@@ -44,15 +44,15 @@ extern const int NOT_IMPLEMENTED;
 
 constexpr char tls_err_msg[] = "common name check is failed";
 
-FlashService::FlashService(IServer & server_)
-    : server(server_)
-    , security_config(server_.securityConfig())
+FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
+    : security_config(security_config_)
+    , m_context(context_)
     , log(&Poco::Logger::get("FlashService"))
     , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
-          server_.context().getGlobalContext(),
-          server_.context().getGlobalContext().getSettingsRef()))
+          m_context.getGlobalContext(),
+          m_context.getGlobalContext().getSettingsRef()))
 {
-    auto settings = server_.context().getSettingsRef();
+    auto settings = m_context.getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
@@ -157,10 +157,10 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
-    if (!security_config.checkGrpcContext(grpc_context))
-    {
-        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    }
+    // if (!security_config.checkGrpcContext(grpc_context))
+    // {
+    //     return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    // }
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
@@ -364,8 +364,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     try
     {
         /// Create DB context.
-        auto context = std::make_shared<Context>(server.context());
-        context->setGlobalContext(server.context());
+        auto context = std::make_shared<Context>(m_context);
+        context->setGlobalContext(m_context);
 
         /// Set a bunch of client information.
         std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
@@ -380,8 +380,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         std::string client_ip = peer.substr(pos + 1);
         Poco::Net::SocketAddress client_address(client_ip);
 
-        if (!context->isMPPTest())
-            context->setUser(user, password, client_address, quota_key);
+        // context->setUser(user, password, client_address, quota_key);
 
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
         context->setCurrentQueryId(query_id);
@@ -412,17 +411,17 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     catch (Exception & e)
     {
         LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
+        return std::make_tuple(std::make_shared<Context>(m_context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
     catch (const std::exception & e)
     {
         LOG_FMT_ERROR(log, "std exception: {}", e.what());
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
+        return std::make_tuple(std::make_shared<Context>(m_context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
     }
     catch (...)
     {
         LOG_FMT_ERROR(log, "other exception");
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
+        return std::make_tuple(std::make_shared<Context>(m_context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
 }
 

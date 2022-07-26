@@ -46,7 +46,7 @@ class FlashService : public tikvpb::Tikv::Service
     , private boost::noncopyable
 {
 public:
-    explicit FlashService(IServer & server_);
+    FlashService(const TiFlashSecurityConfig & security_config_, Context & context_);
 
     ~FlashService() override;
 
@@ -83,8 +83,8 @@ public:
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
-    IServer & server;
     const TiFlashSecurityConfig & security_config;
+    Context & m_context;
     Poco::Logger * log;
     bool is_async = false;
     bool enable_local_tunnel = false;
@@ -103,8 +103,8 @@ public:
     // 48 is EstablishMPPConnection API ID of GRPC
     // note: if the kvrpc protocal is updated, please keep consistent with the generated code.
     static constexpr int EstablishMPPConnectionApiID = 48;
-    explicit AsyncFlashService(IServer & server)
-        : FlashService(server)
+    AsyncFlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
+        : FlashService(security_config_, context_)
     {
         is_async = true;
         ::grpc::Service::MarkMethodAsync(EstablishMPPConnectionApiID);

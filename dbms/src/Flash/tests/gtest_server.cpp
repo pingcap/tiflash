@@ -70,10 +70,17 @@ try
         ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
     }
     // We must start the server before executing MPP Tasks.
-    RUN_SERVER();
-    auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
-    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
+    {
+        Poco::Logger * log = &Poco::Logger::get("flash");
+        TiFlashTestEnv::global_context->setMPPTest();
+        TiFlashTestEnv::global_context->setColumnsForTest(context.executorIdColumnsMap());
+        MockExecutionServer server(TiFlashTestEnv::global_context, log);
+        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
+        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
+    }
 }
 CATCH
 } // namespace tests
 } // namespace DB
+
+
