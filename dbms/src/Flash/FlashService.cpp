@@ -187,9 +187,6 @@ grpc::Status FlashService::Coprocessor(
     }
 
     MPPHandler mpp_handler(*request);
-    if (!server.getColumns().empty()) {
-       context->getDAGContext()->setColumnsForTest(server.getColumns());
-    }
     return mpp_handler.execute(context, response);
 }
 

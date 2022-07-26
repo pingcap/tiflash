@@ -99,4 +99,16 @@ protected:
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
+#define RUN_SERVER()                                                                   \
+    TiFlashTestEnv::global_context->setMPPTest();                                      \
+    TiFlashTestEnv::global_context->setColumnsForTest(context.executorIdColumnsMap()); \
+    MockExecutionServer app(TiFlashTestEnv::global_context);                           \
+    std::vector<std::string> args;                                                     \
+    args.push_back("--no");                                                            \
+    auto run_server = [&] {                                                            \
+        app.run(args);                                                                 \
+    };                                                                                 \
+    std::thread thd(run_server);                                                       \
+    thd.detach();                                                                      \
+    std::this_thread::sleep_for(std::chrono::seconds(5));
 } // namespace DB::tests

@@ -45,9 +45,8 @@ class MockExecutionServer : public BaseDaemon
     , public IServer
 {
 public:
-    explicit MockExecutionServer(std::unique_ptr<Context> & global_context_, std::unordered_map<String, ColumnsWithTypeAndName> & executor_id_columns_map_)
+    explicit MockExecutionServer(std::unique_ptr<Context> & global_context_)
         : global_context(global_context_)
-        , executor_id_columns_map(executor_id_columns_map_)
     {}
     Poco::Util::LayeredConfiguration & config() const override
     {
@@ -69,10 +68,6 @@ public:
     bool isCancelled() const override
     {
         return BaseDaemon::isCancelled();
-    }
-
-    std::unordered_map<String, ColumnsWithTypeAndName> & getColumns() {
-        return executor_id_columns_map;
     }
 
 protected:
@@ -105,10 +100,7 @@ protected:
 
 private:
     std::unique_ptr<Context> & global_context;
-    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map;
-
     TiFlashSecurityConfig security_config;
-
     ServerInfo server_info;
 
     class FlashGrpcServerHolder

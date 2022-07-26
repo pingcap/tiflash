@@ -38,8 +38,6 @@ public:
 
     virtual const TiFlashSecurityConfig & securityConfig() const = 0;
 
-    virtual std::unordered_map<String, ColumnsWithTypeAndName> getColumns() { return {}; };
-
     /// Returns true if shutdown signaled.
     virtual bool isCancelled() const = 0;
 

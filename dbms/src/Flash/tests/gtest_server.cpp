@@ -58,24 +58,22 @@ try
                      .buildMPPTasks(context);
 
     size_t task_size = tasks.size();
+
+    std::vector<String> expected_strings = {
+        "exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}\n"
+        " aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
+        "  table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n",
+        "exchange_sender_3 | type:PassThrough, {<0, Long>}\n"
+        " project_2 | {<0, Long>}\n"
+        "  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
+        "   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}\n"};
     for (size_t i = 0; i < task_size; ++i)
     {
-        std::cout << ExecutorSerializer().serialize(tasks[i].dag_request.get()) << std::endl;
+        ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
     }
 
-    TiFlashTestEnv::global_context->setMPPTest();
-
-    MockExecutionServer app(TiFlashTestEnv::global_context, context.executorIdColumnsMap());
-    std::vector<std::string> args;
-    args.push_back("--no");
-    auto run_server = [&] {
-        app.run(args);
-    };
-    std::thread thd(run_server);
-    thd.detach();
-
-    // ywq todo figure out how to remove sleep_for...
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    RUN_SERVER();
+    executeMPPTasks(tasks);
     executeMPPTasks(tasks);
 }
 CATCH

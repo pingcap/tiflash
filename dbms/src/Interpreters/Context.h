@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -158,7 +159,7 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
@@ -226,6 +227,10 @@ public:
 
     bool isMPPTest() { return is_mpp_test; }
     void setMPPTest() { is_mpp_test = true; }
+
+    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
+    std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap() { return columns_for_test_map; }
+
     /** The parameter check_database_access_rights exists to not check the permissions of the database again,
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
       * made this check.
