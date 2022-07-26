@@ -65,6 +65,17 @@ void recordJoinExecuteInfo(
     assert(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
+
+void executeUnionForPreNonJoinedData(DAGPipeline & probe_pipeline, Context & context, size_t max_streams, const LoggerPtr & log)
+{
+    // If there is non-joined-streams here, we need call `executeUnion`
+    // to ensure that non-joined-streams is executed after joined-streams.
+    if (!probe_pipeline.streams_with_non_joined_data.empty())
+    {
+        executeUnion(probe_pipeline, max_streams, log, false, "final union for non_joined_data");
+        restoreConcurrency(probe_pipeline, context.getDAGContext()->final_concurrency, log);
+    }
+}
 } // namespace
 
 PhysicalPlanNodePtr PhysicalJoin::build(
@@ -165,12 +176,16 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     return physical_join;
 }
 
-void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & context)
+void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & context, size_t max_streams)
 {
     const auto & settings = context.getSettingsRef();
     auto & dag_context = *context.getDAGContext();
 
+    // TODO we can executeUnionForPreNonJoinedData only when has_non_joined == true.
+    executeUnionForPreNonJoinedData(probe_pipeline, context, max_streams, log);
+
     /// probe side streams
+    assert(probe_pipeline.streams_with_non_joined_data.empty());
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
     auto join_probe_actions = PhysicalPlanHelper::newActions(probe_pipeline.firstStream()->getHeader(), context);
     join_probe_actions->add(ExpressionAction::ordinaryJoin(join_ptr, columns_added_by_join));
@@ -236,7 +251,7 @@ void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size
     {
         DAGPipeline & probe_pipeline = pipeline;
         probe()->transform(probe_pipeline, context, max_streams);
-        probeSideTransform(probe_pipeline, context);
+        probeSideTransform(probe_pipeline, context, max_streams);
     }
 
     doSchemaProject(pipeline, context);

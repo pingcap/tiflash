@@ -100,27 +100,8 @@ public:
         {
             DAGPipeline pipeline;
             physical_plan.transform(pipeline, context.context, max_streams);
-            if (pipeline.streams.size() == 1 && pipeline.streams_with_non_joined_data.empty() && !dag_context.hasSubquery())
-            {
-                final_stream = pipeline.firstStream();
-            }
-            else // for join
-            {
-                // for non joined probe streams.
-                BlockInputStreams inputs{};
-                inputs.insert(inputs.end(), pipeline.streams.cbegin(), pipeline.streams.cend());
-                inputs.insert(inputs.end(), pipeline.streams_with_non_joined_data.cbegin(), pipeline.streams_with_non_joined_data.cend());
-                auto probe_stream = std::make_shared<ConcatBlockInputStream>(inputs, log->identifier());
-
-                // for join build side streams
-                assert(dag_context.hasSubquery());
-                const Settings & settings = context.context.getSettingsRef();
-                final_stream = std::make_shared<CreatingSetsBlockInputStream>(
-                    probe_stream,
-                    std::move(dag_context.moveSubqueries()),
-                    SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-                    dag_context.log->identifier());
-            }
+            executeCreatingSets(pipeline, context.context, max_streams, log);
+            final_stream = pipeline.firstStream();
             FmtBuffer fb;
             final_stream->dumpTree(fb);
             ASSERT_EQ(Poco::trim(expected_streams), Poco::trim(fb.toString()));
@@ -392,13 +373,12 @@ CreatingSets
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
- Concat
-  Expression: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2>
-     Expression: <append join key and join filters for probe side>
-      Expression: <final projection>
-       MockExchangeReceiver)",
+ Expression: <final projection>
+  Expression: <remove useless column after join>
+   HashJoinProbe: <join probe, join_executor_id = Join_2>
+    Expression: <append join key and join filters for probe side>
+     Expression: <final projection>
+      MockExchangeReceiver)",
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
@@ -420,13 +400,12 @@ CreatingSets
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
- Concat
-  Expression: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_2>
-     Expression: <append join key and join filters for probe side>
-      Expression: <final projection>
-       MockExchangeReceiver)",
+ Expression: <final projection>
+  Expression: <remove useless column after join>
+   HashJoinProbe: <join probe, join_executor_id = Join_2>
+    Expression: <append join key and join filters for probe side>
+     Expression: <final projection>
+      MockExchangeReceiver)",
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
@@ -448,7 +427,7 @@ CreatingSets
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
- Concat
+ Union: <for test>
   Expression: <final projection>
    Expression: <remove useless column after join>
     HashJoinProbe: <join probe, join_executor_id = Join_2>
@@ -509,21 +488,19 @@ CreatingSets
     Expression: <final projection>
      Expression: <remove useless column after join>
       NonJoined: <add stream with non_joined_data if full_or_right_join>
- Concat
-  Expression: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+ Expression: <final projection>
+  Expression: <remove useless column after join>
+   HashJoinProbe: <join probe, join_executor_id = Join_6>
+    Union: <final union for non_joined_data>
      Expression: <final projection>
       Expression: <remove useless column after join>
        HashJoinProbe: <join probe, join_executor_id = Join_4>
         Expression: <append join key and join filters for probe side>
          Expression: <final projection>
           MockTableScan
-  Expression: <final projection>
-   Expression: <remove useless column after join>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      NonJoined: <add stream with non_joined_data if full_or_right_join>)",
+     Expression: <final projection>
+      Expression: <remove useless column after join>
+       NonJoined: <add stream with non_joined_data if full_or_right_join>)",
             {toNullableVec<Int32>({3, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
@@ -581,21 +558,19 @@ CreatingSets
     Expression: <final projection>
      Expression: <remove useless column after join>
       NonJoined: <add stream with non_joined_data if full_or_right_join>
- Concat
-  Expression: <final projection>
-   Expression: <remove useless column after join>
-    HashJoinProbe: <join probe, join_executor_id = Join_6>
+ Expression: <final projection>
+  Expression: <remove useless column after join>
+   HashJoinProbe: <join probe, join_executor_id = Join_6>
+    Union: <final union for non_joined_data>
      Expression: <final projection>
       Expression: <remove useless column after join>
        HashJoinProbe: <join probe, join_executor_id = Join_4>
         Expression: <append join key and join filters for probe side>
          Expression: <final projection>
           MockTableScan
-  Expression: <final projection>
-   Expression: <remove useless column after join>
-    Expression: <final projection>
-     Expression: <remove useless column after join>
-      NonJoined: <add stream with non_joined_data if full_or_right_join>)",
+     Expression: <final projection>
+      Expression: <remove useless column after join>
+       NonJoined: <add stream with non_joined_data if full_or_right_join>)",
             {toNullableVec<Int32>({3, 3, 0}),
              toNullableVec<Int32>({2, 2, 0}),
              toNullableVec<Int32>({2, 2, 0}),
