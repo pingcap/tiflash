@@ -26,7 +26,7 @@ namespace tests
 {
 IDGenerator<Int64> pk{0};
 
-IDGenerator<UInt64> tso{StopWatchDetail::nanoseconds(CLOCK_MONOTONIC)};
+IDGenerator<UInt64> tso{clock_gettime_ns(CLOCK_MONOTONIC)};
 
 template <typename T>
 void insertColumn(Block & block, const DataTypePtr & type, const String & name, Int64 col_id, const std::vector<T> & values)
@@ -68,6 +68,7 @@ DMStressProxy::DMStressProxy(const StressOptions & opts_)
                                              /* num_streams= */ 1,
                                              /* max_version= */ tso.get(),
                                              EMPTY_FILTER,
+                                             /* tracing_id= */ "",
                                              /* expected_block_size= */ 1024)[0];
         while (Block block = in->read())
         {
@@ -199,6 +200,7 @@ UInt64 DMStressProxy::countRows(UInt32 rnd_break_prob)
                                          /* num_streams= */ 1,
                                          /* max_version= */ tso.get(),
                                          EMPTY_FILTER,
+                                         /* tracing_id= */ "",
                                          /* expected_block_size= */ 1024)[0];
 
     UInt64 total_count = 0;
@@ -428,6 +430,7 @@ void DMStressProxy::verify()
                                          /* num_streams= */ 1,
                                          /* max_version= */ tso.get(),
                                          EMPTY_FILTER,
+                                         /* tracing_id= */ "",
                                          /* expected_block_size= */ 1024)[0];
     UInt64 dm_total_count = 0;
     while (Block block = in->read())
