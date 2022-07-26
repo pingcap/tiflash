@@ -45,6 +45,8 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
         partition_col_collators,
         exchange_sender.tp(),
         fine_grained_shuffle);
+    // executeUnion will be call after sender.transform, so don't need to restore concurrency.
+    physical_exchange_sender->disableRestoreConcurrency();
     return physical_exchange_sender;
 }
 

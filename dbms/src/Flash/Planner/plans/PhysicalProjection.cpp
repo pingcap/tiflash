@@ -94,8 +94,6 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
         project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
-    // TODO remove this line after DAGQueryBlock removed.
-    physical_projection->disableRestoreConcurrency();
     return physical_projection;
 }
 
@@ -141,8 +139,6 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
-    // TODO remove this line after DAGQueryBlock removed.
-    physical_projection->disableRestoreConcurrency();
     return physical_projection;
 }
 

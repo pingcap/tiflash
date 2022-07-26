@@ -83,8 +83,9 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
         cast_after_agg_actions);
-    // For agg, `recordProfileStreams` has been called in `transformImpl`.
+    // For agg, `recordProfileStreams` and `restoreConcurrency` has been called in `transformImpl`.
     physical_agg->disableRecordProfileStreams();
+    physical_agg->disableRestoreConcurrency();
     return physical_agg;
 }
 

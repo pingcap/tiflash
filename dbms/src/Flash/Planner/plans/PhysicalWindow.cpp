@@ -50,8 +50,6 @@ PhysicalPlanNodePtr PhysicalWindow::build(
         child,
         window_description,
         fine_grained_shuffle);
-    // TODO remove this line after DAGQueryBlock removed.
-    physical_window->disableRestoreConcurrency();
     return physical_window;
 }
 
