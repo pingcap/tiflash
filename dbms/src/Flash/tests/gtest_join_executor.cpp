@@ -49,14 +49,6 @@ public:
                              {toVec<String>("s", {"banana", "banana"}),
                               toVec<String>("join_c", {"apple", "banana"})});
 
-        context.addMockTable("multi_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
-
-        context.addMockTable("multi_test", "t2", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {3, 3, 0}), toVec<Int32>("b", {4, 2, 0}), toVec<Int32>("c", {5, 3, 0})});
-
-        context.addMockTable("multi_test", "t3", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 0}), toVec<Int32>("b", {2, 2, 0})});
-
-        context.addMockTable("multi_test", "t4", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
-
         context.addExchangeReceiver("exchange_r_table",
                                     {{"s1", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s", {"banana", "banana"}),
@@ -81,16 +73,16 @@ public:
         }
     }
 
-    static constexpr size_t join_type_num = 4;
+    static constexpr size_t join_type_num = 7;
 
     static constexpr tipb::JoinType join_types[join_type_num] = {
         tipb::JoinType::TypeInnerJoin,
         tipb::JoinType::TypeLeftOuterJoin,
         tipb::JoinType::TypeRightOuterJoin,
         tipb::JoinType::TypeSemiJoin,
-        // tipb::JoinType::TypeAntiSemiJoin,
-        // tipb::JoinType::TypeLeftOuterSemiJoin,
-        // tipb::JoinType::TypeAntiLeftOuterSemiJoin,
+        tipb::JoinType::TypeAntiSemiJoin,
+        tipb::JoinType::TypeLeftOuterSemiJoin,
+        tipb::JoinType::TypeAntiLeftOuterSemiJoin,
     };
 };
 
@@ -132,8 +124,20 @@ try
         {toNullableVec<String>({"1", "2", {}}), toNullableVec<String>({"3", "4", "3"})},
         {toNullableVec<String>({"1", "3", {}}), toNullableVec<String>({"3", "4", "3"})},
         // anti semi join
+        {toNullableVec<String>({"2", {}, {}}), toNullableVec<String>({"4", "3", {}})},
+        {toNullableVec<String>({"3", {}, {}}), toNullableVec<String>({"4", "3", {}})},
+        {toNullableVec<String>({"1", {}}), toNullableVec<String>({{}, {}})},
+        {toNullableVec<String>({"1", {}}), toNullableVec<String>({{}, {}})},
         // left outer semi join
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"1", "0", "0", "1", "0"})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"1", "0", "0", "1", "0"})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"1", "1", "1", "0", "0"})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"1", "1", "1", "0", "0"})},
         // anti left outer semi join
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"0", "1", "1", "0", "1"})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"0", "1", "1", "0", "1"})},
+        {toNullableVec<String>({"1", "2", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"0", "0", "0", "1", "1"})},
+        {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<String>({"0", "0", "0", "1", "1"})},
     };
 
     for (size_t i = 0; i < join_type_num; ++i)
@@ -156,6 +160,14 @@ CATCH
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
 {
+    context.addMockTable("multi_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
+
+    context.addMockTable("multi_test", "t2", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {3, 3, 0}), toVec<Int32>("b", {4, 2, 0}), toVec<Int32>("c", {5, 3, 0})});
+
+    context.addMockTable("multi_test", "t3", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 2, 0}), toVec<Int32>("b", {2, 2, 0})});
+
+    context.addMockTable("multi_test", "t4", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
+
     const ColumnsWithTypeAndName expected_cols[join_type_num * join_type_num] = {
         /// inner x inner x inner
         {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0})},
