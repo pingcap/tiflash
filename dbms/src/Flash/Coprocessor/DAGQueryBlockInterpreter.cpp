@@ -672,7 +672,6 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // execute final project action
     executeProject(pipeline, final_project, "final projection");
-
     // execute limit
     if (query_block.limit_or_topn && query_block.limit_or_topn->tp() == tipb::TypeLimit)
     {
