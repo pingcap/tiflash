@@ -69,7 +69,8 @@ namespace tests
     }                                                                                  \
     catch (...)                                                                        \
     {                                                                                  \
-        FAIL() << "Uncaught unknown exception";                                        \
+        ::DB::tryLogCurrentException(__PRETTY_FUNCTION__);                             \
+        FAIL();                                                                        \
     }
 
 /// helper functions for comparing DataType

@@ -47,7 +47,7 @@ class ThrowListener : public testing::EmptyTestEventListener
     {
         if (result.type() == testing::TestPartResult::kFatalFailure)
         {
-            throw DB::Exception(result.summary());
+            throw testing::AssertionException(result);
         }
     }
 };
@@ -65,9 +65,6 @@ int main(int argc, char ** argv)
     DB::DM::SegmentReadTaskScheduler::instance();
     DB::DM::DMFileReaderPool::instance();
 
-    // Turn all failures into exceptions, so that ASSERT will work in sub-functions.
-    testing::UnitTest::GetInstance()->listeners().Append(new ThrowListener);
-
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
 
@@ -75,6 +72,8 @@ int main(int argc, char ** argv)
 #endif
 
     ::testing::InitGoogleTest(&argc, argv);
+    ::testing::UnitTest::GetInstance()->listeners().Append(new ThrowListener);
+    
     auto ret = RUN_ALL_TESTS();
 
     DB::tests::TiFlashTestEnv::shutdown();
