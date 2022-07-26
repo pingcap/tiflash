@@ -82,11 +82,10 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
-        // for (size_t i = 1; i <= max_concurrency_level; ++i)
-        // {
-        //     ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-        // }
-        ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request));
+        for (size_t i = 1; i <= max_concurrency_level; ++i)
+        {
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
+        }
     }
 };
 
@@ -266,8 +265,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, MultiRightInnerJoin)
 try
 {
-    // WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-    enablePlanner(true);
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto [t1, t2, t3, t4] = multiTestScan();
     auto request = t1.join(t2, {col("a")}, ASTTableJoin::Kind::Right)
                        .join(t3.join(t4, {col("a")}, ASTTableJoin::Kind::Right),
@@ -276,7 +274,7 @@ try
                        .build(context);
 
     executeWithConcurrency(request, {toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 3, 0}), toNullableVec<Int32>({4, 2, 0}), toNullableVec<Int32>({5, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({2, 2, 0})});
-    // WRAP_FOR_DIS_ENABLE_PLANNER_END
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
