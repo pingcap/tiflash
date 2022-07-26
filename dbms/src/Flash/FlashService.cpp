@@ -44,7 +44,7 @@ extern const int NOT_IMPLEMENTED;
 
 constexpr char tls_err_msg[] = "common name check is failed";
 
-FlashService::FlashService(TiFlashSecurityConfig & security_config_, Context & context_)
+FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
     : security_config(security_config_)
     , m_context(context_)
     , log(&Poco::Logger::get("FlashService"))
