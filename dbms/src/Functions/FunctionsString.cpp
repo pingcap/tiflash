@@ -5285,7 +5285,7 @@ private:
         {
             UInt64 number = col->getUInt(i);
 
-            int print_size = sprintf(reinterpret_cast<char *>(&res_chars[prev_res_offset]), "%llX", number);
+            int print_size = sprintf(reinterpret_cast<char *>(&res_chars[prev_res_offset]), "%lX", number);
             res_chars[prev_res_offset + print_size] = 0;
             // Add the size of printed string and a tailing zero
             prev_res_offset += print_size + 1;
