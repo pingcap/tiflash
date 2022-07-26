@@ -68,8 +68,10 @@ void PhysicalPlanNode::transform(DAGPipeline & pipeline, Context & context, size
     transformImpl(pipeline, context, max_streams);
     if (is_record_profile_streams)
         recordProfileStreams(pipeline, context);
-    // todo modify logic after supporting window function.
-    context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
-    restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+    if (is_restore_concurrency)
+    {
+        context.getDAGContext()->updateFinalConcurrency(pipeline.streams.size(), max_streams);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
+    }
 }
 } // namespace DB

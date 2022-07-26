@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Planner/ExecutorIdGenerator.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
@@ -29,6 +30,8 @@
 #include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
+#include <Flash/Planner/plans/PhysicalWindow.h>
+#include <Flash/Planner/plans/PhysicalWindowSort.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 
@@ -93,7 +96,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
         if (unlikely(dagContext().isTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
-            pushBack(PhysicalExchangeSender::build(executor_id, log, executor->exchange_sender(), popBack()));
+            pushBack(PhysicalExchangeSender::build(executor_id, log, executor->exchange_sender(), FineGrainedShuffle(executor), popBack()));
         break;
     }
     case tipb::ExecType::TypeExchangeReceiver:
@@ -106,6 +109,12 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
     case tipb::ExecType::TypeProjection:
         pushBack(PhysicalProjection::build(context, executor_id, log, executor->projection(), popBack()));
+        break;
+    case tipb::ExecType::TypeWindow:
+        pushBack(PhysicalWindow::build(context, executor_id, log, executor->window(), FineGrainedShuffle(executor), popBack()));
+        break;
+    case tipb::ExecType::TypeSort:
+        pushBack(PhysicalWindowSort::build(context, executor_id, log, executor->sort(), FineGrainedShuffle(executor), popBack()));
         break;
     case tipb::ExecType::TypeTableScan:
     case tipb::ExecType::TypePartitionTableScan:

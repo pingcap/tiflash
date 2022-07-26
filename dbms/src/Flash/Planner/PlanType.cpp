@@ -39,6 +39,10 @@ String PlanType::toString() const
         return "MockExchangeReceiver";
     case Projection:
         return "Projection";
+    case Window:
+        return "Window";
+    case WindowSort:
+        return "WindowSort";
     case TableScan:
         return "TableScan";
     case MockTableScan:
