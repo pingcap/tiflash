@@ -167,8 +167,8 @@ inline std::string generateFormattedMessage(const char * condition)
     return fmt::format("Assert {} fail!", condition);
 }
 
-template <typename T, typename... Args>
-inline std::string generateFormattedMessage(const char * condition, T && fmt_str, Args &&... args)
+template <typename... Args>
+inline std::string generateFormattedMessage(const char * condition, const char * fmt_str, Args &&... args)
 {
     return FmtBuffer().fmtAppend("Assert {} fail! ", condition).fmtAppend(fmt_str, std::forward<Args>(args)...).toString();
 }
@@ -186,22 +186,8 @@ inline Poco::Message generateLogMessage(const std::string & logger_name, const c
 
 const LoggerPtr & getDefaultFatalLogger();
 
-inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger)
-{
-    if (likely(logger->fatal()))
-    {
-        auto message = generateLogMessage(logger->name(), filename, lineno, condition);
-        logger->log(message);
-    }
-}
-
-inline void log(const char * filename, int lineno, const char * condition)
-{
-    log(filename, lineno, condition, getDefaultFatalLogger());
-}
-
 template <typename... Args>
-inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, const char * fmt_str, Args &&... args)
+inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, Args &&... args)
 {
     if (logger->fatal())
     {
@@ -210,10 +196,14 @@ inline void log(const char * filename, int lineno, const char * condition, const
             filename,
             lineno,
             condition,
-            fmt_str,
             std::forward<Args>(args)...);
         logger->log(message);
     }
+}
+
+inline void log(const char * filename, int lineno, const char * condition)
+{
+    log(filename, lineno, condition, getDefaultFatalLogger());
 }
 
 template <typename... Args>
