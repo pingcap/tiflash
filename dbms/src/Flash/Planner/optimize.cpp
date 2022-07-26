@@ -14,7 +14,6 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Planner/optimize.h>
-#include <Flash/Planner/plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
 
 namespace DB

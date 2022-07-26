@@ -181,7 +181,7 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     const auto & settings = context.getSettingsRef();
     auto & dag_context = *context.getDAGContext();
 
-    // TODO we can executeUnionForPreNonJoinedData only when has_non_joined == true.
+    // TODO we can call `executeUnionForPreNonJoinedData` only when has_non_joined == true.
     executeUnionForPreNonJoinedData(probe_pipeline, context, max_streams, log);
 
     /// probe side streams
