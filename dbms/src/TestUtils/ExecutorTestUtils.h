@@ -103,13 +103,13 @@ protected:
 
 // TODO: Mock a simple storage layer to store test input.
 // Currently the lifetime of a server is held in a scope.
-// TODO: Add a server manager to maintain the lifetime of a bunch of server.
-#define ASSERT_MPPTASK_EQUAL(tasks, expected_cols)                                             \
-    {                                                                                          \
-        TiFlashTestEnv::global_context->setMPPTest();                                          \
-        TiFlashTestEnv::global_context->setColumnsForTest(context.executorIdColumnsMap());     \
-        MockComputeServer server(TiFlashTestEnv::global_context, &Poco::Logger::get("flash")); \
-        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);                           \
+// TODO: Add ComputeServerManager to maintain the lifetime of a bunch of servers.
+#define ASSERT_MPPTASK_EQUAL(tasks, expected_cols)                                                 \
+    {                                                                                              \
+        TiFlashTestEnv::getGlobalContext().setMPPTest();                                           \
+        TiFlashTestEnv::getGlobalContext().setColumnsForTest(context.executorIdColumnsMap());      \
+        MockComputeServer server(TiFlashTestEnv::getGlobalContext(), &Poco::Logger::get("flash")); \
+        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);                               \
     }
 
 } // namespace DB::tests

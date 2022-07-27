@@ -95,7 +95,7 @@ public:
 
     TiFlashTestEnv() = delete;
 
-public:
+private:
     static std::unique_ptr<Context> global_context;
 };
 } // namespace DB::tests
