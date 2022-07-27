@@ -1331,26 +1331,21 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
     std::vector<size_t> left_partition_keys;
     std::vector<size_t> right_partition_keys;
 
+    auto push_back_partition_key = [](auto & partition_keys, const auto & child_schema, const auto & key) {
+        for (size_t index = 0; index < child_schema.size(); ++index)
+        {
+            if (splitQualifiedName(child_schema[index].first).second == key->getColumnName())
+            {
+                partition_keys.push_back(index);
+                break;
+            }
+        }
+    };
+
     for (auto & key : using_expr_list->children)
     {
-        size_t index = 0;
-        for (; index < children[0]->output_schema.size(); index++)
-        {
-            if (splitQualifiedName(children[0]->output_schema[index].first).second == key->getColumnName())
-            {
-                left_partition_keys.push_back(index);
-                break;
-            }
-        }
-        index = 0;
-        for (; index < children[1]->output_schema.size(); index++)
-        {
-            if (splitQualifiedName(children[1]->output_schema[index].first).second == key->getColumnName())
-            {
-                right_partition_keys.push_back(index);
-                break;
-            }
-        }
+        push_back_partition_key(left_partition_keys, children[0]->output_schema, key);
+        push_back_partition_key(right_partition_keys, children[1]->output_schema, key);
     }
 
     std::shared_ptr<ExchangeSender> left_exchange_sender
