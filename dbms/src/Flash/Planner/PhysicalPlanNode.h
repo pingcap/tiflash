@@ -62,6 +62,8 @@ public:
     /// Obtain a sample block that contains the names and types of result columns.
     virtual const Block & getSampleBlock() const = 0;
 
+    bool isRecordProfileStreams() const { return is_record_profile_streams; }
+
     void disableRecordProfileStreams() { is_record_profile_streams = false; }
 
     void disableRestoreConcurrency() { is_restore_concurrency = false; }

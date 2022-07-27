@@ -83,9 +83,6 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
         cast_after_agg_actions);
-    // For agg, `recordProfileStreams` and `restoreConcurrency` has been called in `transformImpl`.
-    physical_agg->disableRecordProfileStreams();
-    physical_agg->disableRestoreConcurrency();
     return physical_agg;
 }
 
@@ -124,8 +121,6 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
         pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
 
-        // should record for agg before restore concurrency. See #3804.
-        recordProfileStreams(pipeline, context);
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
     }
     else
@@ -146,9 +141,12 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
             context.getFileProvider(),
             true,
             log->identifier());
-        recordProfileStreams(pipeline, context);
     }
 
+    // we can record for agg after restore concurrency.
+    // Because streams of cast_after_agg will provide the correct ProfileInfo.
+    // See #3804.
+    assert(cast_after_agg && !cast_after_agg->getActions().empty());
     executeExpression(pipeline, cast_after_agg, log, "cast after aggregation");
 }
 

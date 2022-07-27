@@ -52,6 +52,16 @@ bool pushDownSelection(const PhysicalPlanNodePtr & plan, const String & executor
     }
     return false;
 }
+
+void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlanNodePtr & root_node)
+{
+    auto & list_based_executors_order = dag_context.list_based_executors_order;
+    PhysicalPlanVisitor::visitReverse(root_node, [&](const PhysicalPlanNodePtr & plan) {
+        assert(plan);
+        if (plan->isRecordProfileStreams())
+            list_based_executors_order.push_back(plan->execId());
+    });
+}
 } // namespace
 
 void PhysicalPlan::build(const tipb::DAGRequest * dag_request)
@@ -217,6 +227,8 @@ void PhysicalPlan::outputAndOptimize()
         toString());
 
     RUNTIME_ASSERT(root_node, log, "root_node shoudn't be nullptr after `outputAndOptimize`");
+
+    fillOrderForListBasedExecutors(dagContext(), root_node);
 }
 
 String PhysicalPlan::toString() const
