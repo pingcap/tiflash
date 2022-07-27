@@ -27,6 +27,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
+#include "Storages/Transaction/TiDB.h"
 
 namespace DB
 {
@@ -1670,12 +1671,14 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     }
 
     /// for any kind of semi join, the right table column is ignored
-    /// besides, for anti left outer semi join and left outer semi join a boolean field is pushed back
+    /// besides, for (anti) left outer semi join a true/false field is pushed back
+    /// indicating whether right table has matched row, see comment in ASTTableJoin::Kind for details
     if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
     {
         // todo: figure out the correct way to set column info
         auto ci = ColumnInfo{};
-        output_schema.push_back(std::make_pair("", ci));
+        ci.tp = TiDB::TypeTiny;
+        output_schema.push_back(toNullableDAGColumnInfo(std::make_pair("", ci)));
     }
     else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
     {
