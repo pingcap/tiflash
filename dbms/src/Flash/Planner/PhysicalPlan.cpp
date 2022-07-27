@@ -228,7 +228,8 @@ void PhysicalPlan::outputAndOptimize()
 
     RUNTIME_ASSERT(root_node, log, "root_node shoudn't be nullptr after `outputAndOptimize`");
 
-    fillOrderForListBasedExecutors(dagContext(), root_node);
+    if (!dagContext().return_executor_id)
+        fillOrderForListBasedExecutors(dagContext(), root_node);
 }
 
 String PhysicalPlan::toString() const
