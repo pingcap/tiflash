@@ -217,7 +217,7 @@ namespace DB
         F(type_get_cache_miss, {"type", "get_cache_miss"}),                                                                               \
         F(type_get_cache_part, {"type", "get_cache_part"}),                                                                               \
         F(type_get_cache_hit, {"type", "get_cache_hit"}),                                                                                 \
-        F(type_get_cache_copy, {"type", "add_cache_copy"}))                                                                               \
+        F(type_get_cache_copy, {"type", "get_cache_copy"}))                                                                               \
     M(tiflash_storage_read_thread_gauge, "The gauge of storage read thread", Gauge,                                                       \
         F(type_merged_task, {"type", "merged_task"}))                                                                                     \
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
