@@ -27,7 +27,6 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
-#include "Storages/Transaction/TiDB.h"
 
 namespace DB
 {
