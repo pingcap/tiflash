@@ -154,12 +154,19 @@ private:
     bool session_is_used = false;
 
     bool use_l0_opt = true;
-    bool is_mpp_test = false;
+
+    enum TestMode
+    {
+        non_test,
+        mpp_test,
+        executor_test
+    };
+    TestMode test_mode = non_test;
 
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-    // TODO: replace it with MockStorage.
+    // TODO: add MockStorage.
     std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
@@ -226,11 +233,25 @@ public:
     bool isExternalTableExist(const String & table_name) const;
     void assertTableExists(const String & database_name, const String & table_name) const;
 
-    bool isMPPTest() { return is_mpp_test; }
-    void setMPPTest() { is_mpp_test = true; }
+    bool isMPPTest() const { return test_mode == mpp_test; }
+    void setMPPTest() { test_mode = mpp_test; }
+    bool isExecutorTest() const { return test_mode == executor_test; }
+    void setExecutorTest() { test_mode = executor_test; }
+    bool isTest() const { return test_mode != non_test; }
 
     void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
     std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap() { return columns_for_test_map; }
+    ColumnsWithTypeAndName columnsForTest(String executor_id)
+    {
+        auto it = columns_for_test_map.find(executor_id);
+        if (unlikely(it == columns_for_test_map.end()))
+        {
+            throw DB::Exception("Don't have columns for mock source executors");
+        }
+        return it->second;
+    }
+    bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
+
 
     /** The parameter check_database_access_rights exists to not check the permissions of the database again,
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already

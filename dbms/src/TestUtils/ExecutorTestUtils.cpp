@@ -120,7 +120,8 @@ DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    dag_context.setColumnsForTest(source_columns_map);
+    context.context.setExecutorTest();
+    context.context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
@@ -144,6 +145,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
+    context.context.setMPPTest();
     auto res = executeMPPQuery(context.context, properties, tasks);
     return readBlock(res);
 }

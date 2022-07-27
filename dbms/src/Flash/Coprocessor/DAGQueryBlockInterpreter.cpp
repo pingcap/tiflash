@@ -99,7 +99,7 @@ AnalysisResult analyzeExpressions(
     ExpressionActionsChain chain;
     // selection on table scan had been executed in handleTableScan
     // In test mode, filter is not pushed down to table scan
-    if (query_block.selection && (!query_block.isTableScanSource() || context.getDAGContext()->isTest()))
+    if (query_block.selection && (!query_block.isTableScanSource() || context.isTest()))
     {
         std::vector<const tipb::Expr *> where_conditions;
         for (const auto & c : query_block.selection->selection().conditions())
@@ -159,7 +159,7 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(table_scan.getTableScanExecutorID()).empty())
+    if (context.columnsForTestEmpty() || context.columnsForTest(table_scan.getTableScanExecutorID()).empty())
     {
         auto names_and_types = genNamesAndTypes(table_scan);
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
@@ -279,7 +279,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         join_execute_info.join_build_streams.push_back(stream);
     });
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dagContext().isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
@@ -492,7 +492,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    if (context.getDAGContext()->columnsForTestEmpty() || context.getDAGContext()->columnsForTest(query_block.source_name).empty())
+    if (context.columnsForTestEmpty() || context.columnsForTest(query_block.source_name).empty())
     {
         for (size_t i = 0; i < max_streams; ++i)
         {
@@ -590,7 +590,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeExchangeReceiver)
     {
-        if (unlikely(dagContext().isTest() && !context.isMPPTest()))
+        if (unlikely(context.isExecutorTest()))
             handleMockExchangeReceiver(pipeline);
         else
             handleExchangeReceiver(pipeline);
@@ -604,7 +604,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     else if (query_block.isTableScanSource())
     {
         TiDBTableScan table_scan(query_block.source, query_block.source_name, dagContext());
-        if (unlikely(dagContext().isTest()))
+        if (unlikely(context.isTest()))
             handleMockTableScan(table_scan, pipeline);
         else
             handleTableScan(table_scan, pipeline);
@@ -685,7 +685,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     // execute exchange_sender
     if (query_block.exchange_sender)
     {
-        if (unlikely(dagContext().isTest() && !context.isMPPTest()))
+        if (unlikely(context.isExecutorTest()))
             handleMockExchangeSender(pipeline);
         else
             handleExchangeSender(pipeline);

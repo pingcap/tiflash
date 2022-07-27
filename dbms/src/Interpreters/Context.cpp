@@ -1894,7 +1894,7 @@ size_t Context::getMaxStreams() const
     bool is_cop_request = false;
     if (dag_context != nullptr)
     {
-        if (dag_context->isTest())
+        if (isExecutorTest())
             max_streams = dag_context->initialize_concurrency;
         else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
         {

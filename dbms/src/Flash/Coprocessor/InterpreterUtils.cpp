@@ -175,7 +175,7 @@ void executeCreatingSets(
 {
     DAGContext & dag_context = *context.getDAGContext();
     /// add union to run in parallel if needed
-    if (unlikely(dag_context.isTest()))
+    if (unlikely(context.isExecutorTest()))
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");
     else if (dag_context.isMPPTask())
         /// MPPTask do not need the returned blocks.

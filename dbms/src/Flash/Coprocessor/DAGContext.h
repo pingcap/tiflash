@@ -178,7 +178,6 @@ public:
         , max_recorded_error_count(max_error_count_)
         , warnings(max_recorded_error_count)
         , warning_count(0)
-        , is_test(true)
     {}
 
     // for tests need to run query tasks.
@@ -193,7 +192,6 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
-        , is_test(true)
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
@@ -308,13 +306,6 @@ public:
 
     void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
 
-    bool isTest() const { return is_test; }
-    void setTest() { is_test = true; }
-    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
-    ColumnsWithTypeAndName columnsForTest(String executor_id);
-
-    bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
-
     ExchangeReceiverPtr getMPPExchangeReceiver(const String & executor_id) const;
     void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set)
     {
@@ -391,9 +382,6 @@ private:
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
-
-    bool is_test = false; /// switch for test, do not use it in production.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
 };
 
 } // namespace DB
