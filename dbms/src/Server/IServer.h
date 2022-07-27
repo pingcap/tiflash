@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
-#include <Core/ColumnsWithTypeAndName.h>
 #include <Interpreters/Context.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/LayeredConfiguration.h>
