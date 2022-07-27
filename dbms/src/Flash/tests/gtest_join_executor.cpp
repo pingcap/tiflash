@@ -60,11 +60,6 @@ public:
                                      toNullableVec<String>("join_c", {"apple", "banana"})});
     }
 
-    std::tuple<DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder> multiTestScan()
-    {
-        return {context.scan("multi_test", "t1"), context.scan("multi_test", "t2"), context.scan("multi_test", "t3"), context.scan("multi_test", "t4")};
-    }
-
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
         for (size_t i = 1; i <= max_concurrency_level; ++i)
@@ -280,7 +275,10 @@ try
     {
         for (auto [j, jt2] : ext::enumerate(join_types))
         {
-            auto [t1, t2, t3, t4] = multiTestScan();
+            auto t1 = context.scan("multi_test", "t1");
+            auto t2 = context.scan("multi_test", "t2");
+            auto t3 = context.scan("multi_test", "t3");
+            auto t4 = context.scan("multi_test", "t4");
             auto request = t1.join(t2, {col("a")}, jt1)
                                .join(t3.join(t4, {col("a")}, jt1),
                                      {col("b")},
