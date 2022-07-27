@@ -159,6 +159,7 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
+    // TODO: replace it with MockStorage.
     std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;

@@ -157,10 +157,10 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
-    // if (!security_config.checkGrpcContext(grpc_context))
-    // {
-    //     return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
-    // }
+    if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
     GET_METRIC(tiflash_coprocessor_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_dispatch_mpp_task).Increment();
     GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Increment();
