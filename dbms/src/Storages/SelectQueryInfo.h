@@ -51,7 +51,7 @@ struct SelectQueryInfo
     std::unique_ptr<DAGQueryInfo> dag_query;
 
     std::string req_id;
-
+    bool keep_order = true;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

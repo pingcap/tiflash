@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/astToExecutor.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -22,6 +23,8 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
+
+#include <unordered_set>
 
 namespace DB::tests
 {
@@ -90,6 +93,30 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     root.reset();
     executor_index = 0;
     return dag_request_ptr;
+}
+
+// Currently Sort and Window Executors don't support columnPrune.
+// TODO: support columnPrume for Sort and Window.
+void columnPrune(ExecutorPtr executor)
+{
+    std::unordered_set<String> used_columns;
+    for (auto & schema : executor->output_schema)
+        used_columns.emplace(schema.first);
+    executor->columnPrune(used_columns);
+}
+
+
+// Split a DAGRequest into multiple QueryTasks which can be dispatched to multiple Compute nodes.
+// Currently we don't support window functions.
+QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context)
+{
+    columnPrune(root);
+    // enable mpp
+    properties.is_mpp_query = true;
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    root.reset();
+    executor_index = 0;
+    return query_tasks;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, const MockColumnInfoVec & columns)
@@ -243,8 +270,10 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
-    agg_funcs->children.push_back(agg_func);
-    group_by_exprs->children.push_back(group_by_expr);
+    if (agg_func)
+        agg_funcs->children.push_back(agg_func);
+    if (group_by_expr)
+        group_by_exprs->children.push_back(group_by_expr);
     return buildAggregation(agg_funcs, group_by_exprs);
 }
 
@@ -358,7 +387,7 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
-    auto builder = DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+    auto builder = DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
     // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
     // If user don't want to test executors, it will be safe to run Interpreter Tests.
     if (mock_table_columns.find(db_name + "." + table_name) != mock_table_columns.end())
@@ -370,7 +399,7 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 
 DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
     // If user don't want to test executors, it will be safe to run Interpreter Tests.

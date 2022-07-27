@@ -86,7 +86,7 @@ void EstablishCallData::initRpc()
     }
     if (eptr)
     {
-        state = FINISH;
+        setFinishState("initRpc called");
         grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
         responderFinish(status);
     }
@@ -112,9 +112,20 @@ void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
         err_status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
 }
 
-void EstablishCallData::writeDone(const ::grpc::Status & status)
+void EstablishCallData::setFinishState(const String & msg)
 {
     state = FINISH;
+    if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
+    {
+        async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
+                                                        async_tunnel_sender->getTunnelId(),
+                                                        msg)); //trigger mpp tunnel finish work
+    }
+}
+
+void EstablishCallData::writeDone(const ::grpc::Status & status)
+{
+    setFinishState("writeDone called");
     if (stopwatch)
     {
         LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
@@ -140,12 +151,7 @@ void EstablishCallData::cancel()
 
 void EstablishCallData::finishTunnelAndResponder()
 {
-    state = FINISH;
-    if (async_tunnel_sender)
-    {
-        async_tunnel_sender->consumerFinish(fmt::format("{}: finishTunnelAndResponder called.",
-                                                        async_tunnel_sender->getTunnelId())); //trigger mpp tunnel finish work
-    }
+    setFinishState("finishTunnelAndResponder called");
     grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
     responder.Finish(status, this);
 }
@@ -174,7 +180,6 @@ void EstablishCallData::proceed()
     }
     else if (state == ERR_HANDLE)
     {
-        state = FINISH;
         writeDone(err_status);
     }
     else

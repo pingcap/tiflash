@@ -16,9 +16,9 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-
 namespace DB
 {
 class Context;
@@ -29,11 +29,23 @@ namespace DM
 class DMFileBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    explicit DMFileBlockInputStream(DMFileReader && reader_)
+    explicit DMFileBlockInputStream(DMFileReader && reader_, bool enable_read_thread_)
         : reader(std::move(reader_))
-    {}
+        , enable_read_thread(enable_read_thread_)
+    {
+        if (enable_read_thread)
+        {
+            DMFileReaderPool::instance().add(reader);
+        }
+    }
 
-    ~DMFileBlockInputStream() = default;
+    ~DMFileBlockInputStream()
+    {
+        if (enable_read_thread)
+        {
+            DMFileReaderPool::instance().del(reader);
+        }
+    }
 
     String getName() const override { return "DMFile"; }
 
@@ -45,6 +57,7 @@ public:
 
 private:
     DMFileReader reader;
+    bool enable_read_thread;
 };
 
 using DMFileBlockInputStreamPtr = std::shared_ptr<DMFileBlockInputStream>;
@@ -69,14 +82,18 @@ public:
 
     // **** filters **** //
 
-    // Only set this param to true when
-    // 1. There is no delta.
-    // 2. You don't need pk, version and delete_tag columns
+    // Only set enable param to true when
+    // in normal mode:
+    //    1. There is no delta.
+    //    2. You don't need pk, version and delete_tag columns
+    // in fast mode:
+    //    1. You don't need pk columns
     // If you have no idea what it means, then simply set it to false.
     // `max_data_version_` is the MVCC filter version for reading. Used by clean read check
-    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable, UInt64 max_data_version_)
+    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable, bool is_fast_mode_, UInt64 max_data_version_)
     {
         enable_clean_read = enable;
+        is_fast_mode = is_fast_mode_;
         max_data_version = max_data_version_;
         return *this;
     }
@@ -125,6 +142,7 @@ private:
         enable_column_cache = settings.dt_enable_stable_column_cache;
         aio_threshold = settings.min_bytes_to_use_direct_io;
         max_read_buffer_size = settings.max_read_buffer_size;
+        enable_read_thread = settings.dt_enable_read_thread;
         return *this;
     }
     DMFileBlockInputStreamBuilder & setCaches(const MarkCachePtr & mark_cache_, const MinMaxIndexCachePtr & index_cache_)
@@ -139,6 +157,7 @@ private:
 
     // clean read
     bool enable_clean_read = false;
+    bool is_fast_mode = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter
     RSOperatorPtr rs_filter;
@@ -150,11 +169,11 @@ private:
     bool enable_column_cache = false;
     ColumnCachePtr column_cache;
     ReadLimiterPtr read_limiter;
-    size_t aio_threshold;
-    size_t max_read_buffer_size;
+    size_t aio_threshold{};
+    size_t max_read_buffer_size{};
     size_t rows_threshold_per_read = DMFILE_READ_ROWS_THRESHOLD;
     bool read_one_pack_every_time = false;
-
+    bool enable_read_thread = false;
     String tracing_id;
 };
 

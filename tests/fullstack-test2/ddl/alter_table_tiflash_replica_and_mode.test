@@ -19,6 +19,8 @@ mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
 
+>> DBGInvoke __refresh_schemas()
+
 >> DBGInvoke get_tiflash_replica_count("test", "t")
 ┌─get_tiflash_replica_count(test, t)─┐
 │ 1                                  │
@@ -141,3 +143,26 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 |    2 |    4|
 |    5 |    7|
 +------+-----+
+
+## test the case across 'do query' and 'set tiflash mode'
+
+=> DBGInvoke __enable_schema_sync_service('false') 
+
+## TODO: case1 can not simulation in this script
+# case 1 : start query (set failpoint) --> set tiflash mode and refresh schema --> continue query, and due to query_version < local_schema, query fail
+
+# case 2 : set tiflash mode first, then do query --> local_schema < query_schema_version --> sync schema and do query in the new mode
+mysql> alter table test.t set tiflash mode normal;
+
+# query in normal mode
+mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
++------+-----+
+| a    | b   |
++------+-----+
+|    2 |    4|
+|    5 |    7|
++------+-----+
+
+
+=> DBGInvoke __enable_schema_sync_service('true') 
+
