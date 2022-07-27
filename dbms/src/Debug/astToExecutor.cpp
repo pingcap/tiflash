@@ -1652,42 +1652,52 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
     return project;
 }
 
+static void buildLeftSideJoinSchema(DAGSchema & schema, const DAGSchema & left_schema, tipb::JoinType tp)
+{
+    for (const auto & field : left_schema)
+    {
+        if (tp == tipb::JoinType::TypeRightOuterJoin && field.second.hasNotNullFlag())
+            schema.push_back(toNullableDAGColumnInfo(field));
+        else
+            schema.push_back(field);
+    }
+}
+
+static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right_schema, tipb::JoinType tp)
+{
+    /// Note: for semi join, the right table column is ignored
+    /// but for (anti) left outer semi join, a true/false field is pushed back
+    /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
+    if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
+    {
+        // todo: figure out the correct columninfo
+        auto ci = ColumnInfo{};
+        ci.tp = TiDB::TypeTiny;
+        schema.push_back(toNullableDAGColumnInfo(std::make_pair("", ci)));
+    }
+    else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
+    {
+        for (const auto & field : right_schema)
+        {
+            if (tp == tipb::JoinType::TypeLeftOuterJoin && field.second.hasNotNullFlag())
+                schema.push_back(toNullableDAGColumnInfo(field));
+            else
+                schema.push_back(field);
+        }
+    }
+}
+
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list)
 {
     DAGSchema output_schema;
 
-    for (auto & field : left->output_schema)
-    {
-        if (tp == tipb::JoinType::TypeRightOuterJoin && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
-    }
-
-    /// for any kind of semi join, the right table column is ignored
-    /// besides, for (anti) left outer semi join a true/false field is pushed back
-    /// indicating whether right table has matched row, see comment in ASTTableJoin::Kind for details
-    if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
-    {
-        // todo: figure out the correct way to set column info
-        auto ci = ColumnInfo{};
-        ci.tp = TiDB::TypeTiny;
-        output_schema.push_back(toNullableDAGColumnInfo(std::make_pair("", ci)));
-    }
-    else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
-    {
-        for (auto & field : right->output_schema)
-        {
-            if (tp == tipb::JoinType::TypeLeftOuterJoin && field.second.hasNotNullFlag())
-                output_schema.push_back(toNullableDAGColumnInfo(field));
-            else
-                output_schema.push_back(field);
-        }
-    }
+    buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
+    buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
     auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, using_expr_list);
     join->children.push_back(left);
     join->children.push_back(right);
+
     return join;
 }
 
