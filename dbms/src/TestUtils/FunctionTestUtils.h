@@ -398,7 +398,7 @@ typename TypeTraits<T>::FieldType parseDecimal(
     const String & literal = [&] {
         if constexpr (Traits::is_nullable)
         {
-            assert(literal_.has_value());
+            RUNTIME_ASSERT(literal_.has_value());
             return literal_.value();
         }
         else
@@ -770,7 +770,7 @@ public:
 
     DAGContext & getDAGContext()
     {
-        assert(dag_context_ptr != nullptr);
+        RUNTIME_ASSERT(dag_context_ptr != nullptr);
         return *dag_context_ptr;
     }
 

@@ -24,7 +24,7 @@ namespace DB
 {
 bool tryToResetMaxThreadsMetrics()
 {
-    UInt64 now_ts = StopWatchDetail::seconds(CLOCK_MONOTONIC);
+    UInt64 now_ts = clock_gettime_ns_adjusted(last_max_thds_metric_reset_ts, CLOCK_MONOTONIC);
     if (now_ts > last_max_thds_metric_reset_ts + max_thds_metric_reset_interval)
     {
         last_max_thds_metric_reset_ts = now_ts;
