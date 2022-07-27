@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/Exception.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataTypes/DataTypeDecimal.h>
@@ -36,23 +37,26 @@ namespace DB
 {
 namespace tests
 {
-#define CATCH                                                                        \
-    catch (const DB::tests::TiFlashTestException & e)                                \
-    {                                                                                \
-        std::string text = e.displayText();                                          \
-        text += "\n\n";                                                              \
-        if (text.find("Stack trace") == std::string::npos)                           \
-            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString()); \
-        FAIL() << text;                                                              \
-    }                                                                                \
-    catch (const DB::Exception & e)                                                  \
-    {                                                                                \
-        std::string text = e.displayText();                                          \
-        fmt::print(stderr, "Code: {}. {}\n\n", e.code(), text);                      \
-        auto embedded_stack_trace_pos = text.find("Stack trace");                    \
-        if (std::string::npos == embedded_stack_trace_pos)                           \
-            fmt::print(stderr, "Stack trace:\n{}\n", e.getStackTrace().toString());  \
-        throw;                                                                       \
+#define CATCH                                                                          \
+    catch (const ::DB::tests::TiFlashTestException & e)                                \
+    {                                                                                  \
+        std::string text = e.displayText();                                            \
+        text += "\n\n";                                                                \
+        if (text.find("Stack trace") == std::string::npos)                             \
+            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString());   \
+        FAIL() << text;                                                                \
+    }                                                                                  \
+    catch (const ::DB::Exception & e)                                                  \
+    {                                                                                  \
+        std::string text = fmt::format("Code: {}. {}\n\n", e.code(), e.displayText()); \
+        if (text.find("Stack trace") == std::string::npos)                             \
+            text += fmt::format("Stack trace:\n{}\n", e.getStackTrace().toString());   \
+        FAIL() << text;                                                                \
+    }                                                                                  \
+    catch (...)                                                                        \
+    {                                                                                  \
+        ::DB::tryLogCurrentException(__PRETTY_FUNCTION__);                             \
+        FAIL();                                                                        \
     }
 
 /// helper functions for comparing DataType
