@@ -1074,21 +1074,19 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
-void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
+bool MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
 {
     if (!(year == 0 && month == 0 && day == 0))
     {
         if (!allow_zero_in_date && (month == 0 || day == 0))
         {
-            throw TiFlashException(
-                fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day),
-                Errors::Types::WrongValue);
+            return false;
         }
     }
 
     if (year >= 9999 || month > 12)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return false;
     }
 
     UInt8 max_day = 31;
@@ -1096,7 +1094,7 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         if (month < 1)
         {
-            throw TiFlashException(fmt::format("Incorrect time value: month {}", month), Errors::Types::WrongValue);
+            return false;
         }
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         static auto is_leap_year = [](UInt16 _year) {
@@ -1110,23 +1108,22 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     }
     if (day > max_day)
     {
-        throw TiFlashException(
-            fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day),
-            Errors::Types::WrongValue);
+        return false;
     }
 
     if (hour < 0 || hour >= 24)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
     if (minute >= 60)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
     if (second >= 60)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
+    return true;
 }
 
 bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result)

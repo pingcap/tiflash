@@ -114,7 +114,8 @@ struct MyTimeBase
 
     // Check validity of time under specified SQL_MODE.
     // May throw exception.
-    void check(bool allow_zero_in_date, bool allow_invalid_date) const;
+    // return false if time is invalid
+    bool check(bool allow_zero_in_date, bool allow_invalid_date) const;
 };
 
 struct MyDateTime : public MyTimeBase
