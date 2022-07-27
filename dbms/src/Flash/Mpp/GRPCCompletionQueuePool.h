@@ -39,10 +39,16 @@ public:
 
     ::grpc::CompletionQueue & pickQueue();
 
+    void markShutdown()
+    {
+        is_shutdown = true;
+    }
+
 private:
     void thread(size_t index);
 
     std::atomic<size_t> next = 0;
+    std::atomic<bool> is_shutdown{false};
     std::vector<::grpc::CompletionQueue> queues;
     std::vector<std::thread> workers;
 };
