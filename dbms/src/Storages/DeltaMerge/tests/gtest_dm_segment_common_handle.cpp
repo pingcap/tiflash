@@ -19,6 +19,7 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/logger_useful.h>
 
 #include <ctime>
 #include <memory>
@@ -522,6 +523,7 @@ try
         // Test delete range [70, 100)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(70, 100, rowkey_column_size)});
         // flush segment
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -549,6 +551,7 @@ try
         // Test delete range [63, 70)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(63, 70, rowkey_column_size)});
         // flush segment
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -563,7 +566,7 @@ try
             std::transform(int_coldata.begin(), int_coldata.end(), std::back_inserter(res), [this](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
+        ASSERT_EQ(common_handle_coldata.size(), num_rows_write - 1);
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -576,6 +579,7 @@ try
         // Test delete range [1, 32)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -584,13 +588,14 @@ try
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         // mock common handle
         auto common_handle_coldata = [this]() {
+            // the result should be [0, 32,33,34,...62]
             std::vector<Int64> int_coldata{0};
             auto tmp = createNumbers<Int64>(32, 63);
+            int_coldata.insert(int_coldata.end(), tmp.begin(), tmp.end());
             Strings res;
             std::transform(int_coldata.begin(), int_coldata.end(), std::back_inserter(res), [this](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -604,6 +609,7 @@ try
         // delete should be idempotent
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -619,7 +625,6 @@ try
             std::transform(int_coldata.begin(), int_coldata.end(), std::back_inserter(res), [this](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -633,6 +638,7 @@ try
         // There is an overlap range [0, 1)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 2, rowkey_column_size)});
         // flush segment
+        segment->flushCache(dmContext());
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
@@ -646,7 +652,6 @@ try
             std::transform(int_coldata.begin(), int_coldata.end(), std::back_inserter(res), [this](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),

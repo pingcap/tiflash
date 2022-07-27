@@ -181,11 +181,13 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
             auto reason = fmt::format(R"r(
   ({}).read() return more rows({}) than expected
   ({}).rows()
-    Which is: {})r",
+    Which is: {}
+  last block is: {})r",
                                       stream_expr,
                                       num_rows_read,
                                       block_expr,
-                                      num_rows_expect);
+                                      num_rows_expect,
+                                      getColumnsContent(read_block.getColumnsWithTypeAndName()));
             return ::testing::AssertionFailure() << reason;
         }
 
@@ -209,6 +211,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
                 const auto & expected_full_col = expect_block.getByPosition(i);
                 if (expected_full_col.column->isColumnConst() != actual_col.column->isColumnConst())
                 {
+                    // One is ColumnConst but the other is not
                     return ::testing::AssertionFailure() << fmt::format(
                                "  block[{}].isColumnConst() from actual block\n    {}\n  expect_block[{}].isColumnConst()\n    {}",
                                actual_col.name,
@@ -292,11 +295,13 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
             auto reason = fmt::format(R"r(
   ({}).read() return more rows({}) than expected
   ({}).rows()
-    Which is: {})r",
+    Which is: {}
+  last block is: {})r",
                                       stream_expr,
                                       num_rows_read,
                                       columns_expr,
-                                      num_rows_expect);
+                                      num_rows_expect,
+                                      getColumnsContent(read_block.getColumnsWithTypeAndName()));
             return ::testing::AssertionFailure() << reason;
         }
 

@@ -465,20 +465,8 @@ public:
 
     static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
     {
-        WriteBufferFromOwnString ss;
-        for (size_t i = 0; i < rowkey_column_size; i++)
-        {
-            EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-            EncodeInt64(start, ss);
-        }
-        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(ss.releaseStr()));
-        ss.restart();
-        for (size_t i = 0; i < rowkey_column_size; i++)
-        {
-            EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-            EncodeInt64(end, ss);
-        }
-        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.releaseStr()));
+        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(start, rowkey_column_size)));
+        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(end, rowkey_column_size)));
         return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
 
