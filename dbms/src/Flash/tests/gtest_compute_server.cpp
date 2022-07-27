@@ -108,5 +108,6 @@ try
     ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
 }
 CATCH
+
 } // namespace tests
 } // namespace DB

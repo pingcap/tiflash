@@ -70,7 +70,7 @@ public:
     }
 
     std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
-    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, Int32 mpp_partition_num_ = 1);
+    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfoVec & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoVec & columns);
 
