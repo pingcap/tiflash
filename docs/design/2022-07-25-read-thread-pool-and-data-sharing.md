@@ -11,7 +11,7 @@
 
 ## Introduction
 
-DeltaTree the columnar storage engine of TiFlash.
+DeltaTree is the columnar storage engine of TiFlash.
 
 **Read Thread Pool** is a new component of DeltaTree that responsible for reading data and decoupling the computing layer and the storage layer.
 
