@@ -15,16 +15,23 @@
 #pragma once
 
 #include <Common/SyncPoint/Ctl.h>
+#include <Common/nocopyable.h>
 
-#include <boost/noncopyable.hpp>
 #include <mutex>
 
 namespace DB
 {
 
-class SyncPointCtl::SyncChannel : boost::noncopyable
+class SyncPointCtl::SyncChannel
 {
 public:
+    /**
+     * Copy and move are disallowed. A single SyncChannel instance can be shared for multiple threads.
+     */
+    DISALLOW_COPY_AND_MOVE(SyncChannel);
+
+    explicit SyncChannel() = default;
+
     ~SyncChannel()
     {
         close();
@@ -101,7 +108,9 @@ private:
 
     std::atomic<int64_t> pending_op = 0;
 
-    std::mutex m_send, m_recv, m_cv;
+    std::mutex m_send;
+    std::mutex m_recv;
+    std::mutex m_cv;
     std::condition_variable cv;
 };
 
