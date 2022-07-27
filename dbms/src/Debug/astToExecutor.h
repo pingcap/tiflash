@@ -350,6 +350,13 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
 
 ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list);
 
+/// Note: this api is only used by legacy test framework for compatibility purpose, which will be depracated soon,
+/// so please avoid using it.
+/// Old executor test framework bases on ch's parser to translate sql string to ast tree, then manually to DAGRequest.
+/// However, as for join executor, this translation, from ASTTableJoin to tipb::Join, is not a one-to-one mapping
+/// because of the different join classification model used by these two structures. Therefore, under old test framework,
+/// it is hard to fully test join executor. New framework aims to directly construct DAGRequest, so new framework APIs for join should
+/// avoid using ASTTableJoin.
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
 
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list);
