@@ -1345,28 +1345,30 @@ public:
                 size_t string_size = next_offset - current_offset - 1;
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
-                try
-                {
-                    Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
-                    UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
-                    MyDateTime datetime(packed_uint);
-                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
-                    {
-                        MyDate date(datetime.year, datetime.month, datetime.day);
-                        vec_to[i] = date.toPackedUInt();
-                    }
-                    else
-                    {
-                        vec_to[i] = packed_uint;
-                    }
-                }
-                catch (const Exception &)
+
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
+
+                if (packed_uint_value.getType() == Field::Types::Null)
                 {
                     // Fill NULL if cannot parse
                     (*vec_null_map_to)[i] = 1;
                     vec_to[i] = 0;
-                    handleInvalidTime(context, string_value);
+                    current_offset = next_offset;
+                    continue;
                 }
+
+                UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                MyDateTime datetime(packed_uint);
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = packed_uint;
+                }
+
                 current_offset = next_offset;
             }
         }
@@ -1515,25 +1517,24 @@ public:
             for (size_t i = 0; i < size; i++)
             {
                 String value_str = vec_from[i].toString(type.getScale());
-                try
-                {
-                    Field value = parseMyDateTime(value_str, to_fsp);
-                    MyDateTime datetime(value.template safeGet<UInt64>());
-                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
-                    {
-                        MyDate date(datetime.year, datetime.month, datetime.day);
-                        vec_to[i] = date.toPackedUInt();
-                    }
-                    else
-                    {
-                        vec_to[i] = datetime.toPackedUInt();
-                    }
-                }
-                catch (const Exception &)
+                Field value = parseMyDateTime(value_str, to_fsp);
+
+                if (value.getType() == Field::Types::Null)
                 {
                     (*vec_null_map_to)[i] = 1;
                     vec_to[i] = 0;
-                    handleInvalidTime(context, value_str);
+                    continue;
+                }
+
+                MyDateTime datetime(value.template safeGet<UInt64>());
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = datetime.toPackedUInt();
                 }
             }
         }
@@ -1651,7 +1652,8 @@ inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx
 
     if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return true;
+        // throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
     }
     if (ctx)
     {
