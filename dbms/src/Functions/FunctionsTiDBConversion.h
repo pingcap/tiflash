@@ -1652,8 +1652,7 @@ inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx
 
     if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
     {
-        return true;
-        // throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
     }
     if (ctx)
     {
