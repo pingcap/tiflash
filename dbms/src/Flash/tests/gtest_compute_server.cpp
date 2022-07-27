@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Server/MockExecutionServer.h>
+#include <Server/MockComputeServer.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -22,7 +22,7 @@ namespace DB
 {
 namespace tests
 {
-class ServerRunner : public DB::tests::ExecutorTest
+class ComputeServerRunner : public DB::tests::ExecutorTest
 {
 public:
     std::shared_ptr<tipb::DAGRequest> dag_request;
@@ -30,11 +30,13 @@ public:
     {
         ExecutorTest::initializeContext();
 
+        /// for agg
         context.addMockTable(
             {"test_db", "test_table_1"},
             {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
             {toNullableVec<Int32>("s1", {1, {}, 10000000}), toNullableVec<String>("s2", {"apple", {}, "banana"}), toNullableVec<String>("s3", {"apple", {}, "banana"})});
 
+        /// for join
         context.addMockTable(
             {"test_db", "l_table"},
             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
@@ -46,8 +48,7 @@ public:
     }
 };
 
-
-TEST_F(ServerRunner, runTasks)
+TEST_F(ComputeServerRunner, runAggTasks)
 try
 {
     auto tasks = context.scan("test_db", "test_table_1")
@@ -69,18 +70,43 @@ try
     {
         ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
     }
-    // We must start the server before executing MPP Tasks.
+
+    auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
+    ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
+}
+CATCH
+
+TEST_F(ComputeServerRunner, runJoinTasks)
+try
+{
+    auto tasks = context
+                     .scan("test_db", "l_table")
+                     .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                     .topN("join_c", false, 2)
+                     .buildMPPTasks(context);
+
+    size_t task_size = tasks.size();
+    std::vector<String> expected_strings = {
+        "exchange_sender_6 | type:Hash, {<0, String>}\n"
+        " table_scan_1 | {<0, String>}",
+        "exchange_sender_5 | type:Hash, {<0, String>, <1, String>}\n"
+        " table_scan_0 | {<0, String>, <1, String>}",
+        "exchange_sender_4 | type:PassThrough, {<0, String>, <1, String>, <2, String>}\n"
+        " topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
+        "  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
+        "   exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>}\n"
+        "   exchange_receiver_8 | type:PassThrough, {<0, String>}"};
+    for (size_t i = 0; i < task_size; ++i)
     {
-        Poco::Logger * log = &Poco::Logger::get("flash");
-        TiFlashTestEnv::global_context->setMPPTest();
-        TiFlashTestEnv::global_context->setColumnsForTest(context.executorIdColumnsMap());
-        MockExecutionServer server(TiFlashTestEnv::global_context, log);
-        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
-        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
+        ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
     }
+
+    auto expected_cols = {
+        toNullableVec<String>({{}, "banana"}),
+        toNullableVec<String>({{}, "apple"}),
+        toNullableVec<String>({{}, {}})};
+    ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
 }
 CATCH
 } // namespace tests
 } // namespace DB
-
-

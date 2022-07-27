@@ -100,4 +100,16 @@ protected:
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
+
+// TODO: Mock a simple storage layer to store test input.
+// Currently the lifetime of a server is held in a scope.
+// TODO: Add a server manager to maintain the lifetime of a bunch of server.
+#define ASSERT_MPPTASK_EQUAL(tasks, expected_cols)                                             \
+    {                                                                                          \
+        TiFlashTestEnv::global_context->setMPPTest();                                          \
+        TiFlashTestEnv::global_context->setColumnsForTest(context.executorIdColumnsMap());     \
+        MockComputeServer server(TiFlashTestEnv::global_context, &Poco::Logger::get("flash")); \
+        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);                           \
+    }
+
 } // namespace DB::tests
