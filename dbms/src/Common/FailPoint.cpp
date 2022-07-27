@@ -226,7 +226,7 @@ void FailPointHelper::wait(const String & fail_point_name)
     }
 }
 
-void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
 {
     String random_fail_point_cfg = config.getString("flash.random_fail_points", "");
     if (random_fail_point_cfg.empty())
@@ -271,7 +271,7 @@ void FailPointHelper::disableFailPoint(const String &) {}
 
 void FailPointHelper::wait(const String &) {}
 
-void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration &, Poco::Logger *) {}
+void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration &, const LoggerPtr &) {}
 
 void FailPointHelper::enableRandomFailPoint(const String &, double) {}
 #endif
