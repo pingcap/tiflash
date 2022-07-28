@@ -18,7 +18,6 @@
 #include <Common/UTF8Helpers.h>
 #include <Functions/CollationOperatorOptimized.h>
 #include <Storages/Transaction/CollatorUtils.h>
-#include <common/strstr.h>
 #include <sys/types.h>
 
 #include <algorithm>
