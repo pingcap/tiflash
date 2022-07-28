@@ -5486,23 +5486,37 @@ private:
         }
         else
         {
-            return vectorColumn<IntType>(col, block, arguments, result);
+            return vectorColumn<IntType>(col_idx, block, arguments, result);
         }
+    }
+
+    static void fillResultColumnNull(Block &block, size_t result)
+    {
+        block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
     }
 
     template<typename IntType>
     static bool constColumn(const ColumnConst * col, Block &block, const ColumnNumbers &arguments, size_t result)
     {
-        const auto idx = col->getInt(0);
         const auto nrow = col->size();
-        if (col->onlyNull() || idx < 1 || idx > static_cast<Int64>(arguments.size())) // NOLINT
+
+        if (col->onlyNull())
         {
-            const auto data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>());
-            block.getByPosition(result).column = data_type->createColumnConst(nrow, Null());
+            fillResultColumnNull(block, result);
+            return true;
+        }
+
+        const auto idx = col->getDataColumnPtr()->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col->getDataColumnPtr().get())->getInt(0)
+            : col->getInt(0);
+
+        if (idx < 1 || idx >= static_cast<Int64>(arguments.size()))
+        {
+            fillResultColumnNull(block, result);
         }
         else
         {
-            block.getByPosition(result).column = block.getByPosition(idx).column->cloneResized(nrow);
+            block.getByPosition(result).column = block.getByPosition(arguments[idx]).column->cloneResized(nrow);
         }
         return true;
     }
@@ -5525,21 +5539,25 @@ private:
 
         auto res_null_map = ColumnUInt8::create(nrow);
         auto res_col = ColumnString::create();
-        auto sink = StringSink(*res_col, nrow);
 
         for (size_t i = 0; i < nrow; ++i)
         {
             const auto idx = idx_vec[i];
-            if (col_idx->isNullAt(i) || idx < 1 || static_cast<Int64>(idx) > static_cast<Int64>(narg))
+
+            if (col_idx->isNullAt(i) || idx < 1 || static_cast<Int64>(idx) >= static_cast<Int64>(narg))
             {
                 res_null_map->getData()[i] = true;
+                res_col->insertDefault();
             }
             else
             {
-                const auto src_col = block.getByPosition(idx).column.get();
+                const auto arg_pos = arguments[idx];
+                const auto src_col = block.getByPosition(arg_pos).column.get();
+
                 if (src_col->isNullAt(i))
                 {
                     res_null_map->getData()[i] = true;
+                    res_col->insertDefault();
                 }
                 else
                 {
@@ -5552,17 +5570,14 @@ private:
                     const auto & col_offsets = col_str->getOffsets();
 
                     const auto start_offset = StringUtil::offsetAt(col_offsets, i);
-                    const auto str_size = StringUtil::sizeAt(col_offsets, i) - 1;
+                    const auto str_size = StringUtil::sizeAt(col_offsets, i);
 
-                    sink.reserve(sink.elements.size() + str_size);
-                    memcpy(&sink.elements[sink.current_offset + 1], &col_data[start_offset], str_size);
-                    sink.current_offset += str_size;
+                    res_col->insertDataWithTerminatingZero(reinterpret_cast<const char *>(&col_data[start_offset]), str_size);
                 }
             }
-            sink.next();
         }
 
-        block.getByPosition(result).column = std::move(res_col);
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res_col), std::move(res_null_map));
         return true;
     }
 };
