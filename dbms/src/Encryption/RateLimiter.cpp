@@ -19,6 +19,7 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
+
 #include <boost/algorithm/string.hpp>
 #include <cassert>
 #include <fstream>
@@ -434,12 +435,10 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
 {
     LOG_FMT_INFO(log, "updateReadLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes);
     auto get_bg_read_io_statistic = [&]() {
-        std::shared_lock lock(io_info_mtx);
-        return io_info.bg_read_bytes;
+        return read_info.bg_read_bytes.load();
     };
     auto get_fg_read_io_statistic = [&]() {
-        std::shared_lock lock(io_info_mtx);
-        return std::max(0, io_info.total_read_bytes - io_info.bg_read_bytes);
+        return std::max(0, read_info.total_read_bytes - read_info.bg_read_bytes);
     };
 
     if (bg_bytes == 0)
@@ -506,7 +505,7 @@ void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
     LOG_FMT_INFO(log, "bg_thread_ids {} => {}", bg_thread_ids.size(), bg_thread_ids);
 }
 
-std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fname [[maybe_unused]])
+Int64 IORateLimiter::getReadBytes(const std::string & fname [[maybe_unused]])
 {
 #if __linux__
     std::ifstream ifs(fname);
@@ -518,7 +517,6 @@ std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fna
     }
     std::string s;
     Int64 read_bytes = -1;
-    Int64 write_bytes = -1;
     while (std::getline(ifs, s))
     {
         if (s.empty())
@@ -537,44 +535,36 @@ std::pair<Int64, Int64> IORateLimiter::getReadWriteBytes(const std::string & fna
             boost::algorithm::trim(values[1]);
             read_bytes = std::stoll(values[1]);
         }
-        else if (values[0] == "write_bytes")
-        {
-            boost::algorithm::trim(values[1]);
-            write_bytes = std::stoll(values[1]);
-        }
     }
-    if (read_bytes == -1 || write_bytes == -1)
+    if (read_bytes == -1)
     {
-        auto msg = fmt::format("read_bytes: {} write_bytes: {} Invalid result.", read_bytes, write_bytes);
+        auto msg = fmt::format("read_bytes: {}. Invalid result.", read_bytes);
         LOG_ERROR(log, msg);
         throw Exception(msg, ErrorCodes::UNKNOWN_EXCEPTION);
     }
-    return {read_bytes, write_bytes};
+    return read_bytes;
 #else
-    return {0, 0};
+    return {0};
 #endif
 }
 
-IOInfo IORateLimiter::getCurrentIOInfo()
+void IORateLimiter::getCurrentIOInfo()
 {
     static const pid_t pid = getpid();
-    IOInfo io_info;
+    read_info.reset();
 
-    // Read I/O info of each background threads.
+    // Read read info of each background threads.
     for (pid_t tid : bg_thread_ids)
     {
         const std::string thread_io_fname = fmt::format("/proc/{}/task/{}/io", pid, tid);
-        Int64 read_bytes, write_bytes;
-        std::tie(read_bytes, write_bytes) = getReadWriteBytes(thread_io_fname);
-        io_info.bg_read_bytes += read_bytes;
-        io_info.bg_write_bytes += write_bytes;
+        Int64 read_bytes;
+        read_bytes = getReadBytes(thread_io_fname);
+        read_info.bg_read_bytes += read_bytes;
     }
 
-    // Read I/O info of this process.
+    // Read read info of this process.
     static const std::string proc_io_fname = fmt::format("/proc/{}/io", pid);
-    std::tie(io_info.total_read_bytes, io_info.total_write_bytes) = getReadWriteBytes(proc_io_fname);
-    io_info.update_time = std::chrono::system_clock::now();
-    return io_info;
+    read_info.total_read_bytes = getReadBytes(proc_io_fname);
 }
 
 void IORateLimiter::setStop()
@@ -619,11 +609,8 @@ void IORateLimiter::runAutoTune()
             }
             if ((bg_read_limiter || fg_read_limiter) && (now_time_point - update_io_stat_time > std::chrono::milliseconds(update_io_stat_period_ms)))
             {
-                IOInfo io_info_tmp = getCurrentIOInfo();
+                getCurrentIOInfo();
                 update_io_stat_time = now_time_point;
-                io_info_mtx.lock();
-                io_info = io_info_tmp;
-                io_info_mtx.unlock();
                 std::this_thread::sleep_for(std::chrono::milliseconds(update_io_stat_period_ms - 1));
             }
         }

@@ -47,34 +47,28 @@ enum class LimiterType
     BG_READ = 4,
 };
 
-/// IOInfo is used to store IO information.
-/// total_write_bytes is the total bytes of the write.
+/// ReadInfo is used to store IO information.
 /// total_read_bytes is the total bytes of the read.
-/// bg_write_bytes is the bytes of the background write.
 /// bg_read_bytes is the bytes of the background read.
-/// update_time is the time of the last update.
-struct IOInfo
+struct ReadInfo
 {
-    Int64 total_write_bytes;
-    Int64 total_read_bytes;
-    Int64 bg_write_bytes;
-    Int64 bg_read_bytes;
-    std::chrono::time_point<std::chrono::system_clock> update_time;
+    std::atomic<Int64> total_read_bytes;
+    std::atomic<Int64> bg_read_bytes;
 
-    IOInfo()
-        : total_write_bytes(0)
-        , total_read_bytes(0)
-        , bg_write_bytes(0)
+    ReadInfo()
+        : total_read_bytes(0)
         , bg_read_bytes(0)
     {}
 
+    void reset()
+    {
+        total_read_bytes = 0;
+        bg_read_bytes = 0;
+    }
+
     std::string toString() const
     {
-        return fmt::format("total_write_bytes {} total_read_bytes {} bg_write_bytes {} bg_read_bytes {}",
-                           total_write_bytes,
-                           total_read_bytes,
-                           bg_write_bytes,
-                           bg_read_bytes);
+        return fmt::format("total_read_bytes {} bg_read_bytes {}", total_read_bytes, bg_read_bytes);
     }
 };
 
@@ -237,8 +231,8 @@ public:
 private:
 #endif
 
-    std::pair<Int64, Int64> getReadWriteBytes(const std::string & fname);
-    IOInfo getCurrentIOInfo();
+    Int64 getReadBytes(const std::string & fname);
+    void getCurrentIOInfo();
 
     std::unique_ptr<IOLimitTuner> createIOLimitTuner();
     void autoTune();
@@ -257,14 +251,12 @@ private:
 
     std::mutex bg_thread_ids_mtx;
     std::vector<pid_t> bg_thread_ids;
-    IOInfo last_io_info;
 
     Poco::Logger * log;
 
     std::atomic<bool> stop;
     std::thread auto_tune_and_get_io_info_thread;
-    IOInfo io_info;
-    mutable std::shared_mutex io_info_mtx;
+    ReadInfo read_info;
     const UInt64 update_io_stat_period_ms;
 
     // Noncopyable and nonmovable.
