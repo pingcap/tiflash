@@ -166,7 +166,7 @@ using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 //
 // Constructor parameters:
 //
-// `getIOStatistic_` is the function that obtain the amount of data from `getCurrentIOInfo()` which read from /proc filesystem.
+// `get_read_bytes_` is the function that obtain the amount of data from `getCurrentIOInfo()` which read from /proc filesystem.
 //
 // Other parameters are the same as WriteLimiter.
 class ReadLimiter : public WriteLimiter
