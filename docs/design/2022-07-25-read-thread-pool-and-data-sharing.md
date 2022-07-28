@@ -21,7 +21,7 @@ At the same time, in order to improve the performance of multi-concurrent table 
 
 ### Read Thread Model
 
-The read thread model of DeltaTree continues from ClickHouse, which is relatively simple and straightforward：
+The read thread model of DeltaTree inherits from ClickHouse, which is relatively simple and straightforward：
 
 1. Each request creates a batch of threads for processing, which can be configured by `profiles.default.max_threads`, the default is the number of physical CPU cores.(Recently, the computing layer has added thread pool to reuse threads and avoid OOT, but for the storage layer, the logic has not changed.)
 
