@@ -4189,55 +4189,6 @@ public:
 private:
 };
 
-
-class FunctionSpace : public IFunction
-{
-public:
-    static constexpr auto name = "space";
-
-    FunctionSpace() = default;
-
-    static FunctionPtr create(const Context & /*context*/)
-    {
-        return std::make_shared<FunctionSpace>();
-    }
-
-    std::string getName() const override { return name; }
-    size_t getNumberOfArguments() const override { return 1; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        if (arguments.size() != 1)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-        return std::make_shared<DataTypeString>();
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
-    {
-        const ColumnPtr c0_col = block.getByPosition(arguments[0]).column;
-
-        Field res_field;
-        int val_num = c0_col->size();
-        auto col_res = ColumnString::create();
-        col_res->reserve(val_num);
-
-        for (int i = 0; i < val_num; i++)
-        {
-            c0_col->get(i, res_field);
-            Int64 space_num = res_field.get<Int64>();
-            std::string res_string(space_num, ' ');
-            col_res->insert(res_string);
-        }
-        
-        block.getByPosition(result).column = std::move(col_res);
-    }
-
-private:
-};
-
 class FunctionRepeat : public IFunction
 {
 public:
@@ -4444,6 +4395,54 @@ private:
     }
 };
 
+
+class FunctionSpace : public IFunction
+{
+public:
+    static constexpr auto name = "space";
+
+    FunctionSpace() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionSpace>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 1)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr c0_col = block.getByPosition(arguments[0]).column;
+
+        Field res_field;
+        int val_num = c0_col->size();
+        auto col_res = ColumnString::create();
+        col_res->reserve(val_num);
+
+        for (int i = 0; i < val_num; i++)
+        {
+            c0_col->get(i, res_field);
+            Int64 space_num = res_field.get<Int64>();
+            std::string res_string(space_num, ' ');
+            col_res->insert(res_string);
+        }
+        
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+private:
+};
 
 class FunctionPosition : public IFunction
 {
