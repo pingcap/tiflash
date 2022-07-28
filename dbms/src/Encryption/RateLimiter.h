@@ -406,8 +406,14 @@ private:
         High = 3,
         Emergency = 4
     };
-    Watermark writeWatermark() const { return getWatermark(writePct()); }
-    Watermark readWatermark() const { return getWatermark(readPct()); }
+    Watermark writeWatermark() const
+    {
+        return getWatermark(writePct());
+    }
+    Watermark readWatermark() const
+    {
+        return getWatermark(readPct());
+    }
     Watermark getWatermark(int pct) const;
 
     // Returns <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>
