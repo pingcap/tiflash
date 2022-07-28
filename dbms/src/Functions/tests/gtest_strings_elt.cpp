@@ -14,6 +14,7 @@
 
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <ext/range.h>
 
 namespace DB
 {
@@ -23,42 +24,165 @@ class TestFunctionElt : public DB::tests::FunctionTest
 {
 };
 
-#define ASSERT_ELT(result, t1, t2, ...) \
-    ASSERT_COLUMN_EQ(result, executeFunction("elt", t1, t2, __VA_ARGS__))
+#define ASSERT_ELT(expected, t1, t2, ...) \
+    ASSERT_COLUMN_EQ(expected, executeFunction("elt", t1, t2, __VA_ARGS__))
 
 TEST_F(TestFunctionElt, BoundaryIdx)
 try
 {
+    const ColumnWithTypeAndName dummy_col0 = createColumn<Nullable<String>>({"abc", "123", "", {}, ""});
+    const ColumnWithTypeAndName dummy_col1 = createColumn<Nullable<String>>({"def", "123", {}, "", ""});
+
+    static constexpr size_t ndummy_col = 5;
+    constexpr size_t nboundary_test = 6;
+
+    // return null if the first argument is less than 1, greater than the number of string arguments, or NULL
+    const int boundary_valus[nboundary_test] = {
+        0, -1, -2, -100, 3, 100
+    };
+
+    // const idx
+    for (const auto i : ext::range(0, nboundary_test))
+    {
+        ASSERT_ELT(createConstColumn<Nullable<String>>(ndummy_col, {}),
+            createConstColumn<Nullable<Int64>>(ndummy_col, boundary_valus[i]),
+            dummy_col0,
+            dummy_col1);
+
+        ASSERT_ELT(createConstColumn<Nullable<String>>(ndummy_col, {}),
+            createConstColumn<Int64>(ndummy_col, boundary_valus[i]),
+            dummy_col0,
+            dummy_col1);
+    }
+
+    // vector idx
     ASSERT_ELT(createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}}),
-        createColumn<Nullable<Int64>>({{}, -1, -2, -100, 3, 100}),
-        createColumn<Nullable<String>>({"abc", "123", "", {}, "", ""}),
-        createColumn<Nullable<String>>({"def", "123", {}, "", "", ""}));
+        createColumn<Nullable<Int64>>({0, -1, -2, -100, 3, 100}),
+        dummy_col0,
+        dummy_col1);
+}
+CATCH
+
+TEST_F(TestFunctionElt, NullArgument)
+try
+{
+    constexpr size_t nrow = 5;
+
+    // null idx
+    ASSERT_ELT(createConstColumn<Nullable<String>>(nrow, {}),
+        createConstColumn<Nullable<Int64>>(nrow, {}),
+        createColumn<Nullable<String>>({"abc", "123", "", {}, ""}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", ""}));
+
+    // vector null idx
+    ASSERT_ELT(createColumn<Nullable<String>>({{}, {}, {}, {}, {}}),
+        createColumn<Nullable<Int64>>({{}, {}, {}, {}, {}}),
+        createColumn<Nullable<String>>({"abc", "123", "", {}, ""}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", ""}));
+
+    // const non-null idx x null arg
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "123", "", {}, ""}),
+        createConstColumn<Nullable<Int64>>(nrow, 1),
+        createColumn<Nullable<String>>({"abc", "123", "", {}, ""}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", ""}));
+
+    // vector idx x null arg
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", {}, {}, {}}),
+        createColumn<Nullable<Int64>>({1, 2, 2, 1, {}}),
+        createColumn<Nullable<String>>({"abc", "123", "", {}, ""}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", ""}));
 }
 CATCH
 
 TEST_F(TestFunctionElt, AllTypeIdx)
 try
 {
+    constexpr size_t nrow = 8;
 
-}
-CATCH
-
-TEST_F(TestFunctionElt, Simple)
-try
-{
     // const idx
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createConstColumn<Nullable<Int8>>(nrow, 1),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
 
+    ASSERT_ELT(createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
+        createConstColumn<Nullable<UInt8>>(nrow, 2),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createConstColumn<Nullable<Int16>>(nrow, 1),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
+        createConstColumn<Nullable<UInt16>>(nrow, 2),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createConstColumn<Nullable<Int32>>(nrow, 1),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
+        createConstColumn<Nullable<UInt32>>(nrow, 2),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createConstColumn<Nullable<Int64>>(nrow, 1),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
+        createConstColumn<Nullable<UInt64>>(nrow, 2),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
 
     // vector idx
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", {}, {}}),
+        createColumn<Nullable<Int8>>({1, 2, 1, 100, 2, 1, 0, -2}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
 
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", {}, "c"}),
+        createColumn<Nullable<UInt8>>({1, 2, 1, 100, 2, 1, 0, 1}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
 
-}
-CATCH
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", "a", {}}),
+        createColumn<Nullable<Int16>>({1, 2, 3, 100, 3, 2, 1, -1}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
+        createColumn<Nullable<String>>({"ghi", "456", "", "", "", "", "e", "f"}));
 
-TEST_F(TestFunctionElt, Random)
-try
-{
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", {}, "c"}),
+        createColumn<Nullable<UInt16>>({1, 2, 1, 100, 2, 1, 0, 1}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
 
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", "a", {}}),
+        createColumn<Nullable<Int32>>({1, 2, 3, 100, 3, 2, 1, -1}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
+        createColumn<Nullable<String>>({"ghi", "456", "", "", "", "", "e", "f"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", {}, "c"}),
+        createColumn<Nullable<UInt32>>({1, 2, 1, 100, 2, 1, 0, 1}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", "a", {}}),
+        createColumn<Nullable<Int64>>({1, 2, 3, 100, 3, 2, 1, -1}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
+        createColumn<Nullable<String>>({"ghi", "456", "", "", "", "", "e", "f"}));
+
+    ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "", "", {}, "c"}),
+        createColumn<Nullable<UInt64>>({1, 2, 1, 100, 2, 1, 0, 1}),
+        createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
+        createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
 }
 CATCH
 
