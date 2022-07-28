@@ -64,7 +64,7 @@ The detailed process is shown in the following figure:
 
 ### ReadThreadPool
 
-In order to avoid segments are processed accross NUMA nodes that affect performance :
+In order to avoid segments are processed across different NUMA nodes that affects performance :
 1. Group the read threads according to NUMA nodes and bind them to the corresponding CPU.
 2. The read task is hashed according to the segment's id, so it can be always processed by one NUMA nodes.
 
