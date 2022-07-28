@@ -25,7 +25,6 @@
 #include <memory>
 #include <mutex>
 #include <queue>
-#include <shared_mutex>
 #include <thread>
 
 // TODO: separate IO utility(i.e. FileProvider, RateLimiter) from Encryption directory
@@ -59,12 +58,6 @@ struct ReadInfo
         : total_read_bytes(0)
         , bg_read_bytes(0)
     {}
-
-    void reset()
-    {
-        total_read_bytes = 0;
-        bg_read_bytes = 0;
-    }
 
     std::string toString() const
     {

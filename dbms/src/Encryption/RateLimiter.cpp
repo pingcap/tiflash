@@ -551,20 +551,21 @@ Int64 IORateLimiter::getReadBytes(const std::string & fname [[maybe_unused]])
 void IORateLimiter::getCurrentIOInfo()
 {
     static const pid_t pid = getpid();
-    read_info.reset();
 
     // Read read info of each background threads.
+    Int64 bg_read_bytes_tmp{0};
     for (pid_t tid : bg_thread_ids)
     {
         const std::string thread_io_fname = fmt::format("/proc/{}/task/{}/io", pid, tid);
         Int64 read_bytes;
         read_bytes = getReadBytes(thread_io_fname);
-        read_info.bg_read_bytes += read_bytes;
+        bg_read_bytes_tmp += read_bytes;
     }
+    read_info.bg_read_bytes.store(bg_read_bytes_tmp);
 
     // Read read info of this process.
     static const std::string proc_io_fname = fmt::format("/proc/{}/io", pid);
-    read_info.total_read_bytes = getReadBytes(proc_io_fname);
+    read_info.total_read_bytes.store(getReadBytes(proc_io_fname));
 }
 
 void IORateLimiter::setStop()
