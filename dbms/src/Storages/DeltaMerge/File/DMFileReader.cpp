@@ -327,6 +327,7 @@ Block DMFileReader::read()
     const auto & pack_stats = dmfile->getPackStats();
     size_t read_rows = 0;
     size_t not_clean_rows = 0;
+    size_t is_delete_rows = 0;
 
     const std::vector<RSResult> & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
     RSResult expected_handle_res = handle_res[next_pack_id];
@@ -339,14 +340,7 @@ Block DMFileReader::read()
 
         read_rows += pack_stats[next_pack_id].rows;
         not_clean_rows += pack_stats[next_pack_id].not_clean;
-
-        // if do del clean read, if current pack(the first pack) has delete rows, we should break. --> it refers to the case that the first pack has delete rows, thus it need to read this pack lonely
-        //                       if next pack has delete rows, we also should break.
-        if (enable_del_clean_read && is_fast_mode && (pack_stats[next_pack_id].is_delete > 0 || (next_pack_id + 1 < use_packs.size() && pack_stats[next_pack_id + 1].is_delete > 0)))
-        {
-            next_pack_id++;
-            break;
-        }
+        //is_delete_rows += pack_stats[next_pack_id].is_delete;
     }
 
     if (read_rows == 0)
@@ -365,7 +359,8 @@ Block DMFileReader::read()
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
 
     bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_mode && expected_handle_res == All;
-    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && pack_stats[start_pack_id].is_delete == 0;
+    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && is_delete_rows == 0;
+    //do_clean_read_on_del_on_fast_mode = false;
 
     if (do_clean_read_on_normal_mode)
     {

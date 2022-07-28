@@ -257,6 +257,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 }
             }
 
+            /*
             // Let's set is_delete.
             is_delete.resize(rows);
             {
@@ -280,6 +281,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++filter_pos;
                 }
             }
+            */
 
             // Let's calculate gc_hint_version
             gc_hint_version = std::numeric_limits<UInt64>::max();
@@ -331,7 +333,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 {
                     filter[rows - 1] = cur_version >= version_limit || !deleted;
                     not_clean[rows - 1] = filter[rows - 1] && deleted;
-                    is_delete[rows - 1] = filter[rows - 1] && deleted;
+                    //is_delete[rows - 1] = filter[rows - 1] && deleted;
                     effective[rows - 1] = filter[rows - 1];
                     if (filter[rows - 1])
                         gc_hint_version = std::min(
@@ -357,7 +359,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     filter[rows - 1] = cur_version >= version_limit
                         || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
                     not_clean[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) == 0 || deleted);
-                    is_delete[rows - 1] = filter[rows - 1] && deleted;
+                    //is_delete[rows - 1] = filter[rows - 1] && deleted;
                     effective[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) != 0);
                     if (filter[rows - 1])
                         gc_hint_version
@@ -375,7 +377,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
             not_clean_rows += countBytesInFilter(not_clean);
-            is_delete_rows += countBytesInFilter(is_delete);
+            //is_delete_rows += countBytesInFilter(is_delete);
             effective_num_rows += countBytesInFilter(effective);
         }
 
