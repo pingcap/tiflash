@@ -70,7 +70,7 @@ In order to avoid segments are processed across different NUMA nodes that affect
 
 ### SegmentReadTaskScheduler
 
-1. The purpose of `SegmentReadScheduler` is to allow the same segment of different read requests to be executed in the same time as much as possible to increase the opportunity for sharing the same data.
+1. The purpose of `SegmentReadScheduler` is to allow the same segment of different read requests to be executed at the same time as much as possible to increase the opportunity of sharing the same data.
 2. When a `BlockInputStream` is created, all relevant segments will be registered to the `SegmentReadTaskScheduler`. `SegmentReadScheduler` maintains all the segments' read information of this process.
 3. The basic logic of scheduling is:
    1. Select a read request that needs to be scheduled.
