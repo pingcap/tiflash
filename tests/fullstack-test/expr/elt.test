@@ -55,7 +55,7 @@ NULL
 NULL
 NULL
 
-mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(1, b, c) from test.t;
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(1, b, c) as v from test.t;
 v
 abc
 ▲α▼βγ➨δε☎ζη✂θι€κλ♫μν✓ξο✚πρ℉στ♥υφ♖χψ♘ω★σ✕
@@ -63,7 +63,7 @@ abc
 NULL
 NULL
 
-mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(2, b, c) from test.t;
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select elt(2, b, c) as v from test.t;
 v
 def
 hello world
