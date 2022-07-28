@@ -205,10 +205,10 @@ void executeCreatingSets(
                 /*fine_grained_shuffle_batch_size=*/0);
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), dag_context.log->identifier());
         });
-        executeUnion(pipeline, max_streams, dag_context.log, /*ignore_block=*/true, "for batch cop");
+        executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for batch cop");
     }
     else
-        executeUnion(pipeline, max_streams, dag_context.log, /*ignore_block=*/false, "for cop");
+        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for cop");
     if (dag_context.hasSubquery())
     {
         const Settings & settings = context.getSettingsRef();

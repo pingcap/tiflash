@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/MPMCQueue.h>
+#include <Common/ThreadManager.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
@@ -23,9 +25,6 @@
 #include <common/logger_useful.h>
 
 #include <condition_variable>
-
-#include "Common/MPMCQueue.h"
-#include "Common/ThreadManager.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <common/ThreadPool.h>
@@ -52,12 +51,13 @@ public:
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
-        UInt64 fine_grained_shuffle_batch_size);
+        UInt64 fine_grained_shuffle_batch_size,
         bool encode_pipe_ = false);
+
     void write(const Block & block) override;
     void finishWrite() override;
 
-    ~StreamingDAGResponseWriter<StreamWriterPtr>();
+    ~StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>();
 
 private:
     template <bool send_exec_summary_at_last>

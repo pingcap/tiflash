@@ -19,6 +19,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
@@ -28,8 +29,6 @@
 #include <tipb/select.pb.h>
 
 #include <memory>
-
-#include <iostream>
 
 namespace DB
 {
@@ -97,7 +96,7 @@ StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::Stream
 }
 
 template <typename StreamWriterPtr, bool enable_fine_grained_shuffle>
-StreamingDAGResponseWriter<StreamWriterPtr>::~StreamingDAGResponseWriter<StreamWriterPtr>()
+StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::~StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>()
 {
     try
     {

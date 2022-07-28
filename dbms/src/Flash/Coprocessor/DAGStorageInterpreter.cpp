@@ -1147,7 +1147,6 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         retry_regions_map[region_id_to_table_id_map[r.get().region_id]].emplace_back(r);
     }
 
-    // Build different remote request for different physical table
     for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
     {
         const auto & retry_regions = retry_regions_map[physical_table_id];
