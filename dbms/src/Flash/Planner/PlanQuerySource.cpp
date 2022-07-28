@@ -15,7 +15,6 @@
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Planner/Planner.h>
 #include <Parsers/makeDummyQuery.h>
-#include <fmt/core.h>
 
 namespace DB
 {
