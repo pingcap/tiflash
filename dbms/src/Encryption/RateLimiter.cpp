@@ -435,10 +435,10 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
 {
     LOG_FMT_INFO(log, "updateReadLimiter: bg_bytes {} fg_bytes {}", bg_bytes, fg_bytes);
     auto get_bg_read_io_statistic = [&]() {
-        return read_info.bg_read_bytes.load();
+        return read_info.bg_read_bytes.load(std::memory_order_relaxed);
     };
     auto get_fg_read_io_statistic = [&]() {
-        return read_info.fg_read_bytes.load();
+        return read_info.fg_read_bytes.load(std::memory_order_relaxed);
     };
 
     if (bg_bytes == 0)
