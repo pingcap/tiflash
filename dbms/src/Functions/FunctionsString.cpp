@@ -29,15 +29,11 @@
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
 #include <Functions/castTypeToEither.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/printf.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
-#include <thread>
 
 namespace DB
 {
