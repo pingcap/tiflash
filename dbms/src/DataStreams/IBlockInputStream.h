@@ -135,7 +135,7 @@ public:
       */
     void addTableLock(const TableLockHolder & lock) { table_locks.push_back(lock); }
 
-    void setExtraInfo(String info) { extra_info = info; }
+    void setExtraInfo(const String & info) { extra_info = info; }
 
     template <typename F>
     void forEachChild(F && f)
