@@ -145,9 +145,7 @@ try
         copyData(*streams.in, *dag_output_stream);
     }
 
-    auto throughput = dag_context.getTableScanThroughput();
-    if (throughput.first)
-    {
+    if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)
         GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
         LOG_FMT_INFO(log, "table scan throughput {}/s", formatReadableSizeWithBinarySuffix(throughput.second, 2));
     }

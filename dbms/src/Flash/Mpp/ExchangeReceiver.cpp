@@ -701,7 +701,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
     if (unlikely(stream_id >= msg_channels.size()))
     {
         LOG_FMT_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
-        return {nullptr, 0, "", true, "stream_id out of range", false};
+        return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
     }
     std::shared_ptr<ReceivedMessage> recv_msg;
     if (!msg_channels[stream_id]->pop(recv_msg))

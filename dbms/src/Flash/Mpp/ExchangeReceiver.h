@@ -69,21 +69,6 @@ struct ExchangeReceiverResult
     bool eof;
     DecodeDetail decode_detail;
 
-    ExchangeReceiverResult(
-        std::shared_ptr<tipb::SelectResponse> resp_,
-        size_t call_index_,
-        const String & req_info_ = "",
-        bool meet_error_ = false,
-        const String & error_msg_ = "",
-        bool eof_ = false)
-        : resp(resp_)
-        , call_index(call_index_)
-        , req_info(req_info_)
-        , meet_error(meet_error_)
-        , error_msg(error_msg_)
-        , eof(eof_)
-    {}
-
     ExchangeReceiverResult()
         : ExchangeReceiverResult(nullptr, 0)
     {}
@@ -102,6 +87,22 @@ struct ExchangeReceiverResult
     {
         return {/*resp*/ nullptr, call_index, req_info, /*meet_error*/ true, error_msg, /*eof*/ false};
     }
+
+private:
+    ExchangeReceiverResult(
+        std::shared_ptr<tipb::SelectResponse> resp_,
+        size_t call_index_,
+        const String & req_info_ = "",
+        bool meet_error_ = false,
+        const String & error_msg_ = "",
+        bool eof_ = false)
+        : resp(resp_)
+        , call_index(call_index_)
+        , req_info(req_info_)
+        , meet_error(meet_error_)
+        , error_msg(error_msg_)
+        , eof(eof_)
+    {}
 };
 
 enum class ExchangeReceiverState
