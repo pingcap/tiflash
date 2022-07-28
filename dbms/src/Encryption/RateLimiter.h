@@ -47,21 +47,21 @@ enum class LimiterType
 };
 
 /// ReadInfo is used to store IO information.
-/// total_read_bytes is the total bytes of the read.
 /// bg_read_bytes is the bytes of the background read.
+/// fg_read_bytes is the bytes of the foreground read.
 struct ReadInfo
 {
-    std::atomic<Int64> total_read_bytes;
     std::atomic<Int64> bg_read_bytes;
+    std::atomic<Int64> fg_read_bytes;
 
     ReadInfo()
-        : total_read_bytes(0)
-        , bg_read_bytes(0)
+        : bg_read_bytes(0)
+        , fg_read_bytes(0)
     {}
 
     std::string toString() const
     {
-        return fmt::format("total_read_bytes {} bg_read_bytes {}", total_read_bytes, bg_read_bytes);
+        return fmt::format("fg_read_bytes {} bg_read_bytes {}", fg_read_bytes, bg_read_bytes);
     }
 };
 

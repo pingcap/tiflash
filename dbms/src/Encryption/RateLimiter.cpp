@@ -438,7 +438,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
         return read_info.bg_read_bytes.load();
     };
     auto get_fg_read_io_statistic = [&]() {
-        return std::max(0, read_info.total_read_bytes - read_info.bg_read_bytes);
+        return read_info.fg_read_bytes.load();
     };
 
     if (bg_bytes == 0)
@@ -544,7 +544,7 @@ Int64 IORateLimiter::getReadBytes(const std::string & fname [[maybe_unused]])
     }
     return read_bytes;
 #else
-    return {0};
+    return 0;
 #endif
 }
 
@@ -561,11 +561,12 @@ void IORateLimiter::getCurrentIOInfo()
         read_bytes = getReadBytes(thread_io_fname);
         bg_read_bytes_tmp += read_bytes;
     }
-    read_info.bg_read_bytes.store(bg_read_bytes_tmp);
+    read_info.bg_read_bytes.store(bg_read_bytes_tmp, std::memory_order_relaxed);
 
     // Read read info of this process.
     static const std::string proc_io_fname = fmt::format("/proc/{}/io", pid);
-    read_info.total_read_bytes.store(getReadBytes(proc_io_fname));
+    Int64 fg_read_bytes_tmp{getReadBytes(proc_io_fname) - bg_read_bytes_tmp};
+    read_info.fg_read_bytes.store(std::min(0, fg_read_bytes_tmp), std::memory_order_relaxed);
 }
 
 void IORateLimiter::setStop()
