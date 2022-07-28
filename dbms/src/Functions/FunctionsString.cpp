@@ -5415,8 +5415,160 @@ public:
             throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
+};
+
+class FunctionElt : public IFunction
+{
+public:
+    static constexpr auto name = "elt";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionElt>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isVariadic() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes &arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        for (const auto arg_idx : ext::range(1, arguments.size()))
+        {
+            const auto arg = removeNullable(arguments[arg_idx]);
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block &block, const ColumnNumbers &arguments, size_t result) const override
+    {
+        if (executeElt<UInt8>(block, arguments, result)
+            || executeElt<UInt16>(block, arguments, result)
+            || executeElt<UInt32>(block, arguments, result)
+            || executeElt<UInt64>(block, arguments, result)
+            || executeElt<Int8>(block, arguments, result)
+            || executeElt<Int16>(block, arguments, result)
+            || executeElt<Int32>(block, arguments, result)
+            || executeElt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
 
 private:
+    template<typename IntType>
+    static bool executeElt(Block &block, const ColumnNumbers &arguments, size_t result)
+    {
+        const auto * col_idx = block.getByPosition(arguments[0]).column.get();
+
+        if (const auto * col = checkAndGetColumnConst<ColumnVector<IntType>>(col_idx, true))
+        {
+            return constColumn<IntType>(col, block, arguments, result);
+        }
+        else
+        {
+            return vectorColumn<IntType>(col, block, arguments, result);
+        }
+    }
+
+    template<typename IntType>
+    static bool constColumn(const ColumnConst * col, Block &block, const ColumnNumbers &arguments, size_t result)
+    {
+        const auto idx = col->getInt(0);
+        const auto nrow = col->size();
+        if (col->onlyNull() || idx < 1 || idx > static_cast<Int64>(arguments.size())) // NOLINT
+        {
+            const auto data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>());
+            block.getByPosition(result).column = data_type->createColumnConst(nrow, Null());
+        }
+        else
+        {
+            block.getByPosition(result).column = block.getByPosition(idx).column->cloneResized(nrow);
+        }
+        return true;
+    }
+
+    template<typename IntType>
+    static bool vectorColumn(const IColumn * col, Block &block, const ColumnNumbers &arguments, size_t result)
+    {
+        const auto narg = arguments.size();
+        const auto nrow = col->size();
+        const auto col_idx = col->isColumnNullable()
+                            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col)
+                            : checkAndGetColumn<ColumnVector<IntType>>(col);
+
+        if (!col_idx)
+        {
+            return false;
+        }
+
+        const auto & idx_vec = col_idx->getData();
+
+        auto res_null_map = ColumnUInt8::create(nrow);
+        auto res_col = ColumnString::create();
+        auto sink = StringSink(*res_col, nrow);
+
+        for (size_t i = 0; i < nrow; ++i)
+        {
+            const auto idx = idx_vec[i];
+            if (col_idx->isNullAt(i) || idx < 1 || static_cast<Int64>(idx) > static_cast<Int64>(narg))
+            {
+                res_null_map->getData()[i] = true;
+            }
+            else
+            {
+                const auto src_col = block.getByPosition(idx).column.get();
+                if (src_col->isNullAt(i))
+                {
+                    res_null_map->getData()[i] = true;
+                }
+                else
+                {
+                    res_null_map->getData()[i] = false;
+
+                    const auto col_str = src_col->isColumnNullable()
+                        ? checkAndGetNestedColumn<ColumnString>(src_col)
+                        : checkAndGetColumn<ColumnString>(src_col);
+                    const auto & col_data = col_str->getChars();
+                    const auto & col_offsets = col_str->getOffsets();
+
+                    const auto start_offset = StringUtil::offsetAt(col_offsets, i);
+                    const auto str_size = StringUtil::sizeAt(col_offsets, i) - 1;
+
+                    sink.reserve(sink.elements.size() + str_size);
+                    memcpy(&sink.elements[sink.current_offset + 1], &col_data[start_offset], str_size);
+                    sink.current_offset += str_size;
+                }
+            }
+            sink.next();
+        }
+
+        block.getByPosition(result).column = std::move(res_col);
+        return true;
+    }
 };
 
 // clang-format off
@@ -5507,5 +5659,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionHexInt>();
     factory.registerFunction<FunctionRepeat>();
     factory.registerFunction<FunctionBin>();
+    factory.registerFunction<FunctionElt>();
 }
 } // namespace DB
