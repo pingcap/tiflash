@@ -296,7 +296,7 @@ ReadLimiter::ReadLimiter(
     : WriteLimiter(rate_limit_per_sec_, type_, refill_period_ms_)
     , get_read_bytes(std::move(get_read_bytes_))
     , last_stat_bytes(get_read_bytes())
-    , log(&Poco::Logger::get("ReadLimiter"))
+    , log(Logger::get("ReadLimiter"))
 {}
 
 Int64 ReadLimiter::getAvailableBalance()
@@ -361,7 +361,7 @@ void ReadLimiter::refillAndAlloc()
 }
 
 IORateLimiter::IORateLimiter(UInt64 update_io_stat_period_ms_)
-    : log(&Poco::Logger::get("IORateLimiter"))
+    : log(Logger::get("IORateLimiter"))
     , stop(false)
     , update_io_stat_period_ms(update_io_stat_period_ms_)
 {}
@@ -674,7 +674,7 @@ IOLimitTuner::IOLimitTuner(
     , bg_read_stat(std::move(bg_read_stat_))
     , fg_read_stat(std::move(fg_read_stat_))
     , io_config(io_config_)
-    , log(&Poco::Logger::get("IOLimitTuner"))
+    , log(Logger::get("IOLimitTuner"))
 {}
 
 IOLimitTuner::TuneResult IOLimitTuner::tune() const

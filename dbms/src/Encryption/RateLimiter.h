@@ -201,7 +201,7 @@ private:
 
     std::function<Int64()> get_read_bytes;
     Int64 last_stat_bytes;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
@@ -252,7 +252,7 @@ private:
     std::mutex bg_thread_ids_mtx;
     std::vector<pid_t> bg_thread_ids;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::atomic<bool> stop;
     std::thread auto_tune_and_get_io_info_thread;
@@ -469,6 +469,6 @@ private:
     LimiterStatUPtr bg_read_stat;
     LimiterStatUPtr fg_read_stat;
     StorageIORateLimitConfig io_config;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 } // namespace DB
