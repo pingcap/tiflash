@@ -14,29 +14,12 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/Logger.h>
-#include <DataStreams/BlocksListBlockInputStream.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <DataTypes/DataTypeString.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
-#include <Poco/File.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
-#include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
-#include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <fmt/format.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 
-#include <cstdint>
-#include <memory>
-#include <vector>
+#include <future>
 
 namespace DB
 {
@@ -54,60 +37,8 @@ extern const char force_set_page_file_write_errno[];
 
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
-// Simple test suit for DeltaMergeStore.
-class DeltaMergeStoreTest : public DB::base::TiFlashStorageTestBasic
-{
-public:
-    void SetUp() override
-    {
-        TiFlashStorageTestBasic::SetUp();
-        store = reload();
-    }
-
-    DeltaMergeStorePtr
-    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
-    {
-        TiFlashStorageTestBasic::reload();
-        ColumnDefinesPtr cols;
-        if (!pre_define_columns)
-            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        else
-            cols = pre_define_columns;
-
-        ColumnDefine handle_column_define = (*cols)[0];
-
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
-                                                                 false,
-                                                                 "test",
-                                                                 "DeltaMergeStoreTest",
-                                                                 100,
-                                                                 *cols,
-                                                                 handle_column_define,
-                                                                 is_common_handle,
-                                                                 rowkey_column_size,
-                                                                 DeltaMergeStore::Settings());
-        return s;
-    }
-
-protected:
-    DeltaMergeStorePtr store;
-};
-
-enum TestMode
-{
-    V1_BlockOnly,
-    V2_BlockOnly,
-    V2_FileOnly,
-    V2_Mix,
-};
 
 String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 {
@@ -127,95 +58,6 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
     }
 }
 
-// Read write test suit for DeltaMergeStore.
-// We will instantiate test cases for different `TestMode`
-// to test with different pack types.
-class DeltaMergeStoreRWTest
-    : public DB::base::TiFlashStorageTestBasic
-    , public testing::WithParamInterface<TestMode>
-{
-public:
-    DeltaMergeStoreRWTest()
-    {
-        mode = GetParam();
-
-        switch (mode)
-        {
-        case TestMode::V1_BlockOnly:
-            setStorageFormat(1);
-            break;
-        case TestMode::V2_BlockOnly:
-        case TestMode::V2_FileOnly:
-        case TestMode::V2_Mix:
-            setStorageFormat(2);
-            break;
-        }
-    }
-
-    void SetUp() override
-    {
-        TiFlashStorageTestBasic::SetUp();
-        store = reload();
-    }
-
-    DeltaMergeStorePtr
-    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
-    {
-        TiFlashStorageTestBasic::reload();
-        ColumnDefinesPtr cols;
-        if (!pre_define_columns)
-            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        else
-            cols = pre_define_columns;
-
-        ColumnDefine handle_column_define = (*cols)[0];
-
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
-                                                                 false,
-                                                                 "test",
-                                                                 "DeltaMergeStoreRWTest",
-                                                                 101,
-                                                                 *cols,
-                                                                 handle_column_define,
-                                                                 is_common_handle,
-                                                                 rowkey_column_size,
-                                                                 DeltaMergeStore::Settings());
-        return s;
-    }
-
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
-    {
-        auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        auto [store_path, file_id] = store->preAllocateIngestFile();
-
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
-        auto dmfile = writeIntoNewDMFile(
-            context,
-            std::make_shared<ColumnDefines>(store->getTableColumns()),
-            input_stream,
-            file_id,
-            store_path,
-            flags);
-
-
-        store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
-
-        auto & pk_column = block.getByPosition(0).column;
-        auto min_pk = pk_column->getInt(0);
-        auto max_pk = pk_column->getInt(block.rows() - 1);
-        HandleRange range(min_pk, max_pk + 1);
-
-        return {RowKeyRange::fromHandleRange(range), {file_id}};
-    }
-
-protected:
-    TestMode mode;
-    DeltaMergeStorePtr store;
-
-    constexpr static const char * TRACING_NAME = "DeltaMergeStoreRWTest";
-};
 
 TEST_F(DeltaMergeStoreTest, Create)
 try
@@ -423,6 +265,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -461,7 +305,7 @@ try
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1)[0];
+        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -565,6 +409,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -650,6 +496,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -721,6 +569,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -758,6 +608,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -843,6 +695,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -928,6 +782,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -959,6 +815,8 @@ try
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -1014,6 +872,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -1053,6 +913,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         // block_num represents index of current segment
@@ -1112,6 +974,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1135,6 +999,8 @@ try
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1158,6 +1024,8 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1181,6 +1049,8 @@ try
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1242,6 +1112,8 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1279,6 +1151,8 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1317,6 +1191,8 @@ try
                                             /* max_version= */ tso3 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1342,6 +1218,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1367,6 +1245,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1428,6 +1308,8 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1465,6 +1347,8 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1503,6 +1387,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1559,6 +1445,8 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1596,6 +1484,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1682,6 +1572,8 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
+                                                /* is_fast_mode= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -1790,6 +1682,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1897,6 +1791,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1985,6 +1881,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2088,6 +1986,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2164,6 +2064,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2240,6 +2142,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2316,6 +2220,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2392,6 +2298,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2466,6 +2374,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -2539,6 +2449,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2629,6 +2541,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2763,6 +2677,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_mode= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2824,6 +2740,8 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
+                                                /* is_fast_mode= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
@@ -2923,6 +2841,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -2976,6 +2896,8 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_mode= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         in->readPrefix();
@@ -3005,14 +2927,14 @@ try
     store = reload(table_column_defines, true, 2);
     {
         // check handle column of store
-        auto & h = store->getHandle();
+        const auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
         ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_STRING_TYPE));
     }
     {
         // check column structure of store
-        auto & cols = store->getTableColumns();
+        const auto & cols = store->getTableColumns();
         // version & tag column added
         ASSERT_EQ(cols.size(), 3UL);
     }
@@ -3092,6 +3014,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         size_t num_rows_read = 0;
@@ -3129,7 +3053,7 @@ try
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1)[0];
+        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
 
         size_t num_rows_read = 0;
         in->readPrefix();
@@ -3221,6 +3145,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3295,6 +3221,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3326,6 +3254,8 @@ try
                                              /* max_version= */ UInt64(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3384,6 +3314,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3434,6 +3366,8 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
         size_t num_rows_read = 0;
         while (Block block = in->read())
@@ -3507,6 +3441,8 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
+                                                /* is_fast_mode= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -3600,11 +3536,11 @@ public:
     }
 
 protected:
-    std::unique_ptr<MultiSegmentTestUtil> helper;
+    std::unique_ptr<MultiSegmentTestUtil> helper{};
     DeltaMergeStorePtr store;
     DMContextPtr dm_context;
 
-    UInt64 ps_ver;
+    UInt64 ps_ver{};
     DMTestEnv::PkType pk_type;
 };
 
@@ -3807,6 +3743,123 @@ try
 
         ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
     }
+}
+CATCH
+
+
+// There is another flush cache executing for the same segment.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryByFlushCache)
+try
+{
+    {
+        // Write new data to segment[1] without flush.
+        auto newly_written_rows = helper->rows_by_segments[1];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+
+    auto sp_flush_commit = SyncPointCtl::enableInScope("before_ColumnFileFlushTask::commit");
+    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+
+    // Start a flush and suspend it before flushCommit.
+    auto th_flush = std::async([&]() {
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = segment1->flushCache(*dm_context);
+        ASSERT_TRUE(result);
+        ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
+        // There should be still rows in the delta layer.
+        ASSERT_GT(segment1->getDelta()->getRows(), 0);
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_flush_commit.waitAndPause();
+
+    // Start a mergeDelta. It should hit retry immediately due to a flush is in progress.
+    auto th_merge_delta = std::async([&]() {
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+        // All rows in the delta layer should be merged into the stable layer.
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_merge_delta_retry.waitAndPause();
+
+    // Let's finish the flush.
+    sp_flush_commit.next();
+    th_flush.wait();
+
+    // Proceed the mergeDelta retry. Retry should succeed without triggering any new flush.
+    sp_merge_delta_retry.next();
+    th_merge_delta.wait();
+}
+CATCH
+
+
+// The segment is splitted during the execution.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryBySplit)
+try
+{
+    auto sp_split_prepare = SyncPointCtl::enableInScope("before_Segment::prepareSplit");
+    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+
+    // Start a split and suspend it during prepareSplit to simulate a long-running split.
+    auto th_split = std::async([&] {
+        auto old_rows_by_segments = helper->rows_by_segments;
+        ASSERT_EQ(4, old_rows_by_segments.size());
+
+        // Split segment1 into 2.
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->segmentSplit(*dm_context, segment1, /*is_foreground*/ true);
+        ASSERT_NE(result.second, nullptr);
+
+        helper->resetExpectedRows();
+        ASSERT_EQ(5, helper->rows_by_segments.size());
+        ASSERT_EQ(old_rows_by_segments[0], helper->rows_by_segments[0]);
+        ASSERT_EQ(old_rows_by_segments[1], helper->rows_by_segments[1] + helper->rows_by_segments[2]);
+        ASSERT_EQ(old_rows_by_segments[2], helper->rows_by_segments[3]);
+        ASSERT_EQ(old_rows_by_segments[3], helper->rows_by_segments[4]);
+    });
+    sp_split_prepare.waitAndPause();
+
+    // Start a mergeDelta. As there is a split in progress, we would expect several retries.
+    auto th_merge_delta = std::async([&] {
+        // mergeDeltaBySegment for segment1
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+
+        // Although original segment1 has been split into 2, we still expect only segment1's delta
+        // was merged.
+        ASSERT_EQ(5, helper->rows_by_segments.size());
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_merge_delta_retry.waitAndNext();
+    sp_merge_delta_retry.waitAndNext();
+    sp_merge_delta_retry.waitAndPause();
+
+    // Proceed and finish the split.
+    sp_split_prepare.next();
+    th_split.wait();
+    {
+        // Write to the new segment1 + segment2 after split.
+        auto newly_written_rows = helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+
+    // This time the retry should succeed without any future retries.
+    sp_merge_delta_retry.next();
+    th_merge_delta.wait();
 }
 CATCH
 

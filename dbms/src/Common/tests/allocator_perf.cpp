@@ -94,13 +94,11 @@ void dump_profile(int type)
 {
     fmt::print(
         R"raw(USE_JEMALLOC={};USE_JEMALLOC_PROF={}
-USE_TCMALLOC={}
 USE_MIMALLOC={}
 type={}
 )raw",
         USE_JEMALLOC,
         USE_JEMALLOC_PROF,
-        USE_TCMALLOC,
         USE_MIMALLOC,
         type);
 }

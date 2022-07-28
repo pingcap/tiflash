@@ -27,13 +27,15 @@ using LoggerPtr = std::shared_ptr<Logger>;
 /**
  * Logger is to support identifiers based on Poco::Logger.
  *
- * Identifiers could be request_id, session_id, etc. They can be used in `LogSearch` when we want to
- * glob all logs related to one request/session/query.
+ * Identifiers could be request_id, session_id, etc. They can be used in
+ * `LogSearch` when we want to glob all logs related to one
+ * request/session/query.
  *
- * Logger will print all identifiers at the front of each log record (and after the `source`).
+ * Logger will print all identifiers at the front of each log record (and after
+ * the `source`).
  *
- * Interfaces in Logger are definitely the same with the Poco::Logger, so that they could use the same
- * macro such as LOG_INFO() etc.
+ * Interfaces in Logger are definitely the same with the Poco::Logger, so that
+ * they could use the same macro such as LOG_INFO() etc.
  */
 class Logger : private boost::noncopyable
 {
@@ -59,23 +61,24 @@ public:
 
     Logger(const std::string & source, const std::string & identifier)
         : Logger(&Poco::Logger::get(source), identifier)
-    {
-    }
+    {}
 
     Logger(Poco::Logger * source_log, const std::string & identifier)
         : logger(source_log)
         , id(identifier)
-    {
-    }
+    {}
 
-#define M(level)                                   \
-    bool level() const { return logger->level(); } \
-    void level(const std::string & msg) const      \
-    {                                              \
-        if (id.empty())                            \
-            logger->level(msg);                    \
-        else                                       \
-            logger->level(wrapMsg(msg));           \
+#define M(level)                              \
+    bool level() const                        \
+    {                                         \
+        return logger->level();               \
+    }                                         \
+    void level(const std::string & msg) const \
+    {                                         \
+        if (id.empty())                       \
+            logger->level(msg);               \
+        else                                  \
+            logger->level(wrapMsg(msg));      \
     }
 
     M(trace)
@@ -101,15 +104,30 @@ public:
         return logger->log(msg);
     }
 
-    bool is(int level) const { return logger->is(level); }
+    bool is(int level) const
+    {
+        return logger->is(level);
+    }
 
-    Poco::Channel * getChannel() const { return logger->getChannel(); }
+    Poco::Channel * getChannel() const
+    {
+        return logger->getChannel();
+    }
 
-    const std::string & name() const { return logger->name(); }
+    const std::string & name() const
+    {
+        return logger->name();
+    }
 
-    const std::string & identifier() const { return id; }
+    const std::string & identifier() const
+    {
+        return id;
+    }
 
-    Poco::Logger * getLog() const { return logger; }
+    Poco::Logger * getLog() const
+    {
+        return logger;
+    }
 
 private:
     template <typename T, typename... Args>

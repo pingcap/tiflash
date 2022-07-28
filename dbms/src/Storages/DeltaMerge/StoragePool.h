@@ -79,7 +79,7 @@ public:
     using Timepoint = Clock::time_point;
     using Seconds = std::chrono::seconds;
 
-    StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & path_pool, const String & name = "");
+    StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name = "");
 
     PageStorageRunMode restore();
 
@@ -180,6 +180,8 @@ private:
 
     // whether the three storage instance is owned by this StoragePool
     const NamespaceId ns_id;
+
+    StoragePathPool & storage_path_pool;
 
     PageStoragePtr log_storage_v2;
     PageStoragePtr data_storage_v2;

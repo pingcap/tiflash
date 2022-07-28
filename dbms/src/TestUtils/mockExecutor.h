@@ -16,8 +16,10 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Debug/astToExecutor.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
+#include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::tests
@@ -35,6 +37,11 @@ using MockWindowFrame = mock::MockWindowFrame;
 
 class MockDAGRequestContext;
 
+inline int32_t convertToTiDBCollation(int32_t collation)
+{
+    return -(abs(collation));
+}
+
 /** Responsible for Hand write tipb::DAGRequest
   * Use this class to mock DAGRequest, then feed the DAGRequest into 
   * the Interpreter for test purpose.
@@ -51,9 +58,10 @@ public:
         return executor_index;
     }
 
-    explicit DAGRequestBuilder(size_t & index)
+    explicit DAGRequestBuilder(size_t & index, Int32 collator = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : executor_index(index)
     {
+        properties.collator = -abs(collator);
     }
 
     ExecutorPtr getRoot()
@@ -62,6 +70,7 @@ public:
     }
 
     std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
+    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
 
     DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfoVec & columns);
     DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoVec & columns);
@@ -99,6 +108,9 @@ public:
     DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
     DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
+    void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
+    Int32 getCollation() const { return abs(properties.collator); }
+
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
@@ -115,8 +127,9 @@ private:
 class MockDAGRequestContext
 {
 public:
-    explicit MockDAGRequestContext(Context context_)
+    explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : context(context_)
+        , collation(-abs(collation_))
     {
         index = 0;
     }
@@ -141,6 +154,9 @@ public:
     DAGRequestBuilder scan(String db_name, String table_name);
     DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
+    void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
+    Int32 getCollation() const { return abs(collation); }
+
 private:
     size_t index;
     std::unordered_map<String, MockColumnInfoVec> mock_tables;
@@ -155,6 +171,7 @@ public:
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     Context context;
+    Int32 collation;
 };
 
 ASTPtr buildColumn(const String & column_name);
@@ -174,8 +191,13 @@ MockWindowFrame buildDefaultRowsFrame();
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
 #define NOT(expr) makeASTFunction("not", (expr))
+
+// Aggregation functions
 #define Max(expr) makeASTFunction("max", (expr))
+#define Min(expr) makeASTFunction("min", (expr))
+#define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
+
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
 #define Rank() makeASTFunction("Rank")

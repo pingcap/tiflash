@@ -44,15 +44,15 @@ extern const int NOT_IMPLEMENTED;
 
 constexpr char tls_err_msg[] = "common name check is failed";
 
-FlashService::FlashService(IServer & server_)
-    : server(server_)
-    , security_config(server_.securityConfig())
+FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
+    : security_config(security_config_)
+    , context(context_)
     , log(&Poco::Logger::get("FlashService"))
     , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
-          server_.context().getGlobalContext(),
-          server_.context().getGlobalContext().getSettingsRef()))
+          context.getGlobalContext(),
+          context.getGlobalContext().getSettingsRef()))
 {
-    auto settings = server_.context().getSettingsRef();
+    auto settings = context.getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
@@ -297,7 +297,6 @@ grpc::Status FlashService::Coprocessor(
     Stopwatch stopwatch;
     if (calldata)
     {
-        calldata->attachTunnel(tunnel);
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
@@ -365,8 +364,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     try
     {
         /// Create DB context.
-        auto context = std::make_shared<Context>(server.context());
-        context->setGlobalContext(server.context());
+        auto tmp_context = std::make_shared<Context>(context);
+        tmp_context->setGlobalContext(context);
 
         /// Set a bunch of client information.
         std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
@@ -376,17 +375,17 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         Int64 pos = peer.find(':');
         if (pos == -1)
         {
-            return std::make_tuple(context, ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer));
+            return std::make_tuple(tmp_context, ::grpc::Status(::grpc::StatusCode::INVALID_ARGUMENT, "Invalid peer address: " + peer));
         }
         std::string client_ip = peer.substr(pos + 1);
         Poco::Net::SocketAddress client_address(client_ip);
 
-        context->setUser(user, password, client_address, quota_key);
+        tmp_context->setUser(user, password, client_address, quota_key);
 
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
-        context->setCurrentQueryId(query_id);
+        tmp_context->setCurrentQueryId(query_id);
 
-        ClientInfo & client_info = context->getClientInfo();
+        ClientInfo & client_info = tmp_context->getClientInfo();
         client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
         client_info.interface = ClientInfo::Interface::GRPC;
 
@@ -394,35 +393,35 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         std::string dag_records_per_chunk_str = getClientMetaVarWithDefault(grpc_context, "dag_records_per_chunk", "");
         if (!dag_records_per_chunk_str.empty())
         {
-            context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
+            tmp_context->setSetting("dag_records_per_chunk", dag_records_per_chunk_str);
         }
 
         String max_threads = getClientMetaVarWithDefault(grpc_context, "tidb_max_tiflash_threads", "");
         if (!max_threads.empty())
         {
-            context->setSetting("max_threads", max_threads);
+            tmp_context->setSetting("max_threads", max_threads);
             LOG_FMT_INFO(log, "set context setting max_threads to {}", max_threads);
         }
 
-        context->setSetting("enable_async_server", is_async ? "true" : "false");
-        context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
-        context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
-        return std::make_tuple(context, grpc::Status::OK);
+        tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
+        tmp_context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
+        tmp_context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
+        return std::make_tuple(tmp_context, grpc::Status::OK);
     }
     catch (Exception & e)
     {
         LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
     }
     catch (const std::exception & e)
     {
         LOG_FMT_ERROR(log, "std exception: {}", e.what());
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
     }
     catch (...)
     {
         LOG_FMT_ERROR(log, "other exception");
-        return std::make_tuple(std::make_shared<Context>(server.context()), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
     }
 }
 

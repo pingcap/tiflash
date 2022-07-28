@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
@@ -61,6 +62,8 @@ DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
 
 bool ColumnFileFlushTask::commit(ColumnFilePersistedSetPtr & persisted_file_set, WriteBatches & wbs)
 {
+    SYNC_FOR("before_ColumnFileFlushTask::commit");
+
     if (!persisted_file_set->checkAndIncreaseFlushVersion(flush_version))
         return false;
 
