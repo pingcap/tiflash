@@ -547,11 +547,13 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         // FIXME: req->table_regions for partition table?
 
         std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
+        ranges_for_each_physical_table.reserve(remote_requests.size());
         for (const auto & remote_request : remote_requests)
         {
             ranges_for_each_physical_table.emplace_back(remote_request.key_ranges);
         }
 
+        // TODO: support partition table
         if (ranges_for_each_physical_table.size() != 1)
         {
             throw Exception(fmt::format("Do not support for partition table scan now! [ranges_for_each_physical_table={}]", ranges_for_each_physical_table.size()), ErrorCodes::NOT_IMPLEMENTED);
