@@ -16,8 +16,6 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <benchmark/benchmark.h>
 
-#include <random>
-
 namespace DB
 {
 namespace tests
