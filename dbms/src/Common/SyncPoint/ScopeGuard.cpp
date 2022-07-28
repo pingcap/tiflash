@@ -12,34 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/Logger.h>
-#include <Core/Types.h>
-
-#include <memory>
-
-namespace Poco
-{
-class Logger;
-namespace Util
-{
-class LayeredConfiguration;
-}
-} // namespace Poco
+#include <Common/SyncPoint/Ctl.h>
+#include <Common/SyncPoint/ScopeGuard.h>
 
 namespace DB
 {
-class Context;
-class ConfigReloader;
-using ConfigReloaderPtr = std::unique_ptr<ConfigReloader>;
-namespace UserConfig
-{
-ConfigReloaderPtr parseSettings(
-    Poco::Util::LayeredConfiguration & config,
-    const std::string & config_path,
-    std::unique_ptr<Context> & global_context,
-    const LoggerPtr & log);
 
+SyncPointScopeGuard::SyncPointScopeGuard(const char * name_)
+    : name(name_)
+{
+    SyncPointCtl::enable(name_);
 }
+
+void SyncPointScopeGuard::disable()
+{
+    if (disabled)
+        return;
+    SyncPointCtl::disable(name.c_str());
+    disabled = true;
+}
+
+void SyncPointScopeGuard::waitAndPause()
+{
+    SyncPointCtl::waitAndPause(name.c_str());
+}
+
+void SyncPointScopeGuard::next()
+{
+    SyncPointCtl::next(name.c_str());
+}
+
+void SyncPointScopeGuard::waitAndNext()
+{
+    SyncPointCtl::waitAndNext(name.c_str());
+}
+
 } // namespace DB

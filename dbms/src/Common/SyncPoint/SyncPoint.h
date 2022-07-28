@@ -14,32 +14,23 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Core/Types.h>
+// Expose publicly
+#include <Common/SyncPoint/Ctl.h>
+#include <Common/SyncPoint/ScopeGuard.h>
+// =======
 
-#include <memory>
-
-namespace Poco
-{
-class Logger;
-namespace Util
-{
-class LayeredConfiguration;
-}
-} // namespace Poco
+#include <fiu.h>
 
 namespace DB
 {
-class Context;
-class ConfigReloader;
-using ConfigReloaderPtr = std::unique_ptr<ConfigReloader>;
-namespace UserConfig
-{
-ConfigReloaderPtr parseSettings(
-    Poco::Util::LayeredConfiguration & config,
-    const std::string & config_path,
-    std::unique_ptr<Context> & global_context,
-    const LoggerPtr & log);
 
-}
+/**
+ * Suspend the execution (when enabled), until `SyncPointCtl::waitAndPause()`,
+ * `SyncPointCtl::next()` or `SyncPointCtl::waitAndNext()` is called somewhere
+ * (e.g. in tests).
+ *
+ * Usually this is invoked in actual business logics.
+ */
+#define SYNC_FOR(name) fiu_do_on(name, SyncPointCtl::sync(name);)
+
 } // namespace DB
