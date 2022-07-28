@@ -395,10 +395,7 @@ void MPPTask::runImpl()
         {
             // todo when error happens, should try to update the metrics if it is available
             if (auto throughput = dag_context->getTableScanThroughput(); throughput.first)
-<<<<<<< HEAD
             {
-=======
->>>>>>> bbd6ab515 (Refine the ExchangeReceiverResult)
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
                 LOG_FMT_INFO(log, "table scan throughput {}/s", formatReadableSizeWithBinarySuffix(throughput.second, 2));
             }
