@@ -60,7 +60,7 @@ const Type * checkAndGetNestedColumn(const IColumn * column)
 {
     if (!column || !column->isColumnNullable())
         return {};
-    
+
     const auto * data_column = &static_cast<const ColumnNullable *>(column)->getNestedColumn();
 
     return checkAndGetColumn<Type>(data_column);

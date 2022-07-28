@@ -5430,7 +5430,7 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes &arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (arguments.size() < 2)
             throw Exception(
@@ -5451,11 +5451,11 @@ public:
                     fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
-        
+
         return makeNullable(std::make_shared<DataTypeString>());
     }
 
-    void executeImpl(Block &block, const ColumnNumbers &arguments, size_t result) const override
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         if (executeElt<UInt8>(block, arguments, result)
             || executeElt<UInt16>(block, arguments, result)
@@ -5475,8 +5475,8 @@ public:
     }
 
 private:
-    template<typename IntType>
-    static bool executeElt(Block &block, const ColumnNumbers &arguments, size_t result)
+    template <typename IntType>
+    static bool executeElt(Block & block, const ColumnNumbers & arguments, size_t result)
     {
         const auto * col_idx = block.getByPosition(arguments[0]).column.get();
 
@@ -5490,13 +5490,13 @@ private:
         }
     }
 
-    static void fillResultColumnNull(Block &block, size_t result)
+    static void fillResultColumnNull(Block & block, size_t result)
     {
         block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
     }
 
-    template<typename IntType>
-    static bool constColumn(const ColumnConst * col, Block &block, const ColumnNumbers &arguments, size_t result)
+    template <typename IntType>
+    static bool constColumn(const ColumnConst * col, Block & block, const ColumnNumbers & arguments, size_t result)
     {
         const auto nrow = col->size();
 
@@ -5521,14 +5521,14 @@ private:
         return true;
     }
 
-    template<typename IntType>
-    static bool vectorColumn(const IColumn * col, Block &block, const ColumnNumbers &arguments, size_t result)
+    template <typename IntType>
+    static bool vectorColumn(const IColumn * col, Block & block, const ColumnNumbers & arguments, size_t result)
     {
         const auto narg = arguments.size();
         const auto nrow = col->size();
         const auto col_idx = col->isColumnNullable()
-                            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col)
-                            : checkAndGetColumn<ColumnVector<IntType>>(col);
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col)
+            : checkAndGetColumn<ColumnVector<IntType>>(col);
 
         if (!col_idx)
         {
