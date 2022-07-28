@@ -26,10 +26,22 @@ class ComputeServerRunner : public DB::tests::ExecutorTest
 {
 public:
     std::shared_ptr<tipb::DAGRequest> dag_request;
+
+    static void SetUpTestCase()
+    {
+        ExecutorTest::SetUpTestCase();
+
+        compute_server_ptr = std::make_unique<MockComputeServer>(TiFlashTestEnv::getGlobalContext(), &Poco::Logger::get("compute"));
+    }
+
+    static void TearDownTestCase()
+    {
+        compute_server_ptr.reset();
+    }
+
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
-
         /// for agg
         context.addMockTable(
             {"test_db", "test_table_1"},
@@ -46,33 +58,47 @@ public:
             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
             {toNullableVec<String>("s", {"banana", {}, "banana"}), toNullableVec<String>("join_c", {"apple", {}, "banana"})});
     }
+
+protected:
+    // TODO: Mock a simple storage layer to store test input.
+    // Currently the lifetime of a server is held in this scope.
+    // TODO: Add ComputeServerManager to maintain the lifetime of a bunch of servers.
+    // Note: May go through GRPC fail number 14 --> socket closed,
+    // if you start a server, send a request to the server using pingcap::kv::RpcClient,
+    // then close the server and start the server using the same addr,
+    // then send a request to the new server using pingcap::kv::RpcClient.
+    static std::unique_ptr<MockComputeServer> compute_server_ptr;
 };
+
+std::unique_ptr<MockComputeServer> ComputeServerRunner::compute_server_ptr = nullptr;
 
 TEST_F(ComputeServerRunner, runAggTasks)
 try
 {
-    auto tasks = context.scan("test_db", "test_table_1")
-                     .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                     .project({"max(s1)"})
-                     .buildMPPTasks(context);
-
-    size_t task_size = tasks.size();
-
-    std::vector<String> expected_strings = {
-        "exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}\n"
-        " aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
-        "  table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n",
-        "exchange_sender_3 | type:PassThrough, {<0, Long>}\n"
-        " project_2 | {<0, Long>}\n"
-        "  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
-        "   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}\n"};
-    for (size_t i = 0; i < task_size; ++i)
     {
-        ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
-    }
+        auto tasks = context.scan("test_db", "test_table_1")
+                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                         .project({"max(s1)"})
+                         .buildMPPTasks(context);
 
-    auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
-    ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
+        size_t task_size = tasks.size();
+
+        std::vector<String> expected_strings = {
+            "exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}\n"
+            " aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
+            "  table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n",
+            "exchange_sender_3 | type:PassThrough, {<0, Long>}\n"
+            " project_2 | {<0, Long>}\n"
+            "  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
+            "   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}\n"};
+        for (size_t i = 0; i < task_size; ++i)
+        {
+            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
+        }
+
+        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
+        ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
+    }
 }
 CATCH
 

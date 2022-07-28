@@ -45,6 +45,7 @@
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Poco/StringTokenizer.h>
+#include <Server/MockComputeClient.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Datum.h>
@@ -248,10 +249,20 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                 }
             }
         }
-        pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-        context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
-        if (call.getResp()->has_error())
-            throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
+
+        if (context.isMPPTest())
+        {
+            MockComputeClient client(
+                grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
+            client.runDispatchMPPTask(req);
+        }
+        else
+        {
+            pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
+            context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
+            if (call.getResp()->has_error())
+                throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
+        }
     }
     tipb::ExchangeReceiver tipb_exchange_receiver;
     for (const auto root_task_id : root_task_ids)
