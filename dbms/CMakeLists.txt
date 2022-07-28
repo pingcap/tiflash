@@ -57,6 +57,7 @@ include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
 add_headers_and_sources(clickhouse_common_io src/Common)
 add_headers_and_sources(clickhouse_common_io src/Common/HashTable)
+add_headers_and_sources(clickhouse_common_io src/Common/SyncPoint)
 add_headers_and_sources(clickhouse_common_io src/IO)
 
 add_headers_and_sources(dbms src/Analyzers)
@@ -272,6 +273,7 @@ if (ENABLE_TESTS)
     include (${TiFlash_SOURCE_DIR}/cmake/find_gtest.cmake)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
+        set(INSTALL_GTEST OFF)
         # Google Test from sources
         add_subdirectory(${TiFlash_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
