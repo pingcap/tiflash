@@ -177,6 +177,8 @@ void executeCreatingSets(
     /// add union to run in parallel if needed
     if (unlikely(context.isExecutorTest()))
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for test");
+    else if (context.isMPPTest())
+        executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for mpp test");
     else if (dag_context.isMPPTask())
         /// MPPTask do not need the returned blocks.
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for mpp");

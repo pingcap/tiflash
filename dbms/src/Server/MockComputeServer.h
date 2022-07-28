@@ -37,7 +37,7 @@ public:
         grpc::ServerBuilder builder;
         builder.AddListeningPort(Debug::LOCAL_HOST, grpc::InsecureServerCredentials()); // TODO: Port as a parameter.
 
-        /// Init and register flash service.
+        // Init and register flash service.
         TiFlashSecurityConfig security_config;
         flash_service = std::make_unique<FlashService>(security_config, global_context);
         builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
@@ -50,7 +50,7 @@ public:
         builder.RegisterService(flash_service.get());
         LOG_FMT_DEBUG(log, "Flash service registered");
 
-        /// Kick off grpc server.
+        // Kick off grpc server.
         builder.SetMaxReceiveMessageSize(-1);
         builder.SetMaxSendMessageSize(-1);
         flash_grpc_server = builder.BuildAndStart();
@@ -65,7 +65,7 @@ public:
     {
         try
         {
-            /// Shut down grpc server.
+            // Shut down grpc server.
             LOG_FMT_DEBUG(log, "Begin to shut down flash grpc server");
             flash_grpc_server->Shutdown();
             *is_shutdown = true;

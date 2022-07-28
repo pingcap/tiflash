@@ -593,7 +593,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         if (unlikely(context.isExecutorTest()))
             handleMockExchangeReceiver(pipeline);
         else
+        {
+            // for MPP test, we can use real exchangeReceiver to run an query across different compute nodes
+            // or use one compute node to simulate MPP process.
             handleExchangeReceiver(pipeline);
+        }
         recordProfileStreams(pipeline, query_block.source_name);
     }
     else if (query_block.source->tp() == tipb::ExecType::TypeProjection)
@@ -688,7 +692,11 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         if (unlikely(context.isExecutorTest()))
             handleMockExchangeSender(pipeline);
         else
+        {
+            // for MPP test, we can use real exchangeReceiver to run an query across different compute nodes
+            // or use one compute node to simulate MPP process.
             handleExchangeSender(pipeline);
+        }
         recordProfileStreams(pipeline, query_block.exchange_sender_name);
     }
 }

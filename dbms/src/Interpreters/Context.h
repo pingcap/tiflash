@@ -233,26 +233,6 @@ public:
     bool isExternalTableExist(const String & table_name) const;
     void assertTableExists(const String & database_name, const String & table_name) const;
 
-    bool isMPPTest() const { return test_mode == mpp_test; }
-    void setMPPTest() { test_mode = mpp_test; }
-    bool isExecutorTest() const { return test_mode == executor_test; }
-    void setExecutorTest() { test_mode = executor_test; }
-    bool isTest() const { return test_mode != non_test; }
-
-    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
-    std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap() { return columns_for_test_map; }
-    ColumnsWithTypeAndName columnsForTest(String executor_id)
-    {
-        auto it = columns_for_test_map.find(executor_id);
-        if (unlikely(it == columns_for_test_map.end()))
-        {
-            throw DB::Exception("Don't have columns for mock source executors");
-        }
-        return it->second;
-    }
-    bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
-
-
     /** The parameter check_database_access_rights exists to not check the permissions of the database again,
       * when assertTableDoesntExist or assertDatabaseExists is called inside another function that already
       * made this check.
@@ -492,6 +472,17 @@ public:
     void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
 
     size_t getMaxStreams() const;
+
+    /// For executor tests and MPPTask tests.
+    bool isMPPTest() const;
+    void setMPPTest();
+    bool isExecutorTest() const;
+    void setExecutorTest();
+    bool isTest() const;
+    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_);
+    std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap();
+    ColumnsWithTypeAndName columnsForTest(String executor_id);
+    bool columnsForTestEmpty();
 
 private:
     /** Check if the current client has access to the specified database.

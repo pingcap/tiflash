@@ -157,6 +157,7 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
+    // For MPP test, we don't care about security config.
     if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
@@ -380,7 +381,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         std::string client_ip = peer.substr(pos + 1);
         Poco::Net::SocketAddress client_address(client_ip);
 
-        if (!context.isMPPTest()) // ywq todo
+        // For MPP test, we don't care about security config.
+        if (!context.isMPPTest())
             tmp_context->setUser(user, password, client_address, quota_key);
 
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");

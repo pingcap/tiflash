@@ -13,32 +13,15 @@
 // limitations under the License.
 
 #include <Server/MockComputeServer.h>
-#include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
-#include <TestUtils/mockExecutor.h>
+#include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB
 {
 namespace tests
 {
-class ComputeServerRunner : public DB::tests::ExecutorTest
+class ComputeServerRunner : public DB::tests::MPPTaskTestUtils
 {
 public:
-    std::shared_ptr<tipb::DAGRequest> dag_request;
-
-    static void SetUpTestCase()
-    {
-        ExecutorTest::SetUpTestCase();
-
-        compute_server_ptr = std::make_unique<MockComputeServer>(TiFlashTestEnv::getGlobalContext(), &Poco::Logger::get("compute"));
-    }
-
-    static void TearDownTestCase()
-    {
-        compute_server_ptr.reset();
-    }
-
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -58,19 +41,7 @@ public:
             {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
             {toNullableVec<String>("s", {"banana", {}, "banana"}), toNullableVec<String>("join_c", {"apple", {}, "banana"})});
     }
-
-protected:
-    // TODO: Mock a simple storage layer to store test input.
-    // Currently the lifetime of a server is held in this scope.
-    // TODO: Add ComputeServerManager to maintain the lifetime of a bunch of servers.
-    // Note: May go through GRPC fail number 14 --> socket closed,
-    // if you start a server, send a request to the server using pingcap::kv::RpcClient,
-    // then close the server and start the server using the same addr,
-    // then send a request to the new server using pingcap::kv::RpcClient.
-    static std::unique_ptr<MockComputeServer> compute_server_ptr;
 };
-
-std::unique_ptr<MockComputeServer> ComputeServerRunner::compute_server_ptr = nullptr;
 
 TEST_F(ComputeServerRunner, runAggTasks)
 try
