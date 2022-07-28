@@ -154,7 +154,7 @@ public:
 
     size_t getSourceNum() const { return 1; }
 
-    BatchCoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header)
+    BatchCoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/)
     {
         std::shared_ptr<coprocessor::BatchResponse> recv_msg;
         watch.restart();

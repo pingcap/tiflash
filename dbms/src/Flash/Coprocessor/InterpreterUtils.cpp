@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DAGResponseWriter.h>
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExchangeSenderBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -21,9 +20,10 @@
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Interpreters/Context.h>
-#include <StreamingDAGResponseWriter.h>
 
 namespace DB
 {

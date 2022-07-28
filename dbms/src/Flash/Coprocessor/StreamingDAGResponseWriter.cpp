@@ -172,9 +172,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::w
 }
 
 template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
-void StreamingDAGResponseWriter<StreamWriterPtr>::encodeJob()
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::encodeJob()
 {
-    LOG_INFO(&Poco::Logger::get("fff"), "encode job started");
+    LOG_TRACE(&Poco::Logger::get("fff"), "encode job started");
     String err_msg;
     try
     {
@@ -187,7 +187,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeJob()
             const auto & blocks = blocks_and_rsp->blocks;
             if (blocks.empty())
             {
-                LOG_FMT_INFO(&Poco::Logger::get("fff"), "meet empty blocks, ended");
+                LOG_FMT_TRACE(&Poco::Logger::get("fff"), "meet empty blocks, ended");
                 if (blocks_and_rsp->send_exec_summary_at_last)
                 {
                     writer->write(*rsp);
@@ -385,8 +385,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::h
 
 template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::writePackets(const std::vector<size_t> & responses_row_count,
-                                                                                            std::vector<mpp::MPPDataPacket> & packets) const
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::writePackets(
+    const std::vector<size_t> & responses_row_count,
+    std::vector<mpp::MPPDataPacket> & packets) const
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {

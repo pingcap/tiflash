@@ -490,7 +490,6 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
 #endif
     constexpr static const Int64 PROTOCOL_COP = 0;
     constexpr static const Int64 PROTOCOL_BATCH_COP = 1;
-    constexpr static const Int64 PROTOCOL_MPP = 2;
     Int64 read_node_protocol = 0;
     if (is_read_node)
     {
@@ -573,34 +572,11 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
             size_t idx = 0;
             for (; idx < expect_concurrent_num / all_batch_tasks.size(); ++idx)
             {
-                BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID());
+                BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id_=*/0);
                 pipeline.streams.emplace_back(std::move(input));
             }
             LOG_FMT_INFO(log, "build {} batch cop input stream for [task_idx={}] within 1 grpc connection", idx, task_idx);
         }
-    }
-    else if (read_node_protocol == PROTOCOL_MPP)
-    {
-        auto req = std::make_shared<pingcap::coprocessor::Request>();
-        remote_requests[0].dag_request.SerializeToString(&req->data); // TODO: Is is ok for partition table?
-        req->tp = pingcap::coprocessor::ReqType::DAG;
-        req->start_ts = context.getSettingsRef().read_tso;
-        req->schema_version = context.getSettingsRef().schema_version;
-
-        // Dispatch mpp task and establish mpp connections
-        mpp::DispatchTaskRequest dispatch_mpp_task;
-        {
-            auto * meta = dispatch_mpp_task.mutable_meta();
-            meta->set_start_ts(req->start_ts);
-            auto task_id = std::numeric_limits<Int64>::max();
-            task_id -= context.getDAGContext()->getMPPTaskId().task_id;
-            meta->set_task_id(task_id);
-            dispatch_mpp_task.set_encoded_plan(req->data);
-            dispatch_mpp_task.set_timeout(60);
-            dispatch_mpp_task.set_schema_ver(req->schema_version);
-        }
-
-        throw Exception("not implement mpp protocol!", ErrorCodes::NOT_IMPLEMENTED);
     }
     else
     {
