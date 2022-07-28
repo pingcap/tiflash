@@ -4437,7 +4437,7 @@ public:
             std::string res_string(space_num, ' ');
             col_res->insert(res_string);
         }
-        
+
         block.getByPosition(result).column = std::move(col_res);
     }
 
