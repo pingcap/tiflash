@@ -79,16 +79,28 @@ public:
     CoprocessorReader(
         const DAGSchema & schema_,
         pingcap::kv::Cluster * cluster,
-        std::vector<pingcap::coprocessor::copTask> tasks,
+        std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
-        int concurrency)
+        int concurrency_)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
-        , resp_iter(std::move(tasks), cluster, concurrency, &Poco::Logger::get("pingcap/coprocessor"))
+        , resp_iter(std::move(tasks), cluster, concurrency_, &Poco::Logger::get("pingcap/coprocessor"))
+        , total_wait_pull_channel_elapse_ms(0)
         , collected(false)
-        , concurrency_(concurrency)
+        , concurrency(concurrency_)
     {
         resp_iter.open();
+    }
+
+    ~CoprocessorReader()
+    {
+        // TODO: Remove this verbose logging?
+        LOG_FMT_DEBUG(
+            Logger::get(name),
+            "done, wait_pull_channel_ms={} wait_net_ms={} net_recv_bytes={}",
+            total_wait_pull_channel_elapse_ms,
+            resp_iter.total_wait_net_elapse_ms,
+            resp_iter.total_net_recv_bytes);
     }
 
     const DAGSchema & getOutputSchema() const { return schema; }
@@ -142,7 +154,9 @@ public:
     // stream_id is only meaningful for ExchagneReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/)
     {
+        Stopwatch read_watch;
         auto && [result, has_next] = resp_iter.next();
+        total_wait_pull_channel_elapse_ms += read_watch.elapsedMilliseconds();
         if (!result.error.empty())
             return {nullptr, true, result.error.message(), false};
         if (!has_next)
@@ -173,7 +187,7 @@ public:
 
     size_t getSourceNum() const { return 1; }
 
-    int computeNewThreadCount() const { return concurrency_; }
+    int computeNewThreadCount() const { return concurrency; }
 
     void collectNewThreadCount(int & cnt)
     {
@@ -191,7 +205,9 @@ public:
 
     void close() {}
 
+    size_t total_wait_pull_channel_elapse_ms;
+
     bool collected = false;
-    int concurrency_;
+    int concurrency;
 };
 } // namespace DB

@@ -15,12 +15,16 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/MPMCQueue.h>
+#include <Common/ThreadManager.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <common/logger_useful.h>
+
+#include <condition_variable>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <common/ThreadPool.h>
@@ -47,9 +51,13 @@ public:
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
-        UInt64 fine_grained_shuffle_batch_size);
+        UInt64 fine_grained_shuffle_batch_size,
+        bool encode_pipe_ = false);
+
     void write(const Block & block) override;
     void finishWrite() override;
+
+    ~StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>();
 
 private:
     template <bool send_exec_summary_at_last>
@@ -81,6 +89,21 @@ private:
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
+
+    bool encode_pipe;
+    void encodeJob();
+
+    struct EncodeElem
+    {
+        std::vector<Block> blocks;
+        tipb::SelectResponse rsp;
+        bool send_exec_summary_at_last = false;
+    };
+    mutable MPMCQueue<std::shared_ptr<EncodeElem>> encode_queue;
+    std::shared_ptr<ThreadManager> thread_manager;
+    std::mutex mu;
+    bool finished;
+    std::condition_variable cv_for_finished;
 };
 
 } // namespace DB

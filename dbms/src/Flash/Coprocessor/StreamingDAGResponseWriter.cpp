@@ -12,18 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/ThreadManager.h>
 #include <Common/TiFlashException.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Interpreters/AggregationCommon.h>
+#include <common/logger_useful.h>
+#include <tipb/select.pb.h>
 
-#include <iostream>
+#include <memory>
 
 namespace DB
 {
@@ -50,7 +55,8 @@ StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::Stream
     bool should_send_exec_summary_at_last_,
     DAGContext & dag_context_,
     uint64_t fine_grained_shuffle_stream_count_,
-    UInt64 fine_grained_shuffle_batch_size_)
+    UInt64 fine_grained_shuffle_batch_size_,
+    bool encode_pipe_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , batch_send_min_limit(batch_send_min_limit_)
     , should_send_exec_summary_at_last(should_send_exec_summary_at_last_)
@@ -60,6 +66,10 @@ StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::Stream
     , collators(std::move(collators_))
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
+    , encode_pipe(encode_pipe_)
+    , encode_queue(20)
+    , thread_manager(newThreadManager())
+    , finished(false)
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
@@ -74,6 +84,36 @@ StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::Stream
     case tipb::EncodeType::TypeCHBlock:
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
         break;
+    }
+
+    if (encode_pipe)
+    {
+        thread_manager->schedule(true, "DAGResponseWriter", [this] {
+            encodeJob();
+        });
+        finished = true;
+    }
+}
+
+template <typename StreamWriterPtr, bool enable_fine_grained_shuffle>
+StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::~StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>()
+{
+    try
+    {
+        {
+            std::unique_lock lock(mu);
+            if (finished)
+            {
+                return;
+            }
+
+            encode_queue.finish();
+        }
+        thread_manager->wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(&Poco::Logger::get("fff"), "Error in destructor of StreamingDAGResponseWriter");
     }
 }
 
@@ -132,6 +172,63 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::w
 }
 
 template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::encodeJob()
+{
+    LOG_TRACE(&Poco::Logger::get("fff"), "encode job started");
+    String err_msg;
+    try
+    {
+        std::shared_ptr<EncodeElem> blocks_and_rsp;
+
+        std::unique_ptr<ChunkCodecStream> my_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
+        while (encode_queue.pop(blocks_and_rsp))
+        {
+            auto * rsp = &blocks_and_rsp->rsp;
+            const auto & blocks = blocks_and_rsp->blocks;
+            if (blocks.empty())
+            {
+                LOG_FMT_TRACE(&Poco::Logger::get("fff"), "meet empty blocks, ended");
+                if (blocks_and_rsp->send_exec_summary_at_last)
+                {
+                    writer->write(*rsp);
+                }
+                break; // exit
+            }
+
+            for (const auto & block : blocks)
+            {
+                my_codec_stream->encode(block, 0, block.rows());
+                auto * dag_chunk = rsp->add_chunks();
+                dag_chunk->set_rows_data(my_codec_stream->getString());
+                my_codec_stream->clear();
+            }
+            writer->write(*rsp);
+        }
+    }
+    catch (Exception & e)
+    {
+        err_msg = e.message();
+    }
+    catch (std::exception & e)
+    {
+        err_msg = e.what();
+    }
+    catch (...)
+    {
+        err_msg = fmt::format("fatal error in {}", __PRETTY_FUNCTION__);
+    }
+    if (!err_msg.empty())
+        LOG_ERROR(&Poco::Logger::get("fff"), err_msg);
+
+    // consumerFinish
+    encode_queue.finish();
+    std::unique_lock lock(mu);
+    if (finished)
+        return;
+    finished = true;
+}
+
+template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
@@ -164,23 +261,41 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
         }
         else /// passthrough data to a non-TiFlash node, like sending data to TiSpark
         {
-            response.set_encode_type(dag_context.encode_type);
-            if (input_blocks.empty())
+            if (!encode_pipe)
             {
+                response.set_encode_type(dag_context.encode_type);
+                if (input_blocks.empty())
+                {
+                    if constexpr (send_exec_summary_at_last)
+                    {
+                        writer->write(response);
+                    }
+                    return;
+                }
+                for (const auto & block : input_blocks)
+                {
+                    chunk_codec_stream->encode(block, 0, block.rows());
+                    auto * dag_chunk = response.add_chunks();
+                    dag_chunk->set_rows_data(chunk_codec_stream->getString());
+                    chunk_codec_stream->clear();
+                }
+                writer->write(response);
+            }
+            else
+            {
+                response.set_encode_type(dag_context.encode_type);
+                EncodeElem e{.blocks = input_blocks, .rsp = response};
                 if constexpr (send_exec_summary_at_last)
                 {
-                    writer->write(response);
+                    e.send_exec_summary_at_last = true;
                 }
-                return;
+                auto elem = std::make_shared<EncodeElem>(std::move(e));
+                if (encode_queue.push(elem))
+                {
+                    return;
+                }
+                // push failed, wait for consumer for the final state?
             }
-            for (const auto & block : input_blocks)
-            {
-                chunk_codec_stream->encode(block, 0, block.rows());
-                auto * dag_chunk = response.add_chunks();
-                dag_chunk->set_rows_data(chunk_codec_stream->getString());
-                chunk_codec_stream->clear();
-            }
-            writer->write(response);
         }
     }
     else /// passthrough data to a TiDB node
@@ -224,7 +339,6 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
         writer->write(response);
     }
 }
-
 
 template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>

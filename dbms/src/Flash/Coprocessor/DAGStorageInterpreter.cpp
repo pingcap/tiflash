@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashException.h>
@@ -22,6 +23,7 @@
 #include <DataStreams/MultiplexInputStream.h>
 #include <DataStreams/NullBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/BatchCoprocessorReader.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -37,10 +39,17 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <common/logger_useful.h>
+
+#include <limits>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
+#include <kvproto/mpp.pb.h>
+#include <pingcap/coprocessor/Client.h>
+#include <pingcap/kv/Backoff.h>
+#include <pingcap/kv/RegionCache.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 
@@ -479,40 +488,101 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
             throw Exception("Schema mismatch between different partitions for partition table");
     }
 #endif
-    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
-    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    std::vector<pingcap::coprocessor::copTask> all_tasks;
-    for (const auto & remote_request : remote_requests)
+    constexpr static const Int64 PROTOCOL_COP = 0;
+    constexpr static const Int64 PROTOCOL_BATCH_COP = 1;
+    Int64 read_node_protocol = 0;
+    if (is_read_node)
     {
-        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
-        remote_request.dag_request.SerializeToString(&(req->data));
+        read_node_protocol = settings.rn_protocal;
+    }
+
+    if (read_node_protocol == PROTOCOL_COP)
+    {
+        // build cop request streams
+        bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+        pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+        std::vector<pingcap::coprocessor::CopTask> all_tasks;
+        for (const auto & remote_request : remote_requests)
+        {
+            pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
+            remote_request.dag_request.SerializeToString(&(req->data));
+            req->tp = pingcap::coprocessor::ReqType::DAG;
+            req->start_ts = context.getSettingsRef().read_tso;
+            req->schema_version = context.getSettingsRef().schema_version;
+
+            pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+            pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
+            auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+            all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+        }
+
+        const size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
+        const size_t task_per_thread = all_tasks.size() / concurrent_num;
+        const size_t rest_task = all_tasks.size() % concurrent_num;
+        for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
+        {
+            size_t task_end = task_start + task_per_thread;
+            if (i < rest_task)
+                task_end++;
+            if (task_end == task_start)
+                continue;
+            std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+
+            auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+            context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+            BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
+            pipeline.streams.push_back(input);
+            task_start = task_end;
+        }
+    }
+    else if (read_node_protocol == PROTOCOL_BATCH_COP)
+    {
+        // build batch cop request streams
+        pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+        auto req = std::make_shared<pingcap::coprocessor::Request>();
+        remote_requests[0].dag_request.SerializeToString(&req->data); // TODO: Is is ok for partition table?
         req->tp = pingcap::coprocessor::ReqType::DAG;
         req->start_ts = context.getSettingsRef().read_tso;
         req->schema_version = context.getSettingsRef().schema_version;
+        // FIXME: req->table_regions for partition table?
+
+        std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
+        ranges_for_each_physical_table.reserve(remote_requests.size());
+        for (const auto & remote_request : remote_requests)
+        {
+            ranges_for_each_physical_table.emplace_back(remote_request.key_ranges);
+        }
+
+        // TODO: support partition table
+        if (ranges_for_each_physical_table.size() != 1)
+        {
+            throw Exception(fmt::format("Do not support for partition table scan now! [ranges_for_each_physical_table={}]", ranges_for_each_physical_table.size()), ErrorCodes::NOT_IMPLEMENTED);
+        }
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
+        const auto & settings = context.getSettingsRef();
+        const size_t batch_cop_split = settings.rn_batch_cop_split; // TODO: Remove batch_cop_split
+        const size_t expect_concurrent_num = settings.max_threads;
+        const size_t recv_buffer_size = settings.rn_recv_buffer;
+        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, ranges_for_each_physical_table, store_type, batch_cop_split, &Poco::Logger::get("pingcap/coprocessor"));
+        LOG_FMT_INFO(log, "build {} batch cop tasks with [split={}]", all_batch_tasks.size(), batch_cop_split);
+        for (size_t task_idx = 0; task_idx < all_batch_tasks.size(); ++task_idx)
+        {
+            const auto & batch_task = all_batch_tasks[task_idx];
+            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, recv_buffer_size);
+            size_t idx = 0;
+            for (; idx < expect_concurrent_num / all_batch_tasks.size(); ++idx)
+            {
+                BlockInputStreamPtr input = std::make_shared<BatchCoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id_=*/0);
+                pipeline.streams.emplace_back(std::move(input));
+            }
+            LOG_FMT_INFO(log, "build {} batch cop input stream for [task_idx={}] within 1 grpc connection", idx, task_idx);
+        }
     }
-
-    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-    size_t task_per_thread = all_tasks.size() / concurrent_num;
-    size_t rest_task = all_tasks.size() % concurrent_num;
-    for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
+    else
     {
-        size_t task_end = task_start + task_per_thread;
-        if (i < rest_task)
-            task_end++;
-        if (task_end == task_start)
-            continue;
-        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
-
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
-        pipeline.streams.push_back(input);
-        task_start = task_end;
+        throw Exception("unknown protocol!", ErrorCodes::LOGICAL_ERROR);
     }
 }
 

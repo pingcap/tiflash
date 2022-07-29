@@ -44,11 +44,11 @@ struct RemoteRequest
         , schema(std::move(schema_))
         , key_ranges(std::move(key_ranges_))
     {}
+
     tipb::DAGRequest dag_request;
     DAGSchema schema;
     /// the sorted key ranges
-    std::vector<pingcap::coprocessor::KeyRange> key_ranges;
-
+    pingcap::coprocessor::KeyRanges key_ranges;
 
     static RemoteRequest build(
         const RegionRetryList & retry_regions,

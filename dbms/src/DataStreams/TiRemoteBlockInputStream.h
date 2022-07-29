@@ -16,6 +16,7 @@
 
 #include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Flash/Coprocessor/BatchCoprocessorReader.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
@@ -260,4 +261,5 @@ protected:
 
 using ExchangeReceiverInputStream = TiRemoteBlockInputStream<ExchangeReceiver>;
 using CoprocessorBlockInputStream = TiRemoteBlockInputStream<CoprocessorReader>;
+using BatchCoprocessorBlockInputStream = TiRemoteBlockInputStream<BatchCoprocessorReader>;
 } // namespace DB
