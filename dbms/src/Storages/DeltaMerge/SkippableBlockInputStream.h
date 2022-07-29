@@ -55,7 +55,17 @@ private:
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_)
+    explicit ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_)
+        : rows(inputs_.size(), 0)
+        , precede_stream_rows(0)
+    {
+        children.insert(children.end(), inputs_.begin(), inputs_.end());
+        current_stream = children.begin();
+    }
+
+    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_)
+        : rows(std::move(rows_))
+        , precede_stream_rows(0)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
@@ -83,6 +93,7 @@ public:
             else
             {
                 (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
                 ++current_stream;
             }
         }
@@ -99,10 +110,14 @@ public:
             res = (*current_stream)->read();
 
             if (res)
+            {
+                res.setStartOffset(res.startOffset() + precede_stream_rows);
                 break;
+            }
             else
             {
                 (*current_stream)->readSuffix();
+                precede_stream_rows += rows[current_stream - children.begin()];
                 ++current_stream;
             }
         }
@@ -112,6 +127,8 @@ public:
 
 private:
     BlockInputStreams::iterator current_stream;
+    std::vector<size_t> rows;
+    size_t precede_stream_rows;
 };
 
 } // namespace DM

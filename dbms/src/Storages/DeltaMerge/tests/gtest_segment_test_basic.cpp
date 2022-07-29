@@ -414,7 +414,7 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::o
     operation_statistics["write"]++;
 }
 
-void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool clear)
 {
     LOG_INFO(logger_op, "ingestDTFileIntoDelta, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -446,7 +446,7 @@ void SegmentTestBasic::ingestDTFileIntoDelta(PageId segment_id, UInt64 write_row
         wbs.data.putRefPage(ref_id, dm_file->pageId());
         auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
         wbs.writeLogAndData();
-        ASSERT_TRUE(segment->ingestDataToDelta(*dm_context, segment->getRowKeyRange(), {ref_file}, /* clear_data_in_range */ true));
+        ASSERT_TRUE(segment->ingestDataToDelta(*dm_context, segment->getRowKeyRange(), {ref_file}, /* clear_data_in_range */ clear));
 
         ingest_wbs.rollbackWrittenLogAndData();
     }

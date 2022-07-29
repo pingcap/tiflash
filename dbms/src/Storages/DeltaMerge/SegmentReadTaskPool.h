@@ -129,6 +129,8 @@ enum class ReadMode
      * are just returned.
      */
     Raw,
+
+    Bitmap,
 };
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
@@ -244,6 +246,7 @@ private:
     bool exceptionHappened() const;
     void finishSegment(const SegmentPtr & seg);
     void pushBlock(Block && block);
+    ReadMode readModeOfSegment(SegmentReadTaskPtr & t);
 
     const uint64_t pool_id;
     const int64_t table_id;

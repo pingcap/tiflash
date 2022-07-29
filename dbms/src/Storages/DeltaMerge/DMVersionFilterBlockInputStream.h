@@ -199,6 +199,22 @@ private:
         return matched ? cur_version : std::numeric_limits<UInt64>::max();
     }
 
+    Block getNewBlock(const Block & block)
+    {
+        if (block.segmentRowIdCol() == nullptr)
+        {
+            return getNewBlockByHeader(header, block);
+        }
+        else
+        {
+            // `DMVersionFilterBlockInputStream` is the last stage for generating segment row id.
+            // In the way we use it, the other columns are not used subsequently.
+            Block res;
+            res.setSegmentRowIdCol(block.segmentRowIdCol());
+            return res;
+        }
+    }
+
 private:
     const UInt64 version_limit;
     const bool is_common_handle;

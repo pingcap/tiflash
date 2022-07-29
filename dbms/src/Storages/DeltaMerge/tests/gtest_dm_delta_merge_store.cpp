@@ -478,10 +478,10 @@ try
     while (in->read()) {};
     in->readSuffix();
 
-    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 7);
-    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 50000);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 0);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 0);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 7 * 2);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 50000 * 2);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 0 * 2);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 0 * 2);
 
     auto filter = createGreater(Attr{col_a_define.name, col_a_define.id, DataTypeFactory::instance().get("Int64")}, Field(static_cast<Int64>(10000)), 0);
     scan_context = std::make_shared<ScanContext>();
@@ -504,10 +504,10 @@ try
     while (in->read()) {};
     in->readSuffix();
 
-    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 6);
-    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 41808);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 1);
-    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 8192);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_packs, 6 * 2);
+    ASSERT_EQ(scan_context->total_dmfile_scanned_rows, 41808 * 2);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_packs, 1 * 2);
+    ASSERT_EQ(scan_context->total_dmfile_skipped_rows, 8192 * 2);
 }
 CATCH
 

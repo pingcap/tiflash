@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -176,7 +177,8 @@ public:
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         UInt64 max_version,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        bool need_row_id = false);
 
     BlockInputStreamPtr getInputStreamModeNormal(
         const DMContext & dm_context,
@@ -532,6 +534,10 @@ public:
 
     void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
 
+    static bool useBitmapFilter(const DMContext & dm_context,
+                                const SegmentSnapshotPtr & segment_snap,
+                                const ColumnDefines & columns_to_read);
+
 private:
     ReadInfo getReadInfo(
         const DMContext & dm_context,
@@ -556,7 +562,8 @@ private:
         const IndexIterator & delta_index_begin,
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
-        UInt64 max_version = std::numeric_limits<UInt64>::max());
+        UInt64 max_version = std::numeric_limits<UInt64>::max(),
+        bool need_row_id = false);
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.
@@ -591,6 +598,30 @@ private:
         DeltaTree & delta_tree,
         const RowKeyRange & relevant_range,
         bool relevant_place) const;
+
+    static bool useCleanRead(const SegmentSnapshotPtr & segment_snap,
+                             const ColumnDefines & columns_to_read);
+    BitmapFilterPtr buildBitmapFilter(const DMContext & dm_context,
+                                      const SegmentSnapshotPtr & segment_snap,
+                                      const RowKeyRanges & read_ranges,
+                                      const RSOperatorPtr & filter,
+                                      UInt64 max_version,
+                                      size_t expected_block_size);
+    BlockInputStreamPtr getBitmapFilterInputStream(BitmapFilterPtr && bitmap_filter,
+                                                   const DMContext & dm_context,
+                                                   const ColumnDefines & columns_to_read,
+                                                   const RowKeyRanges & data_ranges,
+                                                   const RSOperatorPtr & filter,
+                                                   UInt64 max_version,
+                                                   size_t expected_block_size);
+    BlockInputStreamPtr getBitmapFilterInputStream(const DMContext & dm_context,
+                                                   const ColumnDefines & columns_to_read,
+                                                   const SegmentSnapshotPtr & segment_snap,
+                                                   const RowKeyRanges & data_ranges,
+                                                   const RSOperatorPtr & filter,
+                                                   UInt64 max_version,
+                                                   size_t expected_block_size);
+
 
 private:
     /// The version of this segment. After split / merge / mergeDelta / replaceData, epoch got increased by 1.
