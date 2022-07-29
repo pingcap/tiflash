@@ -350,7 +350,9 @@ StableValueSpace::Snapshot::getInputStream(
 {
     LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
-
+    std::vector<size_t> rows;
+    streams.reserve(stable->files.size());
+    rows.reserve(stable->files.size());
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
@@ -361,8 +363,9 @@ StableValueSpace::Snapshot::getInputStream(
             .setTracingID(context.tracing_id)
             .setRowsThreshold(expected_block_size);
         streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, context.scan_context));
+        rows.push_back(stable->files[i]->getRows());
     }
-    return std::make_shared<ConcatSkippableBlockInputStream>(streams);
+    return std::make_shared<ConcatSkippableBlockInputStream>(streams, std::move(rows));
 }
 
 RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const

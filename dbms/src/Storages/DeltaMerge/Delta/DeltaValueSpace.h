@@ -412,6 +412,9 @@ public:
                      UInt64 max_version);
 };
 
+// `DeltaValueInputStream` will read ALL data in delta.
+// Blocks are not filtered.
+// `segment_range_` is unsued.
 class DeltaValueInputStream : public IBlockInputStream
 {
 private:
@@ -419,6 +422,7 @@ private:
     ColumnFileSetInputStream persisted_files_input_stream;
 
     bool persisted_files_done = false;
+    size_t read_rows = 0;
 
 public:
     DeltaValueInputStream(const DMContext & context_,
@@ -433,6 +437,15 @@ public:
     Block getHeader() const override { return persisted_files_input_stream.getHeader(); }
 
     Block read() override
+    {
+        auto block = doRead();
+        block.setStartOffset(read_rows);
+        read_rows += block.rows();
+        return block;
+    }
+
+    // Read block from old to new.
+    Block doRead()
     {
         if (persisted_files_done)
             return mem_table_input_stream.read();

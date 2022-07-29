@@ -395,8 +395,14 @@ public:
     StoreStats getStoreStats();
     SegmentsStats getSegmentsStats();
 
-    bool isCommonHandle() const { return is_common_handle; }
-    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
+    bool isCommonHandle() const
+    {
+        return is_common_handle;
+    }
+    size_t getRowKeyColumnSize() const
+    {
+        return rowkey_column_size;
+    }
 
 public:
     /// Methods mainly used by region split.
@@ -609,7 +615,6 @@ public:
 
     BackgroundProcessingPool & blockable_background_pool;
     BackgroundProcessingPool::TaskHandle blockable_background_pool_handle;
-
     /// end of range -> segment
     SegmentSortedMap segments;
     /// Mainly for debug.
@@ -621,6 +626,7 @@ public:
 
     RowKeyValue next_gc_check_key;
 
+    RowKeyValue next_update_bitmap_filter_key;
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
 
