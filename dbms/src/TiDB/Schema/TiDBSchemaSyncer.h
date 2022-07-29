@@ -124,7 +124,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         if (version_after_load_diff = tryLoadSchemaDiffs(getter, version, context); version_after_load_diff == -1)
         {
             GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
-            version_after_load_diff = loadAllSchema(getter, version_after_load_diff, context);
+            version_after_load_diff = loadAllSchema(getter, version, context);
         }
         cur_version = version_after_load_diff;
         GET_METRIC(tiflash_schema_version).Set(cur_version);
