@@ -27,6 +27,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
+
 #include "Storages/Transaction/TypeMapping.h"
 
 namespace DB
@@ -1671,7 +1672,7 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
     /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
     if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
     {
-        // Note: the type columnInfo here will not affect later processing, it only serves as a 
+        // Note: the type columnInfo here will not affect later processing, it only serves as a
         // placeholder so that this additional output column will not be neglected when translated to DAGRequest
         ColumnInfo ci{};
         schema.push_back(toNullableDAGColumnInfo(std::make_pair("", ci)));
