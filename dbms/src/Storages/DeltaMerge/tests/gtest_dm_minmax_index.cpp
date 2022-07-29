@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Index/ValueComparison.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
@@ -125,9 +126,7 @@ bool checkMatch(
 
     const ColumnDefine & col_to_read = check_pk ? getExtraHandleColumnDefine(is_common_handle) : cd;
     auto streams = store->read(context, context.getSettingsRef(), {col_to_read}, {all_range}, 1, std::numeric_limits<UInt64>::max(), filter, name, false);
-    streams[0]->readPrefix();
-    auto rows = streams[0]->read().rows();
-    streams[0]->readSuffix();
+    auto rows = getInputStreamNRows(streams[0]);
     store->drop();
 
     return rows != 0;

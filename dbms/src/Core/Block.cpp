@@ -300,7 +300,7 @@ std::string Block::dumpNames() const
             out << ", ";
         out << it->name;
     }
-    return out.str();
+    return out.releaseStr();
 }
 
 
@@ -313,7 +313,21 @@ std::string Block::dumpStructure() const
             out << ", ";
         it->dumpStructure(out);
     }
-    return out.str();
+    return out.releaseStr();
+}
+
+std::string Block::dumpJsonStructure() const
+{
+    WriteBufferFromOwnString out;
+    out << "[";
+    for (auto it = data.begin(); it != data.end(); ++it)
+    {
+        if (it != data.begin())
+            out << ",";
+        it->dumpJsonStructure(out);
+    }
+    out << "]";
+    return out.releaseStr();
 }
 
 
