@@ -28,8 +28,6 @@
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
-#include "Storages/Transaction/TypeMapping.h"
-
 namespace DB
 {
 using ASTPartitionByElement = ASTOrderByElement;
