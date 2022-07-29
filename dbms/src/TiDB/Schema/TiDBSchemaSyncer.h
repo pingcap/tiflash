@@ -183,7 +183,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         // Thus we need check whether latest schema diff is empty or not before begin to builder.applyDiff.
         if (!diffs.back())
         {
-            --latest_version;
             --used_version;
             diffs.pop_back();
         }
@@ -203,7 +202,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     // example:
                     //  - `cur_version` is 1, `latest_version` is 10
                     //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
-                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
+                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9(which we check it before)
                     LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                     continue;
                 }
