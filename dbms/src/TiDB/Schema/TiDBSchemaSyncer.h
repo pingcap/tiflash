@@ -180,7 +180,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
 
         // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
-        // Thus we need check whehter latest schema diff is empty or not before begin to builder.applyDiff.
+        // Thus we need check whether latest schema diff is empty or not before begin to builder.applyDiff.
         if (!diffs.back())
         {
             --latest_version;
