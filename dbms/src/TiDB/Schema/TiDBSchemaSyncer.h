@@ -199,6 +199,11 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 if (!schema_diff)
                 {
                     // If `schema diff` got empty `schema diff`(it's not the latest one, due to we check it before), we should just skip it.
+                    //
+                    // example:
+                    //  - `cur_version` is 1, `latest_version` is 10
+                    //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
+                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
                     LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                     continue;
                 }
