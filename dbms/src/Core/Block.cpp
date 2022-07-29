@@ -269,6 +269,10 @@ size_t Block::rows() const
         if (elem.column)
             return elem.column->size();
 
+    if (segment_row_id_col != nullptr)
+    {
+        return segment_row_id_col->size();
+    }
     return 0;
 }
 

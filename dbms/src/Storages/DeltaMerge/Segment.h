@@ -158,7 +158,8 @@ public:
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
         UInt64 max_version,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        bool for_bitmap = false);
 
     BlockInputStreamPtr getInputStream(
         const DMContext & dm_context,
@@ -339,7 +340,8 @@ private:
         const IndexIterator & delta_index_begin,
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
-        UInt64 max_version = std::numeric_limits<UInt64>::max());
+        UInt64 max_version = std::numeric_limits<UInt64>::max(),
+        bool for_bitmap = false);
 
     /// Merge delta & stable, and then take the middle one.
     std::optional<RowKeyValue> getSplitPointSlow(

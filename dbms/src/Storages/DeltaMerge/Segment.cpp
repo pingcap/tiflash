@@ -387,9 +387,10 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
                                             const RowKeyRanges & read_ranges,
                                             const RSOperatorPtr & filter,
                                             UInt64 max_version,
-                                            size_t expected_block_size)
+                                            size_t expected_block_size,
+                                            bool for_bitmap)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream", segment_id, epoch);
+    LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream for_bitmap {}", segment_id, epoch, for_bitmap);
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
@@ -408,7 +409,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
     {
         throw Exception("Unsupported for read_delta_only");
     }
-    else if (dm_context.read_stable_only)
+    else if (dm_context.read_stable_only && !for_bitmap)
     {
         stream = segment_snap->stable->getInputStream(
             dm_context,
@@ -445,7 +446,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
                                  read_info.index_begin,
                                  read_info.index_end,
                                  expected_block_size,
-                                 max_version);
+                                 max_version,
+                                 for_bitmap);
     }
 
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, real_ranges, 0);
@@ -1522,7 +1524,8 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext & dm_conte
                                                       const IndexIterator & delta_index_begin,
                                                       const IndexIterator & delta_index_end,
                                                       size_t expected_block_size,
-                                                      UInt64 max_version)
+                                                      UInt64 max_version,
+                                                      bool for_bitmap)
 {
     if (unlikely(rowkey_ranges.empty()))
         throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
@@ -1530,13 +1533,28 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext & dm_conte
     SkippableBlockInputStreamPtr stable_input_stream
         = stable_snap->getInputStream(dm_context, read_columns, rowkey_ranges, filter, max_version, expected_block_size, false);
     RowKeyRange rowkey_range = rowkey_ranges.size() == 1 ? rowkey_ranges[0] : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
-    return std::make_shared<DeltaMergeBlockInputStream<DeltaValueReader, IndexIterator, skippable_place>>( //
-        stable_input_stream,
-        delta_reader,
-        delta_index_begin,
-        delta_index_end,
-        rowkey_range,
-        expected_block_size);
+    if (!for_bitmap)
+    {
+        return std::make_shared<DeltaMergeBlockInputStream<DeltaValueReader, IndexIterator, skippable_place, /*for_bitmap*/ false>>( //
+            stable_input_stream,
+            delta_reader,
+            delta_index_begin,
+            delta_index_end,
+            rowkey_range,
+            expected_block_size,
+            stable_snap->getRows());
+    }
+    else
+    {
+        return std::make_shared<DeltaMergeBlockInputStream<DeltaValueReader, IndexIterator, skippable_place, /*for_bitmap*/ true>>( //
+            stable_input_stream,
+            delta_reader,
+            delta_index_begin,
+            delta_index_end,
+            rowkey_range,
+            expected_block_size,
+            stable_snap->getRows());
+    }
 }
 
 std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context,
