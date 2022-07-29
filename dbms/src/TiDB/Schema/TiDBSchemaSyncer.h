@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include "common/logger_useful.h"
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockSchemaGetter.h>
@@ -178,7 +177,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         LOG_FMT_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
 
 
-        if (diffs.empty()){
+        if (diffs.empty())
+        {
             LOG_FMT_WARNING(log, "Schema Diff is empty.");
             return -1;
         }
@@ -249,7 +249,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
-        if (!getter.checkSchemaDiffExists(version)){
+        if (!getter.checkSchemaDiffExists(version))
+        {
             --version;
         }
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
