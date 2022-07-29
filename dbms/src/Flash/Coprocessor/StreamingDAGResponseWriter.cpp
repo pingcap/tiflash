@@ -271,8 +271,9 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::h
 
 template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::writePackets(const std::vector<size_t> & responses_row_count,
-                                                                                            std::vector<mpp::MPPDataPacket> & packets) const
+void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::writePackets(
+    const std::vector<size_t> & responses_row_count,
+    std::vector<mpp::MPPDataPacket> & packets) const
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
