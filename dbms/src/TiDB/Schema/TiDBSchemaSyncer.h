@@ -188,7 +188,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             diffs.pop_back();
         }
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
 
         try
         {
