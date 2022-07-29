@@ -60,4 +60,10 @@ void orderStreams(
     bool enable_fine_grained_shuffle,
     const Context & context,
     const LoggerPtr & log);
+
+void executeCreatingSets(
+    DAGPipeline & pipeline,
+    const Context & context,
+    size_t max_streams,
+    const LoggerPtr & log);
 } // namespace DB

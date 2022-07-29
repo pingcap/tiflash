@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -894,6 +895,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
                                                         const SegmentSnapshotPtr & segment_snap,
                                                         WriteBatches & wbs) const
 {
+    SYNC_FOR("before_Segment::prepareSplit");
+
     if (!dm_context.enable_logical_split //
         || segment_snap->stable->getPacks() <= 3 //
         || segment_snap->delta->getRows() > segment_snap->stable->getRows())

@@ -171,7 +171,7 @@ static inline T ALWAYS_INLINE packFixed(
     return key;
 }
 
-
+/*
 /// Hash a set of keys into a UInt128 value.
 static inline UInt128 ALWAYS_INLINE hash128(
     size_t i,
@@ -202,7 +202,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
 
     return key;
 }
-
+*/
 
 /// Almost the same as above but it doesn't return any reference to key data.
 static inline UInt128 ALWAYS_INLINE hash128(
@@ -212,7 +212,7 @@ static inline UInt128 ALWAYS_INLINE hash128(
     const TiDB::TiDBCollators & collators,
     std::vector<std::string> & sort_key_containers)
 {
-    UInt128 key;
+    UInt128 key{};
     SipHash hash;
 
     if (collators.empty())
@@ -252,7 +252,7 @@ static inline StringRef * ALWAYS_INLINE placeKeysInPool(
     return reinterpret_cast<StringRef *>(res);
 }
 
-
+/*
 /// Copy keys to the pool. Then put into pool StringRefs to them and return the pointer to the first.
 static inline StringRef * ALWAYS_INLINE extractKeysAndPlaceInPool(
     size_t i,
@@ -326,7 +326,7 @@ inline StringRef ALWAYS_INLINE extractKeysAndPlaceInPoolContiguous(
 
     return {res, sum_keys_size};
 }
-
+*/
 
 /** Serialize keys into a continuous chunk of memory.
   */

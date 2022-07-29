@@ -264,6 +264,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     recordJoinExecuteInfo(tiflash_join.build_side_index, join_ptr);
 
+    auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
+
     size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
 
     /// build side streams
@@ -274,6 +276,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
         stream->setExtraInfo(
             fmt::format("join build, build_side_root_executor_id = {}", dagContext().getJoinExecuteInfoMap()[query_block.source_name].build_side_root_executor_id));
+        join_execute_info.join_build_streams.push_back(stream);
     });
     // for test, join executor need the return blocks to output.
     executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dagContext().isTest(), "for join");
@@ -294,7 +297,6 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     /// add join input stream
     if (is_tiflash_right_join)
     {
-        auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
         size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
         for (size_t i = 0; i < not_joined_concurrency; ++i)
         {
@@ -645,7 +647,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,
         pipeline.streams.size());
-    dagContext().final_concurrency = std::min(std::max(dagContext().final_concurrency, pipeline.streams.size()), max_streams);
+    dagContext().updateFinalConcurrency(pipeline.streams.size(), max_streams);
 
     if (res.before_aggregation)
     {
@@ -743,8 +745,8 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
             stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
         });
-        RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, Exception, "exchange_sender has to be hash partition when fine grained shuffle is enabled");
-        RUNTIME_CHECK(stream_count <= 1024, Exception, "fine_grained_shuffle_stream_count should not be greater than 1024");
+        RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, Exception("exchange_sender has to be hash partition when fine grained shuffle is enabled"));
+        RUNTIME_CHECK(stream_count <= 1024, Exception("fine_grained_shuffle_stream_count should not be greater than 1024"));
     }
     else
     {
