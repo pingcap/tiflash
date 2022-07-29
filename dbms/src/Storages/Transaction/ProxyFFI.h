@@ -126,7 +126,7 @@ EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server,
                                        WriteCmdsView cmds,
                                        RaftCmdHeader header);
 uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
-uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t until_succeed);
+uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t until_succeed, uint64_t index, uint64_t term);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
 EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header);

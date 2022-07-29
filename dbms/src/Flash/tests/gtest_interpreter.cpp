@@ -404,11 +404,11 @@ try
                                  table2.join(
                                      table3.join(table4,
                                                  {col("join_c")},
-                                                 ASTTableJoin::Kind::Left),
+                                                 tipb::JoinType::TypeLeftOuterJoin),
                                      {col("join_c")},
-                                     ASTTableJoin::Kind::Left),
+                                     tipb::JoinType::TypeLeftOuterJoin),
                                  {col("join_c")},
-                                 ASTTableJoin::Kind::Left)
+                                 tipb::JoinType::TypeLeftOuterJoin)
                            .build(context);
 
         String expected = R"(
@@ -446,11 +446,11 @@ CreatingSets
                                     receiver2.join(
                                         receiver3.join(receiver4,
                                                        {col("join_c")},
-                                                       ASTTableJoin::Kind::Left),
+                                                       tipb::JoinType::TypeLeftOuterJoin),
                                         {col("join_c")},
-                                        ASTTableJoin::Kind::Left),
+                                        tipb::JoinType::TypeLeftOuterJoin),
                                     {col("join_c")},
-                                    ASTTableJoin::Kind::Left)
+                                    tipb::JoinType::TypeLeftOuterJoin)
                            .build(context);
 
         String expected = R"(
@@ -488,11 +488,11 @@ CreatingSets
                                     receiver2.join(
                                         receiver3.join(receiver4,
                                                        {col("join_c")},
-                                                       ASTTableJoin::Kind::Left),
+                                                       tipb::JoinType::TypeLeftOuterJoin),
                                         {col("join_c")},
-                                        ASTTableJoin::Kind::Left),
+                                        tipb::JoinType::TypeLeftOuterJoin),
                                     {col("join_c")},
-                                    ASTTableJoin::Kind::Left)
+                                    tipb::JoinType::TypeLeftOuterJoin)
                            .exchangeSender(tipb::PassThrough)
                            .build(context);
 
@@ -534,7 +534,7 @@ try
         auto request = table1.join(
                                  table2,
                                  {col("join_c")},
-                                 ASTTableJoin::Kind::Left)
+                                 tipb::JoinType::TypeLeftOuterJoin)
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
@@ -563,7 +563,7 @@ CreatingSets
         auto request = table1.join(
                                  table2,
                                  {col("join_c")},
-                                 ASTTableJoin::Kind::Right)
+                                 tipb::JoinType::TypeRightOuterJoin)
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
@@ -595,7 +595,7 @@ CreatingSets
         auto request = receiver1.join(
                                     receiver2,
                                     {col("join_c")},
-                                    ASTTableJoin::Kind::Right)
+                                    tipb::JoinType::TypeRightOuterJoin)
                            .aggregation({Sum(col("r_a"))}, {col("join_c")})
                            .exchangeSender(tipb::PassThrough)
                            .limit(10)
