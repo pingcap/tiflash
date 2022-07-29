@@ -111,7 +111,7 @@ void RegionKVStoreTest::testNewProxy()
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
-        ASSERT_EQ(kvs.tryFlushRegionData(1, false, ctx.getTMTContext()), false, 0, 0);
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, ctx.getTMTContext(), 0, 0), false);
     }
 }
 
@@ -1241,7 +1241,7 @@ void RegionKVStoreTest::testKVStore()
         // There shall be data to flush.
         ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
         // Force flush until succeed only for testing.
-        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext()), true, 0, 0);
+        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext(), 0, 0), true);
     }
 }
 
