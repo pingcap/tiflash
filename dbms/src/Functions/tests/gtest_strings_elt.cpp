@@ -38,7 +38,7 @@ try
     constexpr size_t nboundary_test = 6;
 
     // return null if the first argument is less than 1, greater than the number of string arguments, or NULL
-    const int boundary_valus[nboundary_test] = {
+    const int boundary_values[nboundary_test] = {
         0,
         -1,
         -2,
@@ -50,12 +50,12 @@ try
     for (const auto i : ext::range(0, nboundary_test))
     {
         ASSERT_ELT(createConstColumn<Nullable<String>>(ndummy_col, {}),
-                   createConstColumn<Nullable<Int64>>(ndummy_col, boundary_valus[i]),
+                   createConstColumn<Nullable<Int64>>(ndummy_col, boundary_values[i]),
                    dummy_col0,
                    dummy_col1);
 
         ASSERT_ELT(createConstColumn<Nullable<String>>(ndummy_col, {}),
-                   createConstColumn<Int64>(ndummy_col, boundary_valus[i]),
+                   createConstColumn<Int64>(ndummy_col, boundary_values[i]),
                    dummy_col0,
                    dummy_col1);
     }
