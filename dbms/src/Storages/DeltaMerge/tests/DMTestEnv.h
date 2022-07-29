@@ -102,7 +102,7 @@ inline std::vector<Int64> createSignedNumbers(size_t beg, size_t end)
 inline String genMockCommonHandle(Int64 value, size_t rowkey_column_size)
 {
     WriteBufferFromOwnString ss;
-    for (size_t index = 0; index < rowkey_column_size; index++)
+    for (size_t index = 0; index < rowkey_column_size; ++index)
     {
         ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
         ::DB::EncodeInt64(value, ss);

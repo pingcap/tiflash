@@ -23,13 +23,12 @@
 #include <Storages/DeltaMerge/Index/ValueComparison.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
-
-#include "TestUtils/InputStreamTestUtils.h"
 
 namespace DB
 {
