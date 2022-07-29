@@ -1670,10 +1670,14 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
     /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
     if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
     {
-        // Note: the type columnInfo here will not affect later processing, it only serves as a
-        // placeholder so that this additional output column will not be neglected when translated to DAGRequest
-        ColumnInfo ci{};
-        schema.push_back(toNullableDAGColumnInfo(std::make_pair("", ci)));
+        tipb::FieldType field_type{};
+        field_type.set_tp(TiDB::TypeTiny);
+        field_type.set_charset("binary");
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        field_type.set_flag(0);
+        field_type.set_flen(-1);
+        field_type.set_decimal(-1);
+        schema.push_back(std::make_pair("", TiDB::fieldTypeToColumnInfo(field_type)));
     }
     else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
     {
