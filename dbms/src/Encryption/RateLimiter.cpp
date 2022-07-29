@@ -600,9 +600,10 @@ void IORateLimiter::runAutoTune()
         using time_point = std::chrono::time_point<std::chrono::system_clock>;
         using clock = std::chrono::system_clock;
         time_point auto_tune_time = clock::now();
-        time_point update_io_stat_time = clock::now();
+        time_point update_io_stat_time = auto_tune_time;
         while (!stop.load(std::memory_order_relaxed))
         {
+            std::this_thread::sleep_for(std::chrono::milliseconds(update_io_stat_period_ms));
             auto now_time_point = clock::now();
             if ((io_config.auto_tune_sec > 0) && (now_time_point - auto_tune_time > std::chrono::seconds(io_config.auto_tune_sec)))
             {
@@ -613,7 +614,6 @@ void IORateLimiter::runAutoTune()
             {
                 getCurrentIOInfo();
                 update_io_stat_time = now_time_point;
-                std::this_thread::sleep_for(std::chrono::milliseconds(update_io_stat_period_ms - 1));
             }
         }
     };
