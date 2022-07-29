@@ -369,7 +369,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (can_flush && flush_if_possible)
     {
-        LOG_FMT_DEBUG(log, "{} flush region due to canFlushRegionData", curr_region.toString(false));
+        LOG_FMT_DEBUG(log, "{} flush region due to canFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
         if (index)
         {
             // We set actual index when handling CompactLog.
