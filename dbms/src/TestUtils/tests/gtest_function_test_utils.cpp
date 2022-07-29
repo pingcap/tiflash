@@ -18,11 +18,16 @@ namespace DB
 {
 namespace tests
 {
-class TestFunctionTestUtils : public ::testing::Test
+TEST(TestFunctionTestUtils, CompareFloat64Column)
+try
 {
-};
+    ASSERT_COLUMN_EQ(
+        createColumn<Float64>({1.23456789}),
+        createColumn<Float64>({1.23456789}));
+}
+CATCH
 
-TEST_F(TestFunctionTestUtils, ParseDecimal)
+TEST(TestFunctionTestUtils, ParseDecimal)
 try
 {
     using DecimalField64 = DecimalField<Decimal64>;
@@ -58,7 +63,7 @@ try
 }
 CATCH
 
-TEST_F(TestFunctionTestUtils, CreateDecimalColumn)
+TEST(TestFunctionTestUtils, CreateDecimalColumn)
 try
 {
     using DecimalField64 = DecimalField<Decimal64>;
