@@ -184,6 +184,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         if (!diffs.back())
         {
             --latest_version;
+            --used_version;
+            diffs.pop_back();
         }
 
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
@@ -196,25 +198,10 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
                 if (!schema_diff)
                 {
-                    // If `schema diff` from `latest_version` got empty `schema diff`
-                    // Then we won't apply to `latest_version`, but we will apply to `latest_version - 1`
-                    // If `schema diff` from [`cur_version`, `latest_version - 1`] got empty `schema diff`
-                    // Then we should just skip it.
-                    //
-                    // example:
-                    //  - `cur_version` is 1, `latest_version` is 10
-                    //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
-                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
-                    if (diff_index != diffs.size() - 1)
-                    {
-                        LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
-                        continue;
-                    }
-
-                    // if diff_index == diffs.size() - 1, return used_version - 1;
-                    return used_version - 1;
+                    // If `schema diff` got empty `schema diff`(it's not the latest one, due to we check it before), we should just skip it.
+                    LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
+                    continue;
                 }
-
                 builder.applyDiff(*schema_diff);
             }
         }
