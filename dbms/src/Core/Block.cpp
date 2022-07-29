@@ -269,7 +269,7 @@ size_t Block::rows() const
         if (elem.column)
             return elem.column->size();
 
-    return 0;
+    return segment_row_id_col != nullptr ? segment_row_id_col->size() : 0;
 }
 
 

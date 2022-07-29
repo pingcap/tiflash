@@ -53,6 +53,12 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
                 mutate_col->popBack(pop_size);
                 col.column = std::move(mutate_col);
             }
+            if (block.segmentRowIdCol() != nullptr)
+            {
+                auto mut_col = (*std::move(block.segmentRowIdCol())).mutate();
+                mut_col->popBack(pop_size);
+                block.setSegmentRowIdCol(std::move(mut_col));
+            }
         }
         else
         {
@@ -60,12 +66,22 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
             {
                 col.column = col.column->cut(offset, limit);
             }
+            if (block.segmentRowIdCol() != nullptr)
+            {
+                auto new_col = block.segmentRowIdCol()->cloneEmpty();
+                new_col->insertRangeFrom(*block.segmentRowIdCol(), offset, limit);
+            }
         }
         return std::move(block);
     }
     else
     {
         auto new_columns = block.cloneEmptyColumns();
+        MutableColumnPtr new_seg_row_id_col;
+        if (block.segmentRowIdCol() != nullptr)
+        {
+            new_seg_row_id_col = block.segmentRowIdCol()->cloneEmpty();
+        }
         for (const auto & [offset, limit] : offset_and_limits)
         {
             if (!limit)
@@ -75,8 +91,14 @@ inline Block cutBlock(Block && block, const std::vector<std::pair<size_t, size_t
             {
                 new_columns[i]->insertRangeFrom(*block.getByPosition(i).column, offset, limit);
             }
+            if (block.segmentRowIdCol() != nullptr)
+            {
+                new_seg_row_id_col->insertRangeFrom(*block.segmentRowIdCol(), offset, limit);
+            }
         }
-        return block.cloneWithColumns(std::move(new_columns));
+        auto new_block = block.cloneWithColumns(std::move(new_columns));
+        new_block.setSegmentRowIdCol(std::move(new_seg_row_id_col));
+        return new_block;
     }
 }
 
@@ -151,6 +173,10 @@ inline Block filterUnsorted(const RowKeyRanges & rowkey_ranges, Block && block, 
     for (auto & col : block)
     {
         col.column = col.column->filter(filter, passed_count);
+    }
+    if (block.segmentRowIdCol() != nullptr)
+    {
+        block.segmentRowIdCol()->filter(filter, passed_count);
     }
     return std::move(block);
 }

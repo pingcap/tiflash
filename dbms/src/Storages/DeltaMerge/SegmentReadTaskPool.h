@@ -129,6 +129,8 @@ enum class ReadMode
      * are just returned.
      */
     Raw,
+
+    Bitmap,
 };
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
@@ -261,7 +263,7 @@ private:
     RSOperatorPtr filter;
     const uint64_t max_version;
     const size_t expected_block_size;
-    const ReadMode read_mode;
+    ReadMode read_mode;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
