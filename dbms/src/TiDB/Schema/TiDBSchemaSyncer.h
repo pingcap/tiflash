@@ -124,9 +124,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         if (version_after_load_diff = tryLoadSchemaDiffs(getter, version, context); version_after_load_diff == -1)
         {
             GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
-            loadAllSchema(getter, version, context);
-            // After loadAllSchema, we need update `version_after_load_diff` by last diff value exist or not
+            // we need update `version_after_load_diff` by last diff value exist or not
             version_after_load_diff = getter.checkSchemaDiffExists(version) ? version : version - 1;
+            loadAllSchema(getter, version_after_load_diff, context);
         }
         cur_version = version_after_load_diff;
         GET_METRIC(tiflash_schema_version).Set(cur_version);
@@ -167,8 +167,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         LOG_FMT_DEBUG(log, "Try load schema diffs.");
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
-
         Int64 used_version = cur_version;
         // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
         // schema diff without any exception.
@@ -179,6 +177,16 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
         LOG_FMT_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
+
+
+        // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
+        // Thus we need check whehter latest schema diff is empty or not before begin to builder.applyDiff.
+        if (!diffs.back())
+        {
+            --latest_version;
+        }
+
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
 
         try
         {
