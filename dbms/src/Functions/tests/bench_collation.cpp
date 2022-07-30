@@ -34,7 +34,7 @@ public:
     ColumnsWithTypeAndName data{toVec<String>("col0", std::vector<ColStringType>(1000000, "aaaaaaaaaaaaa")),
                                 toVec<String>("col1", std::vector<ColStringType>(1000000, "aaaaaaaaaaaaa")),
                                 toVec<UInt8>("result", std::vector<ColUInt8Type>{})};
-    
+
     ColumnsWithTypeAndName like_data{toVec<String>("col0", std::vector<ColStringType>(1000000, "qwdgefwabchfue")),
                                      createConstColumn<String>(1000000, "%abc%"),
                                      createConstColumn<Int32>(1000000, static_cast<Int32>('\\')),
@@ -59,8 +59,8 @@ public:
     void SetUp(const benchmark::State &) override {}
 };
 
-#define BENCH_LESS_COLLATOR(collator)                                                                          \
-    BENCHMARK_DEFINE_F(CollationLessBench, collator)                                                          \
+#define BENCH_LESS_COLLATOR(collator)                                                                     \
+    BENCHMARK_DEFINE_F(CollationLessBench, collator)                                                      \
     (benchmark::State & state)                                                                            \
     try                                                                                                   \
     {                                                                                                     \
@@ -97,16 +97,16 @@ public:
     BENCHMARK_REGISTER_F(CollationEqBench, collator)->Iterations(10);
 
 
-#define BENCH_LIKE_COLLATOR(collator)                                                                       \
-    BENCHMARK_DEFINE_F(CollationLikeBench, collator)                                                        \
+#define BENCH_LIKE_COLLATOR(collator)                                                                     \
+    BENCHMARK_DEFINE_F(CollationLikeBench, collator)                                                      \
     (benchmark::State & state)                                                                            \
     try                                                                                                   \
     {                                                                                                     \
         FunctionLike3Args fl;                                                                             \
         TiDB::TiDBCollatorPtr collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::collator); \
         fl.setCollator(collator);                                                                         \
-        Block block(like_data);                                                                                \
-        ColumnNumbers arguments{0, 1, 2};                                                                    \
+        Block block(like_data);                                                                           \
+        ColumnNumbers arguments{0, 1, 2};                                                                 \
         for (auto _ : state)                                                                              \
         {                                                                                                 \
             fl.executeImpl(block, arguments, 3);                                                          \
