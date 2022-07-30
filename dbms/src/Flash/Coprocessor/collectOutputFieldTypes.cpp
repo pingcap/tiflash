@@ -127,7 +127,24 @@ bool collectForJoin(std::vector<tipb::FieldType> & output_field_types, const tip
             output_field_types.push_back(field_type);
         }
     }
-    if (executor.join().join_type() != tipb::JoinType::TypeSemiJoin && executor.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
+
+    /// Note: for all kinds of semi join, the right table column is ignored
+    /// but for (anti) left outer semi join, a 1/0 (uint8) field is pushed back
+    /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
+    if (executor.join().join_type() == tipb::JoinType::TypeLeftOuterSemiJoin || executor.join().join_type() == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
+    {
+        /// Note: within DAGRequest tidb doesn't have specific field type info for this column
+        /// therefore, we just use tinyType and default values to construct a new one as tidb does in `PlanBuilder::buildSemiJoin`
+        tipb::FieldType field_type{};
+        field_type.set_tp(TiDB::TypeTiny);
+        field_type.set_charset("binary");
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        field_type.set_flag(0);
+        field_type.set_flen(-1);
+        field_type.set_decimal(-1);
+        output_field_types.push_back(field_type);
+    }
+    else if (executor.join().join_type() != tipb::JoinType::TypeSemiJoin && executor.join().join_type() != tipb::JoinType::TypeAntiSemiJoin)
     {
         /// for semi/anti semi join, the right table column is ignored
         for (auto & field_type : children_output_field_types[1])

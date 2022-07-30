@@ -147,7 +147,7 @@ void orderStreams(
                 settings.max_bytes_before_external_sort,
                 context.getTemporaryPath(),
                 log->identifier());
-            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
+            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
     else
