@@ -118,6 +118,8 @@ public:
     /** List of names, types and lengths of columns. Designed for debugging. */
     std::string dumpStructure() const;
 
+    std::string dumpJsonStructure() const;
+
     /** Get the same block, but empty. */
     Block cloneEmpty() const;
 
