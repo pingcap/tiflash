@@ -25,15 +25,9 @@
 #include <string>
 #include <vector>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#include <Poco/Types.h>
-
 #pragma GCC diagnostic pop
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 class StringSpace : public DB::tests::FunctionTest
 {
@@ -68,12 +62,11 @@ TEST_F(StringSpace, nullTest)
 try
 {
     ASSERT_COLUMN_EQ(
-        toVec({"", {}}),
+        toVec({{}}),
         executeFunction(
             func_name,
-            toVec({"", {}})));
+            toVec({{}})));
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests
