@@ -37,7 +37,6 @@ namespace DB::DM::tests
 DB::Settings createSettings(const WorkloadOptions & opts)
 {
     DB::Settings settings;
-    settings.set("background_pool_size", std::to_string(opts.bg_thread_count));
     if (!opts.config_file.empty())
     {
         auto table = cpptoml::parse_file(opts.config_file);
@@ -191,7 +190,7 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
     auto filter = EMPTY_FILTER;
     int excepted_block_size = 1024;
     uint64_t read_ts = ts_gen->get();
-    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, "DTWorkload", excepted_block_size);
+    auto streams = store->read(*context, context->getSettingsRef(), columns, ranges, stream_count, read_ts, filter, "DTWorkload", false, opts->is_fast_mode, excepted_block_size);
     std::vector<std::thread> threads;
     threads.reserve(streams.size());
     for (auto & stream : streams)

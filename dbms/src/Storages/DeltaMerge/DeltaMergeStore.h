@@ -51,7 +51,7 @@ inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStat
 {
-    UInt64 segment_id;
+    UInt64 segment_id = 0;
     RowKeyRange range;
 
     UInt64 rows = 0;
@@ -144,9 +144,6 @@ struct DeltaMergeStoreStat
 
     UInt64 background_tasks_length = 0;
 };
-
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
 
 class DeltaMergeStore : private boost::noncopyable
 {
@@ -350,10 +347,14 @@ public:
                               const DB::Settings & db_settings,
                               const ColumnDefines & columns_to_read,
                               size_t num_streams,
+                              bool keep_order,
                               const SegmentIdSet & read_segments = {},
                               size_t extra_table_id_index = InvalidColumnID);
 
-    /// Read rows with MVCC filtering
+
+    /// Read rows in two modes:
+    ///     when is_fast_mode == false, we are in normal mode. Thus we will read rows with MVCC filtering, del mark !=0  filter and sorted merge
+    ///     when is_fast_mode == true, we are in fast mode. Thus we will read rows without MVCC and sorted merge
     /// `sorted_ranges` should be already sorted and merged
     BlockInputStreams read(const Context & db_context,
                            const DB::Settings & db_settings,
@@ -363,6 +364,8 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            const String & tracing_id,
+                           bool keep_order,
+                           bool is_fast_mode = false, // set true when read in fast mode
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
@@ -386,7 +389,7 @@ public:
     /// If there is no segment found by the start key, nullopt is returned.
     ///
     /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
-    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const TaskRunThread run_thread);
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, TaskRunThread run_thread);
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
@@ -489,7 +492,8 @@ private:
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,
                                           size_t expected_tasks_count = 1,
-                                          const SegmentIdSet & read_segments = {});
+                                          const SegmentIdSet & read_segments = {},
+                                          bool try_split_task = true);
 
 private:
     void dropAllSegments(bool keep_first_segment);

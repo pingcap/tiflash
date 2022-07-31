@@ -75,7 +75,7 @@ MPPTask::~MPPTask()
     {
         /// the threads of this task are not fully freed now, since the BlockIO and DAGContext are not destructed
         /// TODO: finish all threads before here, except the current one.
-        manager->releaseThreadsFromScheduler(needed_threads);
+        manager.load()->releaseThreadsFromScheduler(needed_threads);
         schedule_state = ScheduleState::COMPLETED;
     }
     LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
@@ -172,7 +172,8 @@ void MPPTask::initExchangeReceivers()
                 executor.exchange_receiver().encoded_task_meta_size(),
                 context->getMaxStreams(),
                 log->identifier(),
-                executor_id);
+                executor_id,
+                executor.fine_grained_shuffle_stream_count());
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
@@ -211,10 +212,11 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
 
 void MPPTask::unregisterTask()
 {
-    if (manager != nullptr)
+    auto * manager_ptr = manager.load();
+    if (manager_ptr != nullptr)
     {
         LOG_DEBUG(log, "task unregistered");
-        manager->unregisterTask(this);
+        manager_ptr->unregisterTask(this);
     }
     else
     {
@@ -345,7 +347,7 @@ void MPPTask::runImpl()
         LOG_FMT_INFO(log, "task starts preprocessing");
         preprocess();
         needed_threads = estimateCountOfNewThreads();
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_threads: {} , receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
 
         scheduleOrWait();
 
@@ -391,8 +393,7 @@ void MPPTask::runImpl()
         if (status == FINISHED)
         {
             // todo when error happens, should try to update the metrics if it is available
-            auto throughput = dag_context->getTableScanThroughput();
-            if (throughput.first)
+            if (auto throughput = dag_context->getTableScanThroughput(); throughput.first)
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
             auto process_info = context->getProcessListElement()->getInfo();
             auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;
@@ -434,7 +435,10 @@ void MPPTask::runImpl()
 
 void MPPTask::handleError(const String & error_msg)
 {
-    if (manager == nullptr || !manager->isTaskToBeCancelled(id))
+    auto * manager_ptr = manager.load();
+    /// if manager_ptr is not nullptr, it means the task has already been registered,
+    /// MPPTaskManager::cancelMPPQuery will handle it properly if the query is to be cancelled.
+    if (manager_ptr == nullptr || !manager_ptr->isQueryToBeCancelled(id.start_ts))
         abort(error_msg, AbortType::ONERROR);
 }
 
@@ -502,7 +506,7 @@ bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
 
 void MPPTask::scheduleOrWait()
 {
-    if (!manager->tryToScheduleTask(shared_from_this()))
+    if (!manager.load()->tryToScheduleTask(shared_from_this()))
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;

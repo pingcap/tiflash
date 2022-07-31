@@ -27,6 +27,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
 #include <optional>
@@ -113,7 +114,7 @@ struct Executor
     {
         index_++;
     }
-    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
         = 0;
     virtual void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map)
     {
@@ -133,17 +134,20 @@ struct ExchangeSender : Executor
         , partition_keys(partition_keys_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 
 struct ExchangeReceiver : Executor
 {
     TaskMetas task_metas;
-    ExchangeReceiver(size_t & index, const DAGSchema & output)
+    uint64_t fine_grained_shuffle_stream_count;
+
+    ExchangeReceiver(size_t & index, const DAGSchema & output, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : Executor(index, "exchange_receiver_" + std::to_string(index), output)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
 };
 
 struct TableScan : public Executor
@@ -155,7 +159,7 @@ struct TableScan : public Executor
         , table_info(table_info_)
     {}
     void columnPrune(std::unordered_set<String> & used_columns) override;
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &) override;
     void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> &) override
     {}
 
@@ -187,7 +191,7 @@ struct Selection : public Executor
         : Executor(index_, "selection_" + std::to_string(index_), output_schema_)
         , conditions(std::move(conditions_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -200,7 +204,7 @@ struct TopN : public Executor
         , order_columns(std::move(order_columns_))
         , limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -211,7 +215,7 @@ struct Limit : public Executor
         : Executor(index_, "limit_" + std::to_string(index_), output_schema_)
         , limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -231,7 +235,7 @@ struct Aggregation : public Executor
         , gby_exprs(std::move(gby_exprs_))
         , is_final_mode(is_final_mode_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
@@ -243,23 +247,26 @@ struct Project : public Executor
         : Executor(index_, "project_" + std::to_string(index_), output_schema_)
         , exprs(std::move(exprs_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
 struct Join : Executor
 {
-    ASTPtr params;
-    const ASTTableJoin & join_params;
-    Join(size_t & index_, const DAGSchema & output_schema_, ASTPtr params_)
+    tipb::JoinType tp;
+
+    const ASTPtr using_expr_list;
+
+    // todo(ljr): support on expr
+    const ASTPtr on_expr{};
+
+    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, ASTPtr using_expr_list_)
         : Executor(index_, "Join_" + std::to_string(index_), output_schema_)
-        , params(params_)
-        , join_params(static_cast<const ASTTableJoin &>(*params))
+        , tp(tp_)
+        , using_expr_list(using_expr_list_)
     {
-        if (join_params.using_expression_list == nullptr)
+        if (using_expr_list == nullptr)
             throw Exception("No join condition found.");
-        if (join_params.strictness != ASTTableJoin::Strictness::All)
-            throw Exception("Only support join with strictness ALL");
     }
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
@@ -269,9 +276,9 @@ struct Join : Executor
         const DAGSchema & schema,
         tipb::Expr * tipb_key,
         tipb::FieldType * tipb_field_type,
-        uint32_t collator_id);
+        int32_t collator_id);
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
@@ -292,36 +299,40 @@ struct Window : Executor
     std::vector<ASTPtr> partition_by_exprs;
     std::vector<ASTPtr> order_by_exprs;
     MockWindowFrame frame;
+    uint64_t fine_grained_shuffle_stream_count;
 
-    Window(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_, MockWindowFrame frame_)
+    Window(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_, MockWindowFrame frame_, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : Executor(index_, "window_" + std::to_string(index_), output_schema_)
         , func_descs(std::move(func_descs_))
         , partition_by_exprs(std::move(partition_by_exprs_))
         , order_by_exprs(order_by_exprs_)
         , frame(frame_)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {
     }
     // Currently only use Window Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 
 struct Sort : Executor
 {
     std::vector<ASTPtr> by_exprs;
     bool is_partial_sort;
+    uint64_t fine_grained_shuffle_stream_count;
 
-    Sort(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> by_exprs_, bool is_partial_sort_)
+    Sort(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> by_exprs_, bool is_partial_sort_, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : Executor(index_, "sort_" + std::to_string(index_), output_schema_)
         , by_exprs(by_exprs_)
         , is_partial_sort(is_partial_sort_)
+        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {
     }
     // Currently only use Sort Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 } // namespace mock
 
@@ -339,15 +350,24 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
 
 ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list);
 
+/// Note: this api is only used by legacy test framework for compatibility purpose, which will be depracated soon,
+/// so please avoid using it.
+/// Old executor test framework bases on ch's parser to translate sql string to ast tree, then manually to DAGRequest.
+/// However, as for join executor, this translation, from ASTTableJoin to tipb::Join, is not a one-to-one mapping
+/// because of the different join classification model used by these two structures. Therefore, under old test framework,
+/// it is hard to fully test join executor. New framework aims to directly construct DAGRequest, so new framework APIs for join should
+/// avoid using ASTTableJoin.
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
+
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list);
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 
-ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema);
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count = 0);
 
-ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame);
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
 
-ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort);
+ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
 
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & field, tipb::Expr * expr, Int32 collator_id);
 } // namespace DB

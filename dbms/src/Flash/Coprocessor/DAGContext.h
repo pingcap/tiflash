@@ -52,6 +52,7 @@ struct JoinExecuteInfo
     String build_side_root_executor_id;
     JoinPtr join_ptr;
     BlockInputStreams non_joined_streams;
+    BlockInputStreams join_build_streams;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
@@ -116,6 +117,13 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
+inline bool enableFineGrainedShuffle(uint64_t stream_count)
+{
+    return stream_count > 0;
+}
+
+static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
+
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -126,7 +134,6 @@ public:
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
-        , tunnel_set(nullptr)
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
@@ -146,7 +153,6 @@ public:
         , return_executor_id(true)
         , is_mpp_task(true)
         , is_root_mpp_task(is_root_mpp_task_)
-        , tunnel_set(nullptr)
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
         , mpp_task_meta(meta_)
@@ -168,7 +174,6 @@ public:
         , collect_execution_summaries(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
-        , tunnel_set(nullptr)
         , flags(0)
         , sql_mode(0)
         , max_recorded_error_count(max_error_count_)
@@ -183,7 +188,6 @@ public:
         , initialize_concurrency(concurrency)
         , is_mpp_task(true)
         , is_root_mpp_task(false)
-        , tunnel_set(nullptr)
         , log(Logger::get(log_identifier))
         , flags(dag_request->flags())
         , sql_mode(dag_request->sql_mode())
@@ -303,6 +307,8 @@ public:
         return sql_mode & f;
     }
 
+    void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
+
     bool isTest() const { return is_test; }
     void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
     ColumnsWithTypeAndName columnsForTest(String executor_id);
@@ -334,6 +340,7 @@ public:
     bool is_mpp_task = false;
     bool is_root_mpp_task = false;
     bool is_batch_cop = false;
+    // `tunnel_set` is always set by `MPPTask` and is intended to be used for `DAGQueryBlockInterpreter`.
     MPPTunnelSetPtr tunnel_set;
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
@@ -386,7 +393,7 @@ private:
     std::vector<SubqueriesForSets> subqueries;
 
     bool is_test = false; /// switch for test, do not use it in production.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <executor_id, columns>, for multiple sources
 };
 
 } // namespace DB

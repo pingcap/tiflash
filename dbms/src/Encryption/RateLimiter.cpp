@@ -298,7 +298,7 @@ ReadLimiter::ReadLimiter(
     , getIOStatistic(std::move(getIOStatistic_))
     , last_stat_bytes(getIOStatistic())
     , last_stat_time(now())
-    , log(&Poco::Logger::get("ReadLimiter"))
+    , log(Logger::get("ReadLimiter"))
     , get_io_statistic_period_us(get_io_stat_period_us)
 {}
 
@@ -382,7 +382,7 @@ void ReadLimiter::refillAndAlloc()
 }
 
 IORateLimiter::IORateLimiter()
-    : log(&Poco::Logger::get("IORateLimiter"))
+    : log(Logger::get("IORateLimiter"))
     , stop(false)
 {}
 
@@ -693,7 +693,7 @@ IOLimitTuner::IOLimitTuner(
     , bg_read_stat(std::move(bg_read_stat_))
     , fg_read_stat(std::move(fg_read_stat_))
     , io_config(io_config_)
-    , log(&Poco::Logger::get("IOLimitTuner"))
+    , log(Logger::get("IOLimitTuner"))
 {}
 
 IOLimitTuner::TuneResult IOLimitTuner::tune() const

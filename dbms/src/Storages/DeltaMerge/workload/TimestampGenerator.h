@@ -24,7 +24,7 @@ class TimestampGenerator
 {
 public:
     TimestampGenerator()
-        : t(StopWatchDetail::nanoseconds(CLOCK_MONOTONIC))
+        : t(clock_gettime_ns(CLOCK_MONOTONIC))
     {}
 
     std::vector<uint64_t> get(int count)

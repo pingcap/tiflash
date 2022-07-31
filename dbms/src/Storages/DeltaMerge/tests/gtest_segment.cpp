@@ -75,12 +75,26 @@ CATCH
 TEST_F(SegmentOperationTest, TestSegmentRandom)
 try
 {
+    srand(time(nullptr));
     SegmentTestOptions options;
     options.is_common_handle = true;
     reloadWithOptions(options);
     randomSegmentTest(100);
 }
 CATCH
+
+// run in CI weekly
+TEST_F(SegmentOperationTest, DISABLED_TestSegmentRandomForCI)
+try
+{
+    srand(time(nullptr));
+    SegmentTestOptions options;
+    options.is_common_handle = true;
+    reloadWithOptions(options);
+    randomSegmentTest(10000);
+}
+CATCH
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

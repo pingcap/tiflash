@@ -240,6 +240,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
 
     factory.registerFunction<FunctionFromUnixTime>();
     factory.registerFunction<FunctionDateFormat>();
+    factory.registerFunction<FunctionGetFormat>();
     factory.registerFunction<FunctionTiDBUnixTimeStamp<NameTiDBUnixTimeStampInt>>();
     factory.registerFunction<FunctionTiDBUnixTimeStamp<NameTiDBUnixTimeStampDec>>();
     factory.registerFunction<FunctionStrToDate<NameStrToDateDate>>();
