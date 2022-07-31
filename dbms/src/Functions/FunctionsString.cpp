@@ -5554,6 +5554,7 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionHexStr>();
     factory.registerFunction<FunctionHexInt>();
     factory.registerFunction<FunctionRepeat>();
+    factory.registerFunction<FunctionSpace>();
     factory.registerFunction<FunctionBin>();
 }
 } // namespace DB
