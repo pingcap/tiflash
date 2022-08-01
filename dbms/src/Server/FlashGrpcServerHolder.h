@@ -22,11 +22,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int IP_ADDRESS_NOT_ALLOWED;
-} // namespace ErrorCodes
-
 class FlashGrpcServerHolder
 {
 public:
