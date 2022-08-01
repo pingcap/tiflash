@@ -14,14 +14,12 @@
 #include <Server/FlashGrpcServerHolder.h>
 namespace DB
 {
-
-namespace
-{
 namespace ErrorCodes
 {
 extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
-
+namespace
+{
 void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
 {
     GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
