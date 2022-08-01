@@ -33,11 +33,11 @@ void visit(const PhysicalPlanNodePtr & plan, FF && f)
 /// visit physical plan node tree in reverse order and apply function.
 /// f: (const PhysicalPlanNodePtr &).
 template <typename FF>
-void visitReverse(const PhysicalPlanNodePtr & plan, FF && f)
+void visitPostOrder(const PhysicalPlanNodePtr & plan, FF && f)
 {
     for (size_t i = 0; i < plan->childrenSize(); ++i)
     {
-        visitReverse(plan->children(i), std::forward<FF>(f));
+        visitPostOrder(plan->children(i), std::forward<FF>(f));
     }
     f(plan);
 }
