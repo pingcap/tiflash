@@ -88,7 +88,8 @@ std::string toCheckedFmtStr(const S & format, Args &&... args)
 
 #define LOG_IMPL_CHOSER(...) TF_GET_29TH_ARG(__VA_ARGS__, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_0)
 
-#define LOG_IMPL(logger, PRIORITY, ...) LOG_IMPL_CHOSER(__VA_ARGS__)(logger, PRIORITY, __VA_ARGS__)
+#define LOG_IMPL(logger, PRIORITY, ...) LOG_IMPL_CHOSER(__VA_ARGS__) \
+(logger, PRIORITY, __VA_ARGS__)
 
 #define LOG_TRACE(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_TRACE, __VA_ARGS__)
 #define LOG_DEBUG(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_DEBUG, __VA_ARGS__)
