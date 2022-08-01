@@ -1348,7 +1348,7 @@ public:
 
                 Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
 
-                if (packed_uint_value.getType() == Field::Types::Null)
+                if (packed_uint_value.isNull())
                 {
                     // Fill NULL if cannot parse
                     (*vec_null_map_to)[i] = 1;
@@ -1476,7 +1476,7 @@ public:
                 {
                     Field packed_uint_value = parseMyDateTime(value_str, to_fsp);
 
-                    if (packed_uint_value.getType() == Field::Types::Null)
+                    if (packed_uint_value.isNull())
                     {
                         // Fill NULL if cannot parse
                         (*vec_null_map_to)[i] = 1;
@@ -1647,11 +1647,11 @@ inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx
     }
     if (ctx)
     {
-        return !result.check(ctx->allowZeroInDate(), ctx->allowInvalidDate());
+        return !result.isValid(ctx->allowZeroInDate(), ctx->allowInvalidDate());
     }
     else
     {
-        return !result.check(false, false);
+        return !result.isValid(false, false);
     }
     return false;
 }
