@@ -566,7 +566,7 @@ void IORateLimiter::getCurrentIOInfo()
     // Read read info of this process.
     static const std::string proc_io_fname = fmt::format("/proc/{}/io", pid);
     Int64 fg_read_bytes_tmp{getReadBytes(proc_io_fname) - bg_read_bytes_tmp};
-    read_info.fg_read_bytes.store(std::min(0, fg_read_bytes_tmp), std::memory_order_relaxed);
+    read_info.fg_read_bytes.store(std::max(0, fg_read_bytes_tmp), std::memory_order_relaxed);
 }
 
 void IORateLimiter::setStop()

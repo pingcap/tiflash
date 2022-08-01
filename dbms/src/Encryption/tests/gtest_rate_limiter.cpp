@@ -19,9 +19,11 @@
 #include <unistd.h>
 
 #include <chrono>
+#include <cstddef>
 #include <ctime>
 #include <random>
 #include <thread>
+#include "common/types.h"
 
 #ifdef __linux__
 #include <sys/syscall.h>
@@ -379,12 +381,10 @@ TEST(IORateLimiterTest, IOStat)
     n = ::pread(fd, buf, buf_size, 0);
     ASSERT_EQ(n, buf_size) << strerror(errno);
 
-    //int ret = ::fsync(fd);
-    //ASSERT_EQ(ret, 0) << strerror(errno);
-
-    auto io_info = io_rate_limiter.getCurrentIOInfo();
-    ASSERT_GE(io_info.total_write_bytes, buf_size);
-    ASSERT_GE(io_info.total_read_bytes, buf_size);
+    io_rate_limiter.getCurrentIOInfo();
+    Int64 bg_read_bytes = io_rate_limiter.read_info.bg_read_bytes.load(std::memory_order_relaxed);
+    Int64 fg_read_bytes = io_rate_limiter.read_info.fg_read_bytes.load(std::memory_order_relaxed);
+    ASSERT_GE(bg_read_bytes + fg_read_bytes, buf_size);
 }
 
 TEST(IORateLimiterTest, IOStatMultiThread)
@@ -448,12 +448,12 @@ TEST(IORateLimiterTest, IOStatMultiThread)
 
     IORateLimiter io_rate_limiter;
     io_rate_limiter.setBackgroundThreadIds(bg_pids);
-    auto io_info = io_rate_limiter.getCurrentIOInfo();
-    std::cout << io_info.toString() << std::endl;
-    ASSERT_GE(io_info.total_read_bytes, buf_size * (bg_thread_count + fg_thread_count));
-    ASSERT_GE(io_info.total_write_bytes, buf_size * (bg_thread_count + fg_thread_count));
-    ASSERT_GE(io_info.bg_read_bytes, buf_size * bg_thread_count);
-    ASSERT_GE(io_info.bg_write_bytes, buf_size * bg_thread_count);
+
+    io_rate_limiter.getCurrentIOInfo();
+    Int64 bg_read_bytes = io_rate_limiter.read_info.bg_read_bytes.load(std::memory_order_relaxed);
+    Int64 fg_read_bytes = io_rate_limiter.read_info.fg_read_bytes.load(std::memory_order_relaxed);
+    ASSERT_GE(fg_read_bytes, buf_size * fg_thread_count);
+    ASSERT_GE(bg_read_bytes, buf_size * bg_thread_count);
     stop.store(true);
 
     for (auto & t : threads)
