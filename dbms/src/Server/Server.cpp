@@ -296,6 +296,25 @@ pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_c
     return config;
 }
 
+LoggerPtr grpc_log;
+
+void printGRPCLog(gpr_log_func_args * args)
+{
+    String log_msg = fmt::format("{}, line number: {}, log msg : {}", args->file, args->line, args->message);
+    if (args->severity == GPR_LOG_SEVERITY_DEBUG)
+    {
+        LOG_DEBUG(grpc_log, log_msg);
+    }
+    else if (args->severity == GPR_LOG_SEVERITY_INFO)
+    {
+        LOG_INFO(grpc_log, log_msg);
+    }
+    else if (args->severity == GPR_LOG_SEVERITY_ERROR)
+    {
+        LOG_ERROR(grpc_log, log_msg);
+    }
+}
+
 struct HTTPServer : Poco::Net::HTTPServer
 {
     HTTPServer(Poco::Net::HTTPRequestHandlerFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::HTTPServerParams::Ptr pParams)
@@ -869,6 +888,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
+
+    grpc_log = Logger::get("grpc");
+    gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
+    gpr_set_log_function(&printGRPCLog);
 
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
