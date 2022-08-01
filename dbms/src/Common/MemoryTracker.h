@@ -19,8 +19,9 @@
 
 #include <atomic>
 
+extern std::atomic<long long> dirty_alloc, dirty_free, alct_cnt, alct_sum, max_alct;
 extern std::atomic<long long> tracked_mem, mt_tracked_mem, tracked_peak,untracked_mem, tot_local_delta, tracked_mem_p2, tracked_mem_t3;
-extern std::atomic<long long> tracked_alloc,tracked_reloc, tracked_free;
+extern std::atomic<long long> tracked_alloc,tracked_reloc, tracked_free, tracked_alct;
 extern std::atomic<long long> tracked_rec_alloc, tracked_rec_reloc, tracked_rec_free;
 namespace CurrentMetrics
 {

@@ -142,6 +142,7 @@ void FlashService::memCheckJob()
 {
     double vm_usage;
     double resident_set;
+    size_t max_mem = 0;
     while (!end_syn)
     {
         DB::ProcessList & proc_list = server.context().getGlobalContext().getProcessList();
@@ -161,13 +162,19 @@ void FlashService::memCheckJob()
         tracked_used, limit, cur_tracked_proto, tracked_mem.load(), cur_tracked_peak, resident_set,
         tracked_alloc.load(), tracked_reloc.load(), tracked_free.load(),
         tracked_rec_alloc.load(), tracked_rec_reloc.load(), tracked_rec_free.load());
-
-        LOG_FMT_INFO(log, "mem_checkV2: tracked: {} GB, proto: {} GB, glb_mem_track: {} GB, glb_peak:{} GB, proc_mem:{} GB, alloc: {} GB, delloc: {} GB", 
+        max_mem = std::max(max_mem, resident_set);
+        LOG_FMT_INFO(log, "mem_checkV2: tracked: {} GB, allocator: {} GB, dirty_alloc: {} , avg_alloc: {}, max_alloc:{}, proto: {} GB, glb_mem_track: {} GB, glb_peak:{} GB, proc_mem:{} GB, diff:{} GB, max_mem:{} GB, alloc: {} GB, delloc: {} GB", 
         static_cast<long long>(tracked_used/1024/1024)/1000.0, 
+        static_cast<long long>(tracked_alct.load()/1024/1024)/1000.0, 
+        static_cast<long long>(dirty_alloc.load()),
+        static_cast<long long>(alct_cnt.load()? alct_sum.load()/alct_cnt.load(): 0),
+        static_cast<long long>(max_alct.load()),
         static_cast<long long>(cur_tracked_proto/1024/1024)/1000.0,
         static_cast<long long>(tracked_mem.load()/1024/1024)/1000.0,
         static_cast<long long>(cur_tracked_peak/1024/1024)/1000.0,
         static_cast<long long>(resident_set/1024/1024)/1000.0,
+        static_cast<long long>((resident_set-tracked_used)/1024/1024)/1000.0,
+        static_cast<long long>(max_mem/1024/1024)/1000.0,
         static_cast<long long>(alloc_mem/1024/1024)/1000.0,
         static_cast<long long>(dealloc_mem/1024/1024)/1000.0
          );

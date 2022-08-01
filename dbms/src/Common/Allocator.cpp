@@ -67,6 +67,11 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
 {
     alloc_mem += size;
     CurrentMemoryTracker::alloc(size);
+    tracked_alct += size;
+    dirty_alloc+=size;
+    alct_cnt++;
+    alct_sum+=size;
+    max_alct = std::max(max_alct.load(), (long long)size);
 
     void * buf;
 
@@ -109,6 +114,13 @@ void * Allocator<clear_memory_>::alloc(size_t size, size_t alignment)
                 memset(buf, 0, size);
         }
     }
+    dirty_alloc-=size;
+// // make linux's lazy allocation not working, access all the pages
+//     char *chbuf = (char *)buf;
+//     for(size_t i = 0; i < size; i+=1024) {
+//         chbuf[i] = 0;
+//     }
+
 
     return buf;
 }
@@ -130,6 +142,7 @@ void Allocator<clear_memory_>::free(void * buf, size_t size)
     }
 
     CurrentMemoryTracker::free(size);
+    tracked_alct -= size;
 }
 
 
@@ -148,6 +161,7 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
     else if (old_size < MMAP_THRESHOLD && new_size < MMAP_THRESHOLD && alignment <= MALLOC_MIN_ALIGNMENT)
     {
         CurrentMemoryTracker::realloc(old_size, new_size);
+        tracked_alct += new_size-old_size; 
 
         buf = ::realloc(buf, new_size);
 
@@ -160,6 +174,7 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
     else if (old_size >= MMAP_THRESHOLD && new_size >= MMAP_THRESHOLD)
     {
         CurrentMemoryTracker::realloc(old_size, new_size);
+        tracked_alct += new_size-old_size; 
 
         // On apple and freebsd self-implemented mremap used (common/mremap.h)
         buf = clickhouse_mremap(buf, old_size, new_size, MREMAP_MAYMOVE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -189,6 +204,12 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
         free(buf, old_size);
         buf = new_buf;
     }
+
+// // make linux's lazy allocation not working, access all the pages
+//     char *chbuf = (char *)buf;
+//     for(size_t i = old_size; i < new_size; i+=1024) {
+//         chbuf[i] = 0;
+//     }
 
     return buf;
 }

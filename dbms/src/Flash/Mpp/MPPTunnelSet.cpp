@@ -26,12 +26,14 @@ TmpMemTracker(size_t size):size(size) {
     if (proc_memory_tracker) {
         proc_memory_tracker->alloc(size);
         tracked_mem += size;
+        tracked_proto += size;
     }
 }
 ~TmpMemTracker() {
     if (proc_memory_tracker) {
         proc_memory_tracker->free(size);
         tracked_mem -= size;
+        tracked_proto -= size;
     }
 }
 size_t size;

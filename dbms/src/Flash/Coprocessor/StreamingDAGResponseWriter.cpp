@@ -29,6 +29,7 @@ struct TmpMemTracker2 {
 TmpMemTracker2(size_t size):size(size) {
     if (proc_memory_tracker) {
         proc_memory_tracker->alloc(size);
+        tracked_proto+=size;
         tracked_mem += size;
     }
 }
@@ -36,12 +37,14 @@ void alloc(size_t delta) {
     if (proc_memory_tracker) {
         proc_memory_tracker->alloc(delta);
         size += delta;
+        tracked_proto+=delta;
         tracked_mem += delta;
     }
 }
 ~TmpMemTracker2() {
     if (proc_memory_tracker) {
         proc_memory_tracker->free(size);
+        tracked_proto-=size;
         tracked_mem -= size;
     }
 }

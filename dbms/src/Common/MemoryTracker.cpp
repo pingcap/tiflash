@@ -22,8 +22,9 @@
 #include <unordered_set>
 
 #include <iomanip>
+std::atomic<long long> dirty_alloc{0}, dirty_free{0}, alct_cnt{0}, alct_sum{0}, max_alct{0};
 std::atomic<long long> tracked_mem{0}, mt_tracked_mem{0}, tracked_peak{0}, untracked_mem{0}, tot_local_delta{0}, tracked_mem_p2{0}, tracked_mem_t3{0};
-std::atomic<long long> tracked_alloc{0}, tracked_reloc{0}, tracked_free{0};
+std::atomic<long long> tracked_alloc{0}, tracked_reloc{0}, tracked_free{0}, tracked_alct{0};
 std::atomic<long long> tracked_rec_alloc{0}, tracked_rec_reloc{0}, tracked_rec_free{0};
 std::unordered_set<MemoryTracker*> root_memtracker_set;
 std::mutex rms_mu;
@@ -52,7 +53,7 @@ MemoryTracker::~MemoryTracker()
       *  then memory usage of 'next' memory trackers will be underestimated,
       *  because amount will be decreased twice (first - here, second - when real 'free' happens).
       */
-    if (auto value = amount.load())
+    if (auto value = amount.load(std::memory_order_relaxed))
         free(value);
 }
 
@@ -108,8 +109,8 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     // }
 
     //TODO revert
-    // Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
-    Int64 will_be = size + amount.fetch_add(size);
+    Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
+    // Int64 will_be = size + amount.fetch_add(size);
     if (!next.load(std::memory_order_relaxed))
         CurrentMetrics::add(metric, size);
 
@@ -123,7 +124,7 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         {
             //TODO revert
             // free(size);
-            amount.fetch_sub(size);
+            amount.fetch_sub(size, std::memory_order_relaxed);
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker");
@@ -141,11 +142,11 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             //  (current_limit && tracked_mem.load() > current_limit)  ||
          unlikely(current_limit && will_be > current_limit))
         {
-            auto root_amount = amount.load();
+            auto root_amount = amount.load(std::memory_order_relaxed);
             auto pre_loaded_next = this;
             auto * loaded_next = next.load(std::memory_order_relaxed);   
             while (loaded_next) {
-                root_amount = loaded_next->amount.load();
+                root_amount = loaded_next->amount.load(std::memory_order_relaxed);
                 // loaded_next->alloc(size, check_memory_limit);
                 pre_loaded_next = loaded_next;
                 loaded_next = next.load(std::memory_order_relaxed);
@@ -164,7 +165,7 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                 
             //TODO revert
             // free(size);
-            amount.fetch_sub(size);
+            amount.fetch_sub(size, std::memory_order_relaxed);
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory limit");
@@ -175,7 +176,7 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               formatReadableSizeWithBinarySuffix(will_be),
                               size,
                               formatReadableSizeWithBinarySuffix(current_limit),
-                              formatReadableSizeWithBinarySuffix(amount.load()),
+                              formatReadableSizeWithBinarySuffix(amount.load(std::memory_order_relaxed)),
                               formatReadableSizeWithBinarySuffix(tracked_mem.load()),
                               formatReadableSizeWithBinarySuffix(tracked_mem_p2.load()),
                               formatReadableSizeWithBinarySuffix(tracked_mem_t3.load()),
@@ -198,7 +199,7 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         try {
             fg = loaded_next->alloc(size, check_memory_limit);
         } catch (...) {
-            amount.fetch_sub(size);
+            amount.fetch_sub(size, std::memory_order_relaxed);
             std::rethrow_exception(std::current_exception());
         }
         return fg || proc_memory_tracker == this;
@@ -231,7 +232,7 @@ bool MemoryTracker::free(Int64 size)
     
     //TODO revert
     //Int64 new_amount = amount.fetch_sub(size, std::memory_order_relaxed) - size;
-    Int64 new_amount = amount.fetch_sub(size) - size;
+    Int64 new_amount = amount.fetch_sub(size, std::memory_order_relaxed) - size;
     /** Sometimes, query could free some data, that was allocated outside of query context.
       * Example: cache eviction.
       * To avoid negative memory usage, we "saturate" amount.
@@ -261,7 +262,7 @@ bool MemoryTracker::free(Int64 size)
 void MemoryTracker::reset()
 {
     if (!next.load(std::memory_order_relaxed))
-        CurrentMetrics::sub(metric, amount.load());
+        CurrentMetrics::sub(metric, amount.load(std::memory_order_relaxed));
 
     amount.store(0);
     peak.store(0, std::memory_order_relaxed);
@@ -298,13 +299,13 @@ __attribute__((always_inline)) inline bool checkSubmitAndUpdateLocalDelta(Int64 
     {
         if (unlikely(updated_local_delta > MEMORY_TRACER_SUBMIT_THRESHOLD))
         {
-            tot_local_delta -= local_delta; // DEBUG tot_local_delta
+            
             if (!current_memory_tracker->alloc(updated_local_delta)) {
                 untracked_mem += updated_local_delta;
             } else {
                 tracked_mem_t3 += updated_local_delta;
             }
-            
+            tot_local_delta -= local_delta; // DEBUG tot_local_delta
             local_delta = 0;
             return true;
         }
@@ -336,7 +337,7 @@ void disableThreshold()
 
 void submitLocalDeltaMemory()
 {
-    tot_local_delta -= local_delta;
+    
     if (current_memory_tracker)
     {
         try
@@ -359,6 +360,7 @@ void submitLocalDeltaMemory()
             DB::tryLogCurrentException("MemoryTracker", "Failed when try to submit local delta memory");
         }
     }
+    tot_local_delta -= local_delta;
     local_delta = 0;
 }
 
