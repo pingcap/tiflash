@@ -310,6 +310,10 @@ Int64 ReadLimiter::getAvailableBalance()
             last_stat_bytes,
             bytes);
     }
+    else if (bytes == last_stat_bytes)
+    {
+        return available_balance;
+    }
     else
     {
         Int64 real_alloc_bytes = bytes - last_stat_bytes;

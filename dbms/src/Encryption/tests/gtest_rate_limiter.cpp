@@ -18,11 +18,10 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
-#include <chrono>
-#include <cstddef>
 #include <ctime>
 #include <random>
 #include <thread>
+
 #include "common/types.h"
 
 #ifdef __linux__
