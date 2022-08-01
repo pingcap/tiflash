@@ -47,14 +47,16 @@ inline size_t estimateAllocatedSize(const mpp::MPPDataPacket & data)
 
 struct TrackedMppDataPacket
 {
-    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data)
+    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
+        : memory_tracker(memory_tracker)
     {
         size = estimateAllocatedSize(data);
         alloc();
         packet = std::make_shared<mpp::MPPDataPacket>(data);
     }
 
-    explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_)
+    explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_, MemoryTracker * memory_tracker)
+        : memory_tracker(memory_tracker)
     {
         size = estimateAllocatedSize(*packet_);
         alloc();
@@ -75,6 +77,7 @@ struct TrackedMppDataPacket
         trackFree();
     }
 
+    MemoryTracker * memory_tracker = nullptr;
     int size;
     bool has_err = false;
     std::shared_ptr<mpp::MPPDataPacket> packet;

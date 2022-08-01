@@ -130,7 +130,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason)));
+                    send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), mem_tracker));
                     if (!is_local && is_async)
                         writer->tryFlushOne();
                 }
@@ -161,7 +161,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         waitUntilConnectedOrFinished(lk);
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
-        if (send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(data)))
+        if (send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker)))
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;

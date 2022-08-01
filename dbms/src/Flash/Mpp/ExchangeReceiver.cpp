@@ -256,7 +256,7 @@ private:
             auto recv_msg = std::make_shared<ReceivedMessage>();
             try
             {
-                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet);
+                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet, current_memory_tracker);
             }
             catch (Exception & e)
             {
@@ -500,7 +500,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = req.source_index;
                 bool success = reader->read(packet);
-                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet);
+                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet, current_memory_tracker);
                 if (!success)
                     break;
                 has_data = true;

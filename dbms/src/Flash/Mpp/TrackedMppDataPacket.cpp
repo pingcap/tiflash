@@ -25,9 +25,9 @@ namespace DB
             {
                 // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
                 // server.context().getGlobalContext().getProcessList().total_memory_tracker.alloc(size);
-                //TrackedMppDataPacket::proc_memory_tracker->alloc(size)
-                if (proc_memory_tracker) {
-                    proc_memory_tracker->alloc(size);
+                //TrackedMppDataPacket::memory_tracker->alloc(size)
+                if (memory_tracker) {
+                    memory_tracker->alloc(size);
                 //     current_memory_tracker->alloc(size);
 
 
@@ -56,8 +56,8 @@ namespace DB
         if (size && !has_err)
         {
             // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
-            if (proc_memory_tracker) {
-                proc_memory_tracker->free(size);
+            if (memory_tracker) {
+                memory_tracker->free(size);
                 //     current_memory_tracker->free(size);
 
                 tracked_proto -= size;

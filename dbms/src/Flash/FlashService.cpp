@@ -33,9 +33,9 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
-// #if USE_JEMALLOC
+ #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
-// #endif
+ #endif
 
 #include <ext/scope_guard.h>
 
@@ -78,6 +78,7 @@ FlashService::FlashService(IServer & server_)
 
 void jestats() 
 {
+#if USE_JEMALLOC
     size_t sz;
     // Update the statistics cached by mallctl.
     uint64_t epoch = 1;
@@ -99,6 +100,7 @@ void jestats()
                 "Current allocated/active/metadata/resident/mapped/retained: %zu/%zu/%zu/%zu/%zu/%zu\n",
                 allocated, active, metadata, resident, mapped, retained);
     }
+#endif
 }
 
 void process_mem_usage(double& vm_usage, double& resident_set)
@@ -149,11 +151,11 @@ void FlashService::memCheckJob()
         long long tracked_used = static_cast<long long>(proc_list.getMemAlloacted());
         long long limit = static_cast<long long>(proc_list.getMemLimit());
         long long cur_tracked_proto = tracked_proto.load();
+ #if USE_JEMALLOC
         size_t value{0};
-// #if USE_JEMALLOC
         size_t size = sizeof(value);
         mallctl("stats.resident", &value, &size, nullptr, 0);
-// #endif
+ #endif
         long long cur_tracked_peak = tracked_peak;
         tracked_peak = tracked_mem.load();
         process_mem_usage(vm_usage, resident_set);
@@ -179,7 +181,9 @@ void FlashService::memCheckJob()
         static_cast<long long>(dealloc_mem/1024/1024)/1000.0
          );
         jestats();
+#if USE_JEMALLOC
         mallctl("prof.dump", NULL, NULL, NULL, 0);
+#endif
         // std::cerr<<"*******************"<<std::endl;
         // malloc_stats_print(NULL, NULL, NULL);
         // std::cerr<<"*******************"<<std::endl;
