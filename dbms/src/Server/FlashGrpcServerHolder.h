@@ -27,8 +27,6 @@ namespace ErrorCodes
 extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 
-void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log);
-
 class FlashGrpcServerHolder
 {
 public:

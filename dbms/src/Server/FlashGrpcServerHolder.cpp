@@ -15,6 +15,69 @@
 namespace DB
 {
 
+namespace
+{
+
+
+void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
+{
+    GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Decrement();
+    });
+    void * tag = nullptr; // uniquely identifies a request.
+    bool ok = false;
+    while (true)
+    {
+        String err_msg;
+        try
+        {
+            // Block waiting to read the next event from the completion queue. The
+            // event is uniquely identified by its tag, which in this case is the
+            // memory address of a EstablishCallData instance.
+            // The return value of Next should always be checked. This return value
+            // tells us whether there is any kind of event or cq is shutting down.
+            if (!curcq->Next(&tag, &ok))
+            {
+                LOG_FMT_INFO(log, "CQ is fully drained and shut down");
+                break;
+            }
+            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
+            SCOPE_EXIT({
+                GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
+            });
+            // If ok is false, it means server is shutdown.
+            // We need not log all not ok events, since the volumn is large which will pollute the content of log.
+            if (ok)
+                static_cast<EstablishCallData *>(tag)->proceed();
+            else
+                static_cast<EstablishCallData *>(tag)->cancel();
+        }
+        catch (Exception & e)
+        {
+            err_msg = e.displayText();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
+        }
+        catch (pingcap::Exception & e)
+        {
+            err_msg = e.message();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (std::exception & e)
+        {
+            err_msg = e.what();
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+        }
+        catch (...)
+        {
+            err_msg = "unrecovered error";
+            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
+            throw;
+        }
+    }
+}
+} // namespace
+
 FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::LayeredConfiguration & config_, TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config, const LoggerPtr & log_)
     : log(log_)
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
@@ -129,64 +192,6 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         auto message = getCurrentExceptionMessage(false);
         LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
         std::terminate();
-    }
-}
-
-void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
-{
-    GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Decrement();
-    });
-    void * tag = nullptr; // uniquely identifies a request.
-    bool ok = false;
-    while (true)
-    {
-        String err_msg;
-        try
-        {
-            // Block waiting to read the next event from the completion queue. The
-            // event is uniquely identified by its tag, which in this case is the
-            // memory address of a EstablishCallData instance.
-            // The return value of Next should always be checked. This return value
-            // tells us whether there is any kind of event or cq is shutting down.
-            if (!curcq->Next(&tag, &ok))
-            {
-                LOG_FMT_INFO(log, "CQ is fully drained and shut down");
-                break;
-            }
-            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
-            SCOPE_EXIT({
-                GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
-            });
-            // If ok is false, it means server is shutdown.
-            // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-            if (ok)
-                static_cast<EstablishCallData *>(tag)->proceed();
-            else
-                static_cast<EstablishCallData *>(tag)->cancel();
-        }
-        catch (Exception & e)
-        {
-            err_msg = e.displayText();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
-        }
-        catch (pingcap::Exception & e)
-        {
-            err_msg = e.message();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
-        }
-        catch (std::exception & e)
-        {
-            err_msg = e.what();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
-        }
-        catch (...)
-        {
-            err_msg = "unrecovered error";
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
-            throw;
-        }
     }
 }
 } // namespace DB
