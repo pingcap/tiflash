@@ -66,7 +66,7 @@ void recordJoinExecuteInfo(
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
 
-void executeUnionForPreNonJoinedData(DAGPipeline & probe_pipeline, Context & context, size_t max_streams, const LoggerPtr & log)
+void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context & context, size_t max_streams, const LoggerPtr & log)
 {
     // If there is non-joined-streams here, we need call `executeUnion`
     // to ensure that non-joined-streams is executed after joined-streams.
@@ -181,8 +181,8 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
     const auto & settings = context.getSettingsRef();
     auto & dag_context = *context.getDAGContext();
 
-    // TODO we can call `executeUnionForPreNonJoinedData` only when has_non_joined == true.
-    executeUnionForPreNonJoinedData(probe_pipeline, context, max_streams, log);
+    // TODO we can call `executeUnionForPreviousNonJoinedData` only when has_non_joined == true.
+    executeUnionForPreviousNonJoinedData(probe_pipeline, context, max_streams, log);
 
     /// probe side streams
     assert(probe_pipeline.streams_with_non_joined_data.empty());

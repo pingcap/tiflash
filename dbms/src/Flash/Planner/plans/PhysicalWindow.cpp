@@ -34,7 +34,7 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     const PhysicalPlanNodePtr & child)
 {
     assert(child);
-    /// the plan tree will be `PhysicalWindow <-- ... <-- PhysicalWindow <-- .. <-- PhysicalSort`.
+    /// The plan tree will be `PhysicalWindow <-- ... <-- PhysicalWindow <-- ... <-- PhysicalSort`.
     /// PhysicalWindow relies on the ordered data stream provided by PhysicalSort,
     /// so the child plan cannot call `restoreConcurrency` that would destroy the ordering of the input data.
     child->disableRestoreConcurrency();

@@ -65,12 +65,12 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             collators);
     }
 
-    auto cast_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
+    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
     analyzer.reset(aggregated_columns);
-    analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
+    analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
     const NamesAndTypes & schema = analyzer.getCurrentInputColumns();
-    cast_after_agg_actions->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(schema)));
+    expr_after_agg_actions->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(schema)));
 
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,
@@ -82,7 +82,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
-        cast_after_agg_actions);
+        expr_after_agg_actions);
     return physical_agg;
 }
 
@@ -144,17 +144,17 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
     }
 
     // we can record for agg after restore concurrency.
-    // Because streams of cast_after_agg will provide the correct ProfileInfo.
+    // Because the streams of expr_after_agg will provide the correct ProfileInfo.
     // See #3804.
-    assert(cast_after_agg && !cast_after_agg->getActions().empty());
-    executeExpression(pipeline, cast_after_agg, log, "cast after aggregation");
+    assert(expr_after_agg && !expr_after_agg->getActions().empty());
+    executeExpression(pipeline, expr_after_agg, log, "cast after aggregation");
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)
 {
     // schema.size() >= parent_require.size()
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
-    cast_after_agg->finalize(PhysicalPlanHelper::schemaToNames(schema));
+    expr_after_agg->finalize(PhysicalPlanHelper::schemaToNames(schema));
 
     Names before_agg_output;
     // set required output for agg funcs's arguments and group by keys.
@@ -177,6 +177,6 @@ void PhysicalAggregation::finalize(const Names & parent_require)
 
 const Block & PhysicalAggregation::getSampleBlock() const
 {
-    return cast_after_agg->getSampleBlock();
+    return expr_after_agg->getSampleBlock();
 }
 } // namespace DB
