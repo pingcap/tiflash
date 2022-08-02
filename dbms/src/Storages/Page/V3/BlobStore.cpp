@@ -502,8 +502,10 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     {
         LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
         auto lock_stats = blob_stats.lock();
+        // need get blob file before remove its stat otherwise we cannot find the blob file
+        auto blob_file = getBlobFile(blob_id);
         blob_stats.eraseStat(std::move(stat), lock_stats);
-        getBlobFile(blob_id)->remove();
+        blob_file->remove();
         cached_files.remove(blob_id);
     }
 }
