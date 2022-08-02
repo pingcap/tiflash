@@ -54,7 +54,7 @@ template <typename T>
 class IDGenerator
 {
 public:
-    IDGenerator(T t_)
+    explicit IDGenerator(T t_)
         : t(t_)
     {}
     std::vector<T> get(Int32 count)
@@ -81,19 +81,21 @@ class KeyLock
 public:
     static constexpr UInt32 default_key_lock_slot_count = 4096;
 
-    KeyLock(UInt32 slot_count = default_key_lock_slot_count)
+    explicit KeyLock(UInt32 slot_count = default_key_lock_slot_count)
         : key_rmutexs(slot_count)
     {}
 
     std::vector<std::unique_lock<std::recursive_mutex>> getLocks(const std::vector<Int64> & keys)
     {
         std::vector<UInt32> idxs;
+        idxs.reserve(keys.size());
         for (Int64 key : keys)
         {
             idxs.push_back(getLockIdx(key));
         }
         sort(idxs.begin(), idxs.end()); // Sort mutex to avoid dead lock.
         std::vector<std::unique_lock<std::recursive_mutex>> locks;
+        locks.reserve(idxs.size());
         for (UInt32 i : idxs)
         {
             locks.push_back(getLockByIdx(i));
@@ -121,7 +123,7 @@ class KeySet
 {
 public:
     static constexpr UInt32 default_key_set_slot_count = 4096;
-    KeySet(UInt32 slot_count = default_key_set_slot_count)
+    explicit KeySet(UInt32 slot_count = default_key_set_slot_count)
         : key_set_mutexs(slot_count)
         , key_sets(slot_count)
     {}
@@ -181,7 +183,7 @@ private:
 class DMStressProxy
 {
 public:
-    DMStressProxy(const StressOptions & opts_);
+    explicit DMStressProxy(const StressOptions & opts_);
 
     void run();
 

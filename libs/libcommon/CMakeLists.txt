@@ -100,19 +100,6 @@ add_library (common ${SPLIT_SHARED}
 if (USE_JEMALLOC)
     message (STATUS "Link jemalloc: ${JEMALLOC_LIBRARIES}")
     set (MALLOC_LIBRARIES ${JEMALLOC_LIBRARIES})
-elseif (USE_TCMALLOC)
-
-    if (DEBUG_TCMALLOC AND NOT GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG)
-        message (WARNING "Requested DEBUG_TCMALLOC but debug lib not found. try install libgoogle-perftools-dev")
-    endif ()
-
-    if (DEBUG_TCMALLOC AND GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG)
-        message (STATUS "Link libtcmalloc_minimal_debug for testing: ${GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG}")
-        set (MALLOC_LIBRARIES ${GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG})
-    else ()
-        message (STATUS "Link libtcmalloc_minimal: ${GPERFTOOLS_TCMALLOC_MINIMAL}")
-        set (MALLOC_LIBRARIES ${GPERFTOOLS_TCMALLOC_MINIMAL})
-    endif ()
 elseif(USE_MIMALLOC)
     message (STATUS "Link mimalloc: ${MIMALLOC_LIBRARIES}")
     set (MALLOC_LIBRARIES ${MIMALLOC_LIBRARIES})
@@ -136,6 +123,12 @@ target_include_directories (common PUBLIC ${COMMON_INCLUDE_DIR})
 
 target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
+if(APPLE AND ARCH_AARCH64)
+    set(CPU_FEATURES_LIBRARY)
+else()
+    set(CPU_FEATURES_LIBRARY cpu_features)
+endif()
+
 # `libcommon` provides a bridge for many other libs.
 # We expose the linkage to public because we want headers to be inherited.
 target_link_libraries (
@@ -151,7 +144,7 @@ target_link_libraries (
     ${GLIBC_COMPATIBILITY_LIBRARIES}
     ${MEMCPY_LIBRARIES}
     fmt
-    cpu_features
+    ${CPU_FEATURES_LIBRARY}
 )
 
 if (RT_LIBRARY)

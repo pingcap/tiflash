@@ -246,23 +246,23 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
 
 DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs)
 {
-    return join(right, exprs, ASTTableJoin::Kind::Inner);
+    return join(right, exprs, tipb::TypeInnerJoin);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs, ASTTableJoin::Kind kind)
+DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs, tipb::JoinType tp)
 {
     assert(root);
     assert(right.root);
-    auto join_ast = std::make_shared<ASTTableJoin>();
-    auto exp_list = std::make_shared<ASTExpressionList>();
+
+    // todo(ljr): support `on` expression
+    auto using_expr_list = std::make_shared<ASTExpressionList>();
     for (const auto & expr : exprs)
     {
-        exp_list->children.push_back(expr);
+        using_expr_list->children.push_back(expr);
     }
-    join_ast->using_expression_list = exp_list;
-    join_ast->strictness = ASTTableJoin::Strictness::All;
-    join_ast->kind = kind;
-    root = compileJoin(getExecutorIndex(), root, right.root, join_ast);
+
+    root = compileJoin(getExecutorIndex(), root, right.root, tp, using_expr_list);
+
     return *this;
 }
 
@@ -270,8 +270,10 @@ DAGRequestBuilder & DAGRequestBuilder::aggregation(ASTPtr agg_func, ASTPtr group
 {
     auto agg_funcs = std::make_shared<ASTExpressionList>();
     auto group_by_exprs = std::make_shared<ASTExpressionList>();
-    agg_funcs->children.push_back(agg_func);
-    group_by_exprs->children.push_back(group_by_expr);
+    if (agg_func)
+        agg_funcs->children.push_back(agg_func);
+    if (group_by_expr)
+        group_by_exprs->children.push_back(group_by_expr);
     return buildAggregation(agg_funcs, group_by_exprs);
 }
 
@@ -385,7 +387,7 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
-    auto builder = DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+    auto builder = DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
     // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
     // If user don't want to test executors, it will be safe to run Interpreter Tests.
     if (mock_table_columns.find(db_name + "." + table_name) != mock_table_columns.end())
@@ -397,7 +399,7 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 
 DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
     // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
     // If user don't want to test executors, it will be safe to run Interpreter Tests.

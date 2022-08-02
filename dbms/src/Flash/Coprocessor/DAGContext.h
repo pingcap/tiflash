@@ -52,6 +52,7 @@ struct JoinExecuteInfo
     String build_side_root_executor_id;
     JoinPtr join_ptr;
     BlockInputStreams non_joined_streams;
+    BlockInputStreams join_build_streams;
 };
 
 using MPPTunnelSetPtr = std::shared_ptr<MPPTunnelSet>;
@@ -121,7 +122,7 @@ inline bool enableFineGrainedShuffle(uint64_t stream_count)
     return stream_count > 0;
 }
 
-extern const String enableFineGrainedShuffleExtraInfo;
+static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
 
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
@@ -392,7 +393,7 @@ private:
     std::vector<SubqueriesForSets> subqueries;
 
     bool is_test = false; /// switch for test, do not use it in production.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <executor_id, columns>, for multiple sources
 };
 
 } // namespace DB

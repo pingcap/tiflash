@@ -46,7 +46,7 @@ struct TiFlashRaftConfig
 public:
     TiFlashRaftConfig() = default;
 
-    static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+    static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 };
 
 } // namespace DB
