@@ -14,8 +14,7 @@
 
 #pragma once
 
-
-#include <Server/MockComputeServer.h>
+#include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
 namespace DB::tests
@@ -27,7 +26,12 @@ public:
     static void SetUpTestCase()
     {
         ExecutorTest::SetUpTestCase();
-        compute_server_ptr = std::make_unique<MockComputeServer>(TiFlashTestEnv::getGlobalContext(), &Poco::Logger::get("compute"));
+        TiFlashSecurityConfig security_config;
+        TiFlashRaftConfig raft_config;
+        raft_config.flash_server_addr = "0.0.0.0:3930"; // TODO:: each FlashGrpcServer should have unique addr.
+        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
+        log_ptr = Logger::get("compute_test");
+        compute_server_ptr = std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr);
     }
 
     static void TearDownTestCase()
@@ -43,10 +47,12 @@ protected:
     // if you start a server, send a request to the server using pingcap::kv::RpcClient,
     // then close the server and start the server using the same addr,
     // then send a request to the new server using pingcap::kv::RpcClient.
-    static std::unique_ptr<MockComputeServer> compute_server_ptr;
+    static std::unique_ptr<FlashGrpcServerHolder> compute_server_ptr;
+    static LoggerPtr log_ptr;
 };
 
-std::unique_ptr<MockComputeServer> MPPTaskTestUtils::compute_server_ptr = nullptr;
+std::unique_ptr<FlashGrpcServerHolder> MPPTaskTestUtils::compute_server_ptr = nullptr;
+LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
 
 
 #define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                          \

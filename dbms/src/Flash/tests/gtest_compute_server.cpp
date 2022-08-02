@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Server/MockComputeServer.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB
@@ -78,7 +77,7 @@ try
 {
     auto tasks = context
                      .scan("test_db", "l_table")
-                     .join(context.scan("test_db", "r_table"), {col("join_c")}, ASTTableJoin::Kind::Left)
+                     .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
                      .topN("join_c", false, 2)
                      .buildMPPTasks(context);
 
