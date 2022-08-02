@@ -147,7 +147,7 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
     // Because the streams of expr_after_agg will provide the correct ProfileInfo.
     // See #3804.
     assert(expr_after_agg && !expr_after_agg->getActions().empty());
-    executeExpression(pipeline, expr_after_agg, log, "cast after aggregation");
+    executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)

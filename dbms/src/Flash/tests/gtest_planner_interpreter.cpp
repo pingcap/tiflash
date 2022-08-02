@@ -128,7 +128,7 @@ Union: <for test>
      PartialSorting x 10: limit = 10
       Expression: <before TopN>
        Filter
-        Expression: <cast after aggregation>
+        Expression: <expr after aggregation>
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 10, final: true
            Expression x 10: <before aggregation>
@@ -153,7 +153,7 @@ Union: <for test>
     Union: <for partial limit>
      Limit x 10, limit = 10
       Filter
-       Expression: <cast after aggregation>
+       Expression: <expr after aggregation>
         SharedQuery: <restore concurrency>
          ParallelAggregating, max_threads: 10, final: true
           Expression x 10: <before aggregation>
@@ -213,7 +213,7 @@ Union: <for test>
     {
         String expected = R"(
 Expression: <final projection>
- Expression: <cast after aggregation>
+ Expression: <expr after aggregation>
   Aggregating
    Concat
     MockTableScan)";
@@ -222,7 +222,7 @@ Expression: <final projection>
         expected = R"(
 Union: <for test>
  Expression x 5: <final projection>
-  Expression: <cast after aggregation>
+  Expression: <expr after aggregation>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 5, final: true
      MockTableScan x 5)";
@@ -279,7 +279,7 @@ Union: <for test>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <cast after aggregation>
+  Expression: <expr after aggregation>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <projection>
@@ -292,7 +292,7 @@ Union: <for test>
 
         expected = R"(
 Expression: <final projection>
- Expression: <cast after aggregation>
+ Expression: <expr after aggregation>
   Aggregating
    Concat
     Expression: <projection>
@@ -310,7 +310,7 @@ Expression: <final projection>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <cast after aggregation>
+  Expression: <expr after aggregation>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <projection>
@@ -323,7 +323,7 @@ Union: <for test>
 
         expected = R"(
 Expression: <final projection>
- Expression: <cast after aggregation>
+ Expression: <expr after aggregation>
   Aggregating
    Concat
     Expression: <projection>
@@ -342,11 +342,11 @@ Expression: <final projection>
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <cast after aggregation>
+  Expression: <expr after aggregation>
    SharedQuery: <restore concurrency>
     ParallelAggregating, max_threads: 10, final: true
      Expression x 10: <projection>
-      Expression: <cast after aggregation>
+      Expression: <expr after aggregation>
        SharedQuery: <restore concurrency>
         ParallelAggregating, max_threads: 10, final: true
          MockTableScan x 10)";
@@ -354,11 +354,11 @@ Union: <for test>
 
         expected = R"(
 Expression: <final projection>
- Expression: <cast after aggregation>
+ Expression: <expr after aggregation>
   Aggregating
    Concat
     Expression: <projection>
-     Expression: <cast after aggregation>
+     Expression: <expr after aggregation>
       Aggregating
        Concat
         MockTableScan)";
@@ -374,7 +374,7 @@ Expression: <final projection>
 Union: <for test>
  MockExchangeSender x 10
   Expression: <final projection>
-   Expression: <cast after aggregation>
+   Expression: <expr after aggregation>
     SharedQuery: <restore concurrency>
      ParallelAggregating, max_threads: 10, final: true
       MockTableScan x 10)";
@@ -383,7 +383,7 @@ Union: <for test>
         expected = R"(
 MockExchangeSender
  Expression: <final projection>
-  Expression: <cast after aggregation>
+  Expression: <expr after aggregation>
    Aggregating
     Concat
      MockTableScan)";
@@ -516,7 +516,7 @@ Union: <for test>
 Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
-   Expression: <cast after aggregation>
+   Expression: <expr after aggregation>
     SharedQuery: <restore concurrency>
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <projection>
@@ -551,7 +551,7 @@ Union: <for test>
       Expression: <projection>
        Filter
         Expression: <projection>
-         Expression: <cast after aggregation>
+         Expression: <expr after aggregation>
           SharedQuery: <restore concurrency>
            ParallelAggregating, max_threads: 10, final: true
             Expression x 10: <projection>
@@ -894,7 +894,7 @@ CreatingSets
      MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <cast after aggregation>
+   Expression: <expr after aggregation>
     SharedQuery: <restore concurrency>
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
@@ -925,7 +925,7 @@ CreatingSets
      MockTableScan
  Union: <for test>
   Expression x 10: <final projection>
-   Expression: <cast after aggregation>
+   Expression: <expr after aggregation>
     SharedQuery: <restore concurrency>
      ParallelAggregating, max_threads: 10, final: true
       Expression x 10: <before aggregation>
@@ -967,7 +967,7 @@ CreatingSets
      Limit, limit = 10
       Union: <for partial limit>
        Limit x 20, limit = 10
-        Expression: <cast after aggregation>
+        Expression: <expr after aggregation>
          SharedQuery: <restore concurrency>
           ParallelAggregating, max_threads: 20, final: true
            Expression x 20: <before aggregation>
