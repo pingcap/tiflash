@@ -61,7 +61,7 @@ static String getNormalizedPath(const String & s)
     return getCanonicalPath(Poco::Path{s}.toString());
 }
 
-void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger * log)
+void TiFlashStorageConfig::parseStoragePath(const String & storage, const LoggerPtr & log)
 {
     std::istringstream ss(storage);
     cpptoml::parser p(ss);
@@ -181,7 +181,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
 }
 
-void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logger * log)
+void TiFlashStorageConfig::parseMisc(const String & storage_section, const LoggerPtr & log)
 {
     std::istringstream ss(storage_section);
     cpptoml::parser p(ss);
@@ -233,7 +233,7 @@ Strings TiFlashStorageConfig::getAllNormalPaths() const
     return all_normal_path;
 }
 
-bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
 {
     if (!config.has("path"))
         return false;
@@ -302,7 +302,7 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     return true;
 }
 
-std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
 {
     size_t global_capacity_quota = 0; // "0" by default, means no quota, use the whole disk capacity.
     TiFlashStorageConfig storage_config;
@@ -379,7 +379,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 
-void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, Poco::Logger * log)
+void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, const LoggerPtr & log)
 {
     std::istringstream ss(storage_io_rate_limit);
     cpptoml::parser p(ss);

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
@@ -48,15 +49,29 @@ void ColumnWithTypeAndName::dumpStructure(WriteBuffer & out) const
         out << ' ' << column->dumpStructure();
     else
         out << " nullptr";
-
-    out << " " << column_id;
 }
 
 String ColumnWithTypeAndName::dumpStructure() const
 {
     WriteBufferFromOwnString out;
     dumpStructure(out);
-    return out.str();
+    return out.releaseStr();
+}
+
+void ColumnWithTypeAndName::dumpJsonStructure(WriteBuffer & out) const
+{
+    out << fmt::format(R"json({{"name":"{}","id":{},"type":{},"column":{}}})json",
+                       name,
+                       column_id,
+                       (type ? "\"" + type->getName() + "\"" : "null"),
+                       (column ? "\"" + column->dumpStructure() + "\"" : "null"));
+}
+
+String ColumnWithTypeAndName::dumpJsonStructure() const
+{
+    WriteBufferFromOwnString out;
+    dumpJsonStructure(out);
+    return out.releaseStr();
 }
 
 } // namespace DB

@@ -358,7 +358,7 @@ void DAGQueryBlockInterpreter::executeWindow(
         /// Window function can be multiple threaded when fine grained shuffle is enabled.
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier());
-            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
+            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
     else
@@ -466,7 +466,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
     size_t stream_count = max_streams;
     if (enable_fine_grained_shuffle)
     {
-        extra_info += ", " + enableFineGrainedShuffleExtraInfo;
+        extra_info += ", " + String(enableFineGrainedShuffleExtraInfo);
         stream_count = std::min(max_streams, exchange_receiver->getFineGrainedShuffleStreamCount());
     }
 
@@ -743,10 +743,10 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
                 stream_count,
                 batch_size);
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
+            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
-        RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, Exception, "exchange_sender has to be hash partition when fine grained shuffle is enabled");
-        RUNTIME_CHECK(stream_count <= 1024, Exception, "fine_grained_shuffle_stream_count should not be greater than 1024");
+        RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, Exception("exchange_sender has to be hash partition when fine grained shuffle is enabled"));
+        RUNTIME_CHECK(stream_count <= 1024, Exception("fine_grained_shuffle_stream_count should not be greater than 1024"));
     }
     else
     {

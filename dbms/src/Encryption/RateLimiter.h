@@ -185,7 +185,7 @@ private:
         return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
     }
     TimePoint last_stat_time;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     Int64 get_io_statistic_period_us;
 };
@@ -260,7 +260,7 @@ private:
     std::vector<pid_t> bg_thread_ids;
     IOInfo last_io_info;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::atomic<bool> stop;
     std::thread auto_tune_thread;
@@ -419,8 +419,14 @@ private:
         High = 3,
         Emergency = 4
     };
-    Watermark writeWatermark() const { return getWatermark(writePct()); }
-    Watermark readWatermark() const { return getWatermark(readPct()); }
+    Watermark writeWatermark() const
+    {
+        return getWatermark(writePct());
+    }
+    Watermark readWatermark() const
+    {
+        return getWatermark(readPct());
+    }
     Watermark getWatermark(int pct) const;
 
     // Returns <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>
@@ -475,6 +481,6 @@ private:
     LimiterStatUPtr bg_read_stat;
     LimiterStatUPtr fg_read_stat;
     StorageIORateLimitConfig io_config;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 } // namespace DB
