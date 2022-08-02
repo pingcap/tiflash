@@ -201,7 +201,7 @@ try
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
- Expression: <cast after aggregation>
+ Expression: <expr after aggregation>
   Aggregating
    Concat
     MockExchangeReceiver)",
