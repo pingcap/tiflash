@@ -122,7 +122,7 @@ inline bool enableFineGrainedShuffle(uint64_t stream_count)
     return stream_count > 0;
 }
 
-extern const String enableFineGrainedShuffleExtraInfo;
+static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
 
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext

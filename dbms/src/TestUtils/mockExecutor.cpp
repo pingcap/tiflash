@@ -248,23 +248,23 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
 
 DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs)
 {
-    return join(right, exprs, ASTTableJoin::Kind::Inner);
+    return join(right, exprs, tipb::TypeInnerJoin);
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs, ASTTableJoin::Kind kind)
+DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs, tipb::JoinType tp)
 {
     assert(root);
     assert(right.root);
-    auto join_ast = std::make_shared<ASTTableJoin>();
-    auto exp_list = std::make_shared<ASTExpressionList>();
+
+    // todo(ljr): support `on` expression
+    auto using_expr_list = std::make_shared<ASTExpressionList>();
     for (const auto & expr : exprs)
     {
-        exp_list->children.push_back(expr);
+        using_expr_list->children.push_back(expr);
     }
-    join_ast->using_expression_list = exp_list;
-    join_ast->strictness = ASTTableJoin::Strictness::All;
-    join_ast->kind = kind;
-    root = compileJoin(getExecutorIndex(), root, right.root, join_ast);
+
+    root = compileJoin(getExecutorIndex(), root, right.root, tp, using_expr_list);
+
     return *this;
 }
 

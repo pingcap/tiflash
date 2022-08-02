@@ -29,6 +29,7 @@ configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
 add_library (clickhouse-server-lib
     HTTPHandler.cpp
+    FlashGrpcServerHolder.cpp
     MetricsTransmitter.cpp
     MetricsPrometheus.cpp
     NotFoundHandler.cpp
