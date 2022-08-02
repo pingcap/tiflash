@@ -94,8 +94,6 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
         project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
-    // TODO remove this line after DAGQueryBlock removed.
-    physical_projection->disableRestoreConcurrency();
     return physical_projection;
 }
 
@@ -141,8 +139,6 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         project_actions);
     // For final projection, no need to record profile streams.
     physical_projection->disableRecordProfileStreams();
-    // TODO remove this line after DAGQueryBlock removed.
-    physical_projection->disableRestoreConcurrency();
     return physical_projection;
 }
 
@@ -161,7 +157,7 @@ void PhysicalProjection::finalize(const Names & parent_require)
     child->finalize(project_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(project_actions, child->getSampleBlock().columns());
 
-    FinalizeHelper::checkSampleBlockContainsSchema(getSampleBlock(), schema);
+    FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);
 }
 
 const Block & PhysicalProjection::getSampleBlock() const

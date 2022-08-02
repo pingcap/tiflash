@@ -65,12 +65,12 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             collators);
     }
 
-    auto cast_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
+    auto expr_after_agg_actions = PhysicalPlanHelper::newActions(aggregated_columns, context);
     analyzer.reset(aggregated_columns);
-    analyzer.appendCastAfterAgg(cast_after_agg_actions, aggregation);
+    analyzer.appendCastAfterAgg(expr_after_agg_actions, aggregation);
     /// project action after aggregation to remove useless columns.
     const NamesAndTypes & schema = analyzer.getCurrentInputColumns();
-    cast_after_agg_actions->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(schema)));
+    expr_after_agg_actions->add(ExpressionAction::project(PhysicalPlanHelper::schemaToNames(schema)));
 
     auto physical_agg = std::make_shared<PhysicalAggregation>(
         executor_id,
@@ -82,9 +82,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
-        cast_after_agg_actions);
-    // For agg, `recordProfileStreams` has been called in `transformImpl`.
-    physical_agg->disableRecordProfileStreams();
+        expr_after_agg_actions);
     return physical_agg;
 }
 
@@ -123,8 +121,6 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
         pipeline.streams_with_non_joined_data.clear();
         pipeline.firstStream() = std::move(stream);
 
-        // should record for agg before restore concurrency. See #3804.
-        recordProfileStreams(pipeline, context);
         restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
     }
     else
@@ -145,17 +141,20 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
             context.getFileProvider(),
             true,
             log->identifier());
-        recordProfileStreams(pipeline, context);
     }
 
-    executeExpression(pipeline, cast_after_agg, log, "cast after aggregation");
+    // we can record for agg after restore concurrency.
+    // Because the streams of expr_after_agg will provide the correct ProfileInfo.
+    // See #3804.
+    assert(expr_after_agg && !expr_after_agg->getActions().empty());
+    executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)
 {
     // schema.size() >= parent_require.size()
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
-    cast_after_agg->finalize(PhysicalPlanHelper::schemaToNames(schema));
+    expr_after_agg->finalize(PhysicalPlanHelper::schemaToNames(schema));
 
     Names before_agg_output;
     // set required output for agg funcs's arguments and group by keys.
@@ -178,6 +177,6 @@ void PhysicalAggregation::finalize(const Names & parent_require)
 
 const Block & PhysicalAggregation::getSampleBlock() const
 {
-    return cast_after_agg->getSampleBlock();
+    return expr_after_agg->getSampleBlock();
 }
 } // namespace DB

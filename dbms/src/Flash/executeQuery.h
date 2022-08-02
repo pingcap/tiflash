@@ -14,11 +14,14 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Flash/Planner/PhysicalPlanNode.h>
+#include <Core/QueryProcessingStage.h>
+#include <DataStreams/BlockIO.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
-class Context;
-PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log);
-} // namespace DB
+BlockIO executeQuery(
+    Context & context,
+    bool internal = false,
+    QueryProcessingStage::Enum stage = QueryProcessingStage::Complete);
+}

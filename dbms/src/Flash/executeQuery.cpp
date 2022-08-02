@@ -12,13 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Common/Logger.h>
-#include <Flash/Planner/PhysicalPlanNode.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/executeQuery.h>
+#include <Interpreters/executeQuery.h>
 
 namespace DB
 {
-class Context;
-PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log);
+BlockIO executeQuery(
+    Context & context,
+    bool internal,
+    QueryProcessingStage::Enum stage)
+{
+    if (context.getSettingsRef().enable_planner)
+    {
+        PlanQuerySource plan(context);
+        return executeQuery(plan, context, internal, stage);
+    }
+    else
+    {
+        DAGQuerySource dag(context);
+        return executeQuery(dag, context, internal, stage);
+    }
+}
 } // namespace DB

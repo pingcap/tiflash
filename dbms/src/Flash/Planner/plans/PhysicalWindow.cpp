@@ -34,6 +34,9 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     const PhysicalPlanNodePtr & child)
 {
     assert(child);
+    /// The plan tree will be `PhysicalWindow <-- ... <-- PhysicalWindow <-- ... <-- PhysicalSort`.
+    /// PhysicalWindow relies on the ordered data stream provided by PhysicalSort,
+    /// so the child plan cannot call `restoreConcurrency` that would destroy the ordering of the input data.
     child->disableRestoreConcurrency();
 
     DAGExpressionAnalyzer analyzer(child->getSchema(), context);
@@ -50,8 +53,6 @@ PhysicalPlanNodePtr PhysicalWindow::build(
         child,
         window_description,
         fine_grained_shuffle);
-    // TODO remove this line after DAGQueryBlock removed.
-    physical_window->disableRestoreConcurrency();
     return physical_window;
 }
 
@@ -84,6 +85,7 @@ void PhysicalWindow::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 
+    child->finalize(window_description.before_window->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(window_description.before_window, child->getSampleBlock().columns());
 }
 

@@ -58,7 +58,7 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
-    void probeSideTransform(DAGPipeline & probe_pipeline, Context & context);
+    void probeSideTransform(DAGPipeline & probe_pipeline, Context & context, size_t max_streams);
 
     void buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams);
 

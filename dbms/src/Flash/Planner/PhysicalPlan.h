@@ -34,12 +34,6 @@ public:
 
     void build(const tipb::DAGRequest * dag_request);
 
-    void build(const String & executor_id, const tipb::Executor * executor);
-
-    void buildSource(const String & executor_id, const BlockInputStreams & source_streams);
-
-    void buildFinalProjection(const String & column_prefix, bool is_root);
-
     // after outputAndOptimize, the physical plan node tree is done.
     void outputAndOptimize();
 
@@ -48,6 +42,12 @@ public:
     void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
 private:
+    void addRootFinalProjectionIfNeed();
+
+    void build(const String & executor_id, const tipb::Executor * executor);
+
+    void buildFinalProjection(const String & column_prefix, bool is_root);
+
     PhysicalPlanNodePtr popBack();
 
     void pushBack(const PhysicalPlanNodePtr & plan);

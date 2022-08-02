@@ -30,8 +30,8 @@
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
@@ -318,8 +318,7 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
-    DAGQuerySource dag(*context);
-    executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    executeQuery(*context);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);

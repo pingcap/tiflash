@@ -30,5 +30,5 @@ void checkParentRequireContainsSchema(const Names & parent_require, const NamesA
 
 void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTypes & schema);
 
-void checkSchemaContainsSampleBlock(const NamesAndTypes & schema, const Block & sample_block);
+void checkSampleBlockContainsParentRequire(const Block & sample_block, const Names & parent_require);
 } // namespace DB::FinalizeHelper

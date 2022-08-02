@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Planner/Planner.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -55,25 +53,12 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
         BlockInputStreams child_streams = executeQueryBlock(*child);
         input_streams_vec.push_back(child_streams);
     }
-    if (context.getSettingsRef().enable_planner && Planner::isSupported(query_block))
-    {
-        LOG_FMT_DEBUG(dagContext().log, "use planer for query block with source {}", query_block.source_name);
-        Planner planner(
-            context,
-            input_streams_vec,
-            query_block,
-            max_streams);
-        return planner.execute();
-    }
-    else
-    {
-        DAGQueryBlockInterpreter query_block_interpreter(
-            context,
-            input_streams_vec,
-            query_block,
-            max_streams);
-        return query_block_interpreter.execute();
-    }
+    DAGQueryBlockInterpreter query_block_interpreter(
+        context,
+        input_streams_vec,
+        query_block,
+        max_streams);
+    return query_block_interpreter.execute();
 }
 
 BlockIO InterpreterDAG::execute()
@@ -81,23 +66,7 @@ BlockIO InterpreterDAG::execute()
     BlockInputStreams streams = executeQueryBlock(*dag.getRootQueryBlock());
     DAGPipeline pipeline;
     pipeline.streams = streams;
-    /// add union to run in parallel if needed
-    if (unlikely(dagContext().isTest()))
-        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/false, "for test");
-    else if (dagContext().isMPPTask())
-        /// MPPTask do not need the returned blocks.
-        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true, "for mpp");
-    else
-        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/false, "for non mpp");
-    if (dagContext().hasSubquery())
-    {
-        const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
-            pipeline.firstStream(),
-            std::move(dagContext().moveSubqueries()),
-            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dagContext().log->identifier());
-    }
+    executeCreatingSets(pipeline, context, max_streams, dagContext().log);
     BlockIO res;
     res.in = pipeline.firstStream();
     return res;

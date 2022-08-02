@@ -20,7 +20,7 @@ namespace DB
 class Rule
 {
 public:
-    virtual PhysicalPlanNodePtr apply(const Context & context, PhysicalPlanNodePtr plan) = 0;
+    virtual PhysicalPlanNodePtr apply(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log) = 0;
 
     virtual ~Rule() = default;
 };
@@ -29,7 +29,7 @@ using RulePtr = std::shared_ptr<Rule>;
 class FinalizeRule : public Rule
 {
 public:
-    PhysicalPlanNodePtr apply(const Context &, PhysicalPlanNodePtr plan) override
+    PhysicalPlanNodePtr apply(const Context &, PhysicalPlanNodePtr plan, const LoggerPtr &) override
     {
         plan->finalize();
         return plan;
@@ -38,13 +38,15 @@ public:
     static RulePtr create() { return std::make_shared<FinalizeRule>(); }
 };
 
-PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan)
+PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log)
 {
     assert(plan);
     static std::vector<RulePtr> rules{FinalizeRule::create()};
     for (const auto & rule : rules)
-        plan = rule->apply(context, plan);
-    assert(plan);
+    {
+        plan = rule->apply(context, plan, log);
+        assert(plan);
+    }
     return plan;
 }
 } // namespace DB

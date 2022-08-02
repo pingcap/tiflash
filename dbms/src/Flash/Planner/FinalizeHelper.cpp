@@ -118,28 +118,13 @@ void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTy
     }
 }
 
-void checkSchemaContainsSampleBlock(const NamesAndTypes & schema, const Block & sample_block)
+void checkSampleBlockContainsParentRequire(const Block & sample_block, const Names & parent_require)
 {
-    std::unordered_map<String, DataTypePtr> schema_map;
-    for (const auto & column : schema)
-        schema_map[column.name] = column.type;
-    for (const auto & sample_block_column : sample_block)
+    for (const auto & parent_require_column : parent_require)
     {
-        auto it = schema_map.find(sample_block_column.name);
-        if (unlikely(it == schema_map.end()))
+        if (unlikely(!sample_block.has(parent_require_column)))
             throw TiFlashException(
-                fmt::format("schema {} don't contain sample block column: {}", schemaToString(schema), sample_block_column.name),
-                Errors::Planner::Internal);
-
-        const auto & type_in_schema = it->second->getName();
-        const auto & type_in_sample_block = sample_block_column.type->getName();
-        if (unlikely(type_in_sample_block != type_in_schema))
-            throw TiFlashException(
-                fmt::format(
-                    "the type of column `{}` in schema `{}` is different from the one in sample block `{}`",
-                    sample_block_column.name,
-                    type_in_schema,
-                    type_in_sample_block),
+                fmt::format("sample block {} don't contain parent_require column: {}", blockMetaToString(sample_block), parent_require_column),
                 Errors::Planner::Internal);
     }
 }

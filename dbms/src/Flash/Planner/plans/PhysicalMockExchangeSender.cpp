@@ -32,6 +32,8 @@ PhysicalPlanNodePtr PhysicalMockExchangeSender::build(
         child->getSchema(),
         log->identifier(),
         child);
+    // executeUnion will be call after sender.transform, so don't need to restore concurrency.
+    physical_mock_exchange_sender->disableRestoreConcurrency();
     return physical_mock_exchange_sender;
 }
 

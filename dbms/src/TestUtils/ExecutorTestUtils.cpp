@@ -14,8 +14,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Interpreters/executeQuery.h>
+#include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
 
@@ -67,8 +66,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in interpreter tests.
-    DAGQuerySource dag(context.context);
-    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
+    auto res = executeQuery(context.context);
     FmtBuffer fb;
     res.in->dumpTree(fb);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
@@ -128,8 +126,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     dag_context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
-    DAGQuerySource dag(context.context);
-    return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
+    return readBlock(executeQuery(context.context).in);
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)

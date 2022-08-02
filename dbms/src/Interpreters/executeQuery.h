@@ -16,7 +16,7 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Interpreters/IQuerySource.h>
 
 
 namespace DB
@@ -53,6 +53,6 @@ BlockIO executeQuery(
 );
 
 
-BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage);
+BlockIO executeQuery(IQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage);
 
 } // namespace DB
