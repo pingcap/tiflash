@@ -18,6 +18,7 @@
 #include <Common/nocopyable.h>
 
 #include <mutex>
+#include <condition_variable>
 
 namespace DB
 {
