@@ -42,6 +42,21 @@ public:
         UTF8_BIN = 83,
     };
 
+    enum class CollatorType : uint32_t
+    {
+        UNKNOWN = 0,
+        UTF8_GENERAL_CI,
+        UTF8MB4_GENERAL_CI,
+        UTF8_UNICODE_CI,
+        UTF8MB4_UNICODE_CI,
+        UTF8MB4_BIN,
+        LATIN1_BIN,
+        BINARY,
+        ASCII_BIN,
+        UTF8_BIN,
+        MAX_,
+    };
+
     /// Get the collator according to the internal collation ID, which directly comes from tipb and has been properly
     /// de-rewritten - the "New CI Collation" will flip the sign of the collation ID.
     static TiDBCollatorPtr getCollator(int32_t id);
@@ -67,22 +82,14 @@ public:
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
-    bool isBinary() const { return collator_id == BINARY; }
-    bool isCI() const
-    {
-        return collator_id == UTF8_UNICODE_CI || collator_id == UTF8_GENERAL_CI
-            || collator_id == UTF8MB4_UNICODE_CI || collator_id == UTF8MB4_GENERAL_CI;
-    }
-    bool isBin() const
-    {
-        return collator_id == UTF8_BIN || collator_id == UTF8MB4_BIN
-            || collator_id == ASCII_BIN || collator_id == LATIN1_BIN;
-    }
+    CollatorType getCollatorType() const { return collator_type; }
+    bool isBinary() const;
+    bool isCI() const;
 
 protected:
-    explicit ITiDBCollator(int32_t collator_id_)
-        : collator_id(collator_id_){};
+    explicit ITiDBCollator(int32_t collator_id_);
     int32_t collator_id;
+    CollatorType collator_type{};
 };
 
 /// these dummy_xxx are used as the default value to avoid too many meaningless
@@ -90,5 +97,7 @@ protected:
 extern TiDBCollators dummy_collators;
 extern std::vector<std::string> dummy_sort_key_contaners;
 extern std::string dummy_sort_key_contaner;
+
+ITiDBCollator::CollatorType GetTiDBCollatorType(const void * collator);
 
 } // namespace TiDB

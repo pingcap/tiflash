@@ -93,4 +93,5 @@ FLATTEN_INLINE_PURE inline StringRef BinCollatorSortKey(const char * s, size_t l
         return StringRef(s, length);
     }
 }
+
 } // namespace DB
