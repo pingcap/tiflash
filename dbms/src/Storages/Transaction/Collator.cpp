@@ -636,7 +636,7 @@ struct TiDBCollatorPtrMap
         auto & collator = (c_##name);                                                                               \
         id_map[collator.getCollatorId()] = type_map[static_cast<uint32_t>(collator.getCollatorType())] = &collator; \
         addr_to_type[&collator] = collator.getCollatorType();                                                       \
-        name_map[#name] = nullptr;                                                                                  \
+        name_map[#name] = &collator;                                                                                \
     } while (false)
 
         M(utf8_general_ci);
