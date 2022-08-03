@@ -5478,15 +5478,15 @@ private:
     template <typename IntType>
     static bool executeElt(Block & block, const ColumnNumbers & arguments, size_t result)
     {
-        const auto * col_idx = block.getByPosition(arguments[0]).column.get();
+        const auto * col_arg0 = block.getByPosition(arguments[0]).column.get();
 
-        if (const auto * col = checkAndGetColumnConst<ColumnVector<IntType>>(col_idx, true))
+        if (const auto * col = checkAndGetColumnConst<ColumnVector<IntType>>(col_arg0, true))
         {
             return constColumn<IntType>(col, block, arguments, result);
         }
         else
         {
-            return vectorColumn<IntType>(col_idx, block, arguments, result);
+            return vectorColumn<IntType>(col_arg0, block, arguments, result);
         }
     }
 
@@ -5506,17 +5506,17 @@ private:
             return true;
         }
 
-        const auto idx = col->getDataColumnPtr()->isColumnNullable()
+        const auto arg0 = col->getDataColumnPtr()->isColumnNullable()
             ? checkAndGetNestedColumn<ColumnVector<IntType>>(col->getDataColumnPtr().get())->getInt(0)
             : col->getInt(0);
 
-        if (idx < 1 || idx >= static_cast<Int64>(arguments.size()))
+        if (arg0 < 1 || arg0 >= static_cast<Int64>(arguments.size()))
         {
             fillResultColumnNull(block, result);
         }
         else
         {
-            block.getByPosition(result).column = block.getByPosition(arguments[idx]).column->cloneResized(nrow);
+            block.getByPosition(result).column = block.getByPosition(arguments[arg0]).column->cloneResized(nrow);
         }
         return true;
     }
@@ -5526,32 +5526,32 @@ private:
     {
         const auto narg = arguments.size();
         const auto nrow = col->size();
-        const auto col_idx = col->isColumnNullable()
+        const auto col_arg0 = col->isColumnNullable()
             ? checkAndGetNestedColumn<ColumnVector<IntType>>(col)
             : checkAndGetColumn<ColumnVector<IntType>>(col);
 
-        if (!col_idx)
+        if (!col_arg0)
         {
             return false;
         }
 
-        const auto & idx_vec = col_idx->getData();
+        const auto & arg0_vec = col_arg0->getData();
 
         auto res_null_map = ColumnUInt8::create(nrow);
         auto res_col = ColumnString::create();
 
         for (size_t i = 0; i < nrow; ++i)
         {
-            const auto idx = idx_vec[i];
+            const auto arg0 = arg0_vec[i];
 
-            if (col_idx->isNullAt(i) || idx < 1 || static_cast<Int64>(idx) >= static_cast<Int64>(narg))
+            if (col_arg0->isNullAt(i) || arg0 < 1 || static_cast<Int64>(arg0) >= static_cast<Int64>(narg))
             {
                 res_null_map->getData()[i] = true;
                 res_col->insertDefault();
             }
             else
             {
-                const auto arg_pos = arguments[idx];
+                const auto arg_pos = arguments[arg0];
                 const auto src_col = block.getByPosition(arg_pos).column.get();
 
                 if (src_col->isNullAt(i))
