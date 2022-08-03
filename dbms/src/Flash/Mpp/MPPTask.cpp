@@ -140,6 +140,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
             throw TiFlashException("Failed to decode task meta info in ExchangeSender", Errors::Coprocessor::BadRequest);
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
+        std::cout << "ywq test is_async: " << is_async << std::endl;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
         LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
         if (status != INITIALIZING)

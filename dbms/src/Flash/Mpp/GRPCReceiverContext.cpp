@@ -93,6 +93,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 
     void init(UnaryCallback<bool> * callback) override
     {
+        std::cout << "ywq test init async grpc exchange... address: " << request.req->sender_meta().address() << std::endl;
         reader = cluster->rpc_client->sendStreamRequestAsync(
             request.req->sender_meta().address(),
             &client_context,

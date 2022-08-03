@@ -147,6 +147,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
+    properties.mpp_partition_num = 2;
     context.context.setMPPTest();
     auto res = executeMPPQuery(context.context, properties, tasks);
     return readBlock(res);

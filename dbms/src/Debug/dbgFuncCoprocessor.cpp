@@ -184,12 +184,14 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
+
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks)
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;
     for (auto & task : query_tasks)
     {
+        std::cout << "ywq test partition id: " << task.partition_id << std::endl;
         if (task.is_root_task)
         {
             root_task_ids.push_back(task.task_id);
@@ -199,7 +201,14 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         auto * tm = req->mutable_meta();
         tm->set_start_ts(properties.start_ts);
         tm->set_partition_id(task.partition_id);
-        tm->set_address(Debug::LOCAL_HOST);
+        if (task.partition_id == 1)
+        {
+            tm->set_address(Debug::LOCAL_HOST1);
+        }
+        else
+        {
+            tm->set_address(Debug::LOCAL_HOST);
+        }
         tm->set_task_id(task.task_id);
         auto * encoded_plan = req->mutable_encoded_plan();
         task.dag_request->AppendToString(encoded_plan);
@@ -252,9 +261,18 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
 
         if (context.isMPPTest())
         {
-            MockComputeClient client(
-                grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
-            client.runDispatchMPPTask(req);
+            if (task.partition_id == 1)
+            {
+                MockComputeClient client(
+                    grpc::CreateChannel(Debug::LOCAL_HOST1, grpc::InsecureChannelCredentials()));
+                client.runDispatchMPPTask(req);
+            }
+            else
+            {
+                MockComputeClient client(
+                    grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
+                client.runDispatchMPPTask(req);
+            }
         }
         else
         {
@@ -287,6 +305,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     root_tm.set_address(Debug::LOCAL_HOST);
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
+    std::cout << "ywq test enbale local tuunel: " << context.getSettingsRef().enable_local_tunnel << std::endl;
     std::shared_ptr<ExchangeReceiver> exchange_receiver
         = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
@@ -294,7 +313,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                 root_tm,
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
-                context.getSettingsRef().enable_local_tunnel,
+                false, // ywq todo
                 context.getSettingsRef().enable_async_grpc_client),
             tipb_exchange_receiver.encoded_task_meta_size(),
             10,
@@ -630,14 +649,17 @@ QueryFragments mppQueryToQueryFragments(
     std::vector<Int64> sender_target_task_ids = mpp_ctx->sender_target_task_ids;
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     size_t current_task_num = properties.mpp_partition_num;
+    std::cout << "ywq test partition num: " << properties.mpp_partition_num << std::endl;
     for (auto & exchange : exchange_map)
     {
+        std::cout << "ywq test exchange map log: " << exchange.first << ": " << exchange.second.first->name << "<---" << exchange.second.second->name << ", with sender type: " << exchange.second.second->type << std::endl;
         if (exchange.second.second->type == tipb::ExchangeType::PassThrough)
         {
             current_task_num = 1;
             break;
         }
     }
+    std::cout << "ywq test, current task num: " << current_task_num << std::endl;
     std::vector<Int64> current_task_ids;
     for (size_t i = 0; i < current_task_num; i++)
         current_task_ids.push_back(mpp_ctx->next_task_id++);

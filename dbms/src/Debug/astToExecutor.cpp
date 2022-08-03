@@ -787,6 +787,7 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
 namespace Debug
 {
 String LOCAL_HOST = "127.0.0.1:3930";
+String LOCAL_HOST1 = "127.0.0.1:3931";
 void setServiceAddr(const std::string & addr)
 {
     LOCAL_HOST = addr;
@@ -1108,9 +1109,12 @@ void Aggregation::toMPPSubPlan(size_t & executor_index, const DAGProperties & pr
     {
         partition_keys.push_back(i + agg_func_num);
     }
+    std::cout << "ywq test, partition_keys: " << partition_keys.size() << std::endl;
     std::shared_ptr<ExchangeSender> exchange_sender
         = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, partition_keys.empty() ? tipb::PassThrough : tipb::Hash, partition_keys);
     exchange_sender->children.push_back(partial_agg);
+
+    std::cout << "ywq test, exchange sender type: " << exchange_sender->type << std::endl;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver
         = std::make_shared<ExchangeReceiver>(executor_index, output_schema_for_partial_agg);

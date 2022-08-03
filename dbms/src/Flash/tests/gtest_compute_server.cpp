@@ -21,6 +21,14 @@ namespace tests
 class ComputeServerRunner : public DB::tests::MPPTaskTestUtils
 {
 public:
+    static void SetUpTestCase() {
+        MPPTaskTestUtils::SetUpTestCase();
+        server_manager.addServerConfig({"test", "0.0.0.0:3930"});
+        server_manager.addServerConfig({"test1", "0.0.0.0:3931"});
+        // server_manager.addServer("test", std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
+        // server_manager.addServer("test1", std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
+        server_manager.startAllServer(log_ptr);
+    }
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
@@ -96,6 +104,38 @@ try
     {
         ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
     }
+
+    auto expected_cols = {
+        toNullableVec<String>({{}, "banana"}),
+        toNullableVec<String>({{}, "apple"}),
+        toNullableVec<String>({{}, {}})};
+    ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
+}
+CATCH
+
+TEST_F(ComputeServerRunner, runAggTasksWithMultipleServer)
+try
+{
+    {
+        auto tasks = context.scan("test_db", "test_table_1")
+                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                         .project({"max(s1)"})
+                         .buildMPPTasks(context, 2);
+
+        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
+        ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, runJoinTasksWithMultipleServer)
+try
+{
+    auto tasks = context
+                     .scan("test_db", "l_table")
+                     .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
+                     .topN("join_c", false, 2)
+                     .buildMPPTasks(context, 2);
 
     auto expected_cols = {
         toNullableVec<String>({{}, "banana"}),

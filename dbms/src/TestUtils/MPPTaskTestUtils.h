@@ -17,8 +17,87 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
+#include <cstddef>
+#include <memory>
+#include <unordered_map>
+
+#include "Core/ColumnsWithTypeAndName.h"
+
 namespace DB::tests
 {
+
+struct MockServerConfig
+{
+    String name;
+    String addr;
+};
+class MockComputeServerManager
+{
+public:
+    void addServerConfig(MockServerConfig config)
+    {
+        server_config_map[config.name] = config;
+    }
+
+    void startAllServer(const LoggerPtr & log_ptr)
+    {
+        for (const auto & kv : server_config_map)
+        {
+            TiFlashSecurityConfig security_config;
+            TiFlashRaftConfig raft_config;
+            raft_config.flash_server_addr = kv.second.addr;
+            Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
+            addServer(kv.first, std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
+        }
+    }
+
+    void reset()
+    {
+        server_map.clear();
+    }
+
+private:
+    void addServer(String name, std::unique_ptr<FlashGrpcServerHolder> server)
+    {
+        server_map[name] = std::move(server);
+    }
+
+private:
+    std::unordered_map<String, std::unique_ptr<FlashGrpcServerHolder>> server_map;
+    std::unordered_map<String, MockServerConfig> server_config_map;
+};
+
+class MockStorage
+{
+    // std::vector<std::unordered_map<String, ColumnsWithTypeAndName>> splitColumnsByPartitionNum(Int64 table_id, size_t mpp_partition_num)
+    // {
+    //     std::vector<std::unordered_map<String, ColumnsWithTypeAndName>> res;
+
+
+    //     for (auto kv : columns_for_test_map)
+    //     {
+    //         for (size_t i = 0; i < mpp_partition_num; ++i)
+    //         {
+    //             ColumnsWithTypeAndName columns_for_each_partition;
+    //             for (auto col : kv.second)
+    //             {
+    //                 columns_for_each_partition.push_back(
+    //                     ColumnWithTypeAndName(
+    //                         col.column->cut(start, row_for_current_stream),
+    //                         col.type,
+    //                         col.name));
+    //             }
+    //         }
+    //     }
+
+
+    //     return res;
+    // }
+
+private:
+
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
+};
 
 class MPPTaskTestUtils : public ExecutorTest
 {
@@ -26,17 +105,14 @@ public:
     static void SetUpTestCase()
     {
         ExecutorTest::SetUpTestCase();
-        TiFlashSecurityConfig security_config;
-        TiFlashRaftConfig raft_config;
-        raft_config.flash_server_addr = "0.0.0.0:3930"; // TODO:: each FlashGrpcServer should have unique addr.
-        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
         log_ptr = Logger::get("compute_test");
-        compute_server_ptr = std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr);
+        auto size = std::thread::hardware_concurrency();
+        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
     }
 
     static void TearDownTestCase()
     {
-        compute_server_ptr.reset();
+        server_manager.reset();
     }
 
 protected:
@@ -47,12 +123,14 @@ protected:
     // if you start a server, send a request to the server using pingcap::kv::RpcClient,
     // then close the server and start the server using the same addr,
     // then send a request to the new server using pingcap::kv::RpcClient.
-    static std::unique_ptr<FlashGrpcServerHolder> compute_server_ptr;
     static LoggerPtr log_ptr;
+    static MockComputeServerManager server_manager;
 };
 
-std::unique_ptr<FlashGrpcServerHolder> MPPTaskTestUtils::compute_server_ptr = nullptr;
+
+// std::unique_ptr<FlashGrpcServerHolder> MPPTaskTestUtils::compute_server_ptr = nullptr;
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
+MockComputeServerManager MPPTaskTestUtils::server_manager;
 
 
 #define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                          \
