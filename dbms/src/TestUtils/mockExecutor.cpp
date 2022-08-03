@@ -107,12 +107,14 @@ void columnPrune(ExecutorPtr executor)
 
 
 // Split a DAGRequest into multiple QueryTasks which can be dispatched to multiple Compute nodes.
-// Currently we don't support window functions.
+// Currently we don't support window functions
+// and MPPTask with multiple partitions.
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context)
 {
     columnPrune(root);
     // enable mpp
     properties.is_mpp_query = true;
+    // TODO find a way to record service info.
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
     root.reset();
     executor_index = 0;
