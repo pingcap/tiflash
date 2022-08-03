@@ -20,7 +20,7 @@
 
 namespace DB
 {
-extern const String enableFineGrainedShuffleExtraInfo;
+static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
 
 inline bool enableFineGrainedShuffle(uint64_t stream_count)
 {

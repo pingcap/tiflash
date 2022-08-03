@@ -38,7 +38,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 
-    if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
+    if (context.columnsForTestEmpty() || context.columnsForTest(executor_id).empty())
     {
         /// build with default blocks.
         schema = genNamesAndTypes(table_scan, "mock_table_scan");
@@ -78,7 +78,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
     const LoggerPtr & log,
     const TiDBTableScan & table_scan)
 {
-    assert(context.getDAGContext()->isTest());
+    assert(context.isTest());
 
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, table_scan);
 

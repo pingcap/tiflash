@@ -71,7 +71,7 @@ void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & c
     size_t stream_count = max_streams;
     if (enable_fine_grained_shuffle)
     {
-        extra_info += ", " + enableFineGrainedShuffleExtraInfo;
+        extra_info += ", " + String(enableFineGrainedShuffleExtraInfo);
         stream_count = std::min(max_streams, mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
     }
 

@@ -63,6 +63,9 @@ struct ColumnWithTypeAndName
 
     void dumpStructure(WriteBuffer & out) const;
     String dumpStructure() const;
+
+    void dumpJsonStructure(WriteBuffer & out) const;
+    String dumpJsonStructure() const;
 };
 
 } // namespace DB

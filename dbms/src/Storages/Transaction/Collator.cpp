@@ -17,8 +17,6 @@
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/CollatorUtils.h>
 
-#include <array>
-
 namespace DB::ErrorCodes
 {
 extern const int LOGICAL_ERROR;

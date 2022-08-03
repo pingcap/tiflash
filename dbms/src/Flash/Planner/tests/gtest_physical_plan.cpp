@@ -30,6 +30,9 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
+
+        context.context.setExecutorTest();
+
         context.addMockTable({"test_db", "test_table"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
@@ -85,8 +88,10 @@ public:
     {
         // TODO support multi-streams.
         size_t max_streams = 1;
+
+        context.context.setColumnsForTest(context.executorIdColumnsMap());
+
         DAGContext dag_context(*request, "executor_test", max_streams);
-        dag_context.setColumnsForTest(context.executorIdColumnsMap());
         context.context.setDAGContext(&dag_context);
 
         PhysicalPlan physical_plan{context.context, log->identifier()};
@@ -196,8 +201,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, aggregation_1> | is_record_profile_streams: false, schema: <aggregation_1_max(s2)_collator_0 , Nullable(String)>, <aggregation_1_s1, Nullable(String)>
- <Aggregation, aggregation_1> | is_record_profile_streams: true, schema: <max(s2)_collator_0 , Nullable(String)>, <s1, Nullable(String)>
+<Projection, aggregation_1> | is_record_profile_streams: false, schema: <aggregation_1_max(s2)_collator_46 , Nullable(String)>, <aggregation_1_any(s1)_collator_46 , Nullable(String)>
+ <Aggregation, aggregation_1> | is_record_profile_streams: true, schema: <max(s2)_collator_46 , Nullable(String)>, <any(s1)_collator_46 , Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
@@ -220,8 +225,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, project_1> | is_record_profile_streams: false, schema: <project_1_tidbConcat(s1, s2)_collator_0 , Nullable(String)>
- <Projection, project_1> | is_record_profile_streams: true, schema: <tidbConcat(s1, s2)_collator_0 , Nullable(String)>
+<Projection, project_1> | is_record_profile_streams: false, schema: <project_1_tidbConcat(s1, s2)_collator_46 , Nullable(String)>
+ <Projection, project_1> | is_record_profile_streams: true, schema: <tidbConcat(s1, s2)_collator_46 , Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
@@ -350,14 +355,14 @@ try
 {
     // Simple Join
     {
-        auto get_request = [&](const ASTTableJoin::Kind & kind) {
+        auto get_request = [&](const tipb::JoinType & join_type) {
             return context
                 .receive("exchange_l_table")
-                .join(context.receive("exchange_r_table"), {col("join_c"), col("join_c")}, kind)
+                .join(context.receive("exchange_r_table"), {col("join_c"), col("join_c")}, join_type)
                 .build(context);
         };
 
-        auto request = get_request(ASTTableJoin::Kind::Inner);
+        auto request = get_request(tipb::JoinType::TypeInnerJoin);
         execute(
             request,
             /*expected_physical_plan=*/R"(
@@ -384,7 +389,7 @@ CreatingSets
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
 
-        request = get_request(ASTTableJoin::Kind::Left);
+        request = get_request(tipb::JoinType::TypeLeftOuterJoin);
         execute(
             request,
             /*expected_physical_plan=*/R"(
@@ -411,7 +416,7 @@ CreatingSets
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
 
-        request = get_request(ASTTableJoin::Kind::Right);
+        request = get_request(tipb::JoinType::TypeRightOuterJoin);
         execute(
             request,
             /*expected_physical_plan=*/R"(
@@ -446,10 +451,10 @@ CreatingSets
     // MultiRightInnerJoin
     {
         auto [t1, t2, t3, t4] = multiTestScan();
-        auto request = t1.join(t2, {col("a")}, ASTTableJoin::Kind::Right)
-                           .join(t3.join(t4, {col("a")}, ASTTableJoin::Kind::Right),
+        auto request = t1.join(t2, {col("a")}, tipb::JoinType::TypeRightOuterJoin)
+                           .join(t3.join(t4, {col("a")}, tipb::JoinType::TypeRightOuterJoin),
                                  {col("b")},
-                                 ASTTableJoin::Kind::Inner)
+                                 tipb::JoinType::TypeInnerJoin)
                            .build(context);
         execute(
             request,
@@ -516,10 +521,10 @@ CreatingSets
     // MultiRightLeftJoin
     {
         auto [t1, t2, t3, t4] = multiTestScan();
-        auto request = t1.join(t2, {col("a")}, ASTTableJoin::Kind::Right)
-                           .join(t3.join(t4, {col("a")}, ASTTableJoin::Kind::Right),
+        auto request = t1.join(t2, {col("a")}, tipb::JoinType::TypeRightOuterJoin)
+                           .join(t3.join(t4, {col("a")}, tipb::JoinType::TypeRightOuterJoin),
                                  {col("b")},
-                                 ASTTableJoin::Kind::Left)
+                                 tipb::JoinType::TypeLeftOuterJoin)
                            .build(context);
         execute(
             request,

@@ -618,7 +618,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 }
             }
-            // if meet error, such as decode packect fails, it will not retry.
+            // if meet error, such as decode packet fails, it will not retry.
             if (meet_error)
             {
                 break;
@@ -702,7 +702,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
     if (unlikely(stream_id >= msg_channels.size()))
     {
         LOG_FMT_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
-        return {nullptr, 0, "", true, "stream_id out of range", false};
+        return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
     }
     std::shared_ptr<ReceivedMessage> recv_msg;
     if (!msg_channels[stream_id]->pop(recv_msg))
@@ -720,18 +720,18 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
                 msg = err_msg;
             else
                 msg = "Unknown error";
-            return {nullptr, 0, "ExchangeReceiver", true, msg, false};
+            return ExchangeReceiverResult::newError(0, name, msg);
         }
         else /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
         {
-            return {nullptr, 0, "ExchangeReceiver", false, "", true};
+            return ExchangeReceiverResult::newEOF(name);
         }
     }
     assert(recv_msg != nullptr);
     ExchangeReceiverResult result;
     if (recv_msg->error_ptr != nullptr)
     {
-        result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, recv_msg->error_ptr->msg(), false};
+        result = ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
     }
     else
     {
@@ -740,25 +740,25 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
             auto select_resp = std::make_shared<tipb::SelectResponse>();
             if (!select_resp->ParseFromString(*(recv_msg->resp_ptr)))
             {
-                result = {nullptr, recv_msg->source_index, recv_msg->req_info, true, "decode error", false};
+                result = ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, "decode error");
             }
             else
             {
-                result = {select_resp, recv_msg->source_index, recv_msg->req_info, false, "", false};
                 /// If mocking TiFlash as TiDB, here should decode chunks from select_resp.
+                result = ExchangeReceiverResult::newOk(select_resp, recv_msg->source_index, recv_msg->req_info);
                 if (!select_resp->chunks().empty())
                 {
                     assert(recv_msg->chunks.empty());
                     // Fine grained shuffle should only be enabled when sending data to TiFlash node.
                     // So all data should be encoded into MPPDataPacket.chunks.
-                    RUNTIME_CHECK(!enableFineGrainedShuffle(fine_grained_shuffle_stream_count), Exception, "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
+                    RUNTIME_CHECK(!enableFineGrainedShuffle(fine_grained_shuffle_stream_count), Exception("Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled"));
                     result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
                 }
             }
         }
         else /// the non-last packets
         {
-            result = {nullptr, recv_msg->source_index, recv_msg->req_info, false, "", false};
+            result = ExchangeReceiverResult::newOk(nullptr, recv_msg->source_index, recv_msg->req_info);
         }
         if (!result.meet_error && !recv_msg->chunks.empty())
         {

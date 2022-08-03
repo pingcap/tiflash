@@ -23,7 +23,7 @@ namespace DB
 /**
  * A physical plan node that generates MockExchangeReceiverInputStream.
  * Used in gtest to test execution logic.
- * Only available with `DAGContext.isTest() == true`.
+ * Only available with `context.isExecutorTest() == true`.
  */
 class PhysicalMockExchangeReceiver : public PhysicalLeaf
 {

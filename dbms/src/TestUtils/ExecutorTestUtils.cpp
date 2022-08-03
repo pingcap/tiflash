@@ -33,6 +33,7 @@ void ExecutorTest::initializeContext()
     dag_context_ptr = std::make_unique<DAGContext>(1024);
     context = MockDAGRequestContext(TiFlashTestEnv::getContext());
     dag_context_ptr->log = Logger::get("executorTest");
+    TiFlashTestEnv::getGlobalContext().setExecutorTest();
 }
 
 void ExecutorTest::SetUpTestCase()
@@ -65,6 +66,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
+    context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
     auto res = executeQuery(context.context);
     FmtBuffer fb;
@@ -123,7 +125,8 @@ void ExecutorTest::enablePlanner(bool is_enable)
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    dag_context.setColumnsForTest(source_columns_map);
+    context.context.setExecutorTest();
+    context.context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     return readBlock(executeQuery(context.context).in);
@@ -139,6 +142,16 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const st
     std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
     source_columns_map[getSourceName(type)] = source_columns;
     return executeStreams(request, source_columns_map, concurrency);
+}
+
+DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
+{
+    DAGProperties properties;
+    // enable mpp
+    properties.is_mpp_query = true;
+    context.context.setMPPTest();
+    auto res = executeMPPQuery(context.context, properties, tasks);
+    return readBlock(res);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

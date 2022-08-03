@@ -3,10 +3,10 @@ name: License checker
 on:
   push:
     branches:
-      - planner_refactory
+      - master
   pull_request:
     branches:
-      - planner_refactory
+      - master
 
 jobs:
   check-license:

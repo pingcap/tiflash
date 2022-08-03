@@ -103,18 +103,26 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeExchangeSender:
     {
         buildFinalProjection(fmt::format("{}_", executor_id), true);
-        if (unlikely(dagContext().isTest()))
+        if (unlikely(context.isExecutorTest()))
             pushBack(PhysicalMockExchangeSender::build(executor_id, log, popBack()));
         else
+        {
+            // for MPP test, we can use real exchangeSender to run an query across different compute nodes
+            // or use one compute node to simulate MPP process.
             pushBack(PhysicalExchangeSender::build(executor_id, log, executor->exchange_sender(), FineGrainedShuffle(executor), popBack()));
+        }
         break;
     }
     case tipb::ExecType::TypeExchangeReceiver:
     {
-        if (unlikely(dagContext().isTest()))
+        if (unlikely(context.isExecutorTest()))
             pushBack(PhysicalMockExchangeReceiver::build(context, executor_id, log, executor->exchange_receiver()));
         else
+        {
+            // for MPP test, we can use real exchangeReceiver to run an query across different compute nodes
+            // or use one compute node to simulate MPP process.
             pushBack(PhysicalExchangeReceiver::build(context, executor_id, log));
+        }
         break;
     }
     case tipb::ExecType::TypeProjection:
@@ -130,7 +138,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypePartitionTableScan:
     {
         TiDBTableScan table_scan(executor, executor_id, dagContext());
-        if (unlikely(dagContext().isTest()))
+        if (unlikely(context.isTest()))
             pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
         else
             pushBack(PhysicalTableScan::build(executor_id, log, table_scan));
