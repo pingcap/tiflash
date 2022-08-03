@@ -441,7 +441,7 @@ MockExchangeSender
 
     DAGRequestBuilder table1 = context.scan("test_db", "r_table");
     DAGRequestBuilder table2 = context.scan("test_db", "l_table");
-    request = table1.join(table2.limit(1), {col("join_c")}, ASTTableJoin::Kind::Left).build(context);
+    request = table1.join(table2.limit(1), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin).build(context);
     {
         String expected = R"(
 CreatingSets
@@ -752,11 +752,11 @@ try
                                  table2.join(
                                      table3.join(table4,
                                                  {col("join_c")},
-                                                 ASTTableJoin::Kind::Left),
+                                                 tipb::JoinType::TypeLeftOuterJoin),
                                      {col("join_c")},
-                                     ASTTableJoin::Kind::Left),
+                                     tipb::JoinType::TypeLeftOuterJoin),
                                  {col("join_c")},
-                                 ASTTableJoin::Kind::Left)
+                                 tipb::JoinType::TypeLeftOuterJoin)
                            .build(context);
 
         String expected = R"(
@@ -794,11 +794,11 @@ CreatingSets
                                     receiver2.join(
                                         receiver3.join(receiver4,
                                                        {col("join_c")},
-                                                       ASTTableJoin::Kind::Left),
+                                                       tipb::JoinType::TypeLeftOuterJoin),
                                         {col("join_c")},
-                                        ASTTableJoin::Kind::Left),
+                                        tipb::JoinType::TypeLeftOuterJoin),
                                     {col("join_c")},
-                                    ASTTableJoin::Kind::Left)
+                                    tipb::JoinType::TypeLeftOuterJoin)
                            .build(context);
 
         String expected = R"(
@@ -836,11 +836,11 @@ CreatingSets
                                     receiver2.join(
                                         receiver3.join(receiver4,
                                                        {col("join_c")},
-                                                       ASTTableJoin::Kind::Left),
+                                                       tipb::JoinType::TypeLeftOuterJoin),
                                         {col("join_c")},
-                                        ASTTableJoin::Kind::Left),
+                                        tipb::JoinType::TypeLeftOuterJoin),
                                     {col("join_c")},
-                                    ASTTableJoin::Kind::Left)
+                                    tipb::JoinType::TypeLeftOuterJoin)
                            .exchangeSender(tipb::PassThrough)
                            .build(context);
 
@@ -882,7 +882,7 @@ try
         auto request = table1.join(
                                  table2,
                                  {col("join_c")},
-                                 ASTTableJoin::Kind::Left)
+                                 tipb::JoinType::TypeLeftOuterJoin)
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
@@ -913,7 +913,7 @@ CreatingSets
         auto request = table1.join(
                                  table2,
                                  {col("join_c")},
-                                 ASTTableJoin::Kind::Right)
+                                 tipb::JoinType::TypeRightOuterJoin)
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
@@ -948,7 +948,7 @@ CreatingSets
         auto request = receiver1.join(
                                     receiver2,
                                     {col("join_c")},
-                                    ASTTableJoin::Kind::Right)
+                                    tipb::JoinType::TypeRightOuterJoin)
                            .aggregation({Sum(col("r_a"))}, {col("join_c")})
                            .limit(10)
                            .exchangeSender(tipb::PassThrough)

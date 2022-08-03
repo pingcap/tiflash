@@ -37,7 +37,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 
-    if (dag_context.columnsForTestEmpty() || dag_context.columnsForTest(executor_id).empty())
+    if (context.columnsForTestEmpty() || context.columnsForTest(executor_id).empty())
     {
         /// build with default blocks.
         for (size_t i = 0; i < max_streams; ++i)
@@ -78,7 +78,7 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     const LoggerPtr & log,
     const tipb::ExchangeReceiver & exchange_receiver)
 {
-    assert(context.getDAGContext()->isTest());
+    assert(context.isExecutorTest());
 
     auto [schema, mock_streams] = mockSchemaAndStreams(context, executor_id, log, exchange_receiver);
 

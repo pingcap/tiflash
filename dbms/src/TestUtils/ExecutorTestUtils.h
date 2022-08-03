@@ -15,6 +15,7 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -91,6 +92,7 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
         size_t concurrency = 1);
+
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
@@ -101,6 +103,8 @@ public:
         SourceType type = TableScan,
         size_t concurrency = 1);
 
+    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks);
+
 protected:
     MockDAGRequestContext context;
     std::unique_ptr<DAGContext> dag_context_ptr;
@@ -108,4 +112,9 @@ protected:
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
+#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                          \
+    TiFlashTestEnv::getGlobalContext().setColumnsForTest(context.executorIdColumnsMap()); \
+    TiFlashTestEnv::getGlobalContext().setMPPTest();                                      \
+    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
+
 } // namespace DB::tests

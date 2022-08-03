@@ -230,7 +230,7 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
         join_execute_info.join_build_streams.push_back(stream);
     });
     // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!dag_context.isTest(), "for join");
+    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
 
     SubqueryForSet build_query;
     build_query.source = build_pipeline.firstStream();

@@ -27,8 +27,15 @@ option(ENABLE_TIFLASH_PAGECTL "Enable pagectl: tools to debug page storage" ${EN
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
+add_library(server_for_test
+    FlashGrpcServerHolder.cpp
+)
+
+target_link_libraries (server_for_test PUBLIC clickhouse_common_io clickhouse_storages_system)
+
 add_library (clickhouse-server-lib
     HTTPHandler.cpp
+    FlashGrpcServerHolder.cpp
     MetricsTransmitter.cpp
     MetricsPrometheus.cpp
     NotFoundHandler.cpp

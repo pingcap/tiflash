@@ -278,6 +278,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->log = log;
     dag_context->tables_regions_info = std::move(tables_regions_info);
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
+
     context->setDAGContext(dag_context.get());
 
     if (dag_context->isRootMPPTask())
@@ -346,7 +347,7 @@ void MPPTask::runImpl()
         LOG_FMT_INFO(log, "task starts preprocessing");
         preprocess();
         needed_threads = estimateCountOfNewThreads();
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query :{} including tunnel_threads: {} , receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
 
         scheduleOrWait();
 
@@ -392,8 +393,7 @@ void MPPTask::runImpl()
         if (status == FINISHED)
         {
             // todo when error happens, should try to update the metrics if it is available
-            auto throughput = dag_context->getTableScanThroughput();
-            if (throughput.first)
+            if (auto throughput = dag_context->getTableScanThroughput(); throughput.first)
                 GET_METRIC(tiflash_storage_logical_throughput_bytes).Observe(throughput.second);
             auto process_info = context->getProcessListElement()->getInfo();
             auto peak_memory = process_info.peak_memory_usage > 0 ? process_info.peak_memory_usage : 0;

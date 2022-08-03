@@ -12,9 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/FineGrainedShuffle.h>
+#pragma once
+
+// Expose publicly
+#include <Common/SyncPoint/Ctl.h>
+#include <Common/SyncPoint/ScopeGuard.h>
+// =======
+
+#include <fiu.h>
 
 namespace DB
 {
-const String enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
-}
+
+/**
+ * Suspend the execution (when enabled), until `SyncPointCtl::waitAndPause()`,
+ * `SyncPointCtl::next()` or `SyncPointCtl::waitAndNext()` is called somewhere
+ * (e.g. in tests).
+ *
+ * Usually this is invoked in actual business logics.
+ */
+#define SYNC_FOR(name) fiu_do_on(name, SyncPointCtl::sync(name);)
+
+} // namespace DB

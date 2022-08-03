@@ -67,7 +67,7 @@ void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, si
         /// Window function can be multiple threaded when fine grained shuffle is enabled.
         pipeline.transform([&](auto & stream) {
             stream = std::make_shared<WindowBlockInputStream>(stream, window_description, log->identifier());
-            stream->setExtraInfo(enableFineGrainedShuffleExtraInfo);
+            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
     }
     else
