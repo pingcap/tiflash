@@ -34,7 +34,7 @@ try
     const ColumnWithTypeAndName dummy_col0 = createColumn<Nullable<String>>({"abc", "123", "", {}, ""});
     const ColumnWithTypeAndName dummy_col1 = createColumn<Nullable<String>>({"def", "123", {}, "", ""});
 
-    static constexpr size_t ndummy_col = 5;
+    const size_t ndummy_col = dummy_col0.column->size();
     constexpr size_t nboundary_test = 6;
 
     // return null if the first argument is less than 1, greater than the number of string arguments, or NULL
