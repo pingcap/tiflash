@@ -204,11 +204,11 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 //
 // Constructor parameters:
 //
-// `update_io_stat_period_ms` is the interval between calling getCurrentIOInfo. Default is 200ms.
+// `update_read_info_period_ms` is the interval between calling getCurrentIOInfo. Default is 30ms.
 class IORateLimiter
 {
 public:
-    explicit IORateLimiter(UInt64 update_io_stat_period_ms = 200);
+    explicit IORateLimiter(UInt64 update_read_info_period_ms_ = 30);
     ~IORateLimiter();
 
     WriteLimiterPtr getWriteLimiter();
@@ -248,9 +248,9 @@ private:
     LoggerPtr log;
 
     std::atomic<bool> stop;
-    std::thread auto_tune_and_get_io_info_thread;
+    std::thread auto_tune_and_get_read_info_thread;
     ReadInfo read_info;
-    const UInt64 update_io_stat_period_ms;
+    const UInt64 update_read_info_period_ms;
 
     // Noncopyable and nonmovable.
     DISALLOW_COPY_AND_MOVE(IORateLimiter);

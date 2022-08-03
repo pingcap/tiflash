@@ -302,7 +302,7 @@ ReadLimiter::ReadLimiter(
 Int64 ReadLimiter::getAvailableBalance()
 {
     Int64 bytes = get_read_bytes();
-    if (bytes < last_stat_bytes)
+    if (unlikely(bytes < last_stat_bytes))
     {
         LOG_FMT_WARNING(
             log,
@@ -310,7 +310,7 @@ Int64 ReadLimiter::getAvailableBalance()
             last_stat_bytes,
             bytes);
     }
-    else if (bytes == last_stat_bytes)
+    else if (likely(bytes == last_stat_bytes))
     {
         return available_balance;
     }
@@ -364,18 +364,18 @@ void ReadLimiter::refillAndAlloc()
     }
 }
 
-IORateLimiter::IORateLimiter(UInt64 update_io_stat_period_ms_)
+IORateLimiter::IORateLimiter(UInt64 update_read_info_period_ms_)
     : log(Logger::get("IORateLimiter"))
     , stop(false)
-    , update_io_stat_period_ms(update_io_stat_period_ms_)
+    , update_read_info_period_ms(update_read_info_period_ms_)
 {}
 
 IORateLimiter::~IORateLimiter()
 {
     stop.store(true, std::memory_order_relaxed);
-    if (auto_tune_and_get_io_info_thread.joinable())
+    if (auto_tune_and_get_read_info_thread.joinable())
     {
-        auto_tune_and_get_io_info_thread.join();
+        auto_tune_and_get_read_info_thread.join();
     }
 }
 
@@ -600,28 +600,28 @@ void IORateLimiter::setStop()
 
 void IORateLimiter::runAutoTune()
 {
-    auto auto_tune_and_get_io_info_worker = [&]() {
+    auto auto_tune_and_get_read_info_worker = [&]() {
         using time_point = std::chrono::time_point<std::chrono::system_clock>;
         using clock = std::chrono::system_clock;
         time_point auto_tune_time = clock::now();
-        time_point update_io_stat_time = auto_tune_time;
+        time_point update_read_info_time = auto_tune_time;
         while (!stop.load(std::memory_order_relaxed))
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(update_io_stat_period_ms));
+            std::this_thread::sleep_for(std::chrono::milliseconds(update_read_info_period_ms));
             auto now_time_point = clock::now();
-            if ((io_config.auto_tune_sec > 0) && (now_time_point - auto_tune_time > std::chrono::seconds(io_config.auto_tune_sec)))
+            if ((io_config.auto_tune_sec > 0) && (now_time_point - auto_tune_time >= std::chrono::seconds(io_config.auto_tune_sec)))
             {
                 autoTune();
                 auto_tune_time = now_time_point;
             }
-            if ((bg_read_limiter || fg_read_limiter) && (now_time_point - update_io_stat_time > std::chrono::milliseconds(update_io_stat_period_ms)))
+            if ((bg_read_limiter || fg_read_limiter) && likely(now_time_point - update_read_info_time >= std::chrono::milliseconds(update_read_info_period_ms)))
             {
                 getCurrentIOInfo();
-                update_io_stat_time = now_time_point;
+                update_read_info_time = now_time_point;
             }
         }
     };
-    auto_tune_and_get_io_info_thread = std::thread(auto_tune_and_get_io_info_worker);
+    auto_tune_and_get_read_info_thread = std::thread(auto_tune_and_get_read_info_worker);
 }
 
 std::unique_ptr<IOLimitTuner> IORateLimiter::createIOLimitTuner()
