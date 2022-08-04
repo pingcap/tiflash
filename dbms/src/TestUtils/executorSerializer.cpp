@@ -88,7 +88,7 @@ void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, 
         // no column selected, must be something wrong
         throw TiFlashException("No column is selected in table scan executor", Errors::Coprocessor::BadRequest);
     }
-    buf.fmtAppend("{} | {{", executor_id);
+    buf.fmtAppend("{}, table_id = {} | {{", executor_id, ts.table_id());
     toString(ts.columns(), buf);
     buf.append("}\n");
 }

@@ -20,6 +20,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
+#include <TestUtils/MockStorage.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::tests
@@ -72,8 +73,8 @@ public:
     std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, int mpp_partition_num = 1);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfoVec & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns);
 
     DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -157,12 +158,17 @@ public:
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
     Int32 getCollation() const { return abs(collation); }
 
+    MockStorage mockStorage() { return mock_storage; }
+
 private:
     size_t index;
+    MockStorage mock_storage;
     std::unordered_map<String, MockColumnInfoVec> mock_tables;
     std::unordered_map<String, MockColumnInfoVec> exchange_schemas;
+    // ywq todo replace
     std::unordered_map<String, ColumnsWithTypeAndName> mock_table_columns;
     std::unordered_map<String, ColumnsWithTypeAndName> mock_exchange_columns;
+    // ywq todo replace it with mockstorage
     std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>
 
 public:

@@ -16,12 +16,8 @@
 
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
-
-#include <cstddef>
+#include <TestUtils/MockStorage.h>
 #include <memory>
-#include <unordered_map>
-
-#include "Core/ColumnsWithTypeAndName.h"
 
 namespace DB::tests
 {
@@ -67,37 +63,6 @@ private:
     std::unordered_map<String, MockServerConfig> server_config_map;
 };
 
-class MockStorage
-{
-    // std::vector<std::unordered_map<String, ColumnsWithTypeAndName>> splitColumnsByPartitionNum(Int64 table_id, size_t mpp_partition_num)
-    // {
-    //     std::vector<std::unordered_map<String, ColumnsWithTypeAndName>> res;
-
-
-    //     for (auto kv : columns_for_test_map)
-    //     {
-    //         for (size_t i = 0; i < mpp_partition_num; ++i)
-    //         {
-    //             ColumnsWithTypeAndName columns_for_each_partition;
-    //             for (auto col : kv.second)
-    //             {
-    //                 columns_for_each_partition.push_back(
-    //                     ColumnWithTypeAndName(
-    //                         col.column->cut(start, row_for_current_stream),
-    //                         col.type,
-    //                         col.name));
-    //             }
-    //         }
-    //     }
-
-
-    //     return res;
-    // }
-
-private:
-
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
-};
 
 class MPPTaskTestUtils : public ExecutorTest
 {

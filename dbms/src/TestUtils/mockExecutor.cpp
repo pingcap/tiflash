@@ -122,11 +122,12 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     return query_tasks;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns)
 {
     assert(!columns.empty());
     TableInfo table_info;
     table_info.name = db + "." + table;
+    table_info.id = table_id;
     int i = 0;
     for (const auto & column : columns)
     {
@@ -144,9 +145,9 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns)
 {
-    return mockTable(name.first, name.second, columns);
+    return mockTable(name.first, name.second, table_id, columns);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count)
@@ -342,11 +343,13 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
+    mock_storage.addTableSchema(db + "." + table, columnInfos);
     mock_tables[db + "." + table] = columnInfos;
 }
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
+    mock_storage.addTableSchema(name.first + "." + name.second, columnInfos);
     mock_tables[name.first + "." + name.second] = columnInfos;
 }
 
@@ -357,12 +360,12 @@ void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockCol
 
 void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
 {
-    mock_table_columns[db + "." + table] = columns;
+    mock_storage.addTableData(db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns)
 {
-    mock_table_columns[name.first + "." + name.second] = columns;
+    mock_storage.addTableData(name.first + "." + name.second, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
@@ -390,13 +393,11 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
-    auto builder = DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
+    // ywq todo bug prone, add more assert..
+    auto table_id = mock_storage.getTableId(db_name + "." + table_name);
+    auto builder = DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_tables[db_name + "." + table_name]);
     // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
     // If user don't want to test executors, it will be safe to run Interpreter Tests.
-    if (mock_table_columns.find(db_name + "." + table_name) != mock_table_columns.end())
-    {
-        executor_id_columns_map[builder.getRoot()->name] = mock_table_columns[db_name + "." + table_name];
-    }
     return builder;
 }
 

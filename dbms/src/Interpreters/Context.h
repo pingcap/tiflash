@@ -29,6 +29,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_set>
+#include <TestUtils/MockStorage.h>
 
 namespace pingcap
 {
@@ -483,6 +484,13 @@ public:
     std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap();
     ColumnsWithTypeAndName columnsForTest(String executor_id);
     bool columnsForTestEmpty();
+
+    DB::tests::MockStorage mock_storage;
+
+    void setMockStorage(DB::tests::MockStorage mock_storage_)
+    {
+        mock_storage = mock_storage_;
+    }
 
 private:
     /** Check if the current client has access to the specified database.

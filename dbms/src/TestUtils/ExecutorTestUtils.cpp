@@ -124,6 +124,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     DAGContext dag_context(*request, "executor_test", concurrency);
     context.context.setExecutorTest();
     context.context.setColumnsForTest(source_columns_map);
+    context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
