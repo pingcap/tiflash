@@ -301,6 +301,10 @@ public:
             paths.emplace_back(fmt::format("{}/{}", path, i));
         }
         delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(paths);
+
+        // Note although set config.cached_fd_size to 0, the cache fd size in blobstore still have capacity 1.
+        // Decrease cache size to make problems more easily be exposed.
+        config.cached_fd_size = 0;
     }
 
 protected:
@@ -1143,6 +1147,8 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     Poco::File blob_file_in_disk(path);
     ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
 
+    // Clear cache to reproduce https://github.com/pingcap/tiflash/issues/5532
+    blob_store.cached_files.reset();
     // Check whether the stat can be totally removed
     stat->changeToReadOnly();
     blob_store.remove(remain_entries);
