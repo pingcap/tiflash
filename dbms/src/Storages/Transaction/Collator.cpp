@@ -630,6 +630,9 @@ struct TiDBCollatorPtrMap
         static const auto c_ascii_bin = BinCollator<char, true>(ITiDBCollator::ASCII_BIN);
         static const auto c_utf8_bin = UTF8MB4_BIN_TYPE(ITiDBCollator::UTF8_BIN);
 
+#ifdef M
+        static_assert(false, "`M` is defined");
+#endif
 #define M(name)                                                                                                     \
     do                                                                                                              \
     {                                                                                                               \
