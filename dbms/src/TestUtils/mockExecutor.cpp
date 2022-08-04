@@ -245,12 +245,12 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
 }
 
 DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
-    tipb::JoinType tp,
-    MockAstVec join_cols,
-    MockAstVec left_conds,
-    MockAstVec right_conds,
-    MockAstVec other_conds,
-    MockAstVec other_eq_conds_from_in)
+                                            tipb::JoinType tp,
+                                            MockAstVec join_cols,
+                                            MockAstVec left_conds,
+                                            MockAstVec right_conds,
+                                            MockAstVec other_conds,
+                                            MockAstVec other_eq_conds_from_in)
 {
     assert(root);
     assert(right.root);

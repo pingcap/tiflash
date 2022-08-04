@@ -436,56 +436,56 @@ try
     {
         auto [t1, t2] = table_scan();
         auto request = t1
-            .join(t2, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond})
-            .build(context);
+                           .join(t2, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond})
+                           .build(context);
         executeWithConcurrency(request, expected_cols[i++]);
     }
 
     {
         auto [t1, t2] = table_scan();
         auto request = t1
-            .join(t2, tipb::JoinType::TypeLeftOuterJoin, {}, {cond})
-            .build(context);
+                           .join(t2, tipb::JoinType::TypeLeftOuterJoin, {}, {cond})
+                           .build(context);
         executeWithConcurrency(request, expected_cols[i++]);
     }
 
     {
         auto [t1, t2] = table_scan();
         auto request = t1
-            .join(t2, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond})
-            .build(context);
+                           .join(t2, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond})
+                           .build(context);
         executeWithConcurrency(request, expected_cols[i++]);
     }
 
     {
         auto [t1, t2] = table_scan();
         auto request = t1
-            .join(t2, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond})
-            .build(context);
+                           .join(t2, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond})
+                           .build(context);
         executeWithConcurrency(request, expected_cols[i++]);
     }
 
     {
         auto [t1, t2] = table_scan();
         auto request = t1
-            .join(t2, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond})
-            .build(context);
+                           .join(t2, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond})
+                           .build(context);
         executeWithConcurrency(request, expected_cols[i++]);
     }
 
     {
         auto [t1, t2] = table_scan();
         auto request = t1
-            .join(t2, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond})
-            .build(context);
+                           .join(t2, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond})
+                           .build(context);
         executeWithConcurrency(request, expected_cols[i++]);
     }
 
     {
         auto [t1, t2] = table_scan();
         auto request = t1
-            .join(t2, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond})
-            .build(context);
+                           .join(t2, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond})
+                           .build(context);
         executeWithConcurrency(request, expected_cols[i++]);
     }
 }
