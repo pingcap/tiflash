@@ -325,8 +325,8 @@ try
                   .aggregation({}, {col("s1")})
                   .build(context);
     {
-        ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                            createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
+        ASSERT_COLUMNS_EQ_UR(executeStreams(request),
+                             createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
     }
 }
 CATCH

@@ -509,8 +509,10 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     {
         LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
         auto lock_stats = blob_stats.lock();
+        // need get blob file before remove its stat otherwise we cannot find the blob file
+        auto blob_file = getBlobFile(blob_id);
         blob_stats.eraseStat(std::move(stat), lock_stats);
-        getBlobFile(blob_id)->remove();
+        blob_file->remove();
         cached_files.remove(blob_id);
     }
 }
@@ -1189,8 +1191,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 
 String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 {
-    PageFileIdAndLevel id_lvl{blob_id, 0};
-    String parent_path = delegator->choosePath(id_lvl);
+    String parent_path = blob_stats.blobIdToPath(blob_id);
 
     if (auto f = Poco::File(parent_path); !f.exists())
         f.createDirectories();
@@ -1353,10 +1354,9 @@ BlobStatPtr BlobStore::BlobStats::createBigPageStatNotChecking(BlobFileId blob_f
     return stat;
 }
 
-void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
+void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> & lock)
 {
-    PageFileIdAndLevel id_lvl{stat->id, 0};
-    stats_map[delegator->getPageFilePath(id_lvl)].remove(stat);
+    stats_map[blobIdToPathImpl(stat->id, lock)].remove(stat);
 }
 
 void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
@@ -1475,6 +1475,29 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_n
     }
 
     return nullptr;
+}
+
+String BlobStore::BlobStats::blobIdToPath(BlobFileId file_id)
+{
+    auto guard = lock();
+    return blobIdToPathImpl(file_id, guard);
+}
+
+String BlobStore::BlobStats::blobIdToPathImpl(BlobFileId file_id, const std::lock_guard<std::mutex> &)
+{
+    for (const auto & [path, stats] : stats_map)
+    {
+        for (const auto & stat : stats)
+        {
+            if (stat->id == file_id)
+            {
+                return path;
+            }
+        }
+    }
+    throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
+                                file_id),
+                    ErrorCodes::LOGICAL_ERROR);
 }
 
 /*********************

@@ -60,8 +60,6 @@ __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
 {
     ColumnString::Offset a_prev_offset = 0;
     ColumnString::Offset b_prev_offset = 0;
-    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
-    const auto * b_ptr = reinterpret_cast<const char *>(b_data.data());
 
     for (size_t i = 0; i < size; ++i)
     {
@@ -69,10 +67,9 @@ __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
         auto b_size = b_offsets[i] - b_prev_offset;
 
         // Remove last zero byte.
-        func({a_ptr, a_size - 1}, {b_ptr, b_size - 1}, i);
-
-        a_ptr += a_size;
-        b_ptr += b_size;
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1},
+             {reinterpret_cast<const char *>(&b_data[b_prev_offset]), b_size - 1},
+             i);
 
         a_prev_offset = a_offsets[i];
         b_prev_offset = b_offsets[i];
@@ -89,16 +86,13 @@ __attribute__((flatten, always_inline)) inline void LoopOneColumn(
     F && func)
 {
     ColumnString::Offset a_prev_offset = 0;
-    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
 
     for (size_t i = 0; i < size; ++i)
     {
         auto a_size = a_offsets[i] - a_prev_offset;
 
         // Remove last zero byte.
-        func({a_ptr, a_size - 1}, i);
-
-        a_ptr += a_size;
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i);
         a_prev_offset = a_offsets[i];
     }
 }

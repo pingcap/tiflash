@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Functions/CollationStringSearchOptimized.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/CollatorUtils.h>
 #include <gtest/gtest.h>
@@ -108,7 +109,81 @@ const typename CollatorCases::PatternCase CollatorCases::pattern_cases[] = {
      {{"ÀÀ", {false, false, false, false, false}}, {"aÀÀ", {false, false, true, false, true}}, {"ÀÀÀa", {true, true, true, true, true}}, {"aÀÀÀ", {false, false, true, false, true}}}},
     {"___a", {{"中a", {true, true, false, false, false}}, {"中文字a", {false, false, true, true, true}}}},
     {"𐐭", {{"𐐨", {false, false, true, false, false}}}},
+    {
+        "%pending%deposits%",
+        {
+            {"riously after the carefully pending foxes. deposits are careful", {true, true, true, true, true}},
+            {"pendingdeposits", {true, true, true, true, true}},
+            {"pendingdeposits", {true, true, true, true, true}},
+        },
+    },
+    {
+        "1234567\\", // `ESCAPE` at last
+        {
+            {"1234567\\", {true, true, true, true, true}},
+            {"1234567", {false, false, false, false, false}},
+            {"1234567\\1", {false, false, false, false, false}},
+        },
+    },
+    {
+        "1234567\\910", // `ESCAPE` at middle
+        {
+            {"1234567\\910", {false, false, false, false, false}},
+            {"1234567910", {true, true, true, true, true}},
+        },
+    },
+    {
+        "%__", // test match from end
+        {
+            {"1", {false, false, false, false, false}}, // 1 bytes
+            {"À", {true, true, false, false, false}}, // 2 bytes
+            {"12", {true, true, true, true, true}}, // 2 bytes
+            {"中", {true, true, false, false, false}}, // 3 bytes
+            {"À1", {true, true, true, true, true}}, // 3 bytes
+            {"ÀÀ", {true, true, true, true, true}}, // 4 bytes
+            {"𒀈", {true, true, false, false, false}}, // 4 bytes 1 char
+            {"À中", {true, true, true, true, true}}, // 5 bytes
+            {"中中", {true, true, true, true, true}}, // 6 bytes
+        },
+    },
+    {
+        "%__%", // test
+        {
+            {"1", {false, false, false, false, false}}, // 1 bytes
+            {"À", {true, true, false, false, false}}, // 2 bytes
+            {"12", {true, true, true, true, true}}, // 2 bytes
+            {"中", {true, true, false, false, false}}, // 3 bytes
+            {"À1", {true, true, true, true, true}}, // 3 bytes
+            {"ÀÀ", {true, true, true, true, true}}, // 4 bytes
+            {"𒀈", {true, true, false, false, false}}, // 4 bytes 1 char
+        },
+    },
+    {
+        "%一_二", // test match from end
+        {
+            {"xx一a二", {true, true, true, true, true}},
+            {"xx一À二", {false, false, true, true, true}},
+        },
+    },
+    {
+        "%一_三%四五六%七",
+        {
+            {"一二三四五七", {false, false, false, false, false}},
+            {"0一二三四五六.七", {false, false, true, true, true}},
+            {"一二四五六七", {false, false, false, false, false}},
+            {"一2三.四五六...七", {true, true, true, true, true}},
+        },
+    },
+    {
+        "%一_三%",
+        {
+            {"000一二3", {false, false, false, false, false}},
+            {"000一", {false, false, false, false, false}},
+        },
+    },
 };
+
+static constexpr char ESCAPE = '\\';
 
 template <typename Collator>
 void testCollator()
@@ -130,18 +205,64 @@ void testCollator()
         std::string buf;
         ASSERT_EQ(collator->sortKey(s.data(), s.length(), buf).toString(), ans);
     }
-    auto pattern = collator->pattern();
-    for (const auto & c : CollatorCases::pattern_cases)
     {
-        const std::string & p = c.first;
-        pattern->compile(p, '\\');
-        const auto & inner_cases = c.second;
-        for (const auto & inner_c : inner_cases)
+        TiDB::BinStrPattern<true> matcher;
+        matcher.compile("%%%", '%');
+        ASSERT_TRUE(matcher.match("%%"));
+        matcher.compile("%%", '.');
+        ASSERT_TRUE(matcher.match(""));
+
+        auto pattern = collator->pattern();
+        pattern->compile("%%%", '%');
+        ASSERT_TRUE(pattern->match("%%", 2));
+    }
+    {
+        auto pattern = collator->pattern();
+        for (const auto & c : CollatorCases::pattern_cases)
         {
-            const std::string & s = inner_c.first;
-            bool ans = std::get<Collator::collation_case>(inner_c.second);
-            std::cout << "Pattern case (" << p << ", " << s << ", " << ans << ")" << std::endl;
-            ASSERT_EQ(pattern->match(s.data(), s.length()), ans);
+            const std::string & p = c.first;
+            const auto & inner_cases = c.second;
+
+            ColumnString::Chars_t strs;
+            ColumnString::Offsets offsets;
+            std::vector<bool> res;
+            { // init data
+                ColumnString::Offset current_new_offset = 0;
+                for (const auto & inner_c : inner_cases)
+                {
+                    const auto s = inner_c.first + char(0);
+                    {
+                        current_new_offset += s.size();
+                        offsets.push_back(current_new_offset);
+                    }
+                    {
+                        strs.resize(strs.size() + s.size());
+                        std::memcpy(
+                            &strs[strs.size() - s.size()],
+                            s.data(),
+                            s.size());
+                    }
+                    res.emplace_back(0);
+                }
+            }
+            if (!StringPatternMatch<false>(strs, offsets, p, ESCAPE, collator, res))
+            {
+                pattern->compile(p, ESCAPE);
+                for (size_t idx = 0; idx < std::size(inner_cases); ++idx)
+                {
+                    const auto & inner_c = inner_cases[idx];
+                    const std::string & s = inner_c.first;
+                    res[idx] = pattern->match(s.data(), s.length());
+                }
+            }
+
+            for (size_t idx = 0; idx < std::size(inner_cases); ++idx)
+            {
+                const auto & inner_c = inner_cases[idx];
+                bool ans = std::get<Collator::collation_case>(inner_c.second);
+                std::cout << "Pattern case (" << p << ", " << inner_c.first << ", " << ans << ")" << std::endl;
+                ASSERT_EQ(res[idx], ans);
+            }
         }
     }
 }
