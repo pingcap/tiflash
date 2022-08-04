@@ -32,10 +32,9 @@ public:
     {
         String executor_id = executor.has_executor_id() ? executor.executor_id() : doGenerate(executor);
         assert(!executor_id.empty());
-        if (unlikely(ids.find(executor_id) != ids.end()))
-            throw TiFlashException(
-                fmt::format("executor id ({}) duplicate", executor_id),
-                Errors::Planner::Internal);
+        RUNTIME_CHECK(
+            ids.find(executor_id) == ids.end(),
+            TiFlashException(fmt::format("executor id ({}) duplicate", executor_id), Errors::Planner::Internal));
         ids.insert(executor_id);
         return executor_id;
     }
@@ -61,6 +60,15 @@ private:
             return fmt::format("{}_exchange_sender", ++current_id);
         case tipb::ExecType::TypeExchangeReceiver:
             return fmt::format("{}_exchange_receiver", ++current_id);
+        case tipb::ExecType::TypeTableScan:
+        case tipb::ExecType::TypePartitionTableScan:
+            return fmt::format("{}_table_scan", ++current_id);
+        case tipb::ExecType::TypeSort:
+            return fmt::format("{}_sort", ++current_id);
+        case tipb::ExecType::TypeWindow:
+            return fmt::format("{}_window", ++current_id);
+        case tipb::ExecType::TypeJoin:
+            return fmt::format("{}_join", ++current_id);
         default:
             throw TiFlashException(
                 fmt::format("Unsupported executor in DAG request: {}", executor.DebugString()),

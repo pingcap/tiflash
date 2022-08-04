@@ -38,12 +38,12 @@ public:
 
     const Block & getSampleBlock() const override;
 
-    void pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection);
-
-    bool hasPushDownFilter() const;
+    bool pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection);
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+
+    bool hasPushDownFilter() const;
 
 private:
     PushDownFilter push_down_filter;

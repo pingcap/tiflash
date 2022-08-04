@@ -44,11 +44,7 @@ bool pushDownSelection(const PhysicalPlanNodePtr & plan, const String & executor
     if (plan->tp() == PlanType::TableScan)
     {
         auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
-        if (!physical_table_scan->hasPushDownFilter())
-        {
-            physical_table_scan->pushDownFilter(executor_id, selection);
-            return true;
-        }
+        return physical_table_scan->pushDownFilter(executor_id, selection);
     }
     return false;
 }
@@ -195,8 +191,7 @@ void PhysicalPlan::pushBack(const PhysicalPlanNodePtr & plan_node)
 
 PhysicalPlanNodePtr PhysicalPlan::popBack()
 {
-    if (unlikely(cur_plan_nodes.empty()))
-        throw TiFlashException("cur_plan_nodes is empty, cannot popBack", Errors::Planner::Internal);
+    RUNTIME_CHECK(!cur_plan_nodes.empty(), TiFlashException("cur_plan_nodes is empty, cannot popBack", Errors::Planner::Internal));
     PhysicalPlanNodePtr back = cur_plan_nodes.back();
     assert(back);
     cur_plan_nodes.pop_back();

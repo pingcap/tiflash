@@ -59,27 +59,27 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     storage_interpreter.execute(pipeline);
 
     const auto & storage_schema = storage_interpreter.analyzer->getCurrentInputColumns();
-    if (unlikely(storage_schema.size() != schema.size()))
-        throw TiFlashException(
+    RUNTIME_CHECK(
+        storage_schema.size() == schema.size(),
+        TiFlashException(
             fmt::format(
                 "Expected col num does not match actual col num {}",
                 schema.size(),
                 storage_schema.size()),
-            Errors::Planner::Internal);
+            Errors::Planner::Internal));
     NamesWithAliases schema_project_cols;
     for (size_t i = 0; i < schema.size(); ++i)
     {
-        if (unlikely(!schema[i].type->equals(*storage_schema[i].type)))
-        {
-            throw TiFlashException(
+        RUNTIME_CHECK(
+            schema[i].type->equals(*storage_schema[i].type),
+            TiFlashException(
                 fmt::format(
                     "The type of schema col <{}, {}> does not match the type of actual col <{}, {}>",
                     schema[i].name,
                     schema[i].type->getName(),
                     storage_schema[i].name,
                     storage_schema[i].type->getName()),
-                Errors::Planner::Internal);
-        }
+                Errors::Planner::Internal));
         assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
         schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
     }
@@ -99,11 +99,17 @@ const Block & PhysicalTableScan::getSampleBlock() const
     return sample_block;
 }
 
-void PhysicalTableScan::pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection)
+bool PhysicalTableScan::pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection)
 {
+    /// Since there is at most one selection on the table scan, pushDownFilter will only be called at most once.
+    /// So in this case hasPushDownFilter() is always false.
     if (unlikely(hasPushDownFilter()))
-        throw TiFlashException("PhysicalTableScan cannot push down more than one filter", Errors::Planner::Internal);
-    push_down_filter = PushDownFilter::toPushDownFilter(filter_executor_id, selection);
+    {
+        return false;
+    }
+
+    push_down_filter = PushDownFilter::pushDownFilterFrom(filter_executor_id, selection);
+    return true;
 }
 
 bool PhysicalTableScan::hasPushDownFilter() const

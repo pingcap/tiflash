@@ -49,17 +49,17 @@ tipb::Executor * PushDownFilter::constructSelectionForRemoteRead(tipb::Executor 
     }
 }
 
-PushDownFilter PushDownFilter::toPushDownFilter(const String & executor_id, const tipb::Executor * executor)
+PushDownFilter PushDownFilter::pushDownFilterFrom(const String & executor_id, const tipb::Executor * executor)
 {
     if (!executor || !executor->has_selection())
     {
         return {"", {}};
     }
 
-    return toPushDownFilter(executor_id, executor->selection());
+    return pushDownFilterFrom(executor_id, executor->selection());
 }
 
-PushDownFilter PushDownFilter::toPushDownFilter(const String & executor_id, const tipb::Selection & selection)
+PushDownFilter PushDownFilter::pushDownFilterFrom(const String & executor_id, const tipb::Selection & selection)
 {
     std::vector<const tipb::Expr *> conditions;
     for (const auto & condition : selection.conditions())
