@@ -1369,7 +1369,7 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
         }
     };
 
-    for (auto & key : join_cols)
+    for (const auto & key : join_cols)
     {
         push_back_partition_key(left_partition_keys, children[0]->output_schema, key);
         push_back_partition_key(right_partition_keys, children[1]->output_schema, key);
