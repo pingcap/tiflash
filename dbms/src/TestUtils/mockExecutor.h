@@ -92,11 +92,7 @@ public:
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
-    // Currently only support inner join, left join and right join.
-    // TODO support more types of join.
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAstVec using_exprs);
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec using_exprs);
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds = {}, MockAstVec other_eq_conds_from_in = {});
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds = {}, MockAstVec right_conds = {}, MockAstVec other_conds = {}, MockAstVec other_eq_conds_from_in = {});
 
     // aggregation
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
