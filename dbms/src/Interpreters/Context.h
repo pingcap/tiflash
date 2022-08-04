@@ -20,6 +20,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <TestUtils/MockStorage.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -29,7 +30,6 @@
 #include <mutex>
 #include <thread>
 #include <unordered_set>
-#include <TestUtils/MockStorage.h>
 
 namespace pingcap
 {
@@ -480,7 +480,7 @@ public:
     bool isExecutorTest() const;
     void setExecutorTest();
     bool isTest() const;
-  
+
     DB::tests::MockStorage mock_storage;
 
     void setMockStorage(DB::tests::MockStorage mock_storage_)

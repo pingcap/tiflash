@@ -63,7 +63,8 @@ public:
     bool tableExists(Int64 table_id)
     {
         std::cout << "ywq test read tables" << std::endl;
-        for (const auto& kv : table_columns) {
+        for (const auto & kv : table_columns)
+        {
             std::cout << kv.first << std::endl;
         }
         return table_schema.find(table_id) != table_schema.end();

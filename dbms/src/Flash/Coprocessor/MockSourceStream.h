@@ -29,7 +29,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     size_t rows = 0;
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
     columns_with_type_and_name = context.mock_storage.getExchangeColumns(executor_id);
-    
+
     for (const auto & col : columns_with_type_and_name)
     {
         if (rows == 0)

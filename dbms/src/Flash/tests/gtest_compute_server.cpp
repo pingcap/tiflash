@@ -21,7 +21,8 @@ namespace tests
 class ComputeServerRunner : public DB::tests::MPPTaskTestUtils
 {
 public:
-    static void SetUpTestCase() {
+    static void SetUpTestCase()
+    {
         MPPTaskTestUtils::SetUpTestCase();
         server_manager.addServerConfig({"test", "0.0.0.0:3930"});
         server_manager.addServerConfig({"test1", "0.0.0.0:3931"});
