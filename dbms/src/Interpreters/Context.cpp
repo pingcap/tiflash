@@ -1937,31 +1937,6 @@ bool Context::isTest() const
     return test_mode != non_test;
 }
 
-void Context::setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_)
-{
-    columns_for_test_map = columns_for_test_map_;
-}
-
-std::unordered_map<String, ColumnsWithTypeAndName> & Context::getColumnsForTestMap()
-{
-    return columns_for_test_map;
-}
-
-ColumnsWithTypeAndName Context::columnsForTest(String executor_id)
-{
-    auto it = columns_for_test_map.find(executor_id);
-    if (unlikely(it == columns_for_test_map.end()))
-    {
-        throw DB::Exception("Don't have columns for mock source executors");
-    }
-    return it->second;
-}
-
-bool Context::columnsForTestEmpty()
-{
-    return columns_for_test_map.empty();
-}
-
 SessionCleaner::~SessionCleaner()
 {
     try

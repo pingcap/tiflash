@@ -480,11 +480,7 @@ public:
     bool isExecutorTest() const;
     void setExecutorTest();
     bool isTest() const;
-    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_);
-    std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap();
-    ColumnsWithTypeAndName columnsForTest(String executor_id);
-    bool columnsForTestEmpty();
-
+  
     DB::tests::MockStorage mock_storage;
 
     void setMockStorage(DB::tests::MockStorage mock_storage_)

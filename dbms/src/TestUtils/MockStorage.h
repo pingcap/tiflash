@@ -44,6 +44,7 @@ class MockStorage
 public:
     void addTableSchema(String name, const MockColumnInfoVec & columnInfos)
     {
+        std::cout << "ywq test add table schema, table_name = " << name << std::endl;
         name_to_id_map[name] = MockTableIdGenerator::getInstance().nextTableId();
         table_schema[getTableId(name)] = columnInfos;
     }
@@ -61,7 +62,11 @@ public:
 
     bool tableExists(Int64 table_id)
     {
-        return table_columns.find(table_id) != table_columns.end();
+        std::cout << "ywq test read tables" << std::endl;
+        for (const auto& kv : table_columns) {
+            std::cout << kv.first << std::endl;
+        }
+        return table_schema.find(table_id) != table_schema.end();
     }
 
     ColumnsWithTypeAndName getColumns(Int64 table_id)
@@ -78,8 +83,10 @@ public:
     {
         if (tableExists(getTableId(name)))
         {
+            std::cout << "ywq test reach have schema here.., name = " << name << std::endl;
             return table_schema[getTableId(name)];
         }
+        std::cout << "ywq test reach no schema here.., name = " << name << std::endl;
         return {};
     }
 
@@ -137,7 +144,6 @@ public:
     }
 
     /// for mpp
-
     ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num)
     {
         if (tableExists(table_id))

@@ -78,17 +78,6 @@ public:
 
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
-        size_t concurrency = 1);
-
-    ColumnsWithTypeAndName executeStreams(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency = 1);
-
-    ColumnsWithTypeAndName executeStreamsWithSingleSource(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & source_columns,
-        SourceType type = TableScan,
         size_t concurrency = 1);
 
     ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks);
