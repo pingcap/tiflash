@@ -401,6 +401,96 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, CrossJoinWithCondition)
+try
+{
+    context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+
+    const auto cond = gt(col("a"), lit(Field("1", 1)));
+
+    const auto table_scan = [&]() -> std::tuple<DAGRequestBuilder, DAGRequestBuilder> {
+        return {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")};
+    };
+
+    const ColumnsWithTypeAndName expected_cols[join_type_num] = {
+        // inner
+        {toNullableVec<String>({"2", "2", "2", "2"}), toNullableVec<String>({"4", "4", "4", "4"}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // left
+        {toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}), toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
+        // right
+        {toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}), toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
+        // semi
+        {toNullableVec<String>({"2"}), toNullableVec<String>({"4"})},
+        // anti semi
+        {toNullableVec<String>({"1", "1", {}}), toNullableVec<String>({{}, "3", "3"})},
+        // left outer semi
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
+        // anti left outer semi
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
+    };
+
+    /// for cross join, there is no join columns
+    size_t i = 0;
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+            .join(t2, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond})
+            .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+            .join(t2, tipb::JoinType::TypeLeftOuterJoin, {}, {cond})
+            .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+            .join(t2, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond})
+            .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+            .join(t2, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond})
+            .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+            .join(t2, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond})
+            .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+            .join(t2, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond})
+            .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+            .join(t2, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond})
+            .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, JoinWithTableScan)
 try
 {
