@@ -129,7 +129,6 @@ struct Pipe
     {
         read_fd = -1;
         write_fd = -1;
-        // fd = {-1, -1};
 
         if (0 != pipe(fds))
             DB::throwFromErrno("Cannot create pipe");
