@@ -1718,24 +1718,6 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
     }
 }
 
-// ExecutorPtr compileJoin(size_t & executor_index,
-//                         ExecutorPtr left,
-//                         ExecutorPtr right,
-//                         tipb::JoinType tp,
-//                         ASTPtr using_expr_list)
-// {
-//     DAGSchema output_schema;
-
-//     buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
-//     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
-
-//     auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, using_expr_list);
-//     join->children.push_back(left);
-//     join->children.push_back(right);
-
-//     return join;
-// }
-
 // compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
 ExecutorPtr compileJoin(size_t & executor_index,
                         ExecutorPtr left,
