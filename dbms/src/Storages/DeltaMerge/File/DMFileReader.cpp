@@ -25,6 +25,8 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 
+#include <string>
+
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -210,6 +212,7 @@ DMFileReader::DMFileReader(
     bool is_common_handle_,
     // clean read
     bool enable_clean_read_,
+    bool is_fast_mode_,
     UInt64 max_read_version_,
     // filters
     DMFilePackFilter && pack_filter_,
@@ -223,13 +226,15 @@ DMFileReader::DMFileReader(
     const ReadLimiterPtr & read_limiter,
     size_t rows_threshold_per_read_,
     bool read_one_pack_every_time_,
-    const String & tracing_id_)
+    const String & tracing_id_,
+    bool enable_col_sharing_cache)
     : dmfile(dmfile_)
     , read_columns(read_columns_)
     , is_common_handle(is_common_handle_)
     , read_one_pack_every_time(read_one_pack_every_time_)
     , single_file_mode(dmfile_->isSingleFileMode())
     , enable_clean_read(enable_clean_read_)
+    , is_fast_mode(is_fast_mode_)
     , max_read_version(max_read_version_)
     , pack_filter(std::move(pack_filter_))
     , skip_packs_by_column(read_columns.size(), 0)
@@ -261,6 +266,14 @@ DMFileReader::DMFileReader(
         };
         const auto data_type = dmfile->getColumnStat(cd.id).type;
         data_type->enumerateStreams(callback, {});
+    }
+    if (enable_col_sharing_cache)
+    {
+        col_data_cache = std::make_unique<ColumnSharingCacheMap>(path(), read_columns, log);
+        for (const auto & cd : read_columns)
+        {
+            last_read_from_cache[cd.id] = false;
+        }
     }
 }
 
@@ -301,7 +314,6 @@ Block DMFileReader::read()
     const auto & use_packs = pack_filter.getUsePacks();
     if (next_pack_id >= use_packs.size())
         return {};
-
     // Find max continuing rows we can read.
     size_t start_pack_id = next_pack_id;
     // When single_file_mode is true, or read_one_pack_every_time is true, we can just read one pack every time.
@@ -338,13 +350,16 @@ Block DMFileReader::read()
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
-    bool do_clean_read = enable_clean_read && expected_handle_res == All && not_clean_rows == 0;
-    if (do_clean_read)
+    bool do_clean_read_on_normal_mode = enable_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
+
+    bool do_clean_read_on_handle = enable_clean_read && is_fast_mode && expected_handle_res == All;
+
+    if (do_clean_read_on_normal_mode)
     {
         UInt64 max_version = 0;
         for (size_t pack_id = start_pack_id; pack_id < next_pack_id; ++pack_id)
             max_version = std::max(pack_filter.getMaxVersion(pack_id), max_version);
-        do_clean_read = max_version <= max_read_version;
+        do_clean_read_on_normal_mode = max_version <= max_read_version;
     }
 
     for (size_t i = 0; i < read_columns.size(); ++i)
@@ -353,7 +368,24 @@ Block DMFileReader::read()
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
             auto & cd = read_columns[i];
-            if (do_clean_read && isExtraColumn(cd))
+            if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle)
+            {
+                // Return the first row's handle
+                ColumnPtr column;
+                if (is_common_handle)
+                {
+                    StringRef min_handle = pack_filter.getMinStringHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle.data, min_handle.size));
+                }
+                else
+                {
+                    Handle min_handle = pack_filter.getMinHandle(start_pack_id);
+                    column = cd.type->createColumnConst(read_rows, Field(min_handle));
+                }
+                res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+                skip_packs_by_column[i] = read_packs;
+            }
+            else if (do_clean_read_on_normal_mode && isExtraColumn(cd))
             {
                 ColumnPtr column;
                 if (cd.id == EXTRA_HANDLE_COLUMN_ID)
@@ -416,7 +448,9 @@ Block DMFileReader::read()
                                 {
                                     rows_count += pack_stats[cursor].rows;
                                 }
-                                readFromDisk(cd, column, range.first, rows_count, skip_packs_by_column[i], single_file_mode);
+                                ColumnPtr col;
+                                readColumn(cd, col, range.first, range.second - range.first, rows_count, skip_packs_by_column[i], single_file_mode);
+                                column->insertRangeFrom(*col, 0, col->size());
                                 skip_packs_by_column[i] = 0;
                             }
                             else
@@ -438,9 +472,10 @@ Block DMFileReader::read()
                     else
                     {
                         auto data_type = dmfile->getColumnStat(cd.id).type;
-                        auto column = data_type->createColumn();
-                        readFromDisk(cd, column, start_pack_id, read_rows, skip_packs_by_column[i], single_file_mode);
+                        ColumnPtr column;
+                        readColumn(cd, column, start_pack_id, read_packs, read_rows, skip_packs_by_column[i], single_file_mode);
                         auto converted_column = convertColumnByColumnDefineIfNeed(data_type, std::move(column), cd);
+
                         res.insert(ColumnWithTypeAndName{std::move(converted_column), cd.type, cd.name, cd.id});
                         skip_packs_by_column[i] = 0;
                     }
@@ -456,6 +491,7 @@ Block DMFileReader::read()
                         dmfile->path());
                     // New column after ddl is not exist in this DMFile, fill with default value
                     ColumnPtr column = createColumnWithDefaultValue(cd, read_rows);
+
                     res.insert(ColumnWithTypeAndName{std::move(column), cd.type, cd.name, cd.id});
                     skip_packs_by_column[i] = 0;
                 }
@@ -508,5 +544,58 @@ void DMFileReader::readFromDisk(
     }
 }
 
+void DMFileReader::readColumn(ColumnDefine & column_define,
+                              ColumnPtr & column,
+                              size_t start_pack_id,
+                              size_t pack_count,
+                              size_t read_rows,
+                              size_t skip_packs,
+                              bool force_seek)
+{
+    if (!getCachedPacks(column_define.id, start_pack_id, pack_count, read_rows, column))
+    {
+        auto data_type = dmfile->getColumnStat(column_define.id).type;
+        auto col = data_type->createColumn();
+        readFromDisk(column_define, col, start_pack_id, read_rows, skip_packs, force_seek || last_read_from_cache[column_define.id]);
+        column = std::move(col);
+        last_read_from_cache[column_define.id] = false;
+    }
+    else
+    {
+        last_read_from_cache[column_define.id] = true;
+    }
+
+    if (col_data_cache != nullptr)
+    {
+        DMFileReaderPool::instance().set(*this, column_define.id, start_pack_id, pack_count, column);
+    }
+}
+
+void DMFileReader::addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col)
+{
+    if (col_data_cache == nullptr)
+    {
+        return;
+    }
+    if (next_pack_id >= start_pack_id + pack_count)
+    {
+        col_data_cache->addStale();
+    }
+    else
+    {
+        col_data_cache->add(col_id, start_pack_id, pack_count, col);
+    }
+}
+
+bool DMFileReader::getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col)
+{
+    if (col_data_cache == nullptr)
+    {
+        return false;
+    }
+    auto found = col_data_cache->get(col_id, start_pack_id, pack_count, read_rows, col, dmfile->getColumnStat(col_id).type);
+    col_data_cache->del(col_id, next_pack_id);
+    return found;
+}
 } // namespace DM
 } // namespace DB

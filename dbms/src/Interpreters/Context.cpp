@@ -68,17 +68,15 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
-#include <map>
 #include <pcg_random.hpp>
 #include <set>
+#include <unordered_map>
 
 
 namespace ProfileEvents
 {
 extern const Event ContextLock;
 }
-
-#include <set>
 
 namespace CurrentMetrics
 {
@@ -1440,20 +1438,32 @@ void Context::dropCaches() const
         shared->mark_cache->reset();
 }
 
-BackgroundProcessingPool & Context::getBackgroundPool()
+BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
     if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
+        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
     return *shared->background_pool;
+}
+
+BackgroundProcessingPool & Context::getBackgroundPool()
+{
+    auto lock = getLock();
+    return *shared->background_pool;
+}
+
+BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 pool_size)
+{
+    auto lock = getLock();
+    if (!shared->blockable_background_pool)
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
+    return *shared->blockable_background_pool;
 }
 
 BackgroundProcessingPool & Context::getBlockableBackgroundPool()
 {
-    // TODO: choose a better thread pool size and maybe a better name for the pool
+    // TODO: maybe a better name for the pool
     auto lock = getLock();
-    if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(settings.background_pool_size);
     return *shared->blockable_background_pool;
 }
 
@@ -1884,7 +1894,7 @@ size_t Context::getMaxStreams() const
     bool is_cop_request = false;
     if (dag_context != nullptr)
     {
-        if (dag_context->isTest())
+        if (isExecutorTest())
             max_streams = dag_context->initialize_concurrency;
         else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
         {
@@ -1900,6 +1910,56 @@ size_t Context::getMaxStreams() const
         /// for cop request, the max_streams should be 1
         throw Exception("Cop request only support running with max_streams = 1");
     return max_streams;
+}
+
+bool Context::isMPPTest() const
+{
+    return test_mode == mpp_test;
+}
+
+void Context::setMPPTest()
+{
+    test_mode = mpp_test;
+}
+
+bool Context::isExecutorTest() const
+{
+    return test_mode == executor_test;
+}
+
+void Context::setExecutorTest()
+{
+    test_mode = executor_test;
+}
+
+bool Context::isTest() const
+{
+    return test_mode != non_test;
+}
+
+void Context::setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_)
+{
+    columns_for_test_map = columns_for_test_map_;
+}
+
+std::unordered_map<String, ColumnsWithTypeAndName> & Context::getColumnsForTestMap()
+{
+    return columns_for_test_map;
+}
+
+ColumnsWithTypeAndName Context::columnsForTest(String executor_id)
+{
+    auto it = columns_for_test_map.find(executor_id);
+    if (unlikely(it == columns_for_test_map.end()))
+    {
+        throw DB::Exception("Don't have columns for mock source executors");
+    }
+    return it->second;
+}
+
+bool Context::columnsForTestEmpty()
+{
+    return columns_for_test_map.empty();
 }
 
 SessionCleaner::~SessionCleaner()

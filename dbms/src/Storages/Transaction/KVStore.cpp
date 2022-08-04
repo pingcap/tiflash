@@ -327,6 +327,69 @@ void KVStore::persistRegion(const Region & region, const RegionTaskLock & region
     LOG_FMT_DEBUG(log, "Persist {} done", region.toString(false));
 }
 
+bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    const RegionPtr curr_region_ptr = getRegion(region_id);
+    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
+}
+
+bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
+{
+    auto region_task_lock = region_manager.genRegionTaskLock(region_id);
+    const RegionPtr curr_region_ptr = getRegion(region_id);
+    return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+}
+
+bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
+{
+    if (curr_region_ptr == nullptr)
+    {
+        throw Exception(fmt::format("region not found when trying flush", ErrorCodes::LOGICAL_ERROR));
+    }
+    auto & curr_region = *curr_region_ptr;
+
+    auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
+
+    LOG_FMT_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
+
+    bool can_flush = false;
+    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed)
+        || size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
+    {
+        // if rows or bytes more than threshold, flush cache and persist mem data.
+        can_flush = true;
+    }
+    else
+    {
+        // if there is little data in mem, wait until time interval reached threshold.
+        // use random period so that lots of regions will not be persisted at same time.
+        auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
+        can_flush = !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
+    }
+    if (can_flush && flush_if_possible)
+    {
+        LOG_FMT_DEBUG(log, "{} flush region due to canFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
+        if (index)
+        {
+            // We set actual index when handling CompactLog.
+            curr_region.handleWriteRaftCmd({}, index, term, tmt);
+        }
+        if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
+        {
+            persistRegion(curr_region, region_task_lock, "canFlushRegionData before compact raft log");
+            curr_region.markCompactLog();
+            curr_region.cleanApproxMemCacheInfo();
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return can_flush;
+}
+
 EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     raft_cmdpb::AdminCmdType cmd_type,
     UInt64 curr_region_id,
@@ -350,50 +413,17 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
                   term,
                   index);
 
-    curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
-    const auto check_sync_log = [&]() {
-        if (cmd_type != raft_cmdpb::AdminCmdType::CompactLog)
-        {
-            // ignore ComputeHash, VerifyHash or other useless cmd.
-            return false;
-        }
-        else
-        {
-            auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
-
-            LOG_FMT_DEBUG(log, "{} approx mem cache info: rows {}, bytes {}", curr_region.toString(false), rows, size_bytes);
-
-            if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed)
-                || size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
-            {
-                // if rows or bytes more than threshold, try to flush cache and persist mem data.
-                return true;
-            }
-            else
-            {
-                // if there is little data in mem, wait until time interval reached threshold.
-                // use random period so that lots of regions will not be persisted at same time.
-                auto compact_log_period = std::rand() % region_compact_log_period.load(std::memory_order_relaxed); // NOLINT
-                return !(curr_region.lastCompactLogTime() + Seconds{compact_log_period} > Clock::now());
-            }
-        }
-    };
-
-    if (check_sync_log())
+    if (cmd_type == raft_cmdpb::AdminCmdType::CompactLog)
     {
-        if (tryFlushRegionCacheInStorage(tmt, curr_region, log, /* try_until_succeed */ false))
-        {
-            persistRegion(curr_region, region_task_lock, "compact raft log");
-            curr_region.markCompactLog();
-            curr_region.cleanApproxMemCacheInfo();
-            return EngineStoreApplyRes::Persist;
-        }
-        else
-        {
-            return EngineStoreApplyRes::None;
-        }
+        // Before CompactLog, we ought to make sure all data of this region are persisted.
+        // So proxy will firstly call an FFI `fn_try_flush_data` to trigger a attempt to flush data on TiFlash's side.
+        // If the attempt fails, Proxy will filter execution of this CompactLog, which means every CompactLog observed by TiFlash can ALWAYS succeed now.
+        // ref. https://github.com/pingcap/tidb-engine-ext/blob/e83a37d2d8d8ae1778fe279c5f06a851f8c9e56a/components/raftstore/src/engine_store_ffi/observer.rs#L175
+        return EngineStoreApplyRes::Persist;
     }
+
+    curr_region.handleWriteRaftCmd({}, index, term, tmt);
     return EngineStoreApplyRes::None;
 }
 

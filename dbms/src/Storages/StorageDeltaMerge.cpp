@@ -624,14 +624,15 @@ BlockInputStreams StorageDeltaMerge::read(
     }
 
     const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    if (select_query.raw_for_mutable)
+    if (select_query.raw_for_mutable) // for selraw
     {
-        // Read without MVCC filtering
+        // Read without MVCC filtering and del_mark = 1 filtering
         return store->readRaw(
             context,
             context.getSettingsRef(),
             columns_to_read,
             num_streams,
+            query_info.keep_order,
             parseSegmentSet(select_query.segment_expression_list),
             extra_table_id_index);
     }
@@ -756,6 +757,8 @@ BlockInputStreams StorageDeltaMerge::read(
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
         query_info.req_id,
+        query_info.keep_order,
+        /* is_fast_mode */ tidb_table_info.tiflash_mode == TiDB::TiFlashMode::Fast, // read in normal mode or read in fast mode
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -837,7 +840,8 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         1,
         std::numeric_limits<UInt64>::max(),
         EMPTY_FILTER,
-        /*tracing_id*/ "getRows")[0];
+        /*tracing_id*/ "getRows",
+        /*keep_order*/ false)[0];
     stream->readPrefix();
     Block block;
     while ((block = stream->read()))
@@ -862,7 +866,8 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             1,
             std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
-            /*tracing_id*/ "getRange")[0];
+            /*tracing_id*/ "getRange",
+            /*keep_order*/ false)[0];
         stream->readPrefix();
         Block block;
         size_t index = 0;

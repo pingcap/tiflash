@@ -91,6 +91,7 @@ void ColumnFileBigReader::initStream()
                       .setTracingID(context.tracing_id)
                       .build(column_file.getFile(), *col_defs, RowKeyRanges{column_file.segment_range});
 
+    header = file_stream->getHeader();
     // If we only need to read pk and version columns, then cache columns data in memory.
     if (pk_ver_only)
     {
@@ -223,7 +224,20 @@ Block ColumnFileBigReader::readNextBlock()
 {
     initStream();
 
-    return file_stream->read();
+    if (pk_ver_only)
+    {
+        if (next_block_index_in_cache >= cached_pk_ver_columns.size())
+        {
+            return {};
+        }
+        auto & columns = cached_pk_ver_columns[next_block_index_in_cache];
+        next_block_index_in_cache += 1;
+        return header.cloneWithColumns(std::move(columns));
+    }
+    else
+    {
+        return file_stream->read();
+    }
 }
 
 ColumnFileReaderPtr ColumnFileBigReader::createNewReader(const ColumnDefinesPtr & new_col_defs)

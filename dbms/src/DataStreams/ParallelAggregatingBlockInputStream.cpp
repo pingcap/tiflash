@@ -24,7 +24,7 @@ namespace DB
 {
 ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const BlockInputStreams & inputs,
-    const BlockInputStreamPtr & additional_input_at_end,
+    const BlockInputStreams & additional_inputs_at_end,
     const Aggregator::Params & params_,
     const FileProviderPtr & file_provider_,
     bool final_,
@@ -41,11 +41,10 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
-    , processor(inputs, additional_input_at_end, max_threads, handler, log)
+    , processor(inputs, additional_inputs_at_end, max_threads, handler, log)
 {
     children = inputs;
-    if (additional_input_at_end)
-        children.push_back(additional_input_at_end);
+    children.insert(children.end(), additional_inputs_at_end.begin(), additional_inputs_at_end.end());
 }
 
 
@@ -196,10 +195,9 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
     Int32 old_value = -1;
     parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
 
-    /// can not cancel parent inputStream or the exception might be lost
     if (!parent.executed)
         /// use cancel instead of kill to avoid too many useless error message
-        parent.processor.cancel(false);
+        parent.cancel(false);
 }
 
 

@@ -14,26 +14,17 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
-#include <fmt/format.h>
+#include <common/defines.h>
 
 #include <cerrno>
 #include <memory>
 #include <vector>
 
-
-namespace Poco
-{
-class Logger;
-}
-
-
 namespace DB
 {
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
-
 class Exception : public Poco::Exception
 {
 public:
@@ -73,8 +64,8 @@ private:
     StackTrace trace;
 };
 
-
-/// Contains an additional member `saved_errno`. See the throwFromErrno function.
+/// Contains an additional member `saved_errno`. See the throwFromErrno
+/// function.
 class ErrnoException : public Exception
 {
 public:
@@ -97,33 +88,33 @@ private:
     int saved_errno;
 };
 
-
 using Exceptions = std::vector<std::exception_ptr>;
-
 
 [[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int e = errno);
 
-
 /** Try to write an exception to the log (and forget about it).
-  * Can be used in destructors in the catch-all block.
-  */
-void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
-void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message = "");
-void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
-
+ * Can be used in destructors in the catch-all block.
+ */
+void tryLogCurrentException(const char * log_name,
+                            const std::string & start_of_message = "");
+void tryLogCurrentException(const LoggerPtr & logger,
+                            const std::string & start_of_message = "");
+void tryLogCurrentException(Poco::Logger * logger,
+                            const std::string & start_of_message = "");
 
 /** Prints current exception in canonical format.
-  * with_stacktrace - prints stack trace for DB::Exception.
-  * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
-  *  only this stack trace will be printed.
-  */
-std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded_stacktrace = false);
+ * with_stacktrace - prints stack trace for DB::Exception.
+ * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
+ *  only this stack trace will be printed.
+ */
+std::string getCurrentExceptionMessage(bool with_stacktrace,
+                                       bool check_embedded_stacktrace = false);
 
 /// Returns error code from ErrorCodes
 int getCurrentExceptionCode();
 
-
-/// An execution status of any piece of code, contains return code and optional error
+/// An execution status of any piece of code, contains return code and optional
+/// error
 struct ExecutionStatus
 {
     int code = 0;
@@ -131,12 +122,14 @@ struct ExecutionStatus
 
     ExecutionStatus() = default;
 
-    explicit ExecutionStatus(int return_code, const std::string & exception_message = "")
+    explicit ExecutionStatus(int return_code,
+                             const std::string & exception_message = "")
         : code(return_code)
         , message(exception_message)
     {}
 
-    static ExecutionStatus fromCurrentException(const std::string & start_of_message = "");
+    static ExecutionStatus
+    fromCurrentException(const std::string & start_of_message = "");
 
     std::string serializeText() const;
 
@@ -145,13 +138,10 @@ struct ExecutionStatus
     bool tryDeserializeText(const std::string & data);
 };
 
-
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace = false);
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace);
 
-
 void rethrowFirstException(const Exceptions & exceptions);
-
 
 template <typename T>
 std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
@@ -172,28 +162,88 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
 
 namespace exception_details
 {
-template <typename T, typename... Args>
-inline std::string generateLogMessage(const char * condition, T && fmt_str, Args &&... args)
+inline std::string generateFormattedMessage(const char * condition)
 {
-    return fmt::format(std::forward<T>(fmt_str), condition, std::forward<Args>(args)...);
+    return fmt::format("Assert {} fail!", condition);
+}
+
+template <typename... Args>
+inline std::string generateFormattedMessage(const char * condition, const char * fmt_str, Args &&... args)
+{
+    return FmtBuffer().fmtAppend("Assert {} fail! ", condition).fmtAppend(fmt_str, std::forward<Args>(args)...).toString();
+}
+
+template <typename... Args>
+inline Poco::Message generateLogMessage(const std::string & logger_name, const char * filename, int lineno, const char * condition, Args &&... args)
+{
+    return Poco::Message(
+        logger_name,
+        generateFormattedMessage(condition, std::forward<Args>(args)...),
+        Poco::Message::PRIO_FATAL,
+        filename,
+        lineno);
+}
+
+const LoggerPtr & getDefaultFatalLogger();
+
+template <typename... Args>
+inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, Args &&... args)
+{
+    if (logger->fatal())
+    {
+        auto message = generateLogMessage(
+            logger->name(),
+            filename,
+            lineno,
+            condition,
+            std::forward<Args>(args)...);
+        logger->log(message);
+    }
+}
+
+inline void log(const char * filename, int lineno, const char * condition)
+{
+    log(filename, lineno, condition, getDefaultFatalLogger());
+}
+
+template <typename... Args>
+inline void log(const char * filename, int lineno, const char * condition, const char * fmt_str, Args &&... args)
+{
+    log(filename, lineno, condition, getDefaultFatalLogger(), fmt_str, std::forward<Args>(args)...);
 }
 } // namespace exception_details
 
-#define RUNTIME_CHECK(condition, ExceptionType, ...) \
-    do                                               \
-    {                                                \
-        if (unlikely(!(condition)))                  \
-            throw ExceptionType(__VA_ARGS__);        \
+/// Usage:
+/// ```
+/// RUNTIME_CHECK(a != b, Exception("{} does not equal to {}", a, b));
+/// ```
+#define RUNTIME_CHECK(condition, ExceptionGenerationCode) \
+    do                                                    \
+    {                                                     \
+        if (unlikely(!(condition)))                       \
+            throw(ExceptionGenerationCode);               \
     } while (false)
 
-#define RUNTIME_ASSERT(condition, logger, ...)                                                                      \
-    do                                                                                                              \
-    {                                                                                                               \
-        if (unlikely(!(condition)))                                                                                 \
-        {                                                                                                           \
-            LOG_FATAL((logger), exception_details::generateLogMessage(#condition, "Assert {} fail! " __VA_ARGS__)); \
-            std::terminate();                                                                                       \
-        }                                                                                                           \
+/// Usage:
+/// ```
+/// RUNTIME_ASSERT(a != b);
+/// RUNTIME_ASSERT(a != b, "fail");
+/// RUNTIME_ASSERT(a != b, "{} does not equal to {}", a, b);
+/// RUNTIME_ASSERT(a != b, logger);
+/// RUNTIME_ASSERT(a != b, logger, "{} does not equal to {}", a, b);
+/// ```
+#define RUNTIME_ASSERT(condition, ...)                                 \
+    do                                                                 \
+    {                                                                  \
+        if (unlikely(!(condition)))                                    \
+        {                                                              \
+            exception_details::log(                                    \
+                &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)], \
+                __LINE__,                                              \
+                #condition,                                            \
+                ##__VA_ARGS__);                                        \
+            std::terminate();                                          \
+        }                                                              \
     } while (false)
 
 } // namespace DB

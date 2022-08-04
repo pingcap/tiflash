@@ -42,16 +42,17 @@ void waitTasks(std::vector<std::future<void>> & futures)
         std::rethrow_exception(first_exception);
 }
 
-class DynamicThreadManager : public ThreadManager
+class DynamicThreadManager
+    : public ThreadManager
     , public ThreadPoolManager
 {
 public:
-    void scheduleThenDetach(bool propagate_memory_tracker, String /*thread_name*/, ThreadManager::Job job) override
+    void scheduleThenDetach(bool propagate_memory_tracker, std::string /*thread_name*/, ThreadManager::Job job) override
     {
         DynamicThreadPool::global_instance->scheduleRaw(propagate_memory_tracker, std::move(job));
     }
 
-    void schedule(bool propagate_memory_tracker, String /*thread_name*/, ThreadManager::Job job) override
+    void schedule(bool propagate_memory_tracker, std::string /*thread_name*/, ThreadManager::Job job) override
     {
         futures.push_back(DynamicThreadPool::global_instance->schedule(propagate_memory_tracker, std::move(job)));
     }
@@ -73,13 +74,13 @@ protected:
 class RawThreadManager : public ThreadManager
 {
 public:
-    void schedule(bool propagate_memory_tracker, String thread_name, Job job) override
+    void schedule(bool propagate_memory_tracker, std::string thread_name, Job job) override
     {
         auto t = ThreadFactory::newThread(propagate_memory_tracker, std::move(thread_name), std::move(job));
         workers.push_back(std::move(t));
     }
 
-    void scheduleThenDetach(bool propagate_memory_tracker, String thread_name, Job job) override
+    void scheduleThenDetach(bool propagate_memory_tracker, std::string thread_name, Job job) override
     {
         auto t = ThreadFactory::newThread(propagate_memory_tracker, std::move(thread_name), std::move(job));
         t.detach();
@@ -90,7 +91,7 @@ public:
         waitAndClear();
     }
 
-    ~RawThreadManager()
+    ~RawThreadManager() override
     {
         waitAndClear();
     }

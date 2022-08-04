@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnNullable.h>
+#include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Row.h>
 #include <DataTypes/DataTypeNothing.h>
@@ -45,30 +46,42 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 {
     if (expected_v != actual_v)
     {
-        auto expected_str = fmt::format("\n{}: {}", expected_expr, expected_display);
-        auto actual_str = fmt::format("\n{}: {}", actual_expr, actual_display);
+        auto expected_str = fmt::format("\n  {}:\n    {}", expected_expr, expected_display);
+        auto actual_str = fmt::format("\n  {}:\n    {}", actual_expr, actual_display);
         return ::testing::AssertionFailure() << title << expected_str << actual_str;
     }
     return ::testing::AssertionSuccess();
 }
 
 
-#define ASSERT_EQUAL_WITH_TEXT(expected_value, actual_value, title, expected_display, actual_display)                                             \
-    do                                                                                                                                            \
-    {                                                                                                                                             \
-        auto result = assertEqual(#expected_value, #actual_value, (expected_value), (actual_value), (expected_display), (actual_display), title); \
-        if (!result)                                                                                                                              \
-            return result;                                                                                                                        \
+#define ASSERT_EQUAL_WITH_TEXT(expected_value, actual_value, title, expected_display, actual_display) \
+    do                                                                                                \
+    {                                                                                                 \
+        if (auto result = assertEqual(#expected_value,                                                \
+                                      #actual_value,                                                  \
+                                      (expected_value),                                               \
+                                      (actual_value),                                                 \
+                                      (expected_display),                                             \
+                                      (actual_display),                                               \
+                                      title);                                                         \
+            !result)                                                                                  \
+            return result;                                                                            \
     } while (false)
 
-#define ASSERT_EQUAL(expected_value, actual_value, title)                                                             \
-    do                                                                                                                \
-    {                                                                                                                 \
-        auto expected_v = (expected_value);                                                                           \
-        auto actual_v = (actual_value);                                                                               \
-        auto result = assertEqual(#expected_value, #actual_value, expected_v, actual_v, expected_v, actual_v, title); \
-        if (!result)                                                                                                  \
-            return result;                                                                                            \
+#define ASSERT_EQUAL(expected_value, actual_value, title) \
+    do                                                    \
+    {                                                     \
+        auto expected_v = (expected_value);               \
+        auto actual_v = (actual_value);                   \
+        if (auto result = assertEqual(#expected_value,    \
+                                      #actual_value,      \
+                                      expected_v,         \
+                                      actual_v,           \
+                                      expected_v,         \
+                                      actual_v,           \
+                                      title);             \
+            !result)                                      \
+            return result;                                \
     } while (false)
 
 ::testing::AssertionResult dataTypeEqual(
@@ -81,7 +94,8 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
-    const ColumnPtr & actual)
+    const ColumnPtr & actual,
+    bool is_floating_point)
 {
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
@@ -91,7 +105,22 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         auto expected_field = (*expected)[i];
         auto actual_field = (*actual)[i];
 
-        ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value {} mismatch", i), expected_field.toString(), actual_field.toString());
+        if (!is_floating_point)
+        {
+            ASSERT_EQUAL_WITH_TEXT(expected_field, actual_field, fmt::format("Value at index {} mismatch", i), expected_field.toString(), actual_field.toString());
+        }
+        else
+        {
+            auto expected_field_expr = expected_field.toString();
+            auto actual_field_expr = actual_field.toString();
+            if (auto res = ::testing::internal::CmpHelperFloatingPointEQ(
+                    expected_field_expr.c_str(),
+                    actual_field_expr.c_str(),
+                    expected_field.safeGet<Float64>(),
+                    actual_field.safeGet<Float64>());
+                !res)
+                return ::testing::AssertionFailure() << fmt::format("Value at index {} mismatch, ", i) << res.message();
+        }
     }
     return ::testing::AssertionSuccess();
 }
@@ -100,11 +129,10 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual)
 {
-    auto ret = dataTypeEqual(expected.type, actual.type);
-    if (!ret)
+    if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;
 
-    return columnEqual(expected.column, actual.column);
+    return columnEqual(expected.column, actual.column, expected.type->isFloatingPoint());
 }
 
 ::testing::AssertionResult blockEqual(
@@ -114,12 +142,16 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     size_t columns = actual.columns();
     size_t expected_columns = expected.columns();
 
-    ASSERT_EQUAL(expected_columns, columns, "Block size mismatch");
+    ASSERT_EQUAL(
+        expected_columns,
+        columns,
+        fmt::format("Block column size mismatch\nexpected_structure: {}\nstructure: {}", expected.dumpJsonStructure(), actual.dumpJsonStructure()));
 
     for (size_t i = 0; i < columns; ++i)
     {
         const auto & expected_col = expected.getByPosition(i);
         const auto & actual_col = actual.getByPosition(i);
+
         auto cmp_res = columnEqual(expected_col, actual_col);
         if (!cmp_res)
             return cmp_res;
@@ -375,9 +407,63 @@ ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<Strin
     return {makeColumn<Nullable<MyDateTime>>(data_type, vec), data_type, name, 0};
 }
 
+String getColumnsContent(const ColumnsWithTypeAndName & cols)
+{
+    if (cols.size() <= 0)
+        return "";
+    return getColumnsContent(cols, 0, cols[0].column->size());
+}
+
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
+{
+    const size_t col_num = cols.size();
+    if (col_num <= 0)
+        return "";
+
+    const size_t col_size = cols[0].column->size();
+    assert(begin <= end);
+    assert(col_size >= end);
+    assert(col_size > begin);
+
+    bool is_same = true;
+
+    for (size_t i = 1; i < col_num; ++i)
+    {
+        if (cols[i].column->size() != col_size)
+            is_same = false;
+    }
+
+    assert(is_same); /// Ensure the sizes of columns in cols are the same
+
+    std::vector<std::pair<size_t, String>> col_content;
+    FmtBuffer fmt_buf;
+    for (size_t i = 0; i < col_num; ++i)
+    {
+        /// Push the column name
+        fmt_buf.append(fmt::format("{}: (", cols[i].name));
+        for (size_t j = begin; j < end; ++j)
+            col_content.push_back(std::make_pair(j, (*cols[i].column)[j].toString()));
+
+        /// Add content
+        fmt_buf.joinStr(
+            col_content.begin(),
+            col_content.end(),
+            [](const auto & content, FmtBuffer & fmt_buf) {
+                fmt_buf.append(fmt::format("{}: {}", content.first, content.second));
+            },
+            ", ");
+
+        fmt_buf.append(")\n");
+        col_content.clear();
+    }
+
+    return fmt_buf.toString();
+}
+
 ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols)
 {
     return cols;
 }
+
 } // namespace tests
 } // namespace DB

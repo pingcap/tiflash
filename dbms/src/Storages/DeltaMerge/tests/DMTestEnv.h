@@ -41,6 +41,8 @@ namespace tests
 // Add this so that we can call typeFromString under namespace DB::DM::tests
 using DB::tests::typeFromString;
 
+using namespace DB::tests;
+
 /// helper functions for comparing HandleRange
 inline ::testing::AssertionResult HandleRangeCompare(
     const char * lhs_expr,
@@ -94,6 +96,18 @@ inline std::vector<Int64> createSignedNumbers(size_t beg, size_t end)
     for (size_t i = beg; i < end; ++i)
         values.emplace_back(i * (i % 2 == 0 ? -1 : 1));
     return values;
+}
+
+// Mock a common_pk_col that composed by number `rowkey_column_size` of int64 value
+inline String genMockCommonHandle(Int64 value, size_t rowkey_column_size)
+{
+    WriteBufferFromOwnString ss;
+    for (size_t index = 0; index < rowkey_column_size; ++index)
+    {
+        ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
+        ::DB::EncodeInt64(value, ss);
+    }
+    return ss.releaseStr();
 }
 
 class DMTestEnv
@@ -285,13 +299,7 @@ public:
             for (size_t i = 0; i < num_rows; i++)
             {
                 Int64 value = reversed ? end - 1 - i : beg + i;
-                WriteBufferFromOwnString ss;
-                for (size_t index = 0; index < rowkey_column_size; index++)
-                {
-                    ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-                    ::DB::EncodeInt64(value, ss);
-                }
-                values.emplace_back(ss.releaseStr());
+                values.emplace_back(genMockCommonHandle(value, rowkey_column_size));
             }
             block.insert(DB::tests::createColumn<String>(
                 std::move(values),
@@ -410,16 +418,7 @@ public:
         const size_t num_rows = 1;
         if (is_common_handle)
         {
-            Strings values;
-            {
-                WriteBufferFromOwnString ss;
-                for (size_t index = 0; index < rowkey_column_size; index++)
-                {
-                    ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-                    ::DB::EncodeInt64(pk, ss);
-                }
-                values.emplace_back(ss.releaseStr());
-            }
+            Strings values{genMockCommonHandle(pk, rowkey_column_size)};
             block.insert(DB::tests::createColumn<String>(
                 std::move(values),
                 pk_name,
@@ -466,20 +465,8 @@ public:
 
     static RowKeyRange getRowKeyRangeForClusteredIndex(Int64 start, Int64 end, size_t rowkey_column_size)
     {
-        WriteBufferFromOwnString ss;
-        for (size_t i = 0; i < rowkey_column_size; i++)
-        {
-            EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-            EncodeInt64(start, ss);
-        }
-        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(ss.releaseStr()));
-        ss.restart();
-        for (size_t i = 0; i < rowkey_column_size; i++)
-        {
-            EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-            EncodeInt64(end, ss);
-        }
-        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(ss.releaseStr()));
+        RowKeyValue start_key = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(start, rowkey_column_size)));
+        RowKeyValue end_key = RowKeyValue(true, std::make_shared<String>(genMockCommonHandle(end, rowkey_column_size)));
         return RowKeyRange(start_key, end_key, true, rowkey_column_size);
     }
 
