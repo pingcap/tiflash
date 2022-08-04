@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
@@ -154,10 +155,19 @@ private:
 
     bool use_l0_opt = true;
 
+    enum TestMode
+    {
+        non_test,
+        mpp_test,
+        executor_test
+    };
+    TestMode test_mode = non_test;
+
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-
+    // TODO: add MockStorage.
+    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
@@ -462,6 +472,17 @@ public:
     void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
 
     size_t getMaxStreams() const;
+
+    /// For executor tests and MPPTask tests.
+    bool isMPPTest() const;
+    void setMPPTest();
+    bool isExecutorTest() const;
+    void setExecutorTest();
+    bool isTest() const;
+    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_);
+    std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap();
+    ColumnsWithTypeAndName columnsForTest(String executor_id);
+    bool columnsForTestEmpty();
 
 private:
     /** Check if the current client has access to the specified database.
