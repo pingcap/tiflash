@@ -256,7 +256,7 @@ private:
             auto recv_msg = std::make_shared<ReceivedMessage>();
             try
             {
-                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet, current_memory_tracker);
+                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet, current_memory_tracker, 2);
             }
             catch (Exception & e)
             {
@@ -337,7 +337,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     try
     {
         rpc_context->fillSchema(schema);
-        setUpConnection();
+        // setUpConnection();
     }
     catch (...)
     {
@@ -417,6 +417,11 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
         GET_METRIC(tiflash_thread_count, type_threads_of_receiver_reactor).Decrement();
     });
 
+    LoggerPtr log = Logger::get("ExchangeReceiverRoot");
+    if (!current_memory_tracker) {
+        LOG_FMT_ERROR(log, "reactor.current_memory_tracker is null!");
+    }
+
     CPUAffinityManager::getInstance().bindSelfQueryThread();
 
     size_t alive_async_connections = async_requests.size();
@@ -478,12 +483,18 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
         GET_METRIC(tiflash_thread_count, type_threads_of_receiver_read_loop).Decrement();
     });
 
+
+    
     CPUAffinityManager::getInstance().bindSelfQueryThread();
     bool meet_error = false;
     String local_err_msg;
     String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
     LoggerPtr log = Logger::get("ExchangeReceiver", exc_log->identifier(), req_info);
+
+    if (!current_memory_tracker) {
+        LOG_FMT_ERROR(log, "readloop.current_memory_tracker is null!");
+    }
 
     try
     {
@@ -500,7 +511,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 recv_msg->req_info = req_info;
                 recv_msg->source_index = req.source_index;
                 bool success = reader->read(packet);
-                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet, current_memory_tracker);
+                recv_msg->packet = std::make_shared<TrackedMppDataPacket>(packet, current_memory_tracker, 2);
                 if (!success)
                     break;
                 has_data = true;

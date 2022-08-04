@@ -25,7 +25,7 @@
 std::atomic<long long> dirty_alloc{0}, dirty_free{0}, alct_cnt{0}, alct_sum{0}, max_alct{0};
 std::atomic<long long> tracked_mem{0}, mt_tracked_mem{0}, tracked_peak{0}, untracked_mem{0}, tot_local_delta{0}, tracked_mem_p2{0}, tracked_mem_t3{0};
 std::atomic<long long> tracked_alloc{0}, tracked_reloc{0}, tracked_free{0}, tracked_alct{0};
-std::atomic<long long> tracked_rec_alloc{0}, tracked_rec_reloc{0}, tracked_rec_free{0};
+std::atomic<long long> tracked_rec_alloc{0}, tracked_rec_reloc{0}, tracked_rec_free{0}, real_rss{0};
 std::unordered_set<MemoryTracker*> root_memtracker_set;
 std::mutex rms_mu;
 MemoryTracker* proc_memory_tracker = nullptr;
@@ -42,6 +42,7 @@ MemoryTracker::~MemoryTracker()
             /// Exception in Poco::Logger, intentionally swallow.
         }
     }
+    // closed = 1;
 
     /** This is needed for next memory tracker to be consistent with sum of all referring memory trackers.
       *
@@ -53,6 +54,7 @@ MemoryTracker::~MemoryTracker()
       *  then memory usage of 'next' memory trackers will be underestimated,
       *  because amount will be decreased twice (first - here, second - when real 'free' happens).
       */
+    // TODO In future, maybe we can use a better way to handle the  "amount > 0" case.
     if (auto value = amount.load(std::memory_order_relaxed))
         free(value);
 }
@@ -139,7 +141,7 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         }
         //TODO revert "tracked_mem > current_limit  ||"
         if (
-            //  (current_limit && tracked_mem.load() > current_limit)  ||
+             (current_limit && real_rss > current_limit + 5LL*1024*1024*1024 && will_be > current_limit - (real_rss-current_limit))  ||
          unlikely(current_limit && will_be > current_limit))
         {
             auto root_amount = amount.load(std::memory_order_relaxed);
@@ -172,8 +174,9 @@ bool MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
-            fmt_buf.fmtAppend(" exceeded: would use {} (attempt to allocate chunk of {} bytes), maximum: {}, amount:{}, tracked_mem: {}, tracked_memp2: {}, tracked_mem_t3:{}, root_amout: {}, untracked_mem: {}, root_cnt:{}, tot_local_delta: {}, mt_tracked_mem:{}",
+            fmt_buf.fmtAppend(" exceeded: would use {}(RSS:{}) (attempt to allocate chunk of {} bytes), maximum: {}, amount:{}, tracked_mem: {}, tracked_memp2: {}, tracked_mem_t3:{}, root_amout: {}, untracked_mem: {}, root_cnt:{}, tot_local_delta: {}, mt_tracked_mem:{}",
                               formatReadableSizeWithBinarySuffix(will_be),
+                              formatReadableSizeWithBinarySuffix(real_rss),
                               size,
                               formatReadableSizeWithBinarySuffix(current_limit),
                               formatReadableSizeWithBinarySuffix(amount.load(std::memory_order_relaxed)),

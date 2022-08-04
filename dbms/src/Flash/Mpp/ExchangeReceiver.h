@@ -124,10 +124,11 @@ public:
         collected = false;
     }
 
+    void setUpConnection();
+    
 private:
     using Request = typename RPCContext::Request;
 
-    void setUpConnection();
     void readLoop(const Request & req);
     void reactor(const std::vector<Request> & async_requests);
 

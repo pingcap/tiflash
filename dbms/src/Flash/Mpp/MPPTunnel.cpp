@@ -48,6 +48,9 @@ MPPTunnelBase<Writer>::MPPTunnelBase(
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
     , mem_tracker(current_memory_tracker)
 {
+    if (!current_memory_tracker) {
+        LOG_ERROR(log, "mpptunnel.current_memory_tracker is null!");
+    }
     RUNTIME_ASSERT(!(is_local && is_async), log, "is_local: {}, is_async: {}.", is_local, is_async);
     GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Increment();
 }
@@ -119,6 +122,12 @@ void MPPTunnelBase<Writer>::finishSendQueue()
 template <typename Writer>
 void MPPTunnelBase<Writer>::close(const String & reason)
 {
+     SCOPE_EXIT({
+            send_queue.finish();
+            MPPDataPacketPtr res;
+            while(send_queue.pop(res)) {
+            }
+        });
     {
         std::unique_lock lk(mu);
         if (finished)
@@ -130,7 +139,7 @@ void MPPTunnelBase<Writer>::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), mem_tracker));
+                    send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), mem_tracker, 1));
                     if (!is_local && is_async)
                         writer->tryFlushOne();
                 }
@@ -161,7 +170,7 @@ void MPPTunnelBase<Writer>::write(const mpp::MPPDataPacket & data, bool close_af
         waitUntilConnectedOrFinished(lk);
         if (finished)
             throw Exception("write to tunnel which is already closed," + consumer_state.getError());
-        if (send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker)))
+        if (send_queue.push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker, 1)))
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -363,6 +372,12 @@ void MPPTunnelBase<Writer>::consumerFinish(const String & err_msg, bool need_loc
     }
     else
         rest_work();
+}
+
+template <typename Writer>
+void MPPTunnelBase<Writer>::updateMemTracker() 
+{
+    mem_tracker = current_memory_tracker;
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

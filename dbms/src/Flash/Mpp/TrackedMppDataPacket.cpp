@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #include "TrackedMppDataPacket.h"
+#include <sstream>
 
-std::atomic<long long> tracked_proto{0};
+std::atomic<long long> tracked_proto{0}, untracked_proto{0};
 namespace DB
 {
  void TrackedMppDataPacket::alloc()
@@ -23,13 +24,12 @@ namespace DB
         {
             try
             {
-                // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
-                // server.context().getGlobalContext().getProcessList().total_memory_tracker.alloc(size);
-                //TrackedMppDataPacket::memory_tracker->alloc(size)
                 if (memory_tracker) {
-                    memory_tracker->alloc(size);
-                //     current_memory_tracker->alloc(size);
-
+                    if (!memory_tracker->alloc(size)) {
+                        std::stringstream ss;
+                        ss<<"[woodyww.alloc]proc_memory_tracker not visited src: "<< src <<", alloc:"<<size;
+                        std::cerr<<ss.str()<<std::endl;
+                    } 
 
                     tracked_proto += size;
                     //update track mem
@@ -38,8 +38,12 @@ namespace DB
                     if (cur_mem > tracked_peak) {
                         tracked_peak = cur_mem;
                     }
+                } else {
+                    std::stringstream ss;
+                    ss<<"[woodyww.alloc]proc_memory_tracker is null src: "<< src <<", alloc:"<<size;
+                    std::cerr<<ss.str()<<std::endl;
+                    untracked_proto += size;
                 }
-                //CurrentMemoryTracker::alloc(size);
                 
             }
             catch (...)
@@ -49,21 +53,26 @@ namespace DB
                 std::rethrow_exception(std::current_exception());
             }
         }
+       
     }
 
-    void TrackedMppDataPacket::trackFree() const
+    void TrackedMppDataPacket::trackFree() 
     {
         if (size && !has_err)
         {
-            // TODO: troubleshoot what cause CurrentMemoryTracker incorrect
             if (memory_tracker) {
+                // if (memory_tracker->closed) {
+                //     std::stringstream ss;
+                //     ss<<"memory_tracker has been closed! source: "<<src;
+                //     std::cerr<<ss.str()<<std::endl;
+                // }
                 memory_tracker->free(size);
-                //     current_memory_tracker->free(size);
 
                 tracked_proto -= size;
                 tracked_mem -= size;
+            } else {
+                untracked_proto -= size;
             }
-            // CurrentMemoryTracker::free(size);
             
         }
     }

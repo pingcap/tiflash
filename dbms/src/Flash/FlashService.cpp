@@ -160,18 +160,20 @@ void FlashService::memCheckJob()
         tracked_peak = tracked_mem.load();
         process_mem_usage(vm_usage, resident_set);
         resident_set*=1024;
+        real_rss = (long long)resident_set;
         LOG_FMT_INFO(log, "mem_check: tracked: {}, limit: {}, proto: {}, glb_mem_track: {},glb_peak:{}, proc_mem:{}, alloc_cnt:{}, reloc_cnt:{}, free_cnt:{}, alloc_rec_cnt:{}, reloc_rec_cnt:{}, free_rec_cnt:{}", 
         tracked_used, limit, cur_tracked_proto, tracked_mem.load(), cur_tracked_peak, resident_set,
         tracked_alloc.load(), tracked_reloc.load(), tracked_free.load(),
         tracked_rec_alloc.load(), tracked_rec_reloc.load(), tracked_rec_free.load());
         max_mem = std::max(max_mem, resident_set);
-        LOG_FMT_INFO(log, "mem_checkV2: tracked: {} GB, allocator: {} GB, dirty_alloc: {} , avg_alloc: {}, max_alloc:{}, proto: {} GB, glb_mem_track: {} GB, glb_peak:{} GB, proc_mem:{} GB, diff:{} GB, max_mem:{} GB, alloc: {} GB, delloc: {} GB", 
+        LOG_FMT_INFO(log, "mem_checkV2: tracked: {} GB, allocator: {} GB, dirty_alloc: {} , avg_alloc: {}, max_alloc:{}, proto: {} GB, untracked_proto: {} GB, glb_mem_track: {} GB, glb_peak:{} GB, proc_mem:{} GB, diff:{} GB, max_mem:{} GB, alloc: {} GB, delloc: {} GB", 
         static_cast<long long>(tracked_used/1024/1024)/1000.0, 
         static_cast<long long>(tracked_alct.load()/1024/1024)/1000.0, 
         static_cast<long long>(dirty_alloc.load()),
         static_cast<long long>(alct_cnt.load()? alct_sum.load()/alct_cnt.load(): 0),
         static_cast<long long>(max_alct.load()),
         static_cast<long long>(cur_tracked_proto/1024/1024)/1000.0,
+        static_cast<long long>(untracked_proto.load()/1024/1024)/1000.0,
         static_cast<long long>(tracked_mem.load()/1024/1024)/1000.0,
         static_cast<long long>(cur_tracked_peak/1024/1024)/1000.0,
         static_cast<long long>(resident_set/1024/1024)/1000.0,
@@ -187,7 +189,7 @@ void FlashService::memCheckJob()
         // std::cerr<<"*******************"<<std::endl;
         // malloc_stats_print(NULL, NULL, NULL);
         // std::cerr<<"*******************"<<std::endl;
-        usleep(1000000);
+        usleep(100000);
     }
     end_fin = true;
 }

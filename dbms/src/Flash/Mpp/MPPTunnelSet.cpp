@@ -76,6 +76,13 @@ void MPPTunnelSetBase<Tunnel>::clearExecutionSummaries(tipb::SelectResponse & re
 }
 
 template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::updateMemTracker()
+{
+    for (size_t i = 0; i < tunnels.size(); ++i)
+        tunnels[i]->updateMemTracker();
+}
+
+template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
     TmpMemTracker tmt(response.ByteSizeLong());

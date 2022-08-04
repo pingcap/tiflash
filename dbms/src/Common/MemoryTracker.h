@@ -22,7 +22,7 @@
 extern std::atomic<long long> dirty_alloc, dirty_free, alct_cnt, alct_sum, max_alct;
 extern std::atomic<long long> tracked_mem, mt_tracked_mem, tracked_peak,untracked_mem, tot_local_delta, tracked_mem_p2, tracked_mem_t3;
 extern std::atomic<long long> tracked_alloc,tracked_reloc, tracked_free, tracked_alct;
-extern std::atomic<long long> tracked_rec_alloc, tracked_rec_reloc, tracked_rec_free;
+extern std::atomic<long long> tracked_rec_alloc, tracked_rec_reloc, tracked_rec_free, real_rss;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;
@@ -38,6 +38,8 @@ class MemoryTracker
     std::atomic<Int64> amount{0};
     std::atomic<Int64> peak{0};
     std::atomic<Int64> limit{0};
+
+    // std::atomic<Int64> closed{0};
 
     /// To test exception safety of calling code, memory tracker throws an exception on each memory allocation with specified probability.
     double fault_probability = 0;

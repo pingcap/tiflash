@@ -30,7 +30,7 @@
 #pragma GCC diagnostic pop
 #include <memory>
 
-extern std::atomic<long long> tracked_proto;
+extern std::atomic<long long> tracked_proto, untracked_proto;
 
 namespace DB
 {
@@ -47,30 +47,25 @@ inline size_t estimateAllocatedSize(const mpp::MPPDataPacket & data)
 
 struct TrackedMppDataPacket
 {
-    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
-        : memory_tracker(memory_tracker)
+    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker, int src)
+        : memory_tracker(memory_tracker), src(src)
     {
         size = estimateAllocatedSize(data);
         alloc();
         packet = std::make_shared<mpp::MPPDataPacket>(data);
     }
 
-    explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_, MemoryTracker * memory_tracker)
-        : memory_tracker(memory_tracker)
+    explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_, MemoryTracker * memory_tracker, int src)
+        : memory_tracker(memory_tracker), src(src)
     {
         size = estimateAllocatedSize(*packet_);
         alloc();
         packet = packet_;
     }
 
-    //    TrackedMppDataPacket()
-    //        : size(0)
-    //        , packet(std::make_shared<mpp::MPPDataPacket>())
-    //    {}
-
     void alloc();
 
-    void trackFree() const;
+    void trackFree();
 
     ~TrackedMppDataPacket()
     {
@@ -78,6 +73,7 @@ struct TrackedMppDataPacket
     }
 
     MemoryTracker * memory_tracker = nullptr;
+    int src = 0;
     int size;
     bool has_err = false;
     std::shared_ptr<mpp::MPPDataPacket> packet;
