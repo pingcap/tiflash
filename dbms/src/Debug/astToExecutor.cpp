@@ -1300,10 +1300,13 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, c
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
     join->set_inner_idx(1);
 
-    for (auto & key : using_expr_list->children)
+    if (using_expr_list)
     {
-        fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
-        fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
+        for (auto & key : using_expr_list->children)
+        {
+            fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
+            fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
+        }
     }
 
     for (auto & expr : left_conds)
