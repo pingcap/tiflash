@@ -331,7 +331,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::DecimalIsFalse, "isFalse"},
     {tipb::ScalarFuncSig::DecimalIsFalseWithNull, "isFalseWithNull"},
 
-    //{tipb::ScalarFuncSig::LeftShift, "cast"},
+    {tipb::ScalarFuncSig::LeftShift, "bitShiftLeft"},
     {tipb::ScalarFuncSig::RightShift, "bitShiftRight"},
 
     //{tipb::ScalarFuncSig::BitCount, "cast"},
