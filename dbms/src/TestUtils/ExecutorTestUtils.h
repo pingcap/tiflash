@@ -100,9 +100,6 @@ protected:
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
-#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                          \
-    TiFlashTestEnv::getGlobalContext().setColumnsForTest(context.executorIdColumnsMap()); \
-    TiFlashTestEnv::getGlobalContext().setMPPTest();                                      \
-    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
+
 
 } // namespace DB::tests

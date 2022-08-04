@@ -17,6 +17,7 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/MockStorage.h>
+
 #include <memory>
 
 namespace DB::tests
@@ -97,10 +98,8 @@ protected:
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
 MockComputeServerManager MPPTaskTestUtils::server_manager;
 
-
-#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                          \
-    TiFlashTestEnv::getGlobalContext().setColumnsForTest(context.executorIdColumnsMap()); \
-    TiFlashTestEnv::getGlobalContext().setMPPTest();                                      \
+#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)     \
+    TiFlashTestEnv::getGlobalContext().setMPPTest(); \
     ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
 
 } // namespace DB::tests

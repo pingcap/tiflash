@@ -28,7 +28,8 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     NamesAndTypes names_and_types;
     size_t rows = 0;
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
-    columns_with_type_and_name = context.columnsForTest(executor_id);
+    columns_with_type_and_name = context.mock_storage.getExchangeColumns(executor_id);
+    
     for (const auto & col : columns_with_type_and_name)
     {
         if (rows == 0)
@@ -67,7 +68,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
     if (context.isMPPTest())
     {
-        columns_with_type_and_name = context.mock_storage.getColumnsForMPP(table_id, 0, 1);
+        columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, 0, 1);
     }
     else
     {

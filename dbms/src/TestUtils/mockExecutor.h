@@ -163,13 +163,7 @@ public:
 private:
     size_t index;
     MockStorage mock_storage;
-    std::unordered_map<String, MockColumnInfoVec> mock_tables;
-    std::unordered_map<String, MockColumnInfoVec> exchange_schemas;
-    // ywq todo replace
-    std::unordered_map<String, ColumnsWithTypeAndName> mock_table_columns;
-    std::unordered_map<String, ColumnsWithTypeAndName> mock_exchange_columns;
-    // ywq todo replace it with mockstorage
-    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>
+    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>, for single source executor test.
 
 public:
     // Currently don't support task_id, so the following to structure is useless,

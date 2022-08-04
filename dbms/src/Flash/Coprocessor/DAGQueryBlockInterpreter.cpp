@@ -494,8 +494,11 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    if (context.columnsForTestEmpty() || context.columnsForTest(query_block.source_name).empty())
+    // ywq todo
+    std::cout << "ywq test source name: " << query_block.source_name << std::endl;
+    if (!context.mock_storage.exchangeExists(query_block.source_name))
     {
+        std::cout << "ywq test reach here..." << std::endl;
         for (size_t i = 0; i < max_streams; ++i)
         {
             // use max_block_size / 10 to determine the mock block's size

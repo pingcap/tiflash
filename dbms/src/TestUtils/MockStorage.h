@@ -42,13 +42,13 @@ private:
 class MockStorage
 {
 public:
-    void addTableSchema(String name, MockColumnInfoVec columnInfos)
+    void addTableSchema(String name, const MockColumnInfoVec & columnInfos)
     {
-        table_schema[name] = columnInfos;
         name_to_id_map[name] = MockTableIdGenerator::getInstance().nextTableId();
+        table_schema[getTableId(name)] = columnInfos;
     }
 
-    void addTableData(String name, ColumnsWithTypeAndName columns)
+    void addTableData(String name, const ColumnsWithTypeAndName & columns)
     {
         table_columns[getTableId(name)] = columns;
     }
@@ -73,7 +73,72 @@ public:
         return {};
     }
 
-    ColumnsWithTypeAndName getColumnsForMPP(Int64 table_id, Int64 partition_id, Int64 partition_num)
+    // ywq todo safety.
+    MockColumnInfoVec getTableSchema(String name)
+    {
+        if (tableExists(getTableId(name)))
+        {
+            return table_schema[getTableId(name)];
+        }
+        return {};
+    }
+
+    /// for exchange receiver
+    void addExchangeSchema(String & exchange_name, const MockColumnInfoVec & columnInfos)
+    {
+        exchange_schemas[exchange_name] = columnInfos;
+    }
+
+    void addExchangeData(const String & exchange_name, ColumnsWithTypeAndName & columns)
+    {
+        exchange_columns[exchange_name] = columns;
+    }
+
+    bool exchangeExists(const String & executor_id)
+    {
+        return exchange_schemas.find(executor_id_to_name_map[executor_id]) != exchange_schemas.end();
+    }
+
+    bool exchangeExistsWithName(const String & name)
+    {
+        return exchange_schemas.find(name) != exchange_schemas.end();
+    }
+
+    ColumnsWithTypeAndName getExchangeColumnsInternal(String & executor_id)
+    {
+        if (exchangeExists(executor_id))
+        {
+            return exchange_columns[executor_id_to_name_map[executor_id]];
+        }
+        return {};
+    }
+
+    ColumnsWithTypeAndName getExchangeColumns(String & executor_id)
+    {
+        std::cout << "ywq test executor id:" << executor_id << ", exchange name: " << executor_id_to_name_map[executor_id] << std::endl;
+        return getExchangeColumnsInternal(executor_id);
+    }
+
+    void addExchangeRelation(String & executor_id, String & exchange_name)
+    {
+        executor_id_to_name_map[executor_id] = exchange_name;
+    }
+
+    // ywq todo safety.
+    // todo check exists.
+    MockColumnInfoVec getExchangeSchema(String exchange_name)
+    {
+        if (exchangeExistsWithName(exchange_name))
+        {
+            std::cout << "ywq test exchange exist with name" << std::endl;
+            return exchange_schemas[exchange_name];
+        }
+        return {};
+    }
+
+    /// for mpp
+
+    ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num)
     {
         if (tableExists(table_id))
         {
@@ -112,12 +177,14 @@ public:
 
 private:
     /// for mock table scan
-    std::unordered_map<String, MockColumnInfoVec> table_schema; // maybe no need
-    std::unordered_map<String, Int64> name_to_id_map; // Map for table_name -> table_id
+    std::unordered_map<String, Int64> name_to_id_map; /// <table_name, table_id>
+    std::unordered_map<Int64, MockColumnInfoVec> table_schema; /// <table_id, columnInfo>
+
     std::unordered_map<Int64, ColumnsWithTypeAndName> table_columns; /// <table_id, columns>
     /// for mock exchange receiver
-    
-
+    std::unordered_map<String, String> executor_id_to_name_map; /// <executor_id, exchange name>
+    std::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
+    std::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
 };
 
 } // namespace DB::tests

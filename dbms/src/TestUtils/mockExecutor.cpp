@@ -344,18 +344,16 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
     mock_storage.addTableSchema(db + "." + table, columnInfos);
-    mock_tables[db + "." + table] = columnInfos;
 }
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
     mock_storage.addTableSchema(name.first + "." + name.second, columnInfos);
-    mock_tables[name.first + "." + name.second] = columnInfos;
 }
 
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos)
 {
-    exchange_schemas[name] = columnInfos;
+    mock_storage.addExchangeSchema(name, columnInfos);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
@@ -370,7 +368,7 @@ void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, C
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
 {
-    mock_exchange_columns[name] = columns;
+    mock_storage.addExchangeData(name, columns);
 }
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
@@ -393,24 +391,15 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
-    // ywq todo bug prone, add more assert..
     auto table_id = mock_storage.getTableId(db_name + "." + table_name);
-    auto builder = DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_tables[db_name + "." + table_name]);
-    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
-    // If user don't want to test executors, it will be safe to run Interpreter Tests.
-    return builder;
+    return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_storage.getTableSchema(db_name + "." + table_name));
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(mock_storage.getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
-    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
-    // If user don't want to test executors, it will be safe to run Interpreter Tests.
-    if (mock_exchange_columns.find(exchange_name) != mock_exchange_columns.end())
-    {
-        executor_id_columns_map[builder.getRoot()->name] = mock_exchange_columns[exchange_name];
-    }
+    mock_storage.addExchangeRelation(builder.getRoot()->name, exchange_name);
     return builder;
 }
 } // namespace DB::tests
