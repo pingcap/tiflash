@@ -1306,6 +1306,30 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, c
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
     }
 
+    for (auto & expr : left_conds)
+    {
+        tipb::Expr * cond = join->add_left_conditions();
+        astToPB(children[0]->output_schema, expr, cond, collator_id, context);
+    }
+
+    for (auto & expr : right_conds)
+    {
+        tipb::Expr * cond = join->add_right_conditions();
+        astToPB(children[0]->output_schema, expr, cond, collator_id, context);
+    }
+
+    for (auto & expr : other_conds)
+    {
+        tipb::Expr * cond = join->add_other_conditions();
+        astToPB(children[0]->output_schema, expr, cond, collator_id, context);
+    }
+
+    for (auto & expr : other_eq_conds_from_in)
+    {
+        tipb::Expr * cond = join->add_other_eq_conditions_from_in();
+        astToPB(children[0]->output_schema, expr, cond, collator_id, context);
+    }
+
     auto * left_child_executor = join->add_children();
     children[0]->toTiPBExecutor(left_child_executor, collator_id, mpp_info, context);
     auto * right_child_executor = join->add_children();
@@ -1691,7 +1715,11 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
     }
 }
 
-ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list)
+ExecutorPtr compileJoin(size_t & executor_index,
+                        ExecutorPtr left,
+                        ExecutorPtr right,
+                        tipb::JoinType tp,
+                        ASTPtr using_expr_list)
 {
     DAGSchema output_schema;
 
@@ -1699,6 +1727,27 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
     auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, using_expr_list);
+    join->children.push_back(left);
+    join->children.push_back(right);
+
+    return join;
+}
+
+ExecutorPtr compileJoin(size_t & executor_index,
+                        ExecutorPtr left,
+                        ExecutorPtr right,
+                        tipb::JoinType tp,
+                        const ASTs & left_conds,
+                        const ASTs & right_conds,
+                        const ASTs & other_conds,
+                        const ASTs & other_eq_conds_from_in)
+{
+    DAGSchema output_schema;
+
+    buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
+    buildRightSideJoinSchema(output_schema, right->output_schema, tp);
+
+    auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, left_conds, right_conds, other_conds, other_eq_conds_from_in);
     join->children.push_back(left);
     join->children.push_back(right);
 
