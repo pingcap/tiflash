@@ -306,9 +306,17 @@ public:
 
     AggregateFunctionSum() = default;
 
-    AggregateFunctionSum(PrecType prec, ScaleType scale)
+    AggregateFunctionSum(PrecType prec, ScaleType scale, bool is_final = false)
     {
-        std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
+        if (is_final)
+        {
+            result_prec = prec;
+            result_scale = scale;
+        }
+        else
+        {
+            std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
+        }
     };
 
     DataTypePtr getReturnType() const override

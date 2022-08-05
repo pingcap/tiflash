@@ -84,6 +84,12 @@ String getAggFuncName(
         return count_second_stage;
     }
 
+    // sum function in mpp has two stage and we need to distinguish them with function name.
+    // "sum" represents the first stage.
+    // "sumWithOverflow" represents the sencond stage.
+    if (agg_func_name == sum_func_name && expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode)
+        return "sumWithOverflow";
+
     return agg_func_name;
 }
 

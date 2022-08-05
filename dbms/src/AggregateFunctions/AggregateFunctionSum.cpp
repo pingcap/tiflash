@@ -17,7 +17,7 @@
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
 #include <fmt/core.h>
-
+#include <tipb/expression.pb.h>
 
 namespace DB
 {
@@ -39,25 +39,34 @@ template <typename T>
 using AggregateFunctionSumKahan = AggregateFunctionSum<T, Float64, AggregateFunctionSumKahanData<Float64>>;
 
 template <typename T>
-AggregateFunctionPtr createDecimalFunction(const IDataType * p)
+AggregateFunctionPtr createDecimalFunction(const IDataType * p, tipb::AggFunctionMode mode)
 {
     if (auto dec_type = typeid_cast<const DataTypeDecimal<T> *>(p))
     {
         PrecType prec = dec_type->getPrec();
         ScaleType scale = dec_type->getScale();
-        auto [result_prec, result_scale] = SumDecimalInferer::infer(prec, scale);
+
+        PrecType result_prec = prec;
+        ScaleType result_scale = scale;
+        bool is_final = true;
+
+        if (mode != tipb::AggFunctionMode::FinalMode) {
+            std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
+            is_final = false;
+        }
         auto result_type = createDecimal(result_prec, result_scale);
+
         if (checkDecimal<Decimal32>(*result_type))
-            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal32>(*dec_type, prec, scale));
+            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal32>(*dec_type, prec, scale, is_final));
 
         if (checkDecimal<Decimal64>(*result_type))
-            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal64>(*dec_type, prec, scale));
+            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal64>(*dec_type, prec, scale, is_final));
 
         if (checkDecimal<Decimal128>(*result_type))
-            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal128>(*dec_type, prec, scale));
+            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal128>(*dec_type, prec, scale, is_final));
 
         if (checkDecimal<Decimal256>(*result_type))
-            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal256>(*dec_type, prec, scale));
+            return AggregateFunctionPtr(createWithDecimalType<AggregateFunctionSumDecimal, Decimal256>(*dec_type, prec, scale, is_final));
     }
     return nullptr;
 }
@@ -67,21 +76,26 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
-
+    
     AggregateFunctionPtr res;
     const IDataType * p = argument_types[0].get();
-    if ((res = createDecimalFunction<Decimal32>(p)) != nullptr) {}
-    else if ((res = createDecimalFunction<Decimal64>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal128>(p)) != nullptr)
-    {
-    }
-    else if ((res = createDecimalFunction<Decimal256>(p)) != nullptr)
-    {
-    }
+
+    tipb::AggFunctionMode mode = tipb::AggFunctionMode::Partial1Mode;
+    if (name == "sumWithOverflow")
+        mode = tipb::AggFunctionMode::FinalMode;
+        
+    if ((res = createDecimalFunction<Decimal32>(p, mode)) != nullptr)
+    {}
+    else if ((res = createDecimalFunction<Decimal64>(p, mode)) != nullptr)
+    {}
+    else if ((res = createDecimalFunction<Decimal128>(p, mode)) != nullptr)
+    {}
+    else if ((res = createDecimalFunction<Decimal256>(p, mode)) != nullptr)
+    {}
     else
+    {
         res = AggregateFunctionPtr(createWithNumericType<Function>(*p));
+    }
 
     if (!res)
         throw Exception(fmt::format("Illegal type {} of argument for aggregate function {}", p->getName(), name), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
