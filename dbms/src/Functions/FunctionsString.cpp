@@ -5503,11 +5503,11 @@ private:
         dst = makeNullable(src->cloneResized(src->size()));
     }
 
-    /// fill the ith element of result column from the element of another src column in the same place
+    /// fill the ith element of result column from the ith element of another column
     /// Note that for efficiency purpose, following preconditions should be satisfied
     /// 1. res_null_map should already have enough size to contain the ith element and its default value should be 0
-    /// 1. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
-    /// 2. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
+    /// 2. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
+    /// 3. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
     static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, size_t dsti)
     {
         if (src->isNullAt(dsti))
