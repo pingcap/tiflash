@@ -5495,7 +5495,7 @@ private:
 
     static void fillResultColumnNull(ColumnPtr & dst, size_t nrow)
     {
-       dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});;
+        dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});;
     }
 
     static void fillResultColumnFromOther(ColumnPtr & dst, const ColumnPtr & src)
@@ -5508,38 +5508,41 @@ private:
     /// 1. res_null_map should already have enough size to contain the ith element and its default value should be 0
     /// 1. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
     /// 2. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
-    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, size_t i)
+    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, size_t dsti)
     {
-        if (src->isNullAt(i))
+        if (src->isNullAt(dsti))
         {
-            res_null_map->getData()[i] = true;
+            res_null_map->getData()[dsti] = true;
             res_chars.push_back(0);
-            res_offsets[i] = i == 0 ? 1 : (res_offsets[i-1] + 1);
+            res_offsets[dsti] = dsti == 0 ? 1 : (res_offsets[dsti-1] + 1);
             return;
         }
 
-        const IColumn * col_nullable_str = src->isColumnConst()
-            ? checkAndGetColumnConst<ColumnString>(src.get(), true)
+        /// no need to set res_null_map, since its default value is 0
+
+        /// src col might be ColumnConst(Nullable(ColumnString)) or Nullable(ColumnString) or ColumnString
+        /// if it is ColumnConst then we should treat its first element as the ith element
+        size_t srci = dsti;
+        const auto * col_nullable_str = src->isColumnConst()
+            ? (srci = 0, checkAndGetColumnConst<ColumnString>(src.get(), true)->getDataColumnPtr().get())
             : src.get();
 
-        /// no need to set res_null_map, since its default value is 0
-        
         const auto * col_str = col_nullable_str->isColumnNullable()
             ? checkAndGetNestedColumn<ColumnString>(col_nullable_str)
-            : checkAndGetColumn<ColumnString>(src.get());
+            : checkAndGetColumn<ColumnString>(col_nullable_str);
         
         const auto & src_data = col_str->getChars();
         const auto & src_offsets = col_str->getOffsets();
 
-        const auto start_offset = StringUtil::offsetAt(src_offsets, i);
-        const auto str_size = StringUtil::sizeAt(src_offsets, i);
+        const auto start_offset = StringUtil::offsetAt(src_offsets, srci);
+        const auto str_size = StringUtil::sizeAt(src_offsets, srci);
 
         const size_t old_size = res_chars.size();
         const size_t new_size = old_size + str_size;
 
         res_chars.resize(new_size);
         memcpy(&res_chars[old_size], &src_data[start_offset], str_size);
-        res_offsets[i] = new_size;
+        res_offsets[dsti] = new_size;
     }
 
     template <typename IntType>
