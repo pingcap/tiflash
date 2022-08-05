@@ -33,6 +33,7 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/predicate.hpp>
+#include <cstring>
 #include <ext/range.h>
 
 namespace DB
@@ -5475,6 +5476,8 @@ public:
     }
 
 private:
+    using NullMapMutablePtr = COWPtrHelper<DB::ColumnVectorHelper, DB::ColumnVector<unsigned char>>::MutablePtr;
+
     template <typename IntType>
     static bool executeElt(Block & block, const ColumnNumbers & arguments, size_t result)
     {
@@ -5490,9 +5493,53 @@ private:
         }
     }
 
-    static void fillResultColumnNull(Block & block, size_t result)
+    static void fillResultColumnNull(ColumnPtr & dst, size_t nrow)
     {
-        block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
+       dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});;
+    }
+
+    static void fillResultColumnFromOther(ColumnPtr & dst, const ColumnPtr & src)
+    {
+        dst = makeNullable(src->cloneResized(src->size()));
+    }
+
+    /// fill the ith element of result column from the element of another src column in the same place
+    /// Note that for efficiency purpose, following preconditions should be satisfied
+    /// 1. res_null_map should already have enough size to contain the ith element and its default value should be 0
+    /// 1. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
+    /// 2. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
+    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, size_t i)
+    {
+        if (src->isNullAt(i))
+        {
+            res_null_map->getData()[i] = true;
+            res_chars.push_back(0);
+            res_offsets[i] = i == 0 ? 1 : (res_offsets[i-1] + 1);
+            return;
+        }
+
+        const IColumn * col_nullable_str = src->isColumnConst()
+            ? checkAndGetColumnConst<ColumnString>(src.get(), true)
+            : src.get();
+
+        /// no need to set res_null_map, since its default value is 0
+        
+        const auto * col_str = col_nullable_str->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnString>(col_nullable_str)
+            : checkAndGetColumn<ColumnString>(src.get());
+        
+        const auto & src_data = col_str->getChars();
+        const auto & src_offsets = col_str->getOffsets();
+
+        const auto start_offset = StringUtil::offsetAt(src_offsets, i);
+        const auto str_size = StringUtil::sizeAt(src_offsets, i);
+
+        const size_t old_size = res_chars.size();
+        const size_t new_size = old_size + str_size;
+
+        res_chars.resize(new_size);
+        memcpy(&res_chars[old_size], &src_data[start_offset], str_size);
+        res_offsets[i] = new_size;
     }
 
     template <typename IntType>
@@ -5502,21 +5549,22 @@ private:
 
         if (col->onlyNull())
         {
-            fillResultColumnNull(block, result);
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
             return true;
         }
 
+        /// get the first argument from the const column which still might be nullable
         const auto arg0 = col->getDataColumnPtr()->isColumnNullable()
             ? checkAndGetNestedColumn<ColumnVector<IntType>>(col->getDataColumnPtr().get())->getInt(0)
             : col->getInt(0);
 
         if (arg0 < 1 || arg0 >= static_cast<Int64>(arguments.size()))
         {
-            fillResultColumnNull(block, result);
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
         }
         else
         {
-            block.getByPosition(result).column = block.getByPosition(arguments[arg0]).column->cloneResized(nrow);
+            fillResultColumnFromOther(block.getByPosition(result).column, block.getByPosition(arg0).column);
         }
         return true;
     }
@@ -5537,8 +5585,12 @@ private:
 
         const auto & arg0_vec = col_arg0->getData();
 
-        auto res_null_map = ColumnUInt8::create(nrow);
+        auto res_null_map = ColumnUInt8::create(nrow, false);
         auto res_col = ColumnString::create();
+        auto & res_chars = res_col->getChars();
+        auto & res_offsets = res_col->getOffsets();
+
+        res_offsets.resize_fill(nrow);
 
         for (size_t i = 0; i < nrow; ++i)
         {
@@ -5547,33 +5599,12 @@ private:
             if (col_arg0->isNullAt(i) || arg0 < 1 || static_cast<Int64>(arg0) >= static_cast<Int64>(narg))
             {
                 res_null_map->getData()[i] = true;
-                res_col->insertDefault();
+                res_chars.push_back(0);
+                res_offsets[i] = i == 0 ? 1 : (res_offsets[i-1] + 1); 
             }
             else
             {
-                const auto arg_pos = arguments[arg0];
-                const auto src_col = block.getByPosition(arg_pos).column.get();
-
-                if (src_col->isNullAt(i))
-                {
-                    res_null_map->getData()[i] = true;
-                    res_col->insertDefault();
-                }
-                else
-                {
-                    res_null_map->getData()[i] = false;
-
-                    const auto col_str = src_col->isColumnNullable()
-                        ? checkAndGetNestedColumn<ColumnString>(src_col)
-                        : checkAndGetColumn<ColumnString>(src_col);
-                    const auto & col_data = col_str->getChars();
-                    const auto & col_offsets = col_str->getOffsets();
-
-                    const auto start_offset = StringUtil::offsetAt(col_offsets, i);
-                    const auto str_size = StringUtil::sizeAt(col_offsets, i);
-
-                    res_col->insertDataWithTerminatingZero(reinterpret_cast<const char *>(&col_data[start_offset]), str_size);
-                }
+                fillResultColumnEntry(res_null_map, res_chars, res_offsets, block.getByPosition(arguments[arg0]).column, i);
             }
         }
 
