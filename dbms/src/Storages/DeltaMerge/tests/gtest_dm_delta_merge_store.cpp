@@ -52,9 +52,10 @@ extern const char force_set_segment_physical_split[];
 extern const char force_set_page_file_write_errno[];
 } // namespace FailPoints
 
+
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
+extern DMFilePtr writeIntoNewDMFile(const DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,
@@ -183,7 +184,7 @@ public:
         return s;
     }
 
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, ExternalDTFileInfo> genDMFile(DMContext & context, const Block & block)
     {
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
@@ -199,15 +200,15 @@ public:
             store_path,
             flags);
 
-
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 
-        auto & pk_column = block.getByPosition(0).column;
+        const auto & pk_column = block.getByPosition(0).column;
         auto min_pk = pk_column->getInt(0);
         auto max_pk = pk_column->getInt(block.rows() - 1);
         HandleRange range(min_pk, max_pk + 1);
 
-        return {RowKeyRange::fromHandleRange(range), {file_id}};
+        const auto row_key_range = RowKeyRange::fromHandleRange(range);
+        return std::make_pair(row_key_range, ExternalDTFileInfo(file_id, row_key_range));
     }
 
 protected:
@@ -238,6 +239,61 @@ try
     }
 }
 CATCH
+
+
+TEST_F(DeltaMergeStoreTest, SegmentBreakpoints)
+try
+{
+    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
+    });
+
+    ASSERT_NE(store, nullptr);
+    auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+
+    {
+        ASSERT_EQ(store->segments.size(), 1);
+        auto bps = store->getSegmentBreakpointsForTest();
+        ASSERT_EQ(bps.size(), 0);
+    }
+    {
+        store->ensureSegmentBreakpointsForTest(
+            dm_context,
+            {RowKeyValue::fromHandle(Handle(100)),
+             RowKeyValue::fromHandle(Handle(10)),
+             RowKeyValue::fromHandle(Handle(-40)),
+             RowKeyValue::fromHandle(Handle(500))});
+    }
+    {
+        ASSERT_EQ(store->segments.size(), 5);
+        auto bps = store->getSegmentBreakpointsForTest();
+        ASSERT_EQ(bps.size(), 4);
+        ASSERT_EQ(bps[0].int_value, -40);
+        ASSERT_EQ(bps[1].int_value, 10);
+        ASSERT_EQ(bps[2].int_value, 100);
+        ASSERT_EQ(bps[3].int_value, 500);
+    }
+    {
+        // One breakpoint is equal to a segment boundary, check whether it does not cause problems.
+        store->ensureSegmentBreakpointsForTest(
+            dm_context,
+            {RowKeyValue::fromHandle(Handle(30)),
+             RowKeyValue::fromHandle(Handle(10))});
+    }
+    {
+        ASSERT_EQ(store->segments.size(), 6);
+        auto bps = store->getSegmentBreakpointsForTest();
+        ASSERT_EQ(bps.size(), 5);
+        ASSERT_EQ(bps[0].int_value, -40);
+        ASSERT_EQ(bps[1].int_value, 10);
+        ASSERT_EQ(bps[2].int_value, 30);
+        ASSERT_EQ(bps[3].int_value, 100);
+        ASSERT_EQ(bps[4].int_value, 500);
+    }
+}
+CATCH
+
 
 TEST_F(DeltaMergeStoreTest, OpenWithExtraColumns)
 try
@@ -400,8 +456,8 @@ try
         default:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-            auto [range, file_ids] = genDMFile(*dm_context, block);
-            store->ingestFiles(dm_context, range, file_ids, false);
+            auto [range, external_file] = genDMFile(*dm_context, block);
+            store->ingestFiles(dm_context, range, SortedExternalDTFileInfos({external_file}), false);
             break;
         }
         }
@@ -704,8 +760,8 @@ try
         default:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-            auto [range, file_ids] = genDMFile(*dm_context, block);
-            store->ingestFiles(dm_context, range, file_ids, false);
+            auto [range, external_file] = genDMFile(*dm_context, block);
+            store->ingestFiles(dm_context, range, SortedExternalDTFileInfos({external_file}), false);
             break;
         }
         }
@@ -805,25 +861,22 @@ try
         case TestMode::V2_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
-            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
-            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto [range1, file1] = genDMFile(*dm_context, block1);
+            auto [range2, file2] = genDMFile(*dm_context, block2);
+            auto [range3, file3] = genDMFile(*dm_context, block3);
             auto range = range1.merge(range2).merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            auto files = std::vector{file1, file2, file3};
+            store->ingestFiles(dm_context, range, SortedExternalDTFileInfos(files), false);
             break;
         }
         case TestMode::V2_Mix:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
-            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto [range1, file1] = genDMFile(*dm_context, block1);
+            auto [range3, file3] = genDMFile(*dm_context, block3);
             auto range = range1.merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            auto files = std::vector{file1, file3};
+            store->ingestFiles(dm_context, range, SortedExternalDTFileInfos(files), false);
 
             store->write(*db_context, db_context->getSettingsRef(), block2);
             break;
@@ -887,14 +940,12 @@ try
         case TestMode::V2_FileOnly:
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
-            auto [range2, file_ids2] = genDMFile(*dm_context, block2);
-            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto [range1, file1] = genDMFile(*dm_context, block1);
+            auto [range2, file2] = genDMFile(*dm_context, block2);
+            auto [range3, file3] = genDMFile(*dm_context, block3);
             auto range = range1.merge(range2).merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            auto files = std::vector{file1, file2, file3};
+            store->ingestFiles(dm_context, range, SortedExternalDTFileInfos(files), false);
             break;
         }
         case TestMode::V2_Mix:
@@ -902,12 +953,11 @@ try
             store->write(*db_context, db_context->getSettingsRef(), block2);
 
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-            auto [range1, file_ids1] = genDMFile(*dm_context, block1);
-            auto [range3, file_ids3] = genDMFile(*dm_context, block3);
+            auto [range1, file1] = genDMFile(*dm_context, block1);
+            auto [range3, file3] = genDMFile(*dm_context, block3);
             auto range = range1.merge(range3);
-            auto file_ids = file_ids1;
-            file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, false);
+            auto files = std::vector{file1, file3};
+            store->ingestFiles(dm_context, range, SortedExternalDTFileInfos(files), false);
             break;
         }
         }
@@ -1216,16 +1266,14 @@ try
         // Prepare DTFiles for ingesting
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
 
-        auto [range1, file_ids1] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 48, false, tso2));
-        auto [range2, file_ids2] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(80, 256, false, tso3));
-
-        auto file_ids = file_ids1;
-        file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
+        auto [range1, file1] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 48, false, tso2));
+        auto [range2, file2] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(80, 256, false, tso3));
+        auto files = std::vector{file1, file2};
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
         // verify that ingest_range must not less than range1.merge(range2)
         ASSERT_ROWKEY_RANGE_EQ(ingest_range, range1.merge(range2).merge(ingest_range));
 
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, SortedExternalDTFileInfos(files), /*clear_data_in_range*/ true);
     }
 
 
@@ -1407,11 +1455,11 @@ try
     {
         // Prepare DTFiles for ingesting
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-        auto [ingest_range, file_ids] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 128, false, tso2));
+        auto [ingest_range, external_file] = genDMFile(*dm_context, DMTestEnv::prepareSimpleWriteBlock(32, 128, false, tso2));
         // Enable failpoint for testing
         FailPointHelper::enableFailPoint(FailPoints::force_set_segment_ingest_packs_fail);
         FailPointHelper::enableFailPoint(FailPoints::segment_merge_after_ingest_packs);
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, SortedExternalDTFileInfos({external_file}), /*clear_data_in_range*/ true);
     }
 
 
@@ -1539,10 +1587,8 @@ try
     // The ingest range is [32, 256)
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-
-        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, SortedExternalDTFileInfos({}), /*clear_data_in_range*/ true);
     }
 
 
@@ -1634,8 +1680,8 @@ try
 
             auto write_as_file = [&]() {
                 auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-                auto [range, file_ids] = genDMFile(*dm_context, block);
-                store->ingestFiles(dm_context, range, file_ids, false);
+                auto [range, external_file] = genDMFile(*dm_context, block);
+                store->ingestFiles(dm_context, range, SortedExternalDTFileInfos({external_file}), false);
             };
 
             switch (mode)
@@ -3612,8 +3658,8 @@ INSTANTIATE_TEST_CASE_P(
     ByPsVerAndPkType,
     DeltaMergeStoreMergeDeltaBySegmentTest,
     ::testing::Combine(
-        ::testing::Values(2, 3),
-        ::testing::Values(DMTestEnv::PkType::HiddenTiDBRowID, DMTestEnv::PkType::CommonHandle, DMTestEnv::PkType::PkIsHandleInt64)),
+        ::testing::Values(/*2, */ 4),
+        ::testing::Values(/*DMTestEnv::PkType::HiddenTiDBRowID, DMTestEnv::PkType::CommonHandle, */ DMTestEnv::PkType::PkIsHandleInt64)),
     [](const testing::TestParamInfo<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>> & info) {
         const auto [ps_ver, pk_type] = info.param;
         return fmt::format("PsV{}_{}", ps_ver, DMTestEnv::PkTypeToString(pk_type));

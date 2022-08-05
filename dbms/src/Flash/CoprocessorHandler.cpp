@@ -140,7 +140,7 @@ grpc::Status CoprocessorHandler::execute()
     }
     catch (const RegionException & e)
     {
-        LOG_FMT_WARNING(log, "RegionException: region {}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_FMT_WARNING(log, "RegionException: region {}, message: {}, stack: {}", cop_request->context().region_id(), e.message(), e.getStackTrace().toString());
         cop_response->Clear();
         errorpb::Error * region_err;
         switch (e.status)

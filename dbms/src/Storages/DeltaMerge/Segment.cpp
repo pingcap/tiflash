@@ -95,7 +95,7 @@ namespace DM
 {
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
-DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
+DMFilePtr writeIntoNewDMFile(const DMContext & dm_context, //
                              const ColumnDefinesPtr & schema_snap,
                              const BlockInputStreamPtr & input_stream,
                              UInt64 file_id,
@@ -148,7 +148,7 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
     return dmfile;
 }
 
-StableValueSpacePtr createNewStable(DMContext & context,
+StableValueSpacePtr createNewStable(const DMContext & context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     PageId stable_id,
@@ -571,7 +571,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, con
     return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
 }
 
-SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
+SegmentPtr Segment::mergeDeltaForTest(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
@@ -656,14 +656,18 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
     return new_me;
 }
 
-SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
+SegmentPair Segment::splitForTest(
+    DMContext & dm_context,
+    const ColumnDefinesPtr & schema_snap,
+    std::optional<RowKeyValue> opt_split_point,
+    Segment::SplitMode split_mode) const
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     auto segment_snap = createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
     if (!segment_snap)
         return {};
 
-    auto split_info_opt = prepareSplit(dm_context, schema_snap, segment_snap, wbs);
+    auto split_info_opt = prepareSplit(dm_context, schema_snap, segment_snap, opt_split_point, split_mode, wbs);
     if (!split_info_opt.has_value())
         return {};
 
@@ -863,31 +867,65 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
 std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
                                                         const ColumnDefinesPtr & schema_snap,
                                                         const SegmentSnapshotPtr & segment_snap,
+                                                        std::optional<RowKeyValue> opt_split_point,
+                                                        Segment::SplitMode split_mode,
                                                         WriteBatches & wbs) const
 {
-    if (!dm_context.enable_logical_split //
-        || segment_snap->stable->getPacks() <= 3 //
-        || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+    if (split_mode == Segment::SplitMode::Auto)
     {
-        return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
+        if (!dm_context.enable_logical_split //
+            || segment_snap->stable->getPacks() <= 3 //
+            || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+        {
+            split_mode = Segment::SplitMode::PreferPhysical;
+        }
+        else
+        {
+            split_mode = Segment::SplitMode::PreferLogical;
+        }
     }
-    else
-    {
-        auto split_point_opt = getSplitPointFast(dm_context, segment_snap->stable);
 
-        bool bad_split_point = !split_point_opt.has_value() || !rowkey_range.check(split_point_opt->toRowKeyValueRef())
-            || compare(split_point_opt->toRowKeyValueRef(), rowkey_range.getStart()) == 0;
+    // When invalid split point is specified in `opt_split_point`, return failures directly,
+    // as this is an invalid argument.
+    if (unlikely(opt_split_point.has_value()))
+    {
+        bool bad_split_point = !rowkey_range.check(opt_split_point->toRowKeyValueRef())
+            || compare(opt_split_point->toRowKeyValueRef(), rowkey_range.getStart()) == 0;
+        if (bad_split_point)
+        {
+            return std::nullopt;
+        }
+    }
+
+    // Logical split must specify a split point.
+    if (split_mode == Segment::SplitMode::PreferLogical && !opt_split_point.has_value())
+    {
+        opt_split_point = getSplitPointFast(dm_context, segment_snap->stable);
+        bool bad_split_point = !opt_split_point.has_value() || !rowkey_range.check(opt_split_point->toRowKeyValueRef())
+            || compare(opt_split_point->toRowKeyValueRef(), rowkey_range.getStart()) == 0;
         if (bad_split_point)
         {
             LOG_FMT_INFO(
                 log,
                 "Got bad split point [{}] for segment {}, fall back to split physical.",
-                (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value"),
+                (opt_split_point.has_value() ? opt_split_point->toRowKeyValueRef().toDebugString() : "no value"),
                 info());
-            return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
+            split_mode = Segment::SplitMode::PreferPhysical;
+            opt_split_point = std::nullopt;
         }
-        else
-            return prepareSplitLogical(dm_context, schema_snap, segment_snap, split_point_opt.value(), wbs);
+    }
+
+    if (split_mode == Segment::SplitMode::PreferPhysical)
+    {
+        return prepareSplitPhysical(dm_context, schema_snap, segment_snap, opt_split_point, wbs);
+    }
+    else if (split_mode == Segment::SplitMode::PreferLogical)
+    {
+        return prepareSplitLogical(dm_context, schema_snap, segment_snap, opt_split_point.value(), wbs);
+    }
+    else
+    {
+        RUNTIME_CHECK(false, "Unexpect split_mode {}", split_mode);
     }
 }
 
@@ -970,9 +1008,11 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     return {SplitInfo{true, split_point, my_stable, other_stable}};
 }
 
+
 std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_context,
                                                                 const ColumnDefinesPtr & schema_snap,
                                                                 const SegmentSnapshotPtr & segment_snap,
+                                                                std::optional<RowKeyValue> opt_split_point,
                                                                 WriteBatches & wbs) const
 {
     LOG_FMT_INFO(log, "Segment [{}] prepare split physical start", segment_id);
@@ -980,11 +1020,17 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
     auto read_info = getReadInfo(dm_context, *schema_snap, segment_snap, {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-    auto split_point_opt = getSplitPointSlow(dm_context, read_info, segment_snap);
-    if (!split_point_opt.has_value())
+
+    const std::optional<RowKeyValue> my_split_point = [&] {
+        if (likely(!opt_split_point.has_value()))
+            return getSplitPointSlow(dm_context, read_info, segment_snap);
+        return opt_split_point;
+    }();
+
+    if (!my_split_point.has_value())
         return {};
 
-    const auto & split_point = split_point_opt.value();
+    const auto & split_point = my_split_point.value();
 
     RowKeyRange my_range(rowkey_range.start, split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
@@ -1133,7 +1179,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     return {new_me, other};
 }
 
-SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
+SegmentPtr Segment::mergeForTest(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
@@ -1177,6 +1223,60 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
 
     wbs.writeAll();
     return merged;
+}
+
+StableValueSpacePtr Segment::prepareReplaceData(DMContext & dm_context, const DMFilePtr & file, WriteBatches & wbs) const
+{
+    LOG_FMT_INFO(log, "Segment [{}] prepare replace data, file={}",
+                 segment_id, file->toString());
+
+    auto & storage_pool = dm_context.storage_pool;
+    auto delegate = dm_context.path_pool.getStableDiskDelegator();
+
+    // Create a ref to the file.
+    auto new_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+    auto ref_file = DMFile::restore(
+        dm_context.db_context.getFileProvider(),
+        file->fileId(),
+        new_page_id,
+        file->parentPath(),
+        DMFile::ReadMetaMode::all());
+    wbs.data.putRefPage(new_page_id, file->pageId());
+
+    auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
+    new_stable->setFiles({ref_file}, rowkey_range, &dm_context);
+    new_stable->saveMeta(wbs.meta);
+
+    LOG_FMT_INFO(log, "Segment [{}] prepare replace data done",
+                 segment_id);
+
+    return new_stable;
+}
+
+SegmentPtr Segment::applyReplaceData(const StableValueSpacePtr new_data, WriteBatches & wbs) const
+{
+    LOG_FMT_INFO(log, "Segment [{}] apply replace data, this_segment={{ {} }}",
+                 segment_id, info());
+
+    // Empty new delta
+    auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId());
+    new_delta->saveMeta(wbs);
+
+    auto new_me = std::make_shared<Segment>(epoch + 1, //
+                                            rowkey_range,
+                                            segment_id,
+                                            next_segment_id,
+                                            new_delta,
+                                            new_data);
+    new_me->serialize(wbs.meta);
+
+    delta->recordRemoveColumnFilesPages(wbs);
+    stable->recordRemovePacksPages(wbs);
+
+    LOG_FMT_INFO(log, "Segment [{}] apply replace data done, this_segment={{ {} }}, new_segment={{ {} }}",
+                 segment_id, info(), new_me->info());
+
+    return new_me;
 }
 
 /// Segments may contain some rows that not belong to its range which is left by previous split operation.

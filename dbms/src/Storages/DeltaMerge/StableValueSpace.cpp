@@ -33,7 +33,7 @@ extern const int LOGICAL_ERROR;
 
 namespace DM
 {
-void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context)
+void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext const * dm_context)
 {
     UInt64 rows = 0;
     UInt64 bytes = 0;

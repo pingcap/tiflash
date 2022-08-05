@@ -179,21 +179,28 @@ inline std::string generateLogMessage(const char * condition, T && fmt_str, Args
 }
 } // namespace exception_details
 
-#define RUNTIME_CHECK(condition, ExceptionType, ...) \
-    do                                               \
-    {                                                \
-        if (unlikely(!(condition)))                  \
-            throw ExceptionType(__VA_ARGS__);        \
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
+#define RUNTIME_CHECK(condition, ...)                                                                    \
+    do                                                                                                   \
+    {                                                                                                    \
+        if (unlikely(!(condition)))                                                                      \
+            throw ::DB::Exception(                                                                       \
+                ::DB::exception_details::generateLogMessage(#condition, "Assert {} fail! " __VA_ARGS__), \
+                ::DB::ErrorCodes::LOGICAL_ERROR);                                                        \
     } while (false)
 
-#define RUNTIME_ASSERT(condition, logger, ...)                                                                      \
-    do                                                                                                              \
-    {                                                                                                               \
-        if (unlikely(!(condition)))                                                                                 \
-        {                                                                                                           \
-            LOG_FATAL((logger), exception_details::generateLogMessage(#condition, "Assert {} fail! " __VA_ARGS__)); \
-            std::terminate();                                                                                       \
-        }                                                                                                           \
+#define RUNTIME_ASSERT(condition, logger, ...)                                                                            \
+    do                                                                                                                    \
+    {                                                                                                                     \
+        if (unlikely(!(condition)))                                                                                       \
+        {                                                                                                                 \
+            LOG_FATAL((logger), ::DB::exception_details::generateLogMessage(#condition, "Assert {} fail! " __VA_ARGS__)); \
+            std::terminate();                                                                                             \
+        }                                                                                                                 \
     } while (false)
 
 } // namespace DB

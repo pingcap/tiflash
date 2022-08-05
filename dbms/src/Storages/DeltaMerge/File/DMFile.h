@@ -270,8 +270,14 @@ public:
 
     String toString() const
     {
-        return "{DMFile, packs: " + DB::toString(getPacks()) + ", rows: " + DB::toString(getRows()) + ", bytes: " + DB::toString(getBytes())
-            + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
+        return fmt::format(
+            "DMFile {{ file_id = {}, page_id = {}, packs = {}, rows = {}, mem_size_bytes = {}, disk_size_bytes = {} }}",
+            fileId(),
+            pageId(),
+            getPacks(),
+            getRows(),
+            getBytes(),
+            getBytesOnDisk());
     }
 
     DMConfigurationOpt & getConfiguration() { return configuration; }

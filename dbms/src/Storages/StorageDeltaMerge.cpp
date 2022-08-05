@@ -800,17 +800,17 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
 }
 
 void StorageDeltaMerge::ingestFiles(
+    const Settings & settings,
     const DM::RowKeyRange & range,
-    const std::vector<UInt64> & file_ids,
-    bool clear_data_in_range,
-    const Settings & settings)
+    const DM::SortedExternalDTFileInfos & external_files,
+    bool clear_data_in_range)
 {
     GET_METRIC(tiflash_storage_command_count, type_ingest).Increment();
     return getAndMaybeInitStore()->ingestFiles(
         global_context,
         settings,
         range,
-        file_ids,
+        external_files,
         clear_data_in_range);
 }
 

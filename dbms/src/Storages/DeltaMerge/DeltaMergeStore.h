@@ -21,6 +21,8 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/StoragePool.h>
@@ -330,19 +332,19 @@ public:
 
     void preIngestFile(const String & parent_path, PageId file_id, size_t file_size);
 
-    void ingestFiles(const DMContextPtr & dm_context, //
+    void ingestFiles(const DMContextPtr & dm_context,
                      const RowKeyRange & range,
-                     const PageIds & file_ids,
+                     const SortedExternalDTFileInfos & external_files,
                      bool clear_data_in_range);
 
-    void ingestFiles(const Context & db_context, //
+    void ingestFiles(const Context & db_context,
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const PageIds & file_ids,
+                     const SortedExternalDTFileInfos & external_files,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
-        return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
+        return ingestFiles(dm_context, range, external_files, clear_data_in_range);
     }
 
     /// Read all rows without MVCC filtering
@@ -387,6 +389,29 @@ public:
     ///
     /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
     std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const TaskRunThread run_thread);
+
+    /**
+     * Ensure segments in the store are split at the specified breakpoints.
+     * This should only be used in test cases to initialize segments as desired.
+     *
+     * Note: you may also want to enable `FailPoints::skip_check_segment_update` to avoid
+     * these segments being merged automatically in the background.
+     */
+    void ensureSegmentBreakpointsForTest(const DMContextPtr & dm_context, const RowKeyValues & breakpoints, bool use_logical_split = false);
+
+    /**
+     * Returns the breakpoints of all segments in the store.
+     * This should only be used in test cases.
+     *
+     * Example:
+     *
+     * Segments                             | Expected Breakpoints
+     * --------------------------------------------------
+     * [-inf, +inf]                         | None
+     * [-inf, 10), [10, +inf)               | 10
+     * [-inf, 10), [10, 30), [30, +inf)     | 10, 30
+     */
+    RowKeyValues getSegmentBreakpointsForTest() const;
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
@@ -453,9 +478,44 @@ private:
     /// Depend on the thread type, the "update" to do may be varied.
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
+    enum class SplitMode
+    {
+        Auto,
+        PreferLogical,
+        PreferPhysical,
+    };
+
+    inline const char * toString(SplitMode mode)
+    {
+        switch (mode)
+        {
+        case SplitMode::Auto:
+            return "Auto";
+        case SplitMode::PreferLogical:
+            return "PreferLogical";
+        case SplitMode::PreferPhysical:
+            return "PreferPhysical";
+        default:
+            return "Unknown";
+        }
+    }
+
     /// Split the segment into two.
     /// After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground, std::optional<RowKeyValue> opt_split_point = std::nullopt, SplitMode opt_split_mode = SplitMode::Auto);
+
+    /**
+     * Clear all data from the segment and use a new DMFile as its (stable layer) data.
+     * The previous segment will be abandoned.
+     *
+     * This function always create a ref to the `file` and does not touch the file itself,
+     * so that one `file` can be shared for multiple calls. It is caller's duty to mark the file
+     * as GCable at an appropriate time.
+     */
+    SegmentPtr segmentReplaceData(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const DMFilePtr & file);
 
     /// Merge two segments into one.
     /// After merging, both segments will be abandoned (with `segment->hasAbandoned() == true`).
@@ -472,6 +532,28 @@ private:
     bool updateGCSafePoint();
 
     bool handleBackgroundTask(bool heavy);
+
+    /**
+     * Ingest DTFiles directly into the stable layer by splitting segments.
+     * This strategy can be used only when the destination range is cleared before ingesting.
+     */
+    std::vector<SegmentPtr> ingestDTFilesUsingSplit(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & range,
+        const SortedExternalDTFileInfos & external_files,
+        const std::vector<DMFilePtr> & files);
+
+    std::vector<SegmentPtr> ingestDTFilesUsingColumnFile(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & range,
+        bool clear_data_in_range,
+        const std::vector<DMFilePtr> & files);
+
+    bool ingestOneDTFileUsingSplit(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const RowKeyRange & ingest_range,
+        const DMFilePtr & file);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
     inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)

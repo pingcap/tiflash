@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
@@ -85,15 +86,15 @@ public:
     /// If there is no segment found by the start key, nullopt is returned.
     ///
     /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
-    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread);
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, DM::DeltaMergeStore::TaskRunThread run_thread);
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
     void ingestFiles(
+        const Settings & settings,
         const DM::RowKeyRange & range,
-        const std::vector<UInt64> & file_ids,
-        bool clear_data_in_range,
-        const Settings & settings);
+        const DM::SortedExternalDTFileInfos & external_files,
+        bool clear_data_in_range);
 
     UInt64 onSyncGc(Int64) override;
 

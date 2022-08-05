@@ -316,14 +316,18 @@ RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src)
 struct PreHandledSnapshotWithFiles
 {
     ~PreHandledSnapshotWithFiles() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<UInt64> && ids_)
+
+    explicit PreHandledSnapshotWithFiles(
+        const RegionPtr & region_,
+        DM::SortedExternalDTFileInfos && external_files_ = {})
         : region(region_)
-        , ingest_ids(std::move(ids_))
+        , external_files(external_files_)
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
     }
+
     RegionPtr region;
-    std::vector<UInt64> ingest_ids; // The file_ids storing pre-handled files
+    DM::SortedExternalDTFileInfos external_files;
 };
 
 RawCppPtr PreHandleSnapshot(
@@ -356,32 +360,12 @@ RawCppPtr PreHandleSnapshot(
         case TiDB::SnapshotApplyMethod::DTFile_Single:
         {
             // Pre-decode and save as DTFiles
-            auto ingest_ids = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
-            auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(ingest_ids)};
+            auto files = kvstore->preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+            auto * res = new PreHandledSnapshotWithFiles{new_region, std::move(files)};
             return GenRawCppPtr(res, RawCppPtrTypeImpl::PreHandledSnapshotWithFiles);
         }
         default:
             throw Exception("Unknow Region apply method: " + applyMethodToString(kvstore->applyMethod()));
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-        exit(-1);
-    }
-}
-
-template <typename PreHandledSnapshot>
-void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot * snap)
-{
-    static_assert(std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>, "Unknown pre-handled snapshot type");
-
-    try
-    {
-        auto & kvstore = server->tmt->getKVStore();
-        if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
-        {
-            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->ingest_ids)}, *server->tmt);
         }
     }
     catch (...)
@@ -398,7 +382,18 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
     case RawCppPtrTypeImpl::PreHandledSnapshotWithFiles:
     {
         auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
-        ApplyPreHandledSnapshot(server, snap);
+        try
+        {
+            auto & kv_store = server->tmt->getKVStore();
+            kv_store->applyPreHandledSnapshot(
+                RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)},
+                *server->tmt);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+            exit(-1);
+        }
         break;
     }
     default:

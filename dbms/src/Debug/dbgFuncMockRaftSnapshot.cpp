@@ -502,7 +502,7 @@ struct GlobalRegionMap
     using Key = std::string;
     using BlockVal = std::pair<RegionPtr, RegionPtrWithBlock::CachePtr>;
     std::unordered_map<Key, BlockVal> regions_block;
-    using SnapPath = std::pair<RegionPtr, std::vector<UInt64>>;
+    using SnapPath = std::pair<RegionPtr, DM::SortedExternalDTFileInfos>;
     std::unordered_map<Key, SnapPath> regions_snap_files;
     std::mutex mutex;
 
@@ -666,17 +666,17 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
-    auto ingest_ids = kvstore->preHandleSnapshotToFiles(
+    auto external_files = kvstore->preHandleSnapshotToFiles(
         new_region,
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
-    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
+    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, external_files});
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
-        output(fmt::format("Generate {} files for [region_id={}]", ingest_ids.size(), region_id));
+        output(fmt::format("Generate {} files for [region_id={}]", external_files.toUnderType().size(), region_id));
     }
 }
 
@@ -763,17 +763,20 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
     FailPointHelper::enableFailPoint(FailPoints::force_set_sst_to_dtfile_block_size);
     FailPointHelper::enableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
 
-    auto ingest_ids = kvstore->preHandleSnapshotToFiles(
+    auto external_files = kvstore->preHandleSnapshotToFiles(
         new_region,
         SSTViewVec{sst_views.data(), sst_views.size()},
         index,
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
-    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, ingest_ids});
+    GLOBAL_REGION_MAP.insertRegionSnap(region_name, {new_region, external_files});
 
     FailPointHelper::disableFailPoint(FailPoints::force_set_safepoint_when_decode_block);
     {
-        output(fmt::format("Generate {} files for [region_id={}]", ingest_ids.size(), region_id));
+        output(fmt::format(
+            "Generate {} files for [region_id={}]",
+            external_files.toUnderType().size(),
+            region_id));
     }
 }
 
@@ -786,10 +789,10 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const
 
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value));
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
-    auto [new_region, ingest_ids] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
+    auto [new_region, external_files] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
-        RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)},
+        RegionPtrWithSnapshotFiles{new_region, std::move(external_files)},
         tmt);
 
     output(fmt::format("success apply region {} with dt files", new_region->id()));

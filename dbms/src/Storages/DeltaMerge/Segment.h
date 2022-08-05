@@ -106,6 +106,13 @@ public:
         StableValueSpacePtr other_stable;
     };
 
+    enum class SplitMode
+    {
+        Auto,
+        PreferPhysical,
+        PreferLogical,
+    };
+
     DISALLOW_COPY_AND_MOVE(Segment);
 
     Segment(
@@ -190,26 +197,84 @@ public:
         const ColumnDefines & columns_to_read);
 
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
-    /// split(), merge() and mergeDelta() are only used in test cases.
+    /// split(), merge() and mergeDelta() should only be used for test cases.
 
-    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    /**
+     * Prepare for the replaceData.
+     *
+     * Note:
+     *
+     * 1. This function is considered to take some amount of time. Try to put it outside a lock.
+     *
+     * 2. This function always create a ref to the given DTFile, and use the ref as the replacement data.
+     *    It is caller's duty to ensure the DTFile is not yet GCed and will be marked as GCable at
+     *    an appropriate time.
+     *
+     * 3. This function does not flush the WriteBatches to the disk. Caller should writeLogAndData
+     *    at an appropriate time.
+     */
+    StableValueSpacePtr prepareReplaceData(
+        DMContext & dm_context,
+        const DMFilePtr & file,
+        WriteBatches & wbs) const;
+
+    /**
+     * Create a new segment based on the current segment but with data replaced.
+     *
+     * Note:
+     * 1. This function is considered to be very fast, safe to be placed in a lock.
+     *
+     * 2. This function does not flush the WriteBatches to the disk. Caller should write
+     *    meta and delete at an appropriate time.
+     */
+    [[nodiscard]] SegmentPtr applyReplaceData(
+        const StableValueSpacePtr new_data,
+        WriteBatches & wbs) const;
+
+    /**
+     * Only used in tests. In real production, use `prepareSplit` and `applySplit` combo.
+     * @param opt_split_point When specified, the segment will be split at the given split point. Otherwise,
+     * a calculated mid point will be used. Usually this field is only used in tests.
+     */
+    [[nodiscard]] SegmentPair splitForTest(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        std::optional<RowKeyValue> opt_split_point = std::nullopt,
+        Segment::SplitMode split_mode = Segment::SplitMode::Auto) const;
+
+    /**
+     * @param opt_split_point When specified, the segment will be split at the given split point. Otherwise,
+     * a calculated mid point will be used. Usually this field is only used in tests.
+     */
     std::optional<SplitInfo> prepareSplit(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_point,
+        Segment::SplitMode split_mode,
         WriteBatches & wbs) const;
 
-    SegmentPair applySplit(
+    std::optional<SplitInfo> prepareSplit(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        const SegmentSnapshotPtr & segment_snap,
+        WriteBatches & wbs) const
+    {
+        return prepareSplit(dm_context, schema_snap, segment_snap, std::nullopt, Segment::SplitMode::Auto, wbs);
+    }
+
+    [[nodiscard]] SegmentPair applySplit(
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         SplitInfo & split_info) const;
 
-    static SegmentPtr merge(
+    static SegmentPtr mergeForTest(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentPtr & left,
         const SegmentPtr & right);
+
     static StableValueSpacePtr prepareMerge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
@@ -218,7 +283,8 @@ public:
         const SegmentPtr & right,
         const SegmentSnapshotPtr & right_snap,
         WriteBatches & wbs);
-    static SegmentPtr applyMerge(
+
+    [[nodiscard]] static SegmentPtr applyMerge(
         DMContext & dm_context,
         const SegmentPtr & left,
         const SegmentSnapshotPtr & left_snap,
@@ -231,14 +297,15 @@ public:
     ///
     /// Note: This is only a shortcut function used in tests.
     /// Normally you should call `prepareMergeDelta`, `applyMergeDelta` instead.
-    SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    [[nodiscard]] SegmentPtr mergeDeltaForTest(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
 
     StableValueSpacePtr prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
-    SegmentPtr applyMergeDelta(
+
+    [[nodiscard]] SegmentPtr applyMergeDelta(
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
@@ -273,6 +340,10 @@ public:
     using Lock = DeltaValueSpace::Lock;
     bool getUpdateLock(Lock & lock) const { return delta->getLock(lock); }
 
+    /**
+     * Lock this segment for an segment-level update. Note: Segment member functions never lock this segment
+     * itself. The lock is usually owned by the DeltaMergeStore.
+     */
     Lock mustGetUpdateLock() const
     {
         Lock lock;
@@ -295,7 +366,7 @@ public:
     /// The abandon state is usually triggered by the DeltaMergeStore.
     bool hasAbandoned() { return delta->hasAbandoned(); }
 
-    bool isSplitForbidden() { return split_forbidden; }
+    bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
 
     void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
@@ -312,7 +383,12 @@ public:
 
     void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
+#endif
+
     ReadInfo getReadInfo(
         const DMContext & dm_context,
         const ColumnDefines & read_columns,
@@ -354,10 +430,16 @@ private:
         const SegmentSnapshotPtr & segment_snap,
         RowKeyValue & split_point,
         WriteBatches & wbs) const;
+
+    /**
+     * @param opt_split_point When specified, the segment will be split at the given split point. Otherwise,
+     * a calculated mid point will be used. Usually this field is only used in tests.
+     */
     std::optional<SplitInfo> prepareSplitPhysical(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_point,
         WriteBatches & wbs) const;
 
 
@@ -396,12 +478,12 @@ private:
         bool relevant_place) const;
 
 private:
-    /// The version of this segment. After split / merge / merge delta, epoch got increased by 1.
+    /// The version of this segment. After split / merge / merge delta / replace data, epoch got increased by 1.
     const UInt64 epoch;
 
-    RowKeyRange rowkey_range;
-    bool is_common_handle;
-    size_t rowkey_column_size;
+    const RowKeyRange rowkey_range;
+    const bool is_common_handle;
+    const size_t rowkey_column_size;
     const PageId segment_id;
     const PageId next_segment_id;
 

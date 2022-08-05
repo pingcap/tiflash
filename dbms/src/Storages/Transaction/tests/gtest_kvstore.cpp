@@ -1055,24 +1055,28 @@ void RegionKVStoreTest::testKVStore()
         {
             {
                 auto region = makeRegion(22, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
-                auto ingest_ids = kvs.preHandleSnapshotToFiles(
+                auto external_files = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
                     9,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
+                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
+                    RegionPtrWithSnapshotFiles{region, std::move(external_files)},
+                    ctx.getTMTContext());
             }
             try
             {
                 auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
-                auto ingest_ids = kvs.preHandleSnapshotToFiles(
+                auto external_files = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
                     9,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, but not tombstone
+                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
+                    RegionPtrWithSnapshotFiles{region, std::move(external_files)},
+                    ctx.getTMTContext()); // overlap, but not tombstone
                 ASSERT_TRUE(false);
             }
             catch (Exception & e)
@@ -1090,13 +1094,15 @@ void RegionKVStoreTest::testKVStore()
                 try
                 {
                     auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
-                    auto ingest_ids = kvs.preHandleSnapshotToFiles(
+                    auto external_files = kvs.preHandleSnapshotToFiles(
                         region,
                         {},
                         10,
                         5,
                         ctx.getTMTContext());
-                    kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
+                    kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
+                        RegionPtrWithSnapshotFiles{region, std::move(external_files)},
+                        ctx.getTMTContext());
                     ASSERT_TRUE(false);
                 }
                 catch (Exception & e)
@@ -1112,13 +1118,15 @@ void RegionKVStoreTest::testKVStore()
                     s;
                 }));
                 auto region = makeRegion(20, RecordKVFormat::genKey(55, 50), RecordKVFormat::genKey(55, 100));
-                auto ingest_ids = kvs.preHandleSnapshotToFiles(
+                auto external_files = kvs.preHandleSnapshotToFiles(
                     region,
                     {},
                     10,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, tombstone, remove previous one
+                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
+                    RegionPtrWithSnapshotFiles{region, std::move(external_files)},
+                    ctx.getTMTContext()); // overlap, tombstone, remove previous one
 
                 auto state = proxy_helper.getRegionLocalState(8192);
                 ASSERT_EQ(state.state(), raft_serverpb::PeerState::Tombstone);

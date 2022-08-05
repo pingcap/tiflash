@@ -43,7 +43,7 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
 PageId SegmentTestBasic::createNewSegmentWithSomeData()
 {
     SegmentPtr new_segment;
-    std::tie(root_segment, new_segment) = root_segment->split(dmContext(), tableColumns());
+    std::tie(root_segment, new_segment) = root_segment->splitForTest(dmContext(), tableColumns());
 
     const size_t num_rows_write_per_batch = 100;
     {
@@ -110,7 +110,7 @@ std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id)
     auto origin_segment = segments[segment_id];
     size_t origin_segment_row_num = getSegmentRowNum(segment_id);
     SegmentPtr segment, new_segment;
-    std::tie(segment, new_segment) = origin_segment->split(dmContext(), tableColumns());
+    std::tie(segment, new_segment) = origin_segment->splitForTest(dmContext(), tableColumns());
     if (new_segment)
     {
         segments[new_segment->segmentId()] = new_segment;
@@ -131,7 +131,7 @@ void SegmentTestBasic::mergeSegment(PageId left_segment_id, PageId right_segment
     size_t right_segment_row_num = getSegmentRowNum(right_segment_id);
     LOG_FMT_TRACE(&Poco::Logger::root(), "merge in segment:{}:{} and {}:{}", left_segment->segmentId(), left_segment_row_num, right_segment->segmentId(), right_segment_row_num);
 
-    SegmentPtr merged_segment = Segment::merge(dmContext(), tableColumns(), left_segment, right_segment);
+    SegmentPtr merged_segment = Segment::mergeForTest(dmContext(), tableColumns(), left_segment, right_segment);
     segments[merged_segment->segmentId()] = merged_segment;
     auto it = segments.find(right_segment->segmentId());
     if (it != segments.end())
@@ -145,7 +145,7 @@ void SegmentTestBasic::mergeSegmentDelta(PageId segment_id)
 {
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNum(segment_id);
-    SegmentPtr merged_segment = segment->mergeDelta(dmContext(), tableColumns());
+    SegmentPtr merged_segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     segments[merged_segment->segmentId()] = merged_segment;
     EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), segment_row_num);
 }

@@ -130,7 +130,7 @@ struct RowKeyValue
         return std::make_shared<DecodedTiKVKey>(prefix + *value);
     }
 
-    bool operator==(const RowKeyValue & v)
+    bool operator==(const RowKeyValue & v) const
     {
         return is_common_handle == v.is_common_handle && (*value) == (*v.value) && int_value == v.int_value;
     }
@@ -610,7 +610,47 @@ struct RowKeyRange
 
     inline void setStart(const RowKeyValue & value) { start = value; }
 
+    inline void setStart(const RowKeyValueRef & value) { start = value.toRowKeyValue(); }
+
+    /**
+     * Set the start to a larger or equal key. If the given key is smaller, exception is thrown.
+     */
+    inline void shrinkStartChecked(const RowKeyValue & value)
+    {
+        RUNTIME_CHECK(
+            compare(value.toRowKeyValueRef(), getStart()) >= 0,
+            "new_start = {}, old_start = {}",
+            value.toDebugString(),
+            start.toDebugString());
+        setStart(value);
+    }
+
+    inline void shrinkStartChecked(const RowKeyValueRef & value)
+    {
+        shrinkStartChecked(value.toRowKeyValue());
+    }
+
     inline void setEnd(const RowKeyValue & value) { end = value; }
+
+    inline void setEnd(const RowKeyValueRef & value) { end = value.toRowKeyValue(); }
+
+    /**
+     * Set the end to a smaller or equal key. If the given key is larger, exception is thrown.
+     */
+    inline void shrinkEndChecked(const RowKeyValue & value)
+    {
+        RUNTIME_CHECK(
+            compare(value.toRowKeyValueRef(), getStart()) <= 0,
+            "new_end = {}, old_end = {}",
+            value.toDebugString(),
+            end.toDebugString());
+        setEnd(value);
+    }
+
+    inline void shrinkEndChecked(const RowKeyValueRef & value)
+    {
+        shrinkEndChecked(value.toRowKeyValue());
+    }
 
     inline bool intersect(const RowKeyRange & other) const
     {

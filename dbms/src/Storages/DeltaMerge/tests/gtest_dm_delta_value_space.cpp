@@ -33,7 +33,7 @@ namespace DB
 {
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
+extern DMFilePtr writeIntoNewDMFile(const DMContext & dm_context, //
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
                                     UInt64 file_id,

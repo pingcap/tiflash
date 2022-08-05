@@ -143,7 +143,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext(), tableColumns());
+            segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
         }
 
         {
@@ -192,7 +192,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext(), tableColumns());
+            segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
         }
 
         {
@@ -262,7 +262,7 @@ try
         {
             // flush segment
             ASSERT_EQ(segment->getDelta()->getRows(), num_rows_write);
-            segment = segment->mergeDelta(dmContext(), tableColumns());
+            segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
             ASSERT_EQ(segment->getStable()->getRows(), num_rows_write);
         }
 
@@ -314,7 +314,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext(), tableColumns());
+            segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
             ASSERT_EQ(segment->getStable()->getRows(), num_rows_write + num_rows_write_2);
         }
 
@@ -383,7 +383,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -443,7 +443,7 @@ try
 
     {
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -453,13 +453,13 @@ try
         // TODO test delete range not included by segment
 
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -501,7 +501,7 @@ try
                                                          rowkey_column_size);
         segment->write(dmContext(), std::move(block));
         // flush [0, 50) to segment's stable
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     auto [read_before_delete, merge_delta_after_delete] = GetParam();
@@ -544,7 +544,7 @@ try
     if (merge_delta_after_delete)
     {
         // flush segment for apply delete range
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -592,14 +592,14 @@ try
 
     {
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
         // Test delete range [70, 100)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(70, 100, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -629,7 +629,7 @@ try
         // Test delete range [63, 70)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(63, 70, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -658,7 +658,7 @@ try
         // Test delete range [1, 32)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -686,7 +686,7 @@ try
         // delete should be idempotent
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(1, 32, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -714,7 +714,7 @@ try
         // There is an overlap range [0, 1)
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 2, rowkey_column_size)});
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     {
@@ -775,7 +775,7 @@ try
     SegmentPtr new_segment;
     // test split segment
     {
-        std::tie(segment, new_segment) = segment->split(dmContext(), tableColumns());
+        std::tie(segment, new_segment) = segment->splitForTest(dmContext(), tableColumns());
     }
     // check segment range
     const auto s1_range = segment->getRowKeyRange();
@@ -813,7 +813,7 @@ try
     // TODO: enable merge test!
     if (false)
     {
-        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
+        segment = Segment::mergeForTest(dmContext(), tableColumns(), segment, new_segment);
         {
             // check merged segment range
             const auto & merged_range = segment->getRowKeyRange();
@@ -908,7 +908,7 @@ try
                                                          rowkey_column_size);
         segment->write(dmContext(), std::move(block));
         // flush segment
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
     }
 
     SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
@@ -980,7 +980,7 @@ try
 
         {
             // flush segment
-            segment = segment->mergeDelta(dmContext(), tableColumns());
+            segment = segment->mergeDeltaForTest(dmContext(), tableColumns());
         }
 
         for (size_t i = (num_batches_written - 1) * num_rows_per_write + 2; i < num_batches_written * num_rows_per_write; i++)

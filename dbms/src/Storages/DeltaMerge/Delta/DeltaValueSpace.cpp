@@ -206,7 +206,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         if (!flush_task->commit(persisted_file_set, wbs))
         {
             wbs.rollbackWrittenLogAndData();
-            LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
+            LOG_FMT_DEBUG(log, "{} Flush stop because structure got updated", simpleInfo());
             return false;
         }
 

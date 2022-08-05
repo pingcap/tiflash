@@ -65,7 +65,7 @@ void SSTFilesToBlockInputStream::readPrefix()
 {
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
-        auto & snapshot = snaps.views[i];
+        const auto & snapshot = snaps.views[i];
         switch (snapshot.type)
         {
         case ColumnFamilyType::Default:

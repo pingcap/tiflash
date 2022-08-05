@@ -14,9 +14,14 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionManager.h>
 #include <Storages/Transaction/StorageEngineType.h>
+
+#include "RegionTable.h"
 
 namespace TiDB
 {
@@ -108,20 +113,37 @@ public:
         TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    /**
+     * A handy shortcut for { preHandleSnapshotToFiles + applyPreHandledSnapshot }.
+     * Note: This function is no longer used in the Proxy path and is only used in tests.
+     */
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
-    std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
+    /**
+     * The snapshot applying process is separated into two steps: PreHandle and ApplyPreHandled.
+     * - The PreHandle step (this function) is time consuming and should be parallelized.
+     *   During this step, the snapshot files (in row format) are transformed into DTFiles (in column format).
+     * - The ApplyPreHandled step is relatively lightweight and must be performed in serial.
+     *
+     * Snapshots are transformed into multiple DTFiles. The file ids and handle ranges of each
+     * DTFiles are returned.
+     */
+    DM::SortedExternalDTFileInfos preHandleSnapshotToFiles(
         RegionPtr new_region,
-        const SSTViewVec,
+        SSTViewVec,
         uint64_t index,
         uint64_t term,
         TMTContext & tmt);
-    template <typename RegionPtrWrap>
-    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+
+    /**
+     * Apply DTFiles that is produced by `preHandleSnapshotToFiles` previously.
+     * See `preHandleSnapshotToFiles` for details.
+     */
+    void applyPreHandledSnapshot(const RegionPtrWithSnapshotFiles &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
-    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
@@ -182,20 +204,29 @@ private:
     StoreMeta & getStore();
     const StoreMeta & getStore() const;
 
-    std::vector<UInt64> preHandleSSTsToDTFiles(
+    /**
+     * Reads data from SSTFiles and generate DTFile(s) for committed data.
+     * Returns the ids and info of DTFile(s), the uncommitted data will be inserted to `new_region`.
+     */
+    DM::SortedExternalDTFileInfos preHandleSSTsToDTFiles(
         RegionPtr new_region,
-        const SSTViewVec,
+        SSTViewVec,
         uint64_t index,
         uint64_t term,
         DM::FileConvertJobType,
         TMTContext & tmt);
 
+    /**
+     * Apply the snapshot to the region. When applying snapshot to an existing region, the region
+     * will be marked as "Applying" which will effectively reject new requests until the applying
+     * process is finished.
+     */
     template <typename RegionPtrWrap>
     void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
     template <typename RegionPtrWrap>
     void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
-    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    RegionPtr handleIngestSSTByDTFile(const RegionPtr & region, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
 
     // Remove region from this TiFlash node.
     // If region is destroy or moved to another node(change peer),

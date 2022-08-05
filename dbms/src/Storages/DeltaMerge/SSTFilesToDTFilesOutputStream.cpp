@@ -38,7 +38,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int ILLFORMAT_RAFT_ROW;
+extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
 namespace DM
@@ -49,6 +49,8 @@ SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
     TiDB::SnapshotApplyMethod method_,
     FileConvertJobType job_type_,
+    UInt64 split_after_rows_,
+    UInt64 split_after_size_,
     TMTContext & tmt_)
     : child(std::move(child_))
     , //
@@ -56,6 +58,8 @@ SSTFilesToDTFilesOutputStream::SSTFilesToDTFilesOutputStream( //
     , schema_snap(std::move(schema_snap_))
     , method(method_)
     , job_type(job_type_)
+    , split_after_rows(split_after_rows_)
+    , split_after_size(split_after_size_)
     , tmt(tmt_)
     , log(&Poco::Logger::get("SSTFilesToDTFilesOutputStream"))
 {
@@ -66,8 +70,8 @@ SSTFilesToDTFilesOutputStream::~SSTFilesToDTFilesOutputStream() = default;
 void SSTFilesToDTFilesOutputStream::writePrefix()
 {
     child->readPrefix();
-
-    commit_rows = 0;
+    total_committed_rows = 0;
+    total_committed_bytes = 0;
     watch.start();
 }
 
@@ -75,20 +79,7 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
 {
     child->readSuffix();
 
-    if (dt_stream != nullptr)
-    {
-        dt_stream->writeSuffix();
-        auto dt_file = dt_stream->getFile();
-        assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
-        // Add the DTFile to StoragePathPool so that we can restore it later
-        const auto bytes_written = dt_file->getBytesOnDisk();
-        storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
-
-        // Report DMWriteBytes for calculating write amplification
-        ProfileEvents::increment(ProfileEvents::DMWriteBytes, bytes_written);
-
-        dt_stream.reset();
-    }
+    finalizeDTFileStream();
 
     const auto process_keys = child->getProcessKeys();
     if (job_type == FileConvertJobType::ApplySnapshot)
@@ -102,13 +93,24 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         // Note that number of keys in different cf will be aggregated into one metrics
         GET_METRIC(tiflash_raft_process_keys, type_ingest_sst).Increment(process_keys.total());
     }
+
+    LOG_FMT_INFO(log, "Begin print all DTFile ranges...");
+    const auto & files = outputFiles().toUnderType();
+    for (const auto & f : files)
+    {
+        LOG_FMT_INFO(log, "{}", f.toString());
+    }
+    LOG_FMT_INFO(log, "Finish print all DTFile ranges...");
+
+
     LOG_FMT_INFO(
         log,
-        "Pre-handle snapshot {} to {} DTFiles, cost {}ms [rows={}] [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
+        "Pre-handle snapshot {} to {} DTFiles, cost {}ms [rows={}] [bytes={}] [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
         child->getRegion()->toString(true),
         ingest_files.size(),
         watch.elapsedMilliseconds(),
-        commit_rows,
+        total_committed_rows,
+        total_committed_bytes,
         process_keys.write_cf,
         process_keys.default_cf,
         process_keys.lock_cf);
@@ -116,6 +118,11 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
 
 bool SSTFilesToDTFilesOutputStream::newDTFileStream()
 {
+    if (unlikely(dt_stream != nullptr))
+    {
+        throw Exception("Expect dt_stream to be nullptr", ErrorCodes::LOGICAL_ERROR);
+    }
+
     // Generate a DMFilePtr and its DMFileBlockOutputStream
     DMFileBlockOutputStream::Flags flags;
     switch (method)
@@ -139,15 +146,68 @@ bool SSTFilesToDTFilesOutputStream::newDTFileStream()
     }
 
     auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile(), storage->createChecksumConfig(flags.isSingleFile()));
-    LOG_FMT_INFO(
-        log,
-        "Create file for snapshot data {} [file={}] [single_file_mode={}]",
-        child->getRegion()->toString(true),
-        dt_file->path(),
-        flags.isSingleFile());
     dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *(schema_snap->column_defines), flags);
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
+    {
+        if (ingest_files_range.empty())
+        {
+            ingest_files_range.emplace_back(RowKeyRange::newAll(
+                schema_snap->is_common_handle,
+                schema_snap->rowkey_column_size));
+        }
+        else
+        {
+            ingest_files_range.emplace_back(RowKeyRange::startFrom(
+                ingest_files_range.back().getEnd(),
+                schema_snap->is_common_handle,
+                schema_snap->rowkey_column_size));
+        }
+    }
+
+    committed_rows_this_dt_file = 0;
+    committed_bytes_this_dt_file = 0;
+
+    LOG_FMT_INFO(
+        log,
+        "Create DTFile for snapshot data {} [file_idx={}] [file={}] [single_file_mode={}]",
+        child->getRegion()->toString(true),
+        ingest_files.size() - 1,
+        dt_file->path(),
+        flags.isSingleFile());
+
+    return true;
+}
+
+bool SSTFilesToDTFilesOutputStream::finalizeDTFileStream()
+{
+    if (unlikely(dt_stream == nullptr))
+    {
+        // Maybe error happened in `newDTFileStream`, or no data has been written since last finalize.
+        return false;
+    }
+
+    dt_stream->writeSuffix();
+    auto dt_file = dt_stream->getFile();
+    assert(!dt_file->canGC()); // The DTFile should not be able to gc until it is ingested.
+    // Add the DTFile to StoragePathPool so that we can restore it later
+    const auto bytes_written = dt_file->getBytesOnDisk();
+    storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
+
+    // Report DMWriteBytes for calculating write amplification
+    ProfileEvents::increment(ProfileEvents::DMWriteBytes, bytes_written);
+    dt_stream.reset();
+
+    LOG_FMT_INFO(
+        log,
+        "Finished write DTFile for snapshot data {} [file_idx={}] [file={}] [rows={}] [bytes={}] [bytes_on_disk={}]",
+        child->getRegion()->toString(true),
+        ingest_files.size() - 1,
+        dt_file->path(),
+        committed_rows_this_dt_file,
+        committed_bytes_this_dt_file,
+        bytes_written);
+
     return true;
 }
 
@@ -164,6 +224,12 @@ void SSTFilesToDTFilesOutputStream::write()
             break;
         if (unlikely(block.rows() == 0))
             continue;
+
+        LOG_FMT_INFO(
+            log,
+            "WENXUAN --- SSTFilesToDTFilesOutputStream::write got {} rows ({} bytes) from child",
+            block.rows(),
+            block.bytes());
 
         if (dt_stream == nullptr)
         {
@@ -203,28 +269,55 @@ void SSTFilesToDTFilesOutputStream::write()
             }
         }
 
+        // TODO: Add checks to ensure that order is maintained intra blocks.
+        updateRange(block);
+
         // Write block to the output stream
         DMFileBlockOutputStream::BlockProperty property;
         std::tie(cur_effective_num_rows, cur_not_clean_rows, property.gc_hint_version) //
             = child->getMvccStatistics();
         property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
         property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
-        dt_stream->write(block, property);
-
-        commit_rows += block.rows();
         last_effective_num_rows = cur_effective_num_rows;
         last_not_clean_rows = cur_not_clean_rows;
+        dt_stream->write(block, property);
+
+        auto rows = block.rows();
+        auto bytes = block.bytes();
+        total_committed_rows += rows;
+        total_committed_bytes += bytes;
+        committed_rows_this_dt_file += rows;
+        committed_bytes_this_dt_file += bytes;
+        auto should_split_dt_file = ((split_after_rows > 0 && committed_rows_this_dt_file >= split_after_rows) || //
+                                     (split_after_size > 0 && committed_bytes_this_dt_file >= split_after_size));
+        if (should_split_dt_file)
+        {
+            finalizeDTFileStream();
+        }
     }
 }
 
-PageIds SSTFilesToDTFilesOutputStream::ingestIds() const
+SortedExternalDTFileInfos SSTFilesToDTFilesOutputStream::outputFiles() const
 {
-    PageIds ids;
-    for (const auto & file : ingest_files)
+    if (unlikely(ingest_files.size() != ingest_files_range.size()))
     {
-        ids.emplace_back(file->fileId());
+        throw Exception(
+            fmt::format(
+                "Expect ingest_files.size() == ingest_files_range.size(), but got {} != {}",
+                ingest_files.size(),
+                ingest_files_range.size()),
+            ErrorCodes::LOGICAL_ERROR);
     }
-    return ids;
+
+    auto files = std::vector<ExternalDTFileInfo>{};
+    files.reserve(ingest_files.size());
+    for (size_t i = 0; i < ingest_files.size(); i++)
+    {
+        files.emplace_back(
+            ingest_files[i]->fileId(),
+            ingest_files_range[i]);
+    }
+    return SortedExternalDTFileInfos(std::move(files));
 }
 
 void SSTFilesToDTFilesOutputStream::cancel()
@@ -239,6 +332,48 @@ void SSTFilesToDTFilesOutputStream::cancel()
         catch (...)
         {
             tryLogCurrentException(log, fmt::format("ignore exception while canceling SST files to DeltaTree files stream [file={}]", file->path()));
+        }
+    }
+}
+
+void SSTFilesToDTFilesOutputStream::updateRange(Block & block)
+{
+    // TODO: Now we update the rangeEnd for every block. We can update the rangeEnd only once,
+    //  just before a new DTFile is going to be created.
+
+    const auto & pk_col = block.getByName(MutableSupport::tidb_pk_column_name);
+    const auto rowkey_column = RowKeyColumnContainer(pk_col.column, schema_snap->is_common_handle);
+    auto & current_range = ingest_files_range.back();
+
+    {
+        auto const first_handle = rowkey_column.getRowKeyValue(0);
+        if (current_range.isStartInfinite())
+        {
+            current_range.setStart(first_handle);
+        }
+        else if (unlikely(compare(first_handle, current_range.getStart()) < 0))
+        {
+            // As our range is right-open, it is very possible that the last range's end == new block's first row.
+            // So we only check for the `<` order.
+            throw Exception("The new block's first row < previous block's first row");
+        }
+    }
+    {
+        auto const last_handle_end = rowkey_column.getRowKeyValue(pk_col.column->size() - 1) //
+                                         .toRowKeyValue()
+                                         .toPrefixNext(); // because range is right-open.
+        if (current_range.isEndInfinite())
+        {
+            current_range.setEnd(last_handle_end);
+        }
+        else if (unlikely(compare(last_handle_end.toRowKeyValueRef(), current_range.getEnd()) <= 0))
+        {
+            throw Exception("The new block's last row <= previous block's last row");
+        }
+        else
+        {
+            // the new last_handle > current last_handle, update to the new last_handle.
+            current_range.setEnd(last_handle_end);
         }
     }
 }
