@@ -5508,7 +5508,7 @@ private:
     /// 1. res_null_map should already have enough size to contain the ith element and its default value should be 0
     /// 2. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
     /// 3. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
-    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, size_t dsti)
+    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, const size_t dsti)
     {
         if (src->isNullAt(dsti))
         {
