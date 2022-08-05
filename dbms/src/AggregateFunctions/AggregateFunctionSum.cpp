@@ -50,7 +50,8 @@ AggregateFunctionPtr createDecimalFunction(const IDataType * p, tipb::AggFunctio
         ScaleType result_scale = scale;
         bool is_final = true;
 
-        if (mode != tipb::AggFunctionMode::FinalMode) {
+        if (mode != tipb::AggFunctionMode::FinalMode)
+        {
             std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
             is_final = false;
         }
@@ -76,22 +77,26 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
-    
+
     AggregateFunctionPtr res;
     const IDataType * p = argument_types[0].get();
 
     tipb::AggFunctionMode mode = tipb::AggFunctionMode::Partial1Mode;
     if (name == "sumWithOverflow")
         mode = tipb::AggFunctionMode::FinalMode;
-        
+
     if ((res = createDecimalFunction<Decimal32>(p, mode)) != nullptr)
-    {}
+    {
+    }
     else if ((res = createDecimalFunction<Decimal64>(p, mode)) != nullptr)
-    {}
+    {
+    }
     else if ((res = createDecimalFunction<Decimal128>(p, mode)) != nullptr)
-    {}
+    {
+    }
     else if ((res = createDecimalFunction<Decimal256>(p, mode)) != nullptr)
-    {}
+    {
+    }
     else
     {
         res = AggregateFunctionPtr(createWithNumericType<Function>(*p));
