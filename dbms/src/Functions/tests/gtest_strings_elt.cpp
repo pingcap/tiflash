@@ -60,7 +60,7 @@ try
                    dummy_col1);
     }
 
-    // vector idx
+    /// vector idx
     ASSERT_ELT(createColumn<Nullable<String>>({{}, {}, {}, {}, {}, {}}),
                createColumn<Nullable<Int64>>({0, -1, -2, -100, 3, 100}),
                dummy_col0,
@@ -84,7 +84,7 @@ try
                createColumn<Nullable<Int64>>({{}, {}, {}, {}, {}}),
                createColumn<Nullable<String>>({"abc", "123", "", {}, ""}),
                createConstColumn<Nullable<String>>(nrow, "def"));
-    
+
     /// const non-null idx x const null arg
     ASSERT_ELT(createConstColumn<Nullable<String>>(nrow, {}),
                createConstColumn<Nullable<Int64>>(nrow, 1),
@@ -128,7 +128,7 @@ try
 {
     constexpr size_t nrow = 8;
 
-    // const idx x vector
+    /// const idx x vector
     ASSERT_ELT(createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
                createConstColumn<Nullable<Int8>>(nrow, 1),
                createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
@@ -168,8 +168,8 @@ try
                createConstColumn<Nullable<UInt64>>(nrow, 2),
                createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
                createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}));
-    
-    // const idx x const
+
+    /// const idx x const
     ASSERT_ELT(createConstColumn<Nullable<String>>(nrow, "abc"),
                createConstColumn<Nullable<Int8>>(nrow, 1),
                createConstColumn<Nullable<String>>(nrow, "abc"),
@@ -210,7 +210,7 @@ try
                createConstColumn<Nullable<String>>(nrow, "abc"),
                createConstColumn<Nullable<String>>(nrow, "def"));
 
-    // vector idx x vector/const
+    /// vector idx x vector/const
     ASSERT_ELT(createColumn<Nullable<String>>({"abc", "321", "", {}, "xxx", "", {}, {}}),
                createColumn<Nullable<Int8>>({1, 2, 1, 100, 3, 1, 0, -2}),
                createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
@@ -258,7 +258,6 @@ try
                createColumn<Nullable<String>>({"abc", "123", "", "", {}, "", "a", "c"}),
                createColumn<Nullable<String>>({"def", "321", {}, "", "", "", "b", "d"}),
                createConstColumn<Nullable<String>>(nrow, "xxx"));
-    
 }
 CATCH
 

@@ -5495,7 +5495,7 @@ private:
 
     static void fillResultColumnNull(ColumnPtr & dst, size_t nrow)
     {
-        dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});;
+        dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});
     }
 
     static void fillResultColumnFromOther(ColumnPtr & dst, const ColumnPtr & src)
@@ -5514,7 +5514,7 @@ private:
         {
             res_null_map->getData()[dsti] = true;
             res_chars.push_back(0);
-            res_offsets[dsti] = dsti == 0 ? 1 : (res_offsets[dsti-1] + 1);
+            res_offsets[dsti] = dsti == 0 ? 1 : (res_offsets[dsti - 1] + 1);
             return;
         }
 
@@ -5530,7 +5530,7 @@ private:
         const auto * col_str = col_nullable_str->isColumnNullable()
             ? checkAndGetNestedColumn<ColumnString>(col_nullable_str)
             : checkAndGetColumn<ColumnString>(col_nullable_str);
-        
+
         const auto & src_data = col_str->getChars();
         const auto & src_offsets = col_str->getOffsets();
 
@@ -5603,7 +5603,7 @@ private:
             {
                 res_null_map->getData()[i] = true;
                 res_chars.push_back(0);
-                res_offsets[i] = i == 0 ? 1 : (res_offsets[i-1] + 1); 
+                res_offsets[i] = i == 0 ? 1 : (res_offsets[i - 1] + 1);
             }
             else
             {
