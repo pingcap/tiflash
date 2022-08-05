@@ -33,6 +33,11 @@ public:
         const LoggerPtr & log_);
     ~FlashGrpcServerHolder();
 
+    void setMockStorage(tests::MockStorage mock_storage)
+    {
+        flash_service->setMockStorage(mock_storage);
+    }
+
 private:
     const LoggerPtr & log;
     std::shared_ptr<std::atomic<bool>> is_shutdown;

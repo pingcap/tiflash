@@ -160,8 +160,10 @@ AnalysisResult analyzeExpressions(
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
     // ywq todo fully replacement of columns for test
+    std::cout << "ywq test table scan logical table id: " << table_scan.getLogicalTableID() << std::endl;
     if (!context.mock_storage.tableExists(table_scan.getLogicalTableID()))
     {
+        std::cout << "ywq test handle mock table scan no column" << std::endl;
         auto names_and_types = genNamesAndTypes(table_scan);
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
@@ -173,6 +175,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     }
     else
     {
+        std::cout << "ywq test handle mock table scan with user column" << std::endl;
         auto [names_and_types, mock_table_scan_streams] = mockSourceStreamNew<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getLogicalTableID());
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());

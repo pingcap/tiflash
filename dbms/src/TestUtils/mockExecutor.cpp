@@ -393,6 +393,8 @@ DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
     auto table_id = mock_storage.getTableId(db_name + "." + table_name);
     std::cout << "ywq table_id: " << table_id << std::endl;
+
+    std::cout << "ywq test wtf:" << mock_storage.getColumns(table_id).size() << std::endl;
     return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_storage.getTableSchema(db_name + "." + table_name));
 }
 

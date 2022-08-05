@@ -158,7 +158,7 @@ public:
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
     Int32 getCollation() const { return abs(collation); }
 
-    MockStorage mockStorage() { return mock_storage; }
+    MockStorage & mockStorage() { return mock_storage; }
 
 private:
     size_t index;

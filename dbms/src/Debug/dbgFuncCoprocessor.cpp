@@ -215,7 +215,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         req->set_timeout(properties.mpp_timeout);
         req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
         auto table_id = task.table_id;
-        if (table_id != -1)
+        if (table_id != -1 && !context.isMPPTest())
         {
             /// contains a table scan
             const auto & table_info = MockTiDB::instance().getTableInfoByID(table_id);

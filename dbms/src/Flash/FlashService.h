@@ -80,6 +80,11 @@ public:
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
+    void setMockStorage(tests::MockStorage & mock_storage_)
+    {
+        mock_storage = mock_storage_;
+    }
+
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
@@ -92,6 +97,7 @@ protected:
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
 
+    tests::MockStorage mock_storage;
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };

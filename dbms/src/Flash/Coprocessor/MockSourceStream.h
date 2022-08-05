@@ -66,14 +66,15 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     NamesAndTypes names_and_types;
     size_t rows = 0;
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
-    if (context.isMPPTest())
-    {
-        columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, 0, 1);
-    }
-    else
-    {
-        columns_with_type_and_name = context.mock_storage.getColumns(table_id);
-    }
+    // todo getMPPTableScan...
+    // if (context.isMPPTest())
+    // {
+    //     columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, 0, 1);
+    // }
+    // else
+    // {
+    columns_with_type_and_name = context.mock_storage.getColumns(table_id);
+    // }
     for (const auto & col : columns_with_type_and_name)
     {
         if (rows == 0)
@@ -81,6 +82,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
         RUNTIME_ASSERT(rows == col.column->size(), log, "each column must has same size");
         names_and_types.push_back({col.name, col.type});
     }
+    std::cout << "ywq test rows num = " << rows << std::endl;
     size_t row_for_each_stream = rows / max_streams;
     size_t rows_left = rows - row_for_each_stream * max_streams;
     size_t start = 0;

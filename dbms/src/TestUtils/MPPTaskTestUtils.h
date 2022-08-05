@@ -16,55 +16,13 @@
 
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/MockComputeServerManager.h>
 #include <TestUtils/MockStorage.h>
 
 #include <memory>
 
 namespace DB::tests
 {
-
-struct MockServerConfig
-{
-    String name;
-    String addr;
-};
-class MockComputeServerManager
-{
-public:
-    void addServerConfig(MockServerConfig config)
-    {
-        server_config_map[config.name] = config;
-    }
-
-    void startAllServer(const LoggerPtr & log_ptr)
-    {
-        for (const auto & kv : server_config_map)
-        {
-            TiFlashSecurityConfig security_config;
-            TiFlashRaftConfig raft_config;
-            raft_config.flash_server_addr = kv.second.addr;
-            Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
-            addServer(kv.first, std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
-        }
-    }
-
-    void reset()
-    {
-        server_map.clear();
-    }
-
-private:
-    void addServer(String name, std::unique_ptr<FlashGrpcServerHolder> server)
-    {
-        server_map[name] = std::move(server);
-    }
-
-private:
-    std::unordered_map<String, std::unique_ptr<FlashGrpcServerHolder>> server_map;
-    std::unordered_map<String, MockServerConfig> server_config_map;
-};
-
-
 class MPPTaskTestUtils : public ExecutorTest
 {
 public:
@@ -93,13 +51,12 @@ protected:
     static MockComputeServerManager server_manager;
 };
 
-
-// std::unique_ptr<FlashGrpcServerHolder> MPPTaskTestUtils::compute_server_ptr = nullptr;
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
 MockComputeServerManager MPPTaskTestUtils::server_manager;
 
-#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)     \
-    TiFlashTestEnv::getGlobalContext().setMPPTest(); \
+#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)          \
+    TiFlashTestEnv::getGlobalContext().setMPPTest();      \
+    server_manager.setMockStorage(context.mockStorage()); \
     ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
 
 } // namespace DB::tests
