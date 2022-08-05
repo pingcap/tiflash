@@ -29,6 +29,7 @@ namespace DB
 {
 using MPPDataPacket = mpp::MPPDataPacket;
 using MPPDataPacketPtr = std::shared_ptr<MPPDataPacket>;
+using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 using MPPDataPacketPtrs = std::vector<MPPDataPacketPtr>;
 
 class ExchangePacketReader

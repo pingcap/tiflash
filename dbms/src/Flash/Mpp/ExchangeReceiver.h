@@ -38,7 +38,7 @@ struct ReceivedMessage
     size_t source_index;
     String req_info;
     // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
-    const std::shared_ptr<const MPPDataPacket> packet;
+    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
     const mpp::Error * error_ptr;
     const String * resp_ptr;
     std::vector<const String *> chunks;
@@ -46,7 +46,7 @@ struct ReceivedMessage
     // Constructor that move chunks.
     ReceivedMessage(size_t source_index_,
                     const String & req_info_,
-                    const std::shared_ptr<const MPPDataPacket> & packet_,
+                    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
                     const mpp::Error * error_ptr_,
                     const String * resp_ptr_,
                     std::vector<const String *> && chunks_)
@@ -133,6 +133,8 @@ public:
 
     ~ExchangeReceiverBase();
 
+    void setUpConnection();
+
     void cancel();
 
     void close();
@@ -166,7 +168,6 @@ public:
 private:
     using Request = typename RPCContext::Request;
 
-    void setUpConnection();
     // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
     template <bool enable_fine_grained_shuffle>
     void readLoop(const Request & req);

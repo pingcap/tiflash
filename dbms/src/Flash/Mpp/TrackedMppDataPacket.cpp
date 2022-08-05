@@ -13,68 +13,39 @@
 // limitations under the License.
 
 #include "TrackedMppDataPacket.h"
+
 #include <sstream>
 
 std::atomic<long long> tracked_proto{0}, untracked_proto{0};
 namespace DB
 {
- void TrackedMppDataPacket::alloc()
+void TrackedMppDataPacket::alloc()
+{
+    if (size)
     {
-        if (size)
+        try
         {
-            try
+            if (memory_tracker)
             {
-                if (memory_tracker) {
-                    if (!memory_tracker->alloc(size)) {
-                        std::stringstream ss;
-                        ss<<"[woodyww.alloc]proc_memory_tracker not visited src: "<< src <<", alloc:"<<size;
-                        std::cerr<<ss.str()<<std::endl;
-                    } 
-
-                    tracked_proto += size;
-                    //update track mem
-                    tracked_mem += size;
-                    long long cur_mem = tracked_mem;
-                    if (cur_mem > tracked_peak) {
-                        tracked_peak = cur_mem;
-                    }
-                } else {
-                    std::stringstream ss;
-                    ss<<"[woodyww.alloc]proc_memory_tracker is null src: "<< src <<", alloc:"<<size;
-                    std::cerr<<ss.str()<<std::endl;
-                    untracked_proto += size;
-                }
-                
-            }
-            catch (...)
-            {
-                has_err = true;
-                // tracked_proto -= size;
-                std::rethrow_exception(std::current_exception());
+                memory_tracker->alloc(size);
             }
         }
-       
-    }
-
-    void TrackedMppDataPacket::trackFree() 
-    {
-        if (size && !has_err)
+        catch (...)
         {
-            if (memory_tracker) {
-                // if (memory_tracker->closed) {
-                //     std::stringstream ss;
-                //     ss<<"memory_tracker has been closed! source: "<<src;
-                //     std::cerr<<ss.str()<<std::endl;
-                // }
-                memory_tracker->free(size);
-
-                tracked_proto -= size;
-                tracked_mem -= size;
-            } else {
-                untracked_proto -= size;
-            }
-            
+            std::rethrow_exception(std::current_exception());
         }
     }
-
 }
+
+void TrackedMppDataPacket::trackFree()
+{
+    if (size)
+    {
+        if (memory_tracker)
+        {
+            memory_tracker->free(size);
+        }
+    }
+}
+
+} // namespace DB

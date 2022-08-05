@@ -58,13 +58,14 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
 template <bool enable_fine_grained_shuffle, bool is_sync>
 bool pushPacket(size_t source_index,
                 const String & req_info,
-                MPPDataPacketPtr & packet,
+                const TrackedMppDataPacketPtr & tracked_packet,
                 const std::vector<MsgChannelPtr> & msg_channels,
                 LoggerPtr & log)
 {
     bool push_succeed = true;
 
     const mpp::Error * error_ptr = nullptr;
+    auto & packet = tracked_packet->packet;
     if (packet->has_error())
         error_ptr = &packet->error();
     const String * resp_ptr = nullptr;
@@ -106,7 +107,7 @@ bool pushPacket(size_t source_index,
             std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
                 source_index,
                 req_info,
-                packet,
+                tracked_packet,
                 error_ptr,
                 resp_ptr,
                 std::move(chunks[i]));
@@ -133,7 +134,7 @@ bool pushPacket(size_t source_index,
             std::shared_ptr<ReceivedMessage> recv_msg = std::make_shared<ReceivedMessage>(
                 source_index,
                 req_info,
-                packet,
+                tracked_packet,
                 error_ptr,
                 resp_ptr,
                 std::move(chunks));
@@ -227,6 +228,7 @@ public:
     // handle will be called by ExchangeReceiver::reactor.
     void handle()
     {
+        std::string err_info;
         LOG_FMT_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
@@ -250,8 +252,8 @@ public:
 
             if (auto packet = getErrorPacket())
                 setDone("Exchange receiver meet error : " + packet->error().msg());
-            else if (!sendPackets())
-                setDone("Exchange receiver meet error : push packets fail");
+            else if (!sendPackets(err_info))
+                setDone("Exchange receiver meet error : push packets fail, " + err_info);
             else if (read_packet_index < batch_packet_count)
             {
                 stage = AsyncRequestStage::WAIT_FINISH;
@@ -356,13 +358,42 @@ private:
             setDone(done_msg);
     }
 
-    bool sendPackets()
+    bool sendPackets(std::string & err_info)
     {
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            if (!pushPacket<enable_fine_grained_shuffle, false>(request->source_index, req_info, packet, *msg_channels, log))
+            // We shouldn't throw error directly, since the caller works in a standalone thread.
+            try
+            {
+                if (!pushPacket<enable_fine_grained_shuffle, false>(
+                        request->source_index,
+                        req_info,
+                        std::make_shared<DB::TrackedMppDataPacket>(packet, current_memory_tracker),
+                        *msg_channels,
+                        log))
+                    return false;
+            }
+            catch (Exception & e)
+            {
+                err_info = e.displayText();
                 return false;
+            }
+            catch (pingcap::Exception & e)
+            {
+                err_info = e.message();
+                return false;
+            }
+            catch (std::exception & e)
+            {
+                err_info = e.what();
+                return false;
+            }
+            catch (...)
+            {
+                err_info = "unknown error";
+                return false;
+            }
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<MPPDataPacket>();
         }
@@ -430,7 +461,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
             msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
         }
         rpc_context->fillSchema(schema);
-        setUpConnection();
+        //        setUpConnection();
     }
     catch (...)
     {
@@ -608,7 +639,12 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->has_error())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
-                if (!pushPacket<enable_fine_grained_shuffle, true>(req.source_index, req_info, packet, msg_channels, log))
+                if (!pushPacket<enable_fine_grained_shuffle, true>(
+                        req.source_index,
+                        req_info,
+                        std::make_shared<DB::TrackedMppDataPacket>(packet, current_memory_tracker),
+                        msg_channels,
+                        log))
                 {
                     meet_error = true;
                     auto local_state = getState();
@@ -680,9 +716,10 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     if (recv_msg->chunks.empty())
         return detail;
+    auto & packet = recv_msg->packet->packet;
 
     // Record total packet size even if fine grained shuffle is enabled.
-    detail.packet_bytes = recv_msg->packet->ByteSizeLong();
+    detail.packet_bytes = packet->ByteSizeLong();
 
     for (const String * chunk : recv_msg->chunks)
     {

@@ -47,16 +47,16 @@ inline size_t estimateAllocatedSize(const mpp::MPPDataPacket & data)
 
 struct TrackedMppDataPacket
 {
-    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker, int src)
-        : memory_tracker(memory_tracker), src(src)
+    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
+        : memory_tracker(memory_tracker)
     {
         size = estimateAllocatedSize(data);
         alloc();
         packet = std::make_shared<mpp::MPPDataPacket>(data);
     }
 
-    explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_, MemoryTracker * memory_tracker, int src)
-        : memory_tracker(memory_tracker), src(src)
+    explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_, MemoryTracker * memory_tracker)
+        : memory_tracker(memory_tracker)
     {
         size = estimateAllocatedSize(*packet_);
         alloc();
@@ -73,9 +73,31 @@ struct TrackedMppDataPacket
     }
 
     MemoryTracker * memory_tracker = nullptr;
-    int src = 0;
     int size;
-    bool has_err = false;
     std::shared_ptr<mpp::MPPDataPacket> packet;
+};
+
+struct TmpMemTracker
+{
+    TmpMemTracker(size_t size)
+        : size(size)
+    {
+        if (current_memory_tracker)
+            current_memory_tracker->alloc(size);
+    }
+    void alloc(size_t delta)
+    {
+        if (current_memory_tracker)
+        {
+            current_memory_tracker->alloc(delta);
+            size += delta;
+        }
+    }
+    ~TmpMemTracker()
+    {
+        if (current_memory_tracker)
+            current_memory_tracker->free(size);
+    }
+    size_t size;
 };
 } // namespace DB

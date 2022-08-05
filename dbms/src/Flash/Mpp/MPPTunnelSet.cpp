@@ -15,29 +15,13 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
 namespace DB
 {
 
-struct TmpMemTracker {
-TmpMemTracker(size_t size):size(size) {
-    if (proc_memory_tracker) {
-        proc_memory_tracker->alloc(size);
-        tracked_mem += size;
-        tracked_proto += size;
-    }
-}
-~TmpMemTracker() {
-    if (proc_memory_tracker) {
-        proc_memory_tracker->free(size);
-        tracked_mem -= size;
-        tracked_proto -= size;
-    }
-}
-size_t size;
-};
 namespace FailPoints
 {
 extern const char exception_during_mpp_write_err_to_tunnel[];
