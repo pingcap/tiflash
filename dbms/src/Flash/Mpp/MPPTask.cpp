@@ -321,10 +321,17 @@ void MPPTask::preprocess()
     initExchangeReceivers();
     DAGQuerySource dag(*context);
     executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    {
+        for (auto & it : *mpp_exchange_receiver_map)
+        {
+            it.second->setUpConnection();
+        }
+    }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);
     mpp_task_statistics.recordReadWaitIndex(*dag_context);
+    tunnel_set->updateMemTracker();
 }
 
 void MPPTask::runImpl()
@@ -365,7 +372,6 @@ void MPPTask::runImpl()
         auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
-
         while (from->read())
             continue;
 

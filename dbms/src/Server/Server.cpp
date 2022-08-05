@@ -188,6 +188,7 @@ extern const Metric MemoryCapacity;
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
 extern const int NO_ELEMENTS_IN_CONFIG;
@@ -1099,6 +1100,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         main_config_reloader->reload();
         users_config_reloader->reload();
     });
+
+    //TODO revert
+    proc_memory_tracker = &(global_context->getProcessList().total_memory_tracker);
 
     /// Limit on total number of concurrently executed queries.
     global_context->getProcessList().setMaxSize(config().getInt("max_concurrent_queries", 0));

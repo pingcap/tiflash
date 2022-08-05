@@ -19,7 +19,10 @@
 
 #include <atomic>
 
-
+extern std::atomic<long long> dirty_alloc, dirty_free, alct_cnt, alct_sum, max_alct;
+extern std::atomic<long long> tracked_mem, mt_tracked_mem, tracked_peak,untracked_mem, tot_local_delta, tracked_mem_p2, tracked_mem_t3;
+extern std::atomic<long long> tracked_alloc,tracked_reloc, tracked_free, tracked_alct;
+extern std::atomic<long long> tracked_rec_alloc, tracked_rec_reloc, tracked_rec_free, real_rss;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;
@@ -31,9 +34,12 @@ extern const Metric MemoryTracking;
   */
 class MemoryTracker
 {
+  public:
     std::atomic<Int64> amount{0};
     std::atomic<Int64> peak{0};
     std::atomic<Int64> limit{0};
+
+    // std::atomic<Int64> closed{0};
 
     /// To test exception safety of calling code, memory tracker throws an exception on each memory allocation with specified probability.
     double fault_probability = 0;
@@ -58,17 +64,19 @@ public:
 
     /** Call the following functions before calling of corresponding operations with memory allocators.
       */
-    void alloc(Int64 size, bool check_memory_limit = true);
+    bool alloc(Int64 size, bool check_memory_limit = true);
 
-    void realloc(Int64 old_size, Int64 new_size) { alloc(new_size - old_size); }
+    bool realloc(Int64 old_size, Int64 new_size) { return alloc(new_size - old_size); }
 
     /** This function should be called after memory deallocation.
       */
-    void free(Int64 size);
+    bool free(Int64 size);
 
     Int64 get() const { return amount.load(std::memory_order_relaxed); }
 
     Int64 getPeak() const { return peak.load(std::memory_order_relaxed); }
+
+    Int64 getLimit() const { return limit.load(std::memory_order_relaxed); }
 
     void setLimit(Int64 limit_) { limit.store(limit_, std::memory_order_relaxed); }
 
@@ -105,6 +113,8 @@ extern __thread MemoryTracker * current_memory_tracker;
 #else
 extern thread_local MemoryTracker * current_memory_tracker;
 #endif
+
+extern MemoryTracker* proc_memory_tracker;
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker

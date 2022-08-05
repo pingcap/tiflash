@@ -20,6 +20,24 @@
 
 namespace DB
 {
+
+struct TmpMemTracker {
+TmpMemTracker(size_t size):size(size) {
+    if (proc_memory_tracker) {
+        proc_memory_tracker->alloc(size);
+        tracked_mem += size;
+        tracked_proto += size;
+    }
+}
+~TmpMemTracker() {
+    if (proc_memory_tracker) {
+        proc_memory_tracker->free(size);
+        tracked_mem -= size;
+        tracked_proto -= size;
+    }
+}
+size_t size;
+};
 namespace FailPoints
 {
 extern const char exception_during_mpp_write_err_to_tunnel[];
@@ -30,7 +48,7 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
 {
     mpp::MPPDataPacket packet;
     if (!response.SerializeToString(packet.mutable_data()))
-        throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
+        throw Exception(fmt::format("Fail to serialize response, response size: {}, source: MPPTunnelSet", response.ByteSizeLong()));
     return packet;
 }
 
@@ -58,8 +76,16 @@ void MPPTunnelSetBase<Tunnel>::clearExecutionSummaries(tipb::SelectResponse & re
 }
 
 template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::updateMemTracker()
+{
+    for (size_t i = 0; i < tunnels.size(); ++i)
+        tunnels[i]->updateMemTracker();
+}
+
+template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
+    TmpMemTracker tmt(response.ByteSizeLong());
     auto packet = serializeToPacket(response);
     tunnels[0]->write(packet);
 
@@ -98,6 +124,7 @@ void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
 {
+    TmpMemTracker tmt(response.ByteSizeLong());
     if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
 

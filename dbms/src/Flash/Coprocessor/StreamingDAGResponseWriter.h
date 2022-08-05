@@ -60,7 +60,7 @@ private:
     template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
     template <bool send_exec_summary_at_last>
-    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response, bool div = false) const;
 
     template <bool send_exec_summary_at_last>
     void handleExecSummary(const std::vector<Block> & input_blocks,

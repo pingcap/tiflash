@@ -188,7 +188,7 @@ using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender>;
  * To be short: before connect, only close can finish a MPPTunnel; after connect, only Sender Finish can.
  *
  * Each MPPTunnel has a Sender to consume data. There're three kinds of senders: sync_remote, local and async_remote.
- * 
+ *
  * The protocol between MPPTunnel and Sender:
  * - All data will be pushed into the `send_queue`, including errors.
  * - MPPTunnel may finish `send_queue` to notify Sender normally finish.
