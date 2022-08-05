@@ -189,6 +189,7 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
     context->setMockStorage(mock_storage);
+    context->setMPPTestInfo(mpp_test_info);
 
     MPPHandler mpp_handler(*request);
     return mpp_handler.execute(context, response);

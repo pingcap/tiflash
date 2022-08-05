@@ -16,53 +16,27 @@
 
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/MockServerInfo.h>
 
 namespace DB::tests
 {
-
-struct MockServerConfig
-{
-    String name;
-    String addr;
-};
 class MockComputeServerManager
 {
 public:
-    void addServerConfig(MockServerConfig config)
-    {
-        server_config_map[config.name] = config;
-    }
+    void addServerConfig(MockServerConfig config); // ywq todo refine 
 
-    void startAllServer(const LoggerPtr & log_ptr)
-    {
-        for (const auto & kv : server_config_map)
-        {
-            TiFlashSecurityConfig security_config;
-            TiFlashRaftConfig raft_config;
-            raft_config.flash_server_addr = kv.second.addr;
-            Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
-            addServer(kv.first, std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
-        }
-    }
+    void startAllServer(const LoggerPtr & log_ptr);
 
-    void setMockStorage(MockStorage & mock_storage)
-    {
-        for (const auto & kv : server_map)
-        {
-            kv.second->setMockStorage(mock_storage);
-        }
-    }
+    void setMockStorage(MockStorage & mock_storage);
 
-    void reset()
-    {
-        server_map.clear();
-    }
+    void reset();
+
+    MPPTestInfo getMPPTestInfo(String name);
+
+    void setMPPTestInfo();
 
 private:
-    void addServer(String name, std::unique_ptr<FlashGrpcServerHolder> server)
-    {
-        server_map[name] = std::move(server);
-    }
+    void addServer(String name, std::unique_ptr<FlashGrpcServerHolder> server);
 
 private:
     std::unordered_map<String, std::unique_ptr<FlashGrpcServerHolder>> server_map;

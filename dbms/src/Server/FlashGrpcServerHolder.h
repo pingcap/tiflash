@@ -38,6 +38,12 @@ public:
         flash_service->setMockStorage(mock_storage);
     }
 
+    void setMPPTestInfo(tests::MPPTestInfo info)
+    {
+        flash_service->setMPPTestInfo(info);
+    }
+
+
 private:
     const LoggerPtr & log;
     std::shared_ptr<std::atomic<bool>> is_shutdown;

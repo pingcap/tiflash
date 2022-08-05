@@ -112,6 +112,7 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
 {
     if (tableExists(table_id))
     {
+
         auto columns_with_type_and_name = table_columns[table_id];
         int rows = 0;
         for (const auto & col : columns_with_type_and_name)
@@ -120,7 +121,7 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
                 rows = col.column->size();
         }
         int per_rows = rows / partition_num;
-        int rows_left = rows = per_rows * partition_num;
+        int rows_left = rows - per_rows * partition_num;
         int cur_rows = per_rows;
         if (partition_id < rows_left)
         {
@@ -132,6 +133,7 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
             start = cur_rows * partition_id;
         }
         ColumnsWithTypeAndName res;
+        std::cout << "ywq test cur rows: " << cur_rows << std::endl;
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {
             res.push_back(

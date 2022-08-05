@@ -67,14 +67,16 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     size_t rows = 0;
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
     // todo getMPPTableScan...
-    // if (context.isMPPTest())
-    // {
-    //     columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, 0, 1);
-    // }
-    // else
-    // {
-    columns_with_type_and_name = context.mock_storage.getColumns(table_id);
-    // }
+    // figure out how to identifi the partition num
+    if (context.isMPPTest())
+    {
+        std::cout << "ywq test mpp info: " << context.mpp_test_info.partition_id << ": " << context.mpp_test_info.partition_num << std::endl;
+        columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, 0, 1);
+    }
+    else
+    {
+        columns_with_type_and_name = context.mock_storage.getColumns(table_id);
+    }
     for (const auto & col : columns_with_type_and_name)
     {
         if (rows == 0)

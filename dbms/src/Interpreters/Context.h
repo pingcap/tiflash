@@ -21,6 +21,7 @@
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
 #include <TestUtils/MockStorage.h>
+#include <TestUtils/MockServerInfo.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -167,8 +168,6 @@ private:
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-    // TODO: add MockStorage.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
@@ -482,10 +481,16 @@ public:
     bool isTest() const;
 
     DB::tests::MockStorage mock_storage;
-
+    DB::tests::MPPTestInfo mpp_test_info;
+    
+    /// ywq todo refinement..
     void setMockStorage(DB::tests::MockStorage mock_storage_)
     {
         mock_storage = mock_storage_;
+    }
+
+    void setMPPTestInfo(DB::tests::MPPTestInfo info) {
+        mpp_test_info = info;
     }
 
 private:

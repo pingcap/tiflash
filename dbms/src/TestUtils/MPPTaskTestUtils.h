@@ -57,6 +57,7 @@ MockComputeServerManager MPPTaskTestUtils::server_manager;
 #define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)          \
     TiFlashTestEnv::getGlobalContext().setMPPTest();      \
     server_manager.setMockStorage(context.mockStorage()); \
+    server_manager.setMPPTestInfo();                      \
     ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
 
 } // namespace DB::tests

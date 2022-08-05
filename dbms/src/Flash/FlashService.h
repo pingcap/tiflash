@@ -85,6 +85,11 @@ public:
         mock_storage = mock_storage_;
     }
 
+    void setMPPTestInfo(tests::MPPTestInfo & mpp_test_info_)
+    {
+        mpp_test_info = mpp_test_info_;
+    }
+
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
@@ -97,7 +102,11 @@ protected:
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
 
+
+    /// for mpp unit test.
     tests::MockStorage mock_storage;
+    tests::MPPTestInfo mpp_test_info;
+
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
 };

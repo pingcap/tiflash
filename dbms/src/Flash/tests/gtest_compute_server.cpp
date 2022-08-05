@@ -24,8 +24,8 @@ public:
     static void SetUpTestCase()
     {
         MPPTaskTestUtils::SetUpTestCase();
-        server_manager.addServerConfig({"test", "0.0.0.0:3930"});
-        server_manager.addServerConfig({"test1", "0.0.0.0:3931"});
+        server_manager.addServerConfig({"test", "0.0.0.0:3930", 0});
+        server_manager.addServerConfig({"test1", "0.0.0.0:3931", 1});
         // server_manager.addServer("test", std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
         // server_manager.addServer("test1", std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
         server_manager.startAllServer(log_ptr);
