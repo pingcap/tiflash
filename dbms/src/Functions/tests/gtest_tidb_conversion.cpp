@@ -1754,7 +1754,7 @@ try
 {
     const auto to_type_1 = std::make_shared<DataTypeMyDuration>(5); // from_fsp <  to_fsp
     const auto to_type_2 = std::make_shared<DataTypeMyDuration>(4); // from_fsp == to_fsp
-    const auto to_type_3 = std::make_shared<DataTypeMyDuration>(2); // from_fsp >  to_fsp 
+    const auto to_type_3 = std::make_shared<DataTypeMyDuration>(2); // from_fsp >  to_fsp
     // cast datetime to duration
     const auto datetime_type_ptr = std::make_shared<DataTypeMyDateTime>(4);
     MyDateTime date(2021, 10, 26, 0, 0, 0, 0);
@@ -1772,7 +1772,7 @@ try
 
     auto ctn_datetime = ColumnWithTypeAndName(std::move(col_datetime), datetime_type_ptr, "datetime");
     ColumnWithTypeAndName datetime_output1(
-        createColumn<DataTypeMyDuration::FieldType>({(0  * 3600 + 0  * 60 + 0 ) * 1000000000L + 000000000L,
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
@@ -1781,7 +1781,7 @@ try
         to_type_1,
         "datetime_output1");
     ColumnWithTypeAndName datetime_output2(
-        createColumn<DataTypeMyDuration::FieldType>({(0  * 3600 + 0  * 60 + 0 ) * 1000000000L + 000000000L,
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
@@ -1791,7 +1791,7 @@ try
         "datetime_output2");
 
     ColumnWithTypeAndName datetime_output3(
-        createColumn<DataTypeMyDuration::FieldType>({(0  * 3600 + 0  * 60 + 0 ) * 1000000000L + 000000000L,
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 110000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L,

@@ -1639,7 +1639,7 @@ struct TiDBConvertToDuration
                         const auto & from_type = static_cast<const DataTypeMyDateTime &>(*col_with_type_and_name.type);
                         from_fsp = from_type.getFraction();
                     }
-                    MyDuration duration(1/*neg*/, datetime.hour, datetime.minute, datetime.second, datetime.micro_second, from_fsp);
+                    MyDuration duration(1 /*neg*/, datetime.hour, datetime.minute, datetime.second, datetime.micro_second, from_fsp);
                     if (to_fsp < from_fsp)
                     {
                         vec_to[i] = round(duration.nanoSecond(), (6 - to_fsp) + 3);
