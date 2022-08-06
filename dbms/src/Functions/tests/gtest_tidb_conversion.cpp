@@ -1816,6 +1816,6 @@ try
     ASSERT_COLUMN_EQ(datetime_output3, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_3->getName())}));
 }
 CATCH
--
+
 } // namespace
 } // namespace DB::tests
