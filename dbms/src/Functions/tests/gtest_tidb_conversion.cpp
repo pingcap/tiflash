@@ -1296,7 +1296,7 @@ try
     const auto from_type = std::make_shared<DataTypeMyDuration>(3);
     const auto to_type_1 = std::make_shared<DataTypeMyDuration>(5); // from_fsp <  to_fsp
     const auto to_type_2 = std::make_shared<DataTypeMyDuration>(3); // from_fsp == to_fsp
-    const auto to_type_3 = std::make_shared<DataTypeMyDuration>(2); // from_fsp <  to_fsp
+    const auto to_type_3 = std::make_shared<DataTypeMyDuration>(2); // from_fsp >  to_fsp
 
     ColumnWithTypeAndName input(
         createColumn<DataTypeMyDuration::FieldType>({(20 * 3600 + 20 * 60 + 20) * 1000000000L + 555000000L,
