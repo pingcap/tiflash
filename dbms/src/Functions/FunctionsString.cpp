@@ -33,7 +33,6 @@
 #include <fmt/core.h>
 
 #include <boost/algorithm/string/predicate.hpp>
-#include <cstring>
 #include <ext/range.h>
 
 namespace DB
@@ -5520,8 +5519,8 @@ private:
 
         /// no need to set res_null_map, since its default value is 0
 
-        /// src col might be ColumnConst(Nullable(ColumnString)) or Nullable(ColumnString) or ColumnString
-        /// if it is ColumnConst then we should treat its first element as the ith element
+        /// src col might be ColumnConst(Nullable(ColumnString)) or ColumnCost(ColumnString) or Nullable(ColumnString) or ColumnString
+        /// if it is ColumnConst(...) then we should treat its first element as the ith element
         size_t srci = dsti;
         const auto * col_nullable_str = src->isColumnConst()
             ? (srci = 0, checkAndGetColumnConst<ColumnString>(src.get(), true)->getDataColumnPtr().get())
