@@ -16,6 +16,7 @@
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -34,7 +35,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-
+#include <common/logger_useful.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -49,6 +50,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
 {}
 
 extern const String count_second_stage;
+extern const String final_sum_stage;
 
 namespace
 {
@@ -86,9 +88,9 @@ String getAggFuncName(
 
     // sum function in mpp has two stage and we need to distinguish them with function name.
     // "sum" represents the first stage.
-    // "sumWithOverflow" represents the sencond stage.
+    // "finalSumStage" represents the sencond stage.
     if (agg_func_name == sum_func_name && expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode)
-        return "sumWithOverflow";
+        return final_sum_stage;
 
     return agg_func_name;
 }
@@ -1233,7 +1235,11 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
         if (expected_type->getName() != actual_type->getName())
+        {
+            auto log = &Poco::Logger::get("PlaygroundInput");
+            LOG_FMT_INFO(log, "appendCast: expect: {} actual: {}, expr_name: {}", expected_type->getName(), actual_type->getName(), expr_name);
             return appendCast(expected_type, actions, expr_name);
+        }
     }
     return expr_name;
 }

@@ -283,9 +283,24 @@ struct NameSum
     static constexpr auto name = "sum";
 };
 
+struct NameSumWithOverFlow
+{
+    static constexpr auto name = "sumWithOverflow";
+};
+
 struct NameCountSecondStage
 {
     static constexpr auto name = "countSecondStage";
+};
+
+struct NameFinalSumStage
+{
+    static constexpr auto name = "finalSumStage";
+};
+
+struct NameSumKahan
+{
+    static constexpr auto name = "sumKahan";
 };
 
 /// Counts the sum of the numbers.
@@ -306,9 +321,9 @@ public:
 
     AggregateFunctionSum() = default;
 
-    AggregateFunctionSum(PrecType prec, ScaleType scale, bool is_final = false)
+    AggregateFunctionSum(PrecType prec, ScaleType scale)
     {
-        if (is_final)
+        if (Name::name == NameFinalSumStage::name)
         {
             result_prec = prec;
             result_scale = scale;
