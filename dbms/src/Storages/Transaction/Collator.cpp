@@ -611,10 +611,10 @@ using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
 
 struct TiDBCollatorPtrMap
 {
-    static constexpr auto MAX_TYPE_CNT = static_cast<uint32_t>(ITiDBCollator::CollatorType::MAX_);
+    // static constexpr auto MAX_TYPE_CNT = static_cast<uint32_t>(ITiDBCollator::CollatorType::MAX_);
 
     std::unordered_map<int32_t, TiDBCollatorPtr> id_map{};
-    std::array<TiDBCollatorPtr, MAX_TYPE_CNT> type_map{};
+    // std::array<TiDBCollatorPtr, MAX_TYPE_CNT> type_map{};
     std::unordered_map<std::string, TiDBCollatorPtr> name_map;
     std::unordered_map<const void *, ITiDBCollator::CollatorType> addr_to_type;
 
@@ -633,13 +633,13 @@ struct TiDBCollatorPtrMap
 #ifdef M
         static_assert(false, "`M` is defined");
 #endif
-#define M(name)                                                                                                     \
-    do                                                                                                              \
-    {                                                                                                               \
-        auto & collator = (c_##name);                                                                               \
-        id_map[collator.getCollatorId()] = type_map[static_cast<uint32_t>(collator.getCollatorType())] = &collator; \
-        addr_to_type[&collator] = collator.getCollatorType();                                                       \
-        name_map[#name] = &collator;                                                                                \
+#define M(name)                                               \
+    do                                                        \
+    {                                                         \
+        auto & collator = (c_##name);                         \
+        id_map[collator.getCollatorId()] = &collator;         \
+        addr_to_type[&collator] = collator.getCollatorType(); \
+        name_map[#name] = &collator;                          \
     } while (false)
 
         M(utf8_general_ci);
@@ -698,7 +698,7 @@ ITiDBCollator::CollatorType GetTiDBCollatorType(const void * collator)
     const auto & addr_to_type = TiDB::tidb_collator_map.addr_to_type;
     if (auto it = addr_to_type.find(collator); it != addr_to_type.end())
         return it->second;
-    return {};
+    return ITiDBCollator::CollatorType::MAX_;
 }
 
 } // namespace TiDB

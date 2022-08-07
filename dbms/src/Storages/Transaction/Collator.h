@@ -44,16 +44,15 @@ public:
 
     enum class CollatorType : uint32_t
     {
-        UNKNOWN = 0,
+        UTF8MB4_BIN = 0,
+        UTF8_BIN,
+        LATIN1_BIN,
+        ASCII_BIN,
+        BINARY,
         UTF8_GENERAL_CI,
         UTF8MB4_GENERAL_CI,
         UTF8_UNICODE_CI,
         UTF8MB4_UNICODE_CI,
-        UTF8MB4_BIN,
-        LATIN1_BIN,
-        BINARY,
-        ASCII_BIN,
-        UTF8_BIN,
         MAX_,
     };
 
@@ -88,8 +87,8 @@ public:
 
 protected:
     explicit ITiDBCollator(int32_t collator_id_);
-    int32_t collator_id;
-    CollatorType collator_type{};
+    int32_t collator_id; // collator id to be compatible with TiDB
+    CollatorType collator_type{CollatorType::MAX_}; //
 };
 
 /// these dummy_xxx are used as the default value to avoid too many meaningless
