@@ -92,17 +92,23 @@ public:
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
-    /// Note that all the conditional expression arguments can be default, and user should avoid using them unless
-    /// he/she understands how TiDB translates from sql's join on clause to these conditional expressions and have to do so
+    /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
+    /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.
+    /// Note that since our framework does not support qualified column name yet, while building column reference
+    /// the first column with the matching name in correspoding table(s) will be used.
+    /// todo: support qualified name column reference in expression
+    ///
     /// @param join_col_exprs matching columns for the joined table, which must have the same name
-    /// @param left_conds conditional expressions only reference left table and the join type is left kind
-    /// @param right_conds conditional expressions only reference right table and the join type is right kind
+    /// @param left_conds conditional expressions which only reference left table and the join type is left kind
+    /// @param right_conds conditional expressions which only reference right table and the join type is right kind
     /// @param other_conds other conditional expressions
     /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
-    /// Note that since our framework does not support qualified name column reference yet, while building DAGRequest
-    /// the first name matching colum in correspoding table(s) will be used
-    /// todo: support qualified name column reference in expression
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds = {}, MockAstVec right_conds = {}, MockAstVec other_conds = {}, MockAstVec other_eq_conds_from_in = {});
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in);
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs)
+    {
+        return join(right, tp, join_col_exprs, {}, {}, {}, {});
+    }
+
 
     // aggregation
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
