@@ -88,7 +88,7 @@ public:
 protected:
     explicit ITiDBCollator(int32_t collator_id_);
     int32_t collator_id; // collator id to be compatible with TiDB
-    CollatorType collator_type{CollatorType::MAX_}; //
+    CollatorType collator_type{CollatorType::MAX_}; // collator type for internal usage
 };
 
 /// these dummy_xxx are used as the default value to avoid too many meaningless
