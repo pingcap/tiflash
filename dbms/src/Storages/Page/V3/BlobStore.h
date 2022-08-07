@@ -223,12 +223,6 @@ public:
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
-        String blobIdToPath(BlobFileId file_id);
-
-    private:
-        String blobIdToPathImpl(BlobFileId file_id, const std::lock_guard<std::mutex> &);
-
-    public:
         using StatsMap = std::map<String, std::list<BlobStatPtr>>;
         StatsMap getStats() const
         {
