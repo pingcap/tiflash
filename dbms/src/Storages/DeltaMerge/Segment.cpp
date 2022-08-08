@@ -519,6 +519,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     /// But this way seems not to be robustness enough, maybe we need another flag?
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
+    // new_columns_to_read need at most columns_to_read.size() + 2, due to may extra insert into the handle column and del_mark column. 
+    new_columns_to_read->reserve(columns_to_read.size() + 2);
 
     new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
     if (filter_delete_mark)

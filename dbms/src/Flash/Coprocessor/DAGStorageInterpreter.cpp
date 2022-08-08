@@ -600,6 +600,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             context.getTimezoneInfo());
         query_info.req_id = fmt::format("{} Table<{}>", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
+        query_info.read_mode = table_scan.getReadMode();
         return query_info;
     };
     if (table_scan.isPartitionTableScan())
