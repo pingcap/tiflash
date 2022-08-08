@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Server/FlashGrpcServerHolder.h>
 #include <Server/IServer.h>
 #include <Server/ServerInfo.h>
 #include <daemon/BaseDaemon.h>
@@ -72,7 +73,6 @@ private:
 
     ServerInfo server_info;
 
-    class FlashGrpcServerHolder;
     class TcpHttpServersHolder;
 };
 
