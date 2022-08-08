@@ -20,6 +20,7 @@
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Poco/Logger.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMDecoratorStreams.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
@@ -44,6 +45,7 @@
 #include <ext/scope_guard.h>
 #include <memory>
 #include <numeric>
+#include "Interpreters/Context.h"
 
 namespace ProfileEvents
 {
@@ -391,6 +393,11 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
                                             bool for_bitmap)
 {
     LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream for_bitmap {}", segment_id, epoch, for_bitmap);
+
+    if (!for_bitmap)
+    {
+        return getBitmapFilterInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
+    }
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
@@ -1799,6 +1806,55 @@ bool Segment::placeDelete(const DMContext & dm_context,
         fully_indexed &= DM::placeDelete(merged_stream, block, relevant_range, relevant_place, update_delta_tree, getPkSort(handle));
     }
     return fully_indexed;
+}
+
+BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
+                                           const SegmentSnapshotPtr & segment_snap,
+                                           const RowKeyRanges & read_ranges,
+                                           const RSOperatorPtr & filter,
+                                           UInt64 max_version,
+                                           size_t expected_block_size)
+{
+    static ColumnDefines columns_to_read{getExtraHandleColumnDefine(is_common_handle), getVersionColumnDefine(), getTagColumnDefine()};
+    auto stream = getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size, /*for_bitmap*/ true);
+    auto bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->getRows(), segment_snap);
+    for (;;)
+    {
+        auto blk = stream->read();
+        if (!blk)
+        {
+            break;
+        }
+        bitmap_filter->set(blk.segmentRowIdCol());
+    }
+    return bitmap_filter;
+}
+
+BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_context,
+                                               const ColumnDefines & columns_to_read,
+                                               const SegmentSnapshotPtr & segment_snap,
+                                               const RowKeyRanges & data_ranges,
+                                               const RSOperatorPtr & filter,
+                                               UInt64 max_version,
+                                               size_t expected_block_size)
+{
+    // For normal mode, already filter rowkey in bitmap.
+    auto bitmap_filter = buildBitmapFilter(dm_context, segment_snap, data_ranges, filter, max_version, expected_block_size);
+
+    BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
+        dm_context,
+        columns_to_read,
+        data_ranges,
+        filter,
+        max_version,
+        expected_block_size,
+        /* enable_clean_read */ false,
+        /* is_fast_mode */ false);  // TODO(jinhelin): support fast mode, clean read.
+
+    auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
+    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read_ptr, this->rowkey_range);
+
+    return std::make_shared<BitmapFilterBlockInputStream>(stable_stream, delta_stream, segment_snap->stable->getRows(), bitmap_filter, dm_context.tracing_id);
 }
 
 } // namespace DM

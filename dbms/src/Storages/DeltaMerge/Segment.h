@@ -27,6 +27,7 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 
 namespace DB::DM
 {
@@ -400,6 +401,19 @@ private:
         const RowKeyRange & relevant_range,
         bool relevant_place) const;
 
+    BitmapFilterPtr buildBitmapFilter(const DMContext & dm_context,
+                                           const SegmentSnapshotPtr & segment_snap,
+                                           const RowKeyRanges & read_ranges,
+                                           const RSOperatorPtr & filter,
+                                           UInt64 max_version,
+                                           size_t expected_block_size);
+    BlockInputStreamPtr getBitmapFilterInputStream(const DMContext & dm_context,
+                                               const ColumnDefines & columns_to_read,
+                                               const SegmentSnapshotPtr & segment_snap,
+                                               const RowKeyRanges & data_ranges,
+                                               const RSOperatorPtr & filter,
+                                               UInt64 max_version,
+                                               size_t expected_block_size);
 private:
     /// The version of this segment. After split / merge / merge delta, epoch got increased by 1.
     const UInt64 epoch;
@@ -418,6 +432,8 @@ private:
     bool split_forbidden = false;
 
     Poco::Logger * log;
+
+    BitmapFilterPtr fast_mode_bitmap_filter;
 };
 
 } // namespace DB::DM
