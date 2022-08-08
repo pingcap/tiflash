@@ -296,7 +296,7 @@ StringRef MPPTunnel::statusToString()
     }
 }
 
-void TunnelSender::consumerFinish(const String & msg, bool use_lock [[maybe_unused]])
+void TunnelSender::consumerFinish(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue->finish();
@@ -348,7 +348,7 @@ void SyncTunnelSender::startSendThread()
     });
 }
 
-void AsyncTunnelSender::consumerFinish(const String & msg, bool use_lock [[maybe_unused]])
+void AsyncTunnelSender::consumerFinishWithLock(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue->finish();
@@ -403,7 +403,14 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     }
     if (!err_msg.empty() || queue_empty_flag)
     {
-        consumerFinish(err_msg, use_lock);
+        if (!use_lock)
+        {
+            consumerFinish(err_msg);
+        }
+        else
+        {
+            consumerFinishWithLock(err_msg);
+        }
         writer->writeDone(grpc::Status::OK);
     }
 }
