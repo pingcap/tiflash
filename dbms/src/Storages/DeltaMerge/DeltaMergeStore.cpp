@@ -2594,7 +2594,7 @@ SegmentPtr DeltaMergeStore::segmentReplaceData(
         segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
         id_to_segment[new_segment->segmentId()] = new_segment;
 
-        LOG_FMT_DEBUG(log, "Apply segment replace data done, segment={{ {} }}", segment->info());
+        LOG_FMT_DEBUG(log, "Apply segment replace data done, new_segment={{ {} }}", new_segment->info());
     }
 
     // TODO: What if we crashed here? Seems that there will be pending removes..?

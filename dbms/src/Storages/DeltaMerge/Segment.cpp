@@ -978,7 +978,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         // to the file id.
         wbs.data.putRefPage(my_dmfile_page_id, ori_page_id);
         wbs.data.putRefPage(other_dmfile_page_id, ori_page_id);
-        wbs.removed_data.delPage(ori_page_id);
+        // wbs.removed_data.delPage(ori_page_id);
 
         LOG_FMT_INFO(log, "Segment [{}] -- In snapshot: ref my - page_id {} to page_id {}", segment_id, my_dmfile_page_id, ori_page_id);
         LOG_FMT_INFO(log, "Segment [{}] -- In snapshot: ref other - page_id {} to page_id {}", segment_id, other_dmfile_page_id, ori_page_id);
@@ -1232,8 +1232,7 @@ SegmentPtr Segment::mergeForTest(DMContext & dm_context, const ColumnDefinesPtr 
 
 StableValueSpacePtr Segment::prepareReplaceData(DMContext & dm_context, const DMFilePtr & file, WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(log, "Segment [{}] prepare replace data, file={}",
-                 segment_id, file->toString());
+    LOG_FMT_INFO(log, "Segment [{}] prepare replace data, file={}", segment_id, file->toString());
 
     auto & storage_pool = dm_context.storage_pool;
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
@@ -1252,16 +1251,14 @@ StableValueSpacePtr Segment::prepareReplaceData(DMContext & dm_context, const DM
     new_stable->setFiles({ref_file}, rowkey_range, &dm_context);
     new_stable->saveMeta(wbs.meta);
 
-    LOG_FMT_INFO(log, "Segment [{}] prepare replace data done",
-                 segment_id);
+    LOG_FMT_INFO(log, "Segment [{}] prepare replace data done", segment_id);
 
     return new_stable;
 }
 
 SegmentPtr Segment::applyReplaceData(const StableValueSpacePtr new_data, WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(log, "Segment [{}] apply replace data, this_segment={{ {} }}",
-                 segment_id, info());
+    LOG_FMT_INFO(log, "Segment [{}] apply replace data, this_segment={{ {} }}", segment_id, info());
 
     // Empty new delta
     auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId());
@@ -1278,8 +1275,7 @@ SegmentPtr Segment::applyReplaceData(const StableValueSpacePtr new_data, WriteBa
     delta->recordRemoveColumnFilesPages(wbs);
     stable->recordRemovePacksPages(wbs);
 
-    LOG_FMT_INFO(log, "Segment [{}] apply replace data done, this_segment={{ {} }}, new_segment={{ {} }}",
-                 segment_id, info(), new_me->info());
+    LOG_FMT_INFO(log, "Segment [{}] apply replace data done, this_segment={{ {} }}, new_segment={{ {} }}", segment_id, info(), new_me->info());
 
     return new_me;
 }
