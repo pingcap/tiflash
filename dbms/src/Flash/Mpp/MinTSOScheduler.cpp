@@ -199,12 +199,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
         }
         GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
         GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-<<<<<<< HEAD
-        GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Increment();
         LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", task->getId().toString(), active_set.size(), isWaiting ? " from the waiting set" : " directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
-=======
-        LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", task->getId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
->>>>>>> 89e7df8fe7 (fix bug in `MinTSOScheduler` that `estimated_thread_usage`/`waiting_tasks_count`/`active_tasks_count` are not 0 even if there is no queries running (#5557))
         return true;
     }
     else
