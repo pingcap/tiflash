@@ -76,7 +76,7 @@ public:
     {
         return send_queue;
     }
-    virtual void consumerFinish(const String & err_msg, bool use_lock [[maybe_unused]] = false);
+    void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
     {
         return consumer_state.getMsg();
@@ -164,7 +164,7 @@ public:
     /// use_lock should be true if it's invoked from async GRPC thread
     void sendOne(bool use_lock = false);
     bool isSendQueueNextPopNonBlocking() { return send_queue->isNextPopNonBlocking(); }
-    void consumerFinish(const String & err_msg, bool use_lock [[maybe_unused]] = false) override;
+    void consumerFinishWithLock(const String & err_msg);
 
 private:
     std::shared_ptr<std::mutex> mu;

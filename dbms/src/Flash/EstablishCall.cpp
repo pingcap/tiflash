@@ -117,10 +117,17 @@ void EstablishCallData::setFinishState(const String & msg, bool use_lock)
     state = FINISH;
     if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
     {
-        async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
-                                                        async_tunnel_sender->getTunnelId(),
-                                                        msg),
-                                            use_lock); //trigger mpp tunnel finish work
+        String complete_msg = fmt::format("{}: {}",
+                                          async_tunnel_sender->getTunnelId(),
+                                          msg);
+        if (use_lock)
+        {
+            async_tunnel_sender->consumerFinishWithLock(complete_msg);
+        }
+        else
+        {
+            async_tunnel_sender->consumerFinish(complete_msg);
+        }
     }
 }
 
