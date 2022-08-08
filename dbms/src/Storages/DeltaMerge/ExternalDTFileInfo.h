@@ -42,7 +42,7 @@ struct ExternalDTFileInfo
     std::string toString() const
     {
         return fmt::format(
-            "ExternalDTFile {{ id = {}, range = {} }}",
+            "ExternalDTFile {{ page_id={}, range={} }}",
             id,
             range.toDebugString());
     }

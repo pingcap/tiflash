@@ -935,7 +935,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
                                                                RowKeyValue & split_point,
                                                                WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(log, "Segment [{}] prepare split logical start", segment_id);
+    LOG_FMT_INFO(log, "Segment [{}] prepare split logical start, segment={{ {} }}", segment_id, info());
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
@@ -964,6 +964,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
+        LOG_FMT_INFO(log, "Segment [{}] -- In snapshot: file={}", segment_id, dmfile->toString());
+
         auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
@@ -977,6 +979,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         wbs.data.putRefPage(my_dmfile_page_id, ori_page_id);
         wbs.data.putRefPage(other_dmfile_page_id, ori_page_id);
         wbs.removed_data.delPage(ori_page_id);
+
+        LOG_FMT_INFO(log, "Segment [{}] -- In snapshot: ref my - page_id {} to page_id {}", segment_id, my_dmfile_page_id, ori_page_id);
+        LOG_FMT_INFO(log, "Segment [{}] -- In snapshot: ref other - page_id {} to page_id {}", segment_id, other_dmfile_page_id, ori_page_id);
 
         auto my_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),

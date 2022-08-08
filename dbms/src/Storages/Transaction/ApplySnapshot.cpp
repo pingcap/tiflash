@@ -361,8 +361,8 @@ DM::SortedExternalDTFileInfos KVStore::preHandleSSTsToDTFiles(
                 schema_snap,
                 snapshot_apply_method,
                 job_type,
-                1000,
-                0,
+                1000, // TODO: Change to segment rows
+                0, // TODO: Change to segment size
                 tmt);
 
             stream->writePrefix();

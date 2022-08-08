@@ -271,7 +271,7 @@ public:
     String toString() const
     {
         return fmt::format(
-            "DMFile {{ file_id = {}, page_id = {}, packs = {}, rows = {}, mem_size_bytes = {}, disk_size_bytes = {} }}",
+            "DMFile {{ file_id={}, page_id={}, packs={}, rows={}, mem_size_bytes={}, disk_size_bytes={} }}",
             fileId(),
             pageId(),
             getPacks(),
