@@ -296,7 +296,7 @@ StringRef MPPTunnel::statusToString()
     }
 }
 
-void TunnelSender::consumerFinish(const String & msg, bool use_lock[[maybe_unused]])
+void TunnelSender::consumerFinish(const String & msg, bool use_lock [[maybe_unused]])
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue->finish();
@@ -348,7 +348,7 @@ void SyncTunnelSender::startSendThread()
     });
 }
 
-void AsyncTunnelSender::consumerFinish(const String & msg, bool use_lock[[maybe_unused]])
+void AsyncTunnelSender::consumerFinish(const String & msg, bool use_lock [[maybe_unused]])
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue->finish();
