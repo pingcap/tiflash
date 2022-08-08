@@ -85,8 +85,7 @@ private:
     void finishTunnelAndResponder();
 
     /// Will try to call async_sender's consumerFinish if needed
-    /// use_lock should be true, if it is invoked in async GRPC thread
-    void setFinishState(const String & msg, bool use_lock);
+    void setFinishState(const String & msg);
 
     void responderFinish(const grpc::Status & status);
 
