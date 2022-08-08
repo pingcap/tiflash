@@ -352,15 +352,8 @@ void AsyncTunnelSender::consumerFinishWithLock(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
     send_queue->finish();
-    if (!use_lock)
-    {
-        consumer_state.setMsg(msg);
-    }
-    else
-    {
-        std::unique_lock lk(*mu);
-        consumer_state.setMsg(msg);
-    }
+    std::unique_lock lk(*mu);
+    consumer_state.setMsg(msg);
 }
 
 void AsyncTunnelSender::tryFlushOne()
