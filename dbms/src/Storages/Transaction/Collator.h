@@ -42,17 +42,22 @@ public:
         UTF8_BIN = 83,
     };
 
+    // internal wrapped collator types which are effective for `switch case`
     enum class CollatorType : uint32_t
     {
+        // bin
         UTF8MB4_BIN = 0,
         UTF8_BIN,
         LATIN1_BIN,
         ASCII_BIN,
+        // binary
         BINARY,
+        // ----
         UTF8_GENERAL_CI,
         UTF8MB4_GENERAL_CI,
         UTF8_UNICODE_CI,
         UTF8MB4_UNICODE_CI,
+        // ----
         MAX_,
     };
 
