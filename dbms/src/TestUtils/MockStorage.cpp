@@ -14,7 +14,6 @@
 #include <TestUtils/MockStorage.h>
 
 #include "TestUtils/FunctionTestUtils.h"
-#include "common/logger_useful.h"
 
 namespace DB::tests
 {

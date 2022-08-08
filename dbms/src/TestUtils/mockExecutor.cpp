@@ -100,8 +100,13 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
 void columnPrune(ExecutorPtr executor)
 {
     std::unordered_set<String> used_columns;
+    std::cout << "ywq test before column prune.." << std::endl;
     for (auto & schema : executor->output_schema)
+    {
         used_columns.emplace(schema.first);
+        std::cout << schema.first;
+    }
+    std::cout << std::endl;
     executor->columnPrune(used_columns);
 }
 
@@ -111,11 +116,11 @@ void columnPrune(ExecutorPtr executor)
 // and MPPTask with multiple partitions.
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, int mpp_partition_num)
 {
-    // columnPrune(root);
+    columnPrune(root);
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = mpp_partition_num;
-    // TODO find a way to record service info.
+    // ywq todo pass server info into it...
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
     root.reset();
     executor_index = 0;

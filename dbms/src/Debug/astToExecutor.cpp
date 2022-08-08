@@ -1230,6 +1230,20 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
     for (auto & field : children[1]->output_schema)
         right_columns.emplace(field.first);
 
+    std::cout << "ywq test left columns: " << std::endl;
+    for (auto col : left_columns)
+    {
+        std::cout << col;
+    }
+    std::cout << std::endl;
+
+    std::cout << "ywq test right columns: " << std::endl;
+    for (auto col : right_columns)
+    {
+        std::cout << col;
+    }
+    std::cout << std::endl;
+
     std::unordered_set<String> left_used_columns;
     std::unordered_set<String> right_used_columns;
 
@@ -1237,7 +1251,8 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
     {
         if (left_columns.find(s) != left_columns.end())
             left_used_columns.emplace(s);
-        else
+
+        if (right_columns.find(s) != right_columns.end())
             right_used_columns.emplace(s);
     }
 
@@ -1246,6 +1261,7 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
         if (auto * identifier = typeid_cast<ASTIdentifier *>(child.get()))
         {
             auto col_name = identifier->getColumnName();
+            std::cout << "ywq test using expr list col: " << col_name << std::endl;
             for (auto & field : children[0]->output_schema)
             {
                 if (col_name == splitQualifiedName(field.first).second)
@@ -1268,6 +1284,20 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
             throw Exception("Only support Join on columns");
         }
     }
+
+    std::cout << "ywq test left used columns: " << std::endl;
+    for (auto col : left_used_columns)
+    {
+        std::cout << col;
+    }
+    std::cout << std::endl;
+
+    std::cout << "ywq test right used columns: " << std::endl;
+    for (auto col : right_used_columns)
+    {
+        std::cout << col;
+    }
+    std::cout << std::endl;
 
     children[0]->columnPrune(left_used_columns);
     children[1]->columnPrune(right_used_columns);
@@ -1313,7 +1343,7 @@ void Join::fillJoinKeyAndFieldType(
     for (size_t index = 0; index < child_schema.size(); ++index)
     {
         const auto & [col_name, col_info] = child_schema[index];
-
+        std::cout << "ywq test fuck col name" << col_name << std::endl;
         if (splitQualifiedName(col_name).second == identifier->getColumnName())
         {
             auto tipb_type = TiDB::columnInfoToFieldType(col_info);
@@ -1344,7 +1374,9 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, c
 
     for (auto & key : using_expr_list->children)
     {
+        std::cout << "ywq test left join keys" << std::endl;
         fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
+        std::cout << "ywq test right join keys" << std::endl;
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
     }
 
