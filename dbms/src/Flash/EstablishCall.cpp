@@ -86,7 +86,7 @@ void EstablishCallData::initRpc()
     }
     if (eptr)
     {
-        setFinishState("initRpc called", true);
+        setFinishState("initRpc called");
         grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
         responderFinish(status);
     }
@@ -112,7 +112,7 @@ void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
         err_status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
 }
 
-void EstablishCallData::setFinishState(const String & msg, bool use_lock)
+void EstablishCallData::setFinishState(const String & msg)
 {
     state = FINISH;
     if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
@@ -120,20 +120,13 @@ void EstablishCallData::setFinishState(const String & msg, bool use_lock)
         String complete_msg = fmt::format("{}: {}",
                                           async_tunnel_sender->getTunnelId(),
                                           msg);
-        if (use_lock)
-        {
-            async_tunnel_sender->consumerFinishWithLock(complete_msg);
-        }
-        else
-        {
-            async_tunnel_sender->consumerFinish(complete_msg);
-        }
+        async_tunnel_sender->consumerFinishWithLock(complete_msg);
     }
 }
 
 void EstablishCallData::writeDone(const ::grpc::Status & status)
 {
-    setFinishState("writeDone called", false);
+    state = FINISH;
     if (stopwatch)
     {
         LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
@@ -159,7 +152,7 @@ void EstablishCallData::cancel()
 
 void EstablishCallData::finishTunnelAndResponder()
 {
-    setFinishState("finishTunnelAndResponder called", true);
+    setFinishState("finishTunnelAndResponder called");
     grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
     responder.Finish(status, this);
 }
@@ -188,6 +181,13 @@ void EstablishCallData::proceed()
     }
     else if (state == ERR_HANDLE)
     {
+        if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
+        {
+            String complete_msg = fmt::format("{}: {}",
+                                              async_tunnel_sender->getTunnelId(),
+                                              "state is ERR_HANDLE");
+            async_tunnel_sender->consumerFinishWithLock(complete_msg);
+        }
         writeDone(err_status);
     }
     else
