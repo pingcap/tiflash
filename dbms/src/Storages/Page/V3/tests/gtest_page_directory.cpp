@@ -2253,8 +2253,8 @@ try
         BlobStore::BlobStats stats(log, delegator, config);
         {
             const auto & lock = stats.lock();
-            stats.createStatNotChecking(file_id1, lock);
-            stats.createStatNotChecking(file_id2, lock);
+            stats.createStatNotChecking(file_id1, BLOBFILE_LIMIT_SIZE, lock);
+            stats.createStatNotChecking(file_id2, BLOBFILE_LIMIT_SIZE, lock);
         }
         auto restored_dir = restore_from_edit(edit, stats);
         auto temp_snap = restored_dir->createSnapshot();

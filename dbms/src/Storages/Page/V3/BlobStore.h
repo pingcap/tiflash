@@ -72,11 +72,7 @@ public:
             // Read Only.
             // Only after heavy GC, BlobFile will change to READ_ONLY type.
             // After GC remove, empty files will be removed.
-            READ_ONLY = 2,
-
-            // Big Blob file
-            // Only used to page size > config.file_limit_size
-            BIG_BLOB = 3
+            READ_ONLY = 2
         };
 
         static String blobTypeToString(BlobStatType type)
@@ -87,8 +83,6 @@ public:
                 return "normal";
             case BlobStatType::READ_ONLY:
                 return "read only";
-            case BlobStatType::BIG_BLOB:
-                return "big blob";
             }
             return "Invalid";
         }
@@ -101,13 +95,19 @@ public:
             std::mutex sm_lock;
             const SpaceMapPtr smap;
             /**
-             * If no any data inside. It shoule be same as space map `biggest_cap`,
+             * If no any data inside. It should be same as space map `biggest_cap`,
              * It is a hint for choosing quickly, should use `recalculateCapacity`
              * to update it after some space are free in the spacemap.
              */
+            // The map capacity of the whole BlobFile
+            UInt64 file_total_caps = 0;
+            // The max capacity of all available slots in SpaceMap
             UInt64 sm_max_caps = 0;
+            // The current file size of the BlobFile
             UInt64 sm_total_size = 0;
+            // The sum of the size of all valid data in the BlobFile
             UInt64 sm_valid_size = 0;
+            // sm_valid_size / sm_total_size
             double sm_valid_rate = 0.0;
 
         public:
@@ -115,16 +115,9 @@ public:
                 : id(id_)
                 , type(BlobStatType::NORMAL)
                 , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
+                , file_total_caps(sm_max_caps_)
                 , sm_max_caps(sm_max_caps_)
-            {
-                if (sm_type == SpaceMap::SpaceMapType::SMAP64_BIG)
-                {
-                    type = BlobStatType::BIG_BLOB;
-                }
-
-                // Won't create read-only blob by default.
-                assert(type != BlobStatType::READ_ONLY);
-            }
+            {}
 
             [[nodiscard]] std::lock_guard<std::mutex> lock()
             {
@@ -146,14 +139,9 @@ public:
                 type.store(BlobStatType::READ_ONLY);
             }
 
-            bool isBigBlob() const
-            {
-                return type.load() == BlobStatType::BIG_BLOB;
-            }
-
             BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
-            bool removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &);
+            size_t removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &);
 
             /**
              * This method is only used when blobstore restore
@@ -191,13 +179,9 @@ public:
         //
         [[nodiscard]] std::lock_guard<std::mutex> lock() const;
 
-        BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
+        BlobStatPtr createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &);
 
-        BlobStatPtr createStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard);
-
-        BlobStatPtr createBigPageStatNotChecking(BlobFileId blob_file_id, const std::lock_guard<std::mutex> &);
-
-        BlobStatPtr createBigStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & guard);
+        BlobStatPtr createStat(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> & guard);
 
         void eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &);
 
@@ -218,8 +202,6 @@ public:
          * 
          */
         std::pair<BlobStatPtr, BlobFileId> chooseStat(size_t buf_size, const std::lock_guard<std::mutex> &);
-
-        BlobFileId chooseBigStat(const std::lock_guard<std::mutex> &) const;
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
@@ -268,6 +250,8 @@ public:
                        const WriteLimiterPtr & write_limiter = nullptr,
                        const ReadLimiterPtr & read_limiter = nullptr);
 
+    PageEntriesEdit handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+
     PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntriesV3 & del_entries);
@@ -296,8 +280,6 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-
-    PageEntriesEdit handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
 
