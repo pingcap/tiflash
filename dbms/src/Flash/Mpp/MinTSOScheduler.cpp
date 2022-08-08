@@ -167,7 +167,10 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
             if (task_it != query_task_set->task_map.end() && task_it->second != nullptr && !scheduleImp(current_query_id, query_task_set, task_it->second, true, has_error))
             {
                 if (has_error)
+                {
                     query_task_set->waiting_tasks.pop(); /// it should be pop from the waiting queue, because the task is scheduled with errors.
+                    GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
+                }
                 return;
             }
             query_task_set->waiting_tasks.pop();
@@ -189,11 +192,13 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
     {
         updateMinTSO(tso, false, isWaiting ? "from the waiting set" : "when directly schedule it");
         active_set.insert(tso);
-        estimated_thread_usage += needed_threads;
-        task->scheduleThisTask(MPPTask::ScheduleState::SCHEDULED);
+        if (task->scheduleThisTask(MPPTask::ScheduleState::SCHEDULED))
+        {
+            estimated_thread_usage += needed_threads;
+            GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Increment();
+        }
         GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
         GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-        GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Increment();
         LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", task->getId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
         return true;
     }
