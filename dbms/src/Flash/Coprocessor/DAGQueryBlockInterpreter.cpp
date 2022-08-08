@@ -449,6 +449,7 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
+    std::cout << "ywq test execute topn, limit = " << limit << std::endl;
     orderStreams(pipeline, max_streams, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, false, context, log);
 }
 
@@ -719,6 +720,7 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 
 void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
 {
+    std::cout << "ywq test execute limit" << std::endl;
     size_t limit = 0;
     if (query_block.limit_or_topn->tp() == tipb::TypeLimit)
         limit = query_block.limit_or_topn->limit().limit();

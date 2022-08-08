@@ -20,8 +20,8 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
-#include <TestUtils/MockStorage.h>
 #include <TestUtils/MockServerInfo.h>
+#include <TestUtils/MockStorage.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -482,14 +482,15 @@ public:
 
     DB::tests::MockStorage mock_storage;
     DB::tests::MPPTestInfo mpp_test_info;
-    
+
     /// ywq todo refinement..
     void setMockStorage(DB::tests::MockStorage mock_storage_)
     {
         mock_storage = mock_storage_;
     }
 
-    void setMPPTestInfo(DB::tests::MPPTestInfo info) {
+    void setMPPTestInfo(DB::tests::MPPTestInfo info)
+    {
         mpp_test_info = info;
     }
 

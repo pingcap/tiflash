@@ -14,6 +14,8 @@
 
 #include <TestUtils/MPPTaskTestUtils.h>
 
+#include "TestUtils/FunctionTestUtils.h"
+
 namespace DB
 {
 namespace tests
@@ -26,8 +28,6 @@ public:
         MPPTaskTestUtils::SetUpTestCase();
         server_manager.addServerConfig({"test", "0.0.0.0:3930", 0});
         server_manager.addServerConfig({"test1", "0.0.0.0:3931", 1});
-        // server_manager.addServer("test", std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
-        // server_manager.addServer("test1", std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
         server_manager.startAllServer(log_ptr);
     }
     void initializeContext() override
@@ -58,22 +58,7 @@ try
         auto tasks = context.scan("test_db", "test_table_1")
                          .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
                          .project({"max(s1)"})
-                         .buildMPPTasks(context);
-
-        size_t task_size = tasks.size();
-
-        std::vector<String> expected_strings = {
-            "exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}\n"
-            " aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
-            "  table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n",
-            "exchange_sender_3 | type:PassThrough, {<0, Long>}\n"
-            " project_2 | {<0, Long>}\n"
-            "  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
-            "   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}\n"};
-        for (size_t i = 0; i < task_size; ++i)
-        {
-            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
-        }
+                         .buildMPPTasks(context, server_manager.getServerConfigMap().size());
 
         auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
         ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
@@ -87,61 +72,14 @@ try
     auto tasks = context
                      .scan("test_db", "l_table")
                      .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
-                     .topN("join_c", false, 2)
-                     .buildMPPTasks(context);
-
-    size_t task_size = tasks.size();
-    std::vector<String> expected_strings = {
-        "exchange_sender_6 | type:Hash, {<0, String>}\n"
-        " table_scan_1 | {<0, String>}",
-        "exchange_sender_5 | type:Hash, {<0, String>, <1, String>}\n"
-        " table_scan_0 | {<0, String>, <1, String>}",
-        "exchange_sender_4 | type:PassThrough, {<0, String>, <1, String>, <2, String>}\n"
-        " topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
-        "  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-        "   exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>}\n"
-        "   exchange_receiver_8 | type:PassThrough, {<0, String>}"};
-    for (size_t i = 0; i < task_size; ++i)
-    {
-        ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
-    }
+                     .buildMPPTasks(context, server_manager.getServerConfigMap().size());
 
     auto expected_cols = {
-        toNullableVec<String>({{}, "banana"}),
-        toNullableVec<String>({{}, "apple"}),
-        toNullableVec<String>({{}, {}})};
-    ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
-}
-CATCH
+        toNullableVec<String>({{}, "banana", "banana"}),
+        toNullableVec<String>({{}, "apple", "banana"}),
+        toNullableVec<String>({{}, "banana", "banana"}),
+        toNullableVec<String>({{}, "apple", "banana"})};
 
-TEST_F(ComputeServerRunner, runAggTasksWithMultipleServer)
-try
-{
-    {
-        auto tasks = context.scan("test_db", "test_table_1")
-                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                         .project({"max(s1)"})
-                         .buildMPPTasks(context, 2);
-
-        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
-        ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
-    }
-}
-CATCH
-
-TEST_F(ComputeServerRunner, runJoinTasksWithMultipleServer)
-try
-{
-    auto tasks = context
-                     .scan("test_db", "l_table")
-                     .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
-                     .topN("join_c", false, 2)
-                     .buildMPPTasks(context, 2);
-
-    auto expected_cols = {
-        toNullableVec<String>({{}, "banana"}),
-        toNullableVec<String>({{}, "apple"}),
-        toNullableVec<String>({{}, {}})};
     ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
 }
 CATCH

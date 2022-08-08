@@ -17,8 +17,10 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/MockComputeServerManager.h>
 #include <TestUtils/executorSerializer.h>
 
+#include <cstddef>
 #include <functional>
 
 namespace DB::tests
@@ -130,14 +132,14 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
+DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = 2;
     context.context.setMPPTest();
-    auto res = executeMPPQuery(context.context, properties, tasks);
+    auto res = executeMPPQueryNew(context.context, properties, tasks, server_config_map);
     return readBlock(res);
 }
 

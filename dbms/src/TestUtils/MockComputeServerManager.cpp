@@ -13,12 +13,15 @@
 // limitations under the License.
 #include <TestUtils/MockComputeServerManager.h>
 
+#include <cstddef>
+
 namespace DB::tests
 {
 void MockComputeServerManager::addServerConfig(MockServerConfig config)
 {
     config.partition_id = server_config_map.size();
     server_config_map[config.name] = config;
+    server_config_map2[config.partition_id] = config;
 }
 
 void MockComputeServerManager::startAllServer(const LoggerPtr & log_ptr)
@@ -49,6 +52,16 @@ void MockComputeServerManager::reset()
 MPPTestInfo MockComputeServerManager::getMPPTestInfo(String name)
 {
     return {server_config_map[name].partition_id, server_config_map.size()};
+}
+
+std::unordered_map<String, MockServerConfig> & MockComputeServerManager::getServerConfigMap()
+{
+    return server_config_map;
+}
+
+std::unordered_map<size_t, MockServerConfig> & MockComputeServerManager::getServerConfigMap2()
+{
+    return server_config_map2;
 }
 
 void MockComputeServerManager::setMPPTestInfo()

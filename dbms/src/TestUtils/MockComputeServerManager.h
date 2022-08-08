@@ -15,15 +15,18 @@
 #pragma once
 
 #include <Server/FlashGrpcServerHolder.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/MockServerInfo.h>
+#include <TestUtils/TiFlashTestBasic.h>
+
+#include <cstddef>
+#include <unordered_map>
 
 namespace DB::tests
 {
 class MockComputeServerManager
 {
 public:
-    void addServerConfig(MockServerConfig config); // ywq todo refine 
+    void addServerConfig(MockServerConfig config); // ywq todo refine
 
     void startAllServer(const LoggerPtr & log_ptr);
 
@@ -35,11 +38,15 @@ public:
 
     void setMPPTestInfo();
 
+    std::unordered_map<String, MockServerConfig> & getServerConfigMap();
+    std::unordered_map<size_t, MockServerConfig> & getServerConfigMap2();
+
 private:
     void addServer(String name, std::unique_ptr<FlashGrpcServerHolder> server);
 
 private:
     std::unordered_map<String, std::unique_ptr<FlashGrpcServerHolder>> server_map;
     std::unordered_map<String, MockServerConfig> server_config_map;
+    std::unordered_map<size_t, MockServerConfig> server_config_map2;
 };
 } // namespace DB::tests

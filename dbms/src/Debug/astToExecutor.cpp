@@ -835,15 +835,27 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         tipb_type.set_collate(collator_id);
         *exchange_sender->add_types() = tipb_type;
     }
+
+    // ywq todo,pass server info map...
+    int i = 0;
     for (auto task_id : mpp_info.sender_target_task_ids)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        meta.set_address(Debug::LOCAL_HOST);
+        if (i == 1)
+        {
+            std::cout << "ywq test reach sender set meta address with localhost1..." << std::endl;
+            meta.set_address(Debug::LOCAL_HOST1);
+        }
+        else
+        {
+            meta.set_address(Debug::LOCAL_HOST);
+        }
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
+        i++;
     }
 
     for (auto & field : output_schema)
@@ -875,15 +887,30 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     auto it = mpp_info.receiver_source_task_ids_map.find(name);
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
+
+    std::cout << "ywq test receiver source task size: " << it->second.size() << std::endl;
     for (size_t i = 0; i < it->second.size(); i++)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        meta.set_address(Debug::LOCAL_HOST);
+        // ywq todo.
+        if (i == 1)
+        {
+            std::cout << "ywq test reach receiver set meta address with localhost1..." << std::endl;
+            meta.set_address(Debug::LOCAL_HOST1);
+        }
+        else
+        {
+            meta.set_address(Debug::LOCAL_HOST);
+        }
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
+        if (i == 1)
+        {
+            exchange_receiver->set_tp(tipb::Hash);
+        }
     }
     return true;
 }
@@ -1247,20 +1274,31 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
 
     /// update output schema
     output_schema.clear();
+
+    std::cout << "ywq test children[0] schema: " << std::endl;
     for (auto & field : children[0]->output_schema)
     {
         if (tp == tipb::TypeRightOuterJoin && field.second.hasNotNullFlag())
             output_schema.push_back(toNullableDAGColumnInfo(field));
         else
             output_schema.push_back(field);
+        std::cout << field.first << std::endl;
     }
 
+    std::cout << "ywq test children[1] schema: " << std::endl;
     for (auto & field : children[1]->output_schema)
     {
         if (tp == tipb::TypeLeftOuterJoin && field.second.hasNotNullFlag())
             output_schema.push_back(toNullableDAGColumnInfo(field));
         else
             output_schema.push_back(field);
+        std::cout << field.first << std::endl;
+    }
+
+    std::cout << "ywq test: join output schema...." << std::endl;
+    for (auto k : output_schema)
+    {
+        std::cout << k.first << std::endl;
     }
 }
 

@@ -80,7 +80,7 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
 
-    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks);
+    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 protected:
     MockDAGRequestContext context;

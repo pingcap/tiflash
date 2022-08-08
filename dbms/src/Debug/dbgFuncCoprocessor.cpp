@@ -55,6 +55,7 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 
+#include <cstddef>
 #include <utility>
 
 namespace DB
@@ -191,7 +192,6 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     std::vector<Int64> root_task_ids;
     for (auto & task : query_tasks)
     {
-        std::cout << "ywq test partition id: " << task.partition_id << std::endl;
         if (task.is_root_task)
         {
             root_task_ids.push_back(task.task_id);
@@ -201,21 +201,14 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         auto * tm = req->mutable_meta();
         tm->set_start_ts(properties.start_ts);
         tm->set_partition_id(task.partition_id);
-        if (task.partition_id == 1)
-        {
-            tm->set_address(Debug::LOCAL_HOST1);
-        }
-        else
-        {
-            tm->set_address(Debug::LOCAL_HOST);
-        }
+        tm->set_address(Debug::LOCAL_HOST);
         tm->set_task_id(task.task_id);
         auto * encoded_plan = req->mutable_encoded_plan();
         task.dag_request->AppendToString(encoded_plan);
         req->set_timeout(properties.mpp_timeout);
         req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
         auto table_id = task.table_id;
-        if (table_id != -1 && !context.isMPPTest())
+        if (table_id != -1)
         {
             /// contains a table scan
             const auto & table_info = MockTiDB::instance().getTableInfoByID(table_id);
@@ -259,28 +252,79 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
             }
         }
 
-        if (context.isMPPTest())
+        pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
+        context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
+        if (call.getResp()->has_error())
+            throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
+    }
+    tipb::ExchangeReceiver tipb_exchange_receiver;
+    for (const auto root_task_id : root_task_ids)
+    {
+        mpp::TaskMeta tm;
+        tm.set_start_ts(properties.start_ts);
+        tm.set_address(Debug::LOCAL_HOST);
+        tm.set_task_id(root_task_id);
+        tm.set_partition_id(-1);
+        auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
+        tm.AppendToString(tm_string);
+    }
+    for (auto & field : root_task_schema)
+    {
+        auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+        tipb_type.set_collate(properties.collator);
+        auto * field_type = tipb_exchange_receiver.add_field_types();
+        *field_type = tipb_type;
+    }
+    mpp::TaskMeta root_tm;
+    root_tm.set_start_ts(properties.start_ts);
+    root_tm.set_address(Debug::LOCAL_HOST);
+    root_tm.set_task_id(-1);
+    root_tm.set_partition_id(-1);
+    std::shared_ptr<ExchangeReceiver> exchange_receiver
+        = std::make_shared<ExchangeReceiver>(
+            std::make_shared<GRPCReceiverContext>(
+                tipb_exchange_receiver,
+                root_tm,
+                context.getTMTContext().getKVCluster(),
+                context.getTMTContext().getMPPTaskManager(),
+                context.getSettingsRef().enable_local_tunnel,
+                context.getSettingsRef().enable_async_grpc_client),
+            tipb_exchange_receiver.encoded_task_meta_size(),
+            10,
+            /*req_id=*/"",
+            /*executor_id=*/"",
+            /*fine_grained_shuffle_stream_count=*/0);
+    BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/ 0);
+    return ret;
+}
+
+// ywq todo more consice function....
+BlockInputStreamPtr executeMPPQueryNew(Context & context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, tests::MockServerConfig> & server_config_map)
+{
+    DAGSchema root_task_schema;
+    std::vector<Int64> root_task_ids;
+    for (auto & task : query_tasks)
+    {
+        std::cout << "ywq test partition id: " << task.partition_id << std::endl;
+        if (task.is_root_task)
         {
-            if (task.partition_id == 1)
-            {
-                MockComputeClient client(
-                    grpc::CreateChannel(Debug::LOCAL_HOST1, grpc::InsecureChannelCredentials()));
-                client.runDispatchMPPTask(req);
-            }
-            else
-            {
-                MockComputeClient client(
-                    grpc::CreateChannel(Debug::LOCAL_HOST, grpc::InsecureChannelCredentials()));
-                client.runDispatchMPPTask(req);
-            }
+            root_task_ids.push_back(task.task_id);
+            root_task_schema = task.result_schema;
         }
-        else
-        {
-            pingcap::kv::RpcCall<mpp::DispatchTaskRequest> call(req);
-            context.getTMTContext().getCluster()->rpc_client->sendRequest(Debug::LOCAL_HOST, call, 1000);
-            if (call.getResp()->has_error())
-                throw Exception("Meet error while dispatch mpp task: " + call.getResp()->error().msg());
-        }
+        auto req = std::make_shared<mpp::DispatchTaskRequest>();
+        auto * tm = req->mutable_meta();
+        tm->set_start_ts(properties.start_ts);
+        tm->set_partition_id(task.partition_id);
+        tm->set_address(server_config_map[task.partition_id].addr);
+        tm->set_task_id(task.task_id);
+        auto * encoded_plan = req->mutable_encoded_plan();
+        task.dag_request->AppendToString(encoded_plan);
+        req->set_timeout(properties.mpp_timeout);
+        req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+        auto addr = server_config_map[task.partition_id].addr;
+        MockComputeClient client(
+            grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
+        client.runDispatchMPPTask(req);
     }
     tipb::ExchangeReceiver tipb_exchange_receiver;
     for (const auto root_task_id : root_task_ids)
@@ -313,7 +357,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
                 root_tm,
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
-                false, // ywq todo
+                false /*enable_local_tunnel_*/,
                 context.getSettingsRef().enable_async_grpc_client),
             tipb_exchange_receiver.encoded_task_meta_size(),
             10,

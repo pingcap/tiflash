@@ -111,7 +111,7 @@ void columnPrune(ExecutorPtr executor)
 // and MPPTask with multiple partitions.
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, int mpp_partition_num)
 {
-    columnPrune(root);
+    // columnPrune(root);
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = mpp_partition_num;

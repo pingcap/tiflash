@@ -19,8 +19,12 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
 
+#include <cstddef>
+
 namespace DB
 {
+
+// ywq todo for exchangeReceiver...
 template <typename SourceType>
 std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(Context & context, size_t max_streams, DB::LoggerPtr log, String executor_id)
 {
@@ -70,8 +74,8 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     // figure out how to identifi the partition num
     if (context.isMPPTest())
     {
-        std::cout << "ywq test mpp info: " << context.mpp_test_info.partition_id << ": " << context.mpp_test_info.partition_num << std::endl;
-        columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, 0, 1);
+        // std::cout << "ywq test mpp info: " << context.mpp_test_info.partition_id << ": " << context.mpp_test_info.partition_num << std::endl;
+        columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, context.mpp_test_info.partition_id, context.mpp_test_info.partition_num);
     }
     else
     {
@@ -84,7 +88,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
         RUNTIME_ASSERT(rows == col.column->size(), log, "each column must has same size");
         names_and_types.push_back({col.name, col.type});
     }
-    std::cout << "ywq test rows num = " << rows << std::endl;
+    std::cout << "ywq test rows num = " << rows << ", max stream = " << max_streams << std::endl;
     size_t row_for_each_stream = rows / max_streams;
     size_t rows_left = rows - row_for_each_stream * max_streams;
     size_t start = 0;
@@ -92,6 +96,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     {
         ColumnsWithTypeAndName columns_for_stream;
         size_t row_for_current_stream = row_for_each_stream + (i < rows_left ? 1 : 0);
+        std::cout << "ywq test row for cur stream: " << row_for_current_stream << ", rows left: " << rows_left << ", rows_for_each stream: " << row_for_each_stream << std::endl;
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {
             columns_for_stream.push_back(
