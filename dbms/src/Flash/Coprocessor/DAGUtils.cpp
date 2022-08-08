@@ -610,7 +610,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
-    //{tipb::ScalarFuncSig::Elt, "cast"},
+    {tipb::ScalarFuncSig::Elt, "elt"},
     //{tipb::ScalarFuncSig::ExportSet3Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet4Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet5Arg, "cast"},
