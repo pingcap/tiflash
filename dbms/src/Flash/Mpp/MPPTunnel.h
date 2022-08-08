@@ -76,7 +76,7 @@ public:
     {
         return send_queue;
     }
-    virtual void consumerFinish(const String & err_msg, bool use_lock[[maybe_unused]] = false);
+    virtual void consumerFinish(const String & err_msg, bool use_lock [[maybe_unused]] = false);
     String getConsumerFinishMsg()
     {
         return consumer_state.getMsg();
@@ -158,12 +158,14 @@ public:
         const String & tunnel_id_,
         std::shared_ptr<std::mutex> mu_)
         : Base(mode_, send_queue_, writer_, log_, tunnel_id_)
-        , mu(mu_) {}
+        , mu(mu_)
+    {}
     void tryFlushOne();
     /// use_lock should be true if it's invoked from async GRPC thread
     void sendOne(bool use_lock = false);
     bool isSendQueueNextPopNonBlocking() { return send_queue->isNextPopNonBlocking(); }
-    void consumerFinish(const String & err_msg, bool use_lock[[maybe_unused]] = false) override;
+    void consumerFinish(const String & err_msg, bool use_lock [[maybe_unused]] = false) override;
+
 private:
     std::shared_ptr<std::mutex> mu;
 };
