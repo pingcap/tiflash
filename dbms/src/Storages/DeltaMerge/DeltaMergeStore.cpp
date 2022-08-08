@@ -768,9 +768,14 @@ bool DeltaMergeStore::ingestOneDTFileUsingSplit(
          *    │----------- Segment ----------│
          *    │-------- Ingest Range --------│
          */
-        const auto new_segment_or_null = segmentReplaceData(dm_context, segment, file);
-        const bool succeeded = !!new_segment_or_null;
-        return succeeded;
+        LOG_FMT_DEBUG(
+            log,
+            "ingestOneDTFileUsingSplit Replace segment {} with file (skipped)",
+            segment->info(),
+            file->toString());
+        //        const auto new_segment_or_null = segmentReplaceData(dm_context, segment, file);
+        //        const bool succeeded = !!new_segment_or_null;
+        return true;
     }
     else if (is_start_matching)
     {
