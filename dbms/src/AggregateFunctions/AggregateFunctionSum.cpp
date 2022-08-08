@@ -22,11 +22,11 @@
 namespace DB
 {
 
-extern const String sum_name = NameSum::name;
+const String sum_name = NameSum::name;
 extern const String count_second_stage = NameCountSecondStage::name;
-extern const String final_sum_stage = NameFinalSumStage::name;
-extern const String sum_with_overflow = NameSumWithOverFlow::name;
-extern const String sum_kahan = NameSumKahan::name;
+extern constexpr std::string_view final_sum_stage = NameFinalSumStage::name;
+const String sum_with_overflow = NameSumWithOverFlow::name;
+const String sum_kahan = NameSumKahan::name;
 
 namespace
 {
@@ -40,13 +40,13 @@ template <typename T, typename TResult, typename SumName>
 using AggregateFunctionSumDecimal = AggregateFunctionSum<T, TResult, AggregateFunctionSumData<TResult>, SumName>;
 
 template <typename T>
-using AggregateFunctionSumWithOverflow = AggregateFunctionSum<T, T, AggregateFunctionSumData<T>>;
+using AggregateFunctionSumWithOverflow = AggregateFunctionSum<T, T, AggregateFunctionSumData<T>, NameSumWithOverFlow>;
 
 template <typename T>
-using AggregateFunctionFinalSumStage = AggregateFunctionSum<T, T, AggregateFunctionSumData<T>>;
+using AggregateFunctionFinalSumStage = AggregateFunctionSum<T, T, AggregateFunctionSumData<T>, NameFinalSumStage>;
 
 template <typename T>
-using AggregateFunctionSumKahan = AggregateFunctionSum<T, Float64, AggregateFunctionSumKahanData<Float64>>;
+using AggregateFunctionSumKahan = AggregateFunctionSum<T, Float64, AggregateFunctionSumKahanData<Float64>, NameSumKahan>;
 
 template <typename T, typename Name>
 AggregateFunctionPtr createDecimalFunction(const IDataType * p)
@@ -59,7 +59,7 @@ AggregateFunctionPtr createDecimalFunction(const IDataType * p)
         PrecType result_prec = prec;
         ScaleType result_scale = scale;
 
-        if (Name::name != final_sum_stage)
+        if constexpr (Name::name != final_sum_stage)
         {
             std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
         }
@@ -118,7 +118,7 @@ void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
     factory.registerFunction(sum_name, createAggregateFunctionSum<AggregateFunctionSumSimple, NameSum>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction(sum_with_overflow, createAggregateFunctionSum<AggregateFunctionSumWithOverflow, NameSumWithOverFlow>);
-    factory.registerFunction(final_sum_stage, createAggregateFunctionSum<AggregateFunctionFinalSumStage, NameFinalSumStage>);
+    factory.registerFunction(String(final_sum_stage), createAggregateFunctionSum<AggregateFunctionFinalSumStage, NameFinalSumStage>);
     factory.registerFunction(sum_kahan, createAggregateFunctionSum<AggregateFunctionSumKahan, NameSumKahan>);
     factory.registerFunction(count_second_stage, createAggregateFunctionSum<AggregateFunctionCountSecondStage, NameCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
 }

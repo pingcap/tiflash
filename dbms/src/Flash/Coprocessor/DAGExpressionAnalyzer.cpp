@@ -34,6 +34,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -87,7 +88,7 @@ String getAggFuncName(
     // sum function in mpp has two stage and we need to distinguish them with function name.
     // "sum" represents the first stage.
     // "finalSumStage" represents the sencond stage.
-    if (agg_func_name == sum_func_name && expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode)
+    if (agg_func_name == sum_func_name && AggregationInterpreterHelper::isFinalAggMode(expr))
         return final_sum_stage;
 
     return agg_func_name;
