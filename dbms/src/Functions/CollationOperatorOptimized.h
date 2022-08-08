@@ -20,10 +20,10 @@
 #include <Storages/Transaction/CollatorUtils.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
+#include <common/fixed_mem_eq.h>
 
 #include <cstddef>
 #include <string_view>
-
 
 namespace DB
 {
@@ -50,7 +50,7 @@ struct IsEqualRelated<DB::NotEqualsOp<A...>>
 // Loop columns and invoke callback for each pair.
 // Remove last zero byte.
 template <typename F>
-__attribute__((flatten, always_inline)) inline void LoopTwoColumns(
+FLATTEN_INLINE inline void LoopTwoColumns(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
     const ColumnString::Chars_t & b_data,
@@ -79,7 +79,7 @@ __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
 // Loop one column and invoke callback for each pair.
 // Remove last zero byte.
 template <typename F>
-__attribute__((flatten, always_inline)) inline void LoopOneColumn(
+FLATTEN_INLINE inline void LoopOneColumn(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
     size_t size,
@@ -95,6 +95,23 @@ __attribute__((flatten, always_inline)) inline void LoopOneColumn(
         func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i);
         a_prev_offset = a_offsets[i];
     }
+}
+
+template <size_t n, typename Op, bool trim, typename Result>
+FLATTEN_INLINE inline void LoopOneColumnCmpEqFixedStr(
+    const ColumnString::Chars_t & a_data,
+    const ColumnString::Offsets & a_offsets,
+    const char * src,
+    Result & c)
+{
+    LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&](std::string_view view, size_t i) {
+        if constexpr (trim)
+            view = RightTrim(view);
+        auto res = 1;
+        if (view.size() == n)
+            res = mem_utils::memcmp_eq_fixed_size<n>(view.data(), src) ? 0 : 1;
+        c[i] = Op::apply(res, 0);
+    });
 }
 
 // Handle str-column compare str-column.
@@ -175,8 +192,6 @@ ALWAYS_INLINE inline bool CompareStringVectorConstant(
     const TiDB::TiDBCollatorPtr & collator,
     Result & c)
 {
-    bool use_optimized_path = false;
-
     switch (collator->getCollatorType())
     {
     case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
@@ -184,11 +199,46 @@ ALWAYS_INLINE inline bool CompareStringVectorConstant(
     case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
     case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
     {
-        size_t size = a_offsets.size();
-
         std::string_view tar_str_view = RightTrim(b); // right trim const-str first
 
-        LoopOneColumn(a_data, a_offsets, size, [&c, &tar_str_view](const std::string_view & view, size_t i) {
+        if constexpr (IsEqualRelated<Op>::value)
+        {
+#ifdef M
+            static_assert(false, "`M` is defined");
+#endif
+#define M(k)                                                                                \
+    case k:                                                                                 \
+    {                                                                                       \
+        LoopOneColumnCmpEqFixedStr<k, Op, true>(a_data, a_offsets, tar_str_view.data(), c); \
+        return true;                                                                        \
+    }
+
+            switch (tar_str_view.size())
+            {
+                M(0);
+                M(1);
+                M(2);
+                M(3);
+                M(4);
+                M(5);
+                M(6);
+                M(7);
+                M(8);
+                M(9);
+                M(10);
+                M(11);
+                M(12);
+                M(13);
+                M(14);
+                M(15);
+                M(16);
+            default:
+                break;
+            }
+#undef M
+        }
+
+        LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&c, &tar_str_view](const std::string_view & view, size_t i) {
             if constexpr (IsEqualRelated<Op>::value)
             {
                 c[i] = Op::apply(RawStrEqualCompare(RightTrim(view), tar_str_view), 0);
@@ -199,13 +249,48 @@ ALWAYS_INLINE inline bool CompareStringVectorConstant(
             }
         });
 
-        use_optimized_path = true;
-        break;
+        return true;
     }
     case TiDB::ITiDBCollator::CollatorType::BINARY:
     {
-        size_t size = a_offsets.size();
-        LoopOneColumn(a_data, a_offsets, size, [&c, &b](const std::string_view & view, size_t i) {
+        if constexpr (IsEqualRelated<Op>::value)
+        {
+#ifdef M
+            static_assert(false, "`M` is defined");
+#endif
+#define M(k)                                                                      \
+    case k:                                                                       \
+    {                                                                             \
+        LoopOneColumnCmpEqFixedStr<k, Op, false>(a_data, a_offsets, b.data(), c); \
+        return true;                                                              \
+    }
+
+            switch (b.size())
+            {
+                M(0);
+                M(1);
+                M(2);
+                M(3);
+                M(4);
+                M(5);
+                M(6);
+                M(7);
+                M(8);
+                M(9);
+                M(10);
+                M(11);
+                M(12);
+                M(13);
+                M(14);
+                M(15);
+                M(16);
+            default:
+                break;
+            }
+#undef M
+        }
+
+        LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&c, &b](const std::string_view & view, size_t i) {
             if constexpr (IsEqualRelated<Op>::value)
             {
                 c[i] = Op::apply(RawStrEqualCompare((view), b), 0);
@@ -216,13 +301,12 @@ ALWAYS_INLINE inline bool CompareStringVectorConstant(
             }
         });
 
-        use_optimized_path = true;
-        break;
+        return true;
     }
     default:
         break;
     }
-    return use_optimized_path;
+    return false;
 }
 
 } // namespace DB
