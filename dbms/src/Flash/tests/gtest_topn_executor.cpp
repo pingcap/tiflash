@@ -150,7 +150,6 @@ CATCH
 TEST_F(ExecutorTopNTestRunner, TopNFunction)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     std::shared_ptr<tipb::DAGRequest> request;
     std::vector<ColumnsWithTypeAndName> expect_cols;
     MockColumnNameVec output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
@@ -162,6 +161,7 @@ try
     ASTPtr col3_ast = col(col_name[3]);
     ASTPtr func_ast;
 
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     {
         /// "and" function
         expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, {}, 32, 27, 36, 34}),

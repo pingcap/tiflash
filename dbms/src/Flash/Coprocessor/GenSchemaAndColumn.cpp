@@ -25,14 +25,15 @@ DataTypePtr getPkType(const ColumnInfo & column_info)
 {
     const auto & pk_data_type = getDataTypeByColumnInfoForComputingLayer(column_info);
     /// primary key type must be tidb_pk_column_int_type or tidb_pk_column_string_type.
-    if (unlikely(!pk_data_type->equals(*MutableSupport::tidb_pk_column_int_type) && !pk_data_type->equals(*MutableSupport::tidb_pk_column_string_type)))
-        throw Exception(
+    RUNTIME_CHECK(
+        pk_data_type->equals(*MutableSupport::tidb_pk_column_int_type) || pk_data_type->equals(*MutableSupport::tidb_pk_column_string_type),
+        Exception(
             fmt::format(
                 "Actual pk_data_type {} is not {} or {}",
                 pk_data_type->getName(),
                 MutableSupport::tidb_pk_column_int_type->getName(),
                 MutableSupport::tidb_pk_column_string_type->getName()),
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR));
     return pk_data_type;
 }
 } // namespace

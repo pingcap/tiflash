@@ -116,8 +116,10 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 1; i <= max_concurrency; i += step)
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     static const size_t max_concurrency = 10;
@@ -163,7 +165,6 @@ public:
 TEST_F(ExecutorAggTestRunner, GroupBy)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     std::shared_ptr<tipb::DAGRequest> request;
     std::vector<MockAstVec> group_by_exprs;
     std::vector<MockColumnNameVec> projections;
@@ -229,14 +230,12 @@ try
     }
 
     /// TODO type: decimal, enum and unsigned numbers
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(ExecutorAggTestRunner, AggregationMaxAndMin)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     std::shared_ptr<tipb::DAGRequest> request;
     auto agg_func0 = Max(col(col_name[0])); /// select max(age) from clerk group by country;
     auto agg_func1 = Max(col(col_name[3])); /// select max(salary) from clerk group by country, gender;
@@ -279,14 +278,12 @@ try
         request = buildDAGRequest(std::make_pair(db_name, table_name), agg_funcs[i], group_by_exprs[i], projections[i]);
         executeWithConcurrency(request, expect_cols[i]);
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(ExecutorAggTestRunner, AggregationCount)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     /// Prepare some data
     std::shared_ptr<tipb::DAGRequest> request;
     auto agg_func0 = Count(col(col_name[0])); /// select count(age) from clerk group by country;
@@ -310,14 +307,12 @@ try
         request = buildDAGRequest(std::make_pair(db_name, table_name), {agg_funcs[i]}, group_by_exprs[i], projections[i]);
         executeWithConcurrency(request, expect_cols[i]);
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(ExecutorAggTestRunner, AggNull)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto request = context
                        .scan("aggnull_test", "t1")
                        .aggregation({Max(col("s1"))}, {})
@@ -335,7 +330,6 @@ try
         ASSERT_COLUMNS_EQ_UR(executeStreams(request),
                              createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 

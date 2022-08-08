@@ -51,10 +51,12 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 1; i < 10; i += 2)
         {
             ASSERT_COLUMNS_EQ_UR(executeStreams(request, i), expect_columns);
         }
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     /// Prepare column data
@@ -85,7 +87,6 @@ public:
 TEST_F(ExecutorProjectionTestRunner, Projection)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     /// Check single column
     auto request = buildDAGRequest<MockColumnNameVec>({col_names[4]});
     executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
@@ -128,14 +129,12 @@ try
         request = buildDAGRequest<MockColumnNameVec>(projection_input);
         executeWithConcurrency(request, columns);
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(ExecutorProjectionTestRunner, ProjectionFunction)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     std::shared_ptr<tipb::DAGRequest> request;
 
     /// Test "equal" function
@@ -220,7 +219,6 @@ try
                             toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// TODO more functions...
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 

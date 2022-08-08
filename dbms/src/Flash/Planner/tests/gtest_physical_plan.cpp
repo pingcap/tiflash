@@ -358,7 +358,7 @@ try
         auto get_request = [&](const tipb::JoinType & join_type) {
             return context
                 .receive("exchange_l_table")
-                .join(context.receive("exchange_r_table"), {col("join_c"), col("join_c")}, join_type)
+                .join(context.receive("exchange_r_table"), join_type, {col("join_c"), col("join_c")})
                 .build(context);
         };
 
@@ -451,10 +451,10 @@ CreatingSets
     // MultiRightInnerJoin
     {
         auto [t1, t2, t3, t4] = multiTestScan();
-        auto request = t1.join(t2, {col("a")}, tipb::JoinType::TypeRightOuterJoin)
-                           .join(t3.join(t4, {col("a")}, tipb::JoinType::TypeRightOuterJoin),
-                                 {col("b")},
-                                 tipb::JoinType::TypeInnerJoin)
+        auto request = t1.join(t2, tipb::JoinType::TypeRightOuterJoin, {col("a")})
+                           .join(t3.join(t4, tipb::JoinType::TypeRightOuterJoin, {col("a")}),
+                                 tipb::JoinType::TypeInnerJoin,
+                                 {col("b")})
                            .build(context);
         execute(
             request,
@@ -521,10 +521,10 @@ CreatingSets
     // MultiRightLeftJoin
     {
         auto [t1, t2, t3, t4] = multiTestScan();
-        auto request = t1.join(t2, {col("a")}, tipb::JoinType::TypeRightOuterJoin)
-                           .join(t3.join(t4, {col("a")}, tipb::JoinType::TypeRightOuterJoin),
-                                 {col("b")},
-                                 tipb::JoinType::TypeLeftOuterJoin)
+        auto request = t1.join(t2, tipb::JoinType::TypeRightOuterJoin, {col("a")})
+                           .join(t3.join(t4, tipb::JoinType::TypeRightOuterJoin, {col("a")}),
+                                 tipb::JoinType::TypeLeftOuterJoin,
+                                 {col("b")})
                            .build(context);
         execute(
             request,

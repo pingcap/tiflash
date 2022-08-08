@@ -62,27 +62,28 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
-        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 1; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
-        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 1; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
         }
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 };
 
 TEST_F(WindowExecutorTestRunner, testWindowFunctionByPartitionAndOrder)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     /***** row_number with different types of input *****/
     // int - sql : select *, row_number() over w1 from test1 window w1 as (partition by partition_int order by order_int)
     auto request = context
@@ -211,7 +212,6 @@ try
                        toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2}),
                        toNullableVec<Int64>("rank", {1, 2, 1, 1, 3, 3, 1, 1, 3, 3}),
                        toNullableVec<Int64>("dense_rank", {1, 2, 1, 1, 2, 2, 1, 1, 2, 2})}));
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 

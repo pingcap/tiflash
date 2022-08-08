@@ -62,10 +62,12 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 1; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     static constexpr size_t join_type_num = 7;
@@ -135,7 +137,6 @@ try
         {toNullableVec<String>({"1", "3", {}, "1", {}}), toNullableVec<String>({"3", "4", "3", {}, {}}), toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     for (size_t i = 0; i < join_type_num; ++i)
     {
         for (size_t j = 0; j < simple_test_num; ++j)
@@ -150,7 +151,6 @@ try
             }
         }
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
@@ -272,7 +272,6 @@ try
         {toNullableVec<Int32>({1, 3, 0}), toNullableVec<Int32>({2, 2, 0}), toNullableVec<Int32>({3, 2, 0}), toNullableVec<Int8>({1, 0, 0}), toNullableVec<Int8>({0, 0, 0})},
     };
 
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     /// select * from (t1 JT1 t2 using (a)) JT2 (t3 JT1 t4 using (a)) using (b)
     for (auto [i, jt1] : ext::enumerate(join_types))
     {
@@ -291,14 +290,12 @@ try
             executeWithConcurrency(request, expected_cols[i * join_type_num + j]);
         }
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(JoinExecutorTestRunner, JoinCast)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto cast_request = [&]() {
         return context.scan("cast", "t1")
             .join(context.scan("cast", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
@@ -374,7 +371,6 @@ try
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeTimestamp}}, {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 6)});
 
     executeWithConcurrency(cast_request(), {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
@@ -395,7 +391,6 @@ try
         {toNullableVec<Int32>({4, 3}), toNullableVec<Int32>({1, 3}), toVec<UInt64>({3, 1}), toNullableVec<Int32>({1, 4})},
     };
 
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     for (auto [i, tp] : ext::enumerate(join_types))
     {
         auto request = context.scan("join_agg", "t1")
@@ -405,7 +400,6 @@ try
 
         executeWithConcurrency(request, expected_cols[i]);
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
@@ -502,7 +496,6 @@ CATCH
 TEST_F(JoinExecutorTestRunner, JoinWithTableScan)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto request = context
                        .scan("test_db", "l_table")
                        .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -527,14 +520,12 @@ try
     {
         executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})});
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(JoinExecutorTestRunner, JoinWithExchangeReceiver)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto request = context
                        .receive("exchange_l_table")
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -542,14 +533,12 @@ try
     {
         executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
 TEST_F(JoinExecutorTestRunner, JoinWithTableScanAndReceiver)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto request = context
                        .scan("test_db", "l_table")
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
@@ -557,7 +546,6 @@ try
     {
         executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
