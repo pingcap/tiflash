@@ -401,7 +401,6 @@ void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, b
 {
     using PermutationWithCollationUtils = ColumnString::LessWithCollation<false, void>;
 
-    // optimize path for default collator `UTF8MB4_BIN`
     switch (TiDB::GetTiDBCollatorType(&collator))
     {
     case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
