@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
 #include <Common/BackgroundTask.h>
 
 #include <fstream>
@@ -52,13 +50,25 @@ bool process_mem_usage(double & vm_usage, double & resident_set)
     return true;
 }
 
+bool isProcStatSupported()
+{
+    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
+    return stat_stream.is_open();
+}
+
 void CollectProcInfoBackgroundTask::begin()
 {
     std::unique_lock lk(mu);
     if (!is_already_begin)
     {
+        if (!isProcStatSupported())
+        {
+            end_fin = true;
+            return;
+        }
         std::thread t = ThreadFactory::newThread(false, "MemTrackThread", &CollectProcInfoBackgroundTask::memCheckJob, this);
         t.detach();
+        is_already_begin = true;
     }
 }
 
