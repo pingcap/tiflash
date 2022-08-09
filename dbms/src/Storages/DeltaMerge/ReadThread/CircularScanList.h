@@ -40,10 +40,9 @@ public:
         last_itr = nextItr(last_itr);
         while (!l.empty())
         {
-            auto ptr = *last_itr;
-            if (ptr->valid())
+            if (needScheduled(last_itr))
             {
-                return ptr;
+                return *last_itr;
             }
             else
             {
@@ -95,6 +94,12 @@ private:
         {
             return std::next(itr);
         }
+    }
+
+    bool needScheduled(Iter itr)
+    {
+        // If other components hold this SegmentReadTaskPool, schedule it for read blocks or clean MergedTaskPool if necessary.
+        return (*itr)->valid() || itr->use_count() > 1;
     }
 
     std::list<Value> l;
