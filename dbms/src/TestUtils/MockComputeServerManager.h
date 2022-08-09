@@ -18,7 +18,6 @@
 #include <TestUtils/MockServerInfo.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
-#include <cstddef>
 #include <unordered_map>
 
 namespace DB::tests

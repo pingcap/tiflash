@@ -13,8 +13,6 @@
 // limitations under the License.
 #include <TestUtils/MockComputeServerManager.h>
 
-#include <cstddef>
-
 namespace DB::tests
 {
 void MockComputeServerManager::addServer(String addr)

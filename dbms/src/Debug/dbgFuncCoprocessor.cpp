@@ -55,7 +55,6 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 
-#include <cstddef>
 #include <utility>
 
 namespace DB

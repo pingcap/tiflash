@@ -42,6 +42,10 @@ public:
     ExecutorTest()
         : context(TiFlashTestEnv::getContext())
     {}
+
+    virtual ~ExecutorTest()
+    {
+    }
     static void SetUpTestCase();
 
     virtual void initializeContext();

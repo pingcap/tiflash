@@ -35,19 +35,12 @@ public:
         MockComputeServerManager::getInstance();
     }
 
-    static void TearDownTestCase()
+    static void TearDownTestCase() // NOLINT(readability-identifier-naming))
     {
         MockComputeServerManager::getInstance().reset();
     }
 
 protected:
-    // TODO: Mock a simple storage layer to store test input.
-    // Currently the lifetime of a server is held in this scope.
-    // TODO: Add ComputeServerManager to maintain the lifetime of a bunch of servers.
-    // Note: May go through GRPC fail number 14 --> socket closed,
-    // if you start a server, send a request to the server using pingcap::kv::RpcClient,
-    // then close the server and start the server using the same addr,
-    // then send a request to the new server using pingcap::kv::RpcClient.
     static LoggerPtr log_ptr;
 };
 
