@@ -114,7 +114,7 @@ public:
         , delta_small_column_file_rows(settings.dt_segment_delta_small_column_file_rows)
         , delta_small_column_file_bytes(settings.dt_segment_delta_small_column_file_size)
         , stable_pack_rows(settings.dt_segment_stable_pack_rows)
-        , enable_logical_split(settings.dt_enable_logical_split)
+        , enable_logical_split(false) // disable due to incompatible issue https://github.com/pingcap/tiflash/issues/5576
         , read_delta_only(settings.dt_read_delta_only)
         , read_stable_only(settings.dt_read_stable_only)
         , enable_relevant_place(settings.dt_enable_relevant_place)
