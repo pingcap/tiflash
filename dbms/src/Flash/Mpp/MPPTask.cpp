@@ -331,7 +331,6 @@ void MPPTask::preprocess()
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);
     mpp_task_statistics.recordReadWaitIndex(*dag_context);
-
 }
 
 void MPPTask::runImpl()
@@ -372,6 +371,7 @@ void MPPTask::runImpl()
         auto from = dag_context->getBlockIO().in;
         from->readPrefix();
         LOG_DEBUG(log, "begin read ");
+
         while (from->read())
             continue;
 

@@ -33,9 +33,6 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
-#if USE_JEMALLOC
-#include <jemalloc/jemalloc.h>
-#endif
 
 #include <ext/scope_guard.h>
 
@@ -72,67 +69,9 @@ FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Conte
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
     LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
-    std::thread t = ThreadFactory::newThread(false, "MemTrackThread", &FlashService::memCheckJob, this);
-    t.detach();
 }
 
-
-bool process_mem_usage(double & vm_usage, double & resident_set)
-{
-    vm_usage = 0.0;
-    resident_set = 0.0;
-
-    // 'file' stat seems to give the most reliable results
-    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
-    if (!stat_stream.is_open())
-        return false;
-
-    // dummy vars for leading entries in stat that we don't care about
-    std::string pid, comm, state, ppid, pgrp, session, tty_nr;
-    std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
-    std::string utime, stime, cutime, cstime, priority, nice;
-    std::string proc_num_threads, itrealvalue, starttime;
-
-    // the two fields we want
-    unsigned long long vsize;
-    long long rss;
-
-    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
-        >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
-        >> utime >> stime >> cutime >> cstime >> priority >> nice
-        >> proc_num_threads >> itrealvalue >> starttime >> vsize >> rss; // don't care about the rest
-
-    stat_stream.close();
-
-    long long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
-    vm_usage = vsize / 1024.0;
-    resident_set = rss * page_size_kb;
-    return true;
-}
-
-void FlashService::memCheckJob()
-{
-    double vm_usage;
-    double resident_set;
-    while (!end_syn)
-    {
-        process_mem_usage(vm_usage, resident_set);
-        resident_set *= 1024; // unit: byte
-        real_rss = (long long)resident_set;
-
-        usleep(100000); // sleep 100ms
-    }
-    end_fin = true;
-}
-
-FlashService::~FlashService()
-{
-    end_syn = true;
-    while (!end_fin)
-    {
-        usleep(10000);
-    }
-}
+FlashService::~FlashService() = default;
 
 // Use executeInThreadPool to submit job to thread pool which return grpc::Status.
 grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()> job)
