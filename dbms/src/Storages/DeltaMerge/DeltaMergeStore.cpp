@@ -894,10 +894,19 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
             if (succeeded)
             {
                 updated_segments.insert(segment);
+                LOG_FMT_DEBUG(log, "Update remaining range, before update: {}.shrink to {}", remaining_range.toDebugString(), delete_range.end.toDebugString());
                 remaining_range.shrinkStartChecked(delete_range.end);
+                LOG_FMT_DEBUG(log, "Update remaining range, before after update: {}.shrink to {}", remaining_range.toDebugString(), delete_range.end.toDebugString());
             }
             else
             {
+                LOG_FMT_TRACE(
+                    log,
+                    "ingestDTFilesUsingSplit DeleteRange phase: Delete range failed, delete_range={}, segment={}, remaining_delete_range={}, updated_segments_n={}",
+                    delete_range.toDebugString(),
+                    segment->simpleInfo(),
+                    remaining_range.toDebugString(),
+                    updated_segments.size());
                 // retry current range
             }
         }

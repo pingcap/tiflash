@@ -978,7 +978,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
         // to the file id.
         wbs.data.putRefPage(my_dmfile_page_id, ori_page_id);
         wbs.data.putRefPage(other_dmfile_page_id, ori_page_id);
-        // wbs.removed_data.delPage(ori_page_id);
+        wbs.removed_data.delPage(ori_page_id);
 
         LOG_FMT_INFO(log, "Segment [{}] -- In snapshot: ref my - page_id {} to page_id {}", segment_id, my_dmfile_page_id, ori_page_id);
         LOG_FMT_INFO(log, "Segment [{}] -- In snapshot: ref other - page_id {} to page_id {}", segment_id, other_dmfile_page_id, ori_page_id);
