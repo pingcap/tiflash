@@ -28,7 +28,7 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     NamesAndTypes names_and_types;
     size_t rows = 0;
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
-    columns_with_type_and_name = context.getDAGContext()->columnsForTest(executor_id);
+    columns_with_type_and_name = context.columnsForTest(executor_id);
     for (const auto & col : columns_with_type_and_name)
     {
         if (rows == 0)
