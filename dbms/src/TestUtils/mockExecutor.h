@@ -93,6 +93,8 @@ public:
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
+    DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type, const std::unordered_map<size_t, MockServerConfig> & server_config_map);
+
     // Currently only support inner join, left join and right join.
     // TODO support more types of join.
     DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAstVec exprs);

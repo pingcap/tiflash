@@ -100,13 +100,10 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
 void columnPrune(ExecutorPtr executor)
 {
     std::unordered_set<String> used_columns;
-    std::cout << "ywq test before column prune.." << std::endl;
     for (auto & schema : executor->output_schema)
     {
         used_columns.emplace(schema.first);
-        std::cout << schema.first;
     }
-    std::cout << std::endl;
     executor->columnPrune(used_columns);
 }
 
@@ -120,7 +117,6 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = mpp_partition_num;
-    // ywq todo pass server info into it...
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
     root.reset();
     executor_index = 0;
@@ -397,9 +393,6 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
 {
     auto table_id = mock_storage.getTableId(db_name + "." + table_name);
-    std::cout << "ywq table_id: " << table_id << std::endl;
-
-    std::cout << "ywq test wtf:" << mock_storage.getColumns(table_id).size() << std::endl;
     return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_storage.getTableSchema(db_name + "." + table_name));
 }
 

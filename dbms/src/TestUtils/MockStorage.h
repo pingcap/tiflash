@@ -71,7 +71,6 @@ public:
 
     MockColumnInfoVec getExchangeSchema(String exchange_name);
 
-    /// for mpp ywq todo not ready to use.
     ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num);
 
 private:

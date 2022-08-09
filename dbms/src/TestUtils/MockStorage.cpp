@@ -13,7 +13,7 @@
 // limitations under the License.
 #include <TestUtils/MockStorage.h>
 
-#include "TestUtils/FunctionTestUtils.h"
+#include <cstddef>
 
 namespace DB::tests
 {
@@ -109,44 +109,24 @@ MockColumnInfoVec MockStorage::getExchangeSchema(String exchange_name)
     throw Exception(fmt::format("Failed to get exchange schema by exchange name '{}'", exchange_name));
 }
 
-/// for mpp ywq todo not ready to use.
 ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num)
 {
-    std::cout << "ywq test getColumnsForMPPTableScan, partition_id = " << partition_id << ", partition_num = " << partition_num << std::endl;
     if (tableExists(table_id))
     {
         auto columns_with_type_and_name = table_columns[table_id];
-        int rows = 0;
+        size_t rows = 0;
         for (const auto & col : columns_with_type_and_name)
         {
-            // ywq todo assert...
             if (rows == 0)
                 rows = col.column->size();
+            assert(rows == col.column->size());
         }
 
-        std::cout << "ywq test rows in column: " << rows << std::endl;
         int per_rows = rows / partition_num;
         int rows_left = rows - per_rows * partition_num;
-        int cur_rows = per_rows;
-        if (partition_id < rows_left)
-        {
-            cur_rows += 1;
-        }
-        int start = 0;
-        if (partition_id < rows_left)
-        {
-            start = cur_rows * partition_id;
-        }
-        else if (rows_left != 0)
-        {
-            start = (cur_rows + 1) * partition_id;
-        }
-        else
-        {
-            start = cur_rows * partition_id;
-        }
+        int cur_rows = per_rows + (partition_id < rows_left ? 1 : 0);
+        int start = (cur_rows + (rows_left != 0 ? 1 : 0)) * partition_id;
         ColumnsWithTypeAndName res;
-
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {
             res.push_back(
@@ -155,8 +135,6 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
                     column_with_type_and_name.type,
                     column_with_type_and_name.name));
         }
-        std::cout << "ywq test table_id: " << table_id << ", cur rows: " << cur_rows << ", start = " << start << ", partition_id = " << partition_id
-                  << ", ywq test column content: " << getColumnsContent(res) << std::endl;
         return res;
     }
     return {};

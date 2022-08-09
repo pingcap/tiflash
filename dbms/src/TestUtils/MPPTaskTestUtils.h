@@ -32,11 +32,12 @@ public:
         log_ptr = Logger::get("compute_test");
         auto size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+        MockComputeServerManager::getInstance();
     }
 
     static void TearDownTestCase()
     {
-        server_manager.reset();
+        MockComputeServerManager::getInstance().reset();
     }
 
 protected:
@@ -48,16 +49,14 @@ protected:
     // then close the server and start the server using the same addr,
     // then send a request to the new server using pingcap::kv::RpcClient.
     static LoggerPtr log_ptr;
-    static MockComputeServerManager server_manager;
 };
 
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
-MockComputeServerManager MPPTaskTestUtils::server_manager;
 
-#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)          \
-    TiFlashTestEnv::getGlobalContext().setMPPTest();      \
-    server_manager.setMockStorage(context.mockStorage()); \
-    server_manager.setMPPTestInfo();                      \
-    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, server_manager.getServerConfigMap2()), expected_cols);
+#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                   \
+    TiFlashTestEnv::getGlobalContext().setMPPTest();                               \
+    MockComputeServerManager::getInstance().setMockStorage(context.mockStorage()); \
+    MockComputeServerManager::getInstance().setMPPTestInfo();                      \
+    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::getInstance().getServerConfigMap2()), expected_cols);
 
 } // namespace DB::tests

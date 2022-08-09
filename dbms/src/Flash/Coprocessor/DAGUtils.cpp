@@ -1128,7 +1128,6 @@ String getColumnNameForColumnExpr(const tipb::Expr & expr, const std::vector<Nam
     auto column_index = decodeDAGInt64(expr.val());
     if (column_index < 0 || column_index >= static_cast<Int64>(input_col.size()))
     {
-        std::cout << "ywq test column index: " << column_index << std::endl;
         throw TiFlashException("Column index out of bound", Errors::Coprocessor::BadRequest);
     }
     return input_col[column_index].name;

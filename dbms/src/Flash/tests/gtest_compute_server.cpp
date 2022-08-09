@@ -26,9 +26,11 @@ public:
     static void SetUpTestCase()
     {
         MPPTaskTestUtils::SetUpTestCase();
-        server_manager.addServerConfig({"test", "0.0.0.0:3930", 0});
-        server_manager.addServerConfig({"test1", "0.0.0.0:3931", 1});
-        server_manager.startAllServer(log_ptr);
+        MockComputeServerManager::getInstance().addServerConfig({"test", "0.0.0.0:3930", 0});
+        MockComputeServerManager::getInstance().addServerConfig({"test1", "0.0.0.0:3931", 1});
+        MockComputeServerManager::getInstance().addServerConfig({"test2", "0.0.0.0:3932", 1});
+
+        MockComputeServerManager::getInstance().startAllServer(log_ptr);
     }
     void initializeContext() override
     {
@@ -58,7 +60,7 @@ try
         auto tasks = context.scan("test_db", "test_table_1")
                          .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
                          .project({"max(s1)"})
-                         .buildMPPTasks(context, server_manager.getServerConfigMap().size());
+                         .buildMPPTasks(context, MockComputeServerManager::getInstance().getServerConfigMap().size());
 
         auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
         ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
@@ -72,7 +74,7 @@ try
     auto tasks = context
                      .scan("test_db", "l_table")
                      .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
-                     .buildMPPTasks(context, server_manager.getServerConfigMap().size());
+                     .buildMPPTasks(context, MockComputeServerManager::getInstance().getServerConfigMap().size());
 
     auto expected_cols = {
         toNullableVec<String>({{}, "banana", "banana"}),

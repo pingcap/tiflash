@@ -16,9 +16,8 @@
 
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/MockServerInfo.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/TiFlashTestEnv.h>
 
-#include <cstddef>
 #include <unordered_map>
 
 namespace DB::tests
@@ -26,6 +25,11 @@ namespace DB::tests
 class MockComputeServerManager
 {
 public:
+    static MockComputeServerManager & getInstance()
+    {
+        static MockComputeServerManager server_manager;
+        return server_manager;
+    }
     void addServerConfig(MockServerConfig config); // ywq todo refine
 
     void startAllServer(const LoggerPtr & log_ptr);

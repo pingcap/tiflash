@@ -26,6 +26,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
+#include <TestUtils/MockComputeServerManager.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -788,6 +789,7 @@ namespace Debug
 {
 String LOCAL_HOST = "127.0.0.1:3930";
 String LOCAL_HOST1 = "127.0.0.1:3931";
+
 void setServiceAddr(const std::string & addr)
 {
     LOCAL_HOST = addr;
@@ -836,26 +838,15 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         *exchange_sender->add_types() = tipb_type;
     }
 
-    // ywq todo,pass server info map...
-    int i = 0;
     for (auto task_id : mpp_info.sender_target_task_ids)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        if (i == 1)
-        {
-            std::cout << "ywq test reach sender set meta address with localhost1..." << std::endl;
-            meta.set_address(Debug::LOCAL_HOST1);
-        }
-        else
-        {
-            meta.set_address(Debug::LOCAL_HOST);
-        }
+        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap2()[mpp_info.partition_id].addr);
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
-        i++;
     }
 
     for (auto & field : output_schema)
@@ -888,23 +879,13 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
 
-    std::cout << "ywq test receiver source task size: " << it->second.size() << std::endl;
     for (size_t i = 0; i < it->second.size(); i++)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        // ywq todo.
-        if (i == 1)
-        {
-            std::cout << "ywq test reach receiver set meta address with localhost1..." << std::endl;
-            meta.set_address(Debug::LOCAL_HOST1);
-        }
-        else
-        {
-            meta.set_address(Debug::LOCAL_HOST);
-        }
+        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap2()[i].addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
         if (i == 1)
@@ -1136,12 +1117,9 @@ void Aggregation::toMPPSubPlan(size_t & executor_index, const DAGProperties & pr
     {
         partition_keys.push_back(i + agg_func_num);
     }
-    std::cout << "ywq test, partition_keys: " << partition_keys.size() << std::endl;
     std::shared_ptr<ExchangeSender> exchange_sender
         = std::make_shared<ExchangeSender>(executor_index, output_schema_for_partial_agg, partition_keys.empty() ? tipb::PassThrough : tipb::Hash, partition_keys);
     exchange_sender->children.push_back(partial_agg);
-
-    std::cout << "ywq test, exchange sender type: " << exchange_sender->type << std::endl;
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver
         = std::make_shared<ExchangeReceiver>(executor_index, output_schema_for_partial_agg);
@@ -1230,20 +1208,6 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
     for (auto & field : children[1]->output_schema)
         right_columns.emplace(field.first);
 
-    std::cout << "ywq test left columns: " << std::endl;
-    for (auto col : left_columns)
-    {
-        std::cout << col;
-    }
-    std::cout << std::endl;
-
-    std::cout << "ywq test right columns: " << std::endl;
-    for (auto col : right_columns)
-    {
-        std::cout << col;
-    }
-    std::cout << std::endl;
-
     std::unordered_set<String> left_used_columns;
     std::unordered_set<String> right_used_columns;
 
@@ -1261,7 +1225,6 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
         if (auto * identifier = typeid_cast<ASTIdentifier *>(child.get()))
         {
             auto col_name = identifier->getColumnName();
-            std::cout << "ywq test using expr list col: " << col_name << std::endl;
             for (auto & field : children[0]->output_schema)
             {
                 if (col_name == splitQualifiedName(field.first).second)
@@ -1285,50 +1248,26 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
         }
     }
 
-    std::cout << "ywq test left used columns: " << std::endl;
-    for (auto col : left_used_columns)
-    {
-        std::cout << col;
-    }
-    std::cout << std::endl;
-
-    std::cout << "ywq test right used columns: " << std::endl;
-    for (auto col : right_used_columns)
-    {
-        std::cout << col;
-    }
-    std::cout << std::endl;
-
     children[0]->columnPrune(left_used_columns);
     children[1]->columnPrune(right_used_columns);
 
     /// update output schema
     output_schema.clear();
 
-    std::cout << "ywq test children[0] schema: " << std::endl;
     for (auto & field : children[0]->output_schema)
     {
         if (tp == tipb::TypeRightOuterJoin && field.second.hasNotNullFlag())
             output_schema.push_back(toNullableDAGColumnInfo(field));
         else
             output_schema.push_back(field);
-        std::cout << field.first << std::endl;
     }
 
-    std::cout << "ywq test children[1] schema: " << std::endl;
     for (auto & field : children[1]->output_schema)
     {
         if (tp == tipb::TypeLeftOuterJoin && field.second.hasNotNullFlag())
             output_schema.push_back(toNullableDAGColumnInfo(field));
         else
             output_schema.push_back(field);
-        std::cout << field.first << std::endl;
-    }
-
-    std::cout << "ywq test: join output schema...." << std::endl;
-    for (auto k : output_schema)
-    {
-        std::cout << k.first << std::endl;
     }
 }
 
@@ -1343,7 +1282,6 @@ void Join::fillJoinKeyAndFieldType(
     for (size_t index = 0; index < child_schema.size(); ++index)
     {
         const auto & [col_name, col_info] = child_schema[index];
-        std::cout << "ywq test fuck col name" << col_name << std::endl;
         if (splitQualifiedName(col_name).second == identifier->getColumnName())
         {
             auto tipb_type = TiDB::columnInfoToFieldType(col_info);
@@ -1374,9 +1312,7 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, c
 
     for (auto & key : using_expr_list->children)
     {
-        std::cout << "ywq test left join keys" << std::endl;
         fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
-        std::cout << "ywq test right join keys" << std::endl;
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
     }
 
@@ -1799,6 +1735,7 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     }
     return compileJoin(executor_index, left, right, tp, ast_join.using_expression_list);
 }
+
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type)
 {

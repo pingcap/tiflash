@@ -159,11 +159,8 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    // ywq todo fully replacement of columns for test
-    std::cout << "ywq test table scan logical table id: " << table_scan.getLogicalTableID() << std::endl;
     if (!context.mock_storage.tableExists(table_scan.getLogicalTableID()))
     {
-        std::cout << "ywq test handle mock table scan no column" << std::endl;
         auto names_and_types = genNamesAndTypes(table_scan);
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
@@ -175,8 +172,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
     }
     else
     {
-        std::cout << "ywq test handle mock table scan with user column" << std::endl;
-        auto [names_and_types, mock_table_scan_streams] = mockSourceStreamNew<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getLogicalTableID());
+        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, table_scan.getTableScanExecutorID(), table_scan.getLogicalTableID());
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         pipeline.streams.insert(pipeline.streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
@@ -449,7 +445,6 @@ void DAGQueryBlockInterpreter::executeWindowOrder(DAGPipeline & pipeline, SortDe
 void DAGQueryBlockInterpreter::executeOrder(DAGPipeline & pipeline, const NamesAndTypes & order_columns)
 {
     Int64 limit = query_block.limit_or_topn->topn().limit();
-    std::cout << "ywq test execute topn, limit = " << limit << std::endl;
     orderStreams(pipeline, max_streams, getSortDescription(order_columns, query_block.limit_or_topn->topn().order_by()), limit, false, context, log);
 }
 
@@ -498,11 +493,8 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    // ywq todo
-    std::cout << "ywq test source name: " << query_block.source_name << std::endl;
     if (!context.mock_storage.exchangeExists(query_block.source_name))
     {
-        std::cout << "ywq test reach here..." << std::endl;
         for (size_t i = 0; i < max_streams; ++i)
         {
             // use max_block_size / 10 to determine the mock block's size
@@ -720,7 +712,6 @@ void DAGQueryBlockInterpreter::executeProject(DAGPipeline & pipeline, NamesWithA
 
 void DAGQueryBlockInterpreter::executeLimit(DAGPipeline & pipeline)
 {
-    std::cout << "ywq test execute limit" << std::endl;
     size_t limit = 0;
     if (query_block.limit_or_topn->tp() == tipb::TypeLimit)
         limit = query_block.limit_or_topn->limit().limit();

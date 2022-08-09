@@ -54,7 +54,6 @@ FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Conte
 {
     auto settings = context.getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
-    std::cout << "ywq test flashservice enable local tunnel: " << enable_local_tunnel << std::endl;
     enable_local_tunnel = false;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
