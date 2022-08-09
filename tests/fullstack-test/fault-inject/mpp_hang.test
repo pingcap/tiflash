@@ -13,7 +13,7 @@
 # limitations under the License.
 
 #TODO: mpp hang detect is disabled, so this test should not be used
-#RETURN
+RETURN
 
 mysql> drop table if exists test.t;
 mysql> create table test.t(id int, value int);
