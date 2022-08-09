@@ -5619,7 +5619,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Thread and Cache",
+          "title": "Read Thread and Data Sharing",
           "tooltip": {
             "shared": true,
             "sort": 0,
