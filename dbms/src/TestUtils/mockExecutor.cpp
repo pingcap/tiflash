@@ -23,7 +23,7 @@
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
-
+#include <TestUtils/MockComputeServerManager.h>
 #include <unordered_set>
 
 namespace DB::tests
@@ -110,7 +110,6 @@ void columnPrune(ExecutorPtr executor)
 
 // Split a DAGRequest into multiple QueryTasks which can be dispatched to multiple Compute nodes.
 // Currently we don't support window functions
-// and MPPTask with multiple partitions.
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, int mpp_partition_num)
 {
     columnPrune(root);
@@ -121,6 +120,11 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     root.reset();
     executor_index = 0;
     return query_tasks;
+}
+
+QueryTasks DAGRequestBuilder::buildMPPTasksForMultipleServer(MockDAGRequestContext & mock_context)
+{
+    return buildMPPTasks(mock_context, MockComputeServerManager::getInstance().getServerConfigMap().size());
 }
 
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns)

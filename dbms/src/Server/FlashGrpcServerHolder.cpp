@@ -198,12 +198,12 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     }
 }
 
-void FlashGrpcServerHolder::setMockStorage(tests::MockStorage mock_storage)
+void FlashGrpcServerHolder::setMockStorage(tests::MockStorage & mock_storage)
 {
     flash_service->setMockStorage(mock_storage);
 }
 
-void FlashGrpcServerHolder::setMPPTestInfo(tests::MPPTestInfo info) // ywq todo refine.
+void FlashGrpcServerHolder::setMPPTestInfo(tests::MPPTestInfo info)
 {
     flash_service->setMPPTestInfo(info);
 }

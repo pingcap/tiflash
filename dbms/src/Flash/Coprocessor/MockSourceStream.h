@@ -20,11 +20,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
 
-#include <cstddef>
-#include <type_traits>
-
-#include "common/types.h"
-
 namespace DB
 {
 

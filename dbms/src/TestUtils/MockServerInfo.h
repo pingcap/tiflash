@@ -19,7 +19,6 @@ namespace DB::tests
 {
 struct MockServerConfig
 {
-    String name;
     String addr;
     size_t partition_id;
 };

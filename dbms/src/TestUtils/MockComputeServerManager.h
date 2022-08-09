@@ -31,9 +31,9 @@ public:
         static MockComputeServerManager server_manager;
         return server_manager;
     }
-    void addServerConfig(MockServerConfig config);
+    void addServer(String addr);
 
-    void startAllServer(const LoggerPtr & log_ptr);
+    void startServers(const LoggerPtr & log_ptr);
 
     void setMockStorage(MockStorage & mock_storage);
 
@@ -41,17 +41,14 @@ public:
 
     MPPTestInfo getMPPTestInfo(size_t partition_id);
 
-    void setMPPTestInfo();
-
-    // std::unordered_map<String, MockServerConfig> & getServerConfigMap();
     std::unordered_map<size_t, MockServerConfig> & getServerConfigMap();
 
 private:
     void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);
+    void prepareMPPTestInfo();
 
 private:
     std::unordered_map<size_t, std::unique_ptr<FlashGrpcServerHolder>> server_map;
     std::unordered_map<size_t, MockServerConfig> server_config_map;
-    // std::unordered_map<size_t, MockServerConfig> server_config_map2;
 };
 } // namespace DB::tests

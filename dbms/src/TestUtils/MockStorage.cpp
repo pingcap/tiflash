@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include "Common/Exception.h"
 #include <TestUtils/MockStorage.h>
 
 #include <cstddef>
@@ -122,10 +123,17 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
             assert(rows == col.column->size());
         }
 
-        int per_rows = rows / partition_num;
-        int rows_left = rows - per_rows * partition_num;
-        int cur_rows = per_rows + (partition_id < rows_left ? 1 : 0);
-        int start = (cur_rows + (rows_left != 0 ? 1 : 0)) * partition_id;
+        int start, per_rows, rows_left, cur_rows;
+        per_rows = rows / partition_num;
+        rows_left = rows - per_rows * partition_num;
+        if (partition_id >= rows_left) {
+            start = (per_rows + 1) * rows_left + (partition_id - rows_left) * per_rows;
+            cur_rows = per_rows;
+        } else {
+            start = (per_rows + 1) * partition_id;
+            cur_rows = per_rows + 1;
+        }
+        
         ColumnsWithTypeAndName res;
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {

@@ -42,6 +42,7 @@ private:
 class MockStorage
 {
 public:
+    /// for table scan
     void addTableSchema(String name, const MockColumnInfoVec & columnInfos);
 
     void addTableData(String name, const ColumnsWithTypeAndName & columns);
@@ -71,6 +72,7 @@ public:
 
     MockColumnInfoVec getExchangeSchema(String exchange_name);
 
+    /// for MPP Tasks
     ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num);
 
 private:

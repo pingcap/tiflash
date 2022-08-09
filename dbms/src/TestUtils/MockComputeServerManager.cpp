@@ -17,30 +17,33 @@
 
 namespace DB::tests
 {
-void MockComputeServerManager::addServerConfig(MockServerConfig config)
+void MockComputeServerManager::addServer(String addr)
 {
+    MockServerConfig config;
     config.partition_id = server_config_map.size();
+    config.addr = addr;
     server_config_map[config.partition_id] = config;
-    // server_config_map2[config.partition_id] = config;
 }
 
-void MockComputeServerManager::startAllServer(const LoggerPtr & log_ptr)
+void MockComputeServerManager::startServers(const LoggerPtr & log_ptr)
 {
-    for (const auto & kv : server_config_map)
+    for (const auto & server_config : server_config_map)
     {
         TiFlashSecurityConfig security_config;
         TiFlashRaftConfig raft_config;
-        raft_config.flash_server_addr = kv.second.addr;
+        raft_config.flash_server_addr = server_config.second.addr;
         Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
-        addServer(kv.first, std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
+        addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
     }
+
+    prepareMPPTestInfo();
 }
 
 void MockComputeServerManager::setMockStorage(MockStorage & mock_storage)
 {
-    for (const auto & kv : server_map)
+    for (const auto & server : server_map)
     {
-        kv.second->setMockStorage(mock_storage);
+        server.second->setMockStorage(mock_storage);
     }
 }
 
@@ -59,12 +62,11 @@ std::unordered_map<size_t, MockServerConfig> & MockComputeServerManager::getServ
     return server_config_map;
 }
 
-
-void MockComputeServerManager::setMPPTestInfo()
+void MockComputeServerManager::prepareMPPTestInfo()
 {
-    for (const auto & kv : server_map)
+    for (const auto & server : server_map)
     {
-        kv.second->setMPPTestInfo(getMPPTestInfo(kv.first));
+        server.second->setMPPTestInfo(getMPPTestInfo(server.first));
     }
 }
 

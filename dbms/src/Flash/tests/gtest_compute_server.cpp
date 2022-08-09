@@ -26,11 +26,11 @@ public:
     static void SetUpTestCase()
     {
         MPPTaskTestUtils::SetUpTestCase();
-        MockComputeServerManager::getInstance().addServerConfig({"test", "0.0.0.0:3930", 0});
-        MockComputeServerManager::getInstance().addServerConfig({"test1", "0.0.0.0:3931", 1});
-        MockComputeServerManager::getInstance().addServerConfig({"test2", "0.0.0.0:3932", 1});
-
-        MockComputeServerManager::getInstance().startAllServer(log_ptr);
+        MockComputeServerManager::getInstance().addServer("0.0.0.0:3930");
+        MockComputeServerManager::getInstance().addServer("0.0.0.0:3931");
+        MockComputeServerManager::getInstance().addServer("0.0.0.0:3932");
+        MockComputeServerManager::getInstance().addServer("0.0.0.0:3933");
+        MockComputeServerManager::getInstance().startServers(log_ptr);
     }
     void initializeContext() override
     {
@@ -39,7 +39,7 @@ public:
         context.addMockTable(
             {"test_db", "test_table_1"},
             {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
-            {toNullableVec<Int32>("s1", {1, {}, 10000000}), toNullableVec<String>("s2", {"apple", {}, "banana"}), toNullableVec<String>("s3", {"apple", {}, "banana"})});
+            {toNullableVec<Int32>("s1", {1, {}, 10000000, 10000000}), toNullableVec<String>("s2", {"apple", {}, "banana", "test"}), toNullableVec<String>("s3", {"apple", {}, "banana", "test"})});
 
         /// for join
         context.addMockTable(
@@ -60,9 +60,9 @@ try
         auto tasks = context.scan("test_db", "test_table_1")
                          .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
                          .project({"max(s1)"})
-                         .buildMPPTasks(context, MockComputeServerManager::getInstance().getServerConfigMap().size());
+                         .buildMPPTasksForMultipleServer(context);
 
-        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
+        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000, 10000000})};
         ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
     }
 }
@@ -74,7 +74,7 @@ try
     auto tasks = context
                      .scan("test_db", "l_table")
                      .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
-                     .buildMPPTasks(context, MockComputeServerManager::getInstance().getServerConfigMap().size());
+                     .buildMPPTasksForMultipleServer(context);
 
     auto expected_cols = {
         toNullableVec<String>({{}, "banana", "banana"}),
