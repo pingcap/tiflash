@@ -223,7 +223,8 @@ public:
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
-        std::map<String, std::list<BlobStatPtr>> getStats() const
+        using StatsMap = std::map<String, std::list<BlobStatPtr>>;
+        StatsMap getStats() const
         {
             auto guard = lock();
             return stats_map;

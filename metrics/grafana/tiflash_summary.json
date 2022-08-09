@@ -5530,7 +5530,7 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "",
+          "description": "The information of read thread scheduling and data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
@@ -5619,7 +5619,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Read Thread and Cache",
+          "title": "Read Thread and Data Sharing",
           "tooltip": {
             "shared": true,
             "sort": 0,
