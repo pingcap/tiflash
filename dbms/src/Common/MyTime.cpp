@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Common/MyTime.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -58,12 +59,17 @@ int32_t adjustYear(int32_t year)
 
 void scanTimeArgs(const std::vector<String> & seps, std::initializer_list<int *> && list)
 {
+    auto log = &Poco::Logger::get("LRUCache");
+    LOG_FMT_INFO(log, "seps.size: {}, list.size: {}", seps.size(), list.size());
     int i = 0;
     for (auto * ptr : list)
     {
+        LOG_FMT_INFO(log, "seps[{}]={}", i, seps[i]);
         *ptr = std::stoi(seps[i]);
+        LOG_FMT_INFO(log, "i={}", i);
         i++;
     }
+    LOG_FMT_INFO(log, "Exit");
 }
 
 // find index of fractional point.
@@ -554,6 +560,8 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
 
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
+    auto log = &Poco::Logger::get("LRUCache");
+    LOG_FMT_INFO(log, "pMDTAJID, str: {}, fsp: {}, need: {}", str, fsp, needCheckTimeValid);
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
     bool is_date = false;
@@ -561,6 +569,12 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     bool hhmmss = false;
 
     auto [seps, frac_str, has_tz, tz_sign, tz_hour, tz_sep, tz_minute] = splitDatetime(str);
+    auto size_ = seps.size();
+    LOG_FMT_INFO(log, "seps size: {}", size_);
+    for (auto sep : seps)
+    {
+        LOG_FMT_INFO(log, "sep: {}", sep);
+    }
 
     bool truncated_or_incorrect = false;
 
@@ -577,6 +591,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     {
         if (!no_absorb(seps))
         {
+            LOG_FMT_INFO(log, "seps push_back1: {}", frac_str);
             seps.push_back(frac_str);
             frac_str = "";
         }
@@ -591,14 +606,22 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             // we can't absorb timezone if there is no separate between tz_hour and tz_minute
             if (!tz_hour.empty())
             {
+                LOG_FMT_INFO(log, "seps push_back1: {}", tz_hour);
                 seps.push_back(tz_hour);
             }
             if (!tz_minute.empty())
             {
+                LOG_FMT_INFO(log, "seps push_back1: {}", tz_minute);
                 seps.push_back(tz_minute);
             }
             has_tz = false;
         }
+    }
+
+    LOG_FMT_INFO(log, "seps size: {}", size_);
+    for (auto sep : seps)
+    {
+        LOG_FMT_INFO(log, "sep: {}", sep);
     }
 
     switch (seps.size())
@@ -719,6 +742,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         if (truncated_or_incorrect)
         {
+            LOG_FMT_INFO(log, "false sep: {}", seps[0]);
             return {Field(), is_date};
         }
         break;
@@ -726,27 +750,59 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     case 3:
     {
         // YYYY-MM-DD
-        scanTimeArgs(seps, {&year, &month, &day});
+        try
+        {
+            scanTimeArgs(seps, {&year, &month, &day});
+        }
+        catch (...)
+        {
+            LOG_FMT_DEBUG(log, "scanTimeArgs throws exception");
+            return {Field(), is_date};
+        }
         is_date = true;
         break;
     }
     case 4:
     {
         // YYYY-MM-DD HH
-        scanTimeArgs(seps, {&year, &month, &day, &hour});
+        try
+        {
+            scanTimeArgs(seps, {&year, &month, &day, &hour});
+        }
+        catch (...)
+        {
+            LOG_FMT_DEBUG(log, "scanTimeArgs throws exception");
+            return {Field(), is_date};
+        }
         break;
     }
     case 5:
     {
         // YYYY-MM-DD HH-MM
-        scanTimeArgs(seps, {&year, &month, &day, &hour, &minute});
+        try
+        {
+            scanTimeArgs(seps, {&year, &month, &day, &hour, &minute});
+        }
+        catch (...)
+        {
+            LOG_FMT_DEBUG(log, "scanTimeArgs throws exception");
+            return {Field(), is_date};
+        }
         break;
     }
     case 6:
     {
         // We don't have fractional seconds part.
         // YYYY-MM-DD HH-MM-SS
-        scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second});
+        try
+        {
+            scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second});
+        }
+        catch (...)
+        {
+            LOG_FMT_DEBUG(log, "scanTimeArgs throws exception");
+            return {Field(), is_date};
+        }
         hhmmss = true;
         break;
     }
