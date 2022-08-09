@@ -929,11 +929,6 @@ CATCH
 TEST_F(TestTidbConversion, castIntAsTime)
 try
 {
-    // DAGContext * dag_context = context.getDAGContext();
-    // UInt64 ori_flags = dag_context->getFlags();
-    // dag_context->addFlag(TiDBSQLFlags::IGNORE_TRUNCATE);
-    // dag_context->clearWarnings();
-
     ASSERT_COLUMN_EQ(
         createDateTimeColumn({{}, {{2021, 10, 26, 16, 8, 59, 0}}}, 6),
         executeFunction(func_name,
@@ -950,31 +945,16 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<UInt8>>({MAX_UINT8}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    // ASSERT_THROW(
-    //     executeFunction(func_name,
-    //                     {createColumn<Nullable<UInt8>>({MAX_UINT8}),
-    //                      createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-    //     TiFlashException);
     ASSERT_COLUMN_EQ(
         createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt16>>({MAX_UINT16}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    // ASSERT_THROW(
-    //     executeFunction(func_name,
-    //                     {createColumn<Nullable<UInt16>>({MAX_UINT16}),
-    //                      createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-    //     TiFlashException);
     ASSERT_COLUMN_EQ(
         createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt32>>({MAX_UINT32}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    // ASSERT_THROW(
-    //     executeFunction(func_name,
-    //                     {createColumn<Nullable<UInt32>>({MAX_UINT32}),
-    //                      createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-    //     TiFlashException);
     ASSERT_COLUMN_EQ(
         createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
@@ -985,13 +965,6 @@ try
         executeFunction(func_name,
                         {createColumn<Nullable<Int64>>({{}, -20211026160859}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-    // ASSERT_THROW(
-    //     executeFunction(func_name,
-    //                     {createColumn<Nullable<Int64>>({{}, -20211026160859}),
-    //                      createCastTypeConstColumn("Nullable(MyDateTime(6))")}),
-    //     TiFlashException);
-
-    // dag_context->setFlags(ori_flags);
 }
 CATCH
 
@@ -1231,79 +1204,46 @@ CATCH
 TEST_F(TestTidbConversion, castRealAsTime)
 try
 {
-    auto log = &Poco::Logger::get("LRUCache");
-    // DAGContext * dag_context = context.getDAGContext();
-    // UInt64 ori_flags = dag_context->getFlags();
-    // dag_context->addFlag(TiDBSQLFlags::IGNORE_TRUNCATE);
-    // dag_context->clearWarnings();
-    // LOG_FMT_INFO(log, "locate_failure");
     testOnlyNull<Float32, MyDateTime>();
-    // LOG_FMT_INFO(log, "locate_failure");
     testOnlyNull<Float64, MyDateTime>();
-    // LOG_FMT_INFO(log, "locate_failure");
 
     // TODO add tests after non-expected results fixed
 
     // mysql: null, warning.
     // tiflash: null, no warning.
     // tidb: 0000-00-00 00:00:00
-    // LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float32, MyDateTime>(0, 6);
-    // LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float32, MyDateTime>(12.213, 6);
-    // LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float32, MyDateTime>(-12.213, 6);
-    // LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float32, MyDateTime>(MAX_FLOAT32, 6);
-    // LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float32, MyDateTime>(MIN_FLOAT32, 6);
-    // LOG_FMT_INFO(log, "locate_failure");
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
-    LOG_FMT_INFO(log, "locate_failure");
-    // testNotOnlyNull<Float32, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6); // commented
-    LOG_FMT_INFO(log, "locate_failure");
+    // testNotOnlyNull<Float32, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
     testReturnNull<Float32, MyDateTime>(-111, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
-    LOG_FMT_INFO(log, "locate_failure");
-    // testNotOnlyNull<Float32, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6); // commented
-    LOG_FMT_INFO(log, "locate_failure");
+    // testNotOnlyNull<Float32, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
 
     // mysql: null, warning.
     // tiflash: null, no warning.
     // tidb: 0000-00-00 00:00:00
-    LOG_FMT_INFO(log, "locate_failure");
-    // testReturnNull<Float64, MyDateTime>(0, 6); // commented
-    LOG_FMT_INFO(log, "locate_failure");
+    // testReturnNull<Float64, MyDateTime>(0, 6);
     testReturnNull<Float64, MyDateTime>(12.213, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float64, MyDateTime>(-12.213, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float64, MyDateTime>(MAX_FLOAT64, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float64, MyDateTime>(MIN_FLOAT64, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
-    LOG_FMT_INFO(log, "locate_failure");
     // testNotOnlyNull<Float64, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     testReturnNull<Float64, MyDateTime>(-111, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
-    LOG_FMT_INFO(log, "locate_failure");
-    // testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6); // commented
-    LOG_FMT_INFO(log, "locate_failure");
+    // testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(20210201, {2021, 2, 1, 0, 0, 0, 0}, 6);
-    LOG_FMT_INFO(log, "locate_failure");
     // mysql: 2021-02-01 00:00:00
     // tiflash / tidb: 2021-02-01 01:00:00
-    LOG_FMT_INFO(log, "locate_failure");
     // testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
-    LOG_FMT_INFO(log, "locate_failure");
 }
 CATCH
 
