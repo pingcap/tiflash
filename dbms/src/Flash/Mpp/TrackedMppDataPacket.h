@@ -14,23 +14,21 @@
 
 #pragma once
 
-#include "Common/Logger.h"
-#include "common/logger_useful.h"
-#include "common/types.h"
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
 #ifdef __clang__
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #endif
-#include "Common/MemoryTracker.h"
-#include "grpcpp/server_context.h"
-#include "kvproto/mpp.pb.h"
-#include "kvproto/tikvpb.grpc.pb.h"
+#include <Common/MemoryTracker.h>
+#include <grpcpp/server_context.h>
+#include <kvproto/mpp.pb.h>
+#include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
 #include <memory>
-
-extern std::atomic<long long> tracked_proto, untracked_proto;
 
 namespace DB
 {
@@ -51,7 +49,7 @@ struct TrackedMppDataPacket
         : memory_tracker(memory_tracker)
     {
         size = estimateAllocatedSize(data);
-        alloc();
+        trackAlloc();
         packet = std::make_shared<mpp::MPPDataPacket>(data);
     }
 
@@ -59,13 +57,13 @@ struct TrackedMppDataPacket
         : memory_tracker(memory_tracker)
     {
         size = estimateAllocatedSize(*packet_);
-        alloc();
+        trackAlloc();
         packet = packet_;
     }
 
-    void alloc();
+    void trackAlloc();
 
-    void trackFree();
+    void trackFree() const;
 
     ~TrackedMppDataPacket()
     {
@@ -100,7 +98,4 @@ struct TmpMemTracker
     }
     size_t size;
 };
-
-
-
 } // namespace DB

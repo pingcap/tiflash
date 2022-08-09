@@ -109,8 +109,7 @@ void MPPTunnel::close(const String & reason)
         send_queue->finish();
         MPPDataPacketPtr res;
         while (send_queue->pop(res))
-        {
-        }
+            ; // pop all items from send_queue
     });
     {
         std::unique_lock lk(mu);

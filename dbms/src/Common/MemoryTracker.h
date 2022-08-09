@@ -109,8 +109,6 @@ extern __thread MemoryTracker * current_memory_tracker;
 extern thread_local MemoryTracker * current_memory_tracker;
 #endif
 
-extern MemoryTracker * proc_memory_tracker;
-
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker
 {

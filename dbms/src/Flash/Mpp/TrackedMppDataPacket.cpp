@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "TrackedMppDataPacket.h"
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 
-#include <sstream>
-
-std::atomic<long long> tracked_proto{0}, untracked_proto{0};
 namespace DB
 {
-void TrackedMppDataPacket::alloc()
+void TrackedMppDataPacket::trackAlloc()
 {
     if (size)
     {
@@ -37,7 +34,7 @@ void TrackedMppDataPacket::alloc()
     }
 }
 
-void TrackedMppDataPacket::trackFree()
+void TrackedMppDataPacket::trackFree() const
 {
     if (size)
     {

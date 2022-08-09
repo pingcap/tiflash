@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/MemoryTracker.h>
 #include <IO/WriteBuffer.h>
 
 #include <vector>

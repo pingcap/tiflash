@@ -22,7 +22,6 @@
 
 #include <iomanip>
 
-MemoryTracker * proc_memory_tracker = nullptr;
 std::atomic<long long> real_rss{0};
 MemoryTracker::~MemoryTracker()
 {
