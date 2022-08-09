@@ -44,7 +44,7 @@ public:
                              {toNullableVec<Int32>(col_name[0], col_age),
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
-                              toNullableVec<Int32>(col_name[3], c0l_salary)});
+                              toNullableVec<Int32>(col_name[3], col_salary)});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
@@ -52,7 +52,7 @@ public:
         return context.scan(db_name, table_name).topN(col_name, is_desc, limit_num).build(context);
     }
 
-    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItems order_by_items, int limit, MockAsts func_proj_ast = {}, MockColumnNames out_proj_ast = {})
+    std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, MockOrderByItemVec order_by_items, int limit, MockAstVec func_proj_ast = {}, MockColumnNameVec out_proj_ast = {})
     {
         if (func_proj_ast.size() == 0)
             return context.scan(db_name, table_name).topN(order_by_items, limit).build(context);
@@ -72,7 +72,7 @@ public:
     ColumnWithInt32 col_age{{}, 27, 32, 36, {}, 34};
     ColumnWithString col_gender{"female", "female", "male", "female", "male", "male"};
     ColumnWithString col_country{"korea", "usa", "usa", "china", "china", "china"};
-    ColumnWithInt32 c0l_salary{1300, 0, {}, 900, {}, -300};
+    ColumnWithInt32 col_salary{1300, 0, {}, 900, {}, -300};
 };
 
 TEST_F(ExecutorTopNTestRunner, TopN)
@@ -103,10 +103,10 @@ try
                 else
                     expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.begin() + limit_num))});
 
-                executeStreams(request, expect_cols[0]);
-                executeStreams(request, expect_cols[0], 2);
-                executeStreams(request, expect_cols[0], 4);
-                executeStreams(request, expect_cols[0], 8);
+                ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+                ASSERT_COLUMNS_EQ_R(executeStreams(request, 2), expect_cols[0]);
+                ASSERT_COLUMNS_EQ_R(executeStreams(request, 4), expect_cols[0]);
+                ASSERT_COLUMNS_EQ_R(executeStreams(request, 8), expect_cols[0]);
             }
         }
     }
@@ -126,7 +126,7 @@ try
                         toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "china", "korea", "usa"}),
                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{-300, {}, {}, 900, 1300, 0})}};
 
-        std::vector<MockOrderByItems> order_by_items{
+        std::vector<MockOrderByItemVec> order_by_items{
             /// select * from clerk order by age DESC, gender DESC;
             {MockOrderByItem(col_name[0], true), MockOrderByItem(col_name[1], true)},
             /// select * from clerk order by gender DESC, salary ASC;
@@ -139,7 +139,7 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(table_name, order_by_items[i], 100);
-            executeStreams(request, expect_cols[i]);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[i]);
         }
     }
 }
@@ -150,9 +150,9 @@ try
 {
     std::shared_ptr<tipb::DAGRequest> request;
     std::vector<ColumnsWithTypeAndName> expect_cols;
-    MockColumnNames output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
-    MockAsts func_projection; // Do function operation for topn
-    MockOrderByItems order_by_items;
+    MockColumnNameVec output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
+    MockAstVec func_projection; // Do function operation for topn
+    MockOrderByItemVec order_by_items;
     ASTPtr col0_ast = col(col_name[0]);
     ASTPtr col1_ast = col(col_name[1]);
     ASTPtr col2_ast = col(col_name[2]);
@@ -173,7 +173,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeStreams(request, expect_cols[0]);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
         }
     }
 
@@ -191,7 +191,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeStreams(request, expect_cols[0]);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
         }
     }
 
@@ -209,7 +209,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeStreams(request, expect_cols[0]);
+            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
         }
     }
 

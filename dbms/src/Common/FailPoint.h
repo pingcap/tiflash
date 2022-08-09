@@ -60,7 +60,7 @@ public:
      * 2. Parse flash.random_fail_points, which expect to has "FailPointA-RatioA,FailPointB-RatioB,..." format
      * 3. Call enableRandomFailPoint method with parsed FailPointName and Rate
      */
-    static void initRandomFailPoints(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+    static void initRandomFailPoints(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 
     static void enableRandomFailPoint(const String & fail_point_name, double rate);
 

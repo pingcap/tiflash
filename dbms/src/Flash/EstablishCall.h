@@ -23,6 +23,7 @@
 namespace DB
 {
 class MPPTunnel;
+class AsyncTunnelSender;
 class AsyncFlashService;
 
 class SyncPacketWriter : public PacketWriter
@@ -65,7 +66,7 @@ public:
 
     void cancel();
 
-    void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_);
+    virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override;
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -82,6 +83,9 @@ private:
     void initRpc();
 
     void finishTunnelAndResponder();
+
+    // will try to call async_sender's consumerFinish if needed
+    void setFinishState(const String & msg);
 
     void responderFinish(const grpc::Status & status);
 
@@ -115,7 +119,7 @@ private:
         FINISH
     };
     CallStatus state; // The current serving state.
-    std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
+    std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::shared_ptr<Stopwatch> stopwatch;
 };
 } // namespace DB

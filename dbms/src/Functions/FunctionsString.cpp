@@ -16,6 +16,7 @@
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
 #include <Common/Volnitsky.h>
+#include <Common/hex.h>
 #include <Core/AccurateComparison.h>
 #include <DataTypes/DataTypeArray.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -28,15 +29,11 @@
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
 #include <Functions/castTypeToEither.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/printf.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
-#include <thread>
 
 namespace DB
 {
@@ -992,7 +989,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnVector<ResultType>::create();
 
@@ -1002,7 +999,7 @@ public:
 
             block.getByPosition(result).column = std::move(col_res);
         }
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             if (Impl::is_fixed_to_constant)
             {
@@ -1022,7 +1019,7 @@ public:
                 block.getByPosition(result).column = std::move(col_res);
             }
         }
-        else if (const ColumnArray * col = checkAndGetColumn<ColumnArray>(column.get()))
+        else if (const auto * col = checkAndGetColumn<ColumnArray>(column.get()))
         {
             auto col_res = ColumnVector<ResultType>::create();
 
@@ -1081,13 +1078,13 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnString::create();
             ReverseImpl::vector(col->getChars(), col->getOffsets(), col_res->getChars(), col_res->getOffsets());
             block.getByPosition(result).column = std::move(col_res);
         }
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             auto col_res = ColumnFixedString::create(col->getN());
             ReverseImpl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
@@ -1131,7 +1128,7 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnUInt64::create();
             typename ColumnUInt64::Container & vec_col_res = col_res->getData();
@@ -1232,8 +1229,8 @@ private:
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
         const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
 
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
-        const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1);
         const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
         const ColumnConst * c1_const_string = checkAndGetColumnConst<ColumnString>(c1);
 
@@ -1552,7 +1549,7 @@ public:
         if (number_of_arguments == 3)
             column_length = block.getByPosition(arguments[2]).column;
 
-        const ColumnConst * column_start_const = checkAndGetColumn<ColumnConst>(column_start.get());
+        const auto * column_start_const = checkAndGetColumn<ColumnConst>(column_start.get());
         const ColumnConst * column_length_const = nullptr;
 
         if (number_of_arguments == 3)
@@ -1572,9 +1569,9 @@ public:
                 throw Exception("Third argument provided for function substring could not be negative.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
 
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column_string.get()))
             executeForSource(column_start, column_length, column_start_const, column_length_const, start_value, length_value, block, result, StringSource(*col));
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_string.get()))
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_string.get()))
             executeForSource(column_start, column_length, column_start_const, column_length_const, start_value, length_value, block, result, FixedStringSource(*col));
         else if (const ColumnConst * col = checkAndGetColumnConst<ColumnString>(column_string.get()))
             executeForSource(column_start, column_length, column_start_const, column_length_const, start_value, length_value, block, result, ConstSource<StringSource>(*col));
@@ -1676,7 +1673,7 @@ public:
                     return true;
                 }
 
-                const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get());
+                const auto * col = checkAndGetColumn<ColumnString>(column_string.get());
                 assert(col);
                 auto col_res = ColumnString::create();
                 getVectorConstConstFunc(implicit_length, is_positive)(col->getChars(), col->getOffsets(), start_abs, length, col_res->getChars(), col_res->getOffsets());
@@ -1732,7 +1729,7 @@ public:
 
                 // convert to vector if string is const.
                 ColumnPtr full_column_string = column_string->isColumnConst() ? column_string->convertToFullColumnIfConst() : column_string;
-                const ColumnString * col = checkAndGetColumn<ColumnString>(full_column_string.get());
+                const auto * col = checkAndGetColumn<ColumnString>(full_column_string.get());
                 assert(col);
                 auto col_res = ColumnString::create();
                 if (implicit_length)
@@ -1869,7 +1866,7 @@ public:
             using LengthFieldType = typename LengthType::FieldType;
 
             auto col_res = ColumnString::create();
-            if (const ColumnString * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
+            if (const auto * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
             {
                 if (column_length->isColumnConst())
                 {
@@ -1897,7 +1894,7 @@ public:
             else if (const ColumnConst * col_const_string = checkAndGetColumnConst<ColumnString>(column_string.get()))
             {
                 // const vector
-                const ColumnString * col_string_from_const = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
+                const auto * col_string_from_const = checkAndGetColumn<ColumnString>(col_const_string->getDataColumnPtr().get());
                 assert(col_string_from_const);
                 // When useDefaultImplementationForConstants is true, string and length are not both constants
                 assert(!column_length->isColumnConst());
@@ -1993,7 +1990,7 @@ private:
         if (!checkColumnConst<ColumnString>(column_char.get()))
             throw Exception(fmt::format("Second argument of function {} must be a constant string", getName()), ErrorCodes::ILLEGAL_COLUMN);
 
-        String trailing_char_str = static_cast<const ColumnConst &>(*column_char).getValue<String>();
+        auto trailing_char_str = static_cast<const ColumnConst &>(*column_char).getValue<String>();
 
         if (trailing_char_str.size() != 1)
             throw Exception(fmt::format("Second argument of function {} must be a one-character string", getName()), ErrorCodes::BAD_ARGUMENTS);
@@ -2101,7 +2098,7 @@ private:
     void executeTrim(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
 
         auto c_res = ColumnString::create();
@@ -2121,8 +2118,8 @@ private:
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
         const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
 
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
-        const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1);
         const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
         const ColumnConst * c1_const_string = checkAndGetColumnConst<ColumnString>(c1);
 
@@ -2202,7 +2199,7 @@ private:
     void executeTrim(Block & block, const ColumnNumbers & arguments, const size_t result) const
     {
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
 
         auto c_res = ColumnString::create();
@@ -2225,7 +2222,7 @@ private:
         const IColumn * c0 = block.getByPosition(arguments[0]).column.get();
         const IColumn * c1 = block.getByPosition(arguments[1]).column.get();
 
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
         const ColumnConst * c0_const_string = checkAndGetColumnConst<ColumnString>(c0);
         const ColumnConst * c1_const_string = checkAndGetColumnConst<ColumnString>(c1);
         const auto * column_trim_string = checkAndGetColumn<ColumnString>(c1_const_string->getDataColumnPtr().get());
@@ -2716,7 +2713,7 @@ private:
         ColumnPtr & column_data = block.getByPosition(arguments[0]).column;
         auto res_col = ColumnString::create();
 
-        const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
+        const auto * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
         static constexpr std::string_view default_rem = " ";
         static const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(default_rem.data());
@@ -2738,25 +2735,25 @@ private:
         if (data_const && !remstr_const)
         {
             const ColumnConst * data_col = checkAndGetColumnConst<ColumnString>(column_data.get());
-            const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
+            const auto * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
 
-            const std::string data = data_col->getValue<String>();
+            const auto data = data_col->getValue<String>();
             const auto * data_ptr = reinterpret_cast<const UInt8 *>(data.c_str());
             constVector(is_ltrim, is_rtrim, data_ptr, data.size() + 1, remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
         else if (remstr_const && !data_const)
         {
             const ColumnConst * remstr_col = checkAndGetColumnConst<ColumnString>(column_remstr.get());
-            const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
+            const auto * data_col = checkAndGetColumn<ColumnString>(column_data.get());
 
-            const std::string remstr = remstr_col->getValue<String>();
+            const auto remstr = remstr_col->getValue<String>();
             const auto * remstr_ptr = reinterpret_cast<const UInt8 *>(remstr.c_str());
             vectorConst(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), remstr_ptr, remstr.size() + 1, res_col->getChars(), res_col->getOffsets());
         }
         else
         {
-            const ColumnString * data_col = checkAndGetColumn<ColumnString>(column_data.get());
-            const ColumnString * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
+            const auto * data_col = checkAndGetColumn<ColumnString>(column_data.get());
+            const auto * remstr_col = checkAndGetColumn<ColumnString>(column_remstr.get());
 
             vectorVector(is_ltrim, is_rtrim, data_col->getChars(), data_col->getOffsets(), remstr_col->getChars(), remstr_col->getOffsets(), res_col->getChars(), res_col->getOffsets());
         }
@@ -2769,7 +2766,7 @@ private:
         ColumnPtr & column_direction = block.getByPosition(arguments[2]).column;
         if (!column_direction->isColumnConst())
             throw Exception(fmt::format("3nd argument of function {} must be constant.", getName()));
-        const ColumnConst * direction_col = checkAndGetColumn<ColumnConst>(column_direction.get());
+        const auto * direction_col = checkAndGetColumn<ColumnConst>(column_direction.get());
 
         static constexpr Int64 trim_both_default = 0; // trims from both direction by default
         static constexpr Int64 trim_both = 1; // trims from both direction with explicit notation
@@ -2989,7 +2986,7 @@ public:
                 {
                     continue;
                 }
-                int32_t len = static_cast<int32_t>(column_length->getInt(i));
+                auto len = static_cast<int32_t>(column_length->getInt(i));
                 if (len <= 0)
                 {
                     len = 0;
@@ -3051,7 +3048,7 @@ public:
         }
         else
         {
-            const ColumnString * column_string = checkAndGetColumn<ColumnString>(column_string_ptr.get());
+            const auto * column_string = checkAndGetColumn<ColumnString>(column_string_ptr.get());
             const ColumnString::Offsets & string_offsets = column_string->getOffsets();
             const ColumnString::Chars_t & string_data = column_string->getChars();
 
@@ -3233,7 +3230,7 @@ public:
             return true;
         }
 
-        ColumnString::Offset tmp_target_len = static_cast<ColumnString::Offset>(target_len);
+        auto tmp_target_len = static_cast<ColumnString::Offset>(target_len);
         ColumnString::Offset per_pad_offset = 0;
         ColumnString::Offset pad_bytes = 0;
         ColumnString::Offset left = 0;
@@ -3300,7 +3297,7 @@ public:
             return true;
         }
 
-        ColumnString::Offset tmp_target_len = static_cast<ColumnString::Offset>(target_len);
+        auto tmp_target_len = static_cast<ColumnString::Offset>(target_len);
         if (data_len < tmp_target_len)
         {
             ColumnString::Offset left = tmp_target_len - data_len;
@@ -3421,7 +3418,7 @@ private:
         ColumnPtr column_length = block.getByPosition(arguments[1]).column;
         ColumnPtr column_padding = block.getByPosition(arguments[2]).column;
 
-        const ColumnConst * column_length_const = checkAndGetColumn<ColumnConst>(column_length.get());
+        const auto * column_length_const = checkAndGetColumn<ColumnConst>(column_length.get());
         const ColumnConst * column_padding_const = checkAndGetColumnConst<ColumnString>(column_padding.get());
 
         Int64 length_value = 0;
@@ -3441,7 +3438,7 @@ private:
 
         auto c_res = ColumnString::create();
 
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column_string.get()))
             pad<is_left, StringSource, ConstSource<StringSource>, StringSink>(
                 StringSource(*col),
                 ConstSource<StringSource>(*column_padding_const),
@@ -3548,7 +3545,7 @@ private:
         ColumnPtr column_length = block.getByPosition(arguments[1]).column;
         ColumnPtr column_padding = block.getByPosition(arguments[2]).column;
 
-        const ColumnConst * column_length_const = checkAndGetColumn<ColumnConst>(column_length.get());
+        const auto * column_length_const = checkAndGetColumn<ColumnConst>(column_length.get());
         const ColumnConst * column_padding_const = checkAndGetColumnConst<ColumnString>(column_padding.get());
 
         Int64 length_value = 0;
@@ -3568,7 +3565,7 @@ private:
 
         auto c_res = ColumnString::create();
         const auto * column_padding_string = checkAndGetColumn<ColumnString>(column_padding_const->getDataColumnPtr().get());
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_string.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column_string.get()))
             vector(col->getChars(), col->getOffsets(), length_value, column_padding_string->getChars(), column_padding_string->getOffsets(), c_res->getChars(), c_res->getOffsets());
         else if (const ColumnConst * col = checkAndGetColumnConst<ColumnString>(column_string.get()))
         {
@@ -4083,7 +4080,7 @@ private:
             break;
         default:
             throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        };
+        }
     }
 };
 
@@ -4114,8 +4111,8 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
 
         Field res_field;
         int val_num = c0_col->size();
@@ -4165,8 +4162,8 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
 
         Field res_field;
         int val_num = c0_col->size();
@@ -4187,6 +4184,213 @@ public:
 
 private:
 };
+
+class FunctionRepeat : public IFunction
+{
+public:
+    static constexpr auto name = "repeat";
+    FunctionRepeat() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionRepeat>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        if (!arguments[1]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of second argument of function {}", arguments[1]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeRepeat<UInt8>(block, arguments, result)
+            || executeRepeat<UInt16>(block, arguments, result)
+            || executeRepeat<UInt32>(block, arguments, result)
+            || executeRepeat<UInt64>(block, arguments, result)
+            || executeRepeat<Int8>(block, arguments, result)
+            || executeRepeat<Int16>(block, arguments, result)
+            || executeRepeat<Int32>(block, arguments, result)
+            || executeRepeat<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeRepeat(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        const ColumnPtr column_string = block.getByPosition(arguments[0]).column;
+        const ColumnPtr column_repeat_times = block.getByPosition(arguments[1]).column;
+
+        auto col_res = ColumnString::create();
+        if (const auto * col_string = checkAndGetColumn<ColumnString>(column_string.get()))
+        {
+            // vector const
+            if (column_repeat_times->isColumnConst())
+            {
+                const ColumnConst * col_const_repeat_times = checkAndGetColumnConst<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_const_repeat_times == nullptr)
+                {
+                    return false;
+                }
+                auto repeat_times = col_const_repeat_times->getValue<IntType>();
+                vectorConst(col_string->getChars(),
+                            col_string->getOffsets(),
+                            accurate::lessOp(INT32_MAX, repeat_times) ? INT32_MAX : repeat_times,
+                            col_res->getChars(),
+                            col_res->getOffsets());
+            }
+            // vector vector
+            else
+            {
+                const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
+                if (col_vector_repeat_count == nullptr)
+                {
+                    return false;
+                }
+                vectorVector(col_string->getChars(),
+                             col_string->getOffsets(),
+                             col_vector_repeat_count->getData(),
+                             col_res->getChars(),
+                             col_res->getOffsets());
+            }
+        }
+        else if (const ColumnConst * col_const = checkAndGetColumnConst<ColumnString>(column_string.get()))
+        {
+            // const vector
+            const auto * col_vector_repeat_count = checkAndGetColumn<ColumnVector<IntType>>(column_repeat_times.get());
+            if (col_vector_repeat_count == nullptr)
+            {
+                return false;
+            }
+            const auto * col_string_from_const = checkAndGetColumn<ColumnString>(col_const->getDataColumnPtr().get());
+            constVector(col_string_from_const->getChars(),
+                        col_string_from_const->getOffsets(),
+                        col_vector_repeat_count->getData(),
+                        col_res->getChars(),
+                        col_res->getOffsets());
+        }
+        else
+        {
+            // Impossible to reach here
+            throw Exception("Impossible to reach here. Please check logic", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+        return true;
+    }
+    static void vectorConst(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const Int32 repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            res_offset += doRepeat(data, prev_offset, offsets[i], repeat_times, res_data, res_offset);
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
+    template <typename IntType>
+    static void vectorVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const PaddedPODArray<IntType> & repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
+            res_offset += doRepeat(data, prev_offset, offsets[i], repeat_count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+            prev_offset = offsets[i];
+        }
+    }
+
+    template <typename IntType>
+    static void constVector(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const PaddedPODArray<IntType> & repeat_times,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t size = repeat_times.size();
+        res_offsets.resize(size);
+
+        const ColumnString::Offset start_offset = 0;
+        const ColumnString::Offset end_offset = offsets[0];
+        ColumnString::Offset res_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            Int32 repeat_count = accurate::lessOp(INT32_MAX, repeat_times[i]) ? INT32_MAX : repeat_times[i];
+            res_offset += doRepeat(data, start_offset, end_offset, repeat_count, res_data, res_offset);
+            res_offsets[i] = res_offset;
+        }
+    }
+    /// Todo: should handle maxAllowedPacket. Detail in https://github.com/pingcap/tiflash/issues/3669
+    static size_t doRepeat(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offset & start_offset,
+        const ColumnString::Offset & end_offset,
+        Int32 repeat_times,
+        ColumnString::Chars_t & res_data,
+        const ColumnString::Offset & res_offset)
+    {
+        if (repeat_times < 1)
+        {
+            res_data.resize(res_data.size() + 1);
+            res_data[res_offset] = 0;
+            return 1;
+        }
+        size_t size_to_copy = end_offset - start_offset - 1;
+        size_t size = repeat_times * size_to_copy;
+        res_data.resize(res_data.size() + size + 1);
+
+        for (Int32 i = 0; i < repeat_times; ++i)
+        {
+            memcpy(&res_data[res_offset + size_to_copy * i], &data[start_offset], size_to_copy);
+        }
+        res_data[res_offset + size] = '\0';
+        return size + 1;
+    }
+};
+
 
 class FunctionPosition : public IFunction
 {
@@ -4215,13 +4419,13 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
-        const ColumnConst * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
-        const ColumnString * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
         Field c0_field;
 
         const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
-        const ColumnConst * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
-        const ColumnString * c1_string = checkAndGetColumn<ColumnString>(c1_col);
+        const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
         Field c1_field;
 
         if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
@@ -4331,7 +4535,7 @@ private:
         column_str = column_str->isColumnConst() ? column_str->convertToFullColumnIfConst() : column_str;
         if (delim_const && count_const)
         {
-            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
+            const auto * str_col = checkAndGetColumn<ColumnString>(column_str.get());
             const ColumnConst * delim_col = checkAndGetColumnConst<ColumnString>(column_delim.get());
             const ColumnConst * count_col = checkAndGetColumnConst<ColumnVector<IntType>>(column_count.get());
             if (str_col == nullptr || delim_col == nullptr || count_col == nullptr)
@@ -4339,7 +4543,7 @@ private:
                 return false;
             }
             auto col_res = ColumnString::create();
-            IntType count = count_col->getValue<IntType>();
+            auto count = count_col->getValue<IntType>();
             vectorConstConst(
                 str_col->getChars(),
                 str_col->getOffsets(),
@@ -4353,9 +4557,9 @@ private:
         {
             column_delim = column_delim->isColumnConst() ? column_delim->convertToFullColumnIfConst() : column_delim;
             column_count = column_count->isColumnConst() ? column_count->convertToFullColumnIfConst() : column_count;
-            const ColumnString * str_col = checkAndGetColumn<ColumnString>(column_str.get());
-            const ColumnString * delim_col = checkAndGetColumn<ColumnString>(column_delim.get());
-            const ColumnVector<IntType> * count_col = checkAndGetColumn<ColumnVector<IntType>>(column_count.get());
+            const auto * str_col = checkAndGetColumn<ColumnString>(column_str.get());
+            const auto * delim_col = checkAndGetColumn<ColumnString>(column_delim.get());
+            const auto * count_col = checkAndGetColumn<ColumnVector<IntType>>(column_count.get());
             if (str_col == nullptr || delim_col == nullptr || count_col == nullptr)
             {
                 return false;
@@ -4573,7 +4777,9 @@ public:
             using NumberFieldType = typename NumberType::FieldType;
             using NumberColVec = std::conditional_t<IsDecimal<NumberFieldType>, ColumnDecimal<NumberFieldType>, ColumnVector<NumberFieldType>>;
             const auto * number_raw = block.getByPosition(arguments[0]).column.get();
+
             TiDBDecimalRoundInfo info{number_type, number_type};
+            info.output_prec = info.output_prec < 65 ? info.output_prec + 1 : 65;
 
             return getPrecisionType(precision_base_type, [&](const auto & precision_type, bool) {
                 using PrecisionType = std::decay_t<decltype(precision_type)>;
@@ -4723,10 +4929,11 @@ private:
     static void format(
         T number,
         size_t max_num_decimals,
-        const TiDBDecimalRoundInfo & info,
+        TiDBDecimalRoundInfo & info,
         ColumnString::Chars_t & res_data,
         ColumnString::Offsets & res_offsets)
     {
+        info.output_scale = std::min(max_num_decimals, static_cast<size_t>(info.input_scale));
         auto round_number = round(number, max_num_decimals, info);
         std::string round_number_str = number2Str(round_number, info);
         std::string buffer = Format::apply(round_number_str, max_num_decimals);
@@ -4870,7 +5077,7 @@ private:
             }
             else
             {
-                const String value = locale_const->getValue<String>();
+                const auto value = locale_const->getValue<String>();
                 if (!boost::iequals(value, supported_locale))
                 {
                     const auto & msg = genWarningMsg(value);
@@ -4907,6 +5114,504 @@ private:
         if (!context_.getDAGContext())
             throw Exception("DAGContext should not be nullptr.", ErrorCodes::LOGICAL_ERROR);
         return context_;
+    }
+};
+
+class FunctionHexStr : public IFunction
+{
+public:
+    static constexpr auto name = "hexStr";
+    FunctionHexStr() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexStr>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isStringOrFixedString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto col_res = ColumnString::create();
+            vector(col->getChars(), col->getOffsets(), col_res->getChars(), col_res->getOffsets());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column.get()))
+        {
+            auto col_res = ColumnFixedString::create(col->getN() * 2);
+            vectorFixed(col->getChars(), col->getN(), col_res->getChars());
+            block.getByPosition(result).column = std::move(col_res);
+        }
+        else
+            throw Exception(
+                fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
+                ErrorCodes::ILLEGAL_COLUMN);
+    }
+
+private:
+    static constexpr UInt8 hexTable[17] = "0123456789ABCDEF";
+
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        size_t size = offsets.size();
+        // every string contains a tailing zero, which will not be hexed, so minus size to remove these doubled zeros
+        res_data.resize(data.size() * 2 - size);
+        res_offsets.resize(size);
+
+        ColumnString::Offset prev_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            for (size_t j = prev_offset; j < offsets[i] - 1; ++j)
+            {
+                ColumnString::Offset pos = j * 2 - i;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+            // the last element written by the previous loop is:
+            // `(offsets[i] - 2) * 2 - i + 1 = offsets[i] * 2 - i - 3`
+            // then the zero should be written to `offsets[i] * 2 - i - 2`
+            res_data[offsets[i] * 2 - i - 2] = 0;
+            res_offsets[i] = offsets[i] * 2 - i - 1;
+
+            prev_offset = offsets[i];
+        }
+    }
+
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t length, ColumnString::Chars_t & res_data)
+    {
+        size_t size = data.size() / length;
+        res_data.resize(data.size() * 2);
+
+        for (size_t i = 0; i < size; ++i)
+            for (size_t j = i * length; j < (i + 1) * length; ++j)
+            {
+                ColumnString::Offset pos = j * 2;
+                UInt8 byte = data[j];
+                res_data[pos] = hexTable[byte >> 4];
+                res_data[pos + 1] = hexTable[byte & 0x0f];
+            }
+    }
+};
+
+class FunctionHexInt : public IFunction
+{
+public:
+    static constexpr auto name = "hexInt";
+    FunctionHexInt() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionHexInt>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isNumber())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeHexInt<UInt8>(block, arguments, result)
+            || executeHexInt<UInt16>(block, arguments, result)
+            || executeHexInt<UInt32>(block, arguments, result)
+            || executeHexInt<UInt64>(block, arguments, result)
+            || executeHexInt<Int8>(block, arguments, result)
+            || executeHexInt<Int16>(block, arguments, result)
+            || executeHexInt<Int32>(block, arguments, result)
+            || executeHexInt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeHexInt(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        ColumnPtr & column = block.getByPosition(arguments[0]).column;
+        const auto col = checkAndGetColumn<ColumnVector<IntType>>(column.get());
+        if (col == nullptr)
+        {
+            return false;
+        }
+        size_t size = col->size();
+
+        auto col_res = ColumnString::create();
+
+        ColumnString::Chars_t & res_chars = col_res->getChars();
+        // Convert a UInt64 to hex, will cost 17 bytes at most
+        res_chars.reserve(size * 17);
+        ColumnString::Offsets & res_offsets = col_res->getOffsets();
+        res_offsets.resize(size);
+
+        auto res_chars_iter = res_chars.begin();
+        for (size_t i = 0; i < size; ++i)
+        {
+            UInt64 number = col->getUInt(i);
+
+            res_chars_iter = fmt::format_to(res_chars_iter, "{:X}", number);
+            *(++res_chars_iter) = 0;
+            // Add the size of printed string and a tailing zero
+            res_offsets[i] = res_chars_iter - res_chars.begin();
+        }
+        res_chars.resize(res_chars_iter - res_chars.begin());
+
+        block.getByPosition(result).column = std::move(col_res);
+
+        return true;
+    }
+};
+
+class FunctionBin : public IFunction
+{
+public:
+    static constexpr auto name = "bin";
+    static constexpr size_t word_size = 8;
+    FunctionBin() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionBin>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() != 1)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        return std::make_shared<DataTypeString>();
+    }
+
+    template <typename T>
+    static void executeOneUIntOrInt(T data, char *& out)
+    {
+        auto x = static_cast<Int64>(data); // NOLINT
+        bool was_nonzero = false;
+        bool was_first_nonzero_byte = true;
+        for (int offset = (sizeof(Int64) - 1) * 8; offset >= 0; offset -= 8)
+        {
+            UInt8 byte = x >> offset;
+            /// Skip leading zeros
+            if (byte == 0 && !was_nonzero && offset)
+                continue;
+            was_nonzero = true;
+            if (was_first_nonzero_byte)
+            {
+                out += writeNoZeroPrefixBinByte(byte, out);
+                was_first_nonzero_byte = false;
+            }
+            else
+            {
+                writeBinByte(byte, out);
+                out += word_size;
+            }
+        }
+        *out = '\0';
+        ++out;
+    }
+
+    template <typename T>
+    bool tryExecuteUIntOrInt(const IColumn * col, ColumnPtr & col_res) const
+    {
+        auto * col_vec = checkAndGetColumn<ColumnVector<T>>(col);
+        static constexpr size_t MAX_LENGTH = sizeof(Int64) * word_size + 1; /// Including trailing zero byte.
+        if (col_vec)
+        {
+            auto col_str = ColumnString::create();
+            ColumnString::Chars_t & out_vec = col_str->getChars();
+            ColumnString::Offsets & out_offsets = col_str->getOffsets();
+            const typename ColumnVector<T>::Container & in_vec = col_vec->getData();
+            size_t size = in_vec.size();
+            out_offsets.resize(size);
+            out_vec.resize(size * (word_size + 1) + MAX_LENGTH); /// word_size+1 is length of one byte in hex/bin plus zero byte.
+            size_t pos = 0;
+            for (size_t i = 0; i < size; ++i)
+            {
+                /// Manual exponential growth, so as not to rely on the linear amortized work time of `resize` (no one guarantees it).
+                if (pos + MAX_LENGTH > out_vec.size())
+                    out_vec.resize(out_vec.size() * word_size + MAX_LENGTH);
+                char * begin = reinterpret_cast<char *>(&out_vec[pos]);
+                char * end = begin;
+                executeOneUIntOrInt(in_vec[i], end);
+                pos += end - begin;
+                out_offsets[i] = pos;
+            }
+            out_vec.resize(pos);
+            col_res = std::move(col_str);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * column = block.getByPosition(arguments[0]).column.get();
+        ColumnPtr res_column;
+        if (tryExecuteUIntOrInt<UInt8>(column, res_column)
+            || tryExecuteUIntOrInt<UInt16>(column, res_column)
+            || tryExecuteUIntOrInt<UInt32>(column, res_column)
+            || tryExecuteUIntOrInt<UInt64>(column, res_column)
+            || tryExecuteUIntOrInt<Int8>(column, res_column)
+            || tryExecuteUIntOrInt<Int16>(column, res_column)
+            || tryExecuteUIntOrInt<Int32>(column, res_column)
+            || tryExecuteUIntOrInt<Int64>(column, res_column))
+        {
+            block.getByPosition(result).column = std::move(res_column);
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+};
+
+class FunctionElt : public IFunction
+{
+public:
+    static constexpr auto name = "elt";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionElt>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isVariadic() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        for (const auto arg_idx : ext::range(1, arguments.size()))
+        {
+            const auto arg = removeNullable(arguments[arg_idx]);
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeElt<UInt8>(block, arguments, result)
+            || executeElt<UInt16>(block, arguments, result)
+            || executeElt<UInt32>(block, arguments, result)
+            || executeElt<UInt64>(block, arguments, result)
+            || executeElt<Int8>(block, arguments, result)
+            || executeElt<Int16>(block, arguments, result)
+            || executeElt<Int32>(block, arguments, result)
+            || executeElt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    using NullMapMutablePtr = COWPtrHelper<DB::ColumnVectorHelper, DB::ColumnVector<unsigned char>>::MutablePtr;
+
+    template <typename IntType>
+    static bool executeElt(Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto * col_arg0 = block.getByPosition(arguments[0]).column.get();
+
+        if (const auto * col = checkAndGetColumnConst<ColumnVector<IntType>>(col_arg0, true))
+        {
+            return constColumn<IntType>(col, block, arguments, result);
+        }
+        else
+        {
+            return vectorColumn<IntType>(col_arg0, block, arguments, result);
+        }
+    }
+
+    static void fillResultColumnNull(ColumnPtr & dst, size_t nrow)
+    {
+        dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});
+    }
+
+    static void fillResultColumnFromOther(ColumnPtr & dst, const ColumnPtr & src)
+    {
+        dst = makeNullable(src->cloneResized(src->size()));
+    }
+
+    /// fill the ith element of result column from the ith element of another column
+    /// Note that for efficiency purpose, following preconditions should be satisfied
+    /// 1. res_null_map should already have enough size to contain the ith element and its default value should be 0
+    /// 2. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
+    /// 3. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
+    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, const size_t dsti)
+    {
+        if (src->isNullAt(dsti))
+        {
+            res_null_map->getData()[dsti] = true;
+            res_chars.push_back(0);
+            res_offsets[dsti] = dsti == 0 ? 1 : (res_offsets[dsti - 1] + 1);
+            return;
+        }
+
+        /// no need to set res_null_map, since its default value is 0
+
+        /// src col might be ColumnConst(Nullable(ColumnString)) or ColumnCost(ColumnString) or Nullable(ColumnString) or ColumnString
+        /// if it is ColumnConst(...) then we should treat its first element as the ith element
+        size_t srci = dsti;
+        const auto * col_nullable_str = src->isColumnConst()
+            ? (srci = 0, checkAndGetColumnConst<ColumnString>(src.get(), true)->getDataColumnPtr().get())
+            : src.get();
+
+        const auto * col_str = col_nullable_str->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnString>(col_nullable_str)
+            : checkAndGetColumn<ColumnString>(col_nullable_str);
+
+        const auto & src_data = col_str->getChars();
+        const auto & src_offsets = col_str->getOffsets();
+
+        const auto start_offset = StringUtil::offsetAt(src_offsets, srci);
+        const auto str_size = StringUtil::sizeAt(src_offsets, srci);
+
+        const size_t old_size = res_chars.size();
+        const size_t new_size = old_size + str_size;
+
+        res_chars.resize(new_size);
+        memcpy(&res_chars[old_size], &src_data[start_offset], str_size);
+        res_offsets[dsti] = new_size;
+    }
+
+    template <typename IntType>
+    static bool constColumn(const ColumnConst * col, Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto nrow = col->size();
+
+        if (col->onlyNull())
+        {
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
+            return true;
+        }
+
+        /// get the first argument from the const column which still might be nullable
+        const auto arg0 = col->getDataColumnPtr()->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col->getDataColumnPtr().get())->getInt(0)
+            : col->getInt(0);
+
+        if (arg0 < 1 || arg0 >= static_cast<Int64>(arguments.size()))
+        {
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
+        }
+        else
+        {
+            fillResultColumnFromOther(block.getByPosition(result).column, block.getByPosition(arg0).column);
+        }
+        return true;
+    }
+
+    template <typename IntType>
+    static bool vectorColumn(const IColumn * col, Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto narg = arguments.size();
+        const auto nrow = col->size();
+        const auto col_arg0 = col->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col)
+            : checkAndGetColumn<ColumnVector<IntType>>(col);
+
+        if (!col_arg0)
+        {
+            return false;
+        }
+
+        const auto & arg0_vec = col_arg0->getData();
+
+        auto res_null_map = ColumnUInt8::create(nrow, false);
+        auto res_col = ColumnString::create();
+        auto & res_chars = res_col->getChars();
+        auto & res_offsets = res_col->getOffsets();
+
+        res_offsets.resize_fill(nrow);
+
+        for (size_t i = 0; i < nrow; ++i)
+        {
+            const auto arg0 = arg0_vec[i];
+
+            if (col_arg0->isNullAt(i) || arg0 < 1 || static_cast<Int64>(arg0) >= static_cast<Int64>(narg))
+            {
+                res_null_map->getData()[i] = true;
+                res_chars.push_back(0);
+                res_offsets[i] = i == 0 ? 1 : (res_offsets[i - 1] + 1);
+            }
+            else
+            {
+                fillResultColumnEntry(res_null_map, res_chars, res_offsets, block.getByPosition(arguments[arg0]).column, i);
+            }
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res_col), std::move(res_null_map));
+        return true;
     }
 };
 
@@ -4994,5 +5699,10 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSubStringIndex>();
     factory.registerFunction<FunctionFormat>();
     factory.registerFunction<FunctionFormatWithLocale>();
+    factory.registerFunction<FunctionHexStr>();
+    factory.registerFunction<FunctionHexInt>();
+    factory.registerFunction<FunctionRepeat>();
+    factory.registerFunction<FunctionBin>();
+    factory.registerFunction<FunctionElt>();
 }
 } // namespace DB

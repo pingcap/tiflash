@@ -15,6 +15,7 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -25,6 +26,9 @@
 namespace DB::tests
 {
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
+
+::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
+
 class ExecutorTest : public ::testing::Test
 {
 protected:
@@ -72,22 +76,22 @@ public:
         }
     }
 
-    void executeStreams(
+    ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
-        const ColumnsWithTypeAndName & expect_columns,
-        size_t concurrency = 1);
-    void executeStreams(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & expect_columns,
         size_t concurrency = 1);
 
-    void executeStreamsWithSingleSource(
+    ColumnsWithTypeAndName executeStreams(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        size_t concurrency = 1);
+
+    ColumnsWithTypeAndName executeStreamsWithSingleSource(
         const std::shared_ptr<tipb::DAGRequest> & request,
         const ColumnsWithTypeAndName & source_columns,
-        const ColumnsWithTypeAndName & expect_columns,
         SourceType type = TableScan,
         size_t concurrency = 1);
+
+    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks);
 
 protected:
     MockDAGRequestContext context;
@@ -96,4 +100,9 @@ protected:
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
+#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                          \
+    TiFlashTestEnv::getGlobalContext().setColumnsForTest(context.executorIdColumnsMap()); \
+    TiFlashTestEnv::getGlobalContext().setMPPTest();                                      \
+    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
+
 } // namespace DB::tests

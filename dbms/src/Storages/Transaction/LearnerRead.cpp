@@ -311,7 +311,7 @@ LearnerReadSnapshot doLearnerRead(
             }
         }
 
-        auto handle_wait_timeout_region = [&unavailable_regions, for_batch_cop](const DB::RegionID region_id) {
+        auto handle_wait_timeout_region = [&unavailable_regions, for_batch_cop](const DB::RegionID region_id, UInt64 index) {
             if (!for_batch_cop)
             {
                 // If server is being terminated / time-out, add the region_id into `unavailable_regions` to other store.
@@ -319,7 +319,7 @@ LearnerReadSnapshot doLearnerRead(
                 return;
             }
             // TODO: Maybe collect all the Regions that happen wait index timeout instead of just throwing one Region id
-            throw TiFlashException(fmt::format("Region {} is unavailable", region_id), Errors::Coprocessor::RegionError);
+            throw TiFlashException(fmt::format("Region {} is unavailable at {}", region_id, index), Errors::Coprocessor::RegionError);
         };
         const auto wait_index_timeout_ms = tmt.waitIndexTimeout();
         for (size_t region_idx = region_begin_idx, read_index_res_idx = 0; region_idx < region_end_idx; ++region_idx, ++read_index_res_idx)
@@ -342,7 +342,7 @@ LearnerReadSnapshot doLearnerRead(
                 auto [wait_res, time_cost] = region->waitIndex(index_to_wait, tmt.waitIndexTimeout(), [&tmt]() { return tmt.checkRunning(); });
                 if (wait_res != WaitIndexResult::Finished)
                 {
-                    handle_wait_timeout_region(region_to_query.region_id);
+                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait);
                     continue;
                 }
                 if (time_cost > 0)
@@ -357,7 +357,7 @@ LearnerReadSnapshot doLearnerRead(
                 // for Regions one by one.
                 if (!region->checkIndex(index_to_wait))
                 {
-                    handle_wait_timeout_region(region_to_query.region_id);
+                    handle_wait_timeout_region(region_to_query.region_id, index_to_wait);
                     continue;
                 }
             }

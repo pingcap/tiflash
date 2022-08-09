@@ -189,12 +189,15 @@ public:
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
-        bool do_range_filter,
+        const RowKeyRanges & data_ranges,
+        const RSOperatorPtr & filter,
+        bool filter_delete_mark = true,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamRaw(
         const DMContext & dm_context,
-        const ColumnDefines & columns_to_read);
+        const ColumnDefines & columns_to_read,
+        bool filter_delete_mark = false);
 
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() should only be used for test cases.

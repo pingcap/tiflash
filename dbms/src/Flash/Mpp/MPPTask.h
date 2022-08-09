@@ -76,7 +76,7 @@ public:
         COMPLETED
     };
 
-    void scheduleThisTask(ScheduleState state);
+    bool scheduleThisTask(ScheduleState state);
 
     bool isScheduled();
 
@@ -143,7 +143,7 @@ private:
 
     int new_thread_count_of_exchange_receiver = 0;
 
-    MPPTaskManager * manager = nullptr;
+    std::atomic<MPPTaskManager *> manager = nullptr;
 
     const LoggerPtr log;
 

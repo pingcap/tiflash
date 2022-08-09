@@ -76,7 +76,7 @@ TEST_F(MockDAGRequestTest, Projection)
 try
 {
     auto request = context.scan("test_db", "test_table")
-                       .project("s1")
+                       .project({"s1"})
                        .build(context);
     {
         String expected = "project_1 | {<0, String>}\n"
@@ -180,7 +180,7 @@ try
 
     DAGRequestBuilder left_builder = context.scan("test_db", "l_table")
                                          .topN({{"l_a", false}}, 10)
-                                         .join(right_builder, {col("join_c")}, ASTTableJoin::Kind::Left) // todo ensure the join is legal.
+                                         .join(right_builder, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                                          .limit(10);
     auto request = left_builder.build(context);
     {

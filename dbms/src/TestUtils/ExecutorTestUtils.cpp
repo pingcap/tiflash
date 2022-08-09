@@ -34,6 +34,7 @@ void ExecutorTest::initializeContext()
     dag_context_ptr = std::make_unique<DAGContext>(1024);
     context = MockDAGRequestContext(TiFlashTestEnv::getContext());
     dag_context_ptr->log = Logger::get("executorTest");
+    TiFlashTestEnv::getGlobalContext().setExecutorTest();
 }
 
 void ExecutorTest::SetUpTestCase()
@@ -66,6 +67,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
+    context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
     DAGQuerySource dag(context.context);
     auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
@@ -104,41 +106,50 @@ Block mergeBlocks(Blocks blocks)
     return Block(actual_columns);
 }
 
-void readBlock(BlockInputStreamPtr stream, const ColumnsWithTypeAndName & expect_columns)
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 {
     Blocks actual_blocks;
-    Block except_block(expect_columns);
     stream->readPrefix();
     while (auto block = stream->read())
     {
         actual_blocks.push_back(block);
     }
     stream->readSuffix();
-    Block actual_block = mergeBlocks(actual_blocks);
-    ASSERT_BLOCK_EQ(except_block, actual_block);
+    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 } // namespace
 
-void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    dag_context.setColumnsForTest(source_columns_map);
+    context.context.setExecutorTest();
+    context.context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     DAGQuerySource dag(context.context);
-    readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in, expect_columns);
+    return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
 }
 
-void ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
-    executeStreams(request, context.executorIdColumnsMap(), expect_columns, concurrency);
+    return executeStreams(request, context.executorIdColumnsMap(), concurrency);
 }
 
-void ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns, SourceType type, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, SourceType type, size_t concurrency)
 {
     std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
     source_columns_map[getSourceName(type)] = source_columns;
-    executeStreams(request, source_columns_map, expect_columns, concurrency);
+    return executeStreams(request, source_columns_map, concurrency);
+}
+
+DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
+{
+    DAGProperties properties;
+    // enable mpp
+    properties.is_mpp_query = true;
+    context.context.setMPPTest();
+    auto res = executeMPPQuery(context.context, properties, tasks);
+    return readBlock(res);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

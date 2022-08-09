@@ -46,6 +46,7 @@ public:
     static void testKVStore();
     static void testRegion();
     static void testReadIndex();
+    static void testNewProxy();
 
 private:
     static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
@@ -53,6 +54,66 @@ private:
     static void testRaftChangePeer(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
 };
+
+void RegionKVStoreTest::testNewProxy()
+{
+    std::string path = TiFlashTestEnv::getTemporaryPath("/region_kvs_tmp") + "/basic";
+
+    Poco::File file(path);
+    if (file.exists())
+        file.remove(true);
+    file.createDirectories();
+
+    auto ctx = TiFlashTestEnv::getContext(
+        DB::Settings(),
+        Strings{
+            path,
+        });
+    KVStore & kvs = *ctx.getTMTContext().getKVStore();
+    MockRaftStoreProxy proxy_instance;
+    TiFlashRaftProxyHelper proxy_helper;
+    {
+        proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
+        proxy_instance.init(100);
+    }
+    kvs.restore(&proxy_helper);
+    {
+        auto store = metapb::Store{};
+        store.set_id(1234);
+        kvs.setStore(store);
+        ASSERT_EQ(kvs.getStoreID(), store.id());
+    }
+    {
+        ASSERT_EQ(kvs.getRegion(0), nullptr);
+        auto task_lock = kvs.genTaskLock();
+        auto lock = kvs.genRegionWriteLock(task_lock);
+        {
+            auto region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10));
+            lock.regions.emplace(1, region);
+            lock.index.add(region);
+        }
+    }
+    {
+        kvs.tryPersist(1);
+        kvs.gcRegionPersistedCache(Seconds{0});
+    }
+    {
+        // test CompactLog
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        auto region = kvs.getRegion(1);
+        region->markCompactLog();
+        kvs.setRegionCompactLogConfig(100000, 1000, 1000);
+        request.mutable_compact_log();
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
+        // CompactLog always returns true now, even if we can't do a flush.
+        // We use a tryFlushData to pre-filter.
+        ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
+
+        // Filter
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, ctx.getTMTContext(), 0, 0), false);
+    }
+}
 
 void RegionKVStoreTest::testReadIndex()
 {
@@ -968,20 +1029,17 @@ void RegionKVStoreTest::testKVStore()
 
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
-
-        raft_cmdpb::AdminRequest first_request = request;
         raft_cmdpb::AdminResponse first_response = response;
-
-        ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(first_request), std::move(first_response), 7, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
+        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(first_response), 7, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         raft_cmdpb::AdminResponse second_response = response;
-        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(second_response), 7, 23, 6, ctx.getTMTContext()), EngineStoreApplyRes::None);
-        request.set_cmd_type(::raft_cmdpb::AdminCmdType::ComputeHash);
+        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(second_response), 7, 23, 6, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::ComputeHash);
         raft_cmdpb::AdminResponse third_response = response;
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(third_response), 7, 24, 6, ctx.getTMTContext()), EngineStoreApplyRes::None);
-        request.set_cmd_type(::raft_cmdpb::AdminCmdType::VerifyHash);
 
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::VerifyHash);
         raft_cmdpb::AdminResponse fourth_response = response;
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(fourth_response), 7, 25, 6, ctx.getTMTContext()), EngineStoreApplyRes::None);
 
@@ -1186,6 +1244,12 @@ void RegionKVStoreTest::testKVStore()
         {
             ASSERT_EQ(e.message(), "unsupported admin command type InvalidAdmin");
         }
+    }
+    {
+        // There shall be data to flush.
+        ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
+        // Force flush until succeed only for testing.
+        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext(), 0, 0), true);
     }
 }
 
@@ -1421,6 +1485,13 @@ TEST_F(RegionKVStoreTest, ReadIndex)
 try
 {
     testReadIndex();
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, NewProxy)
+try
+{
+    testNewProxy();
 }
 CATCH
 

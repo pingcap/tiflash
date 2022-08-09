@@ -508,9 +508,11 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     if (need_remove_stat)
     {
         LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+
+        auto blob_file = getBlobFile(blob_id);
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
-        getBlobFile(blob_id)->remove();
+        blob_file->remove();
         cached_files.remove(blob_id);
     }
 }
@@ -1068,26 +1070,10 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     }
     LOG_FMT_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
 
-    const auto config_file_limit = config.file_limit_size.get();
-    auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
-    BlobFileOffset remaining_page_size = total_page_size - alloc_size;
-
-    // We could make the memory consumption smooth during GC.
-    char * data_buf = static_cast<char *>(alloc(alloc_size));
-    SCOPE_EXIT({
-        free(data_buf, alloc_size);
-    });
-
-    char * data_pos = data_buf;
-    BlobFileOffset offset_in_data = 0;
-    BlobFileId blobfile_id;
-    BlobFileOffset file_offset_beg;
-    std::tie(blobfile_id, file_offset_beg) = getPosFromStats(alloc_size);
-
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
-                                                                              char * data_beg,
+                                                                              char * data_begin,
                                                                               const BlobFileOffset & file_offset,
-                                                                              const BlobFileOffset & data_size) {
+                                                                              const PageSize & data_size) {
         try
         {
             auto blob_file = getBlobFile(file_id);
@@ -1101,7 +1087,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 file_offset,
                 data_size,
                 total_page_size);
-            blob_file->write(data_beg, file_offset, data_size, write_limiter, /*background*/ true);
+            blob_file->write(data_begin, file_offset, data_size, write_limiter, /*background*/ true);
         }
         catch (DB::Exception & e)
         {
@@ -1120,6 +1106,23 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
     };
 
+    const auto config_file_limit = config.file_limit_size.get();
+    // If `total_page_size` is greater than `config_file_limit`, we need to write the page data into multiple `BlobFile`s to
+    // make the memory consumption smooth during GC.
+    auto alloc_size = total_page_size > config_file_limit ? config_file_limit : total_page_size;
+    BlobFileOffset remaining_page_size = total_page_size - alloc_size;
+
+    char * data_buf = static_cast<char *>(alloc(alloc_size));
+    SCOPE_EXIT({
+        free(data_buf, alloc_size);
+    });
+
+    char * data_pos = data_buf;
+    BlobFileOffset offset_in_data = 0;
+    BlobFileId blobfile_id;
+    BlobFileOffset file_offset_begin;
+    std::tie(blobfile_id, file_offset_begin) = getPosFromStats(alloc_size);
+
     // blob_file_0, [<page_id_0, ver0, entry0>,
     //               <page_id_0, ver1, entry1>,
     //               <page_id_1, ver1, entry1>, ... ]
@@ -1129,11 +1132,16 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         for (const auto & [page_id, versioned, entry] : versioned_pageid_entry_list)
         {
-            // When we can't load the remaining data.
-            // we will use the original buffer to find an area to load the remaining data
-            if (offset_in_data + entry.size > config_file_limit)
+            /// If `total_page_size` is greater than `config_file_limit`, we need to write the page data into multiple `BlobFile`s.
+            /// So there may be some page entry that cannot be fit into the current blob file, and we need to write it into the next one.
+            /// And we need perform the following steps before writing data into the current blob file:
+            ///   1. reclaim unneeded space allocated from current blob stat if `offset_in_data` < `alloc_size`;
+            ///   2. update `remaining_page_size`;
+            /// After writing data into the current blob file, we reuse the original buffer for future write.
+            if (offset_in_data + entry.size > alloc_size)
             {
-                assert(file_offset_beg == 0);
+                assert(alloc_size == config_file_limit);
+                assert(file_offset_begin == 0);
                 // Remove the span that is not actually used
                 if (offset_in_data != alloc_size)
                 {
@@ -1142,7 +1150,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 remaining_page_size += alloc_size - offset_in_data;
 
                 // Write data into Blob.
-                write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
+                write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
 
                 // Reset the position to reuse the buffer allocated
                 data_pos = data_buf;
@@ -1151,7 +1159,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
                 // Acquire a span from stats for remaining data
                 auto next_alloc_size = (remaining_page_size > config_file_limit ? config_file_limit : remaining_page_size);
                 remaining_page_size -= next_alloc_size;
-                std::tie(blobfile_id, file_offset_beg) = getPosFromStats(next_alloc_size);
+                std::tie(blobfile_id, file_offset_begin) = getPosFromStats(next_alloc_size);
             }
 
             // Read the data into buffer by old entry
@@ -1161,7 +1169,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             // need to be updated.
             PageEntryV3 new_entry = entry;
             new_entry.file_id = blobfile_id;
-            new_entry.offset = file_offset_beg + offset_in_data;
+            new_entry.offset = file_offset_begin + offset_in_data;
             new_entry.padded_size = 0; // reset padded size to be zero
 
             offset_in_data += new_entry.size;
@@ -1171,9 +1179,10 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
     }
 
+    // write remaining data in `data_buf` into BlobFile
     if (offset_in_data != 0)
     {
-        write_blob(blobfile_id, data_buf, file_offset_beg, offset_in_data);
+        write_blob(blobfile_id, data_buf, file_offset_begin, offset_in_data);
     }
 
     return edit;
@@ -1183,7 +1192,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 {
     PageFileIdAndLevel id_lvl{blob_id, 0};
-    String parent_path = delegator->choosePath(id_lvl);
+    String parent_path = delegator->getPageFilePath(id_lvl);
 
     if (auto f = Poco::File(parent_path); !f.exists())
         f.createDirectories();
@@ -1317,7 +1326,12 @@ BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id,
         config.file_limit_size);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
-    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    auto path = delegator->choosePath(id_lvl);
+    /// This function may be called when restoring an old BlobFile at restart or creating a new BlobFile.
+    /// If restoring an old BlobFile, the BlobFile path maybe already added to delegator, but an another call to `addPageFileUsedSize` should do no harm.
+    /// If creating a new BlobFile, we need to register the BlobFile's path to delegator, so it's necessary to call `addPageFileUsedSize` here.
+    delegator->addPageFileUsedSize({blob_file_id, 0}, 0, path, true);
+    stats_map[path].emplace_back(stat);
     return stat;
 }
 
@@ -1342,7 +1356,12 @@ BlobStatPtr BlobStore::BlobStats::createBigPageStatNotChecking(BlobFileId blob_f
         config.file_limit_size);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
-    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    auto path = delegator->choosePath(id_lvl);
+    /// This function may be called when restoring an old BlobFile at restart or creating a new BlobFile.
+    /// If restoring an old BlobFile, the BlobFile path maybe already added to delegator, but an another call to `addPageFileUsedSize` should do no harm.
+    /// If creating a new BlobFile, we need to register the BlobFile's path to delegator, so it's necessary to call `addPageFileUsedSize` here.
+    delegator->addPageFileUsedSize({blob_file_id, 0}, 0, path, true);
+    stats_map[path].emplace_back(stat);
     return stat;
 }
 

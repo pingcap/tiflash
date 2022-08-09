@@ -113,6 +113,10 @@ public:
         TMTContext & tmt);
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
+    bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
+
+    bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
+
     /**
      * A handy shortcut for { preHandleSnapshotToFiles + applyPreHandledSnapshot }.
      * Note: This function is no longer used in the Proxy path and is only used in tests.
@@ -249,6 +253,11 @@ private:
         UInt64 index,
         UInt64 term,
         TMTContext & tmt);
+
+    /// Notice that if flush_if_possible is set to false, we only check if a flush is allowed by rowsize/size/interval.
+    /// It will not check if a flush will eventually succeed.
+    /// In other words, `canFlushRegionDataImpl(flush_if_possible=true)` can return false.
+    bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
     void releaseReadIndexWorkers();
