@@ -21,7 +21,7 @@
 #include <common/logger_useful.h>
 
 #include <iomanip>
-#include <unordered_set>
+
 MemoryTracker * proc_memory_tracker = nullptr;
 std::atomic<long long> real_rss{0};
 MemoryTracker::~MemoryTracker()
@@ -37,7 +37,6 @@ MemoryTracker::~MemoryTracker()
             /// Exception in Poco::Logger, intentionally swallow.
         }
     }
-    // closed = 1;
 
     /** This is needed for next memory tracker to be consistent with sum of all referring memory trackers.
       *
@@ -71,8 +70,8 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
       *  we allow exception about memory limit exceeded to be thrown only on next allocation.
       * So, we allow over-allocations.
       */
-
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
+
     if (!next.load(std::memory_order_relaxed))
         CurrentMetrics::add(metric, size);
 
@@ -84,8 +83,6 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         /// In this case, it doesn't matter.
         if (unlikely(fault_probability && drand48() < fault_probability))
         {
-            //TODO revert
-            // free(size);
             amount.fetch_sub(size, std::memory_order_relaxed);
 
             DB::FmtBuffer fmt_buf;
@@ -110,7 +107,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
-            fmt_buf.fmtAppend(" exceeded: would use {}(RSS:{}) (attempt to allocate chunk of {} bytes), maximum: {}",
+            fmt_buf.fmtAppend(" exceeded: would use {}(RSS: {}) (attempt to allocate chunk of {} bytes), maximum: {}",
                               formatReadableSizeWithBinarySuffix(will_be),
                               formatReadableSizeWithBinarySuffix(real_rss),
                               size,
@@ -141,6 +138,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 void MemoryTracker::free(Int64 size)
 {
     Int64 new_amount = amount.fetch_sub(size, std::memory_order_relaxed) - size;
+
     /** Sometimes, query could free some data, that was allocated outside of query context.
       * Example: cache eviction.
       * To avoid negative memory usage, we "saturate" amount.
@@ -160,7 +158,7 @@ void MemoryTracker::reset()
     if (!next.load(std::memory_order_relaxed))
         CurrentMetrics::sub(metric, amount.load(std::memory_order_relaxed));
 
-    amount.store(0);
+    amount.store(0, std::memory_order_relaxed);
     peak.store(0, std::memory_order_relaxed);
     limit.store(0, std::memory_order_relaxed);
 }
@@ -182,7 +180,7 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 namespace CurrentMemoryTracker
 {
-static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 0; // 8 MiB /// TODO revert
+static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
 #if __APPLE__ && __clang__
 static __thread Int64 local_delta{};
 #else

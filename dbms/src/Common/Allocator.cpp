@@ -33,6 +33,7 @@
 #define MAP_ANONYMOUS MAP_ANON
 #endif
 
+
 namespace DB
 {
 std::atomic_size_t allocator_mmap_counter;
@@ -181,6 +182,7 @@ void * Allocator<clear_memory_>::realloc(void * buf, size_t old_size, size_t new
         free(buf, old_size);
         buf = new_buf;
     }
+
     return buf;
 }
 

@@ -21,11 +21,10 @@
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Interpreters/AggregationCommon.h>
 
 #include <iostream>
-
-#include "Flash/Mpp/TrackedMppDataPacket.h"
 
 namespace DB
 {
