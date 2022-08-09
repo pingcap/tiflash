@@ -24,11 +24,11 @@ public:
     static void SetUpTestCase()
     {
         MPPTaskTestUtils::SetUpTestCase();
-        MockComputeServerManager::getInstance().addServer("0.0.0.0:3930");
-        MockComputeServerManager::getInstance().addServer("0.0.0.0:3931");
-        MockComputeServerManager::getInstance().addServer("0.0.0.0:3932");
-        MockComputeServerManager::getInstance().addServer("0.0.0.0:3933");
-        MockComputeServerManager::getInstance().startServers(log_ptr);
+        MockComputeServerManager::instance().addServer("0.0.0.0:3930");
+        MockComputeServerManager::instance().addServer("0.0.0.0:3931");
+        MockComputeServerManager::instance().addServer("0.0.0.0:3932");
+        MockComputeServerManager::instance().addServer("0.0.0.0:3933");
+        MockComputeServerManager::instance().startServers(log_ptr);
     }
     void initializeContext() override
     {

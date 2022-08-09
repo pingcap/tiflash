@@ -843,7 +843,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap()[mpp_info.partition_id].addr);
+        meta.set_address(tests::MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr);
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
@@ -885,7 +885,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap()[i].addr);
+        meta.set_address(tests::MockComputeServerManager::instance().getServerConfigMap()[i].addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
         if (size > 1)

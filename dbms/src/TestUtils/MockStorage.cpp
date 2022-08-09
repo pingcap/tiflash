@@ -17,7 +17,7 @@ namespace DB::tests
 {
 void MockStorage::addTableSchema(String name, const MockColumnInfoVec & columnInfos)
 {
-    name_to_id_map[name] = MockTableIdGenerator::getInstance().nextTableId();
+    name_to_id_map[name] = MockTableIdGenerator::instance().nextTableId();
     table_schema[getTableId(name)] = columnInfos;
 }
 

@@ -125,7 +125,7 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
 
 QueryTasks DAGRequestBuilder::buildMPPTasksForMultipleServer(MockDAGRequestContext & mock_context)
 {
-    return buildMPPTasks(mock_context, MockComputeServerManager::getInstance().getServerConfigMap().size());
+    return buildMPPTasks(mock_context, MockComputeServerManager::instance().getServerConfigMap().size());
 }
 
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns)

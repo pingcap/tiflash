@@ -32,12 +32,12 @@ public:
         log_ptr = Logger::get("compute_test");
         auto size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-        MockComputeServerManager::getInstance();
+        MockComputeServerManager::instance();
     }
 
     static void TearDownTestCase() // NOLINT(readability-identifier-naming))
     {
-        MockComputeServerManager::getInstance().reset();
+        MockComputeServerManager::instance().reset();
     }
 
 protected:
@@ -48,7 +48,7 @@ LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
 
 #define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                   \
     TiFlashTestEnv::getGlobalContext().setMPPTest();                               \
-    MockComputeServerManager::getInstance().setMockStorage(context.mockStorage()); \
-    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::getInstance().getServerConfigMap()), expected_cols);
+    MockComputeServerManager::instance().setMockStorage(context.mockStorage()); \
+    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::instance().getServerConfigMap()), expected_cols);
 
 } // namespace DB::tests

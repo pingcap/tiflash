@@ -22,14 +22,9 @@
 
 namespace DB::tests
 {
-class MockComputeServerManager
+class MockComputeServerManager : public ext::Singleton<MockComputeServerManager>
 {
 public:
-    static MockComputeServerManager & getInstance()
-    {
-        static MockComputeServerManager server_manager;
-        return server_manager;
-    }
     void addServer(String addr);
 
     void startServers(const LoggerPtr & log_ptr);
