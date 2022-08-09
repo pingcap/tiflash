@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <IO/WriteBuffer.h>
 #include <Common/MemoryTracker.h>
+#include <IO/WriteBuffer.h>
 
 #include <vector>
 
@@ -43,7 +43,6 @@ private:
     bool is_finished = false;
 
     static constexpr size_t size_multiplier = 2;
-    size_t osize = 0;
 
     void nextImpl() override
     {
@@ -53,9 +52,6 @@ private:
         size_t old_size = vector.size();
         /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
         size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
-        if (old_size * size_multiplier > osize) {
-            osize = old_size * size_multiplier;
-        }
         vector.resize(old_size * size_multiplier);
         internal_buffer = Buffer(reinterpret_cast<Position>(vector.data() + pos_offset), reinterpret_cast<Position>(vector.data() + vector.size()));
         working_buffer = internal_buffer;
@@ -114,7 +110,7 @@ public:
         is_finished = false;
     }
 
-    virtual ~WriteBufferFromVector() override
+    ~WriteBufferFromVector() override
     {
         finalize();
     }

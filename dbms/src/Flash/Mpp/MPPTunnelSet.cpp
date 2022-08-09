@@ -32,7 +32,7 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
 {
     mpp::MPPDataPacket packet;
     if (!response.SerializeToString(packet.mutable_data()))
-        throw Exception(fmt::format("Fail to serialize response, response size: {}, source: MPPTunnelSet", response.ByteSizeLong()));
+        throw Exception(fmt::format("[MPPTunnel]Fail to serialize response, response size: {}", response.ByteSizeLong()));
     return packet;
 }
 

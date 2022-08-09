@@ -254,7 +254,7 @@ void AsynchronousMetrics::update()
     }
 #endif
 
-    // std::cerr<<"memcheck.resident:"<<container["jemalloc.resident"]<<std::endl;
+
     /// Add more metrics as you wish.
     set("mmap.alive", DB::allocator_mmap_counter.load(std::memory_order_relaxed));
 }

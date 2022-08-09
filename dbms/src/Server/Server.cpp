@@ -188,7 +188,6 @@ extern const Metric MemoryCapacity;
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int NO_ELEMENTS_IN_CONFIG;

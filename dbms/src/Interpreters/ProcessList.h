@@ -279,10 +279,12 @@ private:
 
     /// Stores info about queries grouped by their priority
     QueryPriorities priorities;
+
 public:
     /// Limit and counter for memory of all simultaneously running queries.
-    MemoryTracker total_memory_tracker; //server.context().getGlobalContext().getProcessList().total_memory_tracker
+    MemoryTracker total_memory_tracker;
 
+private:
     /// Limit network bandwidth for all users
     ThrottlerPtr total_network_throttler;
 
@@ -294,15 +296,6 @@ public:
         : cur_size(0)
         , max_size(max_size_)
     {}
-
-    Int64 getMemAlloacted()
-    {
-        return total_memory_tracker.get();
-    }
-    Int64 getMemLimit()
-    {
-        return total_memory_tracker.getLimit();
-    }
 
     using EntryPtr = std::shared_ptr<ProcessListEntry>;
 
