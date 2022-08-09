@@ -142,8 +142,8 @@ void process_mem_usage(double& vm_usage, double& resident_set)
 
 void FlashService::memCheckJob()
 {
-//    double vm_usage;
-//    double resident_set;
+    double vm_usage;
+    double resident_set;
 //    size_t max_mem = 0;
 //    while (!end_syn)
 //    {
@@ -158,9 +158,9 @@ void FlashService::memCheckJob()
 // #endif
 //        long long cur_tracked_peak = tracked_peak;
 //        tracked_peak = tracked_mem.load();
-//        process_mem_usage(vm_usage, resident_set);
-//        resident_set*=1024;
-//        real_rss = (long long)resident_set;
+        process_mem_usage(vm_usage, resident_set);
+        resident_set*=1024;
+        real_rss = (long long)resident_set;
 //        LOG_FMT_INFO(log, "mem_check: tracked: {}, limit: {}, proto: {}, glb_mem_track: {},glb_peak:{}, proc_mem:{}, alloc_cnt:{}, reloc_cnt:{}, free_cnt:{}, alloc_rec_cnt:{}, reloc_rec_cnt:{}, free_rec_cnt:{}",
 //        tracked_used, limit, cur_tracked_proto, tracked_mem.load(), cur_tracked_peak, resident_set,
 //        tracked_alloc.load(), tracked_reloc.load(), tracked_free.load(),

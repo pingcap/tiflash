@@ -54,8 +54,6 @@ private:
         /// pos may not be equal to vector.data() + old_size, because WriteBuffer::next() can be used to flush data
         size_t pos_offset = pos - reinterpret_cast<Position>(vector.data());
         if (old_size * size_multiplier > osize) {
-            // if (proc_memory_tracker)
-                // proc_memory_tracker->alloc(old_size * size_multiplier - osize);
             osize = old_size * size_multiplier;
         }
         vector.resize(old_size * size_multiplier);
@@ -118,8 +116,6 @@ public:
 
     virtual ~WriteBufferFromVector() override
     {
-        // if (proc_memory_tracker)
-            // proc_memory_tracker->free(osize);
         finalize();
     }
 };
