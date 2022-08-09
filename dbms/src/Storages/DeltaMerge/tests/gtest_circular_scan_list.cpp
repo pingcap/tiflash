@@ -116,7 +116,7 @@ TEST(CircularScanListTest, Normal)
     ASSERT_EQ(lst.next(), nullptr);
 }
 
-TEST(CircularScanListTest, valid)
+TEST(CircularScanListTest, Valid)
 {
     CircularScanList<Node> l;
     l.add(std::make_shared<Node>(1));
@@ -133,4 +133,85 @@ TEST(CircularScanListTest, valid)
     ASSERT_EQ(l.next()->poolId(), 2);
     ASSERT_EQ(l.next()->poolId(), 2);
 }
+
+TEST(CircularScanListTest, ScheduleInvalid)
+{
+    CircularScanList<Node> l;
+
+    // Add tasks.
+    l.add(std::make_shared<Node>(1));
+    l.add(std::make_shared<Node>(2));
+    l.add(std::make_shared<Node>(3));
+
+    // Some tasks hold the shared_ptr.
+    auto n1 = l.next();
+    auto n2 = l.next();
+    auto n3 = l.next();
+
+    {
+        auto [valid, invalid] = l.count(0);
+        ASSERT_EQ(valid, 3);
+        ASSERT_EQ(invalid, 0);
+    }
+    // Make task invalid.
+    n1->setInvalid();
+    n2->setInvalid();
+    n3->setInvalid();
+
+    {
+        auto [valid, invalid] = l.count(0);
+        ASSERT_EQ(valid, 0);
+        ASSERT_EQ(invalid, 3);
+    }
+
+    {
+        // Tasks can be scheduled.
+        auto n1_1 = l.next();
+        ASSERT_NE(n1_1, nullptr);
+        ASSERT_EQ(n1_1->poolId(), 1);
+        ASSERT_FALSE(n1_1->valid());
+
+        auto n2_1 = l.next();
+        ASSERT_NE(n2_1, nullptr);
+        ASSERT_EQ(n2_1->poolId(), 2);
+        ASSERT_FALSE(n2_1->valid());
+
+        auto n3_1 = l.next();
+        ASSERT_NE(n3_1, nullptr);
+        ASSERT_EQ(n3_1->poolId(), 3);
+        ASSERT_FALSE(n3_1->valid());
+    }
+
+    // Reset tasks
+    {
+        n1.reset();
+        n2.reset();
+        n3.reset();
+    }
+
+    {
+        auto [valid, invalid] = l.count(0);
+        ASSERT_EQ(valid, 0);
+        ASSERT_EQ(invalid, 3);
+    }
+
+    // Tasks no need to be scheduled since no task hold the shared_ptr.
+    {
+        auto n1_1 = l.next();
+        ASSERT_EQ(n1_1, nullptr);
+
+        auto n2_1 = l.next();
+        ASSERT_EQ(n2_1, nullptr);
+
+        auto n3_1 = l.next();
+        ASSERT_EQ(n3_1, nullptr);
+    }
+
+    {
+        auto [valid, invalid] = l.count(0);
+        ASSERT_EQ(valid, 0);
+        ASSERT_EQ(invalid, 0);
+    }
+}
+
 } // namespace DB::DM::tests
