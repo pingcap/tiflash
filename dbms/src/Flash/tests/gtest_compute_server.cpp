@@ -71,7 +71,7 @@ try
 {
     auto tasks = context
                      .scan("test_db", "l_table")
-                     .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
+                     .join(context.scan("test_db", "r_table"),tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                      .buildMPPTasksForMultipleServer(context);
 
     auto expected_cols = {
