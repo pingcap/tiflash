@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 
@@ -30,6 +31,12 @@ public:
         : field_types(field_types_)
     {}
     virtual String getString() = 0;
+    virtual String getStringAndTrackMem(TmpMemTracker & mem_tracker)
+    {
+        auto ret = getString();
+        mem_tracker.alloc(ret.size());
+        return ret;
+    }
     virtual void clear() = 0;
     virtual void encode(const Block & block, size_t start, size_t end) = 0;
     virtual ~ChunkCodecStream() = default;

@@ -48,7 +48,7 @@ MemoryTracker::~MemoryTracker()
       *  then memory usage of 'next' memory trackers will be underestimated,
       *  because amount will be decreased twice (first - here, second - when real 'free' happens).
       */
-    // TODO In future, maybe we can use a better way to handle the  "amount > 0" case.
+    // TODO In future, maybe we can find a better way to handle the "amount > 0" case.
     if (auto value = amount.load(std::memory_order_relaxed))
         free(value);
 }
@@ -145,6 +145,11 @@ void MemoryTracker::free(Int64 size)
       * Memory usage will be calculated with some error.
       * NOTE The code is not atomic. Not worth to fix.
       */
+    if (new_amount < 0 && !next.load(std::memory_order_relaxed)) // handle it only for root memory_tracker
+    {
+        amount.fetch_sub(new_amount);
+        size += new_amount;
+    }
 
     if (auto * loaded_next = next.load(std::memory_order_relaxed))
         loaded_next->free(size);

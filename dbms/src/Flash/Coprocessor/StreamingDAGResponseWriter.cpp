@@ -162,9 +162,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
             for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
-                auto curstr = chunk_codec_stream->getString();
-                tmt.alloc(curstr.size());
-                packet.add_chunks(curstr);
+                packet.add_chunks(chunk_codec_stream->getStringAndTrackMem(tmt));
                 chunk_codec_stream->clear();
             }
             writer->write(packet);
@@ -212,9 +210,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
                 if (current_records_num >= records_per_chunk)
                 {
                     auto * dag_chunk = response.add_chunks();
-                    auto curstr = chunk_codec_stream->getString();
-                    tmt.alloc(curstr.size());
-                    dag_chunk->set_rows_data(curstr);
+                    dag_chunk->set_rows_data(chunk_codec_stream->getStringAndTrackMem(tmt));
                     chunk_codec_stream->clear();
                     current_records_num = 0;
                 }
@@ -228,9 +224,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
         if (current_records_num > 0)
         {
             auto * dag_chunk = response.add_chunks();
-            auto curstr = chunk_codec_stream->getString();
-            tmt.alloc(curstr.size());
-            dag_chunk->set_rows_data(curstr);
+            dag_chunk->set_rows_data(chunk_codec_stream->getStringAndTrackMem(tmt));
             chunk_codec_stream->clear();
         }
         writer->write(response);
@@ -394,9 +388,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::p
             dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_block.rows();
             chunk_codec_stream->encode(dest_block, 0, dest_block.rows());
-            auto curstr = chunk_codec_stream->getString();
-            tmt.alloc(curstr.size());
-            packet[part_id].add_chunks(curstr);
+            packet[part_id].add_chunks(chunk_codec_stream->getStringAndTrackMem(tmt));
             chunk_codec_stream->clear();
         }
     }
