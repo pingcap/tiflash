@@ -67,7 +67,7 @@ bool scanTimeArgs(const std::vector<String> & seps, std::initializer_list<int *>
             i++;
         }
     }
-    catch(std::exception & e)
+    catch (std::exception & e)
     {
         return false;
     }
