@@ -76,7 +76,7 @@ public:
         COMPLETED
     };
 
-    void scheduleThisTask(ScheduleState state);
+    bool scheduleThisTask(ScheduleState state);
 
     bool isScheduled();
 
