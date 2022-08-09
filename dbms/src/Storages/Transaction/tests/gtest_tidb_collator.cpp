@@ -237,7 +237,7 @@ void testCollator()
                     }
                     {
                         strs.resize(strs.size() + s.size());
-                        memcpySmallAllowReadWriteOverflow15(
+                        std::memcpy(
                             &strs[strs.size() - s.size()],
                             s.data(),
                             s.size());

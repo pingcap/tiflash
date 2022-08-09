@@ -1218,7 +1218,7 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
             right_used_columns.emplace(s);
     }
 
-    for (const auto & child : using_expr_list->children)
+    for (const auto & child : join_cols)
     {
         if (auto * identifier = typeid_cast<ASTIdentifier *>(child.get()))
         {
@@ -1308,10 +1308,37 @@ bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, c
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
     join->set_inner_idx(1);
 
-    for (auto & key : using_expr_list->children)
+    for (const auto & key : join_cols)
     {
         fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
+    }
+
+    for (const auto & expr : left_conds)
+    {
+        tipb::Expr * cond = join->add_left_conditions();
+        astToPB(children[0]->output_schema, expr, cond, collator_id, context);
+    }
+
+    for (const auto & expr : right_conds)
+    {
+        tipb::Expr * cond = join->add_right_conditions();
+        astToPB(children[1]->output_schema, expr, cond, collator_id, context);
+    }
+
+    DAGSchema merged_children_schema{children[0]->output_schema};
+    merged_children_schema.insert(merged_children_schema.end(), children[1]->output_schema.begin(), children[1]->output_schema.end());
+
+    for (const auto & expr : other_conds)
+    {
+        tipb::Expr * cond = join->add_other_conditions();
+        astToPB(merged_children_schema, expr, cond, collator_id, context);
+    }
+
+    for (const auto & expr : other_eq_conds_from_in)
+    {
+        tipb::Expr * cond = join->add_other_eq_conditions_from_in();
+        astToPB(merged_children_schema, expr, cond, collator_id, context);
     }
 
     auto * left_child_executor = join->add_children();
@@ -1350,7 +1377,7 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
         }
     };
 
-    for (auto & key : using_expr_list->children)
+    for (const auto & key : join_cols)
     {
         push_back_partition_key(left_partition_keys, children[0]->output_schema, key);
         push_back_partition_key(right_partition_keys, children[1]->output_schema, key);
@@ -1699,14 +1726,23 @@ static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right
     }
 }
 
-ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list)
+// compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
+ExecutorPtr compileJoin(size_t & executor_index,
+                        ExecutorPtr left,
+                        ExecutorPtr right,
+                        tipb::JoinType tp,
+                        const ASTs & join_cols,
+                        const ASTs & left_conds,
+                        const ASTs & right_conds,
+                        const ASTs & other_conds,
+                        const ASTs & other_eq_conds_from_in)
 {
     DAGSchema output_schema;
 
     buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
     buildRightSideJoinSchema(output_schema, right->output_schema, tp);
 
-    auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, using_expr_list);
+    auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
     join->children.push_back(left);
     join->children.push_back(right);
 
@@ -1731,7 +1767,17 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     default:
         throw Exception("Unsupported join type");
     }
-    return compileJoin(executor_index, left, right, tp, ast_join.using_expression_list);
+
+    // in legacy test framework, we only support using_expr of join
+    ASTs join_cols;
+    if (ast_join.using_expression_list)
+    {
+        for (const auto & key : ast_join.using_expression_list->children)
+        {
+            join_cols.push_back(key);
+        }
+    }
+    return compileJoin(executor_index, left, right, tp, join_cols);
 }
 
 
