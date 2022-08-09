@@ -1611,11 +1611,26 @@ struct TiDBConvertToDuration
                 block.getByPosition(result).column = std::move(to_col);
             }
         }
-        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate> || std::is_same_v<FromDataType, DataTypeMyDateTime>)
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate>)
+        {
+            // cast date as duration
+            auto to_col = ColumnVector<Int64>::create();
+            auto & vec_to = to_col->getData();
+            vec_to.resize(size);
+            for (size_t i = 0; i < size; ++i)
+            {
+                vec_to[i] = 0; // The DATE type is used for values with a date part but no time part. The value of Duration is always zero.
+            }
+            block.getByPosition(result).column = std::move(to_col);
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
         {
             // cast time as duration
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
             const ColumnUInt64::Container & from_vec = col_from->getData();
+            const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
+            const auto & from_type = static_cast<const DataTypeMyDateTime &>(*col_with_type_and_name.type);
+            int from_fsp = from_type.getFraction();
 
             auto to_col = ColumnVector<Int64>::create();
             auto & vec_to = to_col->getData();
@@ -1626,28 +1641,14 @@ struct TiDBConvertToDuration
             for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(from_vec[i]);
-                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                MyDuration duration(1 /*neg*/, datetime.hour, datetime.minute, datetime.second, datetime.micro_second, from_fsp);
+                if (to_fsp < from_fsp)
                 {
-                    vec_to[i] = 0;
+                    vec_to[i] = round(duration.nanoSecond(), (6 - to_fsp) + 3);
                 }
                 else
                 {
-                    int from_fsp = 0;
-                    if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
-                    {
-                        const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
-                        const auto & from_type = static_cast<const DataTypeMyDateTime &>(*col_with_type_and_name.type);
-                        from_fsp = from_type.getFraction();
-                    }
-                    MyDuration duration(1 /*neg*/, datetime.hour, datetime.minute, datetime.second, datetime.micro_second, from_fsp);
-                    if (to_fsp < from_fsp)
-                    {
-                        vec_to[i] = round(duration.nanoSecond(), (6 - to_fsp) + 3);
-                    }
-                    else
-                    {
-                        vec_to[i] = duration.nanoSecond();
-                    }
+                    vec_to[i] = duration.nanoSecond();
                 }
             }
             block.getByPosition(result).column = std::move(to_col);
