@@ -50,6 +50,8 @@ struct NameAndTypePair
 
 using NamesAndTypes = std::vector<NameAndTypePair>;
 
+String dumpJsonStructure(const NamesAndTypes & names_and_types);
+
 class NamesAndTypesList : public std::list<NameAndTypePair>
 {
 public:

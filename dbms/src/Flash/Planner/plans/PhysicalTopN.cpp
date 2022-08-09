@@ -70,7 +70,7 @@ void PhysicalTopN::finalize(const Names & parent_require)
     Names required_output = parent_require;
     required_output.reserve(required_output.size() + order_descr.size());
     for (const auto & desc : order_descr)
-        required_output.push_back(desc.column_name);
+        required_output.emplace_back(desc.column_name);
     before_sort_actions->finalize(required_output);
 
     child->finalize(before_sort_actions->getRequiredColumns());

@@ -26,8 +26,6 @@ void prependProjectInputIfNeed(ExpressionActionsPtr & actions, size_t columns_fr
 
 void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names & parent_require);
 
-void checkParentRequireContainsSchema(const Names & parent_require, const NamesAndTypes & schema);
-
 void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTypes & schema);
 
 void checkSampleBlockContainsParentRequire(const Block & sample_block, const Names & parent_require);

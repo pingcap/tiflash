@@ -25,40 +25,6 @@
 
 namespace DB::FinalizeHelper
 {
-namespace
-{
-String namesToString(const Names & names)
-{
-    return fmt::format("[{}]", fmt::join(names, ","));
-}
-
-String schemaToString(const NamesAndTypes & schema)
-{
-    FmtBuffer bf;
-    bf.append("[");
-    bf.joinStr(
-        schema.cbegin(),
-        schema.cend(),
-        [](const auto & col, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", col.name, col.type->getName()); },
-        ", ");
-    bf.append("]");
-    return bf.toString();
-}
-
-String blockMetaToString(const Block & block)
-{
-    FmtBuffer bf;
-    bf.append("[");
-    bf.joinStr(
-        block.cbegin(),
-        block.cend(),
-        [](const ColumnWithTypeAndName & col, FmtBuffer & fb) { fb.fmtAppend("<{}, {}>", col.name, col.type->getName()); },
-        ", ");
-    bf.append("]");
-    return bf.toString();
-}
-} // namespace
-
 void prependProjectInputIfNeed(ExpressionActionsPtr & actions, size_t columns_from_previous)
 {
     assert(columns_from_previous >= actions->getRequiredColumnsWithTypes().size());
@@ -79,22 +45,7 @@ void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names 
         RUNTIME_CHECK(
             schema_set.find(parent_require_column) != schema_set.end(),
             TiFlashException(
-                fmt::format("schema {} don't contain parent require column: {}", schemaToString(schema), parent_require_column),
-                Errors::Planner::Internal));
-    }
-}
-
-void checkParentRequireContainsSchema(const Names & parent_require, const NamesAndTypes & schema)
-{
-    NameSet parent_require_set;
-    for (const auto & parent_require_column : parent_require)
-        parent_require_set.insert(parent_require_column);
-    for (const auto & schema_column : schema)
-    {
-        RUNTIME_CHECK(
-            parent_require_set.find(schema_column.name) != parent_require_set.end(),
-            TiFlashException(
-                fmt::format("parent require {} don't contain schema column: {}", namesToString(parent_require), schema_column.name),
+                fmt::format("schema {} don't contain parent require column: {}", DB::dumpJsonStructure(schema), parent_require_column),
                 Errors::Planner::Internal));
     }
 }
@@ -106,7 +57,7 @@ void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTy
         RUNTIME_CHECK(
             sample_block.has(schema_column.name),
             TiFlashException(
-                fmt::format("sample block {} don't contain schema column: {}", blockMetaToString(sample_block), schema_column.name),
+                fmt::format("sample block {} don't contain schema column: {}", sample_block.dumpJsonStructure(), schema_column.name),
                 Errors::Planner::Internal));
 
         const auto & type_in_sample_block = sample_block.getByName(schema_column.name).type;
@@ -130,7 +81,7 @@ void checkSampleBlockContainsParentRequire(const Block & sample_block, const Nam
         RUNTIME_CHECK(
             sample_block.has(parent_require_column),
             TiFlashException(
-                fmt::format("sample block {} don't contain parent_require column: {}", blockMetaToString(sample_block), parent_require_column),
+                fmt::format("sample block {} don't contain parent_require column: {}", sample_block.dumpJsonStructure(), parent_require_column),
                 Errors::Planner::Internal));
     }
 }

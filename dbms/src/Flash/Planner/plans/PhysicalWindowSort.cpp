@@ -62,7 +62,7 @@ void PhysicalWindowSort::finalize(const Names & parent_require)
     Names required_output = parent_require;
     required_output.reserve(required_output.size() + order_descr.size());
     for (const auto & desc : order_descr)
-        required_output.push_back(desc.column_name);
+        required_output.emplace_back(desc.column_name);
 
     child->finalize(required_output);
 }

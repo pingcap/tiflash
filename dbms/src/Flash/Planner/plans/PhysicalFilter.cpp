@@ -61,7 +61,7 @@ void PhysicalFilter::transformImpl(DAGPipeline & pipeline, Context & context, si
 void PhysicalFilter::finalize(const Names & parent_require)
 {
     Names required_output = parent_require;
-    required_output.push_back(filter_column);
+    required_output.emplace_back(filter_column);
     before_filter_actions->finalize(required_output);
 
     child->finalize(before_filter_actions->getRequiredColumns());

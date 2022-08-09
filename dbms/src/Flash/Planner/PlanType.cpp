@@ -21,34 +21,24 @@ String PlanType::toString() const
 {
     switch (enum_value)
     {
-    case Limit:
-        return "Limit";
-    case TopN:
-        return "TopN";
-    case Filter:
-        return "Filter";
-    case Aggregation:
-        return "Aggregation";
-    case ExchangeSender:
-        return "ExchangeSender";
-    case MockExchangeSender:
-        return "MockExchangeSender";
-    case ExchangeReceiver:
-        return "ExchangeReceiver";
-    case MockExchangeReceiver:
-        return "MockExchangeReceiver";
-    case Projection:
-        return "Projection";
-    case Window:
-        return "Window";
-    case WindowSort:
-        return "WindowSort";
-    case TableScan:
-        return "TableScan";
-    case MockTableScan:
-        return "MockTableScan";
-    case Join:
-        return "Join";
+#define M(t) \
+    case t:  \
+        return #t;
+        M(Limit)
+        M(TopN)
+        M(Filter)
+        M(Aggregation)
+        M(ExchangeSender)
+        M(MockExchangeSender)
+        M(ExchangeReceiver)
+        M(MockExchangeReceiver)
+        M(Projection)
+        M(Window)
+        M(WindowSort)
+        M(TableScan)
+        M(MockTableScan)
+        M(Join)
+#undef M
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
     }

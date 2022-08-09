@@ -213,7 +213,7 @@ void PhysicalPlan::addRootFinalProjectionIfNeed()
 
 void PhysicalPlan::outputAndOptimize()
 {
-    RUNTIME_ASSERT(!root_node, log, "root_node shoud be nullptr before `outputAndOptimize`");
+    RUNTIME_ASSERT(!root_node, log, "root_node should be nullptr before `outputAndOptimize`");
     RUNTIME_ASSERT(cur_plan_nodes.size() == 1, log, "There can only be one plan node output, but here are {}", cur_plan_nodes.size());
     root_node = popBack();
     addRootFinalProjectionIfNeed();
@@ -229,7 +229,7 @@ void PhysicalPlan::outputAndOptimize()
         "build optimized physical plan: \n{}",
         toString());
 
-    RUNTIME_ASSERT(root_node, log, "root_node shoudn't be nullptr after `outputAndOptimize`");
+    RUNTIME_ASSERT(root_node, log, "root_node shouldn't be nullptr after `outputAndOptimize`");
 
     if (!dagContext().return_executor_id)
         fillOrderForListBasedExecutors(dagContext(), root_node);
