@@ -18,6 +18,7 @@
 #include <TestUtils/MockServerInfo.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
+#include <cstddef>
 #include <unordered_map>
 
 namespace DB::tests
@@ -30,7 +31,7 @@ public:
         static MockComputeServerManager server_manager;
         return server_manager;
     }
-    void addServerConfig(MockServerConfig config); // ywq todo refine
+    void addServerConfig(MockServerConfig config);
 
     void startAllServer(const LoggerPtr & log_ptr);
 
@@ -38,19 +39,19 @@ public:
 
     void reset();
 
-    MPPTestInfo getMPPTestInfo(String name);
+    MPPTestInfo getMPPTestInfo(size_t partition_id);
 
     void setMPPTestInfo();
 
-    std::unordered_map<String, MockServerConfig> & getServerConfigMap();
-    std::unordered_map<size_t, MockServerConfig> & getServerConfigMap2(); // ywq todo refine.
+    // std::unordered_map<String, MockServerConfig> & getServerConfigMap();
+    std::unordered_map<size_t, MockServerConfig> & getServerConfigMap();
 
 private:
-    void addServer(String name, std::unique_ptr<FlashGrpcServerHolder> server);
+    void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);
 
 private:
-    std::unordered_map<String, std::unique_ptr<FlashGrpcServerHolder>> server_map;
-    std::unordered_map<String, MockServerConfig> server_config_map;
-    std::unordered_map<size_t, MockServerConfig> server_config_map2;
+    std::unordered_map<size_t, std::unique_ptr<FlashGrpcServerHolder>> server_map;
+    std::unordered_map<size_t, MockServerConfig> server_config_map;
+    // std::unordered_map<size_t, MockServerConfig> server_config_map2;
 };
 } // namespace DB::tests

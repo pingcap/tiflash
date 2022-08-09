@@ -20,8 +20,8 @@ namespace DB::tests
 void MockComputeServerManager::addServerConfig(MockServerConfig config)
 {
     config.partition_id = server_config_map.size();
-    server_config_map[config.name] = config;
-    server_config_map2[config.partition_id] = config;
+    server_config_map[config.partition_id] = config;
+    // server_config_map2[config.partition_id] = config;
 }
 
 void MockComputeServerManager::startAllServer(const LoggerPtr & log_ptr)
@@ -49,20 +49,16 @@ void MockComputeServerManager::reset()
     server_map.clear();
 }
 
-MPPTestInfo MockComputeServerManager::getMPPTestInfo(String name)
+MPPTestInfo MockComputeServerManager::getMPPTestInfo(size_t partition_id)
 {
-    return {server_config_map[name].partition_id, server_config_map.size()};
+    return {server_config_map[partition_id].partition_id, server_config_map.size()};
 }
 
-std::unordered_map<String, MockServerConfig> & MockComputeServerManager::getServerConfigMap()
+std::unordered_map<size_t, MockServerConfig> & MockComputeServerManager::getServerConfigMap()
 {
     return server_config_map;
 }
 
-std::unordered_map<size_t, MockServerConfig> & MockComputeServerManager::getServerConfigMap2()
-{
-    return server_config_map2;
-}
 
 void MockComputeServerManager::setMPPTestInfo()
 {
@@ -72,9 +68,9 @@ void MockComputeServerManager::setMPPTestInfo()
     }
 }
 
-void MockComputeServerManager::addServer(String name, std::unique_ptr<FlashGrpcServerHolder> server)
+void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server)
 {
-    server_map[name] = std::move(server);
+    server_map[partition_id] = std::move(server);
 }
 
 } // namespace DB::tests

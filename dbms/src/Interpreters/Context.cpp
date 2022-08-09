@@ -1937,6 +1937,26 @@ bool Context::isTest() const
     return test_mode != non_test;
 }
 
+void Context::setMockStorage(MockStorage & mock_storage_)
+{
+    mock_storage = mock_storage_;
+}
+
+MockStorage Context::mockStorage() const
+{
+    return mock_storage;
+}
+
+void Context::setMPPTestInfo(MPPTestInfo & info)
+{
+    mpp_test_info = info;
+}
+
+MPPTestInfo Context::mppTestInfo() const
+{
+    return mpp_test_info;
+}
+
 SessionCleaner::~SessionCleaner()
 {
     try

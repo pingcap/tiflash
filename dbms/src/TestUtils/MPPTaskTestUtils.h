@@ -57,6 +57,6 @@ LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
     TiFlashTestEnv::getGlobalContext().setMPPTest();                               \
     MockComputeServerManager::getInstance().setMockStorage(context.mockStorage()); \
     MockComputeServerManager::getInstance().setMPPTestInfo();                      \
-    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::getInstance().getServerConfigMap2()), expected_cols);
+    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::getInstance().getServerConfigMap()), expected_cols);
 
 } // namespace DB::tests

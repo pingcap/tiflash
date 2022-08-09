@@ -442,4 +442,14 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     return manual_compact_manager->handleRequest(request, response);
 }
 
+void FlashService::setMockStorage(tests::MockStorage & mock_storage_)
+{
+    mock_storage = mock_storage_;
+}
+
+void FlashService::setMPPTestInfo(tests::MPPTestInfo & mpp_test_info_)
+{
+    mpp_test_info = mpp_test_info_;
+}
+
 } // namespace DB

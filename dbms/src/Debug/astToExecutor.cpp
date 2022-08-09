@@ -788,7 +788,6 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
 namespace Debug
 {
 String LOCAL_HOST = "127.0.0.1:3930";
-String LOCAL_HOST1 = "127.0.0.1:3931";
 
 void setServiceAddr(const std::string & addr)
 {
@@ -844,7 +843,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap2()[mpp_info.partition_id].addr);
+        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap()[mpp_info.partition_id].addr);
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
@@ -879,19 +878,18 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
 
-    for (size_t i = 0; i < it->second.size(); i++)
+    auto size = it->second.size();
+    for (size_t i = 0; i < size; ++i)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap2()[i].addr);
+        meta.set_address(tests::MockComputeServerManager::getInstance().getServerConfigMap()[i].addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
-        if (i == 1)
-        {
+        if (size > 1)
             exchange_receiver->set_tp(tipb::Hash);
-        }
     }
     return true;
 }

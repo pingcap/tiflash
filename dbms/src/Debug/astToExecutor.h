@@ -47,7 +47,6 @@ using DAGSchema = std::vector<DAGColumnInfo>;
 namespace Debug
 {
 extern String LOCAL_HOST;
-extern String LOCAL_HOST1;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
 

@@ -197,4 +197,14 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         std::terminate();
     }
 }
+
+void FlashGrpcServerHolder::setMockStorage(tests::MockStorage mock_storage)
+{
+    flash_service->setMockStorage(mock_storage);
+}
+
+void FlashGrpcServerHolder::setMPPTestInfo(tests::MPPTestInfo info) // ywq todo refine.
+{
+    flash_service->setMPPTestInfo(info);
+}
 } // namespace DB

@@ -36,13 +36,11 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
     size_t rows = 0;
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
     if constexpr (std::is_same_v<SourceType, MockExchangeReceiverInputStream>)
-        columns_with_type_and_name = context.mock_storage.getExchangeColumns(executor_id);
+        columns_with_type_and_name = context.mockStorage().getExchangeColumns(executor_id);
     else if (context.isMPPTest())
-        columns_with_type_and_name = context.mock_storage.getColumnsForMPPTableScan(table_id, context.mpp_test_info.partition_id, context.mpp_test_info.partition_num);
-
+        columns_with_type_and_name = context.mockStorage().getColumnsForMPPTableScan(table_id, context.mppTestInfo().partition_id, context.mppTestInfo().partition_num);
     else
-        columns_with_type_and_name = context.mock_storage.getColumns(table_id);
-
+        columns_with_type_and_name = context.mockStorage().getColumns(table_id);
 
     for (const auto & col : columns_with_type_and_name)
     {

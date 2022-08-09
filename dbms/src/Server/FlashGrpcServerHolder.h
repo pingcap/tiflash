@@ -33,16 +33,8 @@ public:
         const LoggerPtr & log_);
     ~FlashGrpcServerHolder();
 
-    void setMockStorage(tests::MockStorage mock_storage)
-    {
-        flash_service->setMockStorage(mock_storage);
-    }
-
-    void setMPPTestInfo(tests::MPPTestInfo info)
-    {
-        flash_service->setMPPTestInfo(info);
-    }
-
+    void setMockStorage(tests::MockStorage mock_storage);
+    void setMPPTestInfo(tests::MPPTestInfo info);
 
 private:
     const LoggerPtr & log;

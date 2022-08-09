@@ -100,6 +100,8 @@ class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+using MockStorage = DB::tests::MockStorage;
+using MPPTestInfo = DB::tests::MPPTestInfo;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -164,6 +166,9 @@ private:
         executor_test
     };
     TestMode test_mode = non_test;
+
+    MockStorage mock_storage;
+    MPPTestInfo mpp_test_info;
 
     TimezoneInfo timezone_info;
 
@@ -480,19 +485,10 @@ public:
     void setExecutorTest();
     bool isTest() const;
 
-    DB::tests::MockStorage mock_storage;
-    DB::tests::MPPTestInfo mpp_test_info;
-
-    /// ywq todo refinement..
-    void setMockStorage(DB::tests::MockStorage mock_storage_)
-    {
-        mock_storage = mock_storage_;
-    }
-
-    void setMPPTestInfo(DB::tests::MPPTestInfo info)
-    {
-        mpp_test_info = info;
-    }
+    void setMockStorage(MockStorage & mock_storage_);
+    MockStorage mockStorage() const;
+    void setMPPTestInfo(MPPTestInfo & info);
+    MPPTestInfo mppTestInfo() const;
 
 private:
     /** Check if the current client has access to the specified database.

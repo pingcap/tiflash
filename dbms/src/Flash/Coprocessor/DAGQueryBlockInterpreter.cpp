@@ -159,7 +159,7 @@ AnalysisResult analyzeExpressions(
 // for tests, we need to mock tableScan blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    if (!context.mock_storage.tableExists(table_scan.getLogicalTableID()))
+    if (!context.mockStorage().tableExists(table_scan.getLogicalTableID()))
     {
         auto names_and_types = genNamesAndTypes(table_scan);
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
@@ -493,7 +493,7 @@ void DAGQueryBlockInterpreter::handleExchangeReceiver(DAGPipeline & pipeline)
 // for tests, we need to mock ExchangeReceiver blockInputStream as the source stream.
 void DAGQueryBlockInterpreter::handleMockExchangeReceiver(DAGPipeline & pipeline)
 {
-    if (!context.mock_storage.exchangeExists(query_block.source_name))
+    if (!context.mockStorage().exchangeExists(query_block.source_name))
     {
         for (size_t i = 0; i < max_streams; ++i)
         {

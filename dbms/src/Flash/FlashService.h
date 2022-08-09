@@ -80,15 +80,8 @@ public:
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
-    void setMockStorage(tests::MockStorage & mock_storage_)
-    {
-        mock_storage = mock_storage_;
-    }
-
-    void setMPPTestInfo(tests::MPPTestInfo & mpp_test_info_)
-    {
-        mpp_test_info = mpp_test_info_;
-    }
+    void setMockStorage(tests::MockStorage & mock_storage_);
+    void setMPPTestInfo(tests::MPPTestInfo & mpp_test_info_);
 
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
