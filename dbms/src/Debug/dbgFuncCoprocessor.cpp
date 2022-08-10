@@ -227,7 +227,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     return ret;
 }
 
-void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String &addr)
+void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String & addr)
 {
     if (task.is_root_task)
     {
