@@ -1119,11 +1119,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
-<<<<<<< HEAD
-=======
     /// Determining PageStorage run mode based on current files on disk and storage config.
     /// Do it as early as possible after loading storage config.
->>>>>>> 45792ca39d (fix the problem that some config in profiles.default may not take effect (#5575))
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
 
     // Use pd address to define which default_database we use by default.
