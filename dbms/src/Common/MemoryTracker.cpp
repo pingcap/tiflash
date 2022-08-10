@@ -95,8 +95,10 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
-        if ((current_limit && real_rss > current_limit + 5LL * 1024 * 1024 * 1024
-             && will_be > current_limit - (real_rss - current_limit))
+        bool is_rss_too_large = (current_limit
+                                 && real_rss > current_limit + 5LL * 1024 * 1024 * 1024
+                                 && will_be > current_limit - (real_rss - current_limit - 5LL * 1024 * 1024 * 1024));
+        if (is_rss_too_large
             || unlikely(current_limit && will_be > current_limit))
         {
             amount.fetch_sub(size, std::memory_order_relaxed);
@@ -106,11 +108,20 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
-            fmt_buf.fmtAppend(" exceeded: would use {}(RSS: {}) (attempt to allocate chunk of {} bytes), maximum: {}",
-                              formatReadableSizeWithBinarySuffix(will_be),
-                              formatReadableSizeWithBinarySuffix(real_rss),
-                              size,
-                              formatReadableSizeWithBinarySuffix(current_limit));
+            if (!is_rss_too_large)
+            { // out of memory quota
+                fmt_buf.fmtAppend(" exceeded caused by 'out of memory quota for data computing' : would use {} for data computing (attempt to allocate chunk of {} bytes), limit of memory for data computing: {}",
+                                  formatReadableSizeWithBinarySuffix(will_be),
+                                  size,
+                                  formatReadableSizeWithBinarySuffix(current_limit));
+            }
+            else
+            { // RSS too large
+                fmt_buf.fmtAppend(" exceeded caused by 'RSS(Resident Set Size) much larger than limit' : process memory size would be {} for (attempt to allocate chunk of {} bytes), limit of memory for data computing : {}",
+                                  formatReadableSizeWithBinarySuffix(real_rss),
+                                  size,
+                                  formatReadableSizeWithBinarySuffix(current_limit));
+            }
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
