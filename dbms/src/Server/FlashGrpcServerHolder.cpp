@@ -13,7 +13,6 @@
 // limitations under the License.
 #include <Server/FlashGrpcServerHolder.h>
 
-#include "Debug/astToExecutor.h"
 namespace DB
 {
 namespace ErrorCodes
@@ -42,7 +41,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             // tells us whether there is any kind of event or cq is shutting down.
             if (!curcq->Next(&tag, &ok))
             {
-                // LOG_FMT_INFO(log, "CQ is fully drained and shut down");
+                LOG_FMT_INFO(log, "CQ is fully drained and shut down");
                 break;
             }
             GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
@@ -164,7 +163,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     try
     {
         /// Shut down grpc server.
-        LOG_FMT_INFO(log, "Begin to shut down flash grpc server, addr = {}", Debug::LOCAL_HOST);
+        LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
         flash_grpc_server->Shutdown();
         *is_shutdown = true;
         // Wait all existed MPPTunnels done to prevent crash.
