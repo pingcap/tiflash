@@ -43,6 +43,11 @@ PageStorageImpl::PageStorageImpl(
 
 PageStorageImpl::~PageStorageImpl() = default;
 
+void PageStorageImpl::reloadConfig()
+{
+    blob_store.reloadConfig(parseBlobConfig(config));
+}
+
 void PageStorageImpl::restore()
 {
     // TODO: clean up blobstore.
