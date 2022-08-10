@@ -20,7 +20,6 @@
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
 
-#include <cstddef>
 #include <functional>
 
 namespace DB::tests
@@ -137,8 +136,6 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, std
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
-    context.context.setMPPTest();
-
     auto res = executeMPPQueryWithMultipleServer(context.context, properties, tasks, server_config_map);
     return readBlock(res);
 }

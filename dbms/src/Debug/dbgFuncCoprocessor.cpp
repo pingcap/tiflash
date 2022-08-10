@@ -227,7 +227,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     return ret;
 }
 
-void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema)
+void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, String &addr)
 {
     if (task.is_root_task)
     {
@@ -237,7 +237,7 @@ void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchT
     auto * tm = req->mutable_meta();
     tm->set_start_ts(properties.start_ts);
     tm->set_partition_id(task.partition_id);
-    tm->set_address(Debug::LOCAL_HOST);
+    tm->set_address(addr);
     tm->set_task_id(task.task_id);
     auto * encoded_plan = req->mutable_encoded_plan();
     task.dag_request->AppendToString(encoded_plan);
@@ -252,7 +252,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     for (auto & task : query_tasks)
     {
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
-        prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema);
+        prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, Debug::LOCAL_HOST);
         auto table_id = task.table_id;
         if (table_id != -1)
         {
@@ -313,8 +313,8 @@ BlockInputStreamPtr executeMPPQueryWithMultipleServer(Context & context, const D
     for (auto & task : query_tasks)
     {
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
-        prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema);
         auto addr = server_config_map[task.partition_id].addr;
+        prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, addr);
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
         client.runDispatchMPPTask(req);

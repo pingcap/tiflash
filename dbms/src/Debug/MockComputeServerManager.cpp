@@ -25,6 +25,7 @@ void MockComputeServerManager::addServer(String addr)
 
 void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, Context & global_context)
 {
+    global_context.setMPPTest();
     for (const auto & server_config : server_config_map)
     {
         TiFlashSecurityConfig security_config;

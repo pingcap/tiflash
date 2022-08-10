@@ -164,8 +164,6 @@ public:
     void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
     void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns);
 
-    std::unordered_map<String, ColumnsWithTypeAndName> & executorIdColumnsMap() { return executor_id_columns_map; }
-
     DAGRequestBuilder scan(String db_name, String table_name);
     DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -177,7 +175,6 @@ public:
 private:
     size_t index;
     MockStorage mock_storage;
-    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>, for single source executor test.
 
 public:
     // Currently don't support task_id, so the following to structure is useless,

@@ -53,8 +53,9 @@ FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Conte
           context.getGlobalContext().getSettingsRef()))
 {
     auto settings = context.getSettingsRef();
-    enable_local_tunnel = settings.enable_local_tunnel;
-    enable_local_tunnel = false;
+
+    // for MPP test, we don't use local tunnel.
+    enable_local_tunnel = context.isMPPTest() == true ? SettingInt<bool>(false) : settings.enable_local_tunnel; // ywq todo
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
@@ -234,6 +235,7 @@ grpc::Status FlashService::Coprocessor(
     // We need to find it out and bind the grpc stream with it.
     LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
+    // For MPP test, we don't care about security config.
     if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
     {
         return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
