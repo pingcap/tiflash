@@ -1628,9 +1628,8 @@ struct TiDBConvertToDuration
             // cast time as duration
             const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
             const ColumnUInt64::Container & from_vec = col_from->getData();
-            const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
-            const auto & from_type = static_cast<const DataTypeMyDateTime &>(*col_with_type_and_name.type);
-            int from_fsp = from_type.getFraction();
+            const auto & from_type = checkAndGetDataType<DataTypeMyDateTime>(block.getByPosition(arguments[0]).type.get());
+            int from_fsp = from_type->getFraction();
 
             auto to_col = ColumnVector<Int64>::create();
             auto & vec_to = to_col->getData();
