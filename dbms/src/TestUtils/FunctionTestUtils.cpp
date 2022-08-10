@@ -302,18 +302,27 @@ ColumnWithTypeAndName executeFunction(
     const TiDB::TiDBCollatorPtr & collator,
     bool raw_function_test)
 {
-    // shuffle input columns to assure function correctly use physical offsets
-    std::random_device rd;
-    std::mt19937 g(rd());
-
     ColumnNumbers argument_column_numbers;
     for (size_t i = 0; i < columns.size(); ++i)
         argument_column_numbers.push_back(i);
-    std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
 
-    const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
+    if (raw_function_test)
+    {
+        /// raw_function_test requires input columns follow strict argument order to check validity of return type
+        /// therefore we can not shuffle input columns
+        return executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
+    }
+    else
+    {
+        /// shuffle input columns to assure function correctly use physical offsets instead of logical offsets
+        std::random_device rd;
+        std::mt19937 g(rd());
 
-    return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
+        std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
+        const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
+
+        return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
+    }
 }
 
 ColumnWithTypeAndName executeFunction(
