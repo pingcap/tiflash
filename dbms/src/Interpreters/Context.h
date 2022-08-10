@@ -20,8 +20,8 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
-#include <TestUtils/MockServerInfo.h>
-#include <TestUtils/MockStorage.h>
+#include <Debug/MockServerInfo.h>
+#include <Debug/MockStorage.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>

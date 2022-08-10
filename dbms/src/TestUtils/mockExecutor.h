@@ -20,7 +20,7 @@
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
 #include <Storages/Transaction/Collator.h>
-#include <TestUtils/MockStorage.h>
+#include <Debug/MockStorage.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::tests

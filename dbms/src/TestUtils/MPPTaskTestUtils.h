@@ -16,8 +16,8 @@
 
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/MockComputeServerManager.h>
-#include <TestUtils/MockStorage.h>
+#include <Debug/MockComputeServerManager.h>
+#include <Debug/MockStorage.h>
 
 #include <memory>
 

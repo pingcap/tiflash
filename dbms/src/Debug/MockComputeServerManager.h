@@ -15,9 +15,8 @@
 #pragma once
 
 #include <Server/FlashGrpcServerHolder.h>
-#include <TestUtils/MockServerInfo.h>
-#include <TestUtils/TiFlashTestEnv.h>
-
+#include <Debug/MockServerInfo.h>
+#include <Debug/MockStorage.h>
 #include <unordered_map>
 
 namespace DB::tests
@@ -27,7 +26,7 @@ class MockComputeServerManager : public ext::Singleton<MockComputeServerManager>
 public:
     void addServer(String addr);
 
-    void startServers(const LoggerPtr & log_ptr);
+    void startServers(const LoggerPtr & log_ptr, Context & global_context);
 
     void setMockStorage(MockStorage & mock_storage);
 

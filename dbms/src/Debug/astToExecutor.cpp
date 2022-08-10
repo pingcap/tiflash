@@ -26,7 +26,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
-#include <TestUtils/MockComputeServerManager.h>
+#include <Debug/MockComputeServerManager.h>
 #include <common/logger_useful.h>
 
 namespace DB

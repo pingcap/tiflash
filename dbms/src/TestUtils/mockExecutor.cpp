@@ -20,7 +20,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
-#include <TestUtils/MockComputeServerManager.h>
+#include <Debug/MockComputeServerManager.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>

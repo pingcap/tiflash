@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-#include <TestUtils/MockComputeServerManager.h>
+#include <Debug/MockComputeServerManager.h>
 
 namespace DB::tests
 {
@@ -23,7 +23,7 @@ void MockComputeServerManager::addServer(String addr)
     server_config_map[config.partition_id] = config;
 }
 
-void MockComputeServerManager::startServers(const LoggerPtr & log_ptr)
+void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, Context & global_context)
 {
     for (const auto & server_config : server_config_map)
     {
@@ -31,7 +31,7 @@ void MockComputeServerManager::startServers(const LoggerPtr & log_ptr)
         TiFlashRaftConfig raft_config;
         raft_config.flash_server_addr = server_config.second.addr;
         Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
-        addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(TiFlashTestEnv::getGlobalContext(), *config, security_config, raft_config, log_ptr));
+        addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(global_context, *config, security_config, raft_config, log_ptr));
     }
 
     prepareMPPTestInfo();

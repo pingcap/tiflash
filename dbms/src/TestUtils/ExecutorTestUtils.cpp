@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <TestUtils/MockComputeServerManager.h>
+#include <Debug/MockComputeServerManager.h>
 #include <TestUtils/executorSerializer.h>
 
 #include <cstddef>
