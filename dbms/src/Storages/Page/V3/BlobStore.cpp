@@ -66,7 +66,7 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     , file_provider(file_provider_)
     , config(config_)
     , log(Logger::get("BlobStore", std::move(storage_name)))
-    , blob_stats(log, delegator, config_)
+    , blob_stats(log, delegator, config)
     , cached_files(config.cached_fd_size)
 {
 }
@@ -108,6 +108,15 @@ void BlobStore::registerPaths()
             }
         }
     }
+}
+
+void BlobStore::reloadConfig(const BlobStore::Config & rhs)
+{
+    config.file_limit_size = rhs.file_limit_size;
+    config.spacemap_type = rhs.spacemap_type;
+    config.cached_fd_size = rhs.cached_fd_size;
+    config.block_alignment_bytes = rhs.block_alignment_bytes;
+    config.heavy_gc_valid_rate = rhs.heavy_gc_valid_rate;
 }
 
 FileUsageStatistics BlobStore::getFileUsageStatistics() const
@@ -1156,7 +1165,7 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
   * BlobStats methods *
   *********************/
 
-BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
+BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config & config_)
     : log(std::move(log_))
     , delegator(delegator_)
     , config(config_)

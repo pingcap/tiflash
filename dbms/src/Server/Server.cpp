@@ -1119,9 +1119,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
+<<<<<<< HEAD
+=======
+    /// Determining PageStorage run mode based on current files on disk and storage config.
+    /// Do it as early as possible after loading storage config.
+>>>>>>> 45792ca39d (fix the problem that some config in profiles.default may not take effect (#5575))
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
-    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
@@ -1242,6 +1245,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// so must be called after settings has been load.
     auto & bg_pool = global_context->getBackgroundPool();
     auto & blockable_bg_pool = global_context->getBlockableBackgroundPool();
+
+    ///
+    /// The config value in global settings can only be used from here because we just loaded it from config file.
+    ///
+
+    /// Initialize the background & blockable background thread pool.
+    Settings & settings = global_context->getSettingsRef();
+    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
+    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
+    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+
+    /// PageStorage run mode has been determined above
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);

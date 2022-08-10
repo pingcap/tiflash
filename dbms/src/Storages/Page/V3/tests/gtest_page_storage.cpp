@@ -17,6 +17,7 @@
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/RateLimiter.h>
+#include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -1408,6 +1409,37 @@ try
 }
 CATCH
 
+
+
+TEST_F(PageStorageTest, ReloadConfig)
+try
+{
+    auto & global_context = DB::tests::TiFlashTestEnv::getContext().getGlobalContext();
+    auto & settings = global_context.getSettingsRef();
+    auto old_dt_storage_blob_heavy_gc_valid_rate = settings.dt_storage_blob_heavy_gc_valid_rate;
+    auto old_dt_storage_blob_block_alignment_bytes = settings.dt_storage_blob_block_alignment_bytes;
+
+    settings.dt_storage_blob_heavy_gc_valid_rate = 0.6;
+    settings.dt_storage_blob_block_alignment_bytes = 100;
+    page_storage->reloadSettings(getConfigFromSettings(settings));
+    ASSERT_EQ(page_storage->blob_store.config.heavy_gc_valid_rate, 0.6);
+    ASSERT_EQ(page_storage->blob_store.config.block_alignment_bytes, 100);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.heavy_gc_valid_rate, 0.6);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.block_alignment_bytes, 100);
+
+    // change config twice make sure the test select a value different from default value
+    settings.dt_storage_blob_heavy_gc_valid_rate = 0.8;
+    settings.dt_storage_blob_block_alignment_bytes = 200;
+    page_storage->reloadSettings(getConfigFromSettings(settings));
+    ASSERT_EQ(page_storage->blob_store.config.heavy_gc_valid_rate, 0.8);
+    ASSERT_EQ(page_storage->blob_store.config.block_alignment_bytes, 200);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.heavy_gc_valid_rate, 0.8);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.block_alignment_bytes, 200);
+
+    settings.dt_storage_blob_heavy_gc_valid_rate = old_dt_storage_blob_heavy_gc_valid_rate;
+    settings.dt_storage_blob_block_alignment_bytes = old_dt_storage_blob_block_alignment_bytes;
+}
+CATCH
 
 } // namespace PS::V3::tests
 } // namespace DB
