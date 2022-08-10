@@ -47,7 +47,7 @@ public:
 
     void setChild(size_t i, const PhysicalPlanNodePtr & new_child) override
     {
-        RUNTIME_ASSERT(i == 0, log, "child_index({}) should not >= childrenSize({})", i, childrenSize());
+        RUNTIME_ASSERT(i == 0, log, "child_index({}) shouldn't >= childrenSize({})", i, childrenSize());
         RUNTIME_ASSERT(new_child, log, "new_child for child_index({}) shouldn't be nullptr", i);
         RUNTIME_ASSERT(new_child.get() != this, log, "new_child for child_index({}) shouldn't be itself", i);
         child = new_child;
