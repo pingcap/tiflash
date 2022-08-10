@@ -16,7 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Interpreters/executeQuery.h>
+#include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
 
@@ -70,8 +70,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setDAGContext(&dag_context);
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
-    DAGQuerySource dag(context.context);
-    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
+    auto res = executeQuery(context.context);
     FmtBuffer fb;
     res.in->dumpTree(fb);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
@@ -106,6 +105,7 @@ Block mergeBlocks(Blocks blocks)
         actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
     return Block(actual_columns);
 }
+} // namespace
 
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 {
@@ -118,7 +118,11 @@ DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
     stream->readSuffix();
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
-} // namespace
+
+void ExecutorTest::enablePlanner(bool is_enable)
+{
+    context.context.setSetting("enable_planner", is_enable ? "true" : "false");
+}
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
@@ -127,8 +131,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
-    DAGQuerySource dag(context.context);
-    return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
+    return readBlock(executeQuery(context.context).in);
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)

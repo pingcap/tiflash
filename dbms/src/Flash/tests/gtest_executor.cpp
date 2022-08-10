@@ -39,6 +39,7 @@ public:
 TEST_F(ExecutorTestRunner, Filter)
 try
 {
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto request = context
                        .scan("test_db", "test_table")
                        .filter(eq(col("s1"), col("s2")))
@@ -57,6 +58,7 @@ try
                             createColumns({toNullableVec<String>({"banana"}),
                                            toNullableVec<String>({"banana"})}));
     }
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 

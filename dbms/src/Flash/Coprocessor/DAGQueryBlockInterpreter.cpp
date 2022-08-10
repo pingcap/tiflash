@@ -38,6 +38,7 @@
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
@@ -161,7 +162,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
 {
     if (!context.mockStorage().tableExists(table_scan.getLogicalTableID()))
     {
-        auto names_and_types = genNamesAndTypes(table_scan);
+        auto names_and_types = genNamesAndTypes(table_scan, "mock_table_scan");
         auto columns_with_type_and_name = getColumnWithTypeAndName(names_and_types);
         analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
         for (size_t i = 0; i < max_streams; ++i)
@@ -181,7 +182,7 @@ void DAGQueryBlockInterpreter::handleMockTableScan(const TiDBTableScan & table_s
 
 void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan, DAGPipeline & pipeline)
 {
-    const auto push_down_filter = PushDownFilter::toPushDownFilter(query_block.selection_name, query_block.selection);
+    const auto push_down_filter = PushDownFilter::pushDownFilterFrom(query_block.selection_name, query_block.selection);
 
     DAGStorageInterpreter storage_interpreter(context, table_scan, push_down_filter, max_streams);
     storage_interpreter.execute(pipeline);
