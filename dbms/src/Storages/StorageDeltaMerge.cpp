@@ -24,6 +24,7 @@
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -51,7 +52,6 @@
 #include <common/ThreadPool.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
-#include <Flash/Coprocessor/TiDBTableScan.h>
 
 #include <random>
 

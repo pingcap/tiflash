@@ -14,10 +14,11 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/TiDBTableScan.h>
+
 #include <memory>
 #include <string>
 #include <unordered_map>
-#include <Flash/Coprocessor/TiDBTableScan.h>
 
 namespace DB
 {

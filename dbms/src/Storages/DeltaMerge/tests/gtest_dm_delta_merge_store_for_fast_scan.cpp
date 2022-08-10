@@ -88,7 +88,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -172,7 +172,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithRangeFilter)
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -247,7 +247,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -368,7 +368,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -474,7 +474,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -583,7 +583,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -662,7 +662,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
 
         switch (mode)
@@ -809,7 +809,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -835,7 +835,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -881,7 +881,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -906,7 +906,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order = */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -966,7 +966,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         auto pk_coldata = createNumbers<Int64>(num_deleted_rows, num_rows_write);
         ASSERT_EQ(pk_coldata.size(), num_rows_write - num_deleted_rows);
@@ -1054,7 +1054,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
 
         switch (mode)
@@ -1130,11 +1130,11 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1186,7 +1186,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1230,7 +1230,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write - num_deleted_rows);
     }

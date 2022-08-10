@@ -519,7 +519,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     /// But this way seems not to be robustness enough, maybe we need another flag?
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
-    // new_columns_to_read need at most columns_to_read.size() + 2, due to may extra insert into the handle column and del_mark column. 
+    // new_columns_to_read need at most columns_to_read.size() + 2, due to may extra insert into the handle column and del_mark column.
     new_columns_to_read->reserve(columns_to_read.size() + 2);
 
     new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
@@ -558,7 +558,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
         /* enable_clean_read */ enable_clean_read,
-        /* is_fast_mode */ filter_delete_mark);
+        /* is_fast_scan */ filter_delete_mark);
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 

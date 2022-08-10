@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/TiDBTableScan.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -83,7 +82,4 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
         tipb_table_scan->set_table_id(table_id);
     }
 }
-
-
-
 } // namespace DB

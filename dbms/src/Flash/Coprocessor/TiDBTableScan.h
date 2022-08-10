@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`
 class TiDBTableScan
 {
@@ -79,6 +78,5 @@ private:
     bool keep_order;
     bool is_fast_scan;
 };
-
-
+ 
 } // namespace DB

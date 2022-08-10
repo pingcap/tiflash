@@ -62,19 +62,19 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
     case TiDB::CodecFlagCompactBytes:
         return Field(String());
     case TiDB::CodecFlagFloat:
-        return Field(Float64(0));
+        return Field(static_cast<Float64>(0));
     case TiDB::CodecFlagUInt:
-        return Field(UInt64(0));
+        return Field(static_cast<UInt64>(0));
     case TiDB::CodecFlagInt:
-        return Field(Int64(0));
+        return Field(static_cast<Int64>(0));
     case TiDB::CodecFlagVarInt:
-        return Field(Int64(0));
+        return Field(static_cast<Int64>(0));
     case TiDB::CodecFlagVarUInt:
-        return Field(UInt64(0));
+        return Field(static_cast<UInt64>(0));
     case TiDB::CodecFlagJson:
         return TiDB::genJsonNull();
     case TiDB::CodecFlagDuration:
-        return Field(Int64(0));
+        return Field(static_cast<Int64>(0));
     default:
         throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
     }
@@ -407,7 +407,7 @@ try
         size_t elems_size = elems_arr->size();
         for (size_t i = 1; i <= elems_size; i++)
         {
-            elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), Int16(i)));
+            elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), static_cast<Int16>(i)));
         }
     }
     /// need to do this check for forward compatibility
@@ -1097,7 +1097,7 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
 String genJsonNull()
 {
     // null
-    const static String null({char(DB::TYPE_CODE_LITERAL), char(DB::LITERAL_NIL)});
+    const static String null({static_cast<char>(DB::TYPE_CODE_LITERAL), static_cast<char>(DB::LITERAL_NIL)});
     return null;
 }
 
