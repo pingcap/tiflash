@@ -74,7 +74,7 @@ public:
     {
         context.addMockTableColumnData(db, table_name, source_columns);
         ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-        
+
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 1; i <= max_concurrency_level; ++i)
         {
