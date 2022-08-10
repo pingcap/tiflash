@@ -43,7 +43,7 @@ public:
 
     PhysicalPlanNodePtr children(size_t i) const override
     {
-        RUNTIME_ASSERT(i <= 1, log, "child_index({}) should not >= childrenSize({})", i, childrenSize());
+        RUNTIME_ASSERT(i <= 1, log, "child_index({}) shouldn't >= childrenSize({})", i, childrenSize());
         return i == 0 ? left : right;
     }
 
