@@ -131,8 +131,13 @@ void CreatingSetsBlockInputStream::createAll()
             {
                 if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
                 {
-                    if (isCancelledOrThrowIfKilled())
-                        return;
+                    if (is_cancelled || is_killed)
+                    {
+                        thread_manager->wait();
+                        if (is_killed)
+                            throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+                         return;
+                    }
                     thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
