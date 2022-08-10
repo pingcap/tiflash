@@ -28,10 +28,16 @@ extern const int NOT_IMPLEMENTED;
 
 struct WindowFunctionRank final : public IWindowFunction
 {
-    WindowFunctionRank(const std::string & name_,
-                       const DataTypes & argument_types_)
-        : IWindowFunction(name_, argument_types_)
+    static constexpr auto name = "rank";
+
+    explicit WindowFunctionRank(const DataTypes & argument_types_)
+        : IWindowFunction(argument_types_)
     {}
+
+    String getName() const override
+    {
+        return name;
+    }
 
     DataTypePtr getReturnType() const override
     {
@@ -50,16 +56,21 @@ struct WindowFunctionRank final : public IWindowFunction
 
 struct WindowFunctionDenseRank final : public IWindowFunction
 {
-    WindowFunctionDenseRank(const std::string & name_,
-                            const DataTypes & argument_types_)
-        : IWindowFunction(name_, argument_types_)
+    static constexpr auto name = "dense_rank";
+
+    explicit WindowFunctionDenseRank(const DataTypes & argument_types_)
+        : IWindowFunction(argument_types_)
     {}
+
+    String getName() const override
+    {
+        return name;
+    }
 
     DataTypePtr getReturnType() const override
     {
         return std::make_shared<DataTypeInt64>();
     }
-
 
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
                                 size_t function_index) override
@@ -73,16 +84,21 @@ struct WindowFunctionDenseRank final : public IWindowFunction
 
 struct WindowFunctionRowNumber final : public IWindowFunction
 {
-    WindowFunctionRowNumber(const std::string & name_,
-                            const DataTypes & argument_types_)
-        : IWindowFunction(name_, argument_types_)
+    static constexpr auto name = "row_number";
+
+    explicit WindowFunctionRowNumber(const DataTypes & argument_types_)
+        : IWindowFunction(argument_types_)
     {}
+
+    String getName() const override
+    {
+        return name;
+    }
 
     DataTypePtr getReturnType() const override
     {
         return std::make_shared<DataTypeInt64>();
     }
-
 
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
                                 size_t function_index) override
@@ -96,14 +112,8 @@ struct WindowFunctionRowNumber final : public IWindowFunction
 
 void registerWindowFunctions(WindowFunctionFactory & factory)
 {
-    factory.registerFunction(
-        "rank",
-        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionRank>(name, argument_types); });
-    factory.registerFunction(
-        "dense_rank",
-        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionDenseRank>(name, argument_types); });
-    factory.registerFunction(
-        "row_number",
-        [](const std::string & name, const DataTypes & argument_types) { return std::make_shared<WindowFunctionRowNumber>(name, argument_types); });
+    factory.registerFunction<WindowFunctionRank>();
+    factory.registerFunction<WindowFunctionDenseRank>();
+    factory.registerFunction<WindowFunctionRowNumber>();
 }
 } // namespace DB

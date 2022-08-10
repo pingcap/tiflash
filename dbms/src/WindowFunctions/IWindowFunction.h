@@ -29,16 +29,11 @@ using WindowBlockInputStreamPtr = std::shared_ptr<WindowBlockInputStream>;
 class IWindowFunction
 {
 public:
-    IWindowFunction(const std::string & name_,
-                    const DataTypes & argument_types_)
-        : name(name_)
-        , argument_types(argument_types_)
+    explicit IWindowFunction(const DataTypes & argument_types_)
+    : argument_types(argument_types_)
     {}
 
-    String getName()
-    {
-        return name;
-    }
+    virtual String getName() const = 0;
 
     virtual ~IWindowFunction() = default;
 
@@ -49,7 +44,6 @@ public:
         = 0;
 
 protected:
-    std::string name;
     DataTypes argument_types;
 };
 
