@@ -306,23 +306,14 @@ ColumnWithTypeAndName executeFunction(
     for (size_t i = 0; i < columns.size(); ++i)
         argument_column_numbers.push_back(i);
 
-    if (raw_function_test)
-    {
-        /// raw_function_test requires input columns follow strict argument order to check validity of return type
-        /// therefore we can not shuffle input columns
-        return executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
-    }
-    else
-    {
-        /// shuffle input columns to assure function correctly use physical offsets instead of logical offsets
-        std::random_device rd;
-        std::mt19937 g(rd());
+    /// shuffle input columns to assure function correctly use physical offsets instead of logical offsets
+    std::random_device rd;
+    std::mt19937 g(rd());
 
-        std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
-        const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
+    std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
+    const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
 
-        return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
-    }
+    return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
 }
 
 ColumnWithTypeAndName executeFunction(
@@ -336,22 +327,30 @@ ColumnWithTypeAndName executeFunction(
     if (raw_function_test)
     {
         auto & factory = FunctionFactory::instance();
-        Block block(columns);
+
         ColumnsWithTypeAndName arguments;
-        for (size_t i = 0; i < argument_column_numbers.size(); ++i)
-            arguments.push_back(columns.at(i));
-        auto bp = factory.tryGet(func_name, context);
-        if (!bp)
+        for (const auto argument_column_number : argument_column_numbers)
+            arguments.push_back(columns.at(argument_column_number));
+
+        auto builder = factory.tryGet(func_name, context);
+        if (!builder)
             throw TiFlashTestException(fmt::format("Function {} not found!", func_name));
-        auto func = bp->build(arguments, collator);
+
+        Block block(columns);
+        auto func = builder->build(arguments, collator);
+
         block.insert({nullptr, func->getReturnType(), "res"});
         func->execute(block, argument_column_numbers, columns.size());
+
         return block.getByPosition(columns.size());
     }
+
     auto columns_with_unique_name = toColumnsWithUniqueName(columns);
     auto [actions, result_name] = buildFunction(context, func_name, argument_column_numbers, columns_with_unique_name, collator);
+
     Block block(columns_with_unique_name);
     actions->execute(block);
+
     return block.getByName(result_name);
 }
 
