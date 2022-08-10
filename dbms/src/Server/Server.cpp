@@ -1247,12 +1247,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// The config value in global settings can only be used from here because we just loaded it from config file.
     ///
 
-    /// Initialize the background & blockable background thread pool.
-    Settings & settings = global_context->getSettingsRef();
-    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
-    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
-    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
-
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
     LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
