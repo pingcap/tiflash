@@ -530,7 +530,7 @@ void MPPTask::scheduleOrWait()
     }
 }
 
-void MPPTask::scheduleThisTask(ScheduleState state)
+bool MPPTask::scheduleThisTask(ScheduleState state)
 {
     std::unique_lock lock(schedule_mu);
     if (schedule_state == ScheduleState::WAITING)
@@ -538,7 +538,9 @@ void MPPTask::scheduleThisTask(ScheduleState state)
         LOG_FMT_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
+        return true;
     }
+    return false;
 }
 
 int MPPTask::estimateCountOfNewThreads()
