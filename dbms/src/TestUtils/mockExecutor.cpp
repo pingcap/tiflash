@@ -117,6 +117,7 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     // enable mpp
     properties.is_mpp_query = true;
     properties.mpp_partition_num = mpp_partition_num;
+    mock_context.context.setMPPTest();
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
     root.reset();
     executor_index = 0;
