@@ -350,7 +350,7 @@ void SyncTunnelSender::startSendThread()
 
 void AsyncTunnelSender::consumerFinishWithLock(const String & msg)
 {
-    LOG_FMT_TRACE(log, "calling consumer Finish");
+    LOG_FMT_TRACE(log, "calling consumer Finish with lock");
     send_queue->finish();
     std::unique_lock lk(*mu);
     consumer_state.setMsg(msg);
