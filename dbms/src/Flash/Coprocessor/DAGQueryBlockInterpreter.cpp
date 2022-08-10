@@ -352,6 +352,7 @@ void DAGQueryBlockInterpreter::executeWindow(
     WindowDescription & window_description,
     bool enable_fine_grained_shuffle)
 {
+    
     executeExpression(pipeline, window_description.before_window, log, "before window");
 
     if (enable_fine_grained_shuffle)
@@ -550,6 +551,7 @@ void DAGQueryBlockInterpreter::handleWindow(DAGPipeline & pipeline, const tipb::
         input_columns.emplace_back(p.name, p.type);
     DAGExpressionAnalyzer dag_analyzer(input_columns, context);
     WindowDescription window_description = dag_analyzer.buildWindowDescription(window);
+    window_description.fillArgColumnNumbers();
     executeWindow(pipeline, window_description, enable_fine_grained_shuffle);
     executeExpression(pipeline, window_description.after_window, log, "cast after window");
 

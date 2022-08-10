@@ -536,8 +536,6 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
     chain.finalize();
     chain.clear();
 
-    window_description.fillArgColumnNumbers();
-
     return window_description;
 }
 

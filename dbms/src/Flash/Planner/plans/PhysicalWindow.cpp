@@ -87,6 +87,8 @@ void PhysicalWindow::finalize(const Names & parent_require)
 
     child->finalize(window_description.before_window->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(window_description.before_window, child->getSampleBlock().columns());
+
+    window_description.fillArgColumnNumbers();
 }
 
 const Block & PhysicalWindow::getSampleBlock() const
