@@ -845,7 +845,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         meta.set_partition_id(mpp_info.partition_id);
         auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
-          
+
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
