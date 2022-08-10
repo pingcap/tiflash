@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/ColumnsNumber.h>
+#include <Common/Exception.h>
 #include <Common/assert_cast.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -24,8 +25,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-extern const int BAD_ARGUMENTS;
-extern const int NOT_IMPLEMENTED;
+extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 } // namespace ErrorCodes
 
 struct WindowFunctionRank final : public IWindowFunction
@@ -43,11 +43,18 @@ struct WindowFunctionRank final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
+        RUNTIME_CHECK(
+            argument_types.size() == 0,
+            Exception(
+                fmt::format("Number of arguments for window function {} doesn't match: passed {}, should be 0.", getName(), argument_types.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH));
         return std::make_shared<DataTypeInt64>();
     }
 
-    void windowInsertResultInto(WindowBlockInputStreamPtr stream,
-                                size_t function_index) override
+    void windowInsertResultInto(
+        WindowBlockInputStreamPtr stream,
+        size_t function_index,
+        [[maybe_unused]] const ColumnNumbers & arguments) override
     {
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
@@ -70,11 +77,18 @@ struct WindowFunctionDenseRank final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
+        RUNTIME_CHECK(
+            argument_types.size() == 0,
+            Exception(
+                fmt::format("Number of arguments for window function {} doesn't match: passed {}, should be 0.", getName(), argument_types.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH));
         return std::make_shared<DataTypeInt64>();
     }
 
-    void windowInsertResultInto(WindowBlockInputStreamPtr stream,
-                                size_t function_index) override
+    void windowInsertResultInto(
+        WindowBlockInputStreamPtr stream,
+        size_t function_index,
+        [[maybe_unused]] const ColumnNumbers & arguments) override
     {
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
@@ -97,11 +111,18 @@ struct WindowFunctionRowNumber final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
+        RUNTIME_CHECK(
+            argument_types.size() == 0,
+            Exception(
+                fmt::format("Number of arguments for window function {} doesn't match: passed {}, should be 0.", getName(), argument_types.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH));
         return std::make_shared<DataTypeInt64>();
     }
 
-    void windowInsertResultInto(WindowBlockInputStreamPtr stream,
-                                size_t function_index) override
+    void windowInsertResultInto(
+        WindowBlockInputStreamPtr stream,
+        size_t function_index,
+        [[maybe_unused]] const ColumnNumbers & arguments) override
     {
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(

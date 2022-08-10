@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Core/ColumnNumbers.h>
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
@@ -39,9 +40,10 @@ public:
 
     virtual DataTypePtr getReturnType() const = 0;
     // Must insert the result for current_row.
-    virtual void windowInsertResultInto(WindowBlockInputStreamPtr streamPtr,
-                                        size_t function_index)
-        = 0;
+    virtual void windowInsertResultInto(
+        WindowBlockInputStreamPtr streamPtr,
+        size_t function_index,
+        const ColumnNumbers & arguments) = 0;
 
 protected:
     DataTypes argument_types;

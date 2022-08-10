@@ -31,6 +31,7 @@ struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
     Array parameters;
+    ColumnNumbers arguments;
     Names argument_names;
     std::string column_name;
 };
@@ -116,6 +117,8 @@ struct WindowDescription
     WindowFunctionDescriptions window_functions_descriptions;
 
     void setWindowFrame(const tipb::WindowFrame & frame_);
+
+    void fillArgColumnNumbers();
 };
 
 } // namespace DB

@@ -66,6 +66,7 @@ void WindowBlockInputStream::initialWorkspaces()
     {
         WindowFunctionWorkspace workspace;
         workspace.window_function = window_function_description.window_function;
+        workspace.arguments = window_function_description.arguments;
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
@@ -351,7 +352,7 @@ void WindowBlockInputStream::writeOutCurrentRow()
     for (size_t wi = 0; wi < workspaces.size(); ++wi)
     {
         auto & ws = workspaces[wi];
-        ws.window_function->windowInsertResultInto(this->shared_from_this(), wi);
+        ws.window_function->windowInsertResultInto(this->shared_from_this(), wi, ws.arguments);
     }
 }
 

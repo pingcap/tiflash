@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/FmtUtils.h>
+#include <Core/ColumnNumbers.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
 
@@ -28,6 +29,8 @@ struct WindowFunctionWorkspace
 {
     // TODO add aggregation function
     WindowFunctionPtr window_function = nullptr;
+
+    ColumnNumbers arguments;
 };
 
 struct WindowBlock
