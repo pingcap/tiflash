@@ -62,7 +62,7 @@ struct WorkloadOptions
     int64_t table_id;
     std::string table_name;
 
-    bool is_fast_mode;
+    bool is_fast_scan;
 
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);

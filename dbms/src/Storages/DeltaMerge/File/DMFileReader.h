@@ -77,7 +77,7 @@ public:
         // 2. You don't need pk, version and delete_tag columns
         // If you have no idea what it means, then simply set it to false.
         bool enable_clean_read_,
-        bool is_fast_mode_,
+        bool is_fast_scan_,
         // The the MVCC filter version. Used by clean read check.
         UInt64 max_read_version_,
         // filters
@@ -145,7 +145,7 @@ private:
     // In normal mode, if there is no delta for some packs in stable, we can try to do clean read.
     // In fast mode, we always try to do clean read.
     const bool enable_clean_read;
-    const bool is_fast_mode;
+    const bool is_fast_scan;
     const UInt64 max_read_version;
 
     /// Filters

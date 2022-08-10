@@ -13,46 +13,10 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/TiDBTableScan.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
-ReadMode pbToReadMode(tipb::TiFlashReadMode read_mode)
-{
-    switch (read_mode)
-    {
-    case tipb::TiFlashReadMode::Auto:{
-        std::cout << " read_mode: Auto" << std::endl;
-        return ReadMode::Auto;
-    }
-    case tipb::TiFlashReadMode::Normal:{
-        std::cout << " read_mode: Normal" << std::endl;
-        return ReadMode::Normal;
-    }
-    case tipb::TiFlashReadMode::Fast:{
-        std::cout << " read_mode: Fast" << std::endl;
-        return ReadMode::Fast;
-    }
-    //default:
-        // print error message
-    }
-}
-
-
-String readModeToString(ReadMode read_mode)
-{
-    switch (read_mode)
-    {
-    case ReadMode::Auto:
-        return "auto";
-    case ReadMode::Normal:
-        return "normal";
-    case ReadMode::Fast:
-        return "fast";
-    //default:
-    //   print error message
-    }
-}
-
 TiDBTableScan::TiDBTableScan(
     const tipb::Executor * table_scan_,
     const String & executor_id_,
@@ -64,7 +28,7 @@ TiDBTableScan::TiDBTableScan(
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(!is_partition_table_scan && (table_scan->tbl_scan().keep_order() || !table_scan->tbl_scan().has_keep_order()))
-    , read_mode(pbToReadMode(table_scan->tbl_scan().read_mode()))
+    , is_fast_scan(table_scan->tbl_scan().is_fast_scan())
 {
     if (is_partition_table_scan)
     {
@@ -111,7 +75,7 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
         tipb_table_scan->set_next_read_engine(tipb::EngineType::Local);
         for (auto id : partition_table_scan.primary_prefix_column_ids())
             tipb_table_scan->add_primary_prefix_column_ids(id);
-        tipb_table_scan->set_read_mode(partition_table_scan.read_mode());
+        tipb_table_scan->set_is_fast_scan(partition_table_scan.is_fast_scan());
     }
     else
     {

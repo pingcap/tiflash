@@ -53,7 +53,7 @@ struct SelectQueryInfo
 
     std::string req_id;
     bool keep_order = true;
-    ReadMode read_mode = ReadMode::Normal;
+    bool is_fast_scan = false;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

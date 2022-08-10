@@ -749,21 +749,6 @@ BlockInputStreams StorageDeltaMerge::read(
     else
         LOG_FMT_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
-    auto is_fast_mode = tidb_table_info.tiflash_mode == TiDB::TiFlashMode::Fast;
-    switch (query_info.read_mode) {
-        // If in ReadMode::Normal, we always do a normal mode query, no matter what kind of tiflash_mode is.
-        case ReadMode::Normal:
-            is_fast_mode = false;
-        // If in ReadMode::Auto, we do query based on table's tiflash_mode
-        case ReadMode::Auto:
-            break;
-        // If in ReadMode::Normal, we always do a fast mode query, no matter what kind of tiflash_mode is.
-        case ReadMode::Fast:
-            is_fast_mode = true;
-    }
-
-    std::cout << "is_fast_mode: " << is_fast_mode << " tidb_table_info.tiflash_mode " << TiFlashModeToString(tidb_table_info.tiflash_mode) << " query_info.read_mode is " << readModeToString(query_info.read_mode) << std::endl;
-
     auto streams = store->read(
         context,
         context.getSettingsRef(),
@@ -774,7 +759,7 @@ BlockInputStreams StorageDeltaMerge::read(
         rs_operator,
         query_info.req_id,
         query_info.keep_order,
-        /* is_fast_mode */ tidb_table_info.tiflash_mode == TiDB::TiFlashMode::Fast, // read in normal mode or read in fast mode
+        /* is_fast_scan */ query_info.is_fast_scan, // read in normal mode or read in fast mode
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);

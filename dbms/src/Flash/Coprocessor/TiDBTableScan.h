@@ -18,13 +18,7 @@
 
 namespace DB
 {
-// 这玩意应该放在这里么
-enum class ReadMode
-{
-    Normal,
-    Auto,
-    Fast,
-};
+
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`
 class TiDBTableScan
 {
@@ -63,9 +57,9 @@ public:
         return keep_order;
     }
 
-    ReadMode getReadMode() const
+    bool isFastScan() const
     {
-        return read_mode;
+        return is_fast_scan;
     }
 
 private:
@@ -83,12 +77,8 @@ private:
     std::vector<Int64> physical_table_ids;
     Int64 logical_table_id;
     bool keep_order;
-    ReadMode read_mode;
+    bool is_fast_scan;
 };
-
-ReadMode pbToReadMode(tipb::TiFlashReadMode read_mode);
-String readModeToString(ReadMode read_mode);
-
 
 
 } // namespace DB

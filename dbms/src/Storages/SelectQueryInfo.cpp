@@ -30,6 +30,7 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     , dag_query(rhs.dag_query != nullptr ? std::make_unique<DAGQueryInfo>(*rhs.dag_query) : nullptr)
     , req_id(rhs.req_id)
     , keep_order(rhs.keep_order)
+    , is_fast_scan(rhs.is_fast_scan)
 {}
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
@@ -39,6 +40,7 @@ SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     , dag_query(std::move(rhs.dag_query))
     , req_id(std::move(rhs.req_id))
     , keep_order(rhs.keep_order)
+    , is_fast_scan(rhs.is_fast_scan)
 {}
 
 } // namespace DB

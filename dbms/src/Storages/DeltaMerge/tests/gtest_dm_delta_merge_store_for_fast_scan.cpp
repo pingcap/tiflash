@@ -28,7 +28,7 @@ namespace DM
 {
 namespace tests
 {
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
 {
     /// test under only insert data (no update, no delete) with all range
 
@@ -101,7 +101,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
     }
 }
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithRangeFilter)
 {
     /// test under only insert data (no update, no delete) with range filter
 
@@ -185,7 +185,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
     }
 }
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithoutFlushCache)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithoutFlushCache)
 try
 {
     const size_t num_write_rows = 32;
@@ -304,7 +304,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithoutCompact)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithoutCompact)
 try
 {
     const size_t num_write_rows = 32;
@@ -409,7 +409,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithCompact)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithCompact)
 try
 {
     const size_t num_write_rows = 32;
@@ -515,7 +515,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithCompactAndMergeDelta)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithCompactAndMergeDelta)
 try
 {
     const size_t num_write_rows = 32;
@@ -594,7 +594,7 @@ try
 CATCH
 
 // Insert + Update
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithMultipleBlockWithOverlap)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithMultipleBlockWithOverlap)
 try
 {
     const size_t num_write_rows = 32;
@@ -733,7 +733,7 @@ try
 CATCH
 
 // Insert + Delete row
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteRow)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithDeleteRow)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -846,7 +846,7 @@ try
 CATCH
 
 // Insert + Delete Range
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteRange)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithDeleteRange)
 try
 {
     const size_t num_rows_write = 128;
@@ -917,7 +917,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteWithMergeDelta)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithDeleteWithMergeDelta)
 try
 {
     const size_t num_rows_write = 128;
@@ -979,7 +979,7 @@ try
 CATCH
 
 // insert + update + delete and fast mode first and then normal mode, to check the mode conversion is ok
-TEST_P(DeltaMergeStoreRWTest, TestFastModeComplexWithModeConversion)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanComplexWithModeConversion)
 try
 {
     const size_t num_write_rows = 128;
@@ -1144,7 +1144,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeForCleanRead)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanForCleanRead)
 try
 {
     const size_t num_rows_write = 128;

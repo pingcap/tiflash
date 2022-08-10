@@ -90,10 +90,10 @@ public:
     //    1. You don't need pk columns
     // If you have no idea what it means, then simply set it to false.
     // `max_data_version_` is the MVCC filter version for reading. Used by clean read check
-    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable, bool is_fast_mode_, UInt64 max_data_version_)
+    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable, bool is_fast_scan_, UInt64 max_data_version_)
     {
         enable_clean_read = enable;
-        is_fast_mode = is_fast_mode_;
+        is_fast_scan = is_fast_scan_;
         max_data_version = max_data_version_;
         return *this;
     }
@@ -157,7 +157,7 @@ private:
 
     // clean read
     bool enable_clean_read = false;
-    bool is_fast_mode = false;
+    bool is_fast_scan = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter
     RSOperatorPtr rs_filter;
