@@ -148,7 +148,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
     LOG_FMT_TRACE(log, "ready to write");
     {
         /// Should keep this lock to protect async_tunnel_sender's tryFlushOne method,
-        /// because the flush method might release the GRPC writer while GRPC async thread's using the writer
+        /// because the GRPC async thread's might release the GRPC writer while flush method might still use the GRPC writer
         std::unique_lock lk(*mu);
         waitUntilConnectedOrFinished(lk);
         if (status == TunnelStatus::Finished)
