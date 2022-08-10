@@ -183,7 +183,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         if (GRPCCompletionQueuePool::global_instance)
             GRPCCompletionQueuePool::global_instance->markShutdown();
 
-        GRPCCompletionQueuePool::global_instance.release();
+        GRPCCompletionQueuePool::global_instance = nullptr;
         LOG_FMT_INFO(log, "Shut down flash grpc server");
 
         /// Close flash service.
