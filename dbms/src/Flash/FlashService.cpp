@@ -28,15 +28,12 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ProcessList.h>
 #include <Server/IServer.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <grpcpp/server_builder.h>
 
 #include <ext/scope_guard.h>
-
-#include "Common/ThreadFactory.h"
 
 namespace DB
 {

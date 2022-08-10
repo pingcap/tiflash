@@ -21,7 +21,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char exception_during_mpp_write_err_to_tunnel[];

@@ -20,7 +20,6 @@
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
-
 namespace DB
 {
 namespace FailPoints
@@ -109,7 +108,7 @@ void MPPTunnel::close(const String & reason)
         send_queue->finish();
         MPPDataPacketPtr res;
         while (send_queue->pop(res))
-            ; // pop all items from send_queue
+            ; // drain the send_queue when close
     });
     {
         std::unique_lock lk(mu);
@@ -307,7 +306,6 @@ void MPPTunnel::updateMemTracker()
 {
     mem_tracker = current_memory_tracker;
 }
-
 
 void TunnelSender::consumerFinish(const String & msg)
 {
