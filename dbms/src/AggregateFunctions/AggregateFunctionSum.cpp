@@ -17,16 +17,12 @@
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
 #include <fmt/core.h>
-#include <tipb/expression.pb.h>
 
 namespace DB
 {
 
-const String sum_name = NameSum::name;
 extern const String count_second_stage = NameCountSecondStage::name;
-extern constexpr std::string_view final_sum_stage = NameFinalSumStage::name;
-const String sum_with_overflow = NameSumWithOverFlow::name;
-const String sum_kahan = NameSumKahan::name;
+extern const String final_sum_stage = NameFinalSumStage::name;
 
 namespace
 {
@@ -56,13 +52,7 @@ AggregateFunctionPtr createDecimalFunction(const IDataType * p)
         PrecType prec = dec_type->getPrec();
         ScaleType scale = dec_type->getScale();
 
-        PrecType result_prec = prec;
-        ScaleType result_scale = scale;
-
-        if constexpr (Name::name != final_sum_stage)
-        {
-            std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
-        }
+        auto [result_prec, result_scale] = Name::decimalInfer(prec, scale);
         auto result_type = createDecimal(result_prec, result_scale);
 
         if (checkDecimal<Decimal32>(*result_type))
@@ -116,11 +106,11 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
 
 void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction(sum_name, createAggregateFunctionSum<AggregateFunctionSumSimple, NameSum>, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction(sum_with_overflow, createAggregateFunctionSum<AggregateFunctionSumWithOverflow, NameSumWithOverFlow>);
-    factory.registerFunction(String(final_sum_stage), createAggregateFunctionSum<AggregateFunctionFinalSumStage, NameFinalSumStage>);
-    factory.registerFunction(sum_kahan, createAggregateFunctionSum<AggregateFunctionSumKahan, NameSumKahan>);
-    factory.registerFunction(count_second_stage, createAggregateFunctionSum<AggregateFunctionCountSecondStage, NameCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(NameSum::name, createAggregateFunctionSum<AggregateFunctionSumSimple, NameSum>, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction(NameSumWithOverFlow::name, createAggregateFunctionSum<AggregateFunctionSumWithOverflow, NameSumWithOverFlow>);
+    factory.registerFunction(NameFinalSumStage::name, createAggregateFunctionSum<AggregateFunctionFinalSumStage, NameFinalSumStage>);
+    factory.registerFunction(NameSumKahan::name, createAggregateFunctionSum<AggregateFunctionSumKahan, NameSumKahan>);
+    factory.registerFunction(NameCountSecondStage::name, createAggregateFunctionSum<AggregateFunctionCountSecondStage, NameCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
 }
 
 } // namespace DB
