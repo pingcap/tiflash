@@ -172,7 +172,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_side_prepare_actions,
         build_side_prepare_actions,
         is_tiflash_right_join,
-        PhysicalPlanHelper::constructBlockFromSchema(join_output_schema));
+        Block(join_output_schema));
     return physical_join;
 }
 

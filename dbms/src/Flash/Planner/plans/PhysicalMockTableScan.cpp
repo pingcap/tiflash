@@ -86,7 +86,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
         executor_id,
         schema,
         log->identifier(),
-        PhysicalPlanHelper::constructBlockFromSchema(schema),
+        Block(schema),
         mock_streams);
     return physical_mock_table_scan;
 }

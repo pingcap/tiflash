@@ -47,7 +47,7 @@ PhysicalPlanNodePtr PhysicalTableScan::build(
         schema,
         log->identifier(),
         table_scan,
-        PhysicalPlanHelper::constructBlockFromSchema(schema));
+        Block(schema));
     return physical_table_scan;
 }
 

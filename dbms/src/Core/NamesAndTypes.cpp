@@ -50,6 +50,15 @@ String dumpJsonStructure(const NamesAndTypes & names_and_types)
     return bf.toString();
 }
 
+Names toNames(const NamesAndTypes & names_and_types)
+{
+    Names names;
+    names.reserve(names_and_types.size());
+    for (const auto & name_and_type : names_and_types)
+        names.push_back(name_and_type.name);
+    return names;
+}
+
 void NamesAndTypesList::readText(ReadBuffer & buf)
 {
     const DataTypeFactory & data_type_factory = DataTypeFactory::instance();

@@ -16,15 +16,6 @@
 
 namespace DB::PhysicalPlanHelper
 {
-Names schemaToNames(const NamesAndTypes & schema)
-{
-    Names names;
-    names.reserve(schema.size());
-    for (const auto & column : schema)
-        names.push_back(column.name);
-    return names;
-}
-
 ExpressionActionsPtr newActions(const Block & input_block, const Context & context)
 {
     const ColumnsWithTypeAndName & actions_input_columns = input_block.getColumnsWithTypeAndName();
@@ -44,13 +35,5 @@ ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Conte
         }
     }
     return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
-}
-
-Block constructBlockFromSchema(const NamesAndTypes & schema)
-{
-    ColumnsWithTypeAndName columns;
-    for (const auto & column : schema)
-        columns.emplace_back(column.type, column.name);
-    return Block(columns);
 }
 } // namespace DB::PhysicalPlanHelper

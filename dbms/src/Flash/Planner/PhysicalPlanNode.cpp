@@ -54,7 +54,7 @@ String PhysicalPlanNode::toString()
 
 void PhysicalPlanNode::finalize()
 {
-    finalize(PhysicalPlanHelper::schemaToNames(schema));
+    finalize(DB::toNames(schema));
 }
 
 void PhysicalPlanNode::recordProfileStreams(DAGPipeline & pipeline, const Context & context)

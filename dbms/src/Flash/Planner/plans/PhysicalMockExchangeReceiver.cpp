@@ -86,7 +86,7 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
         executor_id,
         schema,
         log->identifier(),
-        PhysicalPlanHelper::constructBlockFromSchema(schema),
+        Block(schema),
         mock_streams);
     return physical_mock_exchange_receiver;
 }

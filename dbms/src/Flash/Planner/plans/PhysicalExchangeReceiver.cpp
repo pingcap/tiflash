@@ -55,7 +55,7 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
         executor_id,
         schema,
         log->identifier(),
-        PhysicalPlanHelper::constructBlockFromSchema(schema),
+        Block(schema),
         mpp_exchange_receiver);
     return physical_exchange_receiver;
 }
