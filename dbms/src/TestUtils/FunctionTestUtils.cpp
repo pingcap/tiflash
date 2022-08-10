@@ -26,7 +26,9 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <algorithm>
 #include <ext/enumerate.h>
+#include <random>
 #include <set>
 
 
@@ -283,6 +285,16 @@ ColumnsWithTypeAndName toColumnsWithUniqueName(const ColumnsWithTypeAndName & co
     return columns_with_distinct_name;
 }
 
+ColumnsWithTypeAndName toColumnsReordered(const ColumnsWithTypeAndName & columns, const ColumnNumbers & new_offsets)
+{
+    ColumnsWithTypeAndName columns_reordered(columns.size());
+    for (const auto & [i, offset] : ext::enumerate(new_offsets))
+    {
+        columns_reordered[offset] = columns[i];
+    }
+    return columns_reordered;
+}
+
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
@@ -290,10 +302,18 @@ ColumnWithTypeAndName executeFunction(
     const TiDB::TiDBCollatorPtr & collator,
     bool raw_function_test)
 {
+    // shuffle input columns to assure function correctly use physical offsets
+    std::random_device rd;
+    std::mt19937 g(rd());
+
     ColumnNumbers argument_column_numbers;
     for (size_t i = 0; i < columns.size(); ++i)
         argument_column_numbers.push_back(i);
-    return executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
+    std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
+
+    const ColumnsWithTypeAndName columns_reordered = toColumnsReordered(columns, argument_column_numbers);
+
+    return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
 }
 
 ColumnWithTypeAndName executeFunction(
@@ -409,7 +429,7 @@ ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<Strin
 
 String getColumnsContent(const ColumnsWithTypeAndName & cols)
 {
-    if (cols.size() <= 0)
+    if (cols.empty())
         return "";
     return getColumnsContent(cols, 0, cols[0].column->size());
 }
