@@ -17,6 +17,8 @@
 #include <Common/assert_cast.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Functions/FunctionsConditional.h>
 #include <WindowFunctions/IWindowFunction.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
@@ -56,6 +58,7 @@ struct WindowFunctionRank final : public IWindowFunction
         size_t function_index,
         [[maybe_unused]] const ColumnNumbers & arguments) override
     {
+        assert(arguments.empty());
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_start_row_number);
@@ -90,6 +93,7 @@ struct WindowFunctionDenseRank final : public IWindowFunction
         size_t function_index,
         [[maybe_unused]] const ColumnNumbers & arguments) override
     {
+        assert(arguments.empty());
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_number);
@@ -119,6 +123,50 @@ struct WindowFunctionRowNumber final : public IWindowFunction
         return std::make_shared<DataTypeInt64>();
     }
 
+    void windowInsertResultInto(
+        WindowBlockInputStreamPtr stream,
+        size_t function_index,
+        [[maybe_unused]] const ColumnNumbers & arguments) override
+    {
+        assert(arguments.empty());
+        IColumn & to = *stream->outputAt(stream->current_row)[function_index];
+        assert_cast<ColumnInt64 &>(to).getData().push_back(
+            stream->current_row_number);
+    }
+};
+
+struct WindowFunctionLead final : public IWindowFunction
+{
+    static constexpr auto name = "lead";
+
+    explicit WindowFunctionLead(const DataTypes & argument_types_)
+        : IWindowFunction(argument_types_)
+    {}
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    DataTypePtr getReturnType() const override
+    {
+        if (argument_types.size() <= 2)
+        {
+            if (removeNullable(argument_types[0])->getTypeId() == TypeIndex::Float32)
+            {
+                auto origin_type = std::make_shared<DataTypeFloat64>();
+                return argument_types[0]->isNullable() ? makeNullable(origin_type) : origin_type;
+            }
+            else
+                return argument_types[0];
+        }
+        else
+        {
+            return FunctionIf{}.getReturnTypeImpl({std::make_shared<DataTypeUInt8>(), removeNullable(argument_types[0]), argument_types[2]});
+        }
+    }
+
+    // todo hanlde nullable, etc
     void windowInsertResultInto(
         WindowBlockInputStreamPtr stream,
         size_t function_index,
