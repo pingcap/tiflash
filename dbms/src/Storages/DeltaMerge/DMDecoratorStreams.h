@@ -19,13 +19,153 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <common/logger_useful.h>
-
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <unordered_set>
 
 namespace DB
 {
 namespace DM
 {
+
+// unsorted 才能用这个
+class DMFilterAllBlockInputStream : public IBlockInputStream
+{
+ static constexpr size_t UNROLL_BATCH = 64;
+
+public:
+    DMFilterAllBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_, const RowKeyRanges & rowkey_ranges_, size_t handle_col_pos_, const String & tracing_id = "")
+        : columns_to_read(columns_to_read_)
+        , rowkey_ranges(rowkey_ranges_)
+        , handle_col_pos(handle_col_pos_)
+        , header(toEmptyBlock(columns_to_read))
+        , log(Logger::get("DMFilterAllBlockInputStream", tracing_id))
+    {
+        children.emplace_back(input);
+        delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
+    }
+    ~DMFilterAllBlockInputStream()
+    {
+        LOG_FMT_TRACE(log,
+                      "Total rows: {}, pass: {:.2f}%"
+                      ", complete pass: {:.2f}%, complete not pass: {:.2f}%",
+                      total_rows,
+                      passed_rows * 100.0 / total_rows,
+                      complete_passed * 100.0 / total_blocks,
+                      complete_not_passed * 100.0 / total_blocks);
+    }
+
+    String getName() const override { return "DMAllFilter"; }
+
+    Block getHeader() const override { return header; }
+
+    Block read() override
+    {
+        while (true)
+        {
+            Block block = children.back()->read();
+            if (!block)
+                return {};
+            if (block.rows() == 0)
+                continue;
+
+            size_t rows = block.rows();
+            filter.resize(rows);
+
+            auto rowkey_column = RowKeyColumnContainer(block.getByPosition(handle_col_pos).column, rowkey_ranges[0].is_common_handle);
+
+            size_t passed_count = 0;
+            for (size_t i = 0; i < rows; ++i)
+            {
+                bool ok = false;
+                for (auto & rowkey_range : rowkey_ranges)
+                {
+                    ok = rowkey_range.check(rowkey_column.getRowKeyValue(i));
+                    if (ok)
+                        break;
+                }
+                filter[i] = ok;
+                passed_count += ok;
+            }
+
+            delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
+            const size_t batch_rows = (rows - 1) / UNROLL_BATCH * UNROLL_BATCH;
+
+            // The following is trying to unroll the filtering operations,
+            // so that optimizer could use vectorized optimization.
+            {
+                UInt8 * filter_pos = filter.data();
+                auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
+                for (size_t i = 0; i < batch_rows; ++i)
+                {
+                    if ((*delete_pos) == 1 && (*filter_pos) == 1) {
+                        (*filter_pos) = 0;
+                        --passed_count;
+                    }
+                    ++filter_pos;
+                    ++delete_pos;
+                }
+            }
+
+            for (size_t i = batch_rows; i < rows; ++i)
+            {
+                if ((*delete_col_data)[i] == 1 && filter[i] == 1) {
+                    filter[i] = 0;
+                    --passed_count;
+                }
+            }
+
+            //const size_t passed_count_check = countBytesInFilter(filter);
+           
+            ++total_blocks;
+            total_rows += rows;
+            passed_rows += passed_count;
+
+            // This block is empty after filter, continue to process next block
+            if (passed_count == 0)
+            {
+                ++complete_not_passed;
+                continue;
+            }
+
+            if (passed_count == rows)
+            {
+                ++complete_passed;
+                return getNewBlockByHeader(header, block);
+            }
+
+            Block res;
+            for (auto & cd : columns_to_read)
+            {
+                auto & column = block.getByName(cd.name);
+                column.column = column.column->filter(filter, passed_count);
+                res.insert(std::move(column));
+            }
+            return res;
+        }
+    }
+
+private:
+    ColumnDefines columns_to_read;
+    RowKeyRanges rowkey_ranges;
+    size_t handle_col_pos;
+    Block header;
+
+    size_t delete_col_pos;
+
+    IColumn::Filter filter{};
+
+    PaddedPODArray<UInt8> const * delete_col_data = nullptr;
+
+    size_t total_blocks = 0;
+    size_t total_rows = 0;
+    size_t passed_rows = 0;
+    size_t complete_passed = 0;
+    size_t complete_not_passed = 0;
+
+    LoggerPtr log;
+};
+
+
 /// DMDeleteFilterBlockInputStream is used to filter the column and filter out the rows whose del_mark is true
 class DMDeleteFilterBlockInputStream : public IBlockInputStream
 {
@@ -103,7 +243,6 @@ public:
                 continue;
             }
 
-
             if (passed_count == rows)
             {
                 ++complete_passed;
@@ -117,6 +256,7 @@ public:
                 column.column = column.column->filter(delete_filter, passed_count);
                 res.insert(std::move(column));
             }
+
             return res;
         }
     }
