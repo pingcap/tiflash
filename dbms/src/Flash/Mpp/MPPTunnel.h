@@ -150,10 +150,24 @@ class AsyncTunnelSender : public TunnelSender
 {
 public:
     using Base = TunnelSender;
-    using Base::Base;
+    AsyncTunnelSender(
+        TunnelSenderMode mode_,
+        DataPacketMPMCQueuePtr send_queue_,
+        PacketWriter * writer_,
+        const LoggerPtr log_,
+        const String & tunnel_id_,
+        std::shared_ptr<std::mutex> mu_)
+        : Base(mode_, send_queue_, writer_, log_, tunnel_id_)
+        , mu(mu_)
+    {}
     void tryFlushOne();
-    void sendOne();
+    /// use_lock should be true if it's invoked from async GRPC thread
+    void sendOne(bool use_lock = false);
     bool isSendQueueNextPopNonBlocking() { return send_queue->isNextPopNonBlocking(); }
+    void consumerFinishWithLock(const String & err_msg);
+
+private:
+    std::shared_ptr<std::mutex> mu;
 };
 
 /// LocalTunnelSender just provide readForLocal method to return one element one time
@@ -268,7 +282,7 @@ private:
 
     void waitForSenderFinish(bool allow_throw);
 
-    std::mutex mu;
+    std::shared_ptr<std::mutex> mu;
     std::condition_variable cv_for_status_changed;
 
     TunnelStatus status;
