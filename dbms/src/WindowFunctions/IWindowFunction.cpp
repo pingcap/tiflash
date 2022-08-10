@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsNumber.h>
+#include <Common/assert_cast.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <DataTypes/getLeastSupertype.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <WindowFunctions/IWindowFunction.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
 
@@ -47,8 +49,7 @@ struct WindowFunctionRank final : public IWindowFunction
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
                                 size_t function_index) override
     {
-        IColumn & to = *stream->blockAt(stream->current_row)
-                            .output_columns[function_index];
+        IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_start_row_number);
     }
@@ -75,8 +76,7 @@ struct WindowFunctionDenseRank final : public IWindowFunction
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
                                 size_t function_index) override
     {
-        IColumn & to = *stream->blockAt(stream->current_row)
-                            .output_columns[function_index];
+        IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_number);
     }
@@ -103,8 +103,7 @@ struct WindowFunctionRowNumber final : public IWindowFunction
     void windowInsertResultInto(WindowBlockInputStreamPtr stream,
                                 size_t function_index) override
     {
-        IColumn & to = *stream->blockAt(stream->current_row)
-                            .output_columns[function_index];
+        IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->current_row_number);
     }

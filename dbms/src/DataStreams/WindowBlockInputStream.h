@@ -16,7 +16,6 @@
 
 #include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Interpreters/AggregateDescription.h>
 #include <Interpreters/WindowDescription.h>
 
 #include <deque>
@@ -188,8 +187,6 @@ public:
 
     // Per-window-function scratch spaces.
     std::vector<WindowFunctionWorkspace> workspaces;
-
-    std::unique_ptr<Arena> arena;
 
     // A sliding window of blocks we currently need. We add the input blocks as
     // they arrive, and discard the blocks we don't need anymore. The blocks

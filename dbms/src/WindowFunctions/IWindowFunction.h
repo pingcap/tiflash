@@ -16,7 +16,7 @@
 
 #include <Core/Field.h>
 #include <Core/Types.h>
-#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/IDataType.h>
 
 #include <memory>
 
