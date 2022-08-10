@@ -1759,9 +1759,9 @@ try
     const auto datetime_type_ptr = std::make_shared<DataTypeMyDateTime>(4);
     MyDateTime date(2021, 10, 26, 0, 0, 0, 0);
     MyDateTime datetime(2021, 10, 26, 11, 11, 11, 0);
-    MyDateTime datetime_frac1(2021, 10, 26, 11, 11, 11, 111111);
-    MyDateTime datetime_frac2(2021, 10, 26, 11, 11, 11, 123456);
-    MyDateTime datetime_frac3(2021, 10, 26, 11, 11, 11, 999999);
+    MyDateTime datetime_frac1(2021, 10, 26, 11, 11, 11, 111100);
+    MyDateTime datetime_frac2(2021, 10, 26, 11, 11, 11, 123500);
+    MyDateTime datetime_frac3(2021, 10, 26, 11, 11, 11, 999900);
 
     auto col_datetime = ColumnUInt64::create();
     col_datetime->insert(Field(date.toPackedUInt()));
@@ -1776,7 +1776,7 @@ try
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
-                                                     (11 * 3600 + 11 * 60 + 12) * 1000000000L + 00000000L})
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
             .column,
         to_type_1,
         "datetime_output1");
@@ -1785,7 +1785,8 @@ try
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
-                                                     (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L})
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L
+                                                     })
             .column,
         to_type_2,
         "datetime_output2");
@@ -1795,15 +1796,69 @@ try
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 110000000L,
                                                      (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L,
-                                                     (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L})
+                                                     (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L
+                                                     })
             .column,
         to_type_3,
         "datetime_output3");
 
 
-    // ASSERT_COLUMN_EQ(datetime_output1, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_1->getName())}));
-    // ASSERT_COLUMN_EQ(datetime_output2, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(datetime_output1, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(datetime_output2, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_2->getName())}));
     ASSERT_COLUMN_EQ(datetime_output3, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_3->getName())}));
+
+
+    // Test Const
+    ColumnWithTypeAndName input_const(createConstColumn<DataTypeMyDateTime::FieldType>(1, datetime_frac2.toPackedUInt()).column, datetime_type_ptr, "input_const");
+    ColumnWithTypeAndName output1_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L).column, to_type_1, "output1_const");
+    ColumnWithTypeAndName output2_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L).column, to_type_2, "output2_const");
+    ColumnWithTypeAndName output3_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L).column, to_type_3, "output3_const");
+
+    ASSERT_COLUMN_EQ(output1_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(output2_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(output3_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_3->getName())}));
+
+    // Test Nullable
+    ColumnWithTypeAndName input_nullable(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({datetime_frac1.toPackedUInt(),
+                                                               {},
+                                                               datetime_frac2.toPackedUInt(),
+                                                               {},
+                                                               datetime_frac3.toPackedUInt()})
+            .column,
+        makeNullable(datetime_type_ptr),
+        "input_nullable");
+    ColumnWithTypeAndName output1_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        makeNullable(to_type_1),
+        "output1_output");
+    ColumnWithTypeAndName output2_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        makeNullable(to_type_2),
+        "output2_output");
+    ColumnWithTypeAndName output3_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 110000000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L})
+            .column,
+        makeNullable(to_type_3),
+        "output3_output");
+
+    ASSERT_COLUMN_EQ(output1_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_1)->getName())}));
+    ASSERT_COLUMN_EQ(output2_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_2)->getName())}));
+    ASSERT_COLUMN_EQ(output3_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_3)->getName())}));
 }
 CATCH
 
