@@ -311,7 +311,7 @@ ColumnWithTypeAndName executeFunction(
         argument_column_numbers.push_back(i);
     std::shuffle(argument_column_numbers.begin(), argument_column_numbers.end(), g);
 
-    const ColumnsWithTypeAndName columns_reordered = toColumnsReordered(columns, argument_column_numbers);
+    const auto columns_reordered = toColumnsReordered(columns, argument_column_numbers);
 
     return executeFunction(context, func_name, argument_column_numbers, columns_reordered, collator, raw_function_test);
 }
