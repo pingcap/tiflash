@@ -15,6 +15,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Debug/MockComputeServerManager.h>
 #include <Debug/astToExecutor.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -26,7 +27,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
-#include <Debug/MockComputeServerManager.h>
 #include <common/logger_useful.h>
 
 namespace DB

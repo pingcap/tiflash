@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Server/FlashGrpcServerHolder.h>
-#include <Debug/MockServerInfo.h>
 #include <Debug/MockStorage.h>
+#include <Server/FlashGrpcServerHolder.h>
+
 #include <unordered_map>
 
 namespace DB::tests
@@ -32,13 +32,13 @@ public:
 
     void reset();
 
-    MPPTestInfo getMPPTestInfo(size_t partition_id);
+    MockMPPServerInfo getMockMPPServerInfo(size_t partition_id);
 
     std::unordered_map<size_t, MockServerConfig> & getServerConfigMap();
 
 private:
     void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);
-    void prepareMPPTestInfo();
+    void prepareMockMPPServerInfo();
 
 private:
     std::unordered_map<size_t, std::unique_ptr<FlashGrpcServerHolder>> server_map;

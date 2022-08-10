@@ -16,12 +16,12 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
+#include <Debug/MockServerInfo.h>
+#include <Debug/MockStorage.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
-#include <Debug/MockServerInfo.h>
-#include <Debug/MockStorage.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -100,8 +100,8 @@ class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
 using MockStorage = DB::tests::MockStorage;
-using MPPTestInfo = DB::tests::MPPTestInfo;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -168,7 +168,7 @@ private:
     TestMode test_mode = non_test;
 
     MockStorage mock_storage;
-    MPPTestInfo mpp_test_info;
+    MockMPPServerInfo mpp_server_info{};
 
     TimezoneInfo timezone_info;
 
@@ -487,8 +487,8 @@ public:
 
     void setMockStorage(MockStorage & mock_storage_);
     MockStorage mockStorage() const;
-    void setMPPTestInfo(MPPTestInfo & info);
-    MPPTestInfo mppTestInfo() const;
+    MockMPPServerInfo mockMPPServerInfo() const;
+    void setMockMPPServerInfo(MockMPPServerInfo & info);
 
 private:
     /** Check if the current client has access to the specified database.

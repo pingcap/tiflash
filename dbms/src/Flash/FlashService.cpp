@@ -188,7 +188,7 @@ grpc::Status FlashService::Coprocessor(
         return status;
     }
     context->setMockStorage(mock_storage);
-    context->setMPPTestInfo(mpp_test_info);
+    context->setMockMPPServerInfo(mpp_test_info);
 
     MPPHandler mpp_handler(*request);
     return mpp_handler.execute(context, response);
@@ -442,12 +442,12 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     return manual_compact_manager->handleRequest(request, response);
 }
 
-void FlashService::setMockStorage(tests::MockStorage & mock_storage_)
+void FlashService::setMockStorage(MockStorage & mock_storage_)
 {
     mock_storage = mock_storage_;
 }
 
-void FlashService::setMPPTestInfo(tests::MPPTestInfo & mpp_test_info_)
+void FlashService::setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_)
 {
     mpp_test_info = mpp_test_info_;
 }

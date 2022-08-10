@@ -23,7 +23,7 @@ struct MockServerConfig
     size_t partition_id;
 };
 
-struct MPPTestInfo
+struct MockMPPServerInfo
 {
     size_t partition_id;
     size_t partition_num;

@@ -22,7 +22,7 @@ namespace DB::tests
 using MockColumnInfo = std::pair<String, TiDB::TP>;
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
 
-class MockTableIdGenerator: public  ext::Singleton<MockTableIdGenerator>
+class MockTableIdGenerator : public ext::Singleton<MockTableIdGenerator>
 {
 public:
     static MockTableIdGenerator & getInstance()

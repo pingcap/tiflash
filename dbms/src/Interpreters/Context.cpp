@@ -1947,14 +1947,14 @@ MockStorage Context::mockStorage() const
     return mock_storage;
 }
 
-void Context::setMPPTestInfo(MPPTestInfo & info)
+MockMPPServerInfo Context::mockMPPServerInfo() const
 {
-    mpp_test_info = info;
+    return mpp_server_info;
 }
 
-MPPTestInfo Context::mppTestInfo() const
+void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
-    return mpp_test_info;
+    mpp_server_info = info;
 }
 
 SessionCleaner::~SessionCleaner()

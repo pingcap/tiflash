@@ -36,6 +36,10 @@ namespace DB
 class IServer;
 class CallExecPool;
 class EstablishCallData;
+
+using MockStorage = tests::MockStorage;
+using MockMPPServerInfo = tests::MockMPPServerInfo;
+
 namespace Management
 {
 class ManualCompactManager;
@@ -80,8 +84,8 @@ public:
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
-    void setMockStorage(tests::MockStorage & mock_storage_);
-    void setMPPTestInfo(tests::MPPTestInfo & mpp_test_info_);
+    void setMockStorage(MockStorage & mock_storage_);
+    void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
 
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
@@ -98,7 +102,7 @@ protected:
 
     /// for mpp unit test.
     tests::MockStorage mock_storage;
-    tests::MPPTestInfo mpp_test_info;
+    tests::MockMPPServerInfo mpp_test_info;
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;

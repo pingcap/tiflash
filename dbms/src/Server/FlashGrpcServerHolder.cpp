@@ -198,13 +198,13 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     }
 }
 
-void FlashGrpcServerHolder::setMockStorage(tests::MockStorage & mock_storage)
+void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
 {
     flash_service->setMockStorage(mock_storage);
 }
 
-void FlashGrpcServerHolder::setMPPTestInfo(tests::MPPTestInfo info)
+void FlashGrpcServerHolder::setMockMPPServerInfo(MockMPPServerInfo info)
 {
-    flash_service->setMPPTestInfo(info);
+    flash_service->setMockMPPServerInfo(info);
 }
 } // namespace DB

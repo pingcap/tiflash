@@ -16,6 +16,7 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockServerInfo.h>
 #include <Debug/MockTiDB.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>

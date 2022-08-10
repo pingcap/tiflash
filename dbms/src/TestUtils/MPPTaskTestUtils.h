@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <Server/FlashGrpcServerHolder.h>
-#include <TestUtils/ExecutorTestUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
+#include <Server/FlashGrpcServerHolder.h>
+#include <TestUtils/ExecutorTestUtils.h>
 
 #include <memory>
 
@@ -46,8 +46,8 @@ protected:
 
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
 
-#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                   \
-    TiFlashTestEnv::getGlobalContext().setMPPTest();                               \
+#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                \
+    TiFlashTestEnv::getGlobalContext().setMPPTest();                            \
     MockComputeServerManager::instance().setMockStorage(context.mockStorage()); \
     ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::instance().getServerConfigMap()), expected_cols);
 

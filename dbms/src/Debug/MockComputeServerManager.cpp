@@ -34,7 +34,7 @@ void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, Context &
         addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(global_context, *config, security_config, raft_config, log_ptr));
     }
 
-    prepareMPPTestInfo();
+    prepareMockMPPServerInfo();
 }
 
 void MockComputeServerManager::setMockStorage(MockStorage & mock_storage)
@@ -50,7 +50,7 @@ void MockComputeServerManager::reset()
     server_map.clear();
 }
 
-MPPTestInfo MockComputeServerManager::getMPPTestInfo(size_t partition_id)
+MockMPPServerInfo MockComputeServerManager::getMockMPPServerInfo(size_t partition_id)
 {
     return {server_config_map[partition_id].partition_id, server_config_map.size()};
 }
@@ -60,11 +60,11 @@ std::unordered_map<size_t, MockServerConfig> & MockComputeServerManager::getServ
     return server_config_map;
 }
 
-void MockComputeServerManager::prepareMPPTestInfo()
+void MockComputeServerManager::prepareMockMPPServerInfo()
 {
     for (const auto & server : server_map)
     {
-        server.second->setMPPTestInfo(getMPPTestInfo(server.first));
+        server.second->setMockMPPServerInfo(getMockMPPServerInfo(server.first));
     }
 }
 

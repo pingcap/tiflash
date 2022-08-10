@@ -14,10 +14,10 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
+#include <Debug/MockComputeServerManager.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Interpreters/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <Debug/MockComputeServerManager.h>
 #include <TestUtils/executorSerializer.h>
 
 #include <cstddef>
