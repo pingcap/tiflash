@@ -25,7 +25,7 @@ namespace DB
 bool tryToResetMaxThreadsMetrics()
 {
     UInt64 now_ts = clock_gettime_ns_adjusted(last_max_thds_metric_reset_ts, CLOCK_MONOTONIC);
-    if (now_ts > last_max_thds_metric_reset_ts + max_thds_metric_reset_interval)
+    if (now_ts > last_max_thds_metric_reset_ts + max_thds_metric_reset_interval * 1000000000ULL)
     {
         last_max_thds_metric_reset_ts = now_ts;
         GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value());
