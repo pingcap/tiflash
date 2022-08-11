@@ -548,6 +548,7 @@ ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
     const ColumnsWithTypeAndName & actual,
     bool _restrict);
 
+/// Note that during execution, the offsets of each column might be reordered.
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
