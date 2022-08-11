@@ -24,6 +24,7 @@
 namespace DB
 {
 class Context;
+using MockServerConfig = tests::MockServerConfig;
 
 // Coprocessor debug tools
 
@@ -85,7 +86,7 @@ QueryTasks queryPlanToQueryTasks(
 
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
-BlockInputStreamPtr executeMPPQueryWithMultipleServer(Context & context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, tests::MockServerConfig> & server_config_map);
+BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 namespace Debug
 {

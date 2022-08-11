@@ -62,6 +62,7 @@ void MockComputeServerManager::setMockStorage(MockStorage & mock_storage)
 void MockComputeServerManager::reset()
 {
     server_map.clear();
+    server_config_map.clear();
 }
 
 MockMPPServerInfo MockComputeServerManager::getMockMPPServerInfo(size_t partition_id)

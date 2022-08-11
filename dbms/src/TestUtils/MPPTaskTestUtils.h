@@ -30,14 +30,23 @@ public:
     {
         ExecutorTest::SetUpTestCase();
         log_ptr = Logger::get("compute_test");
-        auto size = std::thread::hardware_concurrency();
-        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-        MockComputeServerManager::instance();
     }
 
     static void TearDownTestCase() // NOLINT(readability-identifier-naming))
     {
         MockComputeServerManager::instance().reset();
+    }
+
+    void startServers(std::vector<String>  addrs)
+    {
+        MockComputeServerManager::instance().reset();
+        auto size = std::thread::hardware_concurrency();
+        GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+        for (auto addr : addrs)
+        {
+            MockComputeServerManager::instance().addServer(addr);
+        }
+        MockComputeServerManager::instance().startServers(log_ptr, TiFlashTestEnv::getGlobalContext());
     }
 
 protected:

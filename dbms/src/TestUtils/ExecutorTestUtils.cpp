@@ -22,6 +22,8 @@
 
 #include <functional>
 
+#include "TestUtils/FunctionTestUtils.h"
+
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()
@@ -139,7 +141,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, std
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
-    auto res = executeMPPQueryWithMultipleServer(context.context, properties, tasks, server_config_map);
+    auto res = executeMPPQuery(context.context, properties, tasks, server_config_map);
     return readBlock(res);
 }
 

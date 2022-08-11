@@ -245,6 +245,7 @@ void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchT
     req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
 }
 
+// execute MPP Query in one service
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks)
 {
     DAGSchema root_task_schema;
@@ -306,7 +307,8 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, context.getSettingsRef().enable_local_tunnel);
 }
 
-BlockInputStreamPtr executeMPPQueryWithMultipleServer(Context & context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, tests::MockServerConfig> & server_config_map)
+// execute MPP Query across multiple service
+BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, tests::MockServerConfig> & server_config_map)
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;
