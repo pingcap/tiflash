@@ -37,7 +37,7 @@ public:
         MockComputeServerManager::instance().reset();
     }
 
-    void startServers(std::vector<String>  addrs)
+    void startServers(std::vector<String> addrs)
     {
         MockComputeServerManager::instance().reset();
         auto size = std::thread::hardware_concurrency();
