@@ -238,7 +238,7 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
                 // apply a ref to same ori id with small ver, just ignore
                 return false;
             }
-            // else adding ref to another ori id is not allow, just fallover
+            // else adding ref to another ori id is not allow, just fallthrough
         }
         else
         {
@@ -247,7 +247,7 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
                 // adding ref to the same ori id should be idempotent, just ignore
                 return false;
             }
-            // else adding ref to another ori id is not allow, just fallover
+            // else adding ref to another ori id is not allow, just fallthrough
         }
     }
 
@@ -306,14 +306,14 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             // If we applied write batches like this: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}
             // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
             // when resolving 11 to 10, we need to set `check_prev` to true
-            if (iter->second.isDelete() && check_prev && iter->first.sequence == seq)
+            if (iter->second.isDelete() && check_prev)
             {
                 if (iter == entries.begin())
                 {
                     return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
                 }
                 --iter;
-                // fallover the check the prev item
+                // fallthrough the check the prev item
             }
 
             if (iter->second.isEntry())
@@ -321,7 +321,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
                 if (entry != nullptr)
                     *entry = iter->second.entry;
                 return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
-            } // fallover to FAIL
+            } // fallthrough to FAIL
         }
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
@@ -342,7 +342,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
     }
     else
     {
-        LOG_FMT_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't reslove the EditRecordType {}", type);
+        LOG_FMT_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
     }
 
     return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
@@ -422,14 +422,24 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersion & ver)
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
-        if (auto iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1));
-            iter != entries.end())
+        auto iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1));
+        if (iter != entries.end())
         {
+            // ignore all "delete"
+            while (iter != entries.begin() && iter->second.isDelete())
+            {
+                --iter;
+            }
+            // begin or entry
             if (iter->second.isEntry())
+            {
+                if (unlikely(iter->second.being_ref_count == 0))
+                {
+                    throw Exception(fmt::format("Try to add ref to a completely deleted entry [entry={}] [ver={}]", iter->second.toDebugString(), ver), ErrorCodes::LOGICAL_ERROR);
+                }
                 return ++iter->second.being_ref_count;
-            else
-                throw Exception(fmt::format("The entry to be added ref count is not normal entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
-        }
+            }
+        } // fallthrough to FAIL
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
@@ -439,7 +449,7 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersion & ver)
             return ++being_ref_count;
         }
     }
-    throw Exception(fmt::format("The entry to be added ref count is not found [ver={}]", ver));
+    throw Exception(fmt::format("The entry to be added ref count is not found [ver={}] [state={}]", ver, toDebugString()), ErrorCodes::LOGICAL_ERROR);
 }
 
 PageSize VersionedPageEntries::getEntriesByBlobIds(
