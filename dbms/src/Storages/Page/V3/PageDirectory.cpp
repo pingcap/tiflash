@@ -186,7 +186,7 @@ void VersionedPageEntries::createDelete(const PageVersion & ver)
         return;
     }
 
-    if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF_TO_VER)
+    if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF)
     {
         is_deleted = true;
         delete_ver = ver;
@@ -208,20 +208,19 @@ void VersionedPageEntries::createDelete(const PageVersion & ver)
 
 // Create a new reference version with version=`ver` and `ori_page_id_`.
 // If create success, then return true, otherwise return false.
-bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id_, const PageVersion & ori_page_ver_)
+bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id_)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_DELETE)
     {
-        type = EditRecordType::VAR_REF_TO_VER;
+        type = EditRecordType::VAR_REF;
         is_deleted = false;
         ori_page_id = ori_page_id_;
-        ori_page_ver = ori_page_ver_;
         create_ver = ver;
         return true;
     }
 
-    if (type == EditRecordType::VAR_REF_TO_VER)
+    if (type == EditRecordType::VAR_REF)
     {
         if (is_deleted)
         {
@@ -229,7 +228,6 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
             if (delete_ver <= ver)
             {
                 ori_page_id = ori_page_id_;
-                ori_page_ver = ori_page_ver_;
                 create_ver = ver;
                 is_deleted = false;
                 delete_ver = PageVersion(0);
@@ -240,7 +238,7 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
                 // apply a ref to same ori id with small ver, just ignore
                 return false;
             }
-            // else adding ref to another ori id is not allow, just fallthrough
+            // else adding ref to another ori id is not allow, just fallover
         }
         else
         {
@@ -249,7 +247,7 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
                 // adding ref to the same ori id should be idempotent, just ignore
                 return false;
             }
-            // else adding ref to another ori id is not allow, just fallthrough
+            // else adding ref to another ori id is not allow, just fallover
         }
     }
 
@@ -266,23 +264,12 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
 std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
 {
     auto page_lock = acquireLock();
-    if (rec.type == EditRecordType::VAR_REF_TO_VER)
+    if (rec.type == EditRecordType::VAR_REF)
     {
-        type = EditRecordType::VAR_REF_TO_VER;
+        type = EditRecordType::VAR_REF;
         is_deleted = false;
         create_ver = rec.version;
         ori_page_id = rec.ori_page_id;
-        ori_page_ver = rec.ori_page_ver;
-        return nullptr;
-    }
-    else if (rec.type == EditRecordType::VAR_DEPRECATED_REF)
-    {
-        // convert to `VAR_REF_TO_VER
-        type = EditRecordType::VAR_REF_TO_VER;
-        is_deleted = false;
-        create_ver = rec.version;
-        ori_page_id = rec.ori_page_id;
-        ori_page_ver = rec.version; // backward compatibility
         return nullptr;
     }
     else if (rec.type == EditRecordType::VAR_EXTERNAL)
@@ -319,14 +306,14 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             // If we applied write batches like this: [ver=1]{put 10}, [ver=2]{ref 11->10, del 10}
             // then by ver=2, we should not able to read 10, but able to read 11 (resolving 11 ref to 10).
             // when resolving 11 to 10, we need to set `check_prev` to true
-            if (iter->second.isDelete() && check_prev)
+            if (iter->second.isDelete() && check_prev && iter->first.sequence == seq)
             {
                 if (iter == entries.begin())
                 {
                     return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
                 }
                 --iter;
-                // fallthrough the check the prev item
+                // fallover the check the prev item
             }
 
             if (iter->second.isEntry())
@@ -334,7 +321,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
                 if (entry != nullptr)
                     *entry = iter->second.entry;
                 return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
-            } // fallthrough to FAIL
+            } // fallover to FAIL
         }
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
@@ -346,11 +333,11 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 *
             return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
         }
     }
-    else if (type == EditRecordType::VAR_REF_TO_VER)
+    else if (type == EditRecordType::VAR_REF)
     {
         if (create_ver.sequence <= seq && (!is_deleted || seq < delete_ver.sequence))
         {
-            return {RESOLVE_TO_REF, ori_page_id, ori_page_ver};
+            return {RESOLVE_TO_REF, ori_page_id, create_ver};
         }
     }
     else
@@ -416,7 +403,7 @@ bool VersionedPageEntries::isVisible(UInt64 seq) const
         // else there are no valid entry less than seq
         return false;
     }
-    else if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF_TO_VER)
+    else if (type == EditRecordType::VAR_EXTERNAL || type == EditRecordType::VAR_REF)
     {
         // `delete_ver` is only valid when `is_deleted == true`
         return create_ver.sequence <= seq && !(is_deleted && delete_ver.sequence <= seq);
@@ -435,24 +422,13 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersion & ver)
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
-        auto iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1));
-        while (iter != entries.end())
+        if (auto iter = MapUtils::findMutLess(entries, PageVersion(ver.sequence + 1));
+            iter != entries.end())
         {
             if (iter->second.isEntry())
                 return ++iter->second.being_ref_count;
             else
-            {
-                // It is a "delete"
-                if (iter->first.sequence == ver.sequence && iter != entries.begin())
-                {
-                    --iter;
-                    continue;
-                }
-                else
-                {
-                    throw Exception(fmt::format("The entry to be added ref count is not normal entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
-                }
-            }
+                throw Exception(fmt::format("The entry to be added ref count is not normal entry [entry={}] [ver={}]", iter->second.toDebugString(), ver));
         }
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
@@ -510,7 +486,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     {
         return (being_ref_count == 1 && is_deleted && delete_ver.sequence <= lowest_seq);
     }
-    else if (type == EditRecordType::VAR_REF_TO_VER)
+    else if (type == EditRecordType::VAR_REF)
     {
         if (!is_deleted || lowest_seq < delete_ver.sequence)
             return false;
@@ -647,14 +623,14 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal pag
 void VersionedPageEntries::collapseTo(const UInt64 seq, const PageIdV3Internal page_id, PageEntriesEdit & edit)
 {
     auto page_lock = acquireLock();
-    if (type == EditRecordType::VAR_REF_TO_VER)
+    if (type == EditRecordType::VAR_REF)
     {
         if (create_ver.sequence > seq)
             return;
-        // We need to keep the VAR_REF_TO_VER once create_ver > seq,
+        // We need to keep the VAR_REF once create_ver > seq,
         // or the being-ref entry/external won't be able to be clean
         // after restore.
-        edit.varRef(page_id, create_ver, ori_page_id, ori_page_ver);
+        edit.varRef(page_id, create_ver, ori_page_id);
         if (is_deleted && delete_ver.sequence <= seq)
         {
             edit.varDel(page_id, delete_ver);
@@ -1057,7 +1033,7 @@ void PageDirectory::applyRefEditRecord(
             resolved_ver));
     }
     // use the resolved_id to collapse ref chain 3->2, 2->1 ==> 3->1
-    bool is_ref_created = version_list->createNewRef(version, resolved_id, resolved_ver);
+    bool is_ref_created = version_list->createNewRef(version, resolved_id);
 
     if (is_ref_created)
     {
@@ -1133,8 +1109,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             case EditRecordType::VAR_DELETE:
             case EditRecordType::VAR_ENTRY:
             case EditRecordType::VAR_EXTERNAL:
-            case EditRecordType::VAR_DEPRECATED_REF:
-            case EditRecordType::VAR_REF_TO_VER:
+            case EditRecordType::VAR_REF:
                 throw Exception(fmt::format("should not handle edit with invalid type [type={}]", r.type));
             }
         }

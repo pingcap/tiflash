@@ -143,8 +143,7 @@ void PageDirectoryFactory::applyRecord(
         switch (r.type)
         {
         case EditRecordType::VAR_EXTERNAL:
-        case EditRecordType::VAR_DEPRECATED_REF:
-        case EditRecordType::VAR_REF_TO_VER:
+        case EditRecordType::VAR_REF:
         {
             auto holder = version_list->fromRestored(r);
             if (holder)

@@ -493,63 +493,6 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     dir->apply(std::move(edit2));
 }
 
-TEST_F(PageDirectoryTest, NewRefAfterDel2)
-try
-{
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    {
-        PageEntriesEdit edit;
-        edit.put(951, entry1);
-        // edit.putExternal(951);
-        dir->apply(std::move(edit));
-    }
-
-#if 0
-    {
-        PageEntriesEdit edit;
-        edit.ref(954, 951);
-        dir->apply(std::move(edit));
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.del(951);
-        dir->apply(std::move(edit));
-    }
-#else
-    {
-        PageEntriesEdit edit;
-        edit.ref(954, 951);
-        edit.del(951);
-        dir->apply(std::move(edit));
-    }
-#endif
-
-    {
-        PageEntriesEdit edit;
-        edit.ref(972, 954);
-        edit.ref(985, 954);
-        dir->apply(std::move(edit));
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.del(954);
-        dir->apply(std::move(edit));
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.ref(998, 985);
-        edit.ref(1011, 985);
-        dir->apply(std::move(edit));
-    }
-
-    auto snap = dir->createSnapshot();
-    ASSERT_ENTRY_EQ(entry1, dir, 998, snap);
-}
-CATCH
-
 TEST_F(PageDirectoryTest, NewRefAfterDel)
 {
     {
@@ -877,7 +820,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert some entries
-    entries.createNewRef(PageVersion(2), buildV3Id(TEST_NAMESPACE_ID, 2), PageVersion(2));
+    entries.createNewRef(PageVersion(2), buildV3Id(TEST_NAMESPACE_ID, 2));
 
     ASSERT_FALSE(entries.isVisible(1));
     ASSERT_TRUE(entries.isVisible(2));
@@ -895,7 +838,7 @@ try
     ASSERT_FALSE(entries.isVisible(10000));
 
     // insert entry after delete
-    entries.createNewRef(PageVersion(7), buildV3Id(TEST_NAMESPACE_ID, 2), PageVersion(2));
+    entries.createNewRef(PageVersion(7), buildV3Id(TEST_NAMESPACE_ID, 2));
 
     // after re-create ref page, the visible for 1~5 has changed
     ASSERT_FALSE(entries.isVisible(6));

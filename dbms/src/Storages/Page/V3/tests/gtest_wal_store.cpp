@@ -27,7 +27,6 @@
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
-#include <gtest/gtest.h>
 
 #include <random>
 
@@ -143,7 +142,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         PageEntriesEdit edit;
         edit.varExternal(1, ver1_0, 2);
         edit.varDel(1, ver2_0);
-        edit.varRef(2, ver3_0, 1, ver1_0);
+        edit.varRef(2, ver3_0, 1);
 
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
@@ -158,10 +157,9 @@ TEST(WALSeriTest, RefExternalAndEntry)
         EXPECT_EQ(iter->version, ver2_0);
         EXPECT_EQ(iter->being_ref_count, 1);
         iter++;
-        EXPECT_EQ(iter->type, EditRecordType::VAR_REF_TO_VER);
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
         EXPECT_EQ(iter->page_id.low, 2);
         EXPECT_EQ(iter->version, ver3_0);
-        EXPECT_EQ(iter->ori_page_ver, ver1_0);
     }
 
     {
@@ -169,7 +167,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
         edit.varEntry(1, ver1_0, entry_p1_2, 2);
         edit.varDel(1, ver2_0);
-        edit.varRef(2, ver3_0, 1, ver1_0);
+        edit.varRef(2, ver3_0, 1);
 
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
@@ -184,10 +182,9 @@ TEST(WALSeriTest, RefExternalAndEntry)
         EXPECT_EQ(iter->version, ver2_0);
         EXPECT_EQ(iter->being_ref_count, 1);
         iter++;
-        EXPECT_EQ(iter->type, EditRecordType::VAR_REF_TO_VER);
+        EXPECT_EQ(iter->type, EditRecordType::VAR_REF);
         EXPECT_EQ(iter->page_id.low, 2);
         EXPECT_EQ(iter->version, ver3_0);
-        EXPECT_EQ(iter->ori_page_ver, ver1_0);
     }
 }
 

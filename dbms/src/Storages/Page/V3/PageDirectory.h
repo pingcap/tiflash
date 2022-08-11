@@ -151,7 +151,7 @@ public:
 
     void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
-    bool createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id_, const PageVersion & ori_page_ver_);
+    bool createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id);
 
     std::shared_ptr<PageIdV3Internal> createNewExternal(const PageVersion & ver);
 
@@ -279,7 +279,6 @@ private:
     PageVersion delete_ver;
     // Original page id, valid when type == VAR_REF
     PageIdV3Internal ori_page_id;
-    PageVersion ori_page_ver;
     // Being ref counter, valid when type == VAR_EXTERNAL
     Int64 being_ref_count;
     // A shared ptr to a holder, valid when type == VAR_EXTERNAL
