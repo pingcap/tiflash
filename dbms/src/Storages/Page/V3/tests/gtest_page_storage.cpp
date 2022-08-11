@@ -1408,6 +1408,256 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+TEST_F(PageStorageTest, TruncateBlobFile)
+try
+{
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    {
+        WriteBatch batch;
+        batch.putPage(1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    auto blob_file = Poco::File(getTemporaryPath() + "/blobfile_1");
+
+    page_storage = reopenWithConfig(config);
+    EXPECT_GT(blob_file.getSize(), 0);
+
+    {
+        WriteBatch batch;
+        batch.delPage(1);
+        page_storage->write(std::move(batch));
+    }
+    page_storage = reopenWithConfig(config);
+    page_storage->gc(/*not_skip*/ false, nullptr, nullptr);
+    EXPECT_EQ(blob_file.getSize(), 0);
+}
+CATCH
+
+TEST_F(PageStorageTest, EntryTagAfterFullGC)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id = 120;
+    UInt64 tag = 12345;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    {
+        auto entry = page_storage->getEntry(page_id);
+        ASSERT_EQ(entry.tag, tag);
+        auto page = page_storage->read(page_id);
+        for (size_t i = 0; i < buf_sz; ++i)
+        {
+            EXPECT_EQ(*(page.data.begin() + i), static_cast<char>(i % 0xff));
+        }
+    }
+}
+CATCH
+
+TEST_F(PageStorageTest, DumpPageStorageSnapshot)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
+        config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id0 = 120;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+
+    // create a snapshot to avoid gc
+    auto snap = page_storage->getSnapshot();
+
+    {
+        WriteBatch batch;
+        batch.delPage(page_id0);
+        page_storage->write(std::move(batch));
+    }
+
+    auto getLogFileNum = [&]() {
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+        return log_files.size();
+    };
+
+    // write until there are more than one wal file
+    while (getLogFileNum() <= 1)
+    {
+        WriteBatch batch;
+        PageId page_id1 = 130;
+        batch.putPage(page_id1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+
+    // write an upsert entry into the current writing log file
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    ASSERT_TRUE(done_snapshot);
+
+    {
+        PageStorage::Config config;
+        page_storage = reopenWithConfig(config);
+    }
+
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+}
+CATCH
+
+TEST_F(PageStorageTest, DumpPageStorageSnapshotWithRefPage)
+try
+{
+    {
+        PageStorage::Config config;
+        config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
+        config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
+        config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
+        page_storage = reopenWithConfig(config);
+    }
+
+    const size_t buf_sz = 1024;
+    char c_buff[buf_sz];
+
+    for (size_t i = 0; i < buf_sz; ++i)
+    {
+        c_buff[i] = i % 0xff;
+    }
+
+    PageId page_id0 = 120;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id0, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+    PageId page_id1 = 121;
+    {
+        WriteBatch batch;
+        batch.putRefPage(page_id1, page_id0);
+        page_storage->write(std::move(batch));
+    }
+    // create a snapshot to avoid gc
+    auto snap = page_storage->getSnapshot();
+
+    {
+        WriteBatch batch;
+        batch.delPage(page_id0);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.delPage(page_id1);
+        page_storage->write(std::move(batch));
+    }
+
+    auto getLogFileNum = [&]() {
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+        return log_files.size();
+    };
+
+    // write until there are more than one wal file
+    while (getLogFileNum() <= 1)
+    {
+        WriteBatch batch;
+        PageId page_id2 = 130;
+        batch.putPage(page_id2, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
+        page_storage->write(std::move(batch));
+    }
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+
+    // write an upsert entry into the current writing log file
+    auto done_full_gc = page_storage->gc();
+    EXPECT_TRUE(done_full_gc);
+
+    auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
+    ASSERT_TRUE(done_snapshot);
+
+    {
+        PageStorage::Config config;
+        page_storage = reopenWithConfig(config);
+    }
+
+    ASSERT_ANY_THROW(page_storage->read(page_id0));
+}
+CATCH
+
+
+TEST_F(PageStorageTest, ReloadConfig)
+try
+{
+    auto & global_context = DB::tests::TiFlashTestEnv::getContext().getGlobalContext();
+    auto & settings = global_context.getSettingsRef();
+    auto old_dt_page_gc_threshold = settings.dt_page_gc_threshold;
+
+    settings.dt_page_gc_threshold = 0.6;
+    page_storage->reloadSettings(getConfigFromSettings(settings));
+    ASSERT_EQ(page_storage->blob_store.config.heavy_gc_valid_rate, 0.6);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.heavy_gc_valid_rate, 0.6);
+
+    // change config twice make sure the test select a value different from default value
+    settings.dt_page_gc_threshold = 0.8;
+    page_storage->reloadSettings(getConfigFromSettings(settings));
+    ASSERT_EQ(page_storage->blob_store.config.heavy_gc_valid_rate, 0.8);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.heavy_gc_valid_rate, 0.8);
+
+    settings.dt_page_gc_threshold = old_dt_page_gc_threshold;
+}
+CATCH
+>>>>>>> 09773752cb (rename and remove some ps v3 config (#5586))
 
 } // namespace PS::V3::tests
 } // namespace DB
