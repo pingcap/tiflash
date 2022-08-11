@@ -16,6 +16,7 @@
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <common/types.h>
+#include <ratio>
 
 std::atomic<UInt64> last_max_thds_metric_reset_ts{0};
 const std::chrono::duration<UInt64> max_thds_metric_reset_interval{60}; // 60s
@@ -24,10 +25,10 @@ namespace DB
 {
 bool tryToResetMaxThreadsMetrics()
 {
-    using microseconds = std::chrono::duration<UInt64, std::micro>;
+    using nanoseconds = std::chrono::duration<UInt64, std::nano>;
     UInt64 last_max_thds_metric_reset_ts_tmp = last_max_thds_metric_reset_ts.load(std::memory_order_relaxed);
     UInt64 now_ts = clock_gettime_ns_adjusted(last_max_thds_metric_reset_ts_tmp, CLOCK_MONOTONIC);
-    if (microseconds(now_ts) > microseconds(last_max_thds_metric_reset_ts_tmp) + max_thds_metric_reset_interval)
+    if (nanoseconds(now_ts) > nanoseconds(last_max_thds_metric_reset_ts_tmp) + max_thds_metric_reset_interval)
     {
         last_max_thds_metric_reset_ts.store(now_ts, std::memory_order_relaxed);
         GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value());
