@@ -36,7 +36,7 @@ public:
     }
 };
 
-TEST_F(ExecutorTestRunner, Filter)
+TEST_F(ExecutorTestRunner, DISABLED_Filter)
 try
 {
     WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN

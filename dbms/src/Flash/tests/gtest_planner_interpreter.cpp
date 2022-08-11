@@ -38,7 +38,7 @@ public:
     }
 };
 
-TEST_F(PlannerInterpreterExecuteTest, StrangeQuery)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_StrangeQuery)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -109,7 +109,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, SingleQueryBlock)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_SingleQueryBlock)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -164,7 +164,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, ParallelQuery)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_ParallelQuery)
 try
 {
     /// executor with table scan
@@ -465,7 +465,7 @@ CreatingSets
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, MultipleQueryBlockWithSource)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_MultipleQueryBlockWithSource)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -601,7 +601,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, Window)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_Window)
 try
 {
     auto request = context
@@ -669,7 +669,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, FineGrainedShuffle)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_FineGrainedShuffle)
 try
 {
     // fine-grained shuffle is enabled.
@@ -737,7 +737,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, Join)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_Join)
 try
 {
     // TODO: Find a way to write the request easier.
@@ -871,7 +871,7 @@ CreatingSets
 }
 CATCH
 
-TEST_F(PlannerInterpreterExecuteTest, JoinThenAgg)
+TEST_F(PlannerInterpreterExecuteTest, DISABLED_JoinThenAgg)
 try
 {
     {

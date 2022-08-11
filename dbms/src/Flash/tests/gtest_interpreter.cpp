@@ -38,7 +38,7 @@ public:
     }
 };
 
-TEST_F(InterpreterExecuteTest, SingleQueryBlock)
+TEST_F(InterpreterExecuteTest, DISABLED_SingleQueryBlock)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -92,7 +92,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(InterpreterExecuteTest, MultipleQueryBlockWithSource)
+TEST_F(InterpreterExecuteTest, DISABLED_MultipleQueryBlockWithSource)
 try
 {
     auto request = context.scan("test_db", "test_table_1")
@@ -242,7 +242,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(InterpreterExecuteTest, Window)
+TEST_F(InterpreterExecuteTest, DISABLED_Window)
 try
 {
     auto request = context
@@ -319,7 +319,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(InterpreterExecuteTest, FineGrainedShuffle)
+TEST_F(InterpreterExecuteTest, DISABLED_FineGrainedShuffle)
 try
 {
     // fine-grained shuffle is enabled.
@@ -391,7 +391,7 @@ Union: <for test>
 }
 CATCH
 
-TEST_F(InterpreterExecuteTest, Join)
+TEST_F(InterpreterExecuteTest, DISABLED_Join)
 try
 {
     // TODO: Find a way to write the request easier.
@@ -525,7 +525,7 @@ CreatingSets
 }
 CATCH
 
-TEST_F(InterpreterExecuteTest, JoinThenAgg)
+TEST_F(InterpreterExecuteTest, DISABLED_JoinThenAgg)
 try
 {
     {

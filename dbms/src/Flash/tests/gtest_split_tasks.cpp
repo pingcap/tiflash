@@ -34,7 +34,7 @@ public:
     }
 };
 
-TEST_F(SplitTaskTest, aggregation)
+TEST_F(SplitTaskTest, DISABLED_aggregation)
 try
 {
     auto tasks = context.scan("test_db", "test_table_1")
@@ -84,7 +84,7 @@ try
 }
 CATCH
 
-TEST_F(SplitTaskTest, join)
+TEST_F(SplitTaskTest, DISABLED_join)
 try
 {
     auto tasks = context

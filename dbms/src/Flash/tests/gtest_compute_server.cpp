@@ -42,7 +42,7 @@ public:
     }
 };
 
-TEST_F(ComputeServerRunner, runAggTasks)
+TEST_F(ComputeServerRunner, DISABLED_runAggTasks)
 try
 {
     {

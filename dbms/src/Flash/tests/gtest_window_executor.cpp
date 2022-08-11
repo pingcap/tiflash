@@ -81,7 +81,7 @@ public:
     }
 };
 
-TEST_F(WindowExecutorTestRunner, testWindowFunctionByPartitionAndOrder)
+TEST_F(WindowExecutorTestRunner, DISABLED_testWindowFunctionByPartitionAndOrder)
 try
 {
     /***** row_number with different types of input *****/

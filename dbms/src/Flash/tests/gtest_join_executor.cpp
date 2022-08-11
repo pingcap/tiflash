@@ -83,7 +83,7 @@ public:
     };
 };
 
-TEST_F(JoinExecutorTestRunner, SimpleJoin)
+TEST_F(JoinExecutorTestRunner, DISABLED_SimpleJoin)
 try
 {
     constexpr size_t simple_test_num = 4;
@@ -154,7 +154,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, MultiJoin)
+TEST_F(JoinExecutorTestRunner, DISABLED_MultiJoin)
 try
 {
     context.addMockTable("multi_test", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
@@ -293,7 +293,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, JoinCast)
+TEST_F(JoinExecutorTestRunner, DISABLED_JoinCast)
 try
 {
     auto cast_request = [&]() {
@@ -374,7 +374,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, JoinAgg)
+TEST_F(JoinExecutorTestRunner, DISABLED_JoinAgg)
 try
 {
     context.addMockTable("join_agg", "t1", {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
@@ -403,7 +403,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, CrossJoinWithCondition)
+TEST_F(JoinExecutorTestRunner, DISABLED_CrossJoinWithCondition)
 try
 {
     context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
@@ -493,7 +493,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, JoinWithTableScan)
+TEST_F(JoinExecutorTestRunner, DISABLED_JoinWithTableScan)
 try
 {
     auto request = context
@@ -523,7 +523,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, JoinWithExchangeReceiver)
+TEST_F(JoinExecutorTestRunner, DISABLED_JoinWithExchangeReceiver)
 try
 {
     auto request = context
@@ -536,7 +536,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, JoinWithTableScanAndReceiver)
+TEST_F(JoinExecutorTestRunner, DISABLED_JoinWithTableScanAndReceiver)
 try
 {
     auto request = context
