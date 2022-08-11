@@ -75,7 +75,7 @@ public:
     ColumnWithInt32 col_salary{1300, 0, {}, 900, {}, -300};
 };
 
-TEST_F(ExecutorTopNTestRunner, TopN)
+TEST_F(ExecutorTopNTestRunner, DISABLE_TopN)
 try
 {
     WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
@@ -147,7 +147,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTopNTestRunner, TopNFunction)
+TEST_F(ExecutorTopNTestRunner, DISABLE_TopNFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;

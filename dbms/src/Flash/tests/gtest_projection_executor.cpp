@@ -84,7 +84,7 @@ public:
     const String table_name{"projection_test_table"};
 };
 
-TEST_F(ExecutorProjectionTestRunner, Projection)
+TEST_F(ExecutorProjectionTestRunner, DISABLE_Projection)
 try
 {
     /// Check single column
@@ -132,7 +132,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorProjectionTestRunner, ProjectionFunction)
+TEST_F(ExecutorProjectionTestRunner, DISABLE_ProjectionFunction)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;

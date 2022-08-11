@@ -162,7 +162,7 @@ public:
 };
 
 /// Guarantee the correctness of group by
-TEST_F(ExecutorAggTestRunner, GroupBy)
+TEST_F(ExecutorAggTestRunner, DISABLE_GroupBy)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -233,7 +233,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationMaxAndMin)
+TEST_F(ExecutorAggTestRunner, DISABLE_AggregationMaxAndMin)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
@@ -281,7 +281,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationCount)
+TEST_F(ExecutorAggTestRunner, DISABLE_AggregationCount)
 try
 {
     /// Prepare some data
@@ -310,7 +310,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggNull)
+TEST_F(ExecutorAggTestRunner, DISABLE_AggNull)
 try
 {
     auto request = context

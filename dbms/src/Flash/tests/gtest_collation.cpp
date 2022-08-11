@@ -299,7 +299,7 @@ void ExecutorCollation::checkScalarFunctionCollation(std::shared_ptr<tipb::DAGRe
 }
 
 /// Guarantee that test framework has correctly supported the collation.
-TEST_F(ExecutorCollation, Verification)
+TEST_F(ExecutorCollation, DISABLE_Verification)
 try
 {
     /// Test utf8mb4_bin
@@ -319,7 +319,7 @@ try
 CATCH
 
 /// Guarantee the collations of executors or functions have been set
-TEST_F(ExecutorCollation, CheckCollation)
+TEST_F(ExecutorCollation, DISABLE_CheckCollation)
 try
 {
     {

@@ -47,7 +47,7 @@ public:
     const ColumnWithData col0{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"};
 };
 
-TEST_F(ExecutorLimitTestRunner, Limit)
+TEST_F(ExecutorLimitTestRunner, DISABLE_Limit)
 try
 {
     std::shared_ptr<tipb::DAGRequest> request;
