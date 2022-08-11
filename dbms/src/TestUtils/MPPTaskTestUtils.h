@@ -46,9 +46,12 @@ protected:
 
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
 
-#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                \
-    TiFlashTestEnv::getGlobalContext().setMPPTest();                            \
-    MockComputeServerManager::instance().setMockStorage(context.mockStorage()); \
-    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::instance().getServerConfigMap()), expected_cols);
+#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                                                                \
+    do                                                                                                                          \
+    {                                                                                                                           \
+        TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                        \
+        MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                             \
+        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+    } while (0)
 
 } // namespace DB::tests

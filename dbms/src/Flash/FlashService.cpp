@@ -54,7 +54,6 @@ FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Conte
 {
     auto settings = context.getSettingsRef();
     // for MPP test, we don't use local tunnel.
-    enable_local_tunnel = context.isMPPTest() ? SettingInt<bool>(false) : settings.enable_local_tunnel; // ywq todo
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
