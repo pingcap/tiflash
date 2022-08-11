@@ -502,8 +502,6 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     {
         LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
-        // Need get blob file before remove its stat otherwise we cannot find the blob file
-        // And getBlobFile may get lock on blob_stats inside, so call it before acquire the lock.
         auto blob_file = getBlobFile(blob_id);
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
@@ -1136,7 +1134,8 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 
 String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 {
-    String parent_path = blob_stats.blobIdToPath(blob_id);
+    PageFileIdAndLevel id_lvl{blob_id, 0};
+    String parent_path = delegator->getPageFilePath(id_lvl);
 
     if (auto f = Poco::File(parent_path); !f.exists())
         f.createDirectories();
@@ -1270,7 +1269,12 @@ BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id,
         config.file_limit_size);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
-    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    auto path = delegator->choosePath(id_lvl);
+    /// This function may be called when restoring an old BlobFile at restart or creating a new BlobFile.
+    /// If restoring an old BlobFile, the BlobFile path maybe already added to delegator, but an another call to `addPageFileUsedSize` should do no harm.
+    /// If creating a new BlobFile, we need to register the BlobFile's path to delegator, so it's necessary to call `addPageFileUsedSize` here.
+    delegator->addPageFileUsedSize({blob_file_id, 0}, 0, path, true);
+    stats_map[path].emplace_back(stat);
     return stat;
 }
 
@@ -1295,13 +1299,19 @@ BlobStatPtr BlobStore::BlobStats::createBigPageStatNotChecking(BlobFileId blob_f
         config.file_limit_size);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
-    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    auto path = delegator->choosePath(id_lvl);
+    /// This function may be called when restoring an old BlobFile at restart or creating a new BlobFile.
+    /// If restoring an old BlobFile, the BlobFile path maybe already added to delegator, but an another call to `addPageFileUsedSize` should do no harm.
+    /// If creating a new BlobFile, we need to register the BlobFile's path to delegator, so it's necessary to call `addPageFileUsedSize` here.
+    delegator->addPageFileUsedSize({blob_file_id, 0}, 0, path, true);
+    stats_map[path].emplace_back(stat);
     return stat;
 }
 
-void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> & lock)
+void BlobStore::BlobStats::eraseStat(const BlobStatPtr && stat, const std::lock_guard<std::mutex> &)
 {
-    stats_map[blobIdToPathImpl(stat->id, lock)].remove(stat);
+    PageFileIdAndLevel id_lvl{stat->id, 0};
+    stats_map[delegator->getPageFilePath(id_lvl)].remove(stat);
 }
 
 void BlobStore::BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mutex> & lock)
@@ -1420,29 +1430,6 @@ BlobStatPtr BlobStore::BlobStats::blobIdToStat(BlobFileId file_id, bool ignore_n
     }
 
     return nullptr;
-}
-
-String BlobStore::BlobStats::blobIdToPath(BlobFileId file_id)
-{
-    auto guard = lock();
-    return blobIdToPathImpl(file_id, guard);
-}
-
-String BlobStore::BlobStats::blobIdToPathImpl(BlobFileId file_id, const std::lock_guard<std::mutex> &)
-{
-    for (const auto & [path, stats] : stats_map)
-    {
-        for (const auto & stat : stats)
-        {
-            if (stat->id == file_id)
-            {
-                return path;
-            }
-        }
-    }
-    throw Exception(fmt::format("Can't find BlobStat with [blob_id={}]",
-                                file_id),
-                    ErrorCodes::LOGICAL_ERROR);
 }
 
 /*********************
