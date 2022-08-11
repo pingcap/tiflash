@@ -331,6 +331,7 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
+    // TODO Should handle when curr_region_ptr is null.
     return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
 }
 
@@ -338,6 +339,15 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTCo
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
+    if (curr_region_ptr == nullptr)
+    {
+        /// If we can't find region here, we return true so proxy can trigger a CompactLog.
+        /// The triggered CompactLog will be handled by `handleUselessAdminRaftCmd`,
+        /// and result in a `EngineStoreApplyRes::NotFound`.
+        /// Proxy will print this message and continue: `region not found in engine-store, maybe have exec `RemoveNode` first`.
+        LOG_FMT_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
+        return true;
+    }
     return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
 }
 
@@ -345,7 +355,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
 {
     if (curr_region_ptr == nullptr)
     {
-        throw Exception(fmt::format("region not found when trying flush", ErrorCodes::LOGICAL_ERROR));
+        throw Exception("region not found when trying flush", ErrorCodes::LOGICAL_ERROR);
     }
     auto & curr_region = *curr_region_ptr;
 
