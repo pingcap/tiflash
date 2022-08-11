@@ -18,16 +18,18 @@
 #include <common/types.h>
 
 std::atomic<UInt64> last_max_thds_metric_reset_ts{0};
-const UInt64 max_thds_metric_reset_interval = 60; //60s
+const std::chrono::duration<UInt64> max_thds_metric_reset_interval{60}; // 60s
 
 namespace DB
 {
 bool tryToResetMaxThreadsMetrics()
 {
-    UInt64 now_ts = clock_gettime_ns_adjusted(last_max_thds_metric_reset_ts, CLOCK_MONOTONIC);
-    if (now_ts > last_max_thds_metric_reset_ts + max_thds_metric_reset_interval * 1000000000ULL)
+    using microseconds = std::chrono::duration<UInt64, std::micro>;
+    UInt64 last_max_thds_metric_reset_ts_tmp = last_max_thds_metric_reset_ts.load(std::memory_order_relaxed);
+    UInt64 now_ts = clock_gettime_ns_adjusted(last_max_thds_metric_reset_ts_tmp, CLOCK_MONOTONIC);
+    if (microseconds(now_ts) > microseconds(last_max_thds_metric_reset_ts_tmp) + max_thds_metric_reset_interval)
     {
-        last_max_thds_metric_reset_ts = now_ts;
+        last_max_thds_metric_reset_ts.store(now_ts, std::memory_order_relaxed);
         GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value());
         GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value());
         GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value());
