@@ -60,5 +60,25 @@ try
 }
 CATCH
 
+TEST_F(ExecutorTestRunner, Filter1)
+try
+{
+    context.addMockTable({"test_db", "test_table"},
+                            {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
+                            {toNullableVec<String>("s1", {"banana", {}, "banana"}),
+                            toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .filter(eq(col("test_table.s1"), col("test_table.s2")))
+                       .build(context);
+    {
+        ASSERT_COLUMNS_EQ_R(executeStreams(request),
+                            createColumns({toNullableVec<String>({"banana"}),
+                                           toNullableVec<String>({"banana"})}));
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
