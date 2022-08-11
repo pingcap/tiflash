@@ -278,31 +278,29 @@ struct AggregateFunctionSumKahanData
 };
 
 
+#define DEFAULT_DECIMAL_INFER                                                          \
+    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale) \
+    {                                                                                  \
+        return SumDecimalInferer::infer(prec, scale);                                  \
+    }
+
+
 struct NameSum
 {
     static constexpr auto name = "sum";
-    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
-    {
-        return SumDecimalInferer::infer(prec, scale);
-    }
+    DEFAULT_DECIMAL_INFER
 };
 
 struct NameSumWithOverFlow
 {
     static constexpr auto name = "sumWithOverflow";
-    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
-    {
-        return SumDecimalInferer::infer(prec, scale);
-    }
+    DEFAULT_DECIMAL_INFER
 };
 
 struct NameCountSecondStage
 {
     static constexpr auto name = "countSecondStage";
-    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
-    {
-        return {prec, scale};
-    }
+    DEFAULT_DECIMAL_INFER
 };
 
 struct NameFinalSumStage
@@ -317,11 +315,7 @@ struct NameFinalSumStage
 struct NameSumKahan
 {
     static constexpr auto name = "sumKahan";
-
-    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
-    {
-        return SumDecimalInferer::infer(prec, scale);
-    }
+    DEFAULT_DECIMAL_INFER
 };
 
 /// Counts the sum of the numbers.
