@@ -2249,7 +2249,8 @@ try
         auto edit = dir->dumpSnapshotToEdit(snap);
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        BlobStore::BlobStats stats(log, delegator, BlobStore::Config{});
+        auto config = BlobStore::Config{};
+        BlobStore::BlobStats stats(log, delegator, config);
         {
             const auto & lock = stats.lock();
             stats.createStatNotChecking(file_id1, lock);
