@@ -46,15 +46,14 @@ public:
         const String & name,
         Creator creator);
 
-    template<typename Function>
+    template <typename Function>
     void registerFunction()
     {
         registerFunction(
             Function::name,
-            [](const DataTypes & argument_types) { 
-                return std::make_shared<Function>(argument_types); 
-            }
-        );
+            [](const DataTypes & argument_types) {
+                return std::make_shared<Function>(argument_types);
+            });
     }
 
     /// Throws an exception if not found.

@@ -352,7 +352,6 @@ void DAGQueryBlockInterpreter::executeWindow(
     WindowDescription & window_description,
     bool enable_fine_grained_shuffle)
 {
-    
     executeExpression(pipeline, window_description.before_window, log, "before window");
 
     if (enable_fine_grained_shuffle)

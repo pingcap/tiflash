@@ -31,7 +31,7 @@ class IWindowFunction
 {
 public:
     explicit IWindowFunction(const DataTypes & argument_types_)
-    : argument_types(argument_types_)
+        : argument_types(argument_types_)
     {}
 
     virtual String getName() const = 0;
@@ -43,7 +43,8 @@ public:
     virtual void windowInsertResultInto(
         WindowBlockInputStreamPtr streamPtr,
         size_t function_index,
-        const ColumnNumbers & arguments) = 0;
+        const ColumnNumbers & arguments)
+        = 0;
 
 protected:
     DataTypes argument_types;

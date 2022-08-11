@@ -16,12 +16,11 @@
 #include <Common/Exception.h>
 #include <Common/assert_cast.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionsConditional.h>
 #include <WindowFunctions/IWindowFunction.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-
 
 namespace DB
 {
@@ -135,13 +134,23 @@ struct WindowFunctionRowNumber final : public IWindowFunction
     }
 };
 
-struct WindowFunctionLead final : public IWindowFunction
+/**
+LEAD(<expression>[,offset[, default_value]]) OVER (
+    PARTITION BY (expr)
+    ORDER BY (expr)
+) 
+ * */
+class WindowFunctionLead final : public IWindowFunction
 {
+public:
     static constexpr auto name = "lead";
 
     explicit WindowFunctionLead(const DataTypes & argument_types_)
         : IWindowFunction(argument_types_)
-    {}
+    {
+        return_type = getReturnTypeImpl();
+        offset_getter = initOffsetGetter();
+    }
 
     String getName() const override
     {
@@ -150,32 +159,100 @@ struct WindowFunctionLead final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
-        if (argument_types.size() <= 2)
-        {
-            if (removeNullable(argument_types[0])->getTypeId() == TypeIndex::Float32)
-            {
-                auto origin_type = std::make_shared<DataTypeFloat64>();
-                return argument_types[0]->isNullable() ? makeNullable(origin_type) : origin_type;
-            }
-            else
-                return argument_types[0];
-        }
-        else
-        {
-            return FunctionIf{}.getReturnTypeImpl({std::make_shared<DataTypeUInt8>(), removeNullable(argument_types[0]), argument_types[2]});
-        }
+        return return_type;
     }
 
     // todo hanlde nullable, etc
     void windowInsertResultInto(
         WindowBlockInputStreamPtr stream,
         size_t function_index,
-        [[maybe_unused]] const ColumnNumbers & arguments) override
+        const ColumnNumbers & arguments) override
     {
-        IColumn & to = *stream->outputAt(stream->current_row)[function_index];
-        assert_cast<ColumnInt64 &>(to).getData().push_back(
-            stream->current_row_number);
+        const auto & cur_block = stream->blockAt(stream->current_row);
+
+        IColumn & to = *cur_block.output_columns[function_index];
+
+        auto input_row = stream->current_row;
+        auto offset = offset_getter(cur_block.input_columns, arguments);
+        if (stream->advanceRowNumber(input_row, offset))
+        {
+            const auto & cur_block = stream->blockAt(input_row);
+            Block temp_block{};
+        }
+        else
+        {
+        }
     }
+
+private:
+    DataTypePtr getReturnTypeImpl() const
+    {
+        if (argument_types.size() >= 2)
+        {
+            auto second_argument = removeNullable(argument_types[1]);
+            RUNTIME_CHECK(
+                second_argument->isInteger(),
+                Exception(
+                    fmt::format("Illegal type {} of second argument of function {}", second_argument->getName(), getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT));
+        }
+        if (argument_types.size() <= 2)
+        {
+            return removeNullable(argument_types[0])->getTypeId() == TypeIndex::Float32
+                ? makeNullable(std::make_shared<DataTypeFloat64>())
+                : makeNullable(argument_types[0]);
+        }
+        else
+        {
+            return FunctionIf{}.getReturnTypeImpl({std::make_shared<DataTypeUInt8>(), argument_types[0], argument_types[2]});
+        }
+    }
+
+    using OffsetGetter = std::function<UInt64(const Columns &, const ColumnNumbers &)>;
+
+    OffsetGetter initOffsetGetter()
+    {
+        if (argument_types.size() < 2)
+        {
+            return [](const Columns &, const ColumnNumbers &) -> UInt64 {
+                return 1;
+            };
+        }
+        else
+        {
+            auto type_index = argument_types[1]->getTypeId();
+            switch (type_index)
+            {
+#define M(T)                                                                            \
+    case TypeIndex::T:                                                                  \
+        return [](const Columns & columns, const ColumnNumbers & arguments) -> UInt64 { \
+            const IColumn & offset_column = *columns[arguments[1]];                     \
+            T origin_value = offset_column[0].get<T>();                                 \
+            if constexpr (std::is_signed_v<T>)                                          \
+            {                                                                           \
+                if (origin_value < 0)                                                   \
+                    return 0;                                                           \
+            }                                                                           \
+            return static_cast<size_t>(origin_value);                                   \
+        };
+                M(UInt8)
+                M(UInt16)
+                M(UInt32)
+                M(UInt64)
+                M(Int8)
+                M(Int16)
+                M(Int32)
+                M(Int64)
+#undef M
+            default:
+                throw Exception(fmt::format("the argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            };
+        }
+    }
+
+private:
+    DataTypePtr return_type;
+    OffsetGetter offset_getter;
 };
 
 void registerWindowFunctions(WindowFunctionFactory & factory)
