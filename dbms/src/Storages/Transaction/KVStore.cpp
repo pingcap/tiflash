@@ -355,7 +355,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
 {
     if (curr_region_ptr == nullptr)
     {
-        throw Exception(fmt::format("region not found when trying flush", ErrorCodes::LOGICAL_ERROR));
+        throw Exception("region not found when trying flush", ErrorCodes::LOGICAL_ERROR);
     }
     auto & curr_region = *curr_region_ptr;
 
