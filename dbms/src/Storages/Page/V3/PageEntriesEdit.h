@@ -68,6 +68,8 @@ struct PageVersion
 using VersionedEntry = std::pair<PageVersion, PageEntryV3>;
 using VersionedEntries = std::vector<VersionedEntry>;
 
+// Note that new type should append to the end of the existing
+// definitions. Cause the type value is persisted to WAL.
 enum class EditRecordType
 {
     PUT,
@@ -79,9 +81,10 @@ enum class EditRecordType
     // Variant types for dumping the in-memory entries into
     // snapshot
     VAR_ENTRY,
-    VAR_REF,
+    VAR_DEPRECATED_REF,
     VAR_EXTERNAL,
     VAR_DELETE,
+    VAR_REF_TO_VER,
 };
 
 inline const char * typeToString(EditRecordType t)
@@ -100,7 +103,8 @@ inline const char * typeToString(EditRecordType t)
         return "UPSERT ";
     case EditRecordType::VAR_ENTRY:
         return "VAR_ENT";
-    case EditRecordType::VAR_REF:
+    case EditRecordType::VAR_DEPRECATED_REF:
+    case EditRecordType::VAR_REF_TO_VER:
         return "VAR_REF";
     case EditRecordType::VAR_EXTERNAL:
         return "VAR_EXT";
@@ -166,13 +170,14 @@ public:
         records.emplace_back(record);
     }
 
-    void varRef(PageIdV3Internal ref_id, const PageVersion & ver, PageIdV3Internal ori_page_id)
+    void varRef(PageIdV3Internal ref_id, const PageVersion & ver, PageIdV3Internal ori_page_id, const PageVersion & ori_page_ver)
     {
         EditRecord record{};
-        record.type = EditRecordType::VAR_REF;
+        record.type = EditRecordType::VAR_REF_TO_VER;
         record.page_id = ref_id;
         record.version = ver;
         record.ori_page_id = ori_page_id;
+        record.ori_page_ver = ori_page_ver;
         records.emplace_back(record);
     }
 
@@ -218,13 +223,16 @@ public:
         PageIdV3Internal page_id;
         PageIdV3Internal ori_page_id;
         PageVersion version;
+        PageVersion ori_page_ver;
         PageEntryV3 entry;
         Int64 being_ref_count;
 
         EditRecord()
-            : page_id(0)
+            : type(EditRecordType::PUT)
+            , page_id(0)
             , ori_page_id(0)
             , version(0, 0)
+            , ori_page_ver(0, 0)
             , being_ref_count(1)
         {}
     };
@@ -272,9 +280,9 @@ public:
     {
         ref(buildV3Id(TEST_NAMESPACE_ID, ref_id), buildV3Id(TEST_NAMESPACE_ID, page_id));
     }
-    void varRef(PageId ref_id, const PageVersion & ver, PageId ori_page_id)
+    void varRef(PageId ref_id, const PageVersion & ver, PageId ori_page_id, const PageVersion & ori_page_ver)
     {
-        varRef(buildV3Id(TEST_NAMESPACE_ID, ref_id), ver, buildV3Id(TEST_NAMESPACE_ID, ori_page_id));
+        varRef(buildV3Id(TEST_NAMESPACE_ID, ref_id), ver, buildV3Id(TEST_NAMESPACE_ID, ori_page_id), ori_page_ver);
     }
     void varExternal(PageId page_id, const PageVersion & create_ver, Int64 being_ref_count)
     {

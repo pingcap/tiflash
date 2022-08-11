@@ -112,7 +112,7 @@ void deserializePutFrom([[maybe_unused]] const EditRecordType record_type, ReadB
 
 void serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
-    assert(record.type == EditRecordType::REF || record.type == EditRecordType::VAR_REF);
+    assert(record.type == EditRecordType::REF || record.type == EditRecordType::VAR_DEPRECATED_REF);
 
     writeIntBinary(record.type, buf);
 
@@ -124,7 +124,7 @@ void serializeRefTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & bu
 
 void deserializeRefFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
 {
-    assert(record_type == EditRecordType::REF || record_type == EditRecordType::VAR_REF);
+    assert(record_type == EditRecordType::REF || record_type == EditRecordType::VAR_DEPRECATED_REF);
 
     PageEntriesEdit::EditRecord rec;
     rec.type = record_type;
@@ -134,6 +134,31 @@ void deserializeRefFrom([[maybe_unused]] const EditRecordType record_type, ReadB
     edit.appendRecord(rec);
 }
 
+void serializeRefToVer(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
+{
+    assert(record.type == EditRecordType::VAR_REF_TO_VER);
+
+    writeIntBinary(record.type, buf);
+
+    writeIntBinary(record.page_id, buf);
+    writeIntBinary(record.ori_page_id, buf);
+    serializeVersionTo(record.version, buf);
+    serializeVersionTo(record.ori_page_ver, buf);
+    assert(record.entry.file_id == INVALID_BLOBFILE_ID);
+}
+
+void deserializeRefToVerFrom([[maybe_unused]] const EditRecordType record_type, ReadBuffer & buf, PageEntriesEdit & edit)
+{
+    assert(record_type == EditRecordType::VAR_REF_TO_VER);
+
+    PageEntriesEdit::EditRecord rec;
+    rec.type = record_type;
+    readIntBinary(rec.page_id, buf);
+    readIntBinary(rec.ori_page_id, buf);
+    deserializeVersionFrom(buf, rec.version);
+    deserializeVersionFrom(buf, rec.ori_page_ver);
+    edit.appendRecord(rec);
+}
 
 void serializePutExternalTo(const PageEntriesEdit::EditRecord & record, WriteBuffer & buf)
 {
@@ -200,7 +225,7 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
             break;
         }
         case EditRecordType::REF:
-        case EditRecordType::VAR_REF:
+        case EditRecordType::VAR_DEPRECATED_REF:
         {
             deserializeRefFrom(record_type, buf, edit);
             break;
@@ -238,8 +263,10 @@ String serializeTo(const PageEntriesEdit & edit)
             serializePutTo(record, buf);
             break;
         case EditRecordType::REF:
-        case EditRecordType::VAR_REF:
+        case EditRecordType::VAR_DEPRECATED_REF:
             serializeRefTo(record, buf);
+            break;
+        case DB::PS::V3::EditRecordType::VAR_REF_TO_VER:
             break;
         case EditRecordType::VAR_DELETE:
         case EditRecordType::DEL:
