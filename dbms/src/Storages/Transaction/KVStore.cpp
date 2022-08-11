@@ -338,6 +338,11 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTCo
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
+    if (curr_region_ptr == nullptr)
+    {
+        LOG_FMT_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
+        return true;
+    }
     return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
 }
 
