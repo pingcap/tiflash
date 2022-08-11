@@ -39,6 +39,10 @@ private:
     Int64 current_id = 0;
 };
 
+/** Responsible for mock data for executor tests and mpp tests.
+  * 1. Use this class to add mock table schema and table column data.
+  * 2. Use this class to add mock exchange schema and exchange column data.
+  */
 class MockStorage
 {
 public:
@@ -72,7 +76,7 @@ public:
 
     MockColumnInfoVec getExchangeSchema(String exchange_name);
 
-    /// for MPP Tasks
+    /// for MPP Tasks, it will split data by partition num, then each MPP service will have a subset of mock data.
     ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num);
 
 private:

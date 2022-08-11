@@ -102,9 +102,7 @@ void columnPrune(ExecutorPtr executor)
 {
     std::unordered_set<String> used_columns;
     for (auto & schema : executor->output_schema)
-    {
         used_columns.emplace(schema.first);
-    }
     executor->columnPrune(used_columns);
 }
 

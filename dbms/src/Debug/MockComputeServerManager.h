@@ -21,15 +21,23 @@
 
 namespace DB::tests
 {
+
+/** Hold Mock Compute Server to manage the lifetime of them.
+  * Maintains Mock Compute Server info.
+  */
 class MockComputeServerManager : public ext::Singleton<MockComputeServerManager>
 {
 public:
+    /// register an server to run.
     void addServer(String addr);
 
+    /// call startServers to run all servers in current test.
     void startServers(const LoggerPtr & log_ptr, Context & global_context);
 
+    /// set MockStorage for Compute Server in order to mock input columns.
     void setMockStorage(MockStorage & mock_storage);
 
+    /// stop all servers.
     void reset();
 
     MockMPPServerInfo getMockMPPServerInfo(size_t partition_id);

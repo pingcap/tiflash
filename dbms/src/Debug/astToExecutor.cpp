@@ -32,6 +32,7 @@
 namespace DB
 {
 using ASTPartitionByElement = ASTOrderByElement;
+using MockComputeServerManager = tests::MockComputeServerManager;
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
 {
     *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
@@ -843,7 +844,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
 
         auto * meta_string = exchange_sender->add_encoded_task_meta();
@@ -887,7 +888,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        auto addr = context.isMPPTest() ? tests::MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);

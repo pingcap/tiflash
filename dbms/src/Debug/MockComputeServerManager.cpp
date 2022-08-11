@@ -12,12 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Debug/MockComputeServerManager.h>
+#include <fmt/core.h>
 
-namespace DB::tests
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int IP_ADDRESS_NOT_ALLOWED;
+} // namespace ErrorCodes
+namespace tests
 {
 void MockComputeServerManager::addServer(String addr)
 {
     MockServerConfig config;
+    for (const auto & server : server_config_map)
+    {
+        if (server.second.addr == addr)
+        {
+            throw Exception(fmt::format("Already register server with addr = {}", addr), ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
+        }
+    }
     config.partition_id = server_config_map.size();
     config.addr = addr;
     server_config_map[config.partition_id] = config;
@@ -73,5 +87,6 @@ void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<Fl
 {
     server_map[partition_id] = std::move(server);
 }
+} // namespace tests
 
-} // namespace DB::tests
+} // namespace DB

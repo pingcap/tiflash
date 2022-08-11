@@ -28,6 +28,7 @@ public:
         MockComputeServerManager::instance().addServer("0.0.0.0:3931");
         MockComputeServerManager::instance().addServer("0.0.0.0:3932");
         MockComputeServerManager::instance().addServer("0.0.0.0:3933");
+
         MockComputeServerManager::instance().startServers(log_ptr, TiFlashTestEnv::getGlobalContext());
     }
     void initializeContext() override
