@@ -79,18 +79,13 @@ bool MockStorage::exchangeExistsWithName(const String & name)
     return exchange_schemas.find(name) != exchange_schemas.end();
 }
 
-ColumnsWithTypeAndName MockStorage::getExchangeColumnsInternal(String & executor_id)
+ColumnsWithTypeAndName MockStorage::getExchangeColumns(String & executor_id)
 {
     if (exchangeExists(executor_id))
     {
         return exchange_columns[executor_id_to_name_map[executor_id]];
     }
     throw Exception(fmt::format("Failed to get exchange columns by executor_id '{}'", executor_id));
-}
-
-ColumnsWithTypeAndName MockStorage::getExchangeColumns(String & executor_id)
-{
-    return getExchangeColumnsInternal(executor_id);
 }
 
 void MockStorage::addExchangeRelation(String & executor_id, String & exchange_name)

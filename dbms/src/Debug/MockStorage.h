@@ -65,10 +65,7 @@ public:
     void addExchangeData(const String & exchange_name, ColumnsWithTypeAndName & columns);
 
     bool exchangeExists(const String & executor_id);
-
     bool exchangeExistsWithName(const String & name);
-
-    ColumnsWithTypeAndName getExchangeColumnsInternal(String & executor_id);
 
     ColumnsWithTypeAndName getExchangeColumns(String & executor_id);
 
