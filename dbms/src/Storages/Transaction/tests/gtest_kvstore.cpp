@@ -1242,6 +1242,8 @@ void RegionKVStoreTest::testKVStore()
         ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
         // Force flush until succeed only for testing.
         ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext(), 0, 0), true);
+        // Non existing region.
+        ASSERT_EQ(kvs.tryFlushRegionData(1999, true, ctx.getTMTContext(), 0, 0), true);
     }
 }
 
