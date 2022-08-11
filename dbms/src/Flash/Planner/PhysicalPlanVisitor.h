@@ -25,7 +25,7 @@ void visit(const PhysicalPlanNodePtr & plan, FF && f)
     {
         for (size_t i = 0; i < plan->childrenSize(); ++i)
         {
-            visit(plan->children(i), std::forward<FF>(f));
+            DB::PhysicalPlanVisitor::visit(plan->children(i), std::forward<FF>(f));
         }
     }
 }
