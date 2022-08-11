@@ -344,7 +344,7 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTCo
         /// If we can't find region here, we return true so proxy can trigger a CompactLog.
         /// The triggered CompactLog will be handled by `handleUselessAdminRaftCmd`,
         /// and result in a `EngineStoreApplyRes::NotFound`.
-        /// Proxy will print `region not found in engine-store, maybe have exec `RemoveNode` first`.
+        /// Proxy will print this message and continue: `region not found in engine-store, maybe have exec `RemoveNode` first`.
         LOG_FMT_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
         return true;
     }
