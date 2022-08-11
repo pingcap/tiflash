@@ -114,7 +114,14 @@ void BlobStore::registerPaths()
 
 void BlobStore::reloadConfig(const BlobStore::Config & rhs)
 {
-    config.file_limit_size = rhs.file_limit_size;
+    /// Don't reload config.file_limit_size here. Because there may be a potential race between write thread and gc thread.
+    /// For write thread, it will ignore all BlobFile which capacity is larger than config.file_limit_size.
+    /// For gc thread, if the contents of a BlobFile with capacity larger than config.file_limit_size is all removed, it will remove the BlobFile.
+    /// So if you reload config.file_limit_size will a larger value,
+    /// the write thread may see the change and select a BlobFile which capacity is larger than old config.file_limit_size but smaller than new value for write,
+    /// but the gc thread may not see the change and still think the BlobFile's capacity is larger than config.file_limit_size and remove it if all its contents has been removed.
+    /// And this may cause data lose.
+    //    config.file_limit_size = rhs.file_limit_size;
     config.spacemap_type = rhs.spacemap_type;
     config.cached_fd_size = rhs.cached_fd_size;
     config.block_alignment_bytes = rhs.block_alignment_bytes;
