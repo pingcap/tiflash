@@ -135,21 +135,23 @@ struct WindowFunctionRowNumber final : public IWindowFunction
 };
 
 /**
-LEAD(<expression>[,offset[, default_value]]) OVER (
+LEAD/LAG(<expression>[,offset[, default_value]]) OVER (
     PARTITION BY (expr)
     ORDER BY (expr)
-) 
+)
  * */
-class WindowFunctionLead final : public IWindowFunction
+template <typename Impl>
+class WindowFunctionLeadLagBase : public IWindowFunction
 {
 public:
-    static constexpr auto name = "lead";
+    static constexpr auto name = Impl::name;
 
-    explicit WindowFunctionLead(const DataTypes & argument_types_)
+    explicit WindowFunctionLeadLagBase(const DataTypes & argument_types_)
         : IWindowFunction(argument_types_)
     {
         return_type = getReturnTypeImpl();
         offset_getter = initOffsetGetter();
+        default_value_setter = initDefaultValueSetter();
     }
 
     String getName() const override
@@ -172,15 +174,16 @@ public:
 
         IColumn & to = *cur_block.output_columns[function_index];
 
-        auto input_row = stream->current_row;
-        auto offset = offset_getter(cur_block.input_columns, arguments);
-        if (stream->advanceRowNumber(input_row, offset))
+        auto offset = offset_getter(cur_block.input_columns, arguments, stream->current_row.row);
+        auto value_row = stream->current_row;
+        if (Impl::locateRowNumber(stream, value_row, offset))
         {
-            const auto & cur_block = stream->blockAt(input_row);
-            Block temp_block{};
+            const auto & value_column = *stream->inputAt(value_row)[arguments[0]];
+            to.insertFrom(value_column, value_row.row);
         }
         else
         {
+            default_value_setter(cur_block.input_columns, arguments, stream->current_row.row, to);
         }
     }
 
@@ -208,13 +211,33 @@ private:
         }
     }
 
-    using OffsetGetter = std::function<UInt64(const Columns &, const ColumnNumbers &)>;
+    using DefaultValueSetter = std::function<void(const Columns &, const ColumnNumbers &, size_t, IColumn &)>;
+
+    DefaultValueSetter initDefaultValueSetter()
+    {
+        if (argument_types.size() < 3)
+        {
+            return [](const Columns &, const ColumnNumbers &, size_t, IColumn & to) {
+                static Field null_field;
+                to.insert(null_field);
+            };
+        }
+        else
+        {
+            return [](const Columns & input_columns, const ColumnNumbers & arguments, size_t row, IColumn & to) {
+                const auto & default_value_column = *input_columns[arguments[2]];
+                to.insertFrom(default_value_column, row);
+            };
+        }
+    }
+
+    using OffsetGetter = std::function<UInt64(const Columns &, const ColumnNumbers &, size_t)>;
 
     OffsetGetter initOffsetGetter()
     {
         if (argument_types.size() < 2)
         {
-            return [](const Columns &, const ColumnNumbers &) -> UInt64 {
+            return [](const Columns &, const ColumnNumbers &, size_t) -> UInt64 {
                 return 1;
             };
         }
@@ -223,17 +246,17 @@ private:
             auto type_index = argument_types[1]->getTypeId();
             switch (type_index)
             {
-#define M(T)                                                                            \
-    case TypeIndex::T:                                                                  \
-        return [](const Columns & columns, const ColumnNumbers & arguments) -> UInt64 { \
-            const IColumn & offset_column = *columns[arguments[1]];                     \
-            T origin_value = offset_column[0].get<T>();                                 \
-            if constexpr (std::is_signed_v<T>)                                          \
-            {                                                                           \
-                if (origin_value < 0)                                                   \
-                    return 0;                                                           \
-            }                                                                           \
-            return static_cast<size_t>(origin_value);                                   \
+#define M(T)                                                                                        \
+    case TypeIndex::T:                                                                              \
+        return [](const Columns & columns, const ColumnNumbers & arguments, size_t row) -> UInt64 { \
+            const IColumn & offset_column = *columns[arguments[1]];                                 \
+            T origin_value = offset_column[row].get<T>();                                           \
+            if constexpr (std::is_signed_v<T>)                                                      \
+            {                                                                                       \
+                if (origin_value < 0)                                                               \
+                    return 0;                                                                       \
+            }                                                                                       \
+            return static_cast<size_t>(origin_value);                                               \
         };
                 M(UInt8)
                 M(UInt16)
@@ -253,6 +276,33 @@ private:
 private:
     DataTypePtr return_type;
     OffsetGetter offset_getter;
+    DefaultValueSetter default_value_setter;
+};
+
+struct LeadImpl
+{
+    static constexpr auto name = "lead";
+
+    static bool locateRowNumber(
+        const WindowBlockInputStreamPtr & stream,
+        RowNumber & value_row,
+        UInt64 offset)
+    {
+        return stream->advanceRowNumber(value_row, offset);
+    }
+};
+
+struct LagImpl
+{
+    static constexpr auto name = "lag";
+
+    static bool locateRowNumber(
+        const WindowBlockInputStreamPtr & stream,
+        RowNumber & value_row,
+        UInt64 offset)
+    {
+        return stream->backRowNumber(value_row, offset);
+    }
 };
 
 void registerWindowFunctions(WindowFunctionFactory & factory)
@@ -260,5 +310,7 @@ void registerWindowFunctions(WindowFunctionFactory & factory)
     factory.registerFunction<WindowFunctionRank>();
     factory.registerFunction<WindowFunctionDenseRank>();
     factory.registerFunction<WindowFunctionRowNumber>();
+    factory.registerFunction<WindowFunctionLeadLagBase<LeadImpl>>();
+    factory.registerFunction<WindowFunctionLeadLagBase<LagImpl>>();
 }
 } // namespace DB

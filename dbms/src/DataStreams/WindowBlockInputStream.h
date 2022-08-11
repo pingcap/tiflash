@@ -177,6 +177,25 @@ public:
         return advanceRowNumber(x, new_offset);
     }
 
+    bool backRowNumber(RowNumber & x, size_t offset) const
+    {
+        assert(x.block >= first_block_number);
+        assert(x.block - first_block_number < window_blocks.size());
+
+        if (x.row >= offset)
+        {
+            x.row -= offset;
+            return true;
+        }
+
+        --x.block;
+        if (x.block < first_block_number)
+            return false;
+        size_t new_offset = offset - x.row;
+        x.row = blockAt(x.block).rows - 1;
+        return backRowNumber(x, new_offset);
+    }
+
     RowNumber blocksEnd() const
     {
         return RowNumber{first_block_number + window_blocks.size(), 0};

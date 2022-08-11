@@ -195,6 +195,8 @@ std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
     {"RowNumber", tipb::ExprType::RowNumber},
     {"Rank", tipb::ExprType::Rank},
     {"DenseRank", tipb::ExprType::DenseRank},
+    {"Lead", tipb::ExprType::Lead},
+    {"Lag", tipb::ExprType::Lag},
 });
 
 DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
@@ -1839,6 +1841,12 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagBinary;
                 break;
+            }
+            case tipb::ExprType::Lead:
+            case tipb::ExprType::Lag:
+            {
+                // TODO handling complex situations
+                ci = children_ci[0];
             }
             default:
                 throw Exception(fmt::format("Unsupported window function {}", func->name), ErrorCodes::LOGICAL_ERROR);

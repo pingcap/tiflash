@@ -215,5 +215,7 @@ MockWindowFrame buildDefaultRowsFrame();
 #define RowNumber() makeASTFunction("RowNumber")
 #define Rank() makeASTFunction("Rank")
 #define DenseRank() makeASTFunction("DenseRank")
+#define Lead() makeASTFunction("Lead")
+#define Lag() makeASTFunction("Lag")
 
 } // namespace DB::tests
