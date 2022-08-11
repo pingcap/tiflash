@@ -16,7 +16,6 @@
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <common/types.h>
-#include <ratio>
 
 std::atomic<UInt64> last_max_thds_metric_reset_ts{0};
 const std::chrono::duration<UInt64> max_thds_metric_reset_interval{60}; // 60s
