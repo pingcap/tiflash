@@ -26,6 +26,8 @@ public:
     {
         ExecutorTest::initializeContext();
 
+        enablePlanner(false);
+
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
@@ -403,12 +405,12 @@ try
         auto request = table1.join(
                                  table2.join(
                                      table3.join(table4,
-                                                 {col("join_c")},
-                                                 tipb::JoinType::TypeLeftOuterJoin),
-                                     {col("join_c")},
-                                     tipb::JoinType::TypeLeftOuterJoin),
-                                 {col("join_c")},
-                                 tipb::JoinType::TypeLeftOuterJoin)
+                                                 tipb::JoinType::TypeLeftOuterJoin,
+                                                 {col("join_c")}),
+                                     tipb::JoinType::TypeLeftOuterJoin,
+                                     {col("join_c")}),
+                                 tipb::JoinType::TypeLeftOuterJoin,
+                                 {col("join_c")})
                            .build(context);
 
         String expected = R"(
@@ -445,12 +447,12 @@ CreatingSets
         auto request = receiver1.join(
                                     receiver2.join(
                                         receiver3.join(receiver4,
-                                                       {col("join_c")},
-                                                       tipb::JoinType::TypeLeftOuterJoin),
-                                        {col("join_c")},
-                                        tipb::JoinType::TypeLeftOuterJoin),
-                                    {col("join_c")},
-                                    tipb::JoinType::TypeLeftOuterJoin)
+                                                       tipb::JoinType::TypeLeftOuterJoin,
+                                                       {col("join_c")}),
+                                        tipb::JoinType::TypeLeftOuterJoin,
+                                        {col("join_c")}),
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")})
                            .build(context);
 
         String expected = R"(
@@ -487,12 +489,12 @@ CreatingSets
         auto request = receiver1.join(
                                     receiver2.join(
                                         receiver3.join(receiver4,
-                                                       {col("join_c")},
-                                                       tipb::JoinType::TypeLeftOuterJoin),
-                                        {col("join_c")},
-                                        tipb::JoinType::TypeLeftOuterJoin),
-                                    {col("join_c")},
-                                    tipb::JoinType::TypeLeftOuterJoin)
+                                                       tipb::JoinType::TypeLeftOuterJoin,
+                                                       {col("join_c")}),
+                                        tipb::JoinType::TypeLeftOuterJoin,
+                                        {col("join_c")}),
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")})
                            .exchangeSender(tipb::PassThrough)
                            .build(context);
 
@@ -533,8 +535,8 @@ try
 
         auto request = table1.join(
                                  table2,
-                                 {col("join_c")},
-                                 tipb::JoinType::TypeLeftOuterJoin)
+                                 tipb::JoinType::TypeLeftOuterJoin,
+                                 {col("join_c")})
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
@@ -562,8 +564,8 @@ CreatingSets
 
         auto request = table1.join(
                                  table2,
-                                 {col("join_c")},
-                                 tipb::JoinType::TypeRightOuterJoin)
+                                 tipb::JoinType::TypeRightOuterJoin,
+                                 {col("join_c")})
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
@@ -594,8 +596,8 @@ CreatingSets
 
         auto request = receiver1.join(
                                     receiver2,
-                                    {col("join_c")},
-                                    tipb::JoinType::TypeRightOuterJoin)
+                                    tipb::JoinType::TypeRightOuterJoin,
+                                    {col("join_c")})
                            .aggregation({Sum(col("r_a"))}, {col("join_c")})
                            .exchangeSender(tipb::PassThrough)
                            .limit(10)

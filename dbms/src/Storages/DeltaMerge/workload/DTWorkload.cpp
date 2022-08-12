@@ -44,6 +44,8 @@ DB::Settings createSettings(const WorkloadOptions & opts)
         config->add(new DB::TOMLConfiguration(table), /*shared=*/false); // Take ownership of TOMLConfig
         settings.setProfile("default", *config);
     }
+
+    settings.dt_enable_read_thread = opts.enable_read_thread;
     return settings;
 }
 

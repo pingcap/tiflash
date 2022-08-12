@@ -446,18 +446,18 @@ ALWAYS_INLINE inline bool StringPatternMatch(
 {
     bool use_optimized_path = false;
 
-    switch (collator->getCollatorId())
+    switch (collator->getCollatorType())
     {
-    case TiDB::ITiDBCollator::UTF8MB4_BIN:
-    case TiDB::ITiDBCollator::UTF8_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
     {
         BinStringPatternMatch<Result, revert, true>(a_data, a_offsets, pattern_str, escape_char, c);
         use_optimized_path = true;
         break;
     }
-    case TiDB::ITiDBCollator::BINARY:
-    case TiDB::ITiDBCollator::ASCII_BIN:
-    case TiDB::ITiDBCollator::LATIN1_BIN:
+    case TiDB::ITiDBCollator::CollatorType::BINARY:
+    case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+    case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
     {
         BinStringPatternMatch<Result, revert, false>(a_data, a_offsets, pattern_str, escape_char, c);
         use_optimized_path = true;

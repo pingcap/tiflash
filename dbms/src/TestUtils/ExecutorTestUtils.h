@@ -29,6 +29,16 @@ void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Conte
 
 ::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
 
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
+
+#define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
+    std::vector<bool> bools{false, true}; \
+    for (auto flag : bools)               \
+    {                                     \
+        enablePlanner(flag);
+
+#define WRAP_FOR_DIS_ENABLE_PLANNER_END }
+
 class ExecutorTest : public ::testing::Test
 {
 protected:
@@ -49,6 +59,8 @@ public:
     void initializeClientInfo();
 
     DAGContext & getDAGContext();
+
+    void enablePlanner(bool is_enable);
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
