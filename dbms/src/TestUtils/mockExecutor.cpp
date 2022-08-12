@@ -131,15 +131,14 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
     {
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
-        ret.name = table + "." + column.first;
+        ret.name = column.first;
         // TODO: find a way to assign decimal field's flen.
         if (ret.tp == TiDB::TP::TypeNewDecimal)
             ret.flen = 65;
         ret.id = i++;
         table_info.columns.push_back(std::move(ret));
     }
-    String alias = db;
-    root = compileTableScan(getExecutorIndex(), table_info, alias, false);
+    root = compileTableScan(getExecutorIndex(), table_info, db, table, false);
     return *this;
 }
 

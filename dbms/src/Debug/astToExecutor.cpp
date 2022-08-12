@@ -1455,7 +1455,7 @@ bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, c
 
 } // namespace mock
 
-ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column)
+ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column)
 {
     DAGSchema ts_output;
     for (const auto & column_info : table_info.columns)
@@ -1470,7 +1470,7 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, St
         ci.origin_default_value = column_info.origin_default_value;
         /// use qualified name as the column name to handle multiple table queries, not very
         /// efficient but functionally enough for mock test
-        ts_output.emplace_back(std::make_pair(table_alias + "." + column_info.name, std::move(ci)));
+        ts_output.emplace_back(std::make_pair(db + "." + table_name + "." + column_info.name, std::move(ci)));
     }
     if (append_pk_column)
     {

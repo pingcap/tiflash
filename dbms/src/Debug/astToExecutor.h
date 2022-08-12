@@ -176,7 +176,7 @@ struct TableScan : public Executor
         if (names.column_name == MutableSupport::tidb_pk_column_name)
             ci->set_column_id(-1);
         else
-            ci->set_column_id(table_info.getColumnID(names.table_name + "." + names.column_name));
+            ci->set_column_id(table_info.getColumnID(names.column_name));
         ci->set_tp(dag_column_info.second.tp);
         ci->set_flag(dag_column_info.second.flag);
         ci->set_columnlen(dag_column_info.second.flen);
@@ -345,7 +345,7 @@ struct Sort : Executor
 
 using ExecutorPtr = std::shared_ptr<mock::Executor>;
 
-ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column);
+ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column);
 
 ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter);
 
