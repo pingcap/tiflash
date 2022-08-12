@@ -20,17 +20,6 @@
 
 namespace DB::AggregationInterpreterHelper
 {
-namespace
-{
-bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings & settings)
-{
-    /** Two-level aggregation is useful in two cases:
-      * 1. Parallel aggregation is done, and the results should be merged in parallel.
-      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
-      */
-    return before_agg_streams_size > 1 || settings.max_bytes_before_external_group_by != 0;
-}
-} // namespace
 
 bool isFinalAggMode(const tipb::Expr & expr)
 {
@@ -52,6 +41,18 @@ bool isSecondStageSum(const tipb::Expr & expr)
         return true;
     return false;
 }
+
+namespace
+{
+bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings & settings)
+{
+    /** Two-level aggregation is useful in two cases:
+      * 1. Parallel aggregation is done, and the results should be merged in parallel.
+      * 2. An aggregation is done with store of temporary data on the disk, and they need to be merged in a memory efficient way.
+      */
+    return before_agg_streams_size > 1 || settings.max_bytes_before_external_group_by != 0;
+}
+} // namespace
 
 bool isFinalAgg(const tipb::Aggregation & aggregation)
 {
