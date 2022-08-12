@@ -1605,14 +1605,8 @@ struct TiDBConvertToDuration
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate>)
         {
             // cast date as duration
-            auto to_col = ColumnVector<Int64>::create();
-            auto & vec_to = to_col->getData();
-            vec_to.resize(size);
-            for (size_t i = 0; i < size; ++i)
-            {
-                vec_to[i] = 0; // The DATE type is used for values with a date part but no time part. The value of Duration is always zero.
-            }
-            block.getByPosition(result).column = std::move(to_col);
+            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            block.getByPosition(result).column = to_type->createColumnConst(size, toField(0)); // The DATE type is used for values with a date part but no time part. The value of Duration is always zero.
         }
         else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
         {
