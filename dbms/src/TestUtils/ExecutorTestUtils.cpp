@@ -22,8 +22,6 @@
 
 #include <functional>
 
-#include "TestUtils/FunctionTestUtils.h"
-
 namespace DB::tests
 {
 DAGContext & ExecutorTest::getDAGContext()

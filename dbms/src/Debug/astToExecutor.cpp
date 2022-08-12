@@ -29,8 +29,6 @@
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
-#include "tipb/executor.pb.h"
-
 namespace DB
 {
 using ASTPartitionByElement = ASTOrderByElement;

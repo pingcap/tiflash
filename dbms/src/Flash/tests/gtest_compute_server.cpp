@@ -14,9 +14,6 @@
 
 #include <TestUtils/MPPTaskTestUtils.h>
 
-#include <chrono>
-#include <cstddef>
-
 namespace DB
 {
 namespace tests

@@ -19,8 +19,6 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
-#include <memory>
-
 namespace DB::tests
 {
 class MPPTaskTestUtils : public ExecutorTest
