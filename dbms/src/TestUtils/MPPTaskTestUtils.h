@@ -49,6 +49,11 @@ public:
         MockComputeServerManager::instance().startServers(log_ptr, TiFlashTestEnv::getGlobalContext());
     }
 
+    size_t serverNum()
+    {
+        return MockComputeServerManager::instance().getServerConfigMap().size();
+    }
+
 protected:
     static LoggerPtr log_ptr;
 };
@@ -61,6 +66,17 @@ LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
         TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                        \
         MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                             \
         ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+    } while (0)
+
+#define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, expect_cols)          \
+    do                                                                      \
+    {                                                                       \
+        for (size_t i = 1; i <= serverNum(); ++i)                           \
+        {                                                                   \
+            MockComputeServerManager::instance().resetMockMPPServerInfo(i); \
+            auto tasks = (builder).buildMPPTasks(context, i);               \
+            ASSERT_MPPTASK_EQUAL(tasks, expect_cols);                       \
+        }                                                                   \
     } while (0)
 
 } // namespace DB::tests

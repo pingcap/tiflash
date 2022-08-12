@@ -83,6 +83,15 @@ void MockComputeServerManager::prepareMockMPPServerInfo()
     }
 }
 
+void MockComputeServerManager::resetMockMPPServerInfo(size_t partition_num)
+{
+    size_t i = 0;
+    for (const auto & server : server_map)
+    {
+        server.second->setMockMPPServerInfo({i++, partition_num});
+    }
+}
+
 void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server)
 {
     server_map[partition_id] = std::move(server);

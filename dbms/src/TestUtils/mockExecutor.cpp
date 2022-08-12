@@ -111,6 +111,7 @@ void columnPrune(ExecutorPtr executor)
 // Currently we don't support window functions
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, int mpp_partition_num)
 {
+    RUNTIME_ASSERT(mpp_partition_num != 0, "should not build mpp tasks with mpp_partition_num = 0");
     columnPrune(root);
     // enable mpp
     properties.is_mpp_query = true;
@@ -120,11 +121,6 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     root.reset();
     executor_index = 0;
     return query_tasks;
-}
-
-QueryTasks DAGRequestBuilder::buildMPPTasksForMultipleServer(MockDAGRequestContext & mock_context)
-{
-    return buildMPPTasks(mock_context, MockComputeServerManager::instance().getServerConfigMap().size());
 }
 
 DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns)

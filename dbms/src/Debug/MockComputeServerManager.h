@@ -44,6 +44,8 @@ public:
 
     std::unordered_map<size_t, MockServerConfig> & getServerConfigMap();
 
+    void resetMockMPPServerInfo(size_t partition_num);
+
 private:
     void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);
     void prepareMockMPPServerInfo();
