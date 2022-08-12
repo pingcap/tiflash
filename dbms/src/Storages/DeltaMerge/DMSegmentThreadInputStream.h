@@ -51,7 +51,8 @@ public:
         bool do_delete_mark_filter_for_raw_,
         const int extra_table_id_index,
         const TableID physical_table_id,
-        const String & req_id)
+        const String & req_id,
+        bool use_del_optimization_)
         : dm_context(dm_context_)
         , task_pool(task_pool_)
         , after_segment_read(after_segment_read_)
@@ -63,8 +64,10 @@ public:
         , is_raw(is_raw_)
         , do_delete_mark_filter_for_raw(do_delete_mark_filter_for_raw_)
         , extra_table_id_index(extra_table_id_index)
+        , use_del_optimization(use_del_optimization_)
         , physical_table_id(physical_table_id)
         , log(Logger::get(NAME, req_id))
+        
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -104,7 +107,7 @@ protected:
                 cur_segment = task->segment;
                 if (is_raw)
                 {
-                    cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, do_delete_mark_filter_for_raw);
+                    cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, do_delete_mark_filter_for_raw,  DEFAULT_BLOCK_SIZE, use_del_optimization);
                 }
                 else
                 {
@@ -170,6 +173,7 @@ private:
     const bool do_delete_mark_filter_for_raw;
     // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
     const int extra_table_id_index;
+    const bool use_del_optimization;
 
     bool done = false;
 

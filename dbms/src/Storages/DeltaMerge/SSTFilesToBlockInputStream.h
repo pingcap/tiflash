@@ -134,7 +134,7 @@ public:
     RegionPtr getRegion() const;
 
     // Return values: (effective rows, not clean rows, is delete rows, gc hint version)
-    std::tuple<size_t, size_t, UInt64> getMvccStatistics() const;
+    std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() const;
 
 private:
     const ColId pk_column_id;

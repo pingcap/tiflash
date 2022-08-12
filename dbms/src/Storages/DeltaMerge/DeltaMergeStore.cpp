@@ -1041,7 +1041,10 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        auto res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        while (res == nullptr) {
+            res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        }
     }
 }
 
@@ -1222,7 +1225,8 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                req_info,
+                false);
         }
         res.push_back(stream);
     }
@@ -1245,7 +1249,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         bool is_fast_mode,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
-                                        size_t extra_table_id_index)
+                                        size_t extra_table_id_index,
+                                        bool use_del_optimization)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
@@ -1312,7 +1317,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                req_info,
+                use_del_optimization);
         }
         res.push_back(stream);
     }
@@ -2292,6 +2298,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
+    
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 

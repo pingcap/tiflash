@@ -340,7 +340,7 @@ Block DMFileReader::read()
 
         read_rows += pack_stats[next_pack_id].rows;
         not_clean_rows += pack_stats[next_pack_id].not_clean;
-        //is_delete_rows += pack_stats[next_pack_id].is_delete;
+        is_delete_rows += pack_stats[next_pack_id].is_delete;
     }
 
     if (read_rows == 0)
@@ -359,8 +359,11 @@ Block DMFileReader::read()
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
 
     bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_mode && expected_handle_res == All;
-    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && is_delete_rows == 0;
+    //bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && is_delete_rows == 0;
+    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode;
     //do_clean_read_on_del_on_fast_mode = false;
+
+    //std::cout << " do_clean_read_on_del_on_fast_mode " << do_clean_read_on_del_on_fast_mode << " enable_del_clean_read " << enable_del_clean_read << " is_fast_mode " << is_fast_mode << " is_delete_rows " << is_delete_rows << " not_clean_rows " << not_clean_rows << std::endl;
 
     if (do_clean_read_on_normal_mode)
     {
@@ -520,6 +523,7 @@ Block DMFileReader::read()
             e.rethrow();
         }
     }
+    //std::cout << "dmfile res " << res.rows() << std::endl;
     return res;
 }
 

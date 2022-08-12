@@ -86,21 +86,21 @@ public:
         }
         {
             // Check there is only one segment
-            ASSERT_EQ(store->segments.size(), 1);
+            ASSERT_EQ(store->segments.size(), static_cast<unsigned long>(1));
             const auto & [_key, seg] = *store->segments.begin();
             (void)_key;
             ASSERT_EQ(seg->getDelta()->getRows(), n_avg_rows_per_segment * 4);
-            ASSERT_EQ(seg->getStable()->getRows(), 0);
+            ASSERT_EQ(seg->getStable()->getRows(), static_cast<unsigned long>(0));
 
             // Split the segment, now we have two segments with n_rows_per_segment * 2 rows per segment.
             forceForegroundSplit(0);
-            ASSERT_EQ(store->segments.size(), 2);
+            ASSERT_EQ(store->segments.size(), static_cast<unsigned long>(2));
         }
         {
             // Split the 2 segments again.
             forceForegroundSplit(1);
             forceForegroundSplit(0);
-            ASSERT_EQ(store->segments.size(), 4);
+            ASSERT_EQ(store->segments.size(), static_cast<unsigned long>(4));
         }
         {
             std::shared_lock lock(store->read_write_mutex);
@@ -111,15 +111,15 @@ public:
             {
                 (void)_key;
                 LOG_FMT_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
-                ASSERT_EQ(seg->getDelta()->getRows(), 0);
-                ASSERT_GT(seg->getStable()->getRows(), 0); // We don't check the exact rows of each segment.
+                ASSERT_EQ(seg->getDelta()->getRows(), static_cast<unsigned long>(0));
+                ASSERT_GT(seg->getStable()->getRows(), static_cast<unsigned long>(0)); // We don't check the exact rows of each segment.
                 total_stable_rows += seg->getStable()->getRows();
                 rows_by_segments[segment_idx] = seg->getStable()->getRows();
                 expected_stable_rows[segment_idx] = seg->getStable()->getRows();
                 expected_delta_rows[segment_idx] = seg->getDelta()->getRows(); // = 0
                 segment_idx++;
             }
-            ASSERT_EQ(total_stable_rows, 4 * n_avg_rows_per_segment);
+            ASSERT_EQ(total_stable_rows, static_cast<int>(4 * n_avg_rows_per_segment));
         }
         verifyExpectedRowsForAllSegments();
     }
@@ -145,7 +145,7 @@ public:
     void verifyExpectedRowsForAllSegments()
     {
         std::shared_lock lock(store->read_write_mutex);
-        ASSERT_EQ(store->segments.size(), 4);
+        ASSERT_EQ(store->segments.size(), static_cast<unsigned long>(4));
         auto segment_idx = 0;
         for (auto & [_key, seg] : store->segments)
         {
