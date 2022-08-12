@@ -20,7 +20,6 @@
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
-#include <string_view>
 #include <unordered_set>
 
 namespace DB
@@ -78,6 +77,6 @@ private:
 
     UInt32 current_id = 0;
 
-    std::unordered_set<std::string_view> ids;
+    std::unordered_set<String> ids;
 };
 } // namespace DB
