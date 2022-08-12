@@ -5566,7 +5566,7 @@ private:
         }
         else
         {
-            fillResultColumnFromOther(block.getByPosition(result).column, block.getByPosition(arg0).column);
+            fillResultColumnFromOther(block.getByPosition(result).column, block.getByPosition(arguments[arg0]).column);
         }
         return true;
     }
