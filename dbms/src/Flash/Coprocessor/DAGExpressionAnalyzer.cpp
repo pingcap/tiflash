@@ -16,6 +16,7 @@
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -35,6 +36,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+#include <common/logger_useful.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -140,7 +142,6 @@ void appendAggDescription(
     aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, arg_types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
 
-    DataTypePtr result_type = aggregate.function->getReturnType();
     aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
 
     aggregate_descriptions.push_back(std::move(aggregate));
@@ -1223,6 +1224,8 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     const ExpressionActionsPtr & actions,
     const String & expr_name)
 {
+    auto log = &Poco::Logger::get("LRUCache");
+
     if (!isFunctionExpr(expr))
         return expr_name;
 
@@ -1233,6 +1236,7 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
+        LOG_INFO(log, "Comparison: expect: {}, actual: {}, expr: {}", expected_type->getName(), actual_type->getName(), expr_name);
         if (expected_type->getName() != actual_type->getName())
             return appendCast(expected_type, actions, expr_name);
     }

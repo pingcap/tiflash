@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionSum.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -120,6 +123,13 @@ public:
         for (size_t i = 1; i <= max_concurrency; i += step)
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         WRAP_FOR_DIS_ENABLE_PLANNER_END
+    }
+
+    bool checkReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
+    {
+        AggregateFunctionPtr agg_ptr = DB::AggregateFunctionFactory::instance().get(agg_name, data_types, {});
+        const DataTypePtr & ret_type = agg_ptr->getReturnType();
+        return ret_type->getName() == expect_type->getName();
     }
 
     static const size_t max_concurrency = 10;
@@ -330,6 +340,20 @@ try
         ASSERT_COLUMNS_EQ_UR(executeStreams(request),
                              createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
     }
+}
+CATCH
+
+TEST_F(ExecutorAggTestRunner, AggregationSum)
+try
+{
+    // Test output type of the first and second stage sum aggregation function
+    PrecType precision = 33;
+    ScaleType scale = 7;
+    std::shared_ptr<IDataType> input_type_ptr1 = std::make_shared<DataTypeDecimal<Decimal64>>(precision, scale);
+    std::shared_ptr<IDataType> expect_output_type_ptr1 = std::make_shared<DataTypeDecimal<Decimal64>>(precision, scale);
+    EXPECT_TRUE(checkReturnType(NameFinalSumStage::name, {input_type_ptr1}, expect_output_type_ptr1));
+
+    // TODO Test sum aggregation
 }
 CATCH
 
