@@ -320,7 +320,7 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     initExchangeReceivers();
     executeQuery(*context);
-    
+
     // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
     // so that we can propagate current_memory_tracker into them.
     tunnel_set->updateMemTracker();
