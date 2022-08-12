@@ -255,17 +255,22 @@ struct Join : Executor
 {
     tipb::JoinType tp;
 
-    const ASTPtr using_expr_list;
+    const ASTs join_cols{};
+    const ASTs left_conds{};
+    const ASTs right_conds{};
+    const ASTs other_conds{};
+    const ASTs other_eq_conds_from_in{};
 
-    // todo(ljr): support on expr
-    const ASTPtr on_expr{};
-
-    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, ASTPtr using_expr_list_)
+    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds)
         : Executor(index_, "Join_" + std::to_string(index_), output_schema_)
         , tp(tp_)
-        , using_expr_list(using_expr_list_)
+        , join_cols(join_cols_)
+        , left_conds(l_conds)
+        , right_conds(r_conds)
+        , other_conds(o_conds)
+        , other_eq_conds_from_in(o_eq_conds)
     {
-        if (using_expr_list == nullptr)
+        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
             throw Exception("No join condition found.");
     }
 
@@ -359,7 +364,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
 /// avoid using ASTTableJoin.
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
 
-ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list);
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {});
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 

@@ -30,8 +30,8 @@
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
@@ -319,8 +319,7 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
-    DAGQuerySource dag(*context);
-    executeQuery(dag, *context, false, QueryProcessingStage::Complete);
+    executeQuery(*context);
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);
@@ -531,7 +530,7 @@ void MPPTask::scheduleOrWait()
     }
 }
 
-void MPPTask::scheduleThisTask(ScheduleState state)
+bool MPPTask::scheduleThisTask(ScheduleState state)
 {
     std::unique_lock lock(schedule_mu);
     if (schedule_state == ScheduleState::WAITING)
@@ -539,7 +538,9 @@ void MPPTask::scheduleThisTask(ScheduleState state)
         LOG_FMT_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
+        return true;
     }
+    return false;
 }
 
 int MPPTask::estimateCountOfNewThreads()
