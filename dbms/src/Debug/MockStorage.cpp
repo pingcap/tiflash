@@ -102,6 +102,26 @@ MockColumnInfoVec MockStorage::getExchangeSchema(const String & exchange_name)
     throw Exception(fmt::format("Failed to get exchange schema by exchange name '{}'", exchange_name));
 }
 
+// use this function to determine where to cut the columns,
+// and how many rows are needed for each partition of MPP task.
+CutColumnInfo getCutColumnInfo(size_t rows, Int64 partition_id, Int64 partition_num)
+{
+    int start, per_rows, rows_left, cur_rows;
+    per_rows = rows / partition_num;
+    rows_left = rows - per_rows * partition_num;
+    if (partition_id >= rows_left)
+    {
+        start = (per_rows + 1) * rows_left + (partition_id - rows_left) * per_rows;
+        cur_rows = per_rows;
+    }
+    else
+    {
+        start = (per_rows + 1) * partition_id;
+        cur_rows = per_rows + 1;
+    }
+    return {start, cur_rows};
+}
+
 ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num)
 {
     if (tableExists(table_id))
@@ -115,26 +135,14 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
             assert(rows == col.column->size());
         }
 
-        int start, per_rows, rows_left, cur_rows;
-        per_rows = rows / partition_num;
-        rows_left = rows - per_rows * partition_num;
-        if (partition_id >= rows_left)
-        {
-            start = (per_rows + 1) * rows_left + (partition_id - rows_left) * per_rows;
-            cur_rows = per_rows;
-        }
-        else
-        {
-            start = (per_rows + 1) * partition_id;
-            cur_rows = per_rows + 1;
-        }
+        CutColumnInfo cut_info = getCutColumnInfo(rows, partition_id, partition_num);
 
         ColumnsWithTypeAndName res;
         for (const auto & column_with_type_and_name : columns_with_type_and_name)
         {
             res.push_back(
                 ColumnWithTypeAndName(
-                    column_with_type_and_name.column->cut(start, cur_rows),
+                    column_with_type_and_name.column->cut(cut_info.first, cut_info.second),
                     column_with_type_and_name.type,
                     column_with_type_and_name.name));
         }

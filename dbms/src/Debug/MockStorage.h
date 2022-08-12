@@ -14,14 +14,15 @@
 #pragma once
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Storages/Transaction/TiDB.h>
-#include <atomic>
 #include <common/types.h>
 
+#include <atomic>
 #include <unordered_map>
 namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
+using CutColumnInfo = std::pair<int, int>; // <start_idx, row_num>
 
 class MockTableIdGenerator : public ext::Singleton<MockTableIdGenerator>
 {
