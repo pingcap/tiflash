@@ -245,9 +245,9 @@ try
                                  .topN({{"r_table.r_b", false}}, 10);
 
         auto left_builder = context.scan("test_db", "l_table")
-                           .topN({{"l_table.l_a", false}}, 10)
-                           .join(right_builder, {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin) // todo ensure the join is legal.
-                           .limit(10);
+                                .topN({{"l_table.l_a", false}}, 10)
+                                .join(right_builder, {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin) // todo ensure the join is legal.
+                                .limit(10);
         request = left_builder.build(context);
         {
             String expected = "limit_8 | 10\n"

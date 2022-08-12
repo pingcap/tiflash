@@ -28,8 +28,6 @@
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
-#include "common/types.h"
-
 namespace DB
 {
 using ASTPartitionByElement = ASTOrderByElement;
@@ -307,7 +305,8 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
     }
 }
 
-auto checkSchema(const DAGSchema & input, String checked_column) {
+auto checkSchema(const DAGSchema & input, String checked_column)
+{
     auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
         auto column_name = splitQualifiedName(checked_column);
         auto field_name = splitQualifiedName(field.first);

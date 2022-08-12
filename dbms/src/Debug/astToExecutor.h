@@ -49,7 +49,9 @@ namespace Debug
 extern String LOCAL_HOST;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
-struct ColumnName {
+
+struct ColumnName
+{
     String db_name;
     String table_name;
     String column_name;

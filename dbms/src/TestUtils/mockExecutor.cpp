@@ -132,7 +132,6 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
         TiDB::ColumnInfo ret;
         ret.tp = column.second;
         ret.name = table + "." + column.first;
-        std::cout << "ywq test column.first:" << ret.name << std::endl;
         // TODO: find a way to assign decimal field's flen.
         if (ret.tp == TiDB::TP::TypeNewDecimal)
             ret.flen = 65;
