@@ -16,7 +16,7 @@
 
 namespace DB
 {
-void TrackedMppDataPacket::trackAlloc()
+void TrackedMppDataPacket::trackAlloc() const
 {
     if (size)
     {

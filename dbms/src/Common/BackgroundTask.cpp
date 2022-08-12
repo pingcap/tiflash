@@ -34,8 +34,8 @@ bool process_mem_usage(double & vm_usage, double & resident_set)
     std::string proc_num_threads, itrealvalue, starttime;
 
     // the two fields we want
-    unsigned long long vsize;
-    long long rss;
+    UInt64 vsize;
+    Int64 rss;
 
     stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
         >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
@@ -44,7 +44,7 @@ bool process_mem_usage(double & vm_usage, double & resident_set)
 
     stat_stream.close();
 
-    long long page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
+    Int64 page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
     vm_usage = vsize / 1024.0;
     resident_set = rss * page_size_kb;
     return true;
@@ -80,7 +80,7 @@ void CollectProcInfoBackgroundTask::memCheckJob()
     {
         process_mem_usage(vm_usage, resident_set);
         resident_set *= 1024; // unit: byte
-        real_rss = static_cast<long long>(resident_set);
+        real_rss = static_cast<Int64>(resident_set);
 
         usleep(100000); // sleep 100ms
     }

@@ -22,7 +22,7 @@
 
 #include <iomanip>
 
-std::atomic<long long> real_rss{0};
+std::atomic<Int64> real_rss{0};
 MemoryTracker::~MemoryTracker()
 {
     if (peak)

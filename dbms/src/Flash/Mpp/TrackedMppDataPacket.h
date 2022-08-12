@@ -61,7 +61,7 @@ struct TrackedMppDataPacket
         packet = packet_;
     }
 
-    void trackAlloc();
+    void trackAlloc() const;
 
     void trackFree() const;
 

@@ -19,7 +19,7 @@
 
 #include <atomic>
 
-extern std::atomic<long long> real_rss;
+extern std::atomic<Int64> real_rss;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;
