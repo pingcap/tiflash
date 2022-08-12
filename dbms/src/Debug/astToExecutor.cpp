@@ -28,6 +28,8 @@
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
+#include "common/types.h"
+
 namespace DB
 {
 using ASTPartitionByElement = ASTOrderByElement;
@@ -223,7 +225,6 @@ String getFunctionNameForConstantFolding(tipb::Expr * expr)
     }
 }
 
-
 void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     if (expr->tp() == tipb::ScalarFunc)
@@ -286,7 +287,6 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
 
 void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id);
 
-
 void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
@@ -307,17 +307,22 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
     }
 }
 
+auto checkSchema(const DAGSchema & input, String checked_column) {
+    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+        auto column_name = splitQualifiedName(checked_column);
+        auto field_name = splitQualifiedName(field.first);
+        if (column_name.table_name.empty())
+            return field_name.column_name == column_name.column_name;
+        else
+            return field_name.table_name == column_name.table_name && field_name.column_name == column_name.column_name;
+    });
+    return ft;
+}
+
 void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     /// aggregation function is handled in Aggregation, so just treated as a column
-    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-        auto column_name = splitQualifiedName(func->getColumnName());
-        auto field_name = splitQualifiedName(field.first);
-        if (column_name.first.empty())
-            return field_name.second == column_name.second;
-        else
-            return field_name.first == column_name.first && field_name.second == column_name.second;
-    });
+    auto ft = checkSchema(input, func->getColumnName());
     if (ft != input.end())
     {
         expr->set_tp(tipb::ColumnRef);
@@ -520,14 +525,7 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
 
 void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id)
 {
-    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-        auto column_name = splitQualifiedName(id->getColumnName());
-        auto field_name = splitQualifiedName(field.first);
-        if (column_name.first.empty())
-            return field_name.second == column_name.second;
-        else
-            return field_name.first == column_name.first && field_name.second == column_name.second;
-    });
+    auto ft = checkSchema(input, id->getColumnName());
     if (ft == input.end())
         throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
     expr->set_tp(tipb::ColumnRef);
@@ -543,7 +541,7 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
     if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         auto column_name = splitQualifiedName(id->getColumnName());
-        if (!column_name.first.empty())
+        if (!column_name.table_name.empty())
             used_columns.emplace(id->getColumnName());
         else
         {
@@ -551,10 +549,10 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
             for (const auto & field : input)
             {
                 auto field_name = splitQualifiedName(field.first);
-                if (field_name.second == column_name.second)
+                if (field_name.column_name == column_name.column_name)
                 {
                     if (found)
-                        throw Exception("ambiguous column for " + column_name.second);
+                        throw Exception("ambiguous column for " + column_name.column_name);
                     found = true;
                     used_columns.emplace(field.first);
                 }
@@ -570,14 +568,7 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
         else
         {
             /// check function
-            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-                auto column_name = splitQualifiedName(func->getColumnName());
-                auto field_name = splitQualifiedName(field.first);
-                if (column_name.first.empty())
-                    return field_name.second == column_name.second;
-                else
-                    return field_name.first == column_name.first && field_name.second == column_name.second;
-            });
+            auto ft = checkSchema(input, func->getColumnName());
             if (ft != input.end())
             {
                 used_columns.emplace(func->getColumnName());
@@ -597,14 +588,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
     if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         /// check column
-        auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-            auto column_name = splitQualifiedName(id->getColumnName());
-            auto field_name = splitQualifiedName(field.first);
-            if (column_name.first.empty())
-                return field_name.second == column_name.second;
-            else
-                return field_name.first == column_name.first && field_name.second == column_name.second;
-        });
+        auto ft = checkSchema(input, id->getColumnName());
         if (ft == input.end())
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         ci = ft->second;
@@ -793,24 +777,28 @@ void setServiceAddr(const std::string & addr)
 }
 } // namespace Debug
 
-std::pair<String, String> splitQualifiedName(const String & s)
+ColumnName splitQualifiedName(const String & s)
 {
-    std::pair<String, String> ret;
+    ColumnName ret;
     Poco::StringTokenizer string_tokens(s, ".");
 
     switch (string_tokens.count())
     {
     case 1:
-        ret.second = s;
+        ret.column_name = s;
         break;
     case 2:
-        ret.first = string_tokens[0];
-        ret.second = string_tokens[1];
+        ret.table_name = string_tokens[0];
+        ret.column_name = string_tokens[1];
+        break;
+    case 3:
+        ret.db_name = string_tokens[0];
+        ret.table_name = string_tokens[1];
+        ret.column_name = string_tokens[2];
         break;
     default:
         throw Exception("Invalid identifier name " + s);
     }
-
     return ret;
 }
 
@@ -1217,7 +1205,7 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
             auto col_name = identifier->getColumnName();
             for (auto & field : children[0]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).second)
+                if (col_name == splitQualifiedName(field.first).column_name)
                 {
                     left_used_columns.emplace(field.first);
                     break;
@@ -1225,7 +1213,7 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
             }
             for (auto & field : children[1]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).second)
+                if (col_name == splitQualifiedName(field.first).column_name)
                 {
                     right_used_columns.emplace(field.first);
                     break;
@@ -1272,7 +1260,7 @@ void Join::fillJoinKeyAndFieldType(
     {
         const auto & [col_name, col_info] = child_schema[index];
 
-        if (splitQualifiedName(col_name).second == identifier->getColumnName())
+        if (splitQualifiedName(col_name).column_name == identifier->getColumnName())
         {
             auto tipb_type = TiDB::columnInfoToFieldType(col_info);
             tipb_type.set_collate(collator_id);
@@ -1334,7 +1322,7 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
     auto push_back_partition_key = [](auto & partition_keys, const auto & child_schema, const auto & key) {
         for (size_t index = 0; index < child_schema.size(); ++index)
         {
-            if (splitQualifiedName(child_schema[index].first).second == key->getColumnName())
+            if (splitQualifiedName(child_schema[index].first).column_name == key->getColumnName())
             {
                 partition_keys.push_back(index);
                 break;

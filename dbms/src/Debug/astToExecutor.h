@@ -49,8 +49,13 @@ namespace Debug
 extern String LOCAL_HOST;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
+struct ColumnName {
+    String db_name;
+    String table_name;
+    String column_name;
+};
 
-std::pair<String, String> splitQualifiedName(const String & s);
+ColumnName splitQualifiedName(const String & s);
 
 struct MPPCtx
 {
@@ -165,11 +170,11 @@ struct TableScan : public Executor
 
     void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
     {
-        auto column_name = splitQualifiedName(dag_column_info.first).second;
-        if (column_name == MutableSupport::tidb_pk_column_name)
+        auto names = splitQualifiedName(dag_column_info.first);
+        if (names.column_name == MutableSupport::tidb_pk_column_name)
             ci->set_column_id(-1);
         else
-            ci->set_column_id(table_info.getColumnID(column_name));
+            ci->set_column_id(table_info.getColumnID(names.table_name + "." + names.column_name));
         ci->set_tp(dag_column_info.second.tp);
         ci->set_flag(dag_column_info.second.flag);
         ci->set_columnlen(dag_column_info.second.flen);
