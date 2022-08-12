@@ -56,6 +56,12 @@ public:
 
     const Context & getContext() const { return context; }
 
+    void reset(const std::vector<NameAndTypePair> & source_columns_)
+    {
+        source_columns = source_columns_;
+        prepared_sets.clear();
+    }
+
     const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
 
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
