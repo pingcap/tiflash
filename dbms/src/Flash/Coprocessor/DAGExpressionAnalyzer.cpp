@@ -1224,8 +1224,6 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     const ExpressionActionsPtr & actions,
     const String & expr_name)
 {
-    auto log = &Poco::Logger::get("LRUCache");
-
     if (!isFunctionExpr(expr))
         return expr_name;
 
@@ -1236,7 +1234,6 @@ String DAGExpressionAnalyzer::appendCastIfNeeded(
     {
         DataTypePtr expected_type = getDataTypeByFieldTypeForComputingLayer(expr.field_type());
         DataTypePtr actual_type = actions->getSampleBlock().getByName(expr_name).type;
-        LOG_INFO(log, "Comparison: expect: {}, actual: {}, expr: {}", expected_type->getName(), actual_type->getName(), expr_name);
         if (expected_type->getName() != actual_type->getName())
             return appendCast(expected_type, actions, expr_name);
     }

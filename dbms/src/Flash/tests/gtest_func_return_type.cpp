@@ -17,8 +17,9 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <vector>
+
 #include <tuple>
+#include <vector>
 
 namespace DB
 {
