@@ -19,12 +19,25 @@
 #include <Poco/Exception.h>
 #include <common/defines.h>
 
+#include <boost/preprocessor/comparison/equal.hpp>
+#include <boost/preprocessor/control/if.hpp>
+#include <boost/preprocessor/facilities/expand.hpp>
+#include <boost/preprocessor/seq/for_each.hpp>
+#include <boost/preprocessor/stringize.hpp>
+#include <boost/preprocessor/tuple/size.hpp>
+#include <boost/preprocessor/variadic/to_seq.hpp>
 #include <cerrno>
 #include <memory>
 #include <vector>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
+
 class Exception : public Poco::Exception
 {
 public:
@@ -213,25 +226,83 @@ inline void log(const char * filename, int lineno, const char * condition, const
 }
 } // namespace exception_details
 
-/// Usage:
-/// ```
-/// RUNTIME_CHECK(a != b, Exception("{} does not equal to {}", a, b));
-/// ```
-#define RUNTIME_CHECK(condition, ExceptionGenerationCode) \
-    do                                                    \
-    {                                                     \
-        if (unlikely(!(condition)))                       \
-            throw(ExceptionGenerationCode);               \
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARG(r, data, elem) \
+    .fmtAppend(", " BOOST_PP_STRINGIZE(elem) " = {}", elem)
+
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARGS(...) \
+    BOOST_PP_SEQ_FOR_EACH(INTERNAL_RUNTIME_CHECK_APPEND_ARG, _, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))
+
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARGS_OR_NONE(...)            \
+    BOOST_PP_IF(                                                   \
+        BOOST_PP_EQUAL(BOOST_PP_TUPLE_SIZE((, ##__VA_ARGS__)), 1), \
+        BOOST_PP_EXPAND,                                           \
+        INTERNAL_RUNTIME_CHECK_APPEND_ARGS)                        \
+    (__VA_ARGS__)
+
+/**
+ * RUNTIME_CHECK checks the condition, and throws a `DB::Exception` with `LOGICAL_ERROR` error code
+ * when the condition does not meet. It is a good practice to check expected conditions in your
+ * program frequently to detect errors as early as possible.
+ *
+ * Unlike RUNTIME_ASSERT, this function is softer that it does not terminate the application.
+ *
+ * Usually you use this function to verify your code logic, instead of verifying external inputs, as
+ * this function exposes internal variables and the conditions you are checking with, while external
+ * callers are expecting some non-internal descriptions for their invalid inputs.
+ *
+ * Examples:
+ *
+ * ```
+ * RUNTIME_CHECK(a != b);         // DB::Exception("Check a != b failed")
+ * RUNTIME_CHECK(a != b, a, b);   // DB::Exception("Check a != b failed, a = .., b = ..")
+ * ```
+ */
+#define RUNTIME_CHECK(condition, ...)                                       \
+    do                                                                      \
+    {                                                                       \
+        if (unlikely(!(condition)))                                         \
+        {                                                                   \
+            throw ::DB::Exception(                                          \
+                FmtBuffer().append("Check " #condition " failed")           \
+                    INTERNAL_RUNTIME_CHECK_APPEND_ARGS_OR_NONE(__VA_ARGS__) \
+                        .toString(),                                        \
+                ::DB::ErrorCodes::LOGICAL_ERROR);                           \
+        }                                                                   \
     } while (false)
 
-/// Usage:
-/// ```
-/// RUNTIME_ASSERT(a != b);
-/// RUNTIME_ASSERT(a != b, "fail");
-/// RUNTIME_ASSERT(a != b, "{} does not equal to {}", a, b);
-/// RUNTIME_ASSERT(a != b, logger);
-/// RUNTIME_ASSERT(a != b, logger, "{} does not equal to {}", a, b);
-/// ```
+/**
+ * Examples:
+ *
+ * ```
+ * RUNTIME_CHECK_MSG(a != b, "invariant not meet");
+ * RUNTIME_CHECK_MSG(a != b, "invariant not meet, a = {}, b = {}", a, b);
+ * ```
+ */
+#define RUNTIME_CHECK_MSG(condition, fmt, ...)                                                                \
+    do                                                                                                        \
+    {                                                                                                         \
+        if (unlikely(!(condition)))                                                                           \
+        {                                                                                                     \
+            throw ::DB::Exception(                                                                            \
+                FmtBuffer().append("Check " #condition " failed: ").fmtAppend(fmt, ##__VA_ARGS__).toString(), \
+                ::DB::ErrorCodes::LOGICAL_ERROR);                                                             \
+        }                                                                                                     \
+    } while (false)
+
+/**
+ * RUNTIME_ASSERT checks the condition, and triggers a std::terminate to stop the application
+ * immediately when the condition does not meet.
+ *
+ * Examples:
+ *
+ * ```
+ * RUNTIME_ASSERT(a != b);
+ * RUNTIME_ASSERT(a != b, "fail");
+ * RUNTIME_ASSERT(a != b, "{} does not equal to {}", a, b);
+ * RUNTIME_ASSERT(a != b, logger);
+ * RUNTIME_ASSERT(a != b, logger, "{} does not equal to {}", a, b);
+ * ```
+ */
 #define RUNTIME_ASSERT(condition, ...)                                 \
     do                                                                 \
     {                                                                  \
