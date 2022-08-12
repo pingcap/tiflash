@@ -774,7 +774,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
     else
     {
         TableInfo left_table_info = table_info;
-        String left_table_alias = table_alias;
+        auto const & left_table_alias = table_alias;
         TableInfo right_table_info;
         String right_table_alias;
         {
