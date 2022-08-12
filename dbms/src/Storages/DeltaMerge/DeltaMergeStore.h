@@ -28,7 +28,6 @@
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
 
-#include <mach-o/dyld.h>
 #include <queue>
 
 namespace DB
