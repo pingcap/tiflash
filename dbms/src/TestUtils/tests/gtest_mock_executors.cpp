@@ -246,7 +246,7 @@ try
 
         auto left_builder = context.scan("test_db", "l_table")
                                 .topN({{"l_table.l_a", false}}, 10)
-                                .join(right_builder, {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin) // todo ensure the join is legal.
+                                .join(right_builder, tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}) // todo ensure the join is legal.
                                 .limit(10);
         request = left_builder.build(context);
         {
