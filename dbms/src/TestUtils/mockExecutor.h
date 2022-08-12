@@ -163,8 +163,8 @@ public:
     void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
     void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns);
 
-    DAGRequestBuilder scan(String db_name, String table_name);
-    DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder scan(const String & db_name, const String & table_name);
+    DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
     Int32 getCollation() const { return abs(collation); }

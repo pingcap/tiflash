@@ -15,18 +15,18 @@
 
 namespace DB::tests
 {
-void MockStorage::addTableSchema(String name, const MockColumnInfoVec & columnInfos)
+void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & columnInfos)
 {
     name_to_id_map[name] = MockTableIdGenerator::instance().nextTableId();
     table_schema[getTableId(name)] = columnInfos;
 }
 
-void MockStorage::addTableData(String name, const ColumnsWithTypeAndName & columns)
+void MockStorage::addTableData(const String & name, const ColumnsWithTypeAndName & columns)
 {
     table_columns[getTableId(name)] = columns;
 }
 
-Int64 MockStorage::getTableId(String name)
+Int64 MockStorage::getTableId(const String & name)
 {
     if (name_to_id_map.find(name) != name_to_id_map.end())
     {
@@ -49,7 +49,7 @@ ColumnsWithTypeAndName MockStorage::getColumns(Int64 table_id)
     throw Exception(fmt::format("Failed to get columns by table_id '{}'", table_id));
 }
 
-MockColumnInfoVec MockStorage::getTableSchema(String name)
+MockColumnInfoVec MockStorage::getTableSchema(const String & name)
 {
     if (tableExists(getTableId(name)))
     {
@@ -59,12 +59,12 @@ MockColumnInfoVec MockStorage::getTableSchema(String name)
 }
 
 /// for exchange receiver
-void MockStorage::addExchangeSchema(String & exchange_name, const MockColumnInfoVec & columnInfos)
+void MockStorage::addExchangeSchema(const String & exchange_name, const MockColumnInfoVec & columnInfos)
 {
     exchange_schemas[exchange_name] = columnInfos;
 }
 
-void MockStorage::addExchangeData(const String & exchange_name, ColumnsWithTypeAndName & columns)
+void MockStorage::addExchangeData(const String & exchange_name, const ColumnsWithTypeAndName & columns)
 {
     exchange_columns[exchange_name] = columns;
 }
@@ -79,7 +79,7 @@ bool MockStorage::exchangeExistsWithName(const String & name)
     return exchange_schemas.find(name) != exchange_schemas.end();
 }
 
-ColumnsWithTypeAndName MockStorage::getExchangeColumns(String & executor_id)
+ColumnsWithTypeAndName MockStorage::getExchangeColumns(const String & executor_id)
 {
     if (exchangeExists(executor_id))
     {
@@ -88,12 +88,12 @@ ColumnsWithTypeAndName MockStorage::getExchangeColumns(String & executor_id)
     throw Exception(fmt::format("Failed to get exchange columns by executor_id '{}'", executor_id));
 }
 
-void MockStorage::addExchangeRelation(String & executor_id, String & exchange_name)
+void MockStorage::addExchangeRelation(const String & executor_id, const String & exchange_name)
 {
     executor_id_to_name_map[executor_id] = exchange_name;
 }
 
-MockColumnInfoVec MockStorage::getExchangeSchema(String exchange_name)
+MockColumnInfoVec MockStorage::getExchangeSchema(const String & exchange_name)
 {
     if (exchangeExistsWithName(exchange_name))
     {

@@ -14,6 +14,7 @@
 #pragma once
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Storages/Transaction/TiDB.h>
+#include <atomic>
 #include <common/types.h>
 
 #include <unordered_map>
@@ -25,18 +26,13 @@ using MockColumnInfoVec = std::vector<MockColumnInfo>;
 class MockTableIdGenerator : public ext::Singleton<MockTableIdGenerator>
 {
 public:
-    static MockTableIdGenerator & getInstance()
-    {
-        static MockTableIdGenerator table_id_generator;
-        return table_id_generator;
-    }
     Int64 nextTableId()
     {
         return ++current_id;
     }
 
 private:
-    Int64 current_id = 0;
+    std::atomic<Int64> current_id = 0;
 };
 
 /** Responsible for mock data for executor tests and mpp tests.
@@ -47,31 +43,31 @@ class MockStorage
 {
 public:
     /// for table scan
-    void addTableSchema(String name, const MockColumnInfoVec & columnInfos);
+    void addTableSchema(const String & name, const MockColumnInfoVec & columnInfos);
 
-    void addTableData(String name, const ColumnsWithTypeAndName & columns);
+    void addTableData(const String & name, const ColumnsWithTypeAndName & columns);
 
-    Int64 getTableId(String name);
+    Int64 getTableId(const String & name);
 
     bool tableExists(Int64 table_id);
 
     ColumnsWithTypeAndName getColumns(Int64 table_id);
 
-    MockColumnInfoVec getTableSchema(String name);
+    MockColumnInfoVec getTableSchema(const String & name);
 
     /// for exchange receiver
-    void addExchangeSchema(String & exchange_name, const MockColumnInfoVec & columnInfos);
+    void addExchangeSchema(const String & exchange_name, const MockColumnInfoVec & columnInfos);
 
-    void addExchangeData(const String & exchange_name, ColumnsWithTypeAndName & columns);
+    void addExchangeData(const String & exchange_name, const ColumnsWithTypeAndName & columns);
 
     bool exchangeExists(const String & executor_id);
     bool exchangeExistsWithName(const String & name);
 
-    ColumnsWithTypeAndName getExchangeColumns(String & executor_id);
+    ColumnsWithTypeAndName getExchangeColumns(const String & executor_id);
 
-    void addExchangeRelation(String & executor_id, String & exchange_name);
+    void addExchangeRelation(const String & executor_id, const String & exchange_name);
 
-    MockColumnInfoVec getExchangeSchema(String exchange_name);
+    MockColumnInfoVec getExchangeSchema(const String & exchange_name);
 
     /// for MPP Tasks, it will split data by partition num, then each MPP service will have a subset of mock data.
     ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num);

@@ -383,13 +383,13 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
     addExchangeReceiverColumnData(name, columns);
 }
 
-DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
+DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
 {
     auto table_id = mock_storage.getTableId(db_name + "." + table_name);
     return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_storage.getTableSchema(db_name + "." + table_name));
 }
 
-DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
     auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(mock_storage.getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
