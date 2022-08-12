@@ -321,7 +321,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
         client.runDispatchMPPTask(req);
     }
-    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, false);
+    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, true);
 }
 
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
