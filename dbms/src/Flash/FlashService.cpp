@@ -53,6 +53,7 @@ FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Conte
           context.getGlobalContext().getSettingsRef()))
 {
     auto settings = context.getSettingsRef();
+    enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
 
