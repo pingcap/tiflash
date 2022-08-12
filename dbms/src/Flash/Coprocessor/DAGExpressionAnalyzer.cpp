@@ -89,8 +89,8 @@ String getAggFuncName(
 
     // sum function in mpp has two stage and we need to distinguish them with function name.
     // "sum" represents the first stage.
-    // "finalSumStage" represents the sencond stage.
-    if (agg_func_name == sum_func_name && AggregationInterpreterHelper::isFinalAggMode(expr))
+    // "finalSumStage" represents the second stage.
+    if (AggregationInterpreterHelper::isSecondStageSum(expr))
         return final_sum_stage;
 
     return agg_func_name;

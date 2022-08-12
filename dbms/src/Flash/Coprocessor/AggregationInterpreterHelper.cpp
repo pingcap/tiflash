@@ -41,6 +41,18 @@ bool isFinalAggMode(const tipb::Expr & expr)
     return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
 
+bool isSecondStageSum(const tipb::Expr & expr)
+{
+    if (!expr.has_aggfuncmode())
+        return false;
+
+    // Behaviours of type cast of sum with FinalMode and CompleteMode are different
+    // So, we shouldn't initialize the sum with FinalMode and CompleteMode in the same way
+    if (getAggFunctionName(expr) == "sum" && expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode)
+        return true;
+    return false;
+}
+
 bool isFinalAgg(const tipb::Aggregation & aggregation)
 {
     /// set default value to true to make it compatible with old version of TiDB since before this

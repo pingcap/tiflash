@@ -28,6 +28,8 @@ namespace AggregationInterpreterHelper
 {
 bool isFinalAggMode(const tipb::Expr & expr);
 
+bool isSecondStageSum(const tipb::Expr & expr);
+
 bool isFinalAgg(const tipb::Aggregation & aggregation);
 
 bool isGroupByCollationSensitive(const Context & context);
