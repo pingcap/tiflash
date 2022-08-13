@@ -1847,6 +1847,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             {
                 // TODO handling complex situations
                 ci = children_ci[0];
+                break;
             }
             default:
                 throw Exception(fmt::format("Unsupported window function {}", func->name), ErrorCodes::LOGICAL_ERROR);

@@ -179,7 +179,8 @@ public:
         if (Impl::locateRowNumber(stream, value_row, offset))
         {
             const auto & value_column = *stream->inputAt(value_row)[arguments[0]];
-            to.insertFrom(value_column, value_row.row);
+            const auto & value_field = value_column[value_row.row];
+            to.insert(value_field);
         }
         else
         {
@@ -226,7 +227,7 @@ private:
         {
             return [](const Columns & input_columns, const ColumnNumbers & arguments, size_t row, IColumn & to) {
                 const auto & default_value_column = *input_columns[arguments[2]];
-                to.insertFrom(default_value_column, row);
+                to.insert(default_value_column[row]);
             };
         }
     }

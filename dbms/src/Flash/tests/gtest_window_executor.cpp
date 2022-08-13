@@ -58,12 +58,22 @@ public:
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
             {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
              toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+
+        context.addMockTable(
+            {"test_db", "test_table_for_lead_lag"},
+            {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}, {"value", TiDB::TP::TypeLongLong}},
+            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+             toVec<Int64>("order", {1, 2, 3, 4, 5, 6, 7, 8}),
+             toVec<Int64>("value", {1, 2, 3, 4, 5, 6, 7, 8})});
     }
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; ++i)
+        // auto actual = executeStreams(request);
+        // std::cout << getColumnsContent(actual) << std::endl;
+        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
+        for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
@@ -73,9 +83,10 @@ public:
     void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; ++i)
+        ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
+        for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan, i));
         }
         WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
@@ -212,6 +223,33 @@ try
                        toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2}),
                        toNullableVec<Int64>("rank", {1, 2, 1, 1, 3, 3, 1, 1, 3, 3}),
                        toNullableVec<Int64>("dense_rank", {1, 2, 1, 1, 2, 2, 1, 1, 2, 2})}));
+}
+CATCH
+
+TEST_F(WindowExecutorTestRunner, testWindowFunctionLeadLag)
+try
+{
+    auto request = context
+                      .scan("test_db", "test_table_for_lead_lag")
+                      .sort({{"partition", false}, {"order", false}}, true)
+                      .window(Lead3(col("value"), lit(Field(static_cast<UInt64>(1))), lit(Field(static_cast<Int64>(0)))), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+                      .build(context);
+    executeWithConcurrency(request,
+                           createColumns({toNullableVec<Int64>(/*partition*/{1, 1, 1, 1, 2, 2, 2, 2}),
+                                          toNullableVec<Int64>(/*order*/{1, 2, 3, 4, 5, 6, 7, 8}),
+                                          toNullableVec<Int64>(/*value*/{1, 2, 3, 4, 5, 6, 7, 8}),
+                                          toNullableVec<Int64>(/*lead*/{2, 3, 4, 0, 6, 7, 8, 0})}));
+
+    request = context
+                .scan("test_db", "test_table_for_lead_lag")
+                .sort({{"partition", false}, {"order", false}}, true)
+                .window(Lag3(col("value"), lit(Field(static_cast<UInt64>(1))), lit(Field(static_cast<Int64>(0)))), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+                .build(context);
+    executeWithConcurrency(request,
+                           createColumns({toNullableVec<Int64>(/*partition*/{1, 1, 1, 1, 2, 2, 2, 2}),
+                                          toNullableVec<Int64>(/*order*/{1, 2, 3, 4, 5, 6, 7, 8}),
+                                          toNullableVec<Int64>(/*value*/{1, 2, 3, 4, 5, 6, 7, 8}),
+                                          toNullableVec<Int64>(/*lead*/{0, 1, 2, 3, 0, 5, 6, 7})}));
 }
 CATCH
 

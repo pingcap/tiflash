@@ -61,6 +61,11 @@ struct RowNumber
     {
         return *this < other || *this == other;
     }
+
+    String toString() const
+    {
+        return fmt::format("[block={},row={}]", block, row);
+    }
 };
 
 class WindowBlockInputStream : public IProfilingBlockInputStream
@@ -139,62 +144,11 @@ public:
         return window_blocks[x.block - first_block_number].output_columns;
     }
 
-    void advanceRowNumber(RowNumber & x) const
-    {
-        assert(x.block >= first_block_number);
-        assert(x.block - first_block_number < window_blocks.size());
+    void advanceRowNumber(RowNumber & x) const;
 
-        const auto block_rows = blockAt(x).rows;
-        assert(x.row < block_rows);
+    bool advanceRowNumber(RowNumber & x, size_t offset) const;
 
-        ++x.row;
-        if (x.row < block_rows)
-        {
-            return;
-        }
-
-        x.row = 0;
-        ++x.block;
-    }
-
-    bool advanceRowNumber(RowNumber & x, size_t offset) const
-    {
-        assert(x.block >= first_block_number);
-        assert(x.block - first_block_number < window_blocks.size());
-
-        const auto block_rows = blockAt(x).rows;
-        assert(x.row < block_rows);
-
-        x.row += offset;
-        if (x.row < block_rows)
-            return true;
-
-        ++x.block;
-        if (x.block - first_block_number == window_blocks.size())
-            return false;
-        size_t new_offset = x.row - block_rows;
-        x.row = 0;
-        return advanceRowNumber(x, new_offset);
-    }
-
-    bool backRowNumber(RowNumber & x, size_t offset) const
-    {
-        assert(x.block >= first_block_number);
-        assert(x.block - first_block_number < window_blocks.size());
-
-        if (x.row >= offset)
-        {
-            x.row -= offset;
-            return true;
-        }
-
-        --x.block;
-        if (x.block < first_block_number)
-            return false;
-        size_t new_offset = offset - x.row;
-        x.row = blockAt(x.block).rows - 1;
-        return backRowNumber(x, new_offset);
-    }
+    bool backRowNumber(RowNumber & x, size_t offset) const;
 
     RowNumber blocksEnd() const
     {

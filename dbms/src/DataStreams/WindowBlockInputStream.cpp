@@ -70,7 +70,8 @@ void WindowBlockInputStream::initialWorkspaces()
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
-    only_have_pure_window = onlyHaveRowNumberAndRank();
+    // only_have_pure_window = onlyHaveRowNumberAndRank();
+    only_have_pure_window = true;
 }
 
 Block WindowBlockInputStream::readImpl()
@@ -588,5 +589,69 @@ void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
         frameTypeToString(window_description.frame.type),
         boundaryTypeToString(window_description.frame.begin_type),
         boundaryTypeToString(window_description.frame.end_type));
+}
+
+void WindowBlockInputStream::advanceRowNumber(RowNumber & x) const
+{
+    assert(x.block >= first_block_number);
+    assert(x.block - first_block_number < window_blocks.size());
+
+    const auto block_rows = blockAt(x).rows;
+    assert(x.row < block_rows);
+
+    ++x.row;
+    if (x.row < block_rows)
+    {
+        return;
+    }
+
+    x.row = 0;
+    ++x.block;
+}
+
+bool WindowBlockInputStream::advanceRowNumber(RowNumber & x, size_t offset) const
+{
+    assert(x.block >= first_block_number);
+    assert(x.block - first_block_number < window_blocks.size());
+
+    if (offset == 0)
+        return true;
+
+    const auto block_rows = blockAt(x).rows;
+    assert(x.row < block_rows);
+
+    x.row += offset;
+    if (x.row < block_rows)
+    {
+        assert(partition_ended || partition_end == blocksEnd());
+        return x < partition_end;
+    }
+
+    ++x.block;
+    if (x.block - first_block_number == window_blocks.size())
+        return false;
+    size_t new_offset = x.row - block_rows;
+    x.row = 0;
+    return advanceRowNumber(x, new_offset);
+}
+
+bool WindowBlockInputStream::backRowNumber(RowNumber & x, size_t offset) const
+{
+    assert(x.block >= first_block_number);
+    assert(x.block - first_block_number < window_blocks.size());
+
+    if (x.row >= offset)
+    {
+        x.row -= offset;
+        return partition_start <= x;
+    }
+
+    if (x.block <= first_block_number)
+        return false;
+
+    --x.block;
+    size_t new_offset = offset - x.row;
+    x.row = blockAt(x.block).rows - 1;
+    return backRowNumber(x, new_offset);
 }
 } // namespace DB
