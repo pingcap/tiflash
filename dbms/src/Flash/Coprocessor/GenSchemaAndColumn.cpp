@@ -27,13 +27,9 @@ DataTypePtr getPkType(const ColumnInfo & column_info)
     /// primary key type must be tidb_pk_column_int_type or tidb_pk_column_string_type.
     RUNTIME_CHECK(
         pk_data_type->equals(*MutableSupport::tidb_pk_column_int_type) || pk_data_type->equals(*MutableSupport::tidb_pk_column_string_type),
-        Exception(
-            fmt::format(
-                "Actual pk_data_type {} is not {} or {}",
-                pk_data_type->getName(),
-                MutableSupport::tidb_pk_column_int_type->getName(),
-                MutableSupport::tidb_pk_column_string_type->getName()),
-            ErrorCodes::LOGICAL_ERROR));
+        pk_data_type->getName(),
+        MutableSupport::tidb_pk_column_int_type->getName(),
+        MutableSupport::tidb_pk_column_string_type->getName());
     return pk_data_type;
 }
 } // namespace

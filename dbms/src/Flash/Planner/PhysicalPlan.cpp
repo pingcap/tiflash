@@ -191,7 +191,7 @@ void PhysicalPlan::pushBack(const PhysicalPlanNodePtr & plan_node)
 
 PhysicalPlanNodePtr PhysicalPlan::popBack()
 {
-    RUNTIME_CHECK(!cur_plan_nodes.empty(), TiFlashException("cur_plan_nodes is empty, cannot popBack", Errors::Planner::Internal));
+    RUNTIME_CHECK(!cur_plan_nodes.empty());
     PhysicalPlanNodePtr back = cur_plan_nodes.back();
     assert(back);
     cur_plan_nodes.pop_back();
