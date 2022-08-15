@@ -1485,7 +1485,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (shutdown_called.load(std::memory_order_relaxed))
             return;
 
-        auto [added, heavy] = background_tasks.tryAddTask(task, thread_type, std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3), log);
+        size_t segment_size;
+        {
+            std::shared_lock lock(read_write_mutex);
+            segment_size = id_to_segment.size();
+        }
+        
+        auto [added, heavy] = background_tasks.tryAddTask(task, thread_type, std::max(segment_size * 2, background_pool.getNumberOfThreads() * 3), log);
         // Prevent too many tasks.
         if (!added)
             return;
