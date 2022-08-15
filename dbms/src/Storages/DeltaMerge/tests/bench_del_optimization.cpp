@@ -42,7 +42,7 @@ public:
         // dropDataOnDisk
         try
         {
-            const auto *path = "/Users/hongyunyan/Desktop/tiflash/build_release/dbms/bench_hyy/";
+            const auto * path = "/Users/hongyunyan/Desktop/tiflash/build_release/dbms/bench_hyy/";
             if (Poco::File file(path); file.exists())
             {
                 file.remove(true);
