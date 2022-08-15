@@ -77,7 +77,7 @@ private:
     Columns cur_stable_block_columns;
     size_t cur_stable_block_rows = 0;
     size_t cur_stable_block_pos = 0;
-    Int64 cur_stable_block_start_offset = 0;
+    UInt64 cur_stable_block_start_offset = 0;
 
     bool stable_done = false;
     bool delta_done = false;
@@ -92,9 +92,9 @@ private:
     size_t last_handle_read_num = 0;
 
     // Use for calculating MVCC-bitmap-filter.
-    inline static DataTypeInt64 seg_row_id_col_type{};
+    inline static DataTypeUInt64 seg_row_id_col_type{};
     MutableColumnPtr seg_row_id_col;
-    Int64 stable_rows;
+    UInt64 stable_rows;
     Poco::Logger * log;
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
@@ -103,7 +103,7 @@ public:
                                const IndexIterator & delta_index_end_,
                                const RowKeyRange rowkey_range_,
                                size_t max_block_size_,
-                               Int64 stable_rows_)
+                               UInt64 stable_rows_)
         : stable_input_stream(stable_input_stream_)
         , delta_value_reader(delta_value_reader_)
         , delta_index_it(delta_index_start_)
@@ -280,11 +280,11 @@ private:
 private:
     inline bool finished() { return stable_done && delta_done; }
     
-    inline void fillSegmentRowId(Int64 start, Int64 limit)
+    inline void fillSegmentRowId(UInt64 start, UInt64 limit)
     {
-        for (Int64 i = 0; i < limit; i++)
+        for (UInt64 i = 0; i < limit; i++)
         {
-            Int64 row_id = start + i;
+            auto row_id = start + i;
             seg_row_id_col->insert(row_id);
         }
     }

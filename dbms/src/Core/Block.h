@@ -45,9 +45,9 @@ private:
     Container data;
     IndexByName index_by_name;
 
-    // `start_offset` is the offset the first row in this Block.
+    // `start_offset` is the offset of first row in this Block.
     // It is used for calculating `segment_row_id`.
-    Int64 start_offset = -1;
+    UInt64 start_offset = 0;
     // `segment_row_id_col` is a virtual column that represents the records' row id in the corresponding segment.
     // Only used for calculating MVCC-bitmap-filter.
     ColumnPtr segment_row_id_col;
@@ -156,8 +156,8 @@ public:
       */
     void updateHash(SipHash & hash) const;
 
-    void setStartOffset(Int64 offset) { start_offset = offset; }
-    Int64 startOffset() const { return start_offset; }
+    void setStartOffset(UInt64 offset) { start_offset = offset; }
+    UInt64 startOffset() const { return start_offset; }
     void setSegmentRowIdCol(ColumnPtr && col) { segment_row_id_col = col; }
     ColumnPtr segmentRowIdCol() const { return segment_row_id_col; }
 
