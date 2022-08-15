@@ -46,8 +46,7 @@ MPPTunnel::MPPTunnel(
     bool is_local_,
     bool is_async_,
     const String & req_id)
-    : mu(std::make_shared<std::mutex>())
-    , status(TunnelStatus::Unconnected)
+    : status(TunnelStatus::Unconnected)
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
     , send_queue(std::make_shared<MPMCQueue<MPPDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
@@ -71,7 +70,7 @@ MPPTunnel::~MPPTunnel()
     try
     {
         {
-            std::unique_lock lock(*mu);
+            std::unique_lock lock(mu);
             if (status == TunnelStatus::Finished)
             {
                 LOG_DEBUG(log, "already finished!");
@@ -105,7 +104,7 @@ void MPPTunnel::finishSendQueue()
 void MPPTunnel::close(const String & reason)
 {
     {
-        std::unique_lock lk(*mu);
+        std::unique_lock lk(mu);
         switch (status)
         {
         case TunnelStatus::Unconnected:
@@ -147,12 +146,12 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
 {
     LOG_FMT_TRACE(log, "ready to write");
     {
-        /// Should keep this lock to protect async_tunnel_sender's tryFlushOne method,
-        /// because the GRPC async thread's might release the GRPC writer while flush method might still use the GRPC writer
-        std::unique_lock lk(*mu);
-        waitUntilConnectedOrFinished(lk);
-        if (status == TunnelStatus::Finished)
-            throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
+        {
+            std::unique_lock lk(mu);
+            waitUntilConnectedOrFinished(lk);
+            if (status == TunnelStatus::Finished)
+                throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
+        }
 
         if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)))
         {
@@ -177,7 +176,7 @@ void MPPTunnel::writeDone()
 {
     LOG_FMT_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
     {
-        std::unique_lock lk(*mu);
+        std::unique_lock lk(mu);
         if (status == TunnelStatus::Finished)
             throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         /// make sure to finish the tunnel after it is connected
@@ -190,7 +189,7 @@ void MPPTunnel::writeDone()
 void MPPTunnel::connect(PacketWriter * writer)
 {
     {
-        std::unique_lock lk(*mu);
+        std::unique_lock lk(mu);
         if (status != TunnelStatus::Unconnected)
             throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
 
@@ -210,7 +209,7 @@ void MPPTunnel::connect(PacketWriter * writer)
             break;
         case TunnelSenderMode::ASYNC_GRPC:
             RUNTIME_ASSERT(writer != nullptr, log, "Async writer shouldn't be null");
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(mode, send_queue, writer, log, tunnel_id, mu);
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(mode, send_queue, writer, log, tunnel_id);
             tunnel_sender = async_tunnel_sender;
             writer->attachAsyncTunnelSender(async_tunnel_sender);
             break;
@@ -232,13 +231,13 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
 {
 #ifndef NDEBUG
     {
-        std::unique_lock lock(*mu);
+        std::unique_lock lock(mu);
         assert(status != TunnelStatus::Unconnected);
     }
 #endif
     LOG_FMT_TRACE(log, "start wait for consumer finish!");
     {
-        std::unique_lock lock(*mu);
+        std::unique_lock lock(mu);
         if (status == TunnelStatus::Finished)
         {
             return;
@@ -247,7 +246,7 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
     }
     String err_msg = tunnel_sender->getConsumerFinishMsg(); // may blocking
     {
-        std::unique_lock lock(*mu);
+        std::unique_lock lock(mu);
         status = TunnelStatus::Finished;
     }
     if (allow_throw && !err_msg.empty())
@@ -348,14 +347,6 @@ void SyncTunnelSender::startSendThread()
     });
 }
 
-void AsyncTunnelSender::consumerFinishWithLock(const String & msg)
-{
-    LOG_FMT_TRACE(log, "calling consumer Finish with lock");
-    send_queue->finish();
-    std::unique_lock lk(*mu);
-    consumer_state.setMsg(msg);
-}
-
 void AsyncTunnelSender::tryFlushOne()
 {
     // When consumer finished, sending work is done already, just return
@@ -364,7 +355,7 @@ void AsyncTunnelSender::tryFlushOne()
     writer->tryFlushOne();
 }
 
-void AsyncTunnelSender::sendOne(bool use_lock)
+void AsyncTunnelSender::sendOne()
 {
     // When consumer finished, sending work is done already, just return
     if (consumer_state.msgHasSet())
@@ -396,14 +387,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     }
     if (!err_msg.empty() || queue_empty_flag)
     {
-        if (!use_lock)
-        {
-            consumerFinish(err_msg);
-        }
-        else
-        {
-            consumerFinishWithLock(err_msg);
-        }
+        consumerFinish(err_msg);
         writer->writeDone(grpc::Status::OK);
     }
 }

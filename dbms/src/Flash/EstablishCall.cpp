@@ -117,16 +117,15 @@ void EstablishCallData::setFinishState(const String & msg)
     state = FINISH;
     if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
     {
-        String complete_msg = fmt::format("{}: {}",
-                                          async_tunnel_sender->getTunnelId(),
-                                          msg);
-        async_tunnel_sender->consumerFinishWithLock(complete_msg);
+        async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
+                                                        async_tunnel_sender->getTunnelId(),
+                                                        msg)); //trigger mpp tunnel finish work
     }
 }
 
 void EstablishCallData::writeDone(const ::grpc::Status & status)
 {
-    state = FINISH;
+    setFinishState("writeDone called");
     if (stopwatch)
     {
         LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
@@ -174,20 +173,13 @@ void EstablishCallData::proceed()
         {
             ready = false;
             lk.unlock();
-            async_tunnel_sender->sendOne(true);
+            async_tunnel_sender->sendOne();
         }
         else
             ready = true;
     }
     else if (state == ERR_HANDLE)
     {
-        if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
-        {
-            String complete_msg = fmt::format("{}: {}",
-                                              async_tunnel_sender->getTunnelId(),
-                                              "state is ERR_HANDLE");
-            async_tunnel_sender->consumerFinishWithLock(complete_msg);
-        }
         writeDone(err_status);
     }
     else
