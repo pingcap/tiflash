@@ -64,7 +64,7 @@ void PhysicalPlanNode::recordProfileStreams(DAGPipeline & pipeline, const Contex
     /// For example, `DAGStorageInterpreter` records the profile streams of PhysicalTableScan.
     if (profile_streams_map.find(executor_id) == profile_streams_map.end())
     {
-        auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
+        auto & profile_streams = profile_streams_map[executor_id];
         pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
     }
 }
