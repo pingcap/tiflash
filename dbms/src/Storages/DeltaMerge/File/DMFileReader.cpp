@@ -24,11 +24,6 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
-
-#include <string>
-
-#include "Storages/DeltaMerge/DeltaMergeDefines.h"
-
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -519,7 +514,6 @@ Block DMFileReader::read()
             e.rethrow();
         }
     }
-    //std::cout << "dmfile res " << res.rows() << std::endl;
     return res;
 }
 

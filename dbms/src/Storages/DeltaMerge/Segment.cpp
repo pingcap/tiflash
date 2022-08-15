@@ -555,7 +555,8 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         }
     }
 
-    if (use_del_optimization == false) {
+    if (!use_del_optimization)
+    {
         enable_del_clean_read = false;
     }
 

@@ -67,7 +67,7 @@ public:
         , use_del_optimization(use_del_optimization_)
         , physical_table_id(physical_table_id)
         , log(Logger::get(NAME, req_id))
-        
+
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -107,7 +107,7 @@ protected:
                 cur_segment = task->segment;
                 if (is_raw)
                 {
-                    cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, do_delete_mark_filter_for_raw,  DEFAULT_BLOCK_SIZE, use_del_optimization);
+                    cur_stream = cur_segment->getInputStreamRaw(*dm_context, columns_to_read, task->read_snapshot, task->ranges, filter, do_delete_mark_filter_for_raw, DEFAULT_BLOCK_SIZE, use_del_optimization);
                 }
                 else
                 {

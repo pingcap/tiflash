@@ -1042,7 +1042,8 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     for (auto & segment : all_segments)
     {
         auto res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
-        while (res == nullptr) {
+        while (res == nullptr)
+        {
             res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
         }
     }
@@ -2298,7 +2299,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
     auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
-    
+
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 

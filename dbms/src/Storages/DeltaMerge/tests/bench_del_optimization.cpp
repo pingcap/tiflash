@@ -12,36 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsCommon.h>
+#include <Columns/IColumn.h>
+#include <Core/Block.h>
+#include <DataStreams/BlocksListBlockInputStream.h>
+#include <Storages/DeltaMerge/DMDecoratorStreams.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <benchmark/benchmark.h>
 #include <gtest/gtest.h>
-#include <Core/Block.h>
-#include <Columns/IColumn.h>
-#include <Columns/ColumnsCommon.h>
-#include <TestUtils/FunctionTestUtils.h>
-#include <Storages/DeltaMerge/DMDecoratorStreams.h>
-#include <DataStreams/BlocksListBlockInputStream.h>
-#include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/DeltaMerge/RowKeyFilter.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 
 namespace DB
 {
 namespace DM
 {
-namespace tests 
+namespace tests
 {
 
-class DeltaMergeStoreTestForBench : public benchmark::Fixture 
+class DeltaMergeStoreTestForBench : public benchmark::Fixture
 {
 public:
     void SetUp(const benchmark::State & /*state*/) override
     {
         // dropDataOnDisk
-        try {
-            auto path = "/Users/hongyunyan/Desktop/tiflash/build_release/dbms/bench_hyy/";
+        try
+        {
+            const auto *path = "/Users/hongyunyan/Desktop/tiflash/build_release/dbms/bench_hyy/";
             if (Poco::File file(path); file.exists())
             {
                 file.remove(true);
@@ -49,8 +50,9 @@ public:
             tiFlashStorageTestBasicReload();
 
             store = reload();
-
-        } catch ( DB::Exception const& e) {
+        }
+        catch (DB::Exception const & e)
+        {
             std::cerr << "exception: " << e.what() << " " << e.message() << std::endl;
         }
     }
@@ -123,16 +125,19 @@ protected:
 
 static constexpr const char * pk_name = "_tidb_rowid";
 
-std::set<int> createRandomNum(size_t min_value, size_t max_value, size_t num){
+std::set<int> createRandomNum(size_t min_value, size_t max_value, size_t num)
+{
     std::set<int> res;
 
     std::random_device rd;
     std::default_random_engine eng(rd());
     std::uniform_int_distribution<int> distr(min_value, max_value - 1);
 
-    while (res.size() <  num) {
+    while (res.size() < num)
+    {
         int value = distr(eng);
-        if (res.find(value) == res.end()) {
+        if (res.find(value) == res.end())
+        {
             res.insert(value);
         }
     }
@@ -140,17 +145,18 @@ std::set<int> createRandomNum(size_t min_value, size_t max_value, size_t num){
     return res;
 }
 
-Block createBlock(size_t rows, size_t columns, size_t delete_rows) {
+Block createBlock(size_t rows, size_t columns, size_t delete_rows)
+{
     Block block;
     // 单独插入 handle/version/tag 列
 
     // int_pk_col
 
     block.insert(ColumnWithTypeAndName{
-                DB::tests::makeColumn<Int64>(EXTRA_HANDLE_COLUMN_INT_TYPE, createNumbers<Int64>(0, rows)),
-                EXTRA_HANDLE_COLUMN_INT_TYPE,
-                pk_name,
-                EXTRA_HANDLE_COLUMN_ID});
+        DB::tests::makeColumn<Int64>(EXTRA_HANDLE_COLUMN_INT_TYPE, createNumbers<Int64>(0, rows)),
+        EXTRA_HANDLE_COLUMN_INT_TYPE,
+        pk_name,
+        EXTRA_HANDLE_COLUMN_ID});
     // version_col
     block.insert(DB::tests::createColumn<UInt64>(
         std::vector<UInt64>(rows, 2),
@@ -160,7 +166,8 @@ Block createBlock(size_t rows, size_t columns, size_t delete_rows) {
     // tag_col
     std::vector<UInt64> tags(rows, 0);
     auto delete_set = createRandomNum(0, rows, delete_rows);
-    for (auto i : delete_set) {
+    for (auto i : delete_set)
+    {
         tags[i] = 1;
     }
     block.insert(DB::tests::createColumn<UInt8>(
@@ -169,12 +176,13 @@ Block createBlock(size_t rows, size_t columns, size_t delete_rows) {
         TAG_COLUMN_ID));
 
     // other columns
-    for (size_t i = 3; i < columns; ++i) {
+    for (size_t i = 3; i < columns; ++i)
+    {
         auto name = "column" + std::to_string(i);
         block.insert(DB::tests::createColumn<UInt64>(
-                std::vector<UInt64>(rows, 200),
-                name,
-                i));
+            std::vector<UInt64>(rows, 200),
+            name,
+            i));
     }
     return block;
 }
@@ -182,7 +190,8 @@ Block createBlock(size_t rows, size_t columns, size_t delete_rows) {
 constexpr size_t num_iterations_test = 100000;
 
 
-BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)(benchmark::State & state)
+BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
+(benchmark::State & state)
 {
     auto block_rows = state.range(0);
     auto columns_num = state.range(1);
@@ -192,51 +201,10 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)(benc
     ColumnDefines columns = getColumnDefinesFromBlock(block);
 
     ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
-    for (auto col : columns ){
-        if (col.id >= 3) {
-            read_columns->emplace_back(std::move(col));
-        }
-    }
-
-    store = reload(read_columns);
-    
-    store->write(*db_context, db_context->getSettingsRef(), block);
-
-    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
-    store->mergeDeltaAll(*db_context);
-
-    for (auto _ : state)
+    for (auto col : columns)
     {
-        BlockInputStreamPtr in = store->read(*db_context,
-                                        db_context->getSettingsRef(),
-                                        *read_columns,
-                                        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                        /* num_streams= */ 1,
-                                        /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                        EMPTY_FILTER,
-                                        "",
-                                        /* keep_order= */ false,
-                                        /* is_fast_mode= */ true,
-                                        /* expected_block_size= */ 1024,
-                                        {},
-                                        InvalidColumnID,
-                                        /* use_del_optimization */ false)[0];
-        in->read();
-    }
-}
-
-BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)(benchmark::State & state)
-{
-    auto block_rows = state.range(0);
-    auto columns_num = state.range(1);
-    auto delete_rows_num = state.range(2);
-
-    Block block = createBlock(block_rows, columns_num, delete_rows_num);
-    ColumnDefines columns = getColumnDefinesFromBlock(block);
-
-    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
-    for (auto col : columns ){
-        if (col.id >= 3) {
+        if (col.id >= 3)
+        {
             read_columns->emplace_back(std::move(col));
         }
     }
@@ -246,31 +214,78 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)(benchma
     store->write(*db_context, db_context->getSettingsRef(), block);
 
     store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    store->mergeDeltaAll(*db_context);
+
+    for (auto _ : state)
+    {
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             *read_columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             "",
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ true,
+                                             /* expected_block_size= */ 1024,
+                                             {},
+                                             InvalidColumnID,
+                                             /* use_del_optimization */ false)[0];
+        in->read();
+    }
+}
+
+BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
+(benchmark::State & state)
+{
+    auto block_rows = state.range(0);
+    auto columns_num = state.range(1);
+    auto delete_rows_num = state.range(2);
+
+    Block block = createBlock(block_rows, columns_num, delete_rows_num);
+    ColumnDefines columns = getColumnDefinesFromBlock(block);
+
+    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
+    for (auto col : columns)
+    {
+        if (col.id >= 3)
+        {
+            read_columns->emplace_back(std::move(col));
+        }
+    }
+
+    store = reload(read_columns);
+
+    store->write(*db_context, db_context->getSettingsRef(), block);
+
+    store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     store->mergeDeltaAll(*db_context);
 
     for (auto _ : state)
     {
         BlockInputStreamPtr in = store->read(*db_context,
-                                        db_context->getSettingsRef(),
-                                        *read_columns,
-                                        {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-                                        /* num_streams= */ 1,
-                                        /* max_version= */ std::numeric_limits<UInt64>::max(),
-                                        EMPTY_FILTER,
-                                        "",
-                                        /* keep_order= */ false,
-                                        /* is_fast_mode= */ true,
-                                        /* expected_block_size= */ 1024,
-                                        {},
-                                        InvalidColumnID,
-                                        /* use_del_optimization */ true)[0];
+                                             db_context->getSettingsRef(),
+                                             *read_columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             "",
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ true,
+                                             /* expected_block_size= */ 1024,
+                                             {},
+                                             InvalidColumnID,
+                                             /* use_del_optimization */ true)[0];
 
         in->read();
     }
 }
 
-BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)(benchmark::State & state)
+BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)
+(benchmark::State & state)
 {
     auto block_rows = state.range(0);
     auto columns_num = state.range(1);
@@ -280,51 +295,8 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)(b
     ColumnDefines columns = getColumnDefinesFromBlock(block);
 
     ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
-    for (auto col : columns ){
-        read_columns->emplace_back(std::move(col));
-    }
-
-    auto input_stream = std::make_shared<OneBlockInputStream>(block);
-    auto [store_path, file_id] = store->preAllocateIngestFile();
-
-    DMFileBlockOutputStream::Flags flags;
-    flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
-    auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-    auto dmfile = writeIntoNewDMFile(
-        *dm_context,
-        std::make_shared<ColumnDefines>(store->getTableColumns()),
-        input_stream,
-        file_id,
-        store_path,
-        flags);
-
-    auto column_cache = std::make_shared<ColumnCache>();
-
-    DMFileBlockInputStreamBuilder builder(*db_context);
-    
-    for (auto _ : state)
+    for (auto col : columns)
     {
-        auto stream = builder.setColumnCache(column_cache)
-                        .enableCleanRead(true, true, true, std::numeric_limits<UInt64>::max())
-                        .build(dmfile, *read_columns, RowKeyRanges{RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())});
-        stream->readPrefix();         
-        stream->read();
-        stream->readSuffix();         
-    }
-}
-
-BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)(benchmark::State & state)
-{
-    auto block_rows = state.range(0);
-    auto columns_num = state.range(1);
-    auto delete_rows_num = state.range(2);
-
-    Block block = createBlock(block_rows, columns_num, delete_rows_num);
-    ColumnDefines columns = getColumnDefinesFromBlock(block);
-
-    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
-    for (auto col : columns ){
         read_columns->emplace_back(std::move(col));
     }
 
@@ -350,21 +322,67 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization
     for (auto _ : state)
     {
         auto stream = builder.setColumnCache(column_cache)
-                        .enableCleanRead(true, true, false, std::numeric_limits<UInt64>::max())
-                        .build(dmfile, *read_columns, RowKeyRanges{RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())});
-        stream->readPrefix();         
+                          .enableCleanRead(true, true, true, std::numeric_limits<UInt64>::max())
+                          .build(dmfile, *read_columns, RowKeyRanges{RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())});
+        stream->readPrefix();
         stream->read();
-        stream->readSuffix();         
+        stream->readSuffix();
     }
 }
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
+BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)
+(benchmark::State & state)
+{
+    auto block_rows = state.range(0);
+    auto columns_num = state.range(1);
+    auto delete_rows_num = state.range(2);
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
+    Block block = createBlock(block_rows, columns_num, delete_rows_num);
+    ColumnDefines columns = getColumnDefinesFromBlock(block);
+
+    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
+    for (auto col : columns)
+    {
+        read_columns->emplace_back(std::move(col));
+    }
+
+    auto input_stream = std::make_shared<OneBlockInputStream>(block);
+    auto [store_path, file_id] = store->preAllocateIngestFile();
+
+    DMFileBlockOutputStream::Flags flags;
+    flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+
+    auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+    auto dmfile = writeIntoNewDMFile(
+        *dm_context,
+        std::make_shared<ColumnDefines>(store->getTableColumns()),
+        input_stream,
+        file_id,
+        store_path,
+        flags);
+
+    auto column_cache = std::make_shared<ColumnCache>();
+
+    DMFileBlockInputStreamBuilder builder(*db_context);
+
+    for (auto _ : state)
+    {
+        auto stream = builder.setColumnCache(column_cache)
+                          .enableCleanRead(true, true, false, std::numeric_limits<UInt64>::max())
+                          .build(dmfile, *read_columns, RowKeyRanges{RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())});
+        stream->readPrefix();
+        stream->read();
+        stream->readSuffix();
+    }
+}
+
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0})->Args({5000, 15, 0})->Args({5000, 10, 0})->Args({5000, 8, 0})->Args({5000, 5, 0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0})->Args({5000, 15, 0})->Args({5000, 10, 0})->Args({5000, 8, 0})->Args({5000, 5, 0});
+
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0})->Args({5000, 15, 0})->Args({5000, 10, 0})->Args({5000, 8, 0})->Args({5000, 5, 0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0})->Args({5000, 15, 0})->Args({5000, 10, 0})->Args({5000, 8, 0})->Args({5000, 5, 0});
 
 
-}
-}
-}
+} // namespace tests
+} // namespace DM
+} // namespace DB
