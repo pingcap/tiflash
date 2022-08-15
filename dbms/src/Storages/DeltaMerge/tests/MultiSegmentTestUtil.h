@@ -170,3 +170,10 @@ public:
             ASSERT_EQ(seg->getDelta()->getRows(), expected_delta_rows[segment_idx]) << "Assert failed for segment #" << segment_idx;
             ASSERT_EQ(seg->getStable()->getRows(), expected_stable_rows[segment_idx]) << "Assert failed for segment #" << segment_idx;
             segment_idx++;
+        }
+    }
+};
+
+} // namespace tests
+} // namespace DM
+} // namespace DB
