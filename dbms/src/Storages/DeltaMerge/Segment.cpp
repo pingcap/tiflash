@@ -45,7 +45,6 @@
 #include <ext/scope_guard.h>
 #include <memory>
 #include <numeric>
-#include "Interpreters/Context.h"
 
 namespace ProfileEvents
 {
@@ -392,9 +391,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
                                             size_t expected_block_size,
                                             bool for_bitmap)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream for_bitmap {}", segment_id, epoch, for_bitmap);
+    LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream columns_to_read {} for_bitmap {} dt_enable_bitmap_filter {}", segment_id, epoch, columns_to_read.size(), for_bitmap, dm_context.db_context.getSettingsRef().dt_enable_bitmap_filter);
 
-    if (!for_bitmap)
+    if (!for_bitmap && dm_context.db_context.getSettingsRef().dt_enable_bitmap_filter)
     {
         return getBitmapFilterInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
     }
@@ -1815,6 +1814,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
                                            UInt64 max_version,
                                            size_t expected_block_size)
 {
+    Stopwatch sw_total;
     static ColumnDefines columns_to_read{getExtraHandleColumnDefine(is_common_handle), getVersionColumnDefine(), getTagColumnDefine()};
     auto stream = getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size, /*for_bitmap*/ true);
     auto bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->getRows(), segment_snap);
@@ -1827,16 +1827,17 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
         }
         bitmap_filter->set(blk.segmentRowIdCol());
     }
+    LOG_FMT_DEBUG(log, "buildBitmapFilter use {} ms", sw_total.elapsedMilliseconds());
     return bitmap_filter;
 }
 
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_context,
-                                               const ColumnDefines & columns_to_read,
-                                               const SegmentSnapshotPtr & segment_snap,
-                                               const RowKeyRanges & data_ranges,
-                                               const RSOperatorPtr & filter,
-                                               UInt64 max_version,
-                                               size_t expected_block_size)
+                                                        const ColumnDefines & columns_to_read,
+                                                        const SegmentSnapshotPtr & segment_snap,
+                                                        const RowKeyRanges & data_ranges,
+                                                        const RSOperatorPtr & filter,
+                                                        UInt64 max_version,
+                                                        size_t expected_block_size)
 {
     // For normal mode, already filter rowkey in bitmap.
     auto bitmap_filter = buildBitmapFilter(dm_context, segment_snap, data_ranges, filter, max_version, expected_block_size);
@@ -1849,12 +1850,12 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
         max_version,
         expected_block_size,
         /* enable_clean_read */ false,
-        /* is_fast_mode */ false);  // TODO(jinhelin): support fast mode, clean read.
+        /* is_fast_mode */ false); // TODO(jinhelin): support fast mode, clean read.
 
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read_ptr, this->rowkey_range);
 
-    return std::make_shared<BitmapFilterBlockInputStream>(stable_stream, delta_stream, segment_snap->stable->getRows(), bitmap_filter, dm_context.tracing_id);
+    return std::make_shared<BitmapFilterBlockInputStream>(stable_stream, nullptr, segment_snap->stable->getRows(), bitmap_filter, dm_context.tracing_id);
 }
 
 } // namespace DM

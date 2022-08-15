@@ -91,11 +91,10 @@ private:
     size_t last_handle_pos = 0;
     size_t last_handle_read_num = 0;
 
-    // Use for calculating MVCC-bitmap-filter.
+    // Use for calculating MVCC-bitmap-filter when `for_bitmap` is true.
     inline static DataTypeUInt64 seg_row_id_col_type{};
     MutableColumnPtr seg_row_id_col;
     UInt64 stable_rows;
-    Poco::Logger * log;
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
                                const DeltaValueReaderPtr & delta_value_reader_,
@@ -113,7 +112,6 @@ public:
         , rowkey_column_size(rowkey_range.rowkey_column_size)
         , max_block_size(max_block_size_)
         , stable_rows(stable_rows_)
-        , log(&Poco::Logger::get("DeltaMerge"))
     {
         if constexpr (skippable_place)
         {
@@ -230,7 +228,6 @@ private:
                 if (block.rows() != block.segmentRowIdCol()->size())
                 {
                     auto s = fmt::format("Build bitmap error: block.rows {} != segmentRowId.size() {}", block.rows(), block.segmentRowIdCol()->size());
-                    LOG_FMT_ERROR(log, "{}", s);
                     throw Exception(s);
                 }
             }
@@ -490,10 +487,8 @@ private:
             sk_skip_total_rows += final_offset - offset;
         }
 
-        size_t output_rows = 0;
         if (!output_offset && !final_offset && final_limit == cur_stable_block_rows)
         {
-            output_rows = cur_stable_block_rows;
             // Simply return columns in current stable block.
             for (size_t column_id = 0; column_id < output_columns.size(); ++column_id)
                 output_columns[column_id] = (*std::move(cur_stable_block_columns[column_id])).mutate();
@@ -509,12 +504,6 @@ private:
                 for (size_t column_id = 0; column_id < num_columns; ++column_id)
                     output_columns[column_id]->reserve(max_block_size);
             }
-            auto left_rows = cur_stable_block_rows - final_offset;
-            if (left_rows < final_limit)
-            {
-                LOG_FMT_ERROR(log, "left_rows {} final_limit {}", left_rows, final_limit);
-            }
-            output_rows = std::min(left_rows, final_limit);
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
                 output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], final_offset, final_limit);
 
@@ -523,7 +512,6 @@ private:
 
         if constexpr (for_bitmap)
         {
-            LOG_FMT_INFO(log, "cur_stable_block_rows {} output_rows {} final_limit {}", cur_stable_block_rows, output_rows, final_limit);
             fillSegmentRowId(final_offset + cur_stable_block_start_offset, final_limit);
         }
 

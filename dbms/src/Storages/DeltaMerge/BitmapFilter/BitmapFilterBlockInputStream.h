@@ -15,9 +15,6 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include "Columns/IColumn.h"
-//#include <memory>
-//#include "Storages/DeltaMerge/BitmapFilter/BitmapFilter.h"
 
 namespace DB::DM
 {
