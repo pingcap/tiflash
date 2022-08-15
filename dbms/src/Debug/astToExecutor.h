@@ -57,7 +57,7 @@ struct ColumnName
     String column_name;
 };
 
-ColumnName splitQualifiedName(const String & s);
+const ColumnName splitQualifiedName(const String & s);
 
 struct MPPCtx
 {

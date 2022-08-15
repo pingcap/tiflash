@@ -776,7 +776,7 @@ void setServiceAddr(const std::string & addr)
 }
 } // namespace Debug
 
-ColumnName splitQualifiedName(const String & s)
+const ColumnName splitQualifiedName(const String & s)
 {
     ColumnName ret;
     Poco::StringTokenizer string_tokens(s, ".");
