@@ -50,6 +50,9 @@ extern String LOCAL_HOST;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
 
+// We use qualified format like "db_name.table_name.column_name"
+// to identify one column of a table.
+// We can split the qualified format into the ColumnName struct.
 struct ColumnName
 {
     String db_name;
@@ -57,7 +60,7 @@ struct ColumnName
     String column_name;
 };
 
-const ColumnName splitQualifiedName(const String & s);
+ColumnName splitQualifiedName(const String & s);
 
 struct MPPCtx
 {

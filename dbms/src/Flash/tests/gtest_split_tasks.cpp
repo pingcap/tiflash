@@ -44,7 +44,7 @@ try
                      .topN("s2", false, 10)
                      .buildMPPTasks(context);
 
-    size_t task_size = tasks.size();
+    const auto task_size = tasks.size();
     std::vector<String> executors = {
         "exchange_sender_7 | type:Hash, {<0, String>, <1, String>, <2, String>}\n"
         " aggregation_6 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, String>)}\n"
@@ -93,7 +93,7 @@ try
                      .topN("join_c", false, 2)
                      .buildMPPTasks(context);
 
-    size_t task_size = tasks.size();
+    const auto task_size = tasks.size();
     std::vector<String> executors = {
         "exchange_sender_6 | type:Hash, {<0, String>, <1, String>}\n"
         " table_scan_1 | {<0, String>, <1, String>}",
