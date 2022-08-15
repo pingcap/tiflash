@@ -14,6 +14,10 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Server/ServerInfo.h>
+#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/workload/DTWorkload.h>
 #include <Storages/DeltaMerge/workload/Handle.h>
 #include <Storages/DeltaMerge/workload/Options.h>
@@ -249,6 +253,14 @@ void dailyRandomTest(WorkloadOptions & opts)
     }
 }
 
+void initReadThread()
+{
+    DB::ServerInfo server_info;
+    DB::DM::SegmentReaderPoolManager::instance().init(server_info);
+    DB::DM::SegmentReadTaskScheduler::instance();
+    DB::DM::DMFileReaderPool::instance();
+}
+
 int DTWorkload::mainEntry(int argc, char ** argv)
 {
     WorkloadOptions opts;
@@ -270,6 +282,12 @@ int DTWorkload::mainEntry(int argc, char ** argv)
 
     // For mixed mode, we need to run the test in ONLY_V2 mode first.
     TiFlashTestEnv::initializeGlobalContext(opts.work_dirs, opts.ps_run_mode == PageStorageRunMode::ONLY_V3 ? PageStorageRunMode::ONLY_V3 : PageStorageRunMode::ONLY_V2, opts.bg_thread_count);
+
+    if (opts.enable_read_thread)
+    {
+        initReadThread();
+    }
+
     if (opts.testing_type == "daily_perf")
     {
         dailyPerformanceTest(opts);
