@@ -116,4 +116,10 @@ bool PhysicalTableScan::hasPushDownFilter() const
 {
     return push_down_filter.hasValue();
 }
+
+const String & PhysicalTableScan::getPushDownFilterId() const
+{
+    assert(hasPushDownFilter());
+    return push_down_filter.executor_id;
+}
 } // namespace DB
