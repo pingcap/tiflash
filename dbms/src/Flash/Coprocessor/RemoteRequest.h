@@ -31,7 +31,7 @@
 namespace DB
 {
 using RegionRetryList = std::list<std::reference_wrapper<const RegionInfo>>;
-using DAGColumnInfo = std::pair<String, ColumnInfo>;
+using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 
 struct RemoteRequest

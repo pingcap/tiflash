@@ -51,6 +51,7 @@ public:
     Block() = default;
     Block(std::initializer_list<ColumnWithTypeAndName> il);
     explicit Block(const ColumnsWithTypeAndName & data_);
+    explicit Block(const NamesAndTypes & names_and_types);
 
     /// insert the column at the specified position
     void insert(size_t position, const ColumnWithTypeAndName & elem);
@@ -117,6 +118,8 @@ public:
 
     /** List of names, types and lengths of columns. Designed for debugging. */
     std::string dumpStructure() const;
+
+    std::string dumpJsonStructure() const;
 
     /** Get the same block, but empty. */
     Block cloneEmpty() const;

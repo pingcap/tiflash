@@ -27,6 +27,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
 #include <optional>
@@ -252,17 +253,25 @@ struct Project : public Executor
 
 struct Join : Executor
 {
-    ASTPtr params;
-    const ASTTableJoin & join_params;
-    Join(size_t & index_, const DAGSchema & output_schema_, ASTPtr params_)
+    tipb::JoinType tp;
+
+    const ASTs join_cols{};
+    const ASTs left_conds{};
+    const ASTs right_conds{};
+    const ASTs other_conds{};
+    const ASTs other_eq_conds_from_in{};
+
+    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds)
         : Executor(index_, "Join_" + std::to_string(index_), output_schema_)
-        , params(params_)
-        , join_params(static_cast<const ASTTableJoin &>(*params))
+        , tp(tp_)
+        , join_cols(join_cols_)
+        , left_conds(l_conds)
+        , right_conds(r_conds)
+        , other_conds(o_conds)
+        , other_eq_conds_from_in(o_eq_conds)
     {
-        if (join_params.using_expression_list == nullptr)
+        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
             throw Exception("No join condition found.");
-        if (join_params.strictness != ASTTableJoin::Strictness::All)
-            throw Exception("Only support join with strictness ALL");
     }
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
@@ -346,7 +355,16 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
 
 ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list);
 
+/// Note: this api is only used by legacy test framework for compatibility purpose, which will be depracated soon,
+/// so please avoid using it.
+/// Old executor test framework bases on ch's parser to translate sql string to ast tree, then manually to DAGRequest.
+/// However, as for join executor, this translation, from ASTTableJoin to tipb::Join, is not a one-to-one mapping
+/// because of the different join classification model used by these two structures. Therefore, under old test framework,
+/// it is hard to fully test join executor. New framework aims to directly construct DAGRequest, so new framework APIs for join should
+/// avoid using ASTTableJoin.
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
+
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {});
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 

@@ -73,7 +73,7 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     , file_provider(file_provider_)
     , config(config_)
     , log(Logger::get("BlobStore", std::move(storage_name)))
-    , blob_stats(log, delegator, config_)
+    , blob_stats(log, delegator, config)
     , cached_files(config.cached_fd_size)
 {
 }
@@ -115,6 +115,15 @@ void BlobStore::registerPaths()
             }
         }
     }
+}
+
+void BlobStore::reloadConfig(const BlobStore::Config & rhs)
+{
+    config.file_limit_size = rhs.file_limit_size;
+    config.spacemap_type = rhs.spacemap_type;
+    config.cached_fd_size = rhs.cached_fd_size;
+    config.block_alignment_bytes = rhs.block_alignment_bytes;
+    config.heavy_gc_valid_rate = rhs.heavy_gc_valid_rate;
 }
 
 FileUsageStatistics BlobStore::getFileUsageStatistics() const
@@ -508,9 +517,11 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     if (need_remove_stat)
     {
         LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+
+        auto blob_file = getBlobFile(blob_id);
         auto lock_stats = blob_stats.lock();
         blob_stats.eraseStat(std::move(stat), lock_stats);
-        getBlobFile(blob_id)->remove();
+        blob_file->remove();
         cached_files.remove(blob_id);
     }
 }
@@ -1190,7 +1201,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
 String BlobStore::getBlobFileParentPath(BlobFileId blob_id)
 {
     PageFileIdAndLevel id_lvl{blob_id, 0};
-    String parent_path = delegator->choosePath(id_lvl);
+    String parent_path = delegator->getPageFilePath(id_lvl);
 
     if (auto f = Poco::File(parent_path); !f.exists())
         f.createDirectories();
@@ -1210,7 +1221,7 @@ BlobFilePtr BlobStore::getBlobFile(BlobFileId blob_id)
   * BlobStats methods *
   *********************/
 
-BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config_)
+BlobStore::BlobStats::BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config & config_)
     : log(std::move(log_))
     , delegator(delegator_)
     , config(config_)
@@ -1324,7 +1335,12 @@ BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id,
         config.file_limit_size);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
-    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    auto path = delegator->choosePath(id_lvl);
+    /// This function may be called when restoring an old BlobFile at restart or creating a new BlobFile.
+    /// If restoring an old BlobFile, the BlobFile path maybe already added to delegator, but an another call to `addPageFileUsedSize` should do no harm.
+    /// If creating a new BlobFile, we need to register the BlobFile's path to delegator, so it's necessary to call `addPageFileUsedSize` here.
+    delegator->addPageFileUsedSize({blob_file_id, 0}, 0, path, true);
+    stats_map[path].emplace_back(stat);
     return stat;
 }
 
@@ -1349,7 +1365,12 @@ BlobStatPtr BlobStore::BlobStats::createBigPageStatNotChecking(BlobFileId blob_f
         config.file_limit_size);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
-    stats_map[delegator->choosePath(id_lvl)].emplace_back(stat);
+    auto path = delegator->choosePath(id_lvl);
+    /// This function may be called when restoring an old BlobFile at restart or creating a new BlobFile.
+    /// If restoring an old BlobFile, the BlobFile path maybe already added to delegator, but an another call to `addPageFileUsedSize` should do no harm.
+    /// If creating a new BlobFile, we need to register the BlobFile's path to delegator, so it's necessary to call `addPageFileUsedSize` here.
+    delegator->addPageFileUsedSize({blob_file_id, 0}, 0, path, true);
+    stats_map[path].emplace_back(stat);
     return stat;
 }
 

@@ -14,8 +14,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Interpreters/executeQuery.h>
+#include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
 
@@ -34,6 +33,7 @@ void ExecutorTest::initializeContext()
     dag_context_ptr = std::make_unique<DAGContext>(1024);
     context = MockDAGRequestContext(TiFlashTestEnv::getContext());
     dag_context_ptr->log = Logger::get("executorTest");
+    TiFlashTestEnv::getGlobalContext().setExecutorTest();
 }
 
 void ExecutorTest::SetUpTestCase()
@@ -66,9 +66,9 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
 {
     DAGContext dag_context(*request, "interpreter_test", concurrency);
     context.context.setDAGContext(&dag_context);
+    context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
-    DAGQuerySource dag(context.context);
-    auto res = executeQuery(dag, context.context, false, QueryProcessingStage::Complete);
+    auto res = executeQuery(context.context);
     FmtBuffer fb;
     res.in->dumpTree(fb);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
@@ -103,6 +103,7 @@ Block mergeBlocks(Blocks blocks)
         actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
     return Block(actual_columns);
 }
+} // namespace
 
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 {
@@ -115,16 +116,20 @@ DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
     stream->readSuffix();
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
-} // namespace
+
+void ExecutorTest::enablePlanner(bool is_enable)
+{
+    context.context.setSetting("enable_planner", is_enable ? "true" : "false");
+}
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
-    dag_context.setColumnsForTest(source_columns_map);
+    context.context.setExecutorTest();
+    context.context.setColumnsForTest(source_columns_map);
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
-    DAGQuerySource dag(context.context);
-    return readBlock(executeQuery(dag, context.context, false, QueryProcessingStage::Complete).in);
+    return readBlock(executeQuery(context.context).in);
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
@@ -137,6 +142,16 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const st
     std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
     source_columns_map[getSourceName(type)] = source_columns;
     return executeStreams(request, source_columns_map, concurrency);
+}
+
+DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
+{
+    DAGProperties properties;
+    // enable mpp
+    properties.is_mpp_query = true;
+    context.context.setMPPTest();
+    auto res = executeMPPQuery(context.context, properties, tasks);
+    return readBlock(res);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

@@ -49,6 +49,15 @@ Block::Block(const ColumnsWithTypeAndName & data_)
 }
 
 
+Block::Block(const NamesAndTypes & names_and_types)
+{
+    data.reserve(names_and_types.size());
+    for (const auto & name_and_type : names_and_types)
+        data.emplace_back(name_and_type.type, name_and_type.name);
+    initializeIndexByName();
+}
+
+
 void Block::initializeIndexByName()
 {
     for (size_t i = 0, size = data.size(); i < size; ++i)
@@ -300,7 +309,7 @@ std::string Block::dumpNames() const
             out << ", ";
         out << it->name;
     }
-    return out.str();
+    return out.releaseStr();
 }
 
 
@@ -313,7 +322,21 @@ std::string Block::dumpStructure() const
             out << ", ";
         it->dumpStructure(out);
     }
-    return out.str();
+    return out.releaseStr();
+}
+
+std::string Block::dumpJsonStructure() const
+{
+    WriteBufferFromOwnString out;
+    out << "[";
+    for (auto it = data.begin(); it != data.end(); ++it)
+    {
+        if (it != data.begin())
+            out << ",";
+        it->dumpJsonStructure(out);
+    }
+    out << "]";
+    return out.releaseStr();
 }
 
 

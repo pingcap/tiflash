@@ -331,21 +331,31 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
-    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock);
+    // TODO Should handle when curr_region_ptr is null.
+    return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
 }
 
-bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt)
+bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
-    return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock);
+    if (curr_region_ptr == nullptr)
+    {
+        /// If we can't find region here, we return true so proxy can trigger a CompactLog.
+        /// The triggered CompactLog will be handled by `handleUselessAdminRaftCmd`,
+        /// and result in a `EngineStoreApplyRes::NotFound`.
+        /// Proxy will print this message and continue: `region not found in engine-store, maybe have exec `RemoveNode` first`.
+        LOG_FMT_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
+        return true;
+    }
+    return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
 }
 
-bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock)
+bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
 {
     if (curr_region_ptr == nullptr)
     {
-        throw Exception(fmt::format("region not found when trying flush", ErrorCodes::LOGICAL_ERROR));
+        throw Exception("region not found when trying flush", ErrorCodes::LOGICAL_ERROR);
     }
     auto & curr_region = *curr_region_ptr;
 
@@ -369,7 +379,12 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (can_flush && flush_if_possible)
     {
-        LOG_FMT_DEBUG(log, "{} flush region due to canFlushRegionData", curr_region.toString(false));
+        LOG_FMT_DEBUG(log, "{} flush region due to canFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
+        if (index)
+        {
+            // We set actual index when handling CompactLog.
+            curr_region.handleWriteRaftCmd({}, index, term, tmt);
+        }
         if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
         {
             persistRegion(curr_region, region_task_lock, "canFlushRegionData before compact raft log");
@@ -408,7 +423,6 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
                   term,
                   index);
 
-    curr_region.handleWriteRaftCmd({}, index, term, tmt);
 
     if (cmd_type == raft_cmdpb::AdminCmdType::CompactLog)
     {
@@ -418,6 +432,8 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
         // ref. https://github.com/pingcap/tidb-engine-ext/blob/e83a37d2d8d8ae1778fe279c5f06a851f8c9e56a/components/raftstore/src/engine_store_ffi/observer.rs#L175
         return EngineStoreApplyRes::Persist;
     }
+
+    curr_region.handleWriteRaftCmd({}, index, term, tmt);
     return EngineStoreApplyRes::None;
 }
 

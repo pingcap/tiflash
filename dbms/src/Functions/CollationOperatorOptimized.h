@@ -60,8 +60,6 @@ __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
 {
     ColumnString::Offset a_prev_offset = 0;
     ColumnString::Offset b_prev_offset = 0;
-    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
-    const auto * b_ptr = reinterpret_cast<const char *>(b_data.data());
 
     for (size_t i = 0; i < size; ++i)
     {
@@ -69,10 +67,9 @@ __attribute__((flatten, always_inline)) inline void LoopTwoColumns(
         auto b_size = b_offsets[i] - b_prev_offset;
 
         // Remove last zero byte.
-        func({a_ptr, a_size - 1}, {b_ptr, b_size - 1}, i);
-
-        a_ptr += a_size;
-        b_ptr += b_size;
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1},
+             {reinterpret_cast<const char *>(&b_data[b_prev_offset]), b_size - 1},
+             i);
 
         a_prev_offset = a_offsets[i];
         b_prev_offset = b_offsets[i];
@@ -89,26 +86,23 @@ __attribute__((flatten, always_inline)) inline void LoopOneColumn(
     F && func)
 {
     ColumnString::Offset a_prev_offset = 0;
-    const auto * a_ptr = reinterpret_cast<const char *>(a_data.data());
 
     for (size_t i = 0; i < size; ++i)
     {
         auto a_size = a_offsets[i] - a_prev_offset;
 
         // Remove last zero byte.
-        func({a_ptr, a_size - 1}, i);
-
-        a_ptr += a_size;
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i);
         a_prev_offset = a_offsets[i];
     }
 }
 
 // Handle str-column compare str-column.
-// - Optimize UTF8_BIN and UTF8MB4_BIN
+// - Optimize bin collator
 //   - Check if columns do NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
 template <typename Op, typename Result>
-ALWAYS_INLINE inline bool StringVectorStringVector(
+ALWAYS_INLINE inline bool CompareStringVectorStringVector(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
     const ColumnString::Chars_t & b_data,
@@ -118,10 +112,12 @@ ALWAYS_INLINE inline bool StringVectorStringVector(
 {
     bool use_optimized_path = false;
 
-    switch (collator->getCollatorId())
+    switch (collator->getCollatorType())
     {
-    case TiDB::ITiDBCollator::UTF8MB4_BIN:
-    case TiDB::ITiDBCollator::UTF8_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+    case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+    case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
     {
         size_t size = a_offsets.size();
 
@@ -140,6 +136,26 @@ ALWAYS_INLINE inline bool StringVectorStringVector(
 
         break;
     }
+    case TiDB::ITiDBCollator::CollatorType::BINARY:
+    {
+        size_t size = a_offsets.size();
+
+        LoopTwoColumns(a_data, a_offsets, b_data, b_offsets, size, [&c](const std::string_view & va, const std::string_view & vb, size_t i) {
+            if constexpr (IsEqualRelated<Op>::value)
+            {
+                c[i] = Op::apply(RawStrEqualCompare((va), (vb)), 0);
+            }
+            else
+            {
+                c[i] = Op::apply(RawStrCompare(va, vb), 0);
+            }
+        });
+
+        use_optimized_path = true;
+
+        break;
+    }
+
     default:
         break;
     }
@@ -147,12 +163,12 @@ ALWAYS_INLINE inline bool StringVectorStringVector(
 }
 
 // Handle str-column compare const-str.
-// - Optimize UTF8_BIN and UTF8MB4_BIN
+// - Optimize bin collator
 //   - Right trim const-str first
 //   - Check if column does NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
 template <typename Op, typename Result>
-ALWAYS_INLINE inline bool StringVectorConstant(
+ALWAYS_INLINE inline bool CompareStringVectorConstant(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
     const std::string_view & b,
@@ -161,10 +177,12 @@ ALWAYS_INLINE inline bool StringVectorConstant(
 {
     bool use_optimized_path = false;
 
-    switch (collator->getCollatorId())
+    switch (collator->getCollatorType())
     {
-    case TiDB::ITiDBCollator::UTF8MB4_BIN:
-    case TiDB::ITiDBCollator::UTF8_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+    case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+    case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
     {
         size_t size = a_offsets.size();
 
@@ -178,6 +196,23 @@ ALWAYS_INLINE inline bool StringVectorConstant(
             else
             {
                 c[i] = Op::apply(RawStrCompare(RightTrim(view), tar_str_view), 0);
+            }
+        });
+
+        use_optimized_path = true;
+        break;
+    }
+    case TiDB::ITiDBCollator::CollatorType::BINARY:
+    {
+        size_t size = a_offsets.size();
+        LoopOneColumn(a_data, a_offsets, size, [&c, &b](const std::string_view & view, size_t i) {
+            if constexpr (IsEqualRelated<Op>::value)
+            {
+                c[i] = Op::apply(RawStrEqualCompare((view), b), 0);
+            }
+            else
+            {
+                c[i] = Op::apply(RawStrCompare((view), b), 0);
             }
         });
 

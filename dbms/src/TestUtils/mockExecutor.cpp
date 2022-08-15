@@ -107,12 +107,14 @@ void columnPrune(ExecutorPtr executor)
 
 
 // Split a DAGRequest into multiple QueryTasks which can be dispatched to multiple Compute nodes.
-// Currently we don't support window functions.
+// Currently we don't support window functions
+// and MPPTask with multiple partitions.
 QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context)
 {
     columnPrune(root);
     // enable mpp
     properties.is_mpp_query = true;
+    // TODO find a way to record service info.
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
     root.reset();
     executor_index = 0;
@@ -244,25 +246,18 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs)
-{
-    return join(right, exprs, ASTTableJoin::Kind::Inner);
-}
-
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs, ASTTableJoin::Kind kind)
+DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
+                                            tipb::JoinType tp,
+                                            MockAstVec join_cols,
+                                            MockAstVec left_conds,
+                                            MockAstVec right_conds,
+                                            MockAstVec other_conds,
+                                            MockAstVec other_eq_conds_from_in)
 {
     assert(root);
     assert(right.root);
-    auto join_ast = std::make_shared<ASTTableJoin>();
-    auto exp_list = std::make_shared<ASTExpressionList>();
-    for (const auto & expr : exprs)
-    {
-        exp_list->children.push_back(expr);
-    }
-    join_ast->using_expression_list = exp_list;
-    join_ast->strictness = ASTTableJoin::Strictness::All;
-    join_ast->kind = kind;
-    root = compileJoin(getExecutorIndex(), root, right.root, join_ast);
+
+    root = compileJoin(getExecutorIndex(), root, right.root, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
     return *this;
 }
 
