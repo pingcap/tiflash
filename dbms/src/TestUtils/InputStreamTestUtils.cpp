@@ -47,7 +47,10 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     const BlockInputStreamPtr & stream,
     const size_t num_rows_expect)
 {
-    RUNTIME_CHECK(stream != nullptr, stream_expr);
+    RUNTIME_CHECK_MSG(
+        stream != nullptr,
+        "ASSERT_INPUTSTREAM_NROWS: `{}` should be not null",
+        stream_expr);
 
     size_t num_rows_read = 0;
     stream->readPrefix();
@@ -88,7 +91,10 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     const BlockInputStreamPtr & stream,
     const Blocks & blocks)
 {
-    RUNTIME_CHECK(stream != nullptr, stream_expr);
+    RUNTIME_CHECK_MSG(
+        stream != nullptr,
+        "ASSERT_INPUTSTREAM_BLOCKS: `{}` should be not null",
+        stream_expr);
 
     size_t block_idx = 0;
     size_t num_rows_expect = 0;
@@ -147,7 +153,10 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     const BlockInputStreamPtr & stream,
     const Block & expect_block)
 {
-    RUNTIME_CHECK(stream != nullptr, stream_expr);
+    RUNTIME_CHECK_MSG(
+        stream != nullptr,
+        "ASSERT_INPUTSTREAM_BLOCK_UR: `{}` should be not null",
+        stream_expr);
     expect_block.checkNumberOfRows(); // check the input
 
     size_t num_rows_expect = expect_block.rows();
@@ -267,14 +276,23 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
 
 ::testing::AssertionResult InputStreamVSBlockUnrestrictlyCompareColumns(
     const char * stream_expr,
-    const char * /*colnames_expr*/,
+    const char * colnames_expr,
     const char * columns_expr,
     const BlockInputStreamPtr & stream,
     const Strings & colnames,
     const ColumnsWithTypeAndName & columns)
 {
-    RUNTIME_CHECK(stream != nullptr, stream_expr);
-    RUNTIME_CHECK(colnames.size() == columns.size(), colnames.size(), columns.size());
+    RUNTIME_CHECK_MSG(
+        stream != nullptr,
+        "ASSERT_INPUTSTREAM_COLS_UR: `{}` should be not null",
+        stream_expr);
+    RUNTIME_CHECK_MSG(
+        colnames.size() == columns.size(),
+        "ASSERT_INPUTSTREAM_COLS_UR: `{}` (len = {}) should have equal length as `{}` (len = {})",
+        colnames_expr,
+        colnames.size(),
+        columns_expr,
+        columns.size());
 
     Block expect_block(columns);
     expect_block.checkNumberOfRows(); // check the input
