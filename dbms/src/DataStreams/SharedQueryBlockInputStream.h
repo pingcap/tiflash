@@ -112,7 +112,10 @@ public:
     }
 
 protected:
-    Block readImpl() override
+    /// The BlockStreamProfileInfo of SharedQuery is useless,
+    /// and it will trigger tsan UT fail because of data race.
+    /// So overriding method `read` here.
+    Block read(FilterPtr &, bool) override
     {
         std::unique_lock lock(mutex);
 
@@ -133,6 +136,10 @@ protected:
         }
 
         return block;
+    }
+    Block readImpl() override
+    {
+        throw Exception("Unsupport");
     }
 
     void fetchBlocks()
