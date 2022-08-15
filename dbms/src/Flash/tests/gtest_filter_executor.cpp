@@ -19,7 +19,7 @@ namespace DB
 {
 namespace tests
 {
-class ExecutorTestRunner : public DB::tests::ExecutorTest
+class FilterExecutorTestRunner : public DB::tests::ExecutorTest
 {
 public:
     void initializeContext() override
@@ -36,7 +36,7 @@ public:
     }
 };
 
-TEST_F(ExecutorTestRunner, Filter)
+TEST_F(FilterExecutorTestRunner, equals)
 try
 {
     WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
@@ -62,7 +62,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorTestRunner, FilterWithQualifiedFormat)
+TEST_F(FilterExecutorTestRunner, FilterWithQualifiedFormat)
 try
 {
     auto request = context
@@ -76,6 +76,8 @@ try
     }
 }
 CATCH
+
+/// TODO: more functions.
 
 } // namespace tests
 } // namespace DB

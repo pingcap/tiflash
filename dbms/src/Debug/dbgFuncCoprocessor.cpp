@@ -767,8 +767,7 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
                     }
                 }
             }
-            String empty;
-            root_executor = compileTableScan(executor_index, table_info, empty, table_alias, append_pk_column);
+            root_executor = compileTableScan(executor_index, table_info, "", table_alias, append_pk_column);
         }
     }
     else
@@ -829,9 +828,8 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
                 }
             }
         }
-        String empty;
-        auto left_ts = compileTableScan(executor_index, left_table_info, empty, left_table_alias, left_append_pk_column);
-        auto right_ts = compileTableScan(executor_index, right_table_info, empty, right_table_alias, right_append_pk_column);
+        auto left_ts = compileTableScan(executor_index, left_table_info, "", left_table_alias, left_append_pk_column);
+        auto right_ts = compileTableScan(executor_index, right_table_info, "", right_table_alias, right_append_pk_column);
         root_executor = compileJoin(executor_index, left_ts, right_ts, joined_table->table_join);
     }
 

@@ -100,7 +100,8 @@ try
     auto expected_cols = {
         toNullableVec<String>({{}, "banana"}),
         toNullableVec<String>({{}, "apple"}),
-        toNullableVec<String>({{}, {}})};
+        toNullableVec<String>({{}, "banana"}),
+        toNullableVec<String>({{}, "apple"})};
     ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
 }
 CATCH
