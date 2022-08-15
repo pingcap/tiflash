@@ -63,7 +63,8 @@ public:
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; ++i)
+        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
+        for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
@@ -73,9 +74,10 @@ public:
     void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; ++i)
+        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
+        for (size_t 2 = 1; i <= max_concurrency_level; ++i)
         {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan, i));
         }
         WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
@@ -212,6 +214,12 @@ try
                        toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2}),
                        toNullableVec<Int64>("rank", {1, 2, 1, 1, 3, 3, 1, 1, 3, 3}),
                        toNullableVec<Int64>("dense_rank", {1, 2, 1, 1, 2, 2, 1, 1, 2, 2})}));
+}
+CATCH
+
+TEST_F(WindowExecutorTestRunner, multiWindowSortThenAgg)
+{
+
 }
 CATCH
 
