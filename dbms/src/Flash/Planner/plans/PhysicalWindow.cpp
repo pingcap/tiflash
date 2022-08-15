@@ -78,7 +78,7 @@ void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, si
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
 
-    executeExpression(pipeline, window_description.after_window, log, "cast after window");
+    executeExpression(pipeline, window_description.after_window, log, "expr after window");
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)
