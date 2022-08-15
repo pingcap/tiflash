@@ -28,7 +28,8 @@ namespace AggregationInterpreterHelper
 {
 bool isFinalAggMode(const tipb::Expr & expr);
 
-bool isSecondStageSum(const tipb::Expr & expr);
+// Judge if the input of this sum is partial result.
+bool isSumOnPartialResults(const tipb::Expr & expr);
 
 bool isFinalAgg(const tipb::Aggregation & aggregation);
 

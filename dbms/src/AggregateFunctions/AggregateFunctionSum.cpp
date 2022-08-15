@@ -22,7 +22,7 @@ namespace DB
 {
 
 extern const String count_second_stage = NameCountSecondStage::name;
-extern const String final_sum_stage = NameFinalSumStage::name;
+extern const String sum_on_partial_result_stage = NameSumOnPartialResult::name;
 
 namespace
 {
@@ -39,7 +39,7 @@ template <typename T>
 using AggregateFunctionSumWithOverflow = AggregateFunctionSum<T, T, AggregateFunctionSumData<T>, NameSumWithOverFlow>;
 
 template <typename T>
-using AggregateFunctionFinalSumStage = AggregateFunctionSum<T, T, AggregateFunctionSumData<T>, NameFinalSumStage>;
+using AggregateFunctionSumOnPartialResultStage = AggregateFunctionSumWithOverflow<T>;
 
 template <typename T>
 using AggregateFunctionSumKahan = AggregateFunctionSum<T, Float64, AggregateFunctionSumKahanData<Float64>, NameSumKahan>;
@@ -108,7 +108,7 @@ void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
     factory.registerFunction(NameSum::name, createAggregateFunctionSum<AggregateFunctionSumSimple, NameSum>, AggregateFunctionFactory::CaseInsensitive);
     factory.registerFunction(NameSumWithOverFlow::name, createAggregateFunctionSum<AggregateFunctionSumWithOverflow, NameSumWithOverFlow>);
-    factory.registerFunction(NameFinalSumStage::name, createAggregateFunctionSum<AggregateFunctionFinalSumStage, NameFinalSumStage>);
+    factory.registerFunction(NameSumOnPartialResult::name, createAggregateFunctionSum<AggregateFunctionSumOnPartialResultStage, NameSumOnPartialResult>);
     factory.registerFunction(NameSumKahan::name, createAggregateFunctionSum<AggregateFunctionSumKahan, NameSumKahan>);
     factory.registerFunction(NameCountSecondStage::name, createAggregateFunctionSum<AggregateFunctionCountSecondStage, NameCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);
 }

@@ -51,7 +51,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
 {}
 
 extern const String count_second_stage;
-extern const String final_sum_stage;
+extern const String sum_on_partial_result_stage;
 
 namespace
 {
@@ -87,11 +87,11 @@ String getAggFuncName(
         return count_second_stage;
     }
 
-    // sum function in mpp has two stage and we need to distinguish them with function name.
+    // sum functions in mpp are multistage and we need to distinguish them with function name.
     // "sum" represents the first stage.
-    // "finalSumStage" represents the second stage.
-    if (AggregationInterpreterHelper::isSecondStageSum(expr))
-        return final_sum_stage;
+    // "SumOtherStage" represents other stages whose input is partial result.
+    if (AggregationInterpreterHelper::isSumOnPartialResults(expr))
+        return sum_on_partial_result_stage;
 
     return agg_func_name;
 }

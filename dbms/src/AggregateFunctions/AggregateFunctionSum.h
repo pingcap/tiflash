@@ -294,22 +294,18 @@ struct NameSum
 struct NameSumWithOverFlow
 {
     static constexpr auto name = "sumWithOverflow";
-    DEFAULT_DECIMAL_INFER
+    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
+    {
+        return {prec, scale};
+    }
 };
+
+using NameSumOnPartialResult = NameSumWithOverFlow;
 
 struct NameCountSecondStage
 {
     static constexpr auto name = "countSecondStage";
     DEFAULT_DECIMAL_INFER
-};
-
-struct NameFinalSumStage
-{
-    static constexpr auto name = "finalSumStage";
-    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
-    {
-        return {prec, scale};
-    }
 };
 
 struct NameSumKahan
