@@ -315,8 +315,7 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_checksum_frame_size, DBMS_DEFAULT_BUFFER_SIZE, "Frame size for delta tree stable storage")                                                                                                                      \
                                                                                                                                                                                                                                         \
-    M(SettingDouble, dt_storage_blob_heavy_gc_valid_rate, 0.2, "Max valid rate of deciding a blob can be compact")                                                                                                                      \
-    M(SettingDouble, dt_storage_blob_block_alignment_bytes, 0, "Blob IO alignment size")                                                                                                                                                \
+    M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingBool, dt_enable_read_thread, false, "Enable storage read thread or not")                                                                                                                                                          \
     M(SettingDouble, dt_block_slots_scale, 1.0, "Block slots limit of a read request")                                                                                                                                                          \
     M(SettingDouble, dt_active_segments_scale, 1.0, "Acitve segments limit of a read request")                                                                                                                                                          \
@@ -367,8 +366,9 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingUInt64, manual_compact_pool_size, 1, "The number of worker threads to handle manual compact requests.")                                                                                                                    \
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
-    M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")
-
+    M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
+                                                                                                                                                                                                                                        \
+    M(SettingBool, enable_planner, true, "Enable planner")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

@@ -246,25 +246,18 @@ DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchang
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs)
-{
-    return join(right, exprs, tipb::TypeInnerJoin);
-}
-
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs, tipb::JoinType tp)
+DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
+                                            tipb::JoinType tp,
+                                            MockAstVec join_cols,
+                                            MockAstVec left_conds,
+                                            MockAstVec right_conds,
+                                            MockAstVec other_conds,
+                                            MockAstVec other_eq_conds_from_in)
 {
     assert(root);
     assert(right.root);
 
-    // todo(ljr): support `on` expression
-    auto using_expr_list = std::make_shared<ASTExpressionList>();
-    for (const auto & expr : exprs)
-    {
-        using_expr_list->children.push_back(expr);
-    }
-
-    root = compileJoin(getExecutorIndex(), root, right.root, tp, using_expr_list);
-
+    root = compileJoin(getExecutorIndex(), root, right.root, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
     return *this;
 }
 
