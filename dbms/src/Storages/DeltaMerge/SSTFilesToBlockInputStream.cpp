@@ -100,9 +100,9 @@ void SSTFilesToBlockInputStream::readSuffix()
 
 Block SSTFilesToBlockInputStream::read()
 {
-    std::string loaded_write_cf_key;
     while (write_cf_reader && write_cf_reader->remained())
     {
+        std::string loaded_write_cf_key;
         // To decode committed rows from key-value pairs into block, we need to load
         // all need key-value pairs from default and lock column families.
         // Check the MVCC (key-format and transaction model) for details
@@ -117,7 +117,6 @@ Block SSTFilesToBlockInputStream::read()
             ++process_keys.write_cf;
             if (process_keys.write_cf % expected_size == 0)
             {
-                loaded_write_cf_key.clear();
                 loaded_write_cf_key.assign(key.data, key.len);
             }
         } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
@@ -147,8 +146,8 @@ Block SSTFilesToBlockInputStream::read()
 void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * const rowkey_to_be_included)
 {
     SSTReader * reader;
-    size_t * p_process_keys = &process_keys.default_cf;
-    DecodedTiKVKey * last_loaded_rowkey = &default_last_loaded_rowkey;
+    size_t * p_process_keys;
+    DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
         reader = default_cf_reader.get();
