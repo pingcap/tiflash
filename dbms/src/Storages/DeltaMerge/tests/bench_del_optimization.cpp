@@ -121,9 +121,6 @@ protected:
     std::unique_ptr<Context> db_context;
 };
 
-// 增加一个开关来比较是否开启 del optimization
-// 构造几个 block 来进行测试 -- 1. 有 del 2. 无 del
-
 static constexpr const char * pk_name = "_tidb_rowid";
 
 std::set<int> createRandomNum(size_t min_value, size_t max_value, size_t num){

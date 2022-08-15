@@ -270,22 +270,9 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
 {
     try
     {
-        // while (writing_threads.load(std::memory_order_relaxed) > 0)
-        // {
-        int index = 0;
-        while (index < 10) {
-            index += 1;
+        while (writing_threads.load(std::memory_order_relaxed) > 0)
+        {
             const auto & columns = store->getTableColumns();
-            ColumnDefines real_columns;
-
-            for (const auto & col : columns)
-            {
-                if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != VERSION_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
-                {
-                    real_columns.emplace_back(col);
-                }
-            }
-
             int stream_count = opts->read_stream_count;
             std::atomic<uint64_t> read_count = 0;
             auto count_row = [&read_count](BlockInputStreamPtr in, [[maybe_unused]] uint64_t read_ts) {
@@ -295,10 +282,10 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
                 }
             };
             Stopwatch sw;
-            read(real_columns, stream_count, count_row);
+            read(columns, stream_count, count_row);
             read_stat.ms = sw.elapsedMilliseconds();
             read_stat.count = read_count;
-            LOG_FMT_INFO(log, "scanAll: columns {} streams {} read_stat {}", real_columns.size(), stream_count, read_stat.toString());
+            LOG_FMT_INFO(log, "scanAll: columns {} streams {} read_stat {}", columns.size(), stream_count, read_stat.toString());
         }
     }
     catch (...)
@@ -316,18 +303,16 @@ void DTWorkload::run(uint64_t r)
         write_threads.push_back(std::thread(&DTWorkload::write, this, std::ref(stat.write_stats[i])));
     }
 
-    for (auto & t : write_threads)
-    {
-        t.join();
-    }
-
     std::vector<std::thread> read_threads;
     for (uint64_t i = 0; i < opts->read_thread_count; i++)
     {
         read_threads.push_back(std::thread(&DTWorkload::scanAll, this, std::ref(stat.read_stats[i])));
     }
 
-    
+    for (auto & t : write_threads)
+    {
+        t.join();
+    }
     for (auto & t : read_threads)
     {
         t.join();
