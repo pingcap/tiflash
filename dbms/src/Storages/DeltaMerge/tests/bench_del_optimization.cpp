@@ -182,7 +182,7 @@ Block createBlock(size_t rows, size_t columns, size_t delete_rows) {
     return block;
 }
 
-constexpr size_t num_iterations_test = 1000;
+constexpr size_t num_iterations_test = 100000;
 
 
 BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)(benchmark::State & state)
@@ -284,9 +284,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)(b
 
     ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
     for (auto col : columns ){
-        if (col.id >= 3) {
-            read_columns->emplace_back(std::move(col));
-        }
+        read_columns->emplace_back(std::move(col));
     }
 
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
@@ -330,9 +328,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization
 
     ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
     for (auto col : columns ){
-        if (col.id >= 3) {
-            read_columns->emplace_back(std::move(col));
-        }
+        read_columns->emplace_back(std::move(col));
     }
 
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
@@ -365,23 +361,13 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization
     }
 }
 
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
 
-//BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0});
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({10000,10,10})->Args({10000,10,100})->Args({5000,10,0})->Args({10000,20,0})->Args({10000,5,0});
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({10000,10,10})->Args({10000,10,100})->Args({5000,10,0})->Args({10000,20,0})->Args({10000,5,0});
-
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({10000,10,10})->Args({10000,10,100})->Args({5000,10,0})->Args({10000,20,0})->Args({10000,5,0});
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({10000,10,10})->Args({10000,10,100})->Args({5000,10,0})->Args({10000,20,0})->Args({10000,5,0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000,20,0})->Args({5000,15,0})->Args({5000,10,0})->Args({5000,8,0})->Args({5000,5,0});
 
 
-// 先比较没有 delete 行的一个情况对比
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({5000,10,0})->Args({50000,10,0})->Args({10000,20,0})->Args({10000,15,0})->Args({10000,8,0})->Args({10000,5,0});
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({5000,10,0})->Args({50000,10,0})->Args({10000,20,0})->Args({10000,15,0})->Args({10000,8,0})->Args({10000,5,0});
-
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({5000,10,0})->Args({50000,10,0})->Args({10000,20,0})->Args({10000,15,0})->Args({10000,8,0})->Args({10000,5,0});
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({10000,10,0})->Args({5000,10,0})->Args({50000,10,0})->Args({10000,20,0})->Args({10000,15,0})->Args({10000,8,0})->Args({10000,5,0});
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000,10,0})->Args({5000,15,0})->Args({5000,8,0})->Args({5000,5,0});
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000,10,0})->Args({5000,15,0})->Args({5000,8,0})->Args({5000,5,0});
 }
 }
 }
