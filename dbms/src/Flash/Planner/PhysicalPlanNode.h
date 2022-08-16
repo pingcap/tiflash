@@ -64,7 +64,7 @@ public:
 
     bool isTiDBOperator() const { return is_tidb_operator; }
 
-    void notATiDBOperator() { is_tidb_operator = false; }
+    void notTiDBOperator() { is_tidb_operator = false; }
 
     void disableRestoreConcurrency() { is_restore_concurrency = false; }
 

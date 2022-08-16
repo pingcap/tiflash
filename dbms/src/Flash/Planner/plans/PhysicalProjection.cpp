@@ -93,7 +93,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
         "final projection",
         project_actions);
     // Final Projection is not a tidb operator, so no need to record profile streams.
-    physical_projection->notATiDBOperator();
+    physical_projection->notTiDBOperator();
     return physical_projection;
 }
 
@@ -138,7 +138,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         "final projection",
         project_actions);
     // Final Projection is not a tidb operator, so no need to record profile streams.
-    physical_projection->notATiDBOperator();
+    physical_projection->notTiDBOperator();
     return physical_projection;
 }
 
