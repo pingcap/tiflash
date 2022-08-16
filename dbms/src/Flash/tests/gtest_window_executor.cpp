@@ -226,9 +226,8 @@ CATCH
 TEST_F(WindowExecutorTestRunner, multiWindowSortThenAgg)
 try
 {
-    
     /*
-    select count(*)from (
+    select count(1)from (
         SELECT 
             ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`),
             ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1` DESC)

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 
 namespace DB::PhysicalPlanHelper
@@ -35,5 +36,28 @@ ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Conte
         }
     }
     return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
+}
+
+NamesAndTypes addProjectAction(
+    const ExpressionActionsPtr & expr_actions,
+    const NamesAndTypes & before_schema,
+    const String & column_prefix,
+    const Context & context)
+{
+    assert(expr_actions);
+    assert(!before_schema.empty());
+    DAGExpressionAnalyzer analyzer{before_schema, context};
+    const auto & project_aliases = analyzer.genNonRootFinalProjectAliases(column_prefix);
+    expr_actions->add(ExpressionAction::project(project_aliases));
+
+    NamesAndTypes after_schema = before_schema;
+    assert(project_aliases.size() == after_schema.size());
+    // replace column name of after_schema by alias.
+    for (size_t i = 0; i < project_aliases.size(); ++i)
+    {
+        assert(after_schema[i].name == project_aliases[i].first);
+        after_schema[i].name = project_aliases[i].second;
+    }
+    return after_schema;
 }
 } // namespace DB::PhysicalPlanHelper

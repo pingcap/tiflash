@@ -71,19 +71,8 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
 {
     assert(child);
 
-    DAGExpressionAnalyzer analyzer{child->getSchema(), context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
-    auto final_project_aliases = analyzer.genNonRootFinalProjectAliases(column_prefix);
-    project_actions->add(ExpressionAction::project(final_project_aliases));
-
-    NamesAndTypes schema = child->getSchema();
-    assert(final_project_aliases.size() == schema.size());
-    // replace column name of schema by alias.
-    for (size_t i = 0; i < final_project_aliases.size(); ++i)
-    {
-        assert(schema[i].name == final_project_aliases[i].first);
-        schema[i].name = final_project_aliases[i].second;
-    }
+    NamesAndTypes schema = PhysicalPlanHelper::addProjectAction(project_actions, child->getSchema(), column_prefix, context);
 
     auto physical_projection = std::make_shared<PhysicalProjection>(
         child->execId(),

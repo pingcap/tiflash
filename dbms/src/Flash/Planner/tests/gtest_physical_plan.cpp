@@ -201,8 +201,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, aggregation_1> | is_record_profile_streams: false, schema: <aggregation_1_max(s2)_collator_46 , Nullable(String)>, <aggregation_1_any(s1)_collator_46 , Nullable(String)>
- <Aggregation, aggregation_1> | is_record_profile_streams: true, schema: <max(s2)_collator_46 , Nullable(String)>, <any(s1)_collator_46 , Nullable(String)>
+<Projection, aggregation_1> | is_record_profile_streams: false, schema: <aggregation_1_aggregation_1_max(s2)_collator_46 , Nullable(String)>, <aggregation_1_aggregation_1_any(s1)_collator_46 , Nullable(String)>
+ <Aggregation, aggregation_1> | is_record_profile_streams: true, schema: <aggregation_1_max(s2)_collator_46 , Nullable(String)>, <aggregation_1_any(s1)_collator_46 , Nullable(String)>
   <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <s1, Nullable(String)>, <s2, Nullable(String)>)",
         /*expected_streams=*/R"(
 Expression: <final projection>
@@ -295,8 +295,8 @@ try
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, window_2> | is_record_profile_streams: false, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
- <Window, window_2> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>, <CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+<Projection, window_2> | is_record_profile_streams: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+ <Window, window_2> | is_record_profile_streams: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
   <WindowSort, sort_1> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
    <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
         /*expected_streams=*/R"(
@@ -314,8 +314,8 @@ Expression: <final projection>
     execute(
         request,
         /*expected_physical_plan=*/R"(
-<Projection, window_2> | is_record_profile_streams: false, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
- <Window, window_2> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>, <CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+<Projection, window_2> | is_record_profile_streams: false, schema: <window_2_window_2_partition, Nullable(Int64)>, <window_2_window_2_order, Nullable(Int64)>, <window_2_window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
+ <Window, window_2> | is_record_profile_streams: true, schema: <window_2_partition, Nullable(Int64)>, <window_2_order, Nullable(Int64)>, <window_2_CAST(row_number()_collator , Nullable(Int64)_String)_collator_0 , Nullable(Int64)>
   <WindowSort, sort_1> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>
    <MockExchangeReceiver, exchange_receiver_0> | is_record_profile_streams: true, schema: <partition, Nullable(Int64)>, <order, Nullable(Int64)>)",
         /*expected_streams=*/R"(
