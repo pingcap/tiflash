@@ -35,7 +35,7 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
     options = config;
     table_columns = std::make_shared<ColumnDefines>();
 
-    root_segment = reload(config.is_common_handle);
+    root_segment = reload(config.is_common_handle, nullptr, std::move(config.db_settings));
     ASSERT_EQ(root_segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     segments.clear();
     segments[DELTA_MERGE_FIRST_SEGMENT_ID] = root_segment;
@@ -99,7 +99,7 @@ std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id)
     return std::nullopt;
 }
 
-void SegmentTestBasic::mergeSegment(PageId left_segment_id, PageId right_segment_id)
+void SegmentTestBasic::mergeSegment(PageId left_segment_id, PageId right_segment_id, bool skip_row_check)
 {
     auto left_segment = segments[left_segment_id];
     auto right_segment = segments[right_segment_id];
@@ -115,7 +115,10 @@ void SegmentTestBasic::mergeSegment(PageId left_segment_id, PageId right_segment
     {
         segments.erase(it);
     }
-    EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), left_segment_row_num + right_segment_row_num);
+    if (!skip_row_check)
+    {
+        EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), left_segment_row_num + right_segment_row_num);
+    }
 }
 
 void SegmentTestBasic::mergeSegmentDelta(PageId segment_id)
@@ -358,7 +361,7 @@ std::pair<PageId, PageId> SegmentTestBasic::getRandomMergeablePair()
     }
 }
 
-RowKeyRange SegmentTestBasic::commanHandleKeyRange()
+RowKeyRange SegmentTestBasic::commonHandleKeyRange()
 {
     String start_key, end_key;
     {
@@ -385,7 +388,7 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
 
-    return Segment::newSegment(*dm_context, table_columns, is_common_handle ? commanHandleKeyRange() : RowKeyRange::newAll(is_common_handle, 1), storage_pool->newMetaPageId(), 0);
+    return Segment::newSegment(*dm_context, table_columns, is_common_handle ? commonHandleKeyRange() : RowKeyRange::newAll(is_common_handle, 1), storage_pool->newMetaPageId(), 0);
 }
 
 void SegmentTestBasic::setColumns(const ColumnDefinesPtr & columns)
