@@ -449,30 +449,7 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryTest, ApplyRefToNotExistEntry)
-try
-{
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    {
-        PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
-        dir->apply(std::move(edit));
-    }
-
-    // Applying ref to not exist entry is not allowed
-    { // Ref 4-> 999
-        PageEntriesEdit edit;
-        edit.put(3, entry3);
-        edit.ref(4, 999);
-        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
-    }
-}
-CATCH
-
-TEST_F(PageDirectoryTest, TestRefWontDeadLock)
+TEST_F(PageDirectoryTest, RefWontDeadLock)
 {
     PageEntriesEdit edit;
     {
@@ -497,6 +474,125 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
 
     dir->apply(std::move(edit2));
 }
+
+TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
+{
+    // Make sure creating ext page after itself and all its reference are clean
+    // is idempotent
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(10);
+        dir->apply(std::move(edit));
+        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_ids.size(), 1);
+        EXPECT_GT(alive_ids.count(10), 0);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(10); // should be idempotent
+        dir->apply(std::move(edit));
+        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_ids.size(), 1);
+        EXPECT_GT(alive_ids.count(10), 0);
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(10);
+        dir->apply(std::move(edit));
+        dir->gcInMemEntries(); // clean in memory
+        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_ids.size(), 0);
+        EXPECT_EQ(alive_ids.count(10), 0); // removed
+    }
+
+    {
+        // Add again after deleted
+        PageEntriesEdit edit;
+        edit.putExternal(10);
+        dir->apply(std::move(edit));
+        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_ids.size(), 1);
+        EXPECT_GT(alive_ids.count(10), 0);
+    }
+}
+
+TEST_F(PageDirectoryTest, RefToDeletedPage)
+try
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry1);
+        edit.put(2, entry2);
+        dir->apply(std::move(edit));
+    }
+
+    // Applying ref to not exist entry is not allowed
+    { // Ref 4-> 999
+        PageEntriesEdit edit;
+        edit.put(3, entry3);
+        edit.ref(4, 999);
+        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, RefToDeletedPageTwoHops)
+try
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(2, 1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(3, 1);
+        ASSERT_ANY_THROW({ dir->apply(std::move(edit)); });
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, RefToDeletedExtPageTwoHops)
+try
+{
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(2, 1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(3, 1);
+        ASSERT_ANY_THROW({ dir->apply(std::move(edit)); });
+    }
+}
+CATCH
 
 TEST_F(PageDirectoryTest, NewRefAfterDelThreeHops)
 try
@@ -758,77 +854,6 @@ try
         auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_ids.size(), 1);
         EXPECT_GT(alive_ids.count(50), 0);
-    }
-}
-CATCH
-
-TEST_F(PageDirectoryTest, NewRefAfterDel)
-{
-    {
-        PageEntriesEdit edit;
-        edit.putExternal(10);
-        dir->apply(std::move(edit));
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        EXPECT_EQ(alive_ids.size(), 1);
-        EXPECT_GT(alive_ids.count(10), 0);
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.putExternal(10); // should be idempotent
-        dir->apply(std::move(edit));
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        EXPECT_EQ(alive_ids.size(), 1);
-        EXPECT_GT(alive_ids.count(10), 0);
-    }
-
-    {
-        PageEntriesEdit edit;
-        edit.del(10);
-        dir->apply(std::move(edit));
-        dir->gcInMemEntries(); // clean in memory
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        EXPECT_EQ(alive_ids.size(), 0);
-        EXPECT_EQ(alive_ids.count(10), 0); // removed
-    }
-
-    {
-        // Add again after deleted
-        PageEntriesEdit edit;
-        edit.putExternal(10);
-        dir->apply(std::move(edit));
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        EXPECT_EQ(alive_ids.size(), 1);
-        EXPECT_GT(alive_ids.count(10), 0);
-    }
-}
-
-TEST_F(PageDirectoryTest, RefToExt)
-try
-{
-    {
-        PageEntriesEdit edit;
-        edit.putExternal(83);
-        dir->apply(std::move(edit));
-    }
-    {
-        PageEntriesEdit edit;
-        edit.ref(85, 83);
-        dir->apply(std::move(edit));
-    }
-    {
-        PageEntriesEdit edit;
-        edit.del(83);
-        dir->apply(std::move(edit));
-    }
-    // The external id "83" is not changed,
-    // we may add ref to external "83" even
-    // if it is logical delete but have other
-    // alive reference page.
-    {
-        PageEntriesEdit edit;
-        edit.ref(86, 83);
-        dir->apply(std::move(edit));
     }
 }
 CATCH
@@ -2232,8 +2257,8 @@ try
     }
     {
         PageEntriesEdit edit; // split
-        edit.ref(357, 352);
-        edit.ref(359, 352);
+        edit.ref(357, 353);
+        edit.ref(359, 353);
         dir->apply(std::move(edit));
     }
     {

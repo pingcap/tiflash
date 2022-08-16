@@ -793,7 +793,7 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
     //         {
     //             "type": "entry",
     //             "create_ver": 1,
-    //             "being_ref_count": 2, // being ref by id 10
+    //             "being_ref_count": 2, // being ref by id 11
     //             "entry": "..some offset to blob file" // mark as "entryX"
     //         },
     //         {
@@ -1032,9 +1032,37 @@ void PageDirectory::applyRefEditRecord(
     const PageEntriesEdit::EditRecord & rec,
     const PageVersion & version)
 {
-    // applying ref 3->2, existing ref 2->1, normal entry 1, then we should collapse
-    // the ref to be 3->1, increase the refcounting of normal entry 1
-    auto [resolve_success, resolved_id, resolved_ver] = [&mvcc_table_directory](PageIdV3Internal id_to_resolve, PageVersion ver_to_resolve)
+    // Assume the `mvcc_table_directory` is:
+    // {
+    //     "10": [
+    //         {
+    //             "type": "entry",
+    //             "create_ver": 1,
+    //             "being_ref_count": 3, // being ref by id 11, 12
+    //             "entry": "..some offset to blob file" // mark as "entryX"
+    //         },
+    //         {
+    //             "type": "delete",
+    //             "delete_ver": 3,
+    //         },
+    //     ],
+    //     "11": {
+    //         "type": "ref",
+    //         "ori_page_id": 10,
+    //         "create_ver": 2,
+    //     },
+    // }
+    //
+    // When we need to create a new ref 12->11, first call `resolveToPageId` with `ignore_delete=true`
+    // and further resolve ref id 11 to 10. Then we will call `resolveToPageId` with `ignore_delete=false`
+    // to ignore the "delete"s.
+    // Finally, we will collapse the ref chain to create a "ref 12 -> 10" instead of "ref 12 -> 11 -> 10"
+    // in memory and increase the ref-count of "entryX".
+    //
+    // This is because doing GC on a non-collapse ref chain is much harder and long ref chain make the
+    // time of accessing an entry not stable.
+
+    auto [resolve_success, resolved_id, resolved_ver] = [&mvcc_table_directory, ori_page_id = rec.ori_page_id](PageIdV3Internal id_to_resolve, PageVersion ver_to_resolve)
         -> std::tuple<bool, PageIdV3Internal, PageVersion> {
         while (true)
         {
@@ -1045,8 +1073,7 @@ void PageDirectory::applyRefEditRecord(
             const VersionedPageEntriesPtr & resolve_version_list = resolve_ver_iter->second;
             auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = resolve_version_list->resolveToPageId(
                 ver_to_resolve.sequence,
-                /*ignore_delete=*/true,
-                // /*ignore_delete=*/id_to_resolve != ori_page_id,
+                /*ignore_delete=*/id_to_resolve != ori_page_id,
                 nullptr);
             switch (resolve_state)
             {
@@ -1075,9 +1102,9 @@ void PageDirectory::applyRefEditRecord(
             resolved_id,
             resolved_ver));
     }
+
     // use the resolved_id to collapse ref chain 3->2, 2->1 ==> 3->1
     bool is_ref_created = version_list->createNewRef(version, resolved_id);
-
     if (is_ref_created)
     {
         // Add the ref-count of being-ref entry
