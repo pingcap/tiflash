@@ -1271,21 +1271,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             users_config_reloader.reset();
         });
 
-        /// try to load dictionaries immediately, throw on error and die
-        try
-        {
-            if (!config().getBool("dictionaries_lazy_load", true))
-            {
-                global_context->tryCreateEmbeddedDictionaries();
-                global_context->tryCreateExternalDictionaries();
-            }
-        }
-        catch (...)
-        {
-            LOG_FMT_ERROR(log, "Caught exception while loading dictionaries.");
-            throw;
-        }
-
         /// This object will periodically calculate some metrics.
         /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);

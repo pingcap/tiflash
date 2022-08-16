@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
-#include <Databases/DatabaseDictionary.h>
 #include <Databases/DatabaseFactory.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOrdinary.h>
@@ -57,7 +56,7 @@ DatabasePtr DatabaseFactory::get(
         if (engine && engine->arguments)
         {
             const auto & arguments = engine->arguments->children;
-            if (arguments.size() >= 1)
+            if (!arguments.empty())
             {
                 const auto db_info_json = safeGetLiteralValue<String>(arguments[0], engine_name, 0);
                 if (!db_info_json.empty())
@@ -81,9 +80,7 @@ DatabasePtr DatabaseFactory::get(
         return std::make_shared<DatabaseOrdinary>(database_name, metadata_path, context);
     else if (engine_name == "Memory")
         return std::make_shared<DatabaseMemory>(database_name);
-    else if (engine_name == "Dictionary")
-        return std::make_shared<DatabaseDictionary>(database_name, context);
-
+        
     throw Exception("Unknown database engine: " + engine_name, ErrorCodes::UNKNOWN_DATABASE_ENGINE);
 }
 
