@@ -1329,7 +1329,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, UInt64 max
 
 BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &)
 {
-    LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}] with capacity {}", blob_file_id, max_caps);
+    LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}] [capacity={}]", blob_file_id, max_caps);
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
         static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()),
