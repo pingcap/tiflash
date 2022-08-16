@@ -1404,7 +1404,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         for (const auto & stat : stats_iter->second)
         {
             auto lock = stat->lock(); // TODO: will it bring performance regression?
-            // Only BlobFile which total capacity is smaller than config.file_limit_size can be reused for other write
+            // Only BlobFile which total capacity is smaller or equal to config.file_limit_size can be reused for another write
             if (stat->isNormal()
                 && stat->sm_max_caps >= buf_size
                 && stat->sm_valid_rate < smallest_valid_rate
