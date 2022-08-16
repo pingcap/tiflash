@@ -81,7 +81,7 @@ class MPPTaskCancelFunctor
 public:
     MPPTaskPtr task;
     String reason;
-    MPPTaskCancelFunctor(const MPPTaskCancelFunctor & other) noexcept
+    MPPTaskCancelFunctor(const MPPTaskCancelFunctor & other)
         : task(other.task)
         , reason(other.reason)
     {
@@ -133,15 +133,14 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         fmt_buf.fmtAppend("{} ", it->first.toString());
         auto current_task = it->second;
         it = task_set->task_map.erase(it);
-        // Note it is not acceptable to destruct MPPTask inside the loop, because destruct a mpp task before all mpp tasks are
-        // cancelled may cause some deadlock issues.
-        // At first, we try to move `current_task` to the cancel thread by std::move:
-        // `thread_manager->schedule(false, "CancelMPPTask", [task = std::move(current_task), &reason] { task->cancel(reason); });`
-        // However, we found that due to SOO in llvm(https://github.com/llvm/llvm-project/issues/32472), current_task is actually
-        // copied, as a workaround we have to add a wrap(MPPTaskCancelFunctor) here to make sure `current_task` can be moved to cancel thread.
-        // Use a vector to save the cancel functors so even if cancel functors fail to move due to some unknown issues, we can
-        // still make sure that the MPPTask's destructor is not called inside the loop.(Note it is not acceptable to destruct
-        // MPPTask inside the loop, because destruct a mpp task before all the mpp tasks are cancelled may cause some deadlock issues)
+        // Note it is not acceptable to destruct `current_task` inside the loop, because destruct a mpp task before all
+        // other mpp tasks are cancelled may cause some deadlock issues, so `current_task` has to be moved to cancel thread.
+        // At first, we use std::move to move `current_task` to lambda like this:
+        // thread_manager->schedule(false, "CancelMPPTask", [task = std::move(current_task), &reason] { task->cancel(reason); });
+        // However, due to SOO in llvm(https://github.com/llvm/llvm-project/issues/32472), there is still a copy of `current_task`
+        // remaining in the current scope, as a workaround we add a wrap(MPPTaskCancelFunctor) here to make sure `current_task`
+        // can be moved to cancel thread. Meanwhile, also save the moved wrap in a vector to guarantee that even if cancel functors
+        // fail to move due to some other issues, it still does not destruct inside the loop
         cancel_functors.push_back(MPPTaskCancelFunctor(std::move(current_task), reason));
         thread_manager->schedule(false, "CancelMPPTask", std::move(cancel_functors[cancel_functors.size() - 1]));
     }
@@ -154,9 +153,6 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         if (it != mpp_query_map.end())
             mpp_query_map.erase(it);
     }
-    using namespace std::chrono_literals;
-    std::this_thread::sleep_for(30s);
-    cancel_functors.clear();
     LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
 }
 
