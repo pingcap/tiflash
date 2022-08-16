@@ -154,23 +154,14 @@ std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
     const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
-    String err_msg;
-    MPPTunnelPtr tunnel = nullptr;
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    if (tunnel == nullptr)
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
-        if (sender_task != nullptr)
-        {
-            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
-        }
-        if (tunnel == nullptr)
-        {
-            return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
-        }
+        return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
     }
     if (!tunnel->isLocal())
     {
-        String err_msg("EstablishMPPConnectionLocal into a remote channel !");
-        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
     }
     tunnel->connect(nullptr);
     return std::make_tuple(tunnel, grpc::Status::OK);
