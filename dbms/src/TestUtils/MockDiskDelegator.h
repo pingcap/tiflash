@@ -134,9 +134,9 @@ public:
 
     String choosePath(const PageFileIdAndLevel & id_lvl)
     {
-        if (page_path_map.find(id_lvl) != page_path_map.end())
+        if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
         {
-            return paths[page_path_map[id_lvl]];
+            return paths[iter->second];
         }
         auto chosen = paths[choose_idx];
         choose_idx = (choose_idx + 1) % paths.size();
