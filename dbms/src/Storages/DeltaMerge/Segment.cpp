@@ -208,7 +208,10 @@ Segment::Segment(UInt64 epoch_, //
     , delta(delta_)
     , stable(stable_)
     , log(&Poco::Logger::get("Segment"))
-{}
+{
+    //fast_mode_bitmap_filter = std::make_shared<BitmapFilter>(delta->getRows() + stable->getRows(), nullptr);
+    //LOG_FMT_DEBUG(log, "{} => memory usage {}", segment_id, BitmapFilter::getMemoryUsage());
+}
 
 SegmentPtr Segment::newSegment(DMContext & context,
                                const ColumnDefinesPtr & schema,

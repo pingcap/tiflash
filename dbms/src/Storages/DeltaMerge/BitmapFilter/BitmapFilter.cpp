@@ -17,34 +17,67 @@
 
 namespace DB::DM
 {
-BitmapFilter::BitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_) : filter(size_, 0), snap(snapshot_) {}
+ArrayBitmapFilter::ArrayBitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_)
+    : filter(size_, 0)
+    , snap(snapshot_)
+{}
 
-// TODO(jinhelin): use roaringbitmap
-// TODO(jinhelin): since most of the bits in bitmap is 1, reverse it to save memory.
-    void BitmapFilter::set(const ColumnPtr & col)
+void ArrayBitmapFilter::set(const ColumnPtr & col)
+{
+    for (size_t i = 0; i < col->size(); i++)
     {
-        for (size_t i = 0; i < col->size(); i++)
+        auto row_id = col->getUInt(i);
+        if (row_id >= filter.size())
         {
-            auto row_id = col->getUInt(i);
-            if (row_id >= filter.size())
-            {
-                throw Exception(fmt::format("SegmentRowId {} is greater or equal than filter size {}", row_id, filter.size()));
-            }
-            filter[row_id] = 1;
+            throw Exception(fmt::format("SegmentRowId {} is greater or equal than filter size {}", row_id, filter.size()));
         }
+        filter[row_id] = 1;
     }
-
-    void BitmapFilter::get(IColumn::Filter & f, size_t start, size_t limit) const
-    {
-        for (size_t i = 0; i < limit; i++)
-        {
-            f[i] = filter[start + i];
-        }
-    }
-
-    SegmentSnapshotPtr BitmapFilter::snapshot() const 
-    {
-        return snap;
-    }
-
 }
+
+void ArrayBitmapFilter::get(IColumn::Filter & f, size_t start, size_t limit) const
+{
+    for (size_t i = 0; i < limit; i++)
+    {
+        f[i] = filter[start + i];
+    }
+}
+
+SegmentSnapshotPtr ArrayBitmapFilter::snapshot() const
+{
+    return snap;
+}
+
+RoaringBitmapFilter::RoaringBitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_)
+    : filter(size_, 0)
+    , snap(snapshot_)
+{}
+
+// TODO(jinhelin): since most of the bits in bitmap is 1, reverse it to save memory.
+void RoaringBitmapFilter::set(const ColumnPtr & col)
+{
+    for (size_t i = 0; i < col->size(); i++)
+    {
+        auto row_id = col->getUInt(i);
+        if (row_id >= filter.size())
+        {
+            throw Exception(fmt::format("SegmentRowId {} is greater or equal than filter size {}", row_id, filter.size()));
+        }
+        filter[row_id] = 1;
+    }
+}
+
+void RoaringBitmapFilter::get(IColumn::Filter & f, size_t start, size_t limit) const
+{
+    for (size_t i = 0; i < limit; i++)
+    {
+        f[i] = filter[start + i];
+    }
+}
+
+SegmentSnapshotPtr RoaringBitmapFilter::snapshot() const
+{
+    return snap;
+}
+
+} // namespace DB::DM

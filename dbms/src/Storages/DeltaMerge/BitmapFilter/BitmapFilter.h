@@ -21,17 +21,32 @@ namespace DB::DM
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 
-class BitmapFilter
+class ArrayBitmapFilter
 {
 public:
-    BitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_);
+    ArrayBitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_);
     void set(const ColumnPtr & col);
     void get(IColumn::Filter & f, size_t start, size_t limit) const;
     SegmentSnapshotPtr snapshot() const;
+
 private:
     IColumn::Filter filter;
     SegmentSnapshotPtr snap;
 };
 
+class RoaringBitmapFilter
+{
+public:
+    RoaringBitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_);
+    void set(const ColumnPtr & col);
+    void get(IColumn::Filter & f, size_t start, size_t limit) const;
+    SegmentSnapshotPtr snapshot() const;
+
+private:
+    IColumn::Filter filter;
+    SegmentSnapshotPtr snap;
+};
+
+using BitmapFilter = RoaringBitmapFilter;
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
-}
+} // namespace DB::DM
