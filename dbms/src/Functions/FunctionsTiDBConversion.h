@@ -22,6 +22,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/FieldVisitors.h>
+#include <Common/MyDuration.h>
 #include <Common/MyTime.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
@@ -1549,7 +1550,7 @@ private:
     }
 };
 
-/// cast duration as duration
+/// cast time/duration as duration
 /// TODO: support more types convert to duration
 template <typename FromDataType, typename ToDataType, bool return_nullable>
 struct TiDBConvertToDuration
@@ -1600,6 +1601,41 @@ struct TiDBConvertToDuration
                 }
                 block.getByPosition(result).column = std::move(to_col);
             }
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate>)
+        {
+            // cast date as duration
+            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            block.getByPosition(result).column = to_type->createColumnConst(size, toField(0)); // The DATE type is used for values with a date part but no time part. The value of Duration is always zero.
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
+        {
+            // cast time as duration
+            const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
+            const ColumnUInt64::Container & from_vec = col_from->getData();
+            const auto & from_type = checkAndGetDataType<DataTypeMyDateTime>(block.getByPosition(arguments[0]).type.get());
+            int from_fsp = from_type->getFraction();
+
+            auto to_col = ColumnVector<Int64>::create();
+            auto & vec_to = to_col->getData();
+            vec_to.resize(size);
+            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            int to_fsp = to_type->getFsp();
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                MyDateTime datetime(from_vec[i]);
+                MyDuration duration(1 /*neg*/, datetime.hour, datetime.minute, datetime.second, datetime.micro_second, from_fsp);
+                if (to_fsp < from_fsp)
+                {
+                    vec_to[i] = round(duration.nanoSecond(), (6 - to_fsp) + 3);
+                }
+                else
+                {
+                    vec_to[i] = duration.nanoSecond();
+                }
+            }
+            block.getByPosition(result).column = std::move(to_col);
         }
         else
         {
