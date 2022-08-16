@@ -36,13 +36,17 @@ static inline ValueType safeGetLiteralValue(const ASTPtr & ast, const String & e
 {
     if (!ast || !typeid_cast<const ASTLiteral *>(ast.get()))
         throw Exception(
-            "Database engine " + engine_name + " requested literal argument at index " + DB::toString(index), ErrorCodes::BAD_ARGUMENTS);
+            "Database engine " + engine_name + " requested literal argument at index " + DB::toString(index),
+            ErrorCodes::BAD_ARGUMENTS);
 
     return typeid_cast<const ASTLiteral *>(ast.get())->value.safeGet<ValueType>();
 }
 
 DatabasePtr DatabaseFactory::get(
-    const String & database_name, const String & metadata_path, const ASTStorage * engine_define, Context & context)
+    const String & database_name,
+    const String & metadata_path,
+    const ASTStorage * engine_define,
+    Context & context)
 {
     String engine_name = engine_define->engine->name;
     if (engine_name == "TiFlash")
@@ -80,7 +84,7 @@ DatabasePtr DatabaseFactory::get(
         return std::make_shared<DatabaseOrdinary>(database_name, metadata_path, context);
     else if (engine_name == "Memory")
         return std::make_shared<DatabaseMemory>(database_name);
-        
+
     throw Exception("Unknown database engine: " + engine_name, ErrorCodes::UNKNOWN_DATABASE_ENGINE);
 }
 
