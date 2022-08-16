@@ -58,6 +58,12 @@ public:
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
             {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
              toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+
+        context.addMockTable(
+            {"test_db", "table2"},
+            {{"c1", TiDB::TP::TypeLongLong}, {"c2", TiDB::TP::TypeString}},
+            {toVec<Int64>("c1", {1, 2, 3, 4}),
+             toVec<String>("c2", {"a", "a", "b", "b"})});
     }
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
@@ -75,7 +81,7 @@ public:
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         ASSERT_COLUMNS_EQ_R(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
-        for (size_t 2 = 1; i <= max_concurrency_level; ++i)
+        for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan, i));
         }
@@ -218,8 +224,28 @@ try
 CATCH
 
 TEST_F(WindowExecutorTestRunner, multiWindowSortThenAgg)
+try
 {
-
+    
+    /*
+    select count(*)from (
+        SELECT 
+            ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`),
+            ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1` DESC)
+        FROM `test_db`.`table2`
+    )t1;
+    */
+    auto request = context
+                       .scan("test_db", "table2")
+                       .sort({{"c2", false}, {"c1", true}}, true)
+                       .window(RowNumber(), {"c1", true}, {"c2", false}, buildDefaultRowsFrame())
+                       .sort({{"c2", false}, {"c1", false}}, true)
+                       .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                       .build(context);
+    executeWithConcurrency(
+        request,
+        createColumns({toVec<UInt64>({4})}));
 }
 CATCH
 
