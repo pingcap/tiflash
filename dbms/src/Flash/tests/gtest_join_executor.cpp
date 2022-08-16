@@ -62,10 +62,12 @@ public:
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 1; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     static constexpr size_t join_type_num = 7;
@@ -141,7 +143,7 @@ try
         {
             const auto & [l, r, k] = join_cases[j];
             auto request = context.scan("simple_test", l)
-                               .join(context.scan("simple_test", r), {col(k)}, join_types[i])
+                               .join(context.scan("simple_test", r), join_types[i], {col(k)})
                                .build(context);
 
             {
@@ -279,10 +281,10 @@ try
             auto t2 = context.scan("multi_test", "t2");
             auto t3 = context.scan("multi_test", "t3");
             auto t4 = context.scan("multi_test", "t4");
-            auto request = t1.join(t2, {col("a")}, jt1)
-                               .join(t3.join(t4, {col("a")}, jt1),
-                                     {col("b")},
-                                     jt2)
+            auto request = t1.join(t2, jt1, {col("a")})
+                               .join(t3.join(t4, jt1, {col("a")}),
+                                     jt2,
+                                     {col("b")})
                                .build(context);
 
             executeWithConcurrency(request, expected_cols[i * join_type_num + j]);
@@ -296,7 +298,7 @@ try
 {
     auto cast_request = [&]() {
         return context.scan("cast", "t1")
-            .join(context.scan("cast", "t2"), {col("a")}, tipb::JoinType::TypeInnerJoin)
+            .join(context.scan("cast", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
             .build(context);
     };
 
@@ -392,11 +394,101 @@ try
     for (auto [i, tp] : ext::enumerate(join_types))
     {
         auto request = context.scan("join_agg", "t1")
-                           .join(context.scan("join_agg", "t2"), {col("a")}, tp)
+                           .join(context.scan("join_agg", "t2"), tp, {col("a")})
                            .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
                            .build(context);
 
         executeWithConcurrency(request, expected_cols[i]);
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, CrossJoinWithCondition)
+try
+{
+    context.addMockTable("cross_join", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+    context.addMockTable("cross_join", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "2"}), toNullableVec<String>("b", {"3", "4", "3", {}})});
+
+    const auto cond = gt(col("a"), lit(Field("1", 1)));
+
+    const auto table_scan = [&]() -> std::tuple<DAGRequestBuilder, DAGRequestBuilder> {
+        return {context.scan("cross_join", "t1"), context.scan("cross_join", "t2")};
+    };
+
+    const ColumnsWithTypeAndName expected_cols[join_type_num] = {
+        // inner
+        {toNullableVec<String>({"2", "2", "2", "2"}), toNullableVec<String>({"4", "4", "4", "4"}), toNullableVec<String>({"1", "3", {}, "2"}), toNullableVec<String>({"3", "4", "3", {}})},
+        // left
+        {toNullableVec<String>({"1", "2", "2", "2", "2", {}, "1"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}}), toNullableVec<String>({{}, "2", {}, "3", "1", {}, {}}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}})},
+        // right
+        {toNullableVec<String>({{}, "1", {}, "2", "1", {}, "1", {}, "2", "1"}), toNullableVec<String>({{}, {}, "3", "4", "3", {}, {}, "3", "4", "3"}), toNullableVec<String>({"1", "3", "3", "3", "3", {}, "2", "2", "2", "2"}), toNullableVec<String>({"3", "4", "4", "4", "4", "3", {}, {}, {}, {}})},
+        // semi
+        {toNullableVec<String>({"2"}), toNullableVec<String>({"4"})},
+        // anti semi
+        {toNullableVec<String>({"1", "1", {}}), toNullableVec<String>({{}, "3", "3"})},
+        // left outer semi
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({0, 1, 0, 0})},
+        // anti left outer semi
+        {toNullableVec<String>({"1", "2", {}, "1"}), toNullableVec<String>({"3", "4", "3", {}}), toNullableVec<Int8>({1, 0, 1, 1})},
+    };
+
+    /// for cross join, there is no join columns
+    size_t i = 0;
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+                           .join(t2, tipb::JoinType::TypeInnerJoin, {}, {}, {}, {cond}, {})
+                           .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+                           .join(t2, tipb::JoinType::TypeLeftOuterJoin, {}, {cond}, {}, {}, {})
+                           .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+                           .join(t2, tipb::JoinType::TypeRightOuterJoin, {}, {}, {cond}, {}, {})
+                           .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+                           .join(t2, tipb::JoinType::TypeSemiJoin, {}, {}, {}, {cond}, {})
+                           .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+                           .join(t2, tipb::JoinType::TypeAntiSemiJoin, {}, {}, {}, {cond}, {})
+                           .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+                           .join(t2, tipb::JoinType::TypeLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                           .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
+    }
+
+    {
+        auto [t1, t2] = table_scan();
+        auto request = t1
+                           .join(t2, tipb::JoinType::TypeAntiLeftOuterSemiJoin, {}, {}, {}, {cond}, {})
+                           .build(context);
+        executeWithConcurrency(request, expected_cols[i++]);
     }
 }
 CATCH
@@ -406,7 +498,7 @@ try
 {
     auto request = context
                        .scan("test_db", "l_table")
-                       .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
+                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
         executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
@@ -414,7 +506,7 @@ try
 
     request = context
                   .scan("test_db", "l_table")
-                  .join(context.scan("test_db", "r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
+                  .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                   .project({"s", "join_c"})
                   .build(context);
     {
@@ -423,7 +515,7 @@ try
 
     request = context
                   .scan("test_db", "l_table")
-                  .join(context.scan("test_db", "r_table_2"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
+                  .join(context.scan("test_db", "r_table_2"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                   .build(context);
     {
         executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})});
@@ -436,7 +528,7 @@ try
 {
     auto request = context
                        .receive("exchange_l_table")
-                       .join(context.receive("exchange_r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
+                       .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
         executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
@@ -449,7 +541,7 @@ try
 {
     auto request = context
                        .scan("test_db", "l_table")
-                       .join(context.receive("exchange_r_table"), {col("join_c")}, tipb::JoinType::TypeLeftOuterJoin)
+                       .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
         executeWithConcurrency(request, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"}), toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});

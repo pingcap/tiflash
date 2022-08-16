@@ -12,23 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/dedupUtils.h>
-#include <DataStreams/DeletingDeletedBlockInputStream.h>
+#pragma once
 
+#include <Common/Logger.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 
 namespace DB
 {
-
-Block DeletingDeletedBlockInputStream::readImpl()
-{
-    Block block = input->read();
-    if (!block)
-        return block;
-    IColumn::Filter filter(block.rows());
-    size_t count = setFilterByDelMarkColumn(block, filter);
-    if (count > 0)
-        deleteRows(block, filter);
-    return block;
-}
-
-}
+class Context;
+PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log);
+} // namespace DB
