@@ -308,12 +308,12 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
 auto checkSchema(const DAGSchema & input, String checked_column)
 {
     auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-        auto column_name = splitQualifiedName(checked_column);
-        auto field_name = splitQualifiedName(field.first);
-        if (column_name.table_name.empty())
-            return field_name.column_name == column_name.column_name;
+        auto [checked_db_name, checked_table_name, checked_column_name] = splitQualifiedName(checked_column);
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        if (checked_table_name.empty())
+            return column_name == checked_column_name;
         else
-            return field_name.table_name == column_name.table_name && field_name.column_name == column_name.column_name;
+            return table_name == checked_table_name && column_name == checked_column_name;
     });
     return ft;
 }
@@ -539,19 +539,18 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
 {
     if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
-        auto column_name = splitQualifiedName(id->getColumnName());
-        if (!column_name.table_name.empty())
+        auto [db_name, table_name, column_name] = splitQualifiedName(id->getColumnName());
+        if (!table_name.empty())
             used_columns.emplace(id->getColumnName());
         else
         {
             bool found = false;
             for (const auto & field : input)
             {
-                auto field_name = splitQualifiedName(field.first);
-                if (field_name.column_name == column_name.column_name)
+                if (splitQualifiedName(field.first).column_name == column_name)
                 {
                     if (found)
-                        throw Exception("ambiguous column for " + column_name.column_name);
+                        throw Exception("ambiguous column for " + column_name);
                     found = true;
                     used_columns.emplace(field.first);
                 }

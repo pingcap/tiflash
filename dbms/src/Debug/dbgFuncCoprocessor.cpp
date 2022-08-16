@@ -812,19 +812,19 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
         {
             if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
             {
-                auto names = splitQualifiedName(identifier->getColumnName());
-                if (names.column_name == MutableSupport::tidb_pk_column_name)
+                auto [db_name, table_name, column_name] = splitQualifiedName(identifier->getColumnName());
+                if (column_name == MutableSupport::tidb_pk_column_name)
                 {
-                    if (names.table_name.empty())
+                    if (table_name.empty())
                     {
                         throw Exception("tidb pk column must be qualified since there are more than one tables");
                     }
-                    if (names.table_name == left_table_alias)
+                    if (table_name == left_table_alias)
                         left_append_pk_column = true;
-                    else if (names.table_name == right_table_alias)
+                    else if (table_name == right_table_alias)
                         right_append_pk_column = true;
                     else
-                        throw Exception("Unknown table alias: " + names.table_name);
+                        throw Exception("Unknown table alias: " + table_name);
                 }
             }
         }
