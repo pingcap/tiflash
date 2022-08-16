@@ -211,6 +211,7 @@ target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
+    croaring
 )
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)

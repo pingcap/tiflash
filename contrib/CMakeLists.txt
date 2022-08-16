@@ -166,3 +166,6 @@ endif()
 if (ARCH_AARCH64 AND ARCH_LINUX)
     add_subdirectory(arm-optimized-routines-cmake)
 endif ()
+
+SET (ENABLE_ROARING_TESTS OFF CACHE BOOL "Disable roaring-bitmap testing" FORCE)
+add_subdirectory(CRoaring-cmake)
