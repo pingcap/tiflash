@@ -19,13 +19,12 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <pingcap/Exception.h>
@@ -89,10 +88,9 @@ void DAGDriver<batch>::execute()
 try
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context);
     DAGContext & dag_context = *context.getDAGContext();
 
-    BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
+    BlockIO streams = executeQuery(context, internal, QueryProcessingStage::Complete);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);

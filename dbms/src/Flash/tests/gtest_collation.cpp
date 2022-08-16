@@ -325,7 +325,7 @@ try
     {
         /// Check collation for executors
         auto request = context.scan(join_table, "t1")
-                           .join(context.scan(join_table, "t2"), {col("a")}, tipb::JoinType::TypeInnerJoin)
+                           .join(context.scan(join_table, "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
                            .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
                            .build(context);
         ASSERT_EQ(checkExecutorCollation(request).size(), 0);

@@ -115,7 +115,7 @@ FLATTEN_INLINE inline void LoopOneColumnCmpEqFixedStr(
 }
 
 // Handle str-column compare str-column.
-// - Optimize UTF8_BIN and UTF8MB4_BIN
+// - Optimize bin collator
 //   - Check if columns do NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
 template <typename Op, typename Result>
@@ -180,7 +180,7 @@ ALWAYS_INLINE inline bool CompareStringVectorStringVector(
 }
 
 // Handle str-column compare const-str.
-// - Optimize UTF8_BIN and UTF8MB4_BIN
+// - Optimize bin collator
 //   - Right trim const-str first
 //   - Check if column does NOT contain tail space
 //   - If Op is `EqualsOp` or `NotEqualsOp`, optimize comparison by faster way
