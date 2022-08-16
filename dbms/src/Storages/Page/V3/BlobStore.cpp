@@ -117,10 +117,10 @@ void BlobStore::reloadConfig(const BlobStore::Config & rhs)
     /// Don't reload config.file_limit_size here. Because there may be a potential race between write thread and gc thread.
     /// For write thread, it will ignore all BlobFile which capacity is larger than config.file_limit_size.
     /// For gc thread, if the contents of a BlobFile with capacity larger than config.file_limit_size is all removed, it will remove the BlobFile.
-    /// So if you reload config.file_limit_size will a larger value,
+    /// So if you reload config.file_limit_size with a larger value,
     /// the write thread may see the change and select a BlobFile which capacity is larger than old config.file_limit_size but smaller than new value for write,
-    /// but the gc thread may not see the change and still think the BlobFile's capacity is larger than config.file_limit_size and remove it if all its contents has been removed.
-    /// And this may cause data lose.
+    /// but the gc thread may not see the change and still think the BlobFile's capacity is larger than config.file_limit_size and remove it if all its contents have been removed.
+    /// And this may cause data loss.
     //    config.file_limit_size = rhs.file_limit_size;
     config.spacemap_type = rhs.spacemap_type;
     config.cached_fd_size = rhs.cached_fd_size;
@@ -1329,7 +1329,7 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, UInt64 max
 
 BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &)
 {
-    LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}] with capacity {}", blob_file_id, max_caps);
+    LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}] [capacity={}]", blob_file_id, max_caps);
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
         static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()),
@@ -1404,7 +1404,7 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         for (const auto & stat : stats_iter->second)
         {
             auto lock = stat->lock(); // TODO: will it bring performance regression?
-            // Only BlobFile which total capacity is smaller than config.file_limit_size can be reused for other write
+            // Only BlobFile which total capacity is smaller or equal to config.file_limit_size can be reused for another write
             if (stat->isNormal()
                 && stat->sm_max_caps >= buf_size
                 && stat->sm_valid_rate < smallest_valid_rate
