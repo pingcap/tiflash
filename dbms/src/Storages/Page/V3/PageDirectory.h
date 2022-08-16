@@ -166,7 +166,7 @@ public:
         RESOLVE_TO_NORMAL,
     };
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
-    resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry);
+    resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
     Int64 incrRefCount(const PageVersion & ver);
 

@@ -30,17 +30,15 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 #include <fmt/format.h>
-#include <gtest/gtest.h>
 
 #include <iterator>
 #include <memory>
 #include <random>
 #include <unordered_map>
 #include <unordered_set>
-
-#include "common/logger_useful.h"
 
 namespace DB
 {
@@ -500,14 +498,14 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     dir->apply(std::move(edit2));
 }
 
-TEST_F(PageDirectoryTest, NewRefAfterDelThreeTimes)
+TEST_F(PageDirectoryTest, NewRefAfterDelThreeHops)
 try
 {
+    // Fix issue: https://github.com/pingcap/tiflash/issues/5570
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
         edit.put(951, entry1);
-        // edit.putExternal(951);
         dir->apply(std::move(edit));
     }
 
@@ -519,6 +517,7 @@ try
 
     {
         PageEntriesEdit edit;
+        edit.del(951);
         edit.del(951);
         dir->apply(std::move(edit));
     }
@@ -575,6 +574,7 @@ try
         const bool gc_or_not = distrib(gen) < 1;
         LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
 
+        // Generate new ref operations to the visible pages
         const size_t num_ref_page = distrib(gen) + 1;
         std::unordered_map<PageId, PageId> new_ref_page_ids;
         std::uniform_int_distribution<> rand_visible_ids(0, visible_page_ids.size() - 1);
@@ -586,24 +586,27 @@ try
             new_ref_page_ids.emplace(++id, *rand_it);
         }
 
+        // Generate new delete operations among the visible pages and new-generated ref page
         // Delete 1 page at least, delete until 1 page left at most
         std::uniform_int_distribution<> rand_delete_ids(0, visible_page_ids.size() + num_ref_page - 1);
         const size_t num_del_page = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
         std::unordered_set<PageId> delete_ref_page_ids;
         for (size_t j = 0; j < num_del_page; ++j)
         {
+            // Random choose a id from all visible id and new-generated ref pages.
             auto r = rand_delete_ids(gen);
-            // random choose a id from all visible id
+            PageId id_to_del = 0;
             if (static_cast<size_t>(r) < visible_page_ids.size())
             {
                 auto rand_it = std::next(std::begin(visible_page_ids), r);
-                delete_ref_page_ids.emplace(*rand_it);
+                id_to_del = *rand_it;
             }
             else
             {
                 auto rand_it = std::next(std::begin(new_ref_page_ids), r - visible_page_ids.size());
-                delete_ref_page_ids.emplace(rand_it->first);
+                id_to_del = rand_it->first;
             }
+            delete_ref_page_ids.emplace(id_to_del);
         }
 
         // LOG_DEBUG(log, "round={}, create ids: {}", test_round, new_ref_page_ids);
@@ -611,6 +614,7 @@ try
 
         if (del_in_same_wb)
         {
+            // create ref and del in the same write batch
             PageEntriesEdit edit;
             for (const auto & x : new_ref_page_ids)
                 edit.ref(x.first, x.second);
@@ -620,6 +624,7 @@ try
         }
         else
         {
+            // first create all ref, then del in another write batch
             {
                 PageEntriesEdit edit;
                 for (const auto & x : new_ref_page_ids)
@@ -1111,9 +1116,11 @@ try
 }
 CATCH
 
-TEST_F(VersionedEntriesTest, GC)
+TEST_F(VersionedEntriesTest, CleanOutdateVersions)
 try
 {
+    // Test running gc on a single page, it should clean all
+    // outdated versions.
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
     INSERT_ENTRY(5);
