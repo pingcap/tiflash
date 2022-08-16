@@ -94,14 +94,13 @@ public:
 
             std::mutex sm_lock;
             const SpaceMapPtr smap;
-            /**
-             * If no any data inside. It should be same as space map `biggest_cap`,
-             * It is a hint for choosing quickly, should use `recalculateCapacity`
-             * to update it after some space are free in the spacemap.
-             */
+
             // The map capacity of the whole BlobFile
             UInt64 file_total_caps = 0;
-            // The max capacity of all available slots in SpaceMap
+            // The max capacity hint of all available slots in SpaceMap
+            // A hint means that it is not an absolutely accurate value after inserting data,
+            // but is useful for quickly choosing BlobFile.
+            // Should call `recalculateCapacity` to get an accurate value after removing data.
             UInt64 sm_max_caps = 0;
             // The current file size of the BlobFile
             UInt64 sm_total_size = 0;
@@ -141,6 +140,9 @@ public:
 
             BlobFileOffset getPosFromStat(size_t buf_size, const std::lock_guard<std::mutex> &);
 
+            /**
+             * The return value is the valid data size remained in the BlobFile after the remove
+             */
             size_t removePosFromStat(BlobFileOffset offset, size_t buf_size, const std::lock_guard<std::mutex> &);
 
             /**
