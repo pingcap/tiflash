@@ -1550,7 +1550,7 @@ try
     }
 
     ASSERT_ANY_THROW(page_storage->read(page_id0));
-    }
+}
 CATCH
 
 TEST_F(PageStorageTest, ReloadConfig)
