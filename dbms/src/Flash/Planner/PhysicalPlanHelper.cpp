@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 
 namespace DB::PhysicalPlanHelper
