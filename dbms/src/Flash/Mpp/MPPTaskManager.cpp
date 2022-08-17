@@ -72,7 +72,7 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
 
 static Poco::Logger * getLogger()
 {
-    static Poco::Logger * logger = &Poco::Logger::get("MPPTaskHolder");
+    static Poco::Logger * logger = &Poco::Logger::get("MPPTaskCancelFunctor");
     return logger;
 }
 
