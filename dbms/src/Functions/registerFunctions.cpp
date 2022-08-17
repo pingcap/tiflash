@@ -30,7 +30,6 @@ void registerFunctionsConditional(FunctionFactory &);
 void registerFunctionsConversion(FunctionFactory &);
 void registerFunctionsTiDBConversion(FunctionFactory &);
 void registerFunctionsDateTime(FunctionFactory &);
-void registerFunctionsExternalModels(FunctionFactory &);
 void registerFunctionsFormatting(FunctionFactory &);
 void registerFunctionsHashing(FunctionFactory &);
 void registerFunctionsConsistentHashing(FunctionFactory &);
@@ -68,7 +67,6 @@ void registerFunctions()
     registerFunctionsConversion(factory);
     registerFunctionsTiDBConversion(factory);
     registerFunctionsDateTime(factory);
-    registerFunctionsExternalModels(factory);
     registerFunctionsFormatting(factory);
     registerFunctionsHashing(factory);
     registerFunctionsConsistentHashing(factory);

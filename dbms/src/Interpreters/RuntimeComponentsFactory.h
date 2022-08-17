@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Interpreters/ExternalLoaderConfigRepository.h>
 #include <Interpreters/IRuntimeComponentsFactory.h>
 #include <Interpreters/SecurityManager.h>
 
@@ -29,16 +28,6 @@ public:
     std::unique_ptr<ISecurityManager> createSecurityManager() override
     {
         return std::make_unique<SecurityManager>();
-    }
-
-    std::unique_ptr<IExternalLoaderConfigRepository> createExternalDictionariesConfigRepository() override
-    {
-        return std::make_unique<ExternalLoaderConfigRepository>();
-    }
-
-    std::unique_ptr<IExternalLoaderConfigRepository> createExternalModelsConfigRepository() override
-    {
-        return std::make_unique<ExternalLoaderConfigRepository>();
     }
 };
 

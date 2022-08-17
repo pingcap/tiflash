@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Interpreters/IExternalLoaderConfigRepository.h>
 #include <Interpreters/ISecurityManager.h>
 
 #include <memory>
@@ -30,12 +29,7 @@ class IRuntimeComponentsFactory
 public:
     virtual std::unique_ptr<ISecurityManager> createSecurityManager() = 0;
 
-    // Repositories with configurations of user-defined objects (dictionaries, models)
-    virtual std::unique_ptr<IExternalLoaderConfigRepository> createExternalDictionariesConfigRepository() = 0;
-
-    virtual std::unique_ptr<IExternalLoaderConfigRepository> createExternalModelsConfigRepository() = 0;
-
-    virtual ~IRuntimeComponentsFactory() {}
+    virtual ~IRuntimeComponentsFactory() = default;
 };
 
 } // namespace DB
