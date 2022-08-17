@@ -45,10 +45,10 @@ String PhysicalPlanNode::toString()
         return buffer.toString();
     };
     return fmt::format(
-        "<{}, {}> | is_record_profile_streams: {}, schema: {}",
+        "<{}, {}> | is_tidb_operator: {}, schema: {}",
         type.toString(),
         executor_id,
-        is_record_profile_streams,
+        is_tidb_operator,
         schema_to_string());
 }
 
@@ -59,14 +59,20 @@ void PhysicalPlanNode::finalize()
 
 void PhysicalPlanNode::recordProfileStreams(DAGPipeline & pipeline, const Context & context)
 {
-    auto & profile_streams = context.getDAGContext()->getProfileStreamsMap()[executor_id];
-    pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+    auto & profile_streams_map = context.getDAGContext()->getProfileStreamsMap();
+    /// The profile stream of some operators has been recorded.
+    /// For example, `DAGStorageInterpreter` records the profile streams of PhysicalTableScan.
+    if (profile_streams_map.find(executor_id) == profile_streams_map.end())
+    {
+        auto & profile_streams = profile_streams_map[executor_id];
+        pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
+    }
 }
 
 void PhysicalPlanNode::transform(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     transformImpl(pipeline, context, max_streams);
-    if (is_record_profile_streams)
+    if (is_tidb_operator)
         recordProfileStreams(pipeline, context);
     if (is_restore_concurrency)
     {

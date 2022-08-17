@@ -141,8 +141,7 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
         ret.id = i++;
         table_info.columns.push_back(std::move(ret));
     }
-    String empty_alias;
-    root = compileTableScan(getExecutorIndex(), table_info, empty_alias, false);
+    root = compileTableScan(getExecutorIndex(), table_info, db, table, false);
     return *this;
 }
 

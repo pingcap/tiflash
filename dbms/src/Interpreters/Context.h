@@ -50,8 +50,6 @@ namespace DB
 struct ContextShared;
 class IRuntimeComponentsFactory;
 class QuotaForIntervals;
-class EmbeddedDictionaries;
-class ExternalDictionaries;
 class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
@@ -286,14 +284,8 @@ public:
     /// Set a setting by name. Read the value in text form from a string (for example, from a config, or from a URL parameter).
     void setSetting(const String & name, const std::string & value);
 
-    const EmbeddedDictionaries & getEmbeddedDictionaries() const;
-    const ExternalDictionaries & getExternalDictionaries() const;
     const ExternalModels & getExternalModels() const;
-    EmbeddedDictionaries & getEmbeddedDictionaries();
-    ExternalDictionaries & getExternalDictionaries();
     ExternalModels & getExternalModels();
-    void tryCreateEmbeddedDictionaries() const;
-    void tryCreateExternalDictionaries() const;
     void tryCreateExternalModels() const;
 
     /// I/O formats.
@@ -497,8 +489,6 @@ private:
       */
     void checkDatabaseAccessRightsImpl(const std::string & database_name) const;
 
-    EmbeddedDictionaries & getEmbeddedDictionariesImpl(bool throw_on_error) const;
-    ExternalDictionaries & getExternalDictionariesImpl(bool throw_on_error) const;
     ExternalModels & getExternalModelsImpl(bool throw_on_error) const;
 
     StoragePtr getTableImpl(const String & database_name, const String & table_name, Exception * exception) const;
