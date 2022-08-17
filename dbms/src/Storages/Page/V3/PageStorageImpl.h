@@ -60,6 +60,8 @@ public:
         return wal_config;
     }
 
+    void reloadConfig() override;
+
     void restore() override;
 
     void drop() override;
