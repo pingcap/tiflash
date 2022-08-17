@@ -256,7 +256,6 @@ try
                   .scan("test_db", "table2")
                   .sort({{"c2", false}, {"c1", false}}, true)
                   .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
-                  .sort({{"c2", false}, {"c1", false}}, true)
                   .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
@@ -280,7 +279,6 @@ try
                   .scan("test_db", "table2")
                   .sort({{"c2", false}, {"c1", false}}, true)
                   .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
-                  .sort({{"c2", false}, {"c1", false}}, true)
                   .window(Rank(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
