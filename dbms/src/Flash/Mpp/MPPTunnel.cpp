@@ -106,6 +106,7 @@ void MPPTunnel::finishSendQueue()
 void MPPTunnel::close(const String & reason)
 {
     SCOPE_EXIT({
+        // ensure the tracked memory is released and udpated before memotry tracker(in ProcListEntry) is released
         send_queue->finish();
         MPPDataPacketPtr res;
         while (send_queue->pop(res))
