@@ -342,6 +342,15 @@ try
     executeWithConcurrency(
         request,
         {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}});
+
+    /// select max(s1), max(s1), sum(s2) from test_db.test_table;
+    request = context
+                  .scan("test_db", "test_table")
+                  .aggregation({Max(col("s1")), Max(col("s1")), Sum(col("s2"))}, {})
+                  .build(context);
+    executeWithConcurrency(
+        request,
+        {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}, {toNullableVec<Int64>({6})}});
 }
 CATCH
 
