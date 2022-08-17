@@ -14,11 +14,10 @@
 
 #pragma once
 
-#include <Common/StringSearcher.h>
 #include <Common/UTF8Helpers.h>
 #include <Functions/CollationOperatorOptimized.h>
 #include <Storages/Transaction/CollatorUtils.h>
-#include <sys/types.h>
+#include <common/mem_utils_opt.h>
 
 #include <algorithm>
 #include <cassert>
@@ -30,6 +29,19 @@ namespace TiDB
 
 static constexpr char ANY = '%';
 static constexpr char ONE = '_';
+
+FLATTEN_INLINE_PURE static inline size_t BuiltinStrFind(std::string_view src, std::string_view needle)
+{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+#ifdef TIFLASH_USE_AVX2_COMPILE_FLAG
+    return mem_utils::avx2_strstr(src, needle);
+#else
+    return avx2_strstr(src, needle);
+#endif
+#else
+    return src.find(needle);
+#endif
+}
 
 /*
     Unicode Code    UTF-8 Code
@@ -88,7 +100,7 @@ struct BinStrPattern
 
         auto last_match_start = std::string_view::npos;
 
-        const auto & fn_try_add_last_match_str = [&](size_t end_offset) {
+        auto && fn_try_add_last_match_str = [&](size_t end_offset) {
             if (last_match_start != std::string_view::npos)
             {
                 match_sub_str.emplace_back(&pattern[last_match_start], end_offset - last_match_start);
@@ -194,7 +206,7 @@ struct BinStrPattern
 
     // check str equality
     // - make src invalid if remain size if smaller than required
-    bool matchStrEqual(const std::string_view & src, MatchDesc & desc) const
+    ALWAYS_INLINE inline bool matchStrEqual(const std::string_view & src, MatchDesc & desc) const
     {
         const auto & match_str = match_sub_str[desc.match_str_index_start];
         if (desc.srcSize() < match_str.size())
@@ -202,7 +214,7 @@ struct BinStrPattern
             desc.makeSrcInvalid();
             return false;
         }
-        if (DB::RawStrEqualCompare(desc.getSrcStrView(src.data(), match_str.size()), match_str))
+        if (!DB::IsRawStrEqual(desc.getSrcStrView(src.data(), match_str.size()), match_str))
         {
             return false;
         }
@@ -214,7 +226,7 @@ struct BinStrPattern
     // match from start exactly
     // - return true if meet %
     // - return false if failed to match else true
-    bool matchExactly(const std::string_view & src, MatchDesc & cur_match_desc) const
+    ALWAYS_INLINE inline bool matchExactly(const std::string_view & src, MatchDesc & cur_match_desc) const
     {
         // match from start
         for (; !cur_match_desc.patternEmpty(); cur_match_desc.pattern_index_start++)
@@ -245,7 +257,7 @@ struct BinStrPattern
     // match from end exactly
     // - return true if meet %
     // - return false if failed to match else true
-    bool matchExactlyReverse(const std::string_view & src, MatchDesc & cur_match_desc) const
+    ALWAYS_INLINE inline bool matchExactlyReverse(const std::string_view & src, MatchDesc & cur_match_desc) const
     {
         for (; !cur_match_desc.patternEmpty(); --cur_match_desc.pattern_index_end)
         {
@@ -263,7 +275,7 @@ struct BinStrPattern
                     return false;
                 }
 
-                if (DB::RawStrEqualCompare({src.data() + cur_match_desc.src_index_end - match_str.size(), match_str.size()}, match_str))
+                if (!DB::IsRawStrEqual({src.data() + cur_match_desc.src_index_end - match_str.size(), match_str.size()}, match_str))
                 {
                     return false;
                 }
@@ -286,7 +298,7 @@ struct BinStrPattern
     // search by pattern `...%..%`
     // - return true if meet %
     // - return false if failed to search
-    bool searchByPattern(const std::string_view & src, MatchDesc & desc) const
+    ALWAYS_INLINE inline bool searchByPattern(const std::string_view & src, MatchDesc & desc) const
     {
         assert(match_types[desc.pattern_index_end - 1] == MatchType::Any);
         assert(!desc.patternEmpty());
@@ -320,10 +332,8 @@ struct BinStrPattern
 
             // search sub str
             // - seachers like `ASCIICaseSensitiveStringSearcher` or `Volnitsky` are too heavy for small str
-            // - TODO: optimize strstr search by simd
             {
-                pos = src_view.find(match_str);
-                // pos = sse2_strstr(src_view, match_str);
+                pos = BuiltinStrFind(src_view, match_str);
             }
 
             if (pos == std::string_view::npos)
@@ -356,7 +366,7 @@ struct BinStrPattern
         }
     };
 
-    bool match(std::string_view src) const
+    ALWAYS_INLINE inline bool match(std::string_view src) const
     {
         MatchDesc cur_match_desc;
         {
@@ -421,7 +431,7 @@ struct BinStrPattern
 namespace DB
 {
 template <typename Result, bool revert, bool utf8>
-ALWAYS_INLINE inline void BinStringPatternMatch(
+inline void BinStringPatternMatch(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
     const std::string_view & pattern_str,
@@ -436,7 +446,7 @@ ALWAYS_INLINE inline void BinStringPatternMatch(
 }
 
 template <bool revert, typename Result>
-ALWAYS_INLINE inline bool StringPatternMatch(
+ALWAYS_INLINE inline bool StringPatternMatchImpl(
     const ColumnString::Chars_t & a_data,
     const ColumnString::Offsets & a_offsets,
     const std::string_view & pattern_str,

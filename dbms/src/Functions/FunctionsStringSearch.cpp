@@ -17,7 +17,8 @@
 #include <Common/Volnitsky.h>
 #include <Common/config.h>
 #include <DataTypes/DataTypeFixedString.h>
-#include <Functions/CollationStringSearchOptimized.h>
+#include <Functions/CollationOperatorOptimized.h>
+#include <Functions/CollationStringSearch.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
