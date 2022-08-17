@@ -125,23 +125,29 @@ void CreatingSetsBlockInputStream::createAll()
         }
         Stopwatch watch;
         auto thread_manager = newThreadManager();
-        for (auto & subqueries_for_sets : subqueries_for_sets_list)
+        try
         {
-            for (auto & elem : subqueries_for_sets)
+            for (auto & subqueries_for_sets : subqueries_for_sets_list)
             {
-                if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
+                for (auto & elem : subqueries_for_sets)
                 {
-                    if (is_cancelled || is_killed)
+                    if (elem.second.source) /// There could be prepared in advance Set/Join - no source is specified for them.
                     {
-                        thread_manager->wait();
-                        if (is_killed)
-                            throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
-                        return;
+                        if (isCancelledOrThrowIfKilled())
+                        {
+                            thread_manager->wait();
+                            return;
+                        }
+                        thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
+                        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                     }
-                    thread_manager->schedule(true, "CreatingSets", [this, &item = elem.second] { createOne(item); });
-                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_in_creating_set_input_stream);
                 }
             }
+        }
+        catch (...)
+        {
+            thread_manager->wait();
+            throw;
         }
 
         thread_manager->wait();
