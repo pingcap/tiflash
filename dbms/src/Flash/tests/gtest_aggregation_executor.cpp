@@ -350,7 +350,7 @@ try
                   .build(context);
     executeWithConcurrency(
         request,
-        {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}, {toNullableVec<Int64>({6})}});
+        {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}, {toVec<UInt64>({6})}});
 }
 CATCH
 
