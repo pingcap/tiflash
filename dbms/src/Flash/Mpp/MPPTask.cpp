@@ -187,10 +187,10 @@ void MPPTask::initExchangeReceivers()
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
 {
-    if (status == CANCELLED || status == FAILED)
+    if (status == CANCELLED)
     {
         auto err_msg = fmt::format(
-            "can't find tunnel ({} + {}) because the task is aborted",
+            "can't find tunnel ({} + {}) because the task is cancelled",
             request->sender_meta().task_id(),
             request->receiver_meta().task_id());
         return {nullptr, err_msg};
