@@ -50,7 +50,17 @@ extern String LOCAL_HOST;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
 
-std::pair<String, String> splitQualifiedName(const String & s);
+// We use qualified format like "db_name.table_name.column_name"
+// to identify one column of a table.
+// We can split the qualified format into the ColumnName struct.
+struct ColumnName
+{
+    String db_name;
+    String table_name;
+    String column_name;
+};
+
+ColumnName splitQualifiedName(const String & s);
 
 struct MPPCtx
 {
@@ -165,11 +175,11 @@ struct TableScan : public Executor
 
     void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
     {
-        auto column_name = splitQualifiedName(dag_column_info.first).second;
-        if (column_name == MutableSupport::tidb_pk_column_name)
+        auto names = splitQualifiedName(dag_column_info.first);
+        if (names.column_name == MutableSupport::tidb_pk_column_name)
             ci->set_column_id(-1);
         else
-            ci->set_column_id(table_info.getColumnID(column_name));
+            ci->set_column_id(table_info.getColumnID(names.column_name));
         ci->set_tp(dag_column_info.second.tp);
         ci->set_flag(dag_column_info.second.flag);
         ci->set_columnlen(dag_column_info.second.flen);
@@ -343,7 +353,7 @@ struct Sort : Executor
 
 using ExecutorPtr = std::shared_ptr<mock::Executor>;
 
-ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column);
+ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column);
 
 ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter);
 
