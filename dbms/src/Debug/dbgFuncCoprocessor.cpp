@@ -767,13 +767,13 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
                     }
                 }
             }
-            root_executor = compileTableScan(executor_index, table_info, table_alias, append_pk_column);
+            root_executor = compileTableScan(executor_index, table_info, "", table_alias, append_pk_column);
         }
     }
     else
     {
         TableInfo left_table_info = table_info;
-        String left_table_alias = table_alias;
+        auto const & left_table_alias = table_alias;
         TableInfo right_table_info;
         String right_table_alias;
         {
@@ -812,24 +812,24 @@ std::pair<ExecutorPtr, bool> compileQueryBlock(
         {
             if (auto * identifier = typeid_cast<ASTIdentifier *>(expr.get()))
             {
-                auto names = splitQualifiedName(identifier->getColumnName());
-                if (names.second == MutableSupport::tidb_pk_column_name)
+                auto [db_name, table_name, column_name] = splitQualifiedName(identifier->getColumnName());
+                if (column_name == MutableSupport::tidb_pk_column_name)
                 {
-                    if (names.first.empty())
+                    if (table_name.empty())
                     {
                         throw Exception("tidb pk column must be qualified since there are more than one tables");
                     }
-                    if (names.first == left_table_alias)
+                    if (table_name == left_table_alias)
                         left_append_pk_column = true;
-                    else if (names.first == right_table_alias)
+                    else if (table_name == right_table_alias)
                         right_append_pk_column = true;
                     else
-                        throw Exception("Unknown table alias: " + names.first);
+                        throw Exception("Unknown table alias: " + table_name);
                 }
             }
         }
-        auto left_ts = compileTableScan(executor_index, left_table_info, left_table_alias, left_append_pk_column);
-        auto right_ts = compileTableScan(executor_index, right_table_info, right_table_alias, right_append_pk_column);
+        auto left_ts = compileTableScan(executor_index, left_table_info, "", left_table_alias, left_append_pk_column);
+        auto right_ts = compileTableScan(executor_index, right_table_info, "", right_table_alias, right_append_pk_column);
         root_executor = compileJoin(executor_index, left_ts, right_ts, joined_table->table_join);
     }
 

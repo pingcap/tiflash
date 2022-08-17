@@ -34,7 +34,6 @@
 #include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExternalDictionaries.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Join.h>
 #include <Interpreters/LogicalExpressionsOptimizer.h>
@@ -1329,31 +1328,7 @@ void ExpressionAnalyzer::optimizeGroupBy()
     {
         if (const auto * function = typeid_cast<ASTFunction *>(group_exprs[i].get()))
         {
-            /// assert function is injective
-            if (possibly_injective_function_names.count(function->name))
-            {
-                /// do not handle semantic errors here
-                if (function->arguments->children.size() < 2)
-                {
-                    ++i;
-                    continue;
-                }
-
-                const auto & dict_name = typeid_cast<const ASTLiteral &>(*function->arguments->children[0])
-                                             .value.safeGet<String>();
-
-                const auto & dict_ptr = context.getExternalDictionaries().getDictionary(dict_name);
-
-                const auto & attr_name = typeid_cast<const ASTLiteral &>(*function->arguments->children[1])
-                                             .value.safeGet<String>();
-
-                if (!dict_ptr->isInjective(attr_name))
-                {
-                    ++i;
-                    continue;
-                }
-            }
-            else if (!injective_function_names.count(function->name))
+            if (!injective_function_names.count(function->name))
             {
                 ++i;
                 continue;

@@ -30,8 +30,6 @@ void registerFunctionsConditional(FunctionFactory &);
 void registerFunctionsConversion(FunctionFactory &);
 void registerFunctionsTiDBConversion(FunctionFactory &);
 void registerFunctionsDateTime(FunctionFactory &);
-void registerFunctionsEmbeddedDictionaries(FunctionFactory &);
-void registerFunctionsExternalDictionaries(FunctionFactory &);
 void registerFunctionsExternalModels(FunctionFactory &);
 void registerFunctionsFormatting(FunctionFactory &);
 void registerFunctionsHashing(FunctionFactory &);
@@ -70,8 +68,6 @@ void registerFunctions()
     registerFunctionsConversion(factory);
     registerFunctionsTiDBConversion(factory);
     registerFunctionsDateTime(factory);
-    registerFunctionsEmbeddedDictionaries(factory);
-    registerFunctionsExternalDictionaries(factory);
     registerFunctionsExternalModels(factory);
     registerFunctionsFormatting(factory);
     registerFunctionsHashing(factory);
