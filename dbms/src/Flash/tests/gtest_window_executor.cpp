@@ -250,7 +250,7 @@ try
         {
             wfs.push_back(functions[j]);
             wfs_result.push_back(functions_result[j]);
-            for (size_t k = 0; k < functions.size(); ++j)
+            for (size_t k = 0; k < functions.size(); ++k)
             {
                 wfs.push_back(functions[k]);
                 wfs_result.push_back(functions_result[k]);
