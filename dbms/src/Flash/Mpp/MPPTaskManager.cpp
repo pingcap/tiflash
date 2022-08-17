@@ -85,7 +85,7 @@ public:
         : task(other.task)
         , reason(other.reason)
     {
-        LOG_FMT_WARNING(getLogger(), "Copy constructor of MPPTaskCancelFunctor called, should not happens");
+        LOG_FMT_WARNING(getLogger(), "Copy constructor of MPPTaskCancelFunctor called, should not happen");
     }
     MPPTaskCancelFunctor(MPPTaskCancelFunctor && other) = default;
     MPPTaskCancelFunctor(MPPTaskPtr && task_, const String & reason_)
