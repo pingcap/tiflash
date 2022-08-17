@@ -31,7 +31,7 @@ public:
         : field_types(field_types_)
     {}
     virtual String getString() = 0;
-    virtual String getStringAndTrackMem(TmpMemTracker & mem_tracker)
+    String getStringAndTrackMem(TmpMemTracker & mem_tracker)
     {
         auto ret = getString();
         mem_tracker.alloc(ret.size());
