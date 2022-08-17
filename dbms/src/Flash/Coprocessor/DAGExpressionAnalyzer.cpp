@@ -497,7 +497,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
             {
                 // window function duplicate, don't need to build again.
                 source_columns.emplace_back(func_string, duplicated_return_type);
-                break;
+                continue;
             }
 
             WindowFunctionDescription window_function_description;

@@ -18,7 +18,7 @@ namespace DB::tests
 {
 class WindowExecutorTestRunner : public DB::tests::ExecutorTest
 {
-    static const size_t max_concurrency_level = 10;
+    static const size_t max_concurrency_level = 5;
 
 public:
     void initializeContext() override
@@ -62,7 +62,7 @@ public:
         context.addMockTable(
             {"test_db", "table2"},
             {{"c1", TiDB::TP::TypeLongLong}, {"c2", TiDB::TP::TypeString}},
-            {toVec<Int64>("c1", {1, 2, 3, 4}),
+            {toVec<Int64>("c1", {1, 1, 3, 3}),
              toVec<String>("c2", {"a", "a", "b", "b"})});
     }
 
@@ -223,7 +223,60 @@ try
 }
 CATCH
 
-TEST_F(WindowExecutorTestRunner, multiWindowSortThenAgg)
+TEST_F(WindowExecutorTestRunner, multiWindow)
+try
+{
+    std::vector<ASTPtr> functions = {RowNumber(), Rank()};
+    ColumnsWithTypeAndName functions_result = {toNullableVec<Int64>({1, 2, 1, 2}), toNullableVec<Int64>({1, 1, 1, 1})};
+
+    auto gen_merge_window_request = [&](const std::vector<ASTPtr> & wfs) {
+        return context
+            .scan("test_db", "table2")
+            .sort({{"c2", false}, {"c1", false}}, true)
+            .window(wfs, {{"c1", false}}, {{"c2", false}}, buildDefaultRowsFrame())
+            .build(context);
+    };
+
+    auto gen_split_window_request = [&](const std::vector<ASTPtr> & wfs) {
+        auto req = context
+                       .scan("test_db", "table2")
+                       .sort({{"c2", false}, {"c1", false}}, true);
+        for (const auto & wf : wfs)
+            req.window(wf, {"c1", false}, {"c2", false}, buildDefaultRowsFrame());
+        return req.build(context);
+    };
+
+    std::vector<ASTPtr> wfs;
+    ColumnsWithTypeAndName wfs_result = {{toNullableVec<Int64>("c1", {1, 1, 3, 3})}, {toNullableVec<String>("c2", {"a", "a", "b", "b"})}};
+    for (size_t i = 0; i < functions.size(); ++i)
+    {
+        wfs.push_back(functions[i]);
+        wfs_result.push_back(functions_result[i]);
+        for (size_t j = 0; j < functions.size(); ++j)
+        {
+            wfs.push_back(functions[j]);
+            wfs_result.push_back(functions_result[j]);
+            for (size_t k = 0; k < functions.size(); ++j)
+            {
+                wfs.push_back(functions[k]);
+                wfs_result.push_back(functions_result[k]);
+
+                executeWithConcurrency(gen_merge_window_request(wfs), wfs_result);
+                executeWithConcurrency(gen_split_window_request(wfs), wfs_result);
+
+                wfs.pop_back();
+                wfs_result.pop_back();
+            }
+            wfs.pop_back();
+            wfs_result.pop_back();
+        }
+        wfs.pop_back();
+        wfs_result.pop_back();
+    }
+}
+CATCH
+
+TEST_F(WindowExecutorTestRunner, multiWindowThenAgg)
 try
 {
     /*
@@ -236,10 +289,10 @@ try
     */
     auto request = context
                        .scan("test_db", "table2")
-                       .sort({{"c2", false}, {"c1", true}}, true)
-                       .window(RowNumber(), {"c1", true}, {"c2", false}, buildDefaultRowsFrame())
                        .sort({{"c2", false}, {"c1", false}}, true)
                        .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                       .sort({{"c2", false}, {"c1", true}}, true)
+                       .window(RowNumber(), {"c1", true}, {"c2", false}, buildDefaultRowsFrame())
                        .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                        .build(context);
     executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
@@ -280,8 +333,8 @@ try
     request = context
                   .scan("test_db", "table2")
                   .sort({{"c2", false}, {"c1", false}}, true)
-                  .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
                   .window(Rank(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                  .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
     executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
@@ -290,6 +343,33 @@ try
                   .scan("test_db", "table2")
                   .sort({{"c2", false}, {"c1", false}}, true)
                   .window({Rank(), RowNumber()}, {{"c1", false}}, {{"c2", false}}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
+
+    /*
+    select count(1) from (
+        SELECT
+            ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`),
+            ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`),
+            Rank() OVER (PARTITION BY `c2` ORDER BY  `c1`)
+        FROM `test_db`.`table2`
+    )t1;
+    */
+    request = context
+                  .scan("test_db", "table2")
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window({RowNumber(), RowNumber(), Rank()}, {{"c1", false}}, {{"c2", false}}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
+
+    request = context
+                  .scan("test_db", "table2")
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                  .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                  .window(Rank(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
     executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
