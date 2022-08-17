@@ -87,37 +87,30 @@ String getAggFuncName(
     return agg_func_name;
 }
 
-/// return `duplicated agg function`->getReturnType if duplicated.
+/// return `duplicated Agg/Window function`->getReturnType if duplicated.
 /// or not return nullptr.
-DataTypePtr findDuplicateAggFunc(
+template <typename Descriptions>
+DataTypePtr findDuplicateAggWindowFunc(
     const String & func_string,
-    const AggregateDescriptions & aggregate_descriptions)
+    const Descriptions & descriptions)
 {
-    for (const auto & aggregated : aggregate_descriptions)
+    for (const auto & description : descriptions)
     {
-        if (aggregated.column_name == func_string)
+        if (description.column_name == func_string)
         {
-            auto return_type = aggregated.function->getReturnType();
-            assert(return_type);
-            return return_type;
-        }
-    }
-    return nullptr;
-}
-
-/// return `duplicated window function`->getReturnType if duplicated.
-/// or not return nullptr.
-DataTypePtr findDuplicateWindowFunc(
-    const String & func_string,
-    const WindowDescription & window_description)
-{
-    for (const auto & window_functions_description : window_description.window_functions_descriptions)
-    {
-        if (window_functions_description.column_name == func_string)
-        {
-            auto return_type = window_functions_description.window_function->getReturnType();
-            assert(return_type);
-            return return_type;
+            if constexpr (std::is_same_v<Descriptions, AggregateDescriptions>)
+            {
+                auto return_type = description.function->getReturnType();
+                assert(return_type);
+                return return_type;
+            }
+            else
+            {
+                static_assert(std::is_same_v<Descriptions, WindowFunctionDescriptions>);
+                auto return_type = description.window_function->getReturnType();
+                assert(return_type);
+                return return_type;
+            }
         }
     }
     return nullptr;
@@ -139,7 +132,7 @@ void appendAggDescription(
     AggregateDescription aggregate;
     aggregate.argument_names = arg_names;
     String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-    if (auto duplicated_return_type = findDuplicateAggFunc(func_string, aggregate_descriptions))
+    if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
         // agg function duplicate, don't need to build again.
         aggregated_columns.emplace_back(func_string, duplicated_return_type);
@@ -228,7 +221,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 
     String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
     /// return directly if the agg is duplicated
-    if (auto duplicated_return_type = findDuplicateAggFunc(func_string, aggregate_descriptions))
+    if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
         aggregated_columns.emplace_back(func_string, duplicated_return_type);
         return;
@@ -500,7 +493,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_descr
             }
 
             String func_string = genFuncString(window_func_name, arg_names, arg_collators);
-            if (auto duplicated_return_type = findDuplicateWindowFunc(func_string, window_description))
+            if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, window_description.window_functions_descriptions))
             {
                 // window function duplicate, don't need to build again.
                 source_columns.emplace_back(func_string, duplicated_return_type);
