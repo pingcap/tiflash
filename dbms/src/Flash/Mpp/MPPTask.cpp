@@ -320,12 +320,6 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     initExchangeReceivers();
     executeQuery(*context);
-
-    // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
-    // so that we can propagate current_memory_tracker into them.
-    tunnel_set->updateMemTracker();
-    receiver_set->setUpConnection();
-
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);

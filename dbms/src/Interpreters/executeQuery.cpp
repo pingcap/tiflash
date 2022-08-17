@@ -22,6 +22,8 @@
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPReceiverSet.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <IO/ConcatReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/IQuerySource.h>
@@ -230,6 +232,11 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             context.setProcessListElement(&process_list_entry->get());
         }
+
+        // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
+        // so that we can propagate current_memory_tracker into them.
+        context.getDAGContext()->tunnel_set->updateMemTracker();
+        context.getDAGContext()->getMppReceiverSet()->setUpConnection();
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
         auto interpreter = query_src.interpreter(context, stage);
