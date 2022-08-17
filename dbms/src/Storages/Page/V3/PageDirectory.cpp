@@ -309,12 +309,15 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
                 return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
             }
 
-            // Else we need to ignore all "delete"
+            // If `ignore_delete` is true, we need the page entry even if it is logical deleted.
+            // Checkout the details in `PageDirectory::get`.
+
+            // Ignore all "delete"
             while (iter != entries.begin() && iter->second.isDelete())
             {
                 --iter;
             }
-            // begin or entry
+            // Then `iter` point to an entry or the `entries.begin()`, return if entry found
             if (iter->second.isEntry())
             {
                 // copy and return the entry
@@ -327,7 +330,8 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
     }
     else if (type == EditRecordType::VAR_EXTERNAL)
     {
-        // We may add reference to an external id even if it is logically deleted.
+        // If `ignore_delete` is true, we need the origin page id even if it is logical deleted.
+        // Checkout the details in `PageDirectory::getNormalPageId`.
         bool ok = ignore_delete ? true : (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
@@ -336,6 +340,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
     }
     else if (type == EditRecordType::VAR_REF)
     {
+        // Return the origin page id if this ref is visible by `seq`.
         if (create_ver.sequence <= seq && (!is_deleted || seq < delete_ver.sequence))
         {
             return {RESOLVE_TO_REF, ori_page_id, create_ver};
@@ -433,7 +438,7 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersion & ver)
                 met_delete = true;
                 --iter;
             }
-            // begin or entry
+            // Then `iter` point to an entry or the `entries.begin()`, return if entry found
             if (iter->second.isEntry())
             {
                 if (unlikely(met_delete && iter->second.being_ref_count == 1))
@@ -501,9 +506,10 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     }
     else if (type == EditRecordType::VAR_REF)
     {
+        // still visible by `lowest_seq`
         if (!is_deleted || lowest_seq < delete_ver.sequence)
             return false;
-
+        // Else this ref page is safe to be deleted.
         if (normal_entries_to_deref != nullptr)
         {
             // need to decrease the ref count by <id=iter->second.origin_page_id, ver=iter->first, num=1>
@@ -521,10 +527,11 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     }
     else if (type != EditRecordType::VAR_ENTRY)
     {
-        throw Exception("Invalid state");
+        throw Exception(fmt::format("Invalid state {}", toDebugString()), ErrorCodes::LOGICAL_ERROR);
     }
 
     // type == EditRecordType::VAR_ENTRY
+    assert(type == EditRecordType::VAR_ENTRY);
     if (entries.empty())
     {
         return true;
@@ -538,7 +545,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
         return false;
     }
 
-    // If the first version less than <lowest_seq+1, 0> is entry / external,
+    // If the first version less than <lowest_seq+1, 0> is entry,
     // then we can remove those entries prev of it.
     // If the first version less than <lowest_seq+1, 0> is delete,
     // we may keep the first valid entry before the delete entry in the following case:
@@ -552,7 +559,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     {
         if (iter->second.isDelete())
         {
-            // Already deleted
+            // a useless version, simply drop it
             iter = entries.erase(iter);
         }
         else if (iter->second.isEntry())
@@ -616,9 +623,10 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal pag
         {
             --iter; // move to the previous entry
         }
-        // begin or entry
+        // Then `iter` point to an entry or the `entries.begin()`
         if (iter->second.isDelete())
         {
+            // run into the begin of `entries`, but still can not find a valid entry to decrease the ref-count
             throw Exception(fmt::format("Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]", page_id, deref_ver, deref_count));
         }
         assert(iter->second.isEntry());
@@ -1053,14 +1061,15 @@ void PageDirectory::applyRefEditRecord(
     //     },
     // }
     //
-    // When we need to create a new ref 12->11, first call `resolveToPageId` with `ignore_delete=true`
-    // and further resolve ref id 11 to 10. Then we will call `resolveToPageId` with `ignore_delete=false`
+    // When we need to create a new ref 12->11, first call `resolveToPageId` with `ignore_delete=false`
+    // and further resolve ref id 11 to 10. Then we will call `resolveToPageId` with `ignore_delete=true`
     // to ignore the "delete"s.
     // Finally, we will collapse the ref chain to create a "ref 12 -> 10" instead of "ref 12 -> 11 -> 10"
     // in memory and increase the ref-count of "entryX".
     //
-    // This is because doing GC on a non-collapse ref chain is much harder and long ref chain make the
-    // time of accessing an entry not stable.
+    // The reason we choose to collapse the ref chain while applying ref edit is that doing GC on a
+    // non-collapse ref chain is much harder and long ref chain make the time of accessing an entry
+    // not stable.
 
     auto [resolve_success, resolved_id, resolved_ver] = [&mvcc_table_directory, ori_page_id = rec.ori_page_id](PageIdV3Internal id_to_resolve, PageVersion ver_to_resolve)
         -> std::tuple<bool, PageIdV3Internal, PageVersion> {
