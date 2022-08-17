@@ -375,24 +375,9 @@ private:
                         log))
                     return false;
             }
-            catch (Exception & e)
-            {
-                err_info = e.displayText();
-                return false;
-            }
-            catch (pingcap::Exception & e)
-            {
-                err_info = e.message();
-                return false;
-            }
-            catch (std::exception & e)
-            {
-                err_info = e.what();
-                return false;
-            }
             catch (...)
             {
-                err_info = "unknown error";
+                err_info = getCurrentExceptionMessage(false);
                 return false;
             }
             // can't reuse packet since it is sent to readers.
