@@ -245,7 +245,7 @@ try
     executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
 
     /*
-    select count(1)from (
+    select count(1) from (
         SELECT 
             ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`),
             ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`)
@@ -259,6 +259,8 @@ try
                   .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
                   .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                   .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
+
     request = context
                   .scan("test_db", "table2")
                   .sort({{"c2", false}, {"c1", false}}, true)
@@ -268,7 +270,7 @@ try
     executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
 
     /*
-    select count(1)from (
+    select count(1) from (
         SELECT 
             Rank() OVER (PARTITION BY `c2` ORDER BY  `c1`),
             ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`)
