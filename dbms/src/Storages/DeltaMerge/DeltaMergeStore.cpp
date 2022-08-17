@@ -41,6 +41,7 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
+#include "Common/Stopwatch.h"
 
 namespace ProfileEvents
 {
@@ -283,6 +284,14 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     setUpBackgroundTask(dm_context);
 
     LOG_FMT_INFO(log, "Restore DeltaMerge Store end [{}.{}], [ps_run_mode={}]", db_name, table_name, static_cast<UInt8>(page_storage_run_mode));
+
+    Stopwatch sw_build_bmf;
+    for (auto & pa : id_to_segment)
+    {
+        pa.second->updateFastmodeBitmapFilter(*dm_context);
+    }
+    auto build_bmf_ms = sw_build_bmf.elapsedMilliseconds();
+    LOG_FMT_INFO(log, "table {} segments {} build bitmap filter time {} ms segment avg {} ms", table_name, id_to_segment.size(), build_bmf_ms, build_bmf_ms / id_to_segment.size());
 }
 
 DeltaMergeStore::~DeltaMergeStore()

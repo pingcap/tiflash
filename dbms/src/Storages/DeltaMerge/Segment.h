@@ -317,6 +317,7 @@ public:
 
     void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
 
+    void updateFastmodeBitmapFilter(const DMContext & dm_context);
 private:
     ReadInfo getReadInfo(
         const DMContext & dm_context,

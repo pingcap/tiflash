@@ -156,6 +156,10 @@ public:
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
+        void clearColumnCaches()
+        {
+            column_caches.clear();
+        }
     private:
         Poco::Logger * log;
     };

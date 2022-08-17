@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Columns/IColumn.h>
+#include <roaring64map.hh>
 
 namespace DB::DM
 {
@@ -24,11 +25,11 @@ using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 class ArrayBitmapFilter
 {
 public:
-    ArrayBitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_);
+    ArrayBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapshot_);
     void set(const ColumnPtr & col);
-    void get(IColumn::Filter & f, size_t start, size_t limit) const;
+    void get(IColumn::Filter & f, UInt64 start, UInt64 limit) const;
     SegmentSnapshotPtr snapshot() const;
-
+    void runOptimize() const { /*do nothing*/ }
 private:
     IColumn::Filter filter;
     SegmentSnapshotPtr snap;
@@ -37,16 +38,19 @@ private:
 class RoaringBitmapFilter
 {
 public:
-    RoaringBitmapFilter(size_t size_, SegmentSnapshotPtr snapshot_);
+    RoaringBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapshot_);
     void set(const ColumnPtr & col);
-    void get(IColumn::Filter & f, size_t start, size_t limit) const;
+    void get(IColumn::Filter & f, UInt64 start, UInt64 limit) const;
     SegmentSnapshotPtr snapshot() const;
-
+    void runOptimize();
 private:
-    IColumn::Filter filter;
+    UInt64 sz;
+    roaring::Roaring64Map rrbitmap;
     SegmentSnapshotPtr snap;
+    bool all_match;
 };
 
 using BitmapFilter = RoaringBitmapFilter;
+//using BitmapFilter = ArrayBitmapFilter;
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 } // namespace DB::DM

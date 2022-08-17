@@ -43,6 +43,7 @@
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <limits>
 #include <memory>
 #include <numeric>
 
@@ -86,6 +87,7 @@ extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
+extern const Metric DT_SnapshotOfBuildFastModeBitmap;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -207,11 +209,7 @@ Segment::Segment(UInt64 epoch_, //
     , next_segment_id(next_segment_id_)
     , delta(delta_)
     , stable(stable_)
-    , log(&Poco::Logger::get("Segment"))
-{
-    //fast_mode_bitmap_filter = std::make_shared<BitmapFilter>(delta->getRows() + stable->getRows(), nullptr);
-    //LOG_FMT_DEBUG(log, "{} => memory usage {}", segment_id, BitmapFilter::getMemoryUsage());
-}
+    , log(&Poco::Logger::get("Segment")) {}
 
 SegmentPtr Segment::newSegment(DMContext & context,
                                const ColumnDefinesPtr & schema,
@@ -1830,7 +1828,9 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
         }
         bitmap_filter->set(blk.segmentRowIdCol());
     }
-    LOG_FMT_DEBUG(log, "buildBitmapFilter use {} ms", sw_total.elapsedMilliseconds());
+    Stopwatch sw_run_opt;
+    bitmap_filter->runOptimize();
+    LOG_FMT_DEBUG(log, "buildBitmapFilter rows {} use {} ms, run optimize use {} ms", segment_snap->getRows(), sw_total.elapsedMilliseconds(), sw_run_opt.elapsedMilliseconds());
     return bitmap_filter;
 }
 
@@ -1859,6 +1859,17 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read_ptr, this->rowkey_range);
 
     return std::make_shared<BitmapFilterBlockInputStream>(stable_stream, nullptr, segment_snap->stable->getRows(), bitmap_filter, dm_context.tracing_id);
+}
+
+void Segment::updateFastmodeBitmapFilter(const DMContext & dm_context)
+{
+    auto snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfBuildFastModeBitmap);
+    if (!snap)
+    {
+        throw Exception("createSnapshot failed");
+    }
+    fast_mode_bitmap_filter = buildBitmapFilter(dm_context, snap, {rowkey_range}, nullptr, std::numeric_limits<UInt64>::max(), dm_context.db_context.getSettingsRef().max_block_size);
+    fast_mode_bitmap_filter->snapshot()->stable->clearColumnCaches();
 }
 
 } // namespace DM
