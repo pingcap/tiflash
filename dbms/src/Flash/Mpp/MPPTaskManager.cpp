@@ -75,12 +75,11 @@ class MPPTaskCancelHelper
 public:
     MPPTaskPtr task;
     String reason;
-    MPPTaskCancelHelper(const MPPTaskCancelHelper & other) = delete;
-    MPPTaskCancelHelper(MPPTaskCancelHelper && other) = delete;
     MPPTaskCancelHelper(MPPTaskPtr && task_, const String & reason_)
         : task(std::move(task_))
         , reason(reason_)
     {}
+    DISALLOW_COPY_AND_MOVE(MPPTaskCancelHelper);
     void run() const
     {
         task->cancel(reason);
