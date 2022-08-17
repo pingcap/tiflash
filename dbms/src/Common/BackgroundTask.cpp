@@ -17,13 +17,13 @@
 #include <fstream>
 namespace DB
 {
-bool process_mem_usage(double & vm_usage, double & resident_set)
+bool process_mem_usage(double & resident_set)
 {
-    vm_usage = 0.0;
     resident_set = 0.0;
 
     // 'file' stat seems to give the most reliable results
     std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
+    // if "/proc/self/stat" is not supported
     if (!stat_stream.is_open())
         return false;
 
@@ -32,9 +32,9 @@ bool process_mem_usage(double & vm_usage, double & resident_set)
     std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
     std::string utime, stime, cutime, cstime, priority, nice;
     std::string proc_num_threads, itrealvalue, starttime;
-
-    // the two fields we want
     UInt64 vsize;
+
+    // the field we want
     Int64 rss;
 
     stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
@@ -45,7 +45,6 @@ bool process_mem_usage(double & vm_usage, double & resident_set)
     stat_stream.close();
 
     Int64 page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
-    vm_usage = vsize / 1024.0;
     resident_set = rss * page_size_kb;
     return true;
 }
@@ -74,11 +73,10 @@ void CollectProcInfoBackgroundTask::begin()
 
 void CollectProcInfoBackgroundTask::memCheckJob()
 {
-    double vm_usage;
     double resident_set;
     while (!end_syn)
     {
-        process_mem_usage(vm_usage, resident_set);
+        process_mem_usage(resident_set);
         resident_set *= 1024; // unit: byte
         real_rss = static_cast<Int64>(resident_set);
 
