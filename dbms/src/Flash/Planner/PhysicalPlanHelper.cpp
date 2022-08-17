@@ -38,26 +38,30 @@ ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Conte
     return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
 }
 
-NamesAndTypes addProjectAction(
+NamesAndTypes addSchemaProjectAction(
     const ExpressionActionsPtr & expr_actions,
     const NamesAndTypes & before_schema,
-    const String & column_prefix,
-    const Context & context)
+    const String & column_prefix)
 {
     assert(expr_actions);
     assert(!before_schema.empty());
-    DAGExpressionAnalyzer analyzer{before_schema, context};
-    const auto & project_aliases = analyzer.genNonRootFinalProjectAliases(column_prefix);
-    expr_actions->add(ExpressionAction::project(project_aliases));
 
     NamesAndTypes after_schema = before_schema;
-    assert(project_aliases.size() == after_schema.size());
-    // replace column name of after_schema by alias.
-    for (size_t i = 0; i < project_aliases.size(); ++i)
+    NamesWithAliases project_aliases;
+    std::unordered_set<String> column_name_set;
+    for (size_t i = 0; i < before_schema.size(); ++i)
     {
-        assert(after_schema[i].name == project_aliases[i].first);
-        after_schema[i].name = project_aliases[i].second;
+        const auto & before_column_name = before_schema[i].name;
+        String after_column_name = column_prefix + before_column_name;
+        /// Duplicate columns don‘t need to project.
+        if (column_name_set.find(before_column_name) == column_name_set.end())
+        {
+            project_aliases.emplace_back(before_column_name, after_column_name);
+            column_name_set.emplace(before_column_name);
+        }
+        after_schema[i].name = after_column_name;
     }
+    expr_actions->add(ExpressionAction::project(project_aliases));
     return after_schema;
 }
 } // namespace DB::PhysicalPlanHelper

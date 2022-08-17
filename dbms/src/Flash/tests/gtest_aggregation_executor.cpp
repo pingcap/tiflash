@@ -105,6 +105,11 @@ public:
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+        context.addMockTable({"test_db", "test_table"},
+                             {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+                             {toVec<Int64>("s1", {1, 2, 3}),
+                              toVec<Int64>("s2", {1, 2, 3})});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(std::pair<String, String> src, MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
@@ -317,22 +322,29 @@ try
                        .scan("aggnull_test", "t1")
                        .aggregation({Max(col("s1"))}, {})
                        .build(context);
-    {
-        ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                            createColumns({toNullableVec<String>({"banana"})}));
-    }
+    executeWithConcurrency(request, {{toNullableVec<String>({"banana"})}});
 
     request = context
                   .scan("aggnull_test", "t1")
                   .aggregation({}, {col("s1")})
                   .build(context);
-    {
-        ASSERT_COLUMNS_EQ_UR(executeStreams(request),
-                             createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
-    }
+    executeWithConcurrency(request, {{toNullableVec<String>("s1", {{}, "banana"})}});
 }
 CATCH
 
+TEST_F(ExecutorAggTestRunner, RepeatedAggregateFunction)
+try
+{
+    /// select max(s1), max(s1) from test_db.test_table;
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .aggregation({Max(col("s1")), Max(col("s1"))}, {})
+                       .build(context);
+    executeWithConcurrency(
+        request,
+        {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}});
+}
+CATCH
 
 // TODO support more type of min, max, count.
 //      support more aggregation functions: sum, forst_row, group_concat

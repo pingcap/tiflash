@@ -43,11 +43,12 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     WindowDescription window_description = analyzer.buildWindowDescription(window);
 
     /// project action after window to remove useless columns.
-    auto schema = PhysicalPlanHelper::addProjectAction(
+    /// For window, we need to add column_prefix to distinguish it from the output of the next window.
+    /// such as `window(row_number()) <-- window(row_number())`.
+    auto schema = PhysicalPlanHelper::addSchemaProjectAction(
         window_description.after_window,
         window_description.after_window_columns,
-        fmt::format("{}_", executor_id),
-        context);
+        fmt::format("{}_", executor_id));
     window_description.after_window_columns = schema;
 
     auto physical_window = std::make_shared<PhysicalWindow>(

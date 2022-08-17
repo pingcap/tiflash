@@ -242,9 +242,57 @@ try
                        .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
                        .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                        .build(context);
-    executeWithConcurrency(
-        request,
-        createColumns({toVec<UInt64>({4})}));
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
+
+    /*
+    select count(1)from (
+        SELECT 
+            ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`),
+            ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`)
+        FROM `test_db`.`table2`
+    )t1;
+    */
+    request = context
+                  .scan("test_db", "table2")
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    request = context
+                  .scan("test_db", "table2")
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window({RowNumber(), RowNumber()}, {{"c1", false}}, {{"c2", false}}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
+
+    /*
+    select count(1)from (
+        SELECT 
+            Rank() OVER (PARTITION BY `c2` ORDER BY  `c1`),
+            ROW_NUMBER() OVER (PARTITION BY `c2` ORDER BY  `c1`)
+        FROM `test_db`.`table2`
+    )t1;
+    */
+    request = context
+                  .scan("test_db", "table2")
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window(RowNumber(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window(Rank(), {"c1", false}, {"c2", false}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
+
+    request = context
+                  .scan("test_db", "table2")
+                  .sort({{"c2", false}, {"c1", false}}, true)
+                  .window({Rank(), RowNumber()}, {{"c1", false}}, {{"c2", false}}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({4})}));
 }
 CATCH
 

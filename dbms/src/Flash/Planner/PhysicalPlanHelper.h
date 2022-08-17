@@ -23,9 +23,8 @@ ExpressionActionsPtr newActions(const Block & input_block, const Context & conte
 
 ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Context & context);
 
-NamesAndTypes addProjectAction(
+NamesAndTypes addSchemaProjectAction(
     const ExpressionActionsPtr & expr_actions,
     const NamesAndTypes & before_schema,
-    const String & column_prefix,
-    const Context & context);
+    const String & column_prefix = "");
 } // namespace DB::PhysicalPlanHelper
