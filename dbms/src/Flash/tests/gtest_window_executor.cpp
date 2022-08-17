@@ -216,24 +216,19 @@ try
 {
     std::vector<ASTPtr> functions = {DenseRank(), Rank()};
     ColumnsWithTypeAndName functions_result = {toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("rank", {1, 1, 3, 3, 1, 1, 3, 3})};
-    auto request = context
-                       .scan("test_db", "test_table")
-                       .sort({{"partition", false}, {"order", false}}, true)
-                       .window(functions[0], {"order", false}, {"partition", false}, MockWindowFrame{})
-                       .build(context);
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-                                          toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
-                                          functions_result[0]}));
-    request = context
-                  .scan("test_db", "test_table")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window(functions[1], {"order", false}, {"partition", false}, MockWindowFrame{})
-                  .build(context);
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-                                          toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
-                                          functions_result[1]}));
+    auto test_single_window_function = [&](size_t index) {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .sort({{"partition", false}, {"order", false}}, true)
+                           .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{})
+                           .build(context);
+        executeWithConcurrency(request,
+                               createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                                              toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+                                              functions_result[index]}));
+    };
+    for (size_t i = 0; i < functions.size(); ++i)
+        test_single_window_function(i);
 
     auto gen_merge_window_request = [&](const std::vector<ASTPtr> & wfs) {
         return context
