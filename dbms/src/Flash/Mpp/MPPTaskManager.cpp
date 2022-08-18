@@ -33,8 +33,9 @@ MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     , log(&Poco::Logger::get("TaskManager"))
 {}
 
-MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
+std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout)
 {
+    const auto & meta = request->sender_meta();
     MPPTaskId id{meta.start_ts(), meta.task_id()};
     std::unordered_map<MPPTaskId, MPPTaskPtr>::iterator it;
     bool cancelled = false;
@@ -59,15 +60,13 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
     fiu_do_on(FailPoints::random_task_manager_find_task_failure_failpoint, ret = false;);
     if (cancelled)
     {
-        errMsg = fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id());
-        return nullptr;
+        return {nullptr, fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id())};
     }
     else if (!ret)
     {
-        errMsg = fmt::format("Can't find task [{},{}] within {} s.", meta.start_ts(), meta.task_id(), timeout.count());
-        return nullptr;
+        return {nullptr, fmt::format("Can't find task [{},{}] within {} s.", meta.start_ts(), meta.task_id(), timeout.count())};
     }
-    return it->second;
+    return it->second->getTunnel(request);
 }
 
 class MPPTaskCancelHelper
@@ -209,29 +208,6 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
         }
     }
     LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
-}
-
-std::vector<UInt64> MPPTaskManager::getCurrentQueries()
-{
-    std::vector<UInt64> ret;
-    std::lock_guard lock(mu);
-    for (auto & it : mpp_query_map)
-    {
-        ret.push_back(it.first);
-    }
-    return ret;
-}
-
-std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
-{
-    std::vector<MPPTaskPtr> ret;
-    std::lock_guard lock(mu);
-    const auto & it = mpp_query_map.find(query_id);
-    if (it == mpp_query_map.end() || it->second->to_be_cancelled)
-        return ret;
-    for (const auto & task_it : it->second->task_map)
-        ret.push_back(task_it.second);
-    return ret;
 }
 
 String MPPTaskManager::toString()
