@@ -262,36 +262,28 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
-    std::string err_msg;
-    MPPTunnelPtr tunnel = nullptr;
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    if (tunnel == nullptr)
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
-        if (sender_task != nullptr)
+        if (calldata)
         {
-            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
+            LOG_ERROR(log, err_msg);
+            // In Async version, writer::Write() return void.
+            // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
+            calldata->writeErr(getPacketWithError(err_msg));
+            return grpc::Status::OK;
         }
-        if (tunnel == nullptr)
+        else
         {
-            if (calldata)
+            LOG_ERROR(log, err_msg);
+            if (sync_writer->Write(getPacketWithError(err_msg)))
             {
-                LOG_ERROR(log, err_msg);
-                // In Async version, writer::Write() return void.
-                // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
-                calldata->writeErr(getPacketWithError(err_msg));
                 return grpc::Status::OK;
             }
             else
             {
-                LOG_ERROR(log, err_msg);
-                if (sync_writer->Write(getPacketWithError(err_msg)))
-                {
-                    return grpc::Status::OK;
-                }
-                else
-                {
-                    LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
-                    return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
-                }
+                LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
+                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
             }
         }
     }
