@@ -54,8 +54,10 @@ public:
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        ASSERT_COLUMNS_EQ_UR(executeStreams(request), expect_columns);
-        ASSERT_COLUMNS_EQ_UR(executeStreams(request, max_concurrency_level), expect_columns);
+        for (size_t i = 1; i <= max_concurrency_level; i += 2)
+        {
+            ASSERT_COLUMNS_EQ_UR(executeStreams(request, i), expect_columns);
+        }
         WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
