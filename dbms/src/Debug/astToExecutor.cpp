@@ -884,8 +884,19 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
 
 void TableScan::columnPrune(std::unordered_set<String> & used_columns)
 {
-    output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
-                        output_schema.end());
+    DAGSchema new_schema;
+    for (const auto & col : output_schema)
+    {
+        for (const auto & used_col : used_columns)
+        {
+            if (splitQualifiedName(used_col).column_name == splitQualifiedName(col.first).column_name && splitQualifiedName(used_col).table_name == splitQualifiedName(col.first).table_name)
+            {
+                new_schema.push_back({used_col, col.second});
+            }
+        }
+    }
+
+    output_schema = new_schema;
 }
 
 bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &)
@@ -1190,20 +1201,28 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
     std::unordered_set<String> right_columns;
 
     for (auto & field : children[0]->output_schema)
-        left_columns.emplace(field.first);
-    for (auto & field : children[1]->output_schema)
-        right_columns.emplace(field.first);
+    {
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        left_columns.emplace(table_name + "." + column_name);
+    }
 
+    for (auto & field : children[1]->output_schema)
+    {
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        right_columns.emplace(table_name + "." + column_name);
+    }
     std::unordered_set<String> left_used_columns;
     std::unordered_set<String> right_used_columns;
 
     for (const auto & s : used_columns)
     {
-        if (left_columns.find(s) != left_columns.end())
-            left_used_columns.emplace(s);
+        auto [db_name, table_name, col_name] = splitQualifiedName(s);
+        auto t = table_name + "." + col_name;
+        if (left_columns.find(t) != left_columns.end())
+            left_used_columns.emplace(t);
 
-        if (right_columns.find(s) != right_columns.end())
-            right_used_columns.emplace(s);
+        if (right_columns.find(t) != right_columns.end())
+            right_used_columns.emplace(t);
     }
 
     for (const auto & child : join_cols)
@@ -1213,17 +1232,19 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
             auto col_name = identifier->getColumnName();
             for (auto & field : children[0]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).column_name)
+                auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+                if (col_name == column_name)
                 {
-                    left_used_columns.emplace(field.first);
+                    left_used_columns.emplace(table_name + "." + column_name);
                     break;
                 }
             }
             for (auto & field : children[1]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).column_name)
+                auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+                if (col_name == column_name)
                 {
-                    right_used_columns.emplace(field.first);
+                    right_used_columns.emplace(table_name + "." + column_name);
                     break;
                 }
             }

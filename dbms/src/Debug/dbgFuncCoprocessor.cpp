@@ -664,7 +664,7 @@ QueryFragments mppQueryToQueryFragments(
     {
         mpp_ctx->sender_target_task_ids = current_task_ids;
         auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
-        receiver_source_task_ids_map[exchange.first] = sub_fragments.cbegin()->task_ids;
+        receiver_source_task_ids_map[exchange.first] = sub_fragments[sub_fragments.size() - 1].task_ids;
         fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());
     }
     fragments.emplace_back(root_executor, table_id, for_root_fragment, std::move(sender_target_task_ids), std::move(receiver_source_task_ids_map), std::move(current_task_ids));

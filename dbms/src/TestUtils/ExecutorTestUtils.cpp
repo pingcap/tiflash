@@ -134,11 +134,8 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     return readBlock(executeQuery(context.context).in);
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
-    DAGProperties properties;
-    // enable mpp
-    properties.is_mpp_query = true;
     auto res = executeMPPQuery(context.context, properties, tasks, server_config_map);
     return readBlock(res);
 }
