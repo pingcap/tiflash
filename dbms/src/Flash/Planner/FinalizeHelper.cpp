@@ -44,9 +44,8 @@ void checkSchemaContainsParentRequire(const NamesAndTypes & schema, const Names 
     {
         RUNTIME_CHECK(
             schema_set.find(parent_require_column) != schema_set.end(),
-            TiFlashException(
-                fmt::format("schema {} don't contain parent require column: {}", DB::dumpJsonStructure(schema), parent_require_column),
-                Errors::Planner::Internal));
+            DB::dumpJsonStructure(schema),
+            parent_require_column);
     }
 }
 
@@ -56,21 +55,16 @@ void checkSampleBlockContainsSchema(const Block & sample_block, const NamesAndTy
     {
         RUNTIME_CHECK(
             sample_block.has(schema_column.name),
-            TiFlashException(
-                fmt::format("sample block {} don't contain schema column: {}", sample_block.dumpJsonStructure(), schema_column.name),
-                Errors::Planner::Internal));
+            sample_block.dumpJsonStructure(),
+            schema_column.name);
 
         const auto & type_in_sample_block = sample_block.getByName(schema_column.name).type;
         const auto & type_in_schema = schema_column.type;
         RUNTIME_CHECK(
             type_in_sample_block->equals(*type_in_schema),
-            TiFlashException(
-                fmt::format(
-                    "the type of column `{}` in sample block `{}` is different from the one in schema `{}`",
-                    schema_column.name,
-                    type_in_sample_block->getName(),
-                    type_in_schema->getName()),
-                Errors::Planner::Internal));
+            schema_column.name,
+            type_in_sample_block->getName(),
+            type_in_schema->getName());
     }
 }
 
@@ -80,9 +74,8 @@ void checkSampleBlockContainsParentRequire(const Block & sample_block, const Nam
     {
         RUNTIME_CHECK(
             sample_block.has(parent_require_column),
-            TiFlashException(
-                fmt::format("sample block {} don't contain parent_require column: {}", sample_block.dumpJsonStructure(), parent_require_column),
-                Errors::Planner::Internal));
+            sample_block.dumpJsonStructure(),
+            parent_require_column);
     }
 }
 } // namespace DB::FinalizeHelper
