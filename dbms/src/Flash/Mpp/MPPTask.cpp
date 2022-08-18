@@ -56,6 +56,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , id(meta.start_ts(), meta.task_id())
     , log(Logger::get("MPPTask", id.toString()))
     , mpp_task_statistics(id, meta.address())
+    , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
 {}
 
@@ -446,7 +447,7 @@ void MPPTask::scheduleOrWait()
     }
 }
 
-void MPPTask::scheduleThisTask(ScheduleState state)
+bool MPPTask::scheduleThisTask(ScheduleState state)
 {
     std::unique_lock lock(schedule_mu);
     if (schedule_state == ScheduleState::WAITING)
@@ -454,7 +455,9 @@ void MPPTask::scheduleThisTask(ScheduleState state)
         LOG_FMT_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
+        return true;
     }
+    return false;
 }
 
 int MPPTask::estimateCountOfNewThreads()

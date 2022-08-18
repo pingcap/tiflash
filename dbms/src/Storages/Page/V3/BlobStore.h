@@ -177,7 +177,7 @@ public:
         using BlobStatPtr = std::shared_ptr<BlobStat>;
 
     public:
-        BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config config);
+        BlobStats(LoggerPtr log_, PSDiskDelegatorPtr delegator_, BlobStore::Config & config);
 
         // Don't require a lock from BlobStats When you already hold a BlobStat lock
         //
@@ -223,12 +223,6 @@ public:
 
         BlobStatPtr blobIdToStat(BlobFileId file_id, bool ignore_not_exist = false);
 
-        String blobIdToPath(BlobFileId file_id);
-
-    private:
-        String blobIdToPathImpl(BlobFileId file_id, const std::lock_guard<std::mutex> &);
-
-    public:
         using StatsMap = std::map<String, std::list<BlobStatPtr>>;
         StatsMap getStats() const
         {
@@ -250,7 +244,7 @@ public:
 #endif
         LoggerPtr log;
         PSDiskDelegatorPtr delegator;
-        BlobStore::Config config;
+        BlobStore::Config & config;
 
         mutable std::mutex lock_stats;
         BlobFileId roll_id = 1;
@@ -262,6 +256,8 @@ public:
     BlobStore(String storage_name, const FileProviderPtr & file_provider_, PSDiskDelegatorPtr delegator_, const BlobStore::Config & config);
 
     void registerPaths();
+
+    void reloadConfig(const BlobStore::Config & rhs);
 
     FileUsageStatistics getFileUsageStatistics() const;
 

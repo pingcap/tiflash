@@ -205,7 +205,11 @@ public:
                 wal_max_persisted_log_files.get());
         }
     };
-    void reloadSettings(const Config & new_config) { config.reload(new_config); };
+    void reloadSettings(const Config & new_config)
+    {
+        config.reload(new_config);
+        reloadConfig();
+    }
     Config getSettings() const { return config; }
 
 public:
@@ -348,6 +352,8 @@ protected:
     virtual PageId getNormalPageIdImpl(NamespaceId ns_id, PageId page_id, SnapshotPtr snapshot, bool throw_on_not_exist) = 0;
 
     virtual bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) = 0;
+
+    virtual void reloadConfig() {}
 
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
