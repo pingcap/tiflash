@@ -225,8 +225,12 @@ void DAGContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_r
 {
     if (!isMPPTask())
         return;
-    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
-    return mpp_receiver_set->addCoprocessorReader(coprocessor_reader);
+    coprocessor_readers.push_back(coprocessor_reader);
+}
+
+std::vector<CoprocessorReaderPtr> & DAGContext::getCoprocessorReaders()
+{
+    return coprocessor_readers;
 }
 
 bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
