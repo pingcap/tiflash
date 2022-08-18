@@ -70,6 +70,25 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
     return it->second;
 }
 
+<<<<<<< HEAD
+=======
+class MPPTaskCancelHelper
+{
+public:
+    MPPTaskPtr task;
+    String reason;
+    MPPTaskCancelHelper(MPPTaskPtr && task_, const String & reason_)
+        : task(std::move(task_))
+        , reason(reason_)
+    {}
+    DISALLOW_COPY_AND_MOVE(MPPTaskCancelHelper);
+    void run() const
+    {
+        task->cancel(reason);
+    }
+};
+
+>>>>>>> 3240237eb7 (refine MPPTaskCancelFunctor (#5642))
 void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
 {
     MPPQueryTaskSetPtr task_set;
@@ -99,7 +118,30 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     fmt_buf.fmtAppend("Remaining task in query {} are: ", query_id);
     // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
     auto thread_manager = newThreadManager();
+<<<<<<< HEAD
     for (auto it = task_set->task_map.begin(); it != task_set->task_map.end();)
+=======
+    try
+    {
+        for (auto it = task_set->task_map.begin(); it != task_set->task_map.end();)
+        {
+            fmt_buf.fmtAppend("{} ", it->first.toString());
+            auto current_task = it->second;
+            it = task_set->task_map.erase(it);
+            // Note it is not acceptable to destruct `current_task` inside the loop, because destruct a mpp task before all
+            // other mpp tasks are cancelled may cause some deadlock issues, so `current_task` has to be moved to cancel thread.
+            // At first, we use std::move to move `current_task` to lambda like this:
+            // thread_manager->schedule(false, "CancelMPPTask", [task = std::move(current_task), &reason] { task->cancel(reason); });
+            // However, due to SOO in llvm(https://github.com/llvm/llvm-project/issues/32472), there is still a copy of `current_task`
+            // remaining in the current scope, as a workaround we add a wrap(MPPTaskCancelHelper) here to make sure `current_task`
+            // can be moved to cancel thread.
+            thread_manager->schedule(false, "CancelMPPTask", [helper = new MPPTaskCancelHelper(std::move(current_task), reason)] {
+                std::unique_ptr<MPPTaskCancelHelper>(helper)->run();
+            });
+        }
+    }
+    catch (...)
+>>>>>>> 3240237eb7 (refine MPPTaskCancelFunctor (#5642))
     {
         fmt_buf.fmtAppend("{} ", it->first.toString());
         auto current_task = it->second;
