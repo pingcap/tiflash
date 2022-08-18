@@ -40,10 +40,12 @@ public:
 
     bool pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection);
 
+    bool hasPushDownFilter() const;
+
+    const String & getPushDownFilterId() const;
+
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
-
-    bool hasPushDownFilter() const;
 
 private:
     PushDownFilter push_down_filter;
