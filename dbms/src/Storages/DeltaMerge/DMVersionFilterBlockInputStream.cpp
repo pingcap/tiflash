@@ -258,25 +258,25 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             }
 
             // Let's set is_delete.
-            is_delete.resize(rows);
+            is_deleted.resize(rows);
             {
-                UInt8 * is_delete_pos = is_delete.data();
+                UInt8 * is_deleted_pos = is_deleted.data();
                 auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*is_delete_pos) = (*delete_pos);
-                    ++is_delete_pos;
+                    (*is_deleted_pos) = (*delete_pos);
+                    ++is_deleted_pos;
                     ++delete_pos;
                 }
             }
 
             {
-                UInt8 * is_delete_pos = is_delete.data();
+                UInt8 * is_deleted_pos = is_deleted.data();
                 UInt8 * filter_pos = filter.data();
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
-                    (*is_delete_pos) &= (*filter_pos);
-                    ++is_delete_pos;
+                    (*is_deleted_pos) &= (*filter_pos);
+                    ++is_deleted_pos;
                     ++filter_pos;
                 }
             }
@@ -331,7 +331,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 {
                     filter[rows - 1] = cur_version >= version_limit || !deleted;
                     not_clean[rows - 1] = filter[rows - 1] && deleted;
-                    is_delete[rows - 1] = filter[rows - 1] && deleted;
+                    is_deleted[rows - 1] = filter[rows - 1] && deleted;
                     effective[rows - 1] = filter[rows - 1];
                     if (filter[rows - 1])
                         gc_hint_version = std::min(
@@ -357,7 +357,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     filter[rows - 1] = cur_version >= version_limit
                         || ((compare(cur_handle, next_handle) != 0 || next_version > version_limit) && !deleted);
                     not_clean[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) == 0 || deleted);
-                    is_delete[rows - 1] = filter[rows - 1] && deleted;
+                    is_deleted[rows - 1] = filter[rows - 1] && deleted;
                     effective[rows - 1] = filter[rows - 1] && (compare(cur_handle, next_handle) != 0);
                     if (filter[rows - 1])
                         gc_hint_version
@@ -375,7 +375,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
             not_clean_rows += countBytesInFilter(not_clean);
-            is_delete_rows += countBytesInFilter(is_delete);
+            is_deleted_rows += countBytesInFilter(is_deleted);
             effective_num_rows += countBytesInFilter(effective);
         }
 

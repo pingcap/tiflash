@@ -126,7 +126,6 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     DMFile::PackStat stat{};
     stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
-    stat.is_delete = block_property.is_delete_rows;
     stat.bytes = block.bytes(); // This is bytes of pack data in memory.
 
     auto del_mark_column = tryGetByColumnId(block, TAG_COLUMN_ID).column;
@@ -155,6 +154,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     auto * property = properties.add_property();
     property->set_num_rows(block_property.effective_num_rows);
     property->set_gc_hint_version(block_property.gc_hint_version);
+    property->set_num_rows_with_deleted(block_property.is_deleted_rows);
 }
 
 void DMFileWriter::finalize()

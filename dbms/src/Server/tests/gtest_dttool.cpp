@@ -281,7 +281,6 @@ TEST_F(DTToolTest, BlockwiseInvariant)
             EXPECT_EQ(prop_iter->num_rows(), new_prop_iter->num_rows());
             EXPECT_EQ(stat_iter->rows, new_stat_iter->rows);
             EXPECT_EQ(stat_iter->not_clean, new_stat_iter->not_clean);
-            EXPECT_EQ(stat_iter->is_delete, new_stat_iter->is_delete);
             EXPECT_EQ(stat_iter->first_version, new_stat_iter->first_version);
             EXPECT_EQ(stat_iter->bytes, new_stat_iter->bytes);
             EXPECT_EQ(stat_iter->first_tag, new_stat_iter->first_tag);

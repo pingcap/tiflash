@@ -1043,6 +1043,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     for (auto & segment : all_segments)
     {
         auto res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        // just for the bench test
         while (res == nullptr)
         {
             res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
