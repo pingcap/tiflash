@@ -63,7 +63,8 @@ public:
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; ++i)
+        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
+        for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
@@ -73,7 +74,8 @@ public:
     void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; ++i)
+        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
+        for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
         }
@@ -212,6 +214,172 @@ try
                        toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2}),
                        toNullableVec<Int64>("rank", {1, 2, 1, 1, 3, 3, 1, 1, 3, 3}),
                        toNullableVec<Int64>("dense_rank", {1, 2, 1, 1, 2, 2, 1, 1, 2, 2})}));
+}
+CATCH
+
+TEST_F(WindowExecutorTestRunner, multiWindow)
+try
+{
+    std::vector<ASTPtr> functions = {DenseRank(), Rank()};
+    ColumnsWithTypeAndName functions_result = {toNullableVec<Int64>("dense_rank", {1, 1, 2, 2, 1, 1, 2, 2}), toNullableVec<Int64>("rank", {1, 1, 3, 3, 1, 1, 3, 3})};
+    auto test_single_window_function = [&](size_t index) {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .sort({{"partition", false}, {"order", false}}, true)
+                           .window(functions[index], {"order", false}, {"partition", false}, MockWindowFrame{})
+                           .build(context);
+        executeWithConcurrency(request,
+                               createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+                                              toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2}),
+                                              functions_result[index]}));
+    };
+    for (size_t i = 0; i < functions.size(); ++i)
+        test_single_window_function(i);
+
+    auto gen_merge_window_request = [&](const std::vector<ASTPtr> & wfs) {
+        return context
+            .scan("test_db", "test_table")
+            .sort({{"partition", false}, {"order", false}}, true)
+            .window(wfs, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
+            .build(context);
+    };
+
+    auto gen_split_window_request = [&](const std::vector<ASTPtr> & wfs) {
+        auto req = context
+                       .scan("test_db", "test_table")
+                       .sort({{"partition", false}, {"order", false}}, true);
+        for (const auto & wf : wfs)
+            req.window(wf, {"order", false}, {"partition", false}, MockWindowFrame());
+        return req.build(context);
+    };
+
+    std::vector<ASTPtr> wfs;
+    ColumnsWithTypeAndName wfs_result = {{toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2})}, {toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})}};
+    for (size_t i = 0; i < functions.size(); ++i)
+    {
+        wfs.push_back(functions[i]);
+        wfs_result.push_back(functions_result[i]);
+        for (size_t j = 0; j < functions.size(); ++j)
+        {
+            wfs.push_back(functions[j]);
+            wfs_result.push_back(functions_result[j]);
+            for (size_t k = 0; k < functions.size(); ++k)
+            {
+                wfs.push_back(functions[k]);
+                wfs_result.push_back(functions_result[k]);
+
+                executeWithConcurrency(gen_merge_window_request(wfs), wfs_result);
+                executeWithConcurrency(gen_split_window_request(wfs), wfs_result);
+
+                wfs.pop_back();
+                wfs_result.pop_back();
+            }
+            wfs.pop_back();
+            wfs_result.pop_back();
+        }
+        wfs.pop_back();
+        wfs_result.pop_back();
+    }
+}
+CATCH
+
+TEST_F(WindowExecutorTestRunner, multiWindowThenAgg)
+try
+{
+    /*
+    select count(1) from (
+        SELECT 
+            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
+            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order` DESC)
+        FROM `test_db`.`test_table`
+    )t1;
+    */
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .sort({{"partition", false}, {"order", false}}, true)
+                       .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+                       .sort({{"partition", false}, {"order", true}}, true)
+                       .window(RowNumber(), {"order", true}, {"partition", false}, buildDefaultRowsFrame())
+                       .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                       .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+
+    /*
+    select count(1) from (
+        SELECT 
+            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`),
+            ROW_NUMBER() OVER (PARTITION BY `partition` ORDER BY  `order`)
+        FROM `test_db`.`test_table`
+    )t1;
+    */
+    request = context
+                  .scan("test_db", "test_table")
+                  .sort({{"partition", false}, {"order", false}}, true)
+                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+                  .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+
+    request = context
+                  .scan("test_db", "test_table")
+                  .sort({{"partition", false}, {"order", false}}, true)
+                  .window({RowNumber(), RowNumber()}, {{"order", false}}, {{"partition", false}}, buildDefaultRowsFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+
+    /*
+    select count(1) from (
+        SELECT 
+            Rank() OVER (PARTITION BY `partition` ORDER BY  `order`),
+            DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`)
+        FROM `test_db`.`test_table`
+    )t1;
+    */
+    request = context
+                  .scan("test_db", "test_table")
+                  .sort({{"partition", false}, {"order", false}}, true)
+                  .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame())
+                  .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+
+    request = context
+                  .scan("test_db", "test_table")
+                  .sort({{"partition", false}, {"order", false}}, true)
+                  .window({Rank(), DenseRank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+
+    /*
+    select count(1) from (
+        SELECT
+            DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`),
+            DenseRank() OVER (PARTITION BY `partition` ORDER BY  `order`),
+            Rank() OVER (PARTITION BY `partition` ORDER BY  `order`)
+        FROM `test_db`.`test_table`
+    )t1;
+    */
+    request = context
+                  .scan("test_db", "test_table")
+                  .sort({{"partition", false}, {"order", false}}, true)
+                  .window({DenseRank(), DenseRank(), Rank()}, {{"order", false}}, {{"partition", false}}, MockWindowFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
+
+    request = context
+                  .scan("test_db", "test_table")
+                  .sort({{"partition", false}, {"order", false}}, true)
+                  .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame())
+                  .window(DenseRank(), {"order", false}, {"partition", false}, MockWindowFrame())
+                  .window(Rank(), {"order", false}, {"partition", false}, MockWindowFrame())
+                  .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
+                  .build(context);
+    executeWithConcurrency(request, createColumns({toVec<UInt64>({8})}));
 }
 CATCH
 
