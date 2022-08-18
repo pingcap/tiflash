@@ -35,7 +35,7 @@ bool isSumOnPartialResults(const tipb::Expr & expr)
     if (!expr.has_aggfuncmode())
         return false;
 
-    if (getAggFunctionName(expr) == "sum" && expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode)
+    if (getAggFunctionName(expr) == "sum" && (expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::Partial2Mode))
         return true;
     return false;
 }

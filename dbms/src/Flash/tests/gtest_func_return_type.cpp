@@ -15,6 +15,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionSum.h>
 #include <DataTypes/DataTypeDecimal.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -44,13 +45,23 @@ public:
     }
 
     template <typename T>
-    ::testing::AssertionResult testSecondStageSumAgg()
+    ::testing::AssertionResult testSumOnPartialResult()
     {
-        PrecType precision = maxDecimalPrecision<T>() - 1;
-        ScaleType scale = 5;
-        std::shared_ptr<IDataType> input_type_ptr = std::make_shared<DataTypeDecimal<Decimal32>>(precision, scale);
-        std::shared_ptr<IDataType> expect_output_type_ptr = std::make_shared<DataTypeDecimal<Decimal32>>(precision, scale);
-        return checkAggReturnType(NameFinalSumStage::name, {input_type_ptr}, expect_output_type_ptr);
+        for (size_t nullable = 0; nullable <= 1; ++nullable)
+        {
+            PrecType precision = maxDecimalPrecision<T>() - 1;
+            ScaleType scale = 5;
+            std::shared_ptr<DataTypeDecimal<T>> input_nested_type_ptr = std::make_shared<DataTypeDecimal<T>>(precision, scale);
+            std::shared_ptr<DataTypeDecimal<T>> expect_output_nested_type_ptr = std::make_shared<DataTypeDecimal<T>>(precision, scale);
+            DataTypePtr input_type_ptr = nullable == 0 ? static_cast<DataTypePtr>(input_nested_type_ptr) : static_cast<DataTypePtr>(std::make_shared<DataTypeNullable>(input_nested_type_ptr));
+            DataTypePtr expect_output_type_ptr = nullable == 0 ? static_cast<DataTypePtr>(expect_output_nested_type_ptr) : static_cast<DataTypePtr>(std::make_shared<DataTypeNullable>(expect_output_type_ptr));
+            auto result = checkAggReturnType(NameSumOnPartialResult::name, {input_type_ptr}, expect_output_type_ptr);
+            if (result)
+                continue;
+            return result;
+        }
+
+        return ::testing::AssertionSuccess();
     }
 };
 
@@ -58,10 +69,10 @@ TEST_F(ExecutorFuncReturnTypeTestRunner, AggregationSum)
 try
 {
     // Test output type of the second stage sum aggregation function
-    ASSERT_TRUE(testSecondStageSumAgg<Decimal32>());
-    ASSERT_TRUE(testSecondStageSumAgg<Decimal64>());
-    ASSERT_TRUE(testSecondStageSumAgg<Decimal128>());
-    ASSERT_TRUE(testSecondStageSumAgg<Decimal256>());
+    ASSERT_TRUE(testSumOnPartialResult<Decimal32>());
+    ASSERT_TRUE(testSumOnPartialResult<Decimal64>());
+    ASSERT_TRUE(testSumOnPartialResult<Decimal128>());
+    ASSERT_TRUE(testSumOnPartialResult<Decimal256>());
 }
 CATCH
 

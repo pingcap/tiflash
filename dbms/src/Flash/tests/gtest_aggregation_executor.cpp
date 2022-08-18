@@ -351,7 +351,7 @@ try
     ScaleType scale = 7;
     std::shared_ptr<IDataType> input_type_ptr1 = std::make_shared<DataTypeDecimal<Decimal64>>(precision, scale);
     std::shared_ptr<IDataType> expect_output_type_ptr1 = std::make_shared<DataTypeDecimal<Decimal64>>(precision, scale);
-    EXPECT_TRUE(checkReturnType(NameFinalSumStage::name, {input_type_ptr1}, expect_output_type_ptr1));
+    EXPECT_TRUE(checkReturnType(NameSumOnPartialResult::name, {input_type_ptr1}, expect_output_type_ptr1));
 
     // TODO Test sum aggregation
 }

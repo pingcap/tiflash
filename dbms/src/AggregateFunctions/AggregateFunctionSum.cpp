@@ -22,7 +22,7 @@ namespace DB
 {
 
 extern const String count_second_stage = NameCountSecondStage::name;
-extern const String sum_on_partial_result_stage = NameSumOnPartialResult::name;
+extern const String sum_on_partial_result = NameSumOnPartialResult::name;
 
 namespace
 {
@@ -107,7 +107,6 @@ AggregateFunctionPtr createAggregateFunctionSum(const std::string & name, const 
 void registerAggregateFunctionSum(AggregateFunctionFactory & factory)
 {
     factory.registerFunction(NameSum::name, createAggregateFunctionSum<AggregateFunctionSumSimple, NameSum>, AggregateFunctionFactory::CaseInsensitive);
-    factory.registerFunction(NameSumWithOverFlow::name, createAggregateFunctionSum<AggregateFunctionSumWithOverflow, NameSumWithOverFlow>);
     factory.registerFunction(NameSumOnPartialResult::name, createAggregateFunctionSum<AggregateFunctionSumOnPartialResultStage, NameSumOnPartialResult>);
     factory.registerFunction(NameSumKahan::name, createAggregateFunctionSum<AggregateFunctionSumKahan, NameSumKahan>);
     factory.registerFunction(NameCountSecondStage::name, createAggregateFunctionSum<AggregateFunctionCountSecondStage, NameCountSecondStage>, AggregateFunctionFactory::CaseInsensitive);

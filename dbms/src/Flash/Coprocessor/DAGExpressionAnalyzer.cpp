@@ -36,7 +36,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include <common/logger_useful.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -51,7 +50,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
 {}
 
 extern const String count_second_stage;
-extern const String sum_on_partial_result_stage;
+extern const String sum_on_partial_result;
 
 namespace
 {
@@ -91,7 +90,7 @@ String getAggFuncName(
     // "sum" represents the first stage.
     // "SumOtherStage" represents other stages whose input is partial result.
     if (AggregationInterpreterHelper::isSumOnPartialResults(expr))
-        return sum_on_partial_result_stage;
+        return sum_on_partial_result;
 
     return agg_func_name;
 }
