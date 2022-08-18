@@ -19,8 +19,6 @@
 
 #include <memory>
 
-#define FLATTEN_INLINE_PURE __attribute__((flatten, always_inline, pure))
-
 namespace DB
 {
 

@@ -54,8 +54,18 @@ void fillOrderForListBasedExecutors(DAGContext & dag_context, const PhysicalPlan
     auto & list_based_executors_order = dag_context.list_based_executors_order;
     PhysicalPlanVisitor::visitPostOrder(root_node, [&](const PhysicalPlanNodePtr & plan) {
         assert(plan);
-        if (plan->isRecordProfileStreams())
-            list_based_executors_order.push_back(plan->execId());
+        if (plan->isTiDBOperator())
+        {
+            if (plan->tp() == PlanType::TableScan)
+            {
+                auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
+                if (physical_table_scan->hasPushDownFilter())
+                    list_based_executors_order.push_back(physical_table_scan->getPushDownFilterId());
+                list_based_executors_order.push_back(physical_table_scan->execId());
+            }
+            else
+                list_based_executors_order.push_back(plan->execId());
+        }
     });
 }
 } // namespace
