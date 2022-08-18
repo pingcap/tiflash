@@ -93,6 +93,7 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
 
 void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
+    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 

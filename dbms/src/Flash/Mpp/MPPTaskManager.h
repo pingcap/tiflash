@@ -63,10 +63,6 @@ public:
 
     ~MPPTaskManager() = default;
 
-    std::vector<UInt64> getCurrentQueries();
-
-    std::vector<MPPTaskPtr> getCurrentTasksForQuery(UInt64 query_id);
-
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
 
     bool registerTask(MPPTaskPtr task);
@@ -77,9 +73,9 @@ public:
 
     bool tryToScheduleTask(const MPPTaskPtr & task);
 
-    void releaseThreadsFromScheduler(const int needed_threads);
+    void releaseThreadsFromScheduler(int needed_threads);
 
-    MPPTaskPtr findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg);
+    std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
 
     void cancelMPPQuery(UInt64 query_id, const String & reason);
 
