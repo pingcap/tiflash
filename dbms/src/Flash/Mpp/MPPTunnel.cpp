@@ -70,20 +70,7 @@ MPPTunnel::~MPPTunnel()
     });
     try
     {
-        {
-            std::unique_lock lock(*mu);
-            if (status == TunnelStatus::Finished)
-            {
-                LOG_DEBUG(log, "already finished!");
-                return;
-            }
-
-            /// make sure to finish the tunnel after it is connected
-            waitUntilConnectedOrFinished(lock);
-            finishSendQueue();
-        }
-        LOG_FMT_TRACE(log, "waiting consumer finish!");
-        waitForSenderFinish(/*allow_throw=*/false);
+        close("");
     }
     catch (...)
     {

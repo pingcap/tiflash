@@ -137,6 +137,8 @@ private:
 
     MPPTaskId id;
 
+    std::mutex tunnel_and_receiver_mu;
+
     MPPTunnelSetPtr tunnel_set;
 
     MPPReceiverSetPtr receiver_set;

@@ -95,19 +95,30 @@ String getAggFuncName(
     return agg_func_name;
 }
 
-/// return `duplicated agg function`->getReturnType if duplicated.
+/// return `duplicated Agg/Window function`->getReturnType if duplicated.
 /// or not return nullptr.
-DataTypePtr findDuplicateAggFunc(
+template <typename Descriptions>
+DataTypePtr findDuplicateAggWindowFunc(
     const String & func_string,
-    const AggregateDescriptions & aggregate_descriptions)
+    const Descriptions & descriptions)
 {
-    for (const auto & aggregated : aggregate_descriptions)
+    for (const auto & description : descriptions)
     {
-        if (aggregated.column_name == func_string)
+        if (description.column_name == func_string)
         {
-            auto return_type = aggregated.function->getReturnType();
-            assert(return_type);
-            return return_type;
+            if constexpr (std::is_same_v<Descriptions, AggregateDescriptions>)
+            {
+                auto return_type = description.function->getReturnType();
+                assert(return_type);
+                return return_type;
+            }
+            else
+            {
+                static_assert(std::is_same_v<Descriptions, WindowFunctionDescriptions>);
+                auto return_type = description.window_function->getReturnType();
+                assert(return_type);
+                return return_type;
+            }
         }
     }
     return nullptr;
@@ -129,7 +140,7 @@ void appendAggDescription(
     AggregateDescription aggregate;
     aggregate.argument_names = arg_names;
     String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-    if (auto duplicated_return_type = findDuplicateAggFunc(func_string, aggregate_descriptions))
+    if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
         // agg function duplicate, don't need to build again.
         aggregated_columns.emplace_back(func_string, duplicated_return_type);
@@ -217,7 +228,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 
     String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
     /// return directly if the agg is duplicated
-    if (auto duplicated_return_type = findDuplicateAggFunc(func_string, aggregate_descriptions))
+    if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
         aggregated_columns.emplace_back(func_string, duplicated_return_type);
         return;
@@ -455,9 +466,8 @@ void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActions
 }
 
 // This function will add new window function culumns to source_column
-std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindowColumns(const tipb::Window & window, ExpressionActionsChain::Step & step)
+void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, ExpressionActionsChain::Step & step)
 {
-    WindowDescription window_description;
     NamesAndTypes window_columns;
 
     if (window.func_desc_size() == 0)
@@ -479,10 +489,8 @@ std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindow
         }
         else if (isWindowFunctionExpr(expr))
         {
-            WindowFunctionDescription window_function_description;
             String window_func_name = getWindowFunctionName(expr);
             auto child_size = expr.children_size();
-
             Names arg_names;
             DataTypes arg_types;
             TiDB::TiDBCollators arg_collators;
@@ -491,11 +499,19 @@ std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindow
                 fillArgumentDetail(step.actions, expr.children(i), arg_names, arg_types, arg_collators);
             }
 
+            String func_string = genFuncString(window_func_name, arg_names, arg_collators);
+            if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, window_description.window_functions_descriptions))
+            {
+                // window function duplicate, don't need to build again.
+                source_columns.emplace_back(func_string, duplicated_return_type);
+                continue;
+            }
+
+            WindowFunctionDescription window_function_description;
             window_function_description.argument_names.resize(child_size);
             window_function_description.argument_names = arg_names;
             step.required_output.insert(step.required_output.end(), arg_names.begin(), arg_names.end());
 
-            String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
             window_function_description.column_name = func_string;
             window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, arg_types);
             DataTypePtr result_type = window_function_description.window_function->getReturnType();
@@ -509,7 +525,7 @@ std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindow
         }
     }
 
-    return {window_description, window_columns};
+    window_description.add_columns = window_columns;
 }
 
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
@@ -519,18 +535,17 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
     appendSourceColumnsToRequireOutput(step);
     size_t source_size = getCurrentInputColumns().size();
 
-    auto [window_description, window_columns] = appendWindowColumns(window, step);
-
-    window_description.add_columns = window_columns;
-
+    WindowDescription window_description;
+    window_description.partition_by = getWindowSortDescription(window.partition_by());
+    window_description.order_by = getWindowSortDescription(window.order_by());
     if (window.has_frame())
     {
         window_description.setWindowFrame(window.frame());
     }
 
+    appendWindowColumns(window_description, window, step);
+
     window_description.before_window = chain.getLastActions();
-    window_description.partition_by = getWindowSortDescription(window.partition_by());
-    window_description.order_by = getWindowSortDescription(window.order_by());
     chain.finalize();
     chain.clear();
 
