@@ -32,7 +32,7 @@ Int64 MockStorage::getTableId(const String & name)
     {
         return name_to_id_map[name];
     }
-    throw Exception(fmt::format("Failed to get table id  by table name '{}'", name));
+    throw Exception(fmt::format("Failed to get table id by table name '{}'", name));
 }
 
 bool MockStorage::tableExists(Int64 table_id)
@@ -148,7 +148,7 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
         }
         return res;
     }
-    return {};
+    throw Exception(fmt::format("Failed to get table columns by table_id '{}'", table_id));
 }
 
 
