@@ -20,7 +20,8 @@
 
 namespace DB::AggregationInterpreterHelper
 {
-
+namespace
+{
 bool isFinalAggMode(const tipb::Expr & expr)
 {
     if (!expr.has_aggfuncmode())
@@ -30,15 +31,6 @@ bool isFinalAggMode(const tipb::Expr & expr)
     return expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::CompleteMode;
 }
 
-bool isSumOnPartialResults(const tipb::Expr & expr)
-{
-    if (!expr.has_aggfuncmode())
-        return false;
-    return getAggFunctionName(expr) == "sum" && (expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::Partial2Mode);
-}
-
-namespace
-{
 bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings & settings)
 {
     /** Two-level aggregation is useful in two cases:
@@ -48,6 +40,13 @@ bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings 
     return before_agg_streams_size > 1 || settings.max_bytes_before_external_group_by != 0;
 }
 } // namespace
+
+bool isSumOnPartialResults(const tipb::Expr & expr)
+{
+    if (!expr.has_aggfuncmode())
+        return false;
+    return getAggFunctionName(expr) == "sum" && (expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::Partial2Mode);
+}
 
 bool isFinalAgg(const tipb::Aggregation & aggregation)
 {
