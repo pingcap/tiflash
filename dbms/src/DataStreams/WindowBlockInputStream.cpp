@@ -70,8 +70,7 @@ void WindowBlockInputStream::initialWorkspaces()
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
-    // only_have_pure_window = onlyHaveRowNumberAndRank();
-    only_have_pure_window = true;
+    only_have_pure_window = onlyHaveWindowFunction();
 }
 
 Block WindowBlockInputStream::readImpl()
@@ -402,13 +401,9 @@ bool WindowBlockInputStream::onlyHaveRowNumber()
     return true;
 }
 
-bool WindowBlockInputStream::onlyHaveRowNumberAndRank()
+bool WindowBlockInputStream::onlyHaveWindowFunction()
 {
-    for (const auto & workspace : workspaces)
-    {
-        if (workspace.window_function->getName() != "row_number" && workspace.window_function->getName() != "rank" && workspace.window_function->getName() != "dense_rank")
-            return false;
-    }
+    /// Now WindowBlockInputStream only support window function.
     return true;
 }
 
