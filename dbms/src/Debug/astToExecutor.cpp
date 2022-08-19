@@ -121,6 +121,10 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
 namespace
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
+    {"plusInt", tipb::ScalarFuncSig::PlusInt},
+    {"plusint", tipb::ScalarFuncSig::PlusInt},
+    {"minusInt", tipb::ScalarFuncSig::MinusInt},
+    {"minusint", tipb::ScalarFuncSig::MinusInt},
     {"equals", tipb::ScalarFuncSig::EQInt},
     {"notEquals", tipb::ScalarFuncSig::NEInt},
     {"and", tipb::ScalarFuncSig::LogicalAnd},
@@ -403,6 +407,22 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
                 *(expr->mutable_field_type()) = child->field_type();
         }
         return;
+    case tipb::ScalarFuncSig::PlusInt:
+    case tipb::ScalarFuncSig::MinusInt:
+    {
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            astToPB(input, child_ast, child, collator_id, context);
+        }
+        expr->set_sig(it_sig->second);
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(expr->children(0).field_type().tp());
+        ft->set_flag(expr->children(0).field_type().flag());
+        ft->set_collate(collator_id);
+        expr->set_tp(tipb::ExprType::ScalarFunc);
+        return;
+    }
     case tipb::ScalarFuncSig::LikeSig:
     {
         expr->set_sig(tipb::ScalarFuncSig::LikeSig);
@@ -637,6 +657,9 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
                     ci = child_ci;
             }
             return ci;
+        case tipb::ScalarFuncSig::PlusInt:
+        case tipb::ScalarFuncSig::MinusInt:
+            return compileExpr(input, func->arguments->children[0]);
         case tipb::ScalarFuncSig::LikeSig:
             ci.tp = TiDB::TypeLongLong;
             ci.flag = TiDB::ColumnFlagUnsigned;
