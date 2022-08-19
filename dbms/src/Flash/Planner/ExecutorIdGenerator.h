@@ -20,7 +20,6 @@
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
 
-#include <string_view>
 #include <unordered_set>
 
 namespace DB
@@ -32,9 +31,7 @@ public:
     {
         String executor_id = executor.has_executor_id() ? executor.executor_id() : doGenerate(executor);
         assert(!executor_id.empty());
-        RUNTIME_CHECK(
-            ids.find(executor_id) == ids.end(),
-            TiFlashException(fmt::format("executor id ({}) duplicate", executor_id), Errors::Planner::Internal));
+        RUNTIME_CHECK(ids.find(executor_id) == ids.end(), executor_id);
         ids.insert(executor_id);
         return executor_id;
     }
@@ -78,6 +75,6 @@ private:
 
     UInt32 current_id = 0;
 
-    std::unordered_set<std::string_view> ids;
+    std::unordered_set<String> ids;
 };
 } // namespace DB

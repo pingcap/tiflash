@@ -302,7 +302,7 @@ struct StringComparisonWithCollatorImpl
         const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<ResultType> & c)
     {
-        bool optimized_path = StringVectorStringVector<Op>(a_data, a_offsets, b_data, b_offsets, collator, c);
+        bool optimized_path = CompareStringVectorStringVector<Op>(a_data, a_offsets, b_data, b_offsets, collator, c);
         if (optimized_path)
         {
             return;
@@ -328,7 +328,7 @@ struct StringComparisonWithCollatorImpl
         const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<ResultType> & c)
     {
-        bool optimized_path = StringVectorConstant<Op>(a_data, a_offsets, b, collator, c);
+        bool optimized_path = CompareStringVectorConstant<Op>(a_data, a_offsets, b, collator, c);
 
         if (optimized_path)
         {

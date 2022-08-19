@@ -43,8 +43,13 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     WindowDescription window_description = analyzer.buildWindowDescription(window);
 
     /// project action after window to remove useless columns.
-    const auto & schema = window_description.after_window_columns;
-    window_description.after_window->add(ExpressionAction::project(DB::toNames(schema)));
+    /// For window, we need to add column_prefix to distinguish it from the output of the next window.
+    /// such as `window(row_number()) <-- window(row_number())`.
+    auto schema = PhysicalPlanHelper::addSchemaProjectAction(
+        window_description.after_window,
+        window_description.after_window_columns,
+        fmt::format("{}_", executor_id));
+    window_description.after_window_columns = schema;
 
     auto physical_window = std::make_shared<PhysicalWindow>(
         executor_id,
@@ -78,7 +83,7 @@ void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, si
         pipeline.firstStream() = std::make_shared<WindowBlockInputStream>(pipeline.firstStream(), window_description, log->identifier());
     }
 
-    executeExpression(pipeline, window_description.after_window, log, "cast after window");
+    executeExpression(pipeline, window_description.after_window, log, "expr after window");
 }
 
 void PhysicalWindow::finalize(const Names & parent_require)

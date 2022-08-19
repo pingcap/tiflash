@@ -44,11 +44,11 @@ struct WindowFunctionRank final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
-        RUNTIME_CHECK(
+        RUNTIME_CHECK_MSG(
             argument_types.size() == 0,
-            Exception(
-                fmt::format("Number of arguments for window function {} doesn't match: passed {}, should be 0.", getName(), argument_types.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH));
+            "Number of arguments for window function {} doesn't match: passed {}, should be 0.",
+            getName(),
+            argument_types.size());
         return std::make_shared<DataTypeInt64>();
     }
 
@@ -79,11 +79,11 @@ struct WindowFunctionDenseRank final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
-        RUNTIME_CHECK(
+        RUNTIME_CHECK_MSG(
             argument_types.size() == 0,
-            Exception(
-                fmt::format("Number of arguments for window function {} doesn't match: passed {}, should be 0.", getName(), argument_types.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH));
+            "Number of arguments for window function {} doesn't match: passed {}, should be 0.",
+            getName(),
+            argument_types.size());
         return std::make_shared<DataTypeInt64>();
     }
 
@@ -114,11 +114,11 @@ struct WindowFunctionRowNumber final : public IWindowFunction
 
     DataTypePtr getReturnType() const override
     {
-        RUNTIME_CHECK(
+        RUNTIME_CHECK_MSG(
             argument_types.size() == 0,
-            Exception(
-                fmt::format("Number of arguments for window function {} doesn't match: passed {}, should be 0.", getName(), argument_types.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH));
+            "Number of arguments for window function {} doesn't match: passed {}, should be 0.",
+            getName(),
+            argument_types.size());
         return std::make_shared<DataTypeInt64>();
     }
 
@@ -196,9 +196,9 @@ private:
             auto second_argument = removeNullable(argument_types[1]);
             RUNTIME_CHECK(
                 second_argument->isInteger(),
-                Exception(
-                    fmt::format("Illegal type {} of second argument of function {}", second_argument->getName(), getName()),
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT));
+                "Illegal type {} of second argument of function {}",
+                second_argument->getName(),
+                getName());
         }
         if (argument_types.size() <= 2)
         {

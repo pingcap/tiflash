@@ -92,8 +92,8 @@ PhysicalPlanNodePtr PhysicalProjection::buildNonRootFinal(
         child,
         "final projection",
         project_actions);
-    // For final projection, no need to record profile streams.
-    physical_projection->disableRecordProfileStreams();
+    // Final Projection is not a tidb operator, so no need to record profile streams.
+    physical_projection->notTiDBOperator();
     return physical_projection;
 }
 
@@ -137,8 +137,8 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         child,
         "final projection",
         project_actions);
-    // For final projection, no need to record profile streams.
-    physical_projection->disableRecordProfileStreams();
+    // Final Projection is not a tidb operator, so no need to record profile streams.
+    physical_projection->notTiDBOperator();
     return physical_projection;
 }
 
