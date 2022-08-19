@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/defines.h>
 #include <gtest/gtest.h>
 
 #include <future>
@@ -171,20 +172,25 @@ try
     ASSERT_TRUE(new_seg_id_opt.has_value());
     auto new_seg_id = new_seg_id_opt.value();
 
+    LOG_DEBUG(log, "beginSegmentMerge");
+
     // Start a segment merge and suspend it before applyMerge
     auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
     auto th_seg_merge = std::async([&]() {
         mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, true);
     });
     sp_seg_merge_apply.waitAndPause();
+    LOG_DEBUG(log, "pausedBeforeApplyMerge");
 
     // flushed pack
     writeSegment(new_seg_id, 100);
     flushSegmentCache(new_seg_id);
 
     // Finish the segment merge
+    LOG_DEBUG(log, "continueApplyMerge");
     sp_seg_merge_apply.next();
     th_seg_merge.wait();
+    LOG_DEBUG(log, "finishApplyMerge");
 
     // logical split
     FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
@@ -230,46 +236,48 @@ try
     ASSERT_TRUE(new_seg_id_opt.has_value());
     auto new_seg_id = new_seg_id_opt.value();
 
-    LOG_DEBUG(log, "begin");
-
-    // Start a segment merge and suspend it before applyMerge
-    auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
-    auto th_seg_merge = std::async([&]() {
-        mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, true);
-    });
-    sp_seg_merge_apply.waitAndPause();
-    LOG_DEBUG(log, "paused");
-
-    // flushed pack
-    writeSegment(new_seg_id, 100);
-    // flushSegmentCache(new_seg_id); // do not flush
-
-    // Finish the segment merge
-    LOG_DEBUG(log, "next");
-    sp_seg_merge_apply.next();
-    th_seg_merge.wait();
-    LOG_DEBUG(log, "finish");
-
-    // logical split
-    FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
-    auto new_seg_id2_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ASSERT_TRUE(new_seg_id2_opt.has_value());
-    auto new_seg_id2 = new_seg_id2_opt.value();
-
+    const auto storage_pool = db_context->getGlobalContext().getGlobalStoragePool();
+    for (size_t round = 0; round < 50; ++round)
     {
-        // further logical split on the left
-        FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
-        auto further_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
-        ASSERT_TRUE(further_seg_id_opt.has_value());
-    }
+        LOG_DEBUG(log, "beginSegmentMerge");
 
-    {
-        // further logical split on the right(it fall back to physical split cause by current
-        // implement of getSplitPointFast)
+        // Start a segment merge and suspend it before applyMerge
+        auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
+        auto th_seg_merge = std::async([&]() {
+            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, true);
+        });
+        sp_seg_merge_apply.waitAndPause();
+        LOG_DEBUG(log, "pausedBeforeApplyMerge");
+
+        // flushed pack
+        writeSegment(new_seg_id, 100);
+        // flushSegmentCache(new_seg_id); // do not flush
+
+        // Finish the segment merge
+        LOG_DEBUG(log, "continueApplyMerge");
+        sp_seg_merge_apply.next();
+        th_seg_merge.wait();
+        LOG_DEBUG(log, "finishApplyMerge");
+
+        // logical split
         FailPointHelper::enableFailPoint(FailPoints::try_segment_logical_split);
-        auto further_seg_id_opt = splitSegment(new_seg_id2);
-        ASSERT_TRUE(further_seg_id_opt.has_value());
+        auto new_seg_id2_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+        ASSERT_TRUE(new_seg_id2_opt.has_value());
+        new_seg_id = new_seg_id2_opt.value();
+
+        const auto file_usage = storage_pool->getLogFileUsage();
+        LOG_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
     }
+    for (const auto & [seg_id, seg] : segments)
+    {
+        UNUSED(seg);
+        deleteRangeSegment(seg_id);
+        flushSegmentCache(seg_id);
+        mergeSegmentDelta(seg_id);
+    }
+    storage_pool->gc();
+    const auto file_usage = storage_pool->getLogFileUsage();
+    LOG_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
 }
 CATCH
 
