@@ -354,25 +354,25 @@ try
 
     req = context
               .scan("test_db", "test_table3")
-              .project({lit(Field(static_cast<Int64>(10)))})
+              .project({lit(Field(String("a")))})
               .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<Int64>({10, 10, 10, 10, 10})})});
+    executeWithConcurrency(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
 
-    // req = context
-    //           .scan("test_db", "test_table3")
-    //           .project(MockAstVec{})
-    //           .project(MockAstVec{})
-    //           .project({lit(Field(static_cast<Int64>(10)))})
-    //           .build(context);
-    // executeWithConcurrency(req, {createColumns({toVec<Int64>({10, 10, 10, 10, 10})})});
+    req = context
+              .scan("test_db", "test_table3")
+              .project(MockAstVec{})
+              .project(MockAstVec{})
+              .project({lit(Field(String("a")))})
+              .build(context);
+    executeWithConcurrency(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
 
-    // req = context
-    //           .scan("test_db", "test_table3")
-    //           .project({col("s1"), col("s2"), col("s3"), col("s4")})
-    //           .project(MockAstVec{})
-    //           .project({lit(Field(static_cast<Int64>(1)))})
-    //           .build(context);
-    // executeWithConcurrency(req, {createColumns({toVec<Int64>({10, 10, 10, 10, 10})})});
+    req = context
+              .scan("test_db", "test_table3")
+              .project({col("s1"), col("s2"), col("s3"), col("s4")})
+              .project(MockAstVec{})
+              .project({lit(Field(String("a")))})
+              .build(context);
+    executeWithConcurrency(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
 }
 CATCH
 
