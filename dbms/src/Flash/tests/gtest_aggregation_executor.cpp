@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/AggregateFunctionSum.h>
-#include <DataTypes/DataTypeDecimal.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
@@ -128,13 +125,6 @@ public:
         for (size_t i = 1; i <= max_concurrency; i += step)
             ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         WRAP_FOR_DIS_ENABLE_PLANNER_END
-    }
-
-    bool checkReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
-    {
-        AggregateFunctionPtr agg_ptr = DB::AggregateFunctionFactory::instance().get(agg_name, data_types, {});
-        const DataTypePtr & ret_type = agg_ptr->getReturnType();
-        return ret_type->getName() == expect_type->getName();
     }
 
     static const size_t max_concurrency = 10;
