@@ -32,12 +32,13 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     , is_shutdown(is_shutdown)
     , responder(&ctx)
     , state(NEW_REQUEST)
+    , cq_kicker(std::make_shared<CompletionQueueKicker>(ctx.c_call()))
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Increment();
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
-    service->requestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
 EstablishCallData::~EstablishCallData()
@@ -50,18 +51,15 @@ EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::
     return new EstablishCallData(service, cq, notify_cq, is_shutdown);
 }
 
-void EstablishCallData::tryFlushOne()
+void EstablishCallData::setAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
 {
-    // check whether there is a valid msg to write
-    {
-        std::unique_lock lk(mu);
-        if (ready && async_tunnel_sender->isSendQueueNextPopNonBlocking()) //not ready or no packet
-            ready = false;
-        else
-            return;
-    }
-    // there is a valid msg, do single write operation
-    async_tunnel_sender->sendOne();
+    stopwatch = std::make_shared<Stopwatch>();
+    async_tunnel_sender = async_tunnel_sender_;
+}
+
+const CompletionQueueKickerPtr & EstablishCallData::getKicker()
+{
+    return cq_kicker;
 }
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
@@ -133,12 +131,6 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
     responderFinish(status);
 }
 
-void EstablishCallData::notifyReady()
-{
-    std::unique_lock lk(mu);
-    ready = true;
-}
-
 void EstablishCallData::cancel()
 {
     if (state == NEW_REQUEST || state == FINISH) // state == NEW_REQUEST means the server is shutdown and no new rpc has come.
@@ -163,20 +155,14 @@ void EstablishCallData::proceed()
         state = PROCESSING;
 
         spawn(service, cq, notify_cq, is_shutdown);
-        notifyReady();
         initRpc();
     }
     else if (state == PROCESSING)
     {
-        std::unique_lock lk(mu);
-        if (async_tunnel_sender->isSendQueueNextPopNonBlocking())
+        if (!sendOne())
         {
-            ready = false;
-            lk.unlock();
-            async_tunnel_sender->sendOne();
+            cq_kicker->setTag(this);
         }
-        else
-            ready = true;
     }
     else if (state == ERR_HANDLE)
     {
@@ -186,15 +172,48 @@ void EstablishCallData::proceed()
     {
         assert(state == FINISH);
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
-        // That't the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
+        // That's the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
         delete this;
         return;
     }
 }
 
-void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
+bool EstablishCallData::sendOne()
 {
-    stopwatch = std::make_shared<Stopwatch>();
-    this->async_tunnel_sender = async_tunnel_sender_;
+    if (async_tunnel_sender->getSendQueue()->isNextPopNonBlocking())
+    {
+        return false;
+    }
+    String err_msg;
+    bool queue_empty_flag = false;
+    try
+    {
+        MPPDataPacketPtr res;
+        queue_empty_flag = !async_tunnel_sender->getSendQueue()->pop(res);
+        if (!queue_empty_flag)
+        {
+            if (!write(*res))
+            {
+                err_msg = "grpc writes failed.";
+            }
+        }
+    }
+    catch (...)
+    {
+        err_msg = getCurrentExceptionMessage(true);
+    }
+    if (!err_msg.empty())
+    {
+        err_msg = fmt::format("{} meet error: {}", async_tunnel_sender->getTunnelId(), err_msg);
+        LOG_ERROR(async_tunnel_sender->getLogger(), err_msg);
+        trimStackTrace(err_msg);
+    }
+    if (!err_msg.empty() || queue_empty_flag)
+    {
+        async_tunnel_sender->consumerFinish(err_msg);
+        writeDone(grpc::Status::OK);
+    }
+    return true;
 }
+
 } // namespace DB

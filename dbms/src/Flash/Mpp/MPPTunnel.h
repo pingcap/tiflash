@@ -18,6 +18,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCCompletionQueueKicker.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
@@ -56,26 +57,37 @@ enum class TunnelSenderMode
     ASYNC_GRPC // Using async grpc writer
 };
 
+using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
+using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
+
 /// TunnelSender is responsible for consuming data from Tunnel's internal send_queue and do the actual sending work
 /// After TunnelSend finished its work, either normally or abnormally, set ConsumerState to inform Tunnel
 class TunnelSender : private boost::noncopyable
 {
 public:
-    using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
     virtual ~TunnelSender() = default;
-    TunnelSender(TunnelSenderMode mode_, DataPacketMPMCQueuePtr send_queue_, PacketWriter * writer_, const LoggerPtr log_, const String & tunnel_id_)
+    TunnelSender(TunnelSenderMode mode_, size_t queue_size, const LoggerPtr log_, const String & tunnel_id_)
         : mode(mode_)
-        , send_queue(send_queue_)
-        , writer(writer_)
+        , send_queue(std::make_shared<MPMCQueue<MPPDataPacketPtr>>(queue_size))
         , log(log_)
         , tunnel_id(tunnel_id_)
     {
     }
-    DataPacketMPMCQueuePtr getSendQueue()
+    DataPacketMPMCQueuePtr & getSendQueue()
     {
         return send_queue;
     }
+
+    virtual bool push(const mpp::MPPDataPacket & data)
+    {
+        return send_queue->push(std::make_shared<mpp::MPPDataPacket>(data));
+    }
+
+    virtual bool finish()
+    {
+        return send_queue->finish();
+    }
+
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg()
     {
@@ -125,7 +137,6 @@ protected:
     TunnelSenderMode mode;
     DataPacketMPMCQueuePtr send_queue;
     ConsumerState consumer_state;
-    PacketWriter * writer;
     const LoggerPtr log;
     String tunnel_id;
 };
@@ -137,11 +148,11 @@ public:
     using Base = TunnelSender;
     using Base::Base;
     virtual ~SyncTunnelSender();
-    void startSendThread();
+    void startSendThread(PacketWriter * writer);
 
 private:
     friend class tests::TestMPPTunnel;
-    void sendJob();
+    void sendJob(PacketWriter * writer);
     std::shared_ptr<ThreadManager> thread_manager;
 };
 
@@ -151,9 +162,13 @@ class AsyncTunnelSender : public TunnelSender
 public:
     using Base = TunnelSender;
     using Base::Base;
-    void tryFlushOne();
-    void sendOne();
-    bool isSendQueueNextPopNonBlocking() { return send_queue->isNextPopNonBlocking(); }
+
+    void setKicker(const CompletionQueueKickerPtr & kicker);
+    virtual bool push(const mpp::MPPDataPacket & data) override;
+    virtual bool finish() override;
+
+private:
+    CompletionQueueKickerPtr cq_kicker;
 };
 
 /// LocalTunnelSender just provide readForLocal method to return one element one time
@@ -188,7 +203,7 @@ using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender>;
  * To be short: before connect, only close can finish a MPPTunnel; after connect, only Sender Finish can.
  *
  * Each MPPTunnel has a Sender to consume data. There're three kinds of senders: sync_remote, local and async_remote.
- * 
+ *
  * The protocol between MPPTunnel and Sender:
  * - All data will be pushed into the `send_queue`, including errors.
  * - MPPTunnel may finish `send_queue` to notify Sender normally finish.
@@ -278,9 +293,7 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
-    DataPacketMPMCQueuePtr send_queue;
+    const size_t queue_size;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
     TunnelSenderMode mode; // Tunnel transfer data mode

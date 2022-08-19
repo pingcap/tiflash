@@ -62,7 +62,7 @@ class MPMCQueue
 public:
     using Status = MPMCQueueStatus;
 
-    explicit MPMCQueue(Int64 capacity_)
+    explicit MPMCQueue(size_t capacity_)
         : capacity(capacity_)
         , data(capacity * sizeof(T))
     {

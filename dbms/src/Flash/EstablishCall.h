@@ -17,6 +17,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCCompletionQueueKicker.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
 
@@ -54,9 +55,11 @@ public:
 
     ~EstablishCallData();
 
-    bool write(const mpp::MPPDataPacket & packet) override;
+    void setAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_);
 
-    void tryFlushOne() override;
+    const CompletionQueueKickerPtr & getKicker();
+
+    bool write(const mpp::MPPDataPacket & packet) override;
 
     void writeDone(const ::grpc::Status & status) override;
 
@@ -65,8 +68,6 @@ public:
     void proceed();
 
     void cancel();
-
-    virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override;
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -78,9 +79,9 @@ public:
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
 private:
-    void notifyReady();
-
     void initRpc();
+
+    bool sendOne();
 
     void finishTunnelAndResponder();
 
@@ -89,7 +90,6 @@ private:
 
     void responderFinish(const grpc::Status & status);
 
-    std::mutex mu;
     // server instance
     AsyncFlashService * service;
 
@@ -106,10 +106,6 @@ private:
     // The means to get back to the client.
     ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
 
-    // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
-    // It's protected by mu.
-    bool ready = false;
-
     // Let's implement a state machine with the following states.
     enum CallStatus
     {
@@ -118,7 +114,9 @@ private:
         ERR_HANDLE,
         FINISH
     };
-    CallStatus state; // The current serving state.
+    // The current serving state.
+    CallStatus state;
+    CompletionQueueKickerPtr cq_kicker;
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::shared_ptr<Stopwatch> stopwatch;
 };

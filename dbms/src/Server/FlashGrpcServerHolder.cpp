@@ -101,9 +101,11 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     /// Init and register flash service.
     bool enable_async_server = context.getSettingsRef().enable_async_server;
     if (enable_async_server)
-        flash_service = std::make_unique<AsyncFlashService>(security_config, context);
+        flash_service = std::make_unique<AsyncFlashService>();
     else
-        flash_service = std::make_unique<FlashService>(security_config, context);
+        flash_service = std::make_unique<FlashService>();
+    flash_service->init(security_config, context);
+
     diagnostics_service = std::make_unique<DiagnosticsService>(context, config_);
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
