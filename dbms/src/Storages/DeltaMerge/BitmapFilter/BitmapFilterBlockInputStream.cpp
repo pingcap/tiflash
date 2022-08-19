@@ -72,7 +72,11 @@ std::pair<Block, bool> BitmapFilterBlockInputStream::readBlock()
     else
     {
         stable = nullptr;
-        return {delta->read(), true};
+        if (delta != nullptr)
+        {
+            block = delta->read();
+        }
+        return {block, true};
     }
 }
 

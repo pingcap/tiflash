@@ -20,6 +20,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include "Common/Stopwatch.h"
+#include "common/types.h"
 
 namespace DB
 {
@@ -100,7 +102,7 @@ protected:
                     LOG_FMT_DEBUG(log, "Read done");
                     return {};
                 }
-
+                Stopwatch sw;
                 cur_segment = task->segment;
                 if (is_raw)
                 {
@@ -123,6 +125,8 @@ protected:
                         max_version,
                         std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
                 }
+                get_input_stream_ms += sw.elapsedMilliseconds();
+                read_segment_count++;
                 LOG_FMT_TRACE(log, "Start to read segment [{}]", cur_segment->segmentId());
             }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
@@ -160,7 +164,9 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
+        auto elapsed_ms = total_sw.elapsedMilliseconds();
+        LOG_FMT_DEBUG(log, "finish read {} rows from storage, read time {} ms, read segment count {}, read time per segment {} ms, get input stream time {} ms, get input stream time per segment {} ms",
+            total_rows, elapsed_ms, read_segment_count, elapsed_ms / read_segment_count, get_input_stream_ms, get_input_stream_ms / read_segment_count);
     }
 
 private:
@@ -186,6 +192,10 @@ private:
 
     LoggerPtr log;
     size_t total_rows = 0;
+
+    Stopwatch total_sw;
+    UInt64 read_segment_count{0};
+    UInt64 get_input_stream_ms{0};
 };
 
 } // namespace DM

@@ -411,6 +411,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
     if (real_ranges.empty())
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(*read_info.read_columns));
 
+    bool use_clean_read = false;
     BlockInputStreamPtr stream;
     if (dm_context.read_delta_only)
     {
@@ -433,6 +434,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
              && !hasColumn(columns_to_read, TAG_COLUMN_ID))
     {
         // No delta, let's try some optimizations.
+        use_clean_read = true;
         stream = segment_snap->stable->getInputStream(
             dm_context,
             *read_info.read_columns,
@@ -467,11 +469,12 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
 
     LOG_FMT_TRACE(
         Logger::get(log, dm_context.tracing_id),
-        "Segment [{}] is read by max_version: {}, {} ranges: {}",
+        "Segment [{}] is read by max_version: {}, {} ranges: {}, use_clean_read {}",
         segment_id,
         max_version,
         real_ranges.size(),
-        DB::DM::toDebugString(read_ranges));
+        DB::DM::toDebugString(read_ranges),
+        use_clean_read);
     return stream;
 }
 
@@ -1858,7 +1861,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
     auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read_ptr, this->rowkey_range);
 
-    return std::make_shared<BitmapFilterBlockInputStream>(stable_stream, nullptr, segment_snap->stable->getRows(), bitmap_filter, dm_context.tracing_id);
+    return std::make_shared<BitmapFilterBlockInputStream>(stable_stream, delta_stream, segment_snap->stable->getRows(), bitmap_filter, dm_context.tracing_id);
 }
 
 void Segment::updateFastmodeBitmapFilter(const DMContext & dm_context)
