@@ -14,9 +14,6 @@
 
 #include <TestUtils/MPPTaskTestUtils.h>
 
-#include "Debug/MockComputeServerManager.h"
-#include "TestUtils/FunctionTestUtils.h"
-
 namespace DB
 {
 namespace tests
@@ -197,7 +194,6 @@ try
         size_t task_size = tasks.size();
         for (size_t i = 0; i < task_size; ++i)
         {
-            // std::cout << ExecutorSerializer().serialize(tasks[i].dag_request.get()) << std::endl;
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
 
@@ -247,6 +243,52 @@ try
                          .project({col("max(l_table.s)"), col("l_table.s")})
                          .buildMPPTasks(context, properties);
 
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_10 | type:Hash, {<0, String>}
+ table_scan_1 | {<0, String>})",
+            R"(exchange_sender_10 | type:Hash, {<0, String>}
+ table_scan_1 | {<0, String>})",
+            R"(exchange_sender_10 | type:Hash, {<0, String>}
+ table_scan_1 | {<0, String>})",
+            R"(exchange_sender_9 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_9 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_9 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_7 | type:Hash, {<0, String>, <1, String>}
+ aggregation_6 | group_by: {<0, String>}, agg_func: {max(<0, String>)}
+  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+   exchange_receiver_11 | type:PassThrough, {<0, String>, <1, String>}
+   exchange_receiver_12 | type:PassThrough, {<0, String>})",
+            R"(exchange_sender_7 | type:Hash, {<0, String>, <1, String>}
+ aggregation_6 | group_by: {<0, String>}, agg_func: {max(<0, String>)}
+  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+   exchange_receiver_11 | type:PassThrough, {<0, String>, <1, String>}
+   exchange_receiver_12 | type:PassThrough, {<0, String>})",
+            R"(exchange_sender_7 | type:Hash, {<0, String>, <1, String>}
+ aggregation_6 | group_by: {<0, String>}, agg_func: {max(<0, String>)}
+  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+   exchange_receiver_11 | type:PassThrough, {<0, String>, <1, String>}
+   exchange_receiver_12 | type:PassThrough, {<0, String>})",
+            R"(exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>}
+ project_4 | {<0, String>, <1, String>}
+  aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
+   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})",
+            R"(exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>}
+ project_4 | {<0, String>, <1, String>}
+  aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
+   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})",
+            R"(exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>}
+ project_4 | {<0, String>, <1, String>}
+  aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
+   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})"};
+
+        size_t task_size = tasks.size();
+        for (size_t i = 0; i < task_size; ++i)
+        {
+            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
+        }
 
 
         auto expected_cols = {
