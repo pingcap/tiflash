@@ -103,7 +103,7 @@ try
         LOG_DEBUG(log, "setting batch_cop_writer to nullptr");
     }
 
-    BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
+    BlockIO streams = executeQuery(context, internal, QueryProcessingStage::Complete);
 
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null

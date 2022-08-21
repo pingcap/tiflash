@@ -98,7 +98,7 @@ grpc::Status CoprocessorHandler::execute()
             RegionInfo region_info(cop_context.kv_context.region_id(),
                                    cop_context.kv_context.region_epoch().version(),
                                    cop_context.kv_context.region_epoch().conf_ver(),
-                                   GenCopKeyRange(cop_request->ranges()),
+                                   genCopKeyRange(cop_request->ranges()),
                                    &bypass_lock_ts);
             if (cop_context.db_context.getTMTContext().getRole() == TiDB::NodeRole::ReadNode)
             {

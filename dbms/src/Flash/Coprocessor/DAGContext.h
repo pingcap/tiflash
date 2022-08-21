@@ -29,6 +29,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
+#include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
 #include <Storages/Transaction/TiDB.h>
