@@ -25,11 +25,10 @@
 #include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
 #include <sstream>
-
-#include "common/logger_useful.h"
 
 namespace DB
 {
