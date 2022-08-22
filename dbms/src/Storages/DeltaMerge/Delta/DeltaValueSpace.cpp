@@ -97,6 +97,7 @@ size_t DeltaValueSpace::getValidCacheRows() const
 void DeltaValueSpace::recordRemoveColumnFilesPages(WriteBatches & wbs) const
 {
     persisted_file_set->recordRemoveColumnFilesPages(wbs);
+    // there could be some persisted column files in the `mem_table_set` which should be removed.
     mem_table_set->recordRemoveColumnFilesPages(wbs);
 }
 
