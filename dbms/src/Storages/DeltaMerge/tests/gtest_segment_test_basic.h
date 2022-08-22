@@ -40,11 +40,15 @@ public:
 public:
     void reloadWithOptions(SegmentTestOptions config);
 
-    std::optional<PageId> splitSegment(PageId segment_id);
-    void mergeSegment(PageId left_segment_id, PageId right_segment_id, bool skip_row_check = false);
-    void mergeSegmentDelta(PageId segment_id);
+    // When `check_rows` is true, it will compare the rows num before and after the segment update.
+    // So if there is some write during the segment update, it will report false failure if `check_rows` is true.
+    std::optional<PageId> splitSegment(PageId segment_id, bool check_rows = true);
+    void mergeSegment(PageId left_segment_id, PageId right_segment_id, bool check_rows = true);
+    void mergeSegmentDelta(PageId segment_id, bool check_rows = true);
+
     void flushSegmentCache(PageId segment_id);
     void writeSegment(PageId segment_id, UInt64 write_rows = 100);
+    void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100);
     void writeSegmentWithDeletedPack(PageId segment_id);
     void deleteRangeSegment(PageId segment_id);
 
