@@ -147,7 +147,38 @@ void appendAggDescription(
     DataTypePtr result_type = aggregate.function->getReturnType();
     aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
 
-    aggregate_descriptions.push_back(std::move(aggregate));
+    aggregate_descriptions.emplace_back(std::move(aggregate));
+}
+
+/// Generate AggregateDescription and append it to AggregateDescriptions if need.
+/// And append output column to aggregated_columns.
+void appendWindowDescription(
+    const Names & arg_names,
+    const DataTypes & arg_types,
+    TiDB::TiDBCollators & arg_collators,
+    const String & window_func_name,
+    WindowDescription & window_description,
+    NamesAndTypes source_columns,
+    NamesAndTypes & window_columns)
+{
+    assert(arg_names.size() == arg_collators.size() && arg_names.size() == arg_types.size());
+
+    String func_string = genFuncString(window_func_name, arg_names, arg_collators);
+    if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, window_description.window_functions_descriptions))
+    {
+        // window function duplicate, don't need to build again.
+        source_columns.emplace_back(func_string, duplicated_return_type);
+        return;
+    }
+
+    WindowFunctionDescription window_function_description;
+    window_function_description.argument_names = arg_names;
+    window_function_description.column_name = func_string;
+    window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, arg_types);
+    DataTypePtr result_type = window_function_description.window_function->getReturnType();
+    window_description.window_functions_descriptions.emplace_back(std::move(window_function_description));
+    window_columns.emplace_back(func_string, result_type);
+    source_columns.emplace_back(func_string, result_type);
 }
 } // namespace
 
@@ -458,66 +489,79 @@ void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActions
     }
 }
 
-// This function will add new window function culumns to source_column
-void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, ExpressionActionsChain::Step & step)
+void DAGExpressionAnalyzer::buildLeadLag(
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions,
+    const String & window_func_name,
+    WindowDescription & window_description,
+    NamesAndTypes & source_columns,
+    NamesAndTypes & window_columns)
 {
+    auto child_size = expr.children_size();
+    Names arg_names;
+    DataTypes arg_types;
+    TiDB::TiDBCollators arg_collators;
+    for (Int32 i = 0; i < child_size; ++i)
+    {
+        fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
+    }
+
+    appendWindowDescription(
+        arg_names,
+        arg_types,
+        arg_collators,
+        window_func_name,
+        window_description,
+        source_columns,
+        window_columns);
+}
+
+void DAGExpressionAnalyzer::buildCommonWindowFunc(
+    const tipb::Expr & expr,
+    const ExpressionActionsPtr & actions,
+    const String & window_func_name,
+    WindowDescription & window_description,
+    NamesAndTypes & source_columns,
+    NamesAndTypes & window_columns)
+{
+    auto child_size = expr.children_size();
+    Names arg_names;
+    DataTypes arg_types;
+    TiDB::TiDBCollators arg_collators;
+    for (Int32 i = 0; i < child_size; ++i)
+    {
+        fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
+    }
+
+    appendWindowDescription(
+        arg_names,
+        arg_types,
+        arg_collators,
+        window_func_name,
+        window_description,
+        source_columns,
+        window_columns);
+}
+
+// This function will add new window function culumns to source_column
+void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, const ExpressionActionsPtr & actions)
+{
+    RUNTIME_CHECK_MSG(window.func_desc_size() != 0, "window executor without agg/window expression.");
+    RUNTIME_CHECK_MSG(isWindowFunctionsValid(window), "can not have window and agg functions together in one window.");
+
     NamesAndTypes window_columns;
-
-    if (window.func_desc_size() == 0)
-    {
-        //should not reach here
-        throw TiFlashException("window executor without agg/window expression", Errors::Coprocessor::BadRequest);
-    }
-
-    if (!isWindowFunctionsValid(window))
-    {
-        throw TiFlashException("can not have window and agg functions together in one window.", Errors::Coprocessor::BadRequest);
-    }
-
     for (const tipb::Expr & expr : window.func_desc())
     {
-        if (isAggFunctionExpr(expr))
+        RUNTIME_CHECK_MSG(isWindowFunctionExpr(expr), "Now Window Operator only support window function.");
+        if (expr.tp() == tipb::ExprType::Lead || expr.tp() == tipb::ExprType::Lag)
         {
-            throw TiFlashException("Unsupported agg function in window.", Errors::Coprocessor::BadRequest);
-        }
-        else if (isWindowFunctionExpr(expr))
-        {
-            String window_func_name = getWindowFunctionName(expr);
-            auto child_size = expr.children_size();
-            Names arg_names;
-            DataTypes arg_types;
-            TiDB::TiDBCollators arg_collators;
-            for (Int32 i = 0; i < child_size; ++i)
-            {
-                fillArgumentDetail(step.actions, expr.children(i), arg_names, arg_types, arg_collators);
-            }
-
-            String func_string = genFuncString(window_func_name, arg_names, arg_collators);
-            if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, window_description.window_functions_descriptions))
-            {
-                // window function duplicate, don't need to build again.
-                source_columns.emplace_back(func_string, duplicated_return_type);
-                continue;
-            }
-
-            WindowFunctionDescription window_function_description;
-            window_function_description.argument_names.resize(child_size);
-            window_function_description.argument_names = arg_names;
-            step.required_output.insert(step.required_output.end(), arg_names.begin(), arg_names.end());
-
-            window_function_description.column_name = func_string;
-            window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, arg_types);
-            DataTypePtr result_type = window_function_description.window_function->getReturnType();
-            window_description.window_functions_descriptions.push_back(window_function_description);
-            window_columns.emplace_back(func_string, result_type);
-            source_columns.emplace_back(func_string, result_type);
+            buildLeadLag(expr, actions, getWindowFunctionName(expr), window_description, source_columns, window_columns);
         }
         else
         {
-            throw TiFlashException("unknow function expr.", Errors::Coprocessor::BadRequest);
+            buildCommonWindowFunc(expr, actions, getWindowFunctionName(expr), window_description, source_columns, window_columns);
         }
     }
-
     window_description.add_columns = window_columns;
 }
 
@@ -536,7 +580,13 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
         window_description.setWindowFrame(window.frame());
     }
 
-    appendWindowColumns(window_description, window, step);
+    appendWindowColumns(window_description, window, step.actions);
+    // set required output for window funcs's arguments.
+    for (const auto & window_function_description : window_description.window_functions_descriptions)
+    {
+        for (const auto & argument_name : window_function_description.argument_names)
+            step.required_output.push_back(argument_name);
+    }
 
     window_description.before_window = chain.getLastActions();
     chain.finalize();

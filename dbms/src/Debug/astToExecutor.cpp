@@ -1403,12 +1403,26 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id,
         auto window_sig = window_sig_it->second;
         window_expr->set_tp(window_sig);
         auto * ft = window_expr->mutable_field_type();
-        // TODO: Maybe more window functions with different field type.
-        ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagBinary);
-        ft->set_collate(collator_id);
-        ft->set_flen(21);
-        ft->set_decimal(-1);
+        switch (window_sig)
+        {
+        case tipb::ExprType::Lead:
+        case tipb::ExprType::Lag:
+        {
+            const auto first_arg_type = window_expr->children(0).field_type();
+            ft->set_tp(first_arg_type.tp());
+            ft->set_flag(first_arg_type.flag());
+            ft->set_collate(first_arg_type.collate());
+            ft->set_flen(first_arg_type.flen());
+            ft->set_decimal(first_arg_type.decimal());
+            break;
+        }
+        default:
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagBinary);
+            ft->set_collate(collator_id);
+            ft->set_flen(21);
+            ft->set_decimal(-1);
+        }
     }
 
     for (const auto & child : order_by_exprs)
