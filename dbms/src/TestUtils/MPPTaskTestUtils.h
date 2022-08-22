@@ -128,15 +128,18 @@ size_t MPPTaskTestUtils::server_num = 0;
     } while (0)
 
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
-    auto properties = getDAGPropertiesForTest(serverNum());                            \
-    auto tasks = (builder).buildMPPTasks(context, properties);                         \
-    size_t task_size = tasks.size();                                                   \
-    for (size_t i = 0; i < task_size; ++i)                                             \
+    do                                                                                 \
     {                                                                                  \
-        ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);          \
-    }                                                                                  \
-    ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(                                              \
-        builder,                                                                       \
-        properties,                                                                    \
-        expect_cols);
+        auto properties = getDAGPropertiesForTest(serverNum());                        \
+        auto tasks = (builder).buildMPPTasks(context, properties);                     \
+        size_t task_size = tasks.size();                                               \
+        for (size_t i = 0; i < task_size; ++i)                                         \
+        {                                                                              \
+            ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);      \
+        }                                                                              \
+        ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(                                          \
+            builder,                                                                   \
+            properties,                                                                \
+            expect_cols);                                                              \
+    } while (0)
 } // namespace DB::tests

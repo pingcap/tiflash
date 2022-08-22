@@ -249,7 +249,7 @@ try
                 .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                 .project({col("max(l_table.s)"), col("l_table.s")}),
             expected_strings,
-            expect_cols)
+            expect_cols);
     }
 
     {

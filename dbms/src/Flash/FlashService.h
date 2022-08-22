@@ -101,8 +101,8 @@ protected:
 
 
     /// for mpp unit test.
-    tests::MockStorage mock_storage;
-    tests::MockMPPServerInfo mpp_test_info{};
+    MockStorage mock_storage;
+    MockMPPServerInfo mpp_test_info{};
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
