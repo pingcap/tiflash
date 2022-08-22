@@ -166,7 +166,7 @@ public:
         RESOLVE_TO_NORMAL,
     };
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
-    resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry);
+    resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
     Int64 incrRefCount(const PageVersion & ver);
 
@@ -187,38 +187,16 @@ public:
         std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries);
 
     /**
-     * GC will give a `lowest_seq`.
-     * We will find the second entry which `LE` than `lowest_seq`.
-     * And reclaim all entries before that one.
-     * If we can't found any entry less than `lowest_seq`.
-     * Then all entries will be remained.
-     * 
-     * Ex1. 
-     *    entry 1 : seq 2 epoch 0
-     *    entry 2 : seq 2 epoch 1
-     *    entry 3 : seq 3 epoch 0
-     *    entry 4 : seq 4 epoch 0
-     * 
-     *    lowest_seq : 3
-     *    Then (entry 1, entry 2) will be delete.
-     * 
-     * Ex2. 
-     *    entry 1 : seq 2 epoch 0
-     *    entry 2 : seq 2 epoch 1
-     *    entry 3 : seq 4 epoch 0
-     *    entry 4 : seq 4 epoch 1
-     * 
-     *    lowest_seq : 3
-     *    Then (entry 1) will be delete
-     * 
-     * Ex3. 
-     *    entry 1 : seq 2 epoch 0
-     *    entry 2 : seq 2 epoch 1
-     *    entry 3 : seq 4 epoch 0
-     *    entry 4 : seq 4 epoch 1
-     * 
-     *    lowest_seq : 1
-     *    Then no entry should be delete.
+     * Given a `lowest_seq`, this will clean all outdated entries before `lowest_seq`.
+     * It takes good care of the entries being ref by another page id.
+     *
+     * `normal_entries_to_deref`: Return the informations that the entries need
+     *   to be decreased the ref count by `derefAndClean`.
+     *   The elem is <page_id, <version, num to decrease ref count>> 
+     * `entries_removed`: Return the entries removed from the version list
+     * `keep_last_valid_var_entry`: Keep the last valid entry, useful for dumping snapshot.
+     *
+     * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
      */
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
