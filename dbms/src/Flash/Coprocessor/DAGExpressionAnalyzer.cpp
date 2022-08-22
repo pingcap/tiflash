@@ -88,7 +88,9 @@ String getAggFuncName(
 
     // sum functions in mpp are multistage and we need to distinguish them with function name.
     // "sum" represents the first stage.
-    // "SumOtherStage" represents other stages whose input is partial result.
+    // "sum_on_partial_result" represents other stages whose input is partial result.
+    // Return type of sum function in different stages is calculated in different ways which is determined
+    // by function name, so we need to distinguish them with function names.
     if (AggregationInterpreterHelper::isSumOnPartialResults(expr))
         return sum_on_partial_result;
 

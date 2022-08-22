@@ -28,7 +28,7 @@ namespace DB
 namespace tests
 {
 
-class ExecutorFuncReturnTypeTestRunner : public DB::tests::AggregationTest
+class ExecutorAggFuncReturnTypeTestRunner : public DB::tests::AggregationTest
 {
 public:
     ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
@@ -61,7 +61,7 @@ public:
     }
 };
 
-TEST_F(ExecutorFuncReturnTypeTestRunner, AggregationSum)
+TEST_F(ExecutorAggFuncReturnTypeTestRunner, AggregationSum)
 try
 {
     // Test output type of the second stage sum aggregation function
