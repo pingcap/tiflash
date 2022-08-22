@@ -114,7 +114,7 @@ try
 
         LOG_DEBUG(log, "pausedBeforeApplyMergeDelta");
 
-        // flushed pack
+        // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_merge_delta_apply.next();
@@ -175,7 +175,7 @@ try
 
         LOG_DEBUG(log, "pausedBeforeApplySplit");
 
-        // flushed pack
+        // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_split_apply.next();
@@ -238,7 +238,7 @@ try
 
         LOG_DEBUG(log, "pausedBeforeApplyMerge");
 
-        // flushed pack
+        // non-flushed column files
         writeSegment(new_seg_id, 100);
         ingestDTFileIntoSegment(new_seg_id, 100);
         sp_seg_merge_apply.next();
