@@ -19,8 +19,6 @@ namespace DB
 {
 namespace base
 {
-using namespace DB::tests;
-
 class TiFlashStorageTestBasic : public ::testing::Test
 {
 public:
@@ -82,7 +80,7 @@ public:
          * TiFlashTestEnv::findTestDataPath. We may need to check the files on "./tmp/xxx" if some storage test failed.
          * So instead of dropping data after cases run, we drop data before running each test case.
          */
-        return TiFlashTestEnv::getTemporaryPath(getCurrentFullTestName().c_str());
+        return DB::tests::TiFlashTestEnv::getTemporaryPath(getCurrentFullTestName().c_str());
     }
 
 protected:
@@ -110,7 +108,7 @@ protected:
     {
         Strings test_paths;
         test_paths.push_back(getTemporaryPath());
-        db_context = std::make_unique<Context>(TiFlashTestEnv::getContext(db_settings, test_paths));
+        db_context = std::make_unique<Context>(DB::tests::TiFlashTestEnv::getContext(db_settings, test_paths));
     }
 
 protected:
