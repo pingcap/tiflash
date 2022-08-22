@@ -100,8 +100,6 @@ try
     randomSegmentTest(100);
 }
 CATCH
-<<<<<<< HEAD
-=======
 
 // run in CI weekly
 TEST_F(SegmentOperationTest, DISABLED_TestSegmentRandomForCI)
@@ -267,7 +265,7 @@ try
         new_seg_id = new_seg_id2_opt.value();
 
         const auto file_usage = storage_pool->getLogFileUsage();
-        LOG_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
+        LOG_FMT_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
     }
     for (const auto & [seg_id, seg] : segments)
     {
@@ -278,12 +276,11 @@ try
     }
     storage_pool->gc();
     const auto file_usage = storage_pool->getLogFileUsage();
-    LOG_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
+    LOG_FMT_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
 }
 CATCH
 
 
->>>>>>> 7cf292fb77 (Fix fail to create three hops of ref pages (#5612))
 } // namespace tests
 } // namespace DM
 } // namespace DB
