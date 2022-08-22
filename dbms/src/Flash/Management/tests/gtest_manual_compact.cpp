@@ -79,7 +79,7 @@ public:
         storage = StorageDeltaMerge::create("TiFlash",
                                             "default" /* db_name */,
                                             "test_table" /* table_name */,
-                                            std::ref(table_info),
+                                            table_info,
                                             ColumnsDescription{columns},
                                             astptr,
                                             0,

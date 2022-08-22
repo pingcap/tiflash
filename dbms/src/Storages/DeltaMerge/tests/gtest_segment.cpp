@@ -12,14 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Common/CurrentMetrics.h>
+#include <Common/FailPoint.h>
+#include <Common/Logger.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/defines.h>
+#include <gtest/gtest.h>
 
+#include <future>
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char try_segment_logical_split[];
+extern const char force_segment_logical_split[];
+} // namespace FailPoints
+
 namespace DM
 {
 namespace tests
@@ -28,8 +41,6 @@ class SegmentOperationTest : public SegmentTestBasic
 {
 protected:
     static void SetUpTestCase() {}
-<<<<<<< HEAD
-=======
 
     void SetUp() override
     {
@@ -37,7 +48,6 @@ protected:
     }
 
     DB::LoggerPtr log;
->>>>>>> 6b7b3607de (fix the problem that there may be some obsolete data left in storage which cannot be deleted (#5660))
 };
 
 TEST_F(SegmentOperationTest, Issue4956)
@@ -91,8 +101,6 @@ try
     randomSegmentTest(100);
 }
 CATCH
-<<<<<<< HEAD
-=======
 
 TEST_F(SegmentOperationTest, WriteDuringSegmentMergeDelta)
 try
@@ -104,7 +112,7 @@ try
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
     {
-        LOG_DEBUG(log, "beginSegmentMergeDelta");
+        LOG_FMT_DEBUG(log, "beginSegmentMergeDelta");
 
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_merge_delta_apply = SyncPointCtl::enableInScope("before_Segment::applyMergeDelta");
@@ -113,7 +121,7 @@ try
         });
         sp_seg_merge_delta_apply.waitAndPause();
 
-        LOG_DEBUG(log, "pausedBeforeApplyMergeDelta");
+        LOG_FMT_DEBUG(log, "pausedBeforeApplyMergeDelta");
 
         // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
@@ -121,7 +129,7 @@ try
         sp_seg_merge_delta_apply.next();
         th_seg_merge_delta.wait();
 
-        LOG_DEBUG(log, "finishApplyMergeDelta");
+        LOG_FMT_DEBUG(log, "finishApplyMergeDelta");
     }
 
     for (const auto & [seg_id, seg] : segments)
@@ -162,7 +170,7 @@ try
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
     {
-        LOG_DEBUG(log, "beginSegmentSplit");
+        LOG_FMT_DEBUG(log, "beginSegmentSplit");
 
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_split_apply = SyncPointCtl::enableInScope("before_Segment::applySplit");
@@ -174,7 +182,7 @@ try
         });
         sp_seg_split_apply.waitAndPause();
 
-        LOG_DEBUG(log, "pausedBeforeApplySplit");
+        LOG_FMT_DEBUG(log, "pausedBeforeApplySplit");
 
         // non-flushed column files
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
@@ -182,7 +190,7 @@ try
         sp_seg_split_apply.next();
         th_seg_split.wait();
 
-        LOG_DEBUG(log, "finishApplySplit");
+        LOG_FMT_DEBUG(log, "finishApplySplit");
         mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id);
     }
 
@@ -228,7 +236,7 @@ try
     auto new_seg_id = new_seg_id_opt.value();
 
     {
-        LOG_DEBUG(log, "beginSegmentMerge");
+        LOG_FMT_DEBUG(log, "beginSegmentMerge");
 
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
@@ -237,7 +245,7 @@ try
         });
         sp_seg_merge_apply.waitAndPause();
 
-        LOG_DEBUG(log, "pausedBeforeApplyMerge");
+        LOG_FMT_DEBUG(log, "pausedBeforeApplyMerge");
 
         // non-flushed column files
         writeSegment(new_seg_id, 100);
@@ -245,7 +253,7 @@ try
         sp_seg_merge_apply.next();
         th_seg_merge.wait();
 
-        LOG_DEBUG(log, "finishApplyMerge");
+        LOG_FMT_DEBUG(log, "finishApplyMerge");
     }
 
     for (const auto & [seg_id, seg] : segments)
@@ -439,8 +447,11 @@ try
         ASSERT_TRUE(new_seg_id2_opt.has_value());
         new_seg_id = new_seg_id2_opt.value();
 
-        const auto file_usage = storage_pool->getLogFileUsage();
-        LOG_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
+        if (storage_pool)
+        {
+            const auto file_usage = storage_pool->getLogFileUsage();
+            LOG_FMT_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
+        }
     }
     for (const auto & [seg_id, seg] : segments)
     {
@@ -449,14 +460,17 @@ try
         flushSegmentCache(seg_id);
         mergeSegmentDelta(seg_id);
     }
-    storage_pool->gc();
-    const auto file_usage = storage_pool->getLogFileUsage();
-    LOG_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
+
+    // TODO: make it compatible run under ps v2
+    if (storage_pool)
+    {
+        storage_pool->gc();
+        const auto file_usage = storage_pool->getLogFileUsage();
+        LOG_FMT_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
+    }
 }
 CATCH
 
-
->>>>>>> 6b7b3607de (fix the problem that there may be some obsolete data left in storage which cannot be deleted (#5660))
 } // namespace tests
 } // namespace DM
 } // namespace DB
