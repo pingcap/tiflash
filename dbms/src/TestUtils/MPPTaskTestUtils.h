@@ -33,6 +33,23 @@ private:
     std::atomic<UInt64> current_ts = 0;
 };
 
+class MockServerAddrGenerator : public ext::Singleton<MockServerAddrGenerator>
+{
+public:
+    String nextAddr()
+    {
+        return "0.0.0.0:" + std::to_string(port++);
+    }
+
+    void reset()
+    {
+        port = 3931;
+    }
+
+private:
+    std::atomic<Int64> port = 3931;
+};
+
 DAGProperties getDAGPropertiesForTest(int server_num)
 {
     DAGProperties properties;
@@ -50,6 +67,7 @@ public:
     {
         ExecutorTest::SetUpTestCase();
         log_ptr = Logger::get("compute_test");
+        server_num = 1;
     }
 
     static void TearDownTestCase() // NOLINT(readability-identifier-naming))
@@ -57,28 +75,37 @@ public:
         MockComputeServerManager::instance().reset();
     }
 
-    void startServers(std::vector<String> addrs)
+    void startServers()
     {
+        startServers(server_num);
+    }
+
+    void startServers(size_t server_num_)
+    {
+        server_num = server_num_;
         MockComputeServerManager::instance().reset();
         auto size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-        for (auto addr : addrs)
+        for (size_t i = 0; i < server_num; ++i)
         {
-            MockComputeServerManager::instance().addServer(addr);
+            MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
         }
         MockComputeServerManager::instance().startServers(log_ptr, TiFlashTestEnv::getGlobalContext());
+        MockServerAddrGenerator::instance().reset();
     }
 
-    size_t serverNum()
+    size_t serverNum() const
     {
-        return MockComputeServerManager::instance().getServerConfigMap().size();
+        return server_num;
     }
 
 protected:
     static LoggerPtr log_ptr;
+    static size_t server_num;
 };
 
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
+size_t MPPTaskTestUtils::server_num = 0;
 
 #define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                \
     do                                                                                                                                      \
@@ -100,4 +127,16 @@ LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
         }                                                                      \
     } while (0)
 
+#define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
+    auto properties = getDAGPropertiesForTest(serverNum());                            \
+    auto tasks = (builder).buildMPPTasks(context, properties);                         \
+    size_t task_size = tasks.size();                                                   \
+    for (size_t i = 0; i < task_size; ++i)                                             \
+    {                                                                                  \
+        ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);          \
+    }                                                                                  \
+    ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(                                              \
+        builder,                                                                       \
+        properties,                                                                    \
+        expect_cols);
 } // namespace DB::tests

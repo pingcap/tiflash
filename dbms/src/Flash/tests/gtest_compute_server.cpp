@@ -45,14 +45,8 @@ public:
 TEST_F(ComputeServerRunner, runAggTasks)
 try
 {
-    startServers({"0.0.0.0:3930", "0.0.0.0:3931", "0.0.0.0:3932", "0.0.0.0:3933"});
-
+    startServers(4);
     {
-        auto properties = getDAGPropertiesForTest(serverNum());
-        auto tasks = context.scan("test_db", "test_table_1")
-                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                         .project({"max(s1)"})
-                         .buildMPPTasks(context, properties);
         std::vector<String> expected_strings = {
             R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
  aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
@@ -91,39 +85,25 @@ exchange_sender_3 | type:PassThrough, {<0, Long>}
   aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
    exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
 )"};
-        size_t task_size = tasks.size();
-        for (size_t i = 0; i < task_size; ++i)
-        {
-            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
-        }
-
         auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000, 10000000})};
-        ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(
-            context.scan("test_db", "test_table_1").aggregation({Max(col("s1"))}, {col("s2"), col("s3")}).project({"max(s1)"}),
-            properties,
-            expect_cols);
+
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context
+                .scan("test_db", "test_table_1")
+                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                .project({"max(s1)"}),
+            expected_strings,
+            expected_cols);
     }
 
     {
-        auto properties = getDAGPropertiesForTest(serverNum());
-        auto tasks = context.scan("test_db", "test_table_1")
+        auto properties = getDAGPropertiesForTest(1);
+        auto tasks = context
+                         .scan("test_db", "test_table_1")
                          .aggregation({Count(col("s1"))}, {})
                          .project({"count(s1)"})
                          .buildMPPTasks(context, properties);
-
         std::vector<String> expected_strings = {
-            R"(exchange_sender_5 | type:PassThrough, {<0, Longlong>}
- aggregation_4 | group_by: {}, agg_func: {count(<0, Long>)}
-  table_scan_0 | {<0, Long>}
-            )",
-            R"(exchange_sender_5 | type:PassThrough, {<0, Longlong>}
- aggregation_4 | group_by: {}, agg_func: {count(<0, Long>)}
-  table_scan_0 | {<0, Long>}
-            )",
-            R"(exchange_sender_5 | type:PassThrough, {<0, Longlong>}
- aggregation_4 | group_by: {}, agg_func: {count(<0, Long>)}
-  table_scan_0 | {<0, Long>}
-            )",
             R"(exchange_sender_5 | type:PassThrough, {<0, Longlong>}
  aggregation_4 | group_by: {}, agg_func: {count(<0, Long>)}
   table_scan_0 | {<0, Long>}
@@ -138,12 +118,6 @@ exchange_sender_3 | type:PassThrough, {<0, Long>}
         {
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
-
-        auto expected_cols = {toVec<UInt64>({3})};
-        ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(
-            context.scan("test_db", "test_table_1").aggregation({Count(col("s1"))}, {}).project({"count(s1)"}),
-            properties,
-            expect_cols);
     }
 }
 CATCH
@@ -151,14 +125,8 @@ CATCH
 TEST_F(ComputeServerRunner, runJoinTasks)
 try
 {
-    startServers({"0.0.0.0:3930", "0.0.0.0:3931", "0.0.0.0:3932"});
+    startServers(3);
     {
-        auto properties = getDAGPropertiesForTest(serverNum());
-        auto tasks = context
-                         .scan("test_db", "l_table")
-                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                         .buildMPPTasks(context, properties);
-
         auto expected_cols = {
             toNullableVec<String>({{}, "banana", "banana"}),
             toNullableVec<String>({{}, "apple", "banana"}),
@@ -191,19 +159,13 @@ try
   exchange_receiver_6 | type:PassThrough, {<0, String>, <1, String>}
   exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>})"};
 
-        size_t task_size = tasks.size();
-        for (size_t i = 0; i < task_size; ++i)
-        {
-            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
-        }
-
-        ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(
-            context
-                .scan("test_db", "l_table")
-                .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
-            properties,
-            expect_cols);
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(context
+                                                 .scan("test_db", "l_table")
+                                                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
+                                             expected_strings,
+                                             expect_cols);
     }
+
     {
         auto properties = getDAGPropertiesForTest(1);
         auto tasks = context
@@ -233,16 +195,8 @@ CATCH
 TEST_F(ComputeServerRunner, runJoinThenAggTasks)
 try
 {
-    startServers({"0.0.0.0:3930", "0.0.0.0:3931", "0.0.0.0:3932"});
+    startServers(3);
     {
-        auto properties = getDAGPropertiesForTest(serverNum());
-        auto tasks = context
-                         .scan("test_db", "l_table")
-                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                         .project({col("max(l_table.s)"), col("l_table.s")})
-                         .buildMPPTasks(context, properties);
-
         std::vector<String> expected_strings = {
             R"(exchange_sender_10 | type:Hash, {<0, String>}
  table_scan_1 | {<0, String>})",
@@ -284,26 +238,18 @@ try
   aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
    exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})"};
 
-        size_t task_size = tasks.size();
-        for (size_t i = 0; i < task_size; ++i)
-        {
-            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
-        }
-
-
         auto expected_cols = {
             toNullableVec<String>({{}, "banana"}),
             toNullableVec<String>({{}, "banana"})};
 
-        // ywq todo refine...
-        ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
             context
                 .scan("test_db", "l_table")
                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                 .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                 .project({col("max(l_table.s)"), col("l_table.s")}),
-            properties,
-            expect_cols);
+            expected_strings,
+            expect_cols)
     }
 
     {

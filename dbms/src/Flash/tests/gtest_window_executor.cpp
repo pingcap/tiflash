@@ -74,7 +74,7 @@ public:
     void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const String & db, const String & table_name, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
         context.addMockTableColumnData(db, table_name, source_columns);
-
+        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
