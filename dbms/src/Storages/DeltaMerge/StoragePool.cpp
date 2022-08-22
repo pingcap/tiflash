@@ -18,6 +18,7 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
@@ -125,6 +126,11 @@ void GlobalStoragePool::restore()
             return this->gc(global_context.getSettingsRef());
         },
         false);
+}
+
+FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
+{
+    return log_storage->getFileUsageStatistics();
 }
 
 bool GlobalStoragePool::gc()

@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -33,6 +34,7 @@ public:
     struct SegmentTestOptions
     {
         bool is_common_handle = false;
+        DB::Settings db_settings;
     };
 
 public:
@@ -98,9 +100,9 @@ protected:
 
     std::pair<PageId, PageId> getRandomMergeablePair();
 
-    RowKeyRange commanHandleKeyRange();
+    RowKeyRange commonHandleKeyRange();
 
-    SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns = {}, DB::Settings && db_settings = DB::Settings());
+    SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings);
 
     // setColumns should update dm_context at the same time
     void setColumns(const ColumnDefinesPtr & columns);
