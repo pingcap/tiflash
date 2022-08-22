@@ -26,8 +26,6 @@ class Context;
 
 namespace AggregationInterpreterHelper
 {
-bool isFinalAggMode(const tipb::Expr & expr);
-
 // Judge if the input of this sum is partial result.
 bool isSumOnPartialResults(const tipb::Expr & expr);
 

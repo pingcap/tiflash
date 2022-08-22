@@ -16,8 +16,9 @@
 #include <AggregateFunctions/AggregateFunctionSum.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 #include <tuple>
 #include <vector>
@@ -27,14 +28,9 @@ namespace DB
 namespace tests
 {
 
-class ExecutorFuncReturnTypeTestRunner : public DB::tests::ExecutorTest
+class ExecutorFuncReturnTypeTestRunner : public DB::tests::AggregationTest
 {
 public:
-    void initializeContext() override
-    {
-        ExecutorTest::initializeContext();
-    }
-
     ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
     {
         AggregateFunctionPtr agg_ptr = DB::AggregateFunctionFactory::instance().get(agg_name, data_types, {});
