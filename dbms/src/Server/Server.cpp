@@ -23,7 +23,6 @@
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
-#include <Common/TiFlashBuildInfo.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
@@ -55,14 +54,18 @@
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Server/HTTPHandlerFactory.h>
+#include <Server/HTTPServer.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/RaftStoreProxyRunner.h>
 #include <Server/Server.h>
 #include <Server/ServerInfo.h>
 #include <Server/StatusFile.h>
 #include <Server/StorageConfigParser.h>
 #include <Server/TCPHandlerFactory.h>
+#include <Server/TCPServer.h>
+#include <Server/TiFlashProxyConfig.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -228,62 +231,6 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
-struct TiFlashProxyConfig
-{
-    static const std::string config_prefix;
-    std::vector<const char *> args;
-    std::unordered_map<std::string, std::string> val_map;
-    bool is_proxy_runnable = false;
-
-    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
-    const String engine_store_version = "engine-version";
-    const String engine_store_git_hash = "engine-git-hash";
-    const String engine_store_address = "engine-addr";
-    const String engine_store_advertise_address = "advertise-engine-addr";
-    const String pd_endpoints = "pd-endpoints";
-    const String engine_label = "engine-label";
-    const String engine_label_value = "tiflash";
-
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
-    {
-        if (!config.has(config_prefix))
-            return;
-
-        Poco::Util::AbstractConfiguration::Keys keys;
-        config.keys(config_prefix, keys);
-        {
-            std::unordered_map<std::string, std::string> args_map;
-            for (const auto & key : keys)
-            {
-                const auto k = config_prefix + "." + key;
-                args_map[key] = config.getString(k);
-            }
-            args_map[pd_endpoints] = config.getString("raft.pd_addr");
-            args_map[engine_store_version] = TiFlashBuildInfo::getReleaseVersion();
-            args_map[engine_store_git_hash] = TiFlashBuildInfo::getGitHash();
-            if (!args_map.count(engine_store_address))
-                args_map[engine_store_address] = config.getString("flash.service_addr");
-            else
-                args_map[engine_store_advertise_address] = args_map[engine_store_address];
-            args_map[engine_label] = engine_label_value;
-
-            for (auto && [k, v] : args_map)
-            {
-                val_map.emplace("--" + k, std::move(v));
-            }
-        }
-
-        args.push_back("TiFlash Proxy");
-        for (const auto & v : val_map)
-        {
-            args.push_back(v.first.data());
-            args.push_back(v.second.data());
-        }
-        is_proxy_runnable = true;
-    }
-};
-
-const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
 pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
 {
@@ -314,34 +261,6 @@ void printGRPCLog(gpr_log_func_args * args)
         LOG_ERROR(grpc_log, log_msg);
     }
 }
-
-struct HTTPServer : Poco::Net::HTTPServer
-{
-    HTTPServer(Poco::Net::HTTPRequestHandlerFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::HTTPServerParams::Ptr pParams)
-        : Poco::Net::HTTPServer(pFactory, threadPool, socket, pParams)
-    {}
-
-protected:
-    void run() override
-    {
-        setThreadName("HTTPServer");
-        Poco::Net::HTTPServer::run();
-    }
-};
-
-struct TCPServer : Poco::Net::TCPServer
-{
-    TCPServer(Poco::Net::TCPServerConnectionFactory::Ptr pFactory, Poco::ThreadPool & threadPool, const Poco::Net::ServerSocket & socket, Poco::Net::TCPServerParams::Ptr pParams)
-        : Poco::Net::TCPServer(pFactory, threadPool, socket, pParams)
-    {}
-
-protected:
-    void run() override
-    {
-        setThreadName("TCPServer");
-        Poco::Net::TCPServer::run();
-    }
-};
 
 void UpdateMallocConfig([[maybe_unused]] const LoggerPtr & log)
 {
@@ -418,59 +337,6 @@ void UpdateMallocConfig([[maybe_unused]] const LoggerPtr & log)
 #endif
 #undef RUN_FAIL_RETURN
 }
-
-extern "C" {
-void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
-}
-
-struct RaftStoreProxyRunner : boost::noncopyable
-{
-    struct RunRaftStoreProxyParms
-    {
-        const EngineStoreServerHelper * helper;
-        const TiFlashProxyConfig & conf;
-
-        /// set big enough stack size to avoid runtime error like stack-overflow.
-        size_t stack_size = 1024 * 1024 * 20;
-    };
-
-    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, const LoggerPtr & log_)
-        : parms(std::move(parms_))
-        , log(log_)
-    {}
-
-    void join() const
-    {
-        if (!parms.conf.is_proxy_runnable)
-            return;
-        pthread_join(thread, nullptr);
-    }
-
-    void run()
-    {
-        if (!parms.conf.is_proxy_runnable)
-            return;
-        pthread_attr_t attribute;
-        pthread_attr_init(&attribute);
-        pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_FMT_INFO(log, "start raft store proxy");
-        pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
-        pthread_attr_destroy(&attribute);
-    }
-
-private:
-    static void * runRaftStoreProxyFFI(void * pv)
-    {
-        setThreadName("RaftStoreProxy");
-        const auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
-        run_raftstore_proxy_ffi(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
-        return nullptr;
-    }
-
-    RunRaftStoreProxyParms parms;
-    pthread_t thread{};
-    const LoggerPtr & log;
-};
 
 // We only need this task run once.
 void initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store)
