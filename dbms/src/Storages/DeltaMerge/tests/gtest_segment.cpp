@@ -41,7 +41,6 @@ class SegmentOperationTest : public SegmentTestBasic
 {
 protected:
     static void SetUpTestCase() {}
-
     void SetUp() override
     {
         log = DB::Logger::get("SegmentOperationTest");
@@ -469,6 +468,7 @@ try
     }
 }
 CATCH
+
 
 } // namespace tests
 } // namespace DM
