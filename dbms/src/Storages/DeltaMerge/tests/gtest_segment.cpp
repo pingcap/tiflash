@@ -244,7 +244,7 @@ try
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
         auto th_seg_merge = std::async([&]() {
-            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, true);
+            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /*check_rows=*/false);
         });
         sp_seg_merge_apply.waitAndPause();
         LOG_DEBUG(log, "pausedBeforeApplyMerge");
