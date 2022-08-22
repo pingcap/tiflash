@@ -1046,7 +1046,7 @@ void PageDirectory::applyRefEditRecord(
     //         {
     //             "type": "entry",
     //             "create_ver": 1,
-    //             "being_ref_count": 3, // being ref by id 11, 12
+    //             "being_ref_count": 2, // being ref by id 11
     //             "entry": "..some offset to blob file" // mark as "entryX"
     //         },
     //         {
