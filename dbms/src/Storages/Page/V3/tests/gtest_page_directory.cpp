@@ -668,7 +668,7 @@ try
         SCOPED_TRACE(fmt::format("test idx={}", test_round));
         const bool del_in_same_wb = distrib(gen) % 2 == 0;
         const bool gc_or_not = distrib(gen) < 1;
-        LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
+        LOG_FMT_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
 
         // Generate new ref operations to the visible pages
         const size_t num_ref_page = distrib(gen) + 1;
@@ -775,7 +775,7 @@ try
         SCOPED_TRACE(fmt::format("test idx={}", test_round));
         const bool del_in_same_wb = distrib(gen) % 2 == 0;
         const bool gc_or_not = distrib(gen) < 1;
-        LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
+        LOG_FMT_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
 
         const size_t num_ref_page = distrib(gen) + 1;
         std::unordered_map<PageId, PageId> new_ref_page_ids;
