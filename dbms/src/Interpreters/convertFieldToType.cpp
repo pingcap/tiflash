@@ -117,7 +117,7 @@ static Field convertStringToDecimalType(const Field & from, const DataTypeDecima
 {
     using FieldType = typename DataTypeDecimal<T>::FieldType;
 
-    const String & str_value = from.get<String>();
+    const auto & str_value = from.get<String>();
     T value = type.parseFromString(str_value);
     return DecimalField<FieldType>(value, type.getScale());
 }
@@ -290,13 +290,13 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
         if (src.getType() == Field::Types::String)
             return src;
     }
-    else if (const DataTypeArray * type_array = typeid_cast<const DataTypeArray *>(&type))
+    else if (const auto * type_array = typeid_cast<const DataTypeArray *>(&type))
     {
         if (src.getType() == Field::Types::Array)
         {
-            const DataTypePtr nested_type = removeNullable(type_array->getNestedType());
+            const auto nested_type = removeNullable(type_array->getNestedType());
 
-            const Array & src_arr = src.get<Array>();
+            const auto & src_arr = src.get<Array>();
             size_t src_arr_size = src_arr.size();
 
             Array res(src_arr_size);
@@ -306,7 +306,7 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type)
             return res;
         }
     }
-    else if (const DataTypeTuple * type_tuple = typeid_cast<const DataTypeTuple *>(&type))
+    else if (const auto * type_tuple = typeid_cast<const DataTypeTuple *>(&type))
     {
         if (src.getType() == Field::Types::Tuple)
         {
@@ -344,8 +344,8 @@ Field convertFieldToType(const Field & from_value, const IDataType & to_type, co
 
     if (to_type.isNullable())
     {
-        const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(to_type);
-        const DataTypePtr & nested_type = nullable_type.getNestedType();
+        const auto & nullable_type = static_cast<const DataTypeNullable &>(to_type);
+        const auto & nested_type = nullable_type.getNestedType();
         return convertFieldToTypeImpl(from_value, *nested_type);
     }
     else

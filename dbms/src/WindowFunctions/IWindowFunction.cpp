@@ -45,7 +45,7 @@ struct WindowFunctionRank final : public IWindowFunction
     DataTypePtr getReturnType() const override
     {
         RUNTIME_CHECK_MSG(
-            argument_types.size() == 0,
+            argument_types.empty(),
             "Number of arguments for window function {} doesn't match: passed {}, should be 0.",
             getName(),
             argument_types.size());
@@ -55,9 +55,8 @@ struct WindowFunctionRank final : public IWindowFunction
     void windowInsertResultInto(
         WindowBlockInputStreamPtr stream,
         size_t function_index,
-        [[maybe_unused]] const ColumnNumbers & arguments) override
+        const ColumnNumbers &) override
     {
-        assert(arguments.empty());
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_start_row_number);
@@ -80,7 +79,7 @@ struct WindowFunctionDenseRank final : public IWindowFunction
     DataTypePtr getReturnType() const override
     {
         RUNTIME_CHECK_MSG(
-            argument_types.size() == 0,
+            argument_types.empty(),
             "Number of arguments for window function {} doesn't match: passed {}, should be 0.",
             getName(),
             argument_types.size());
@@ -90,9 +89,8 @@ struct WindowFunctionDenseRank final : public IWindowFunction
     void windowInsertResultInto(
         WindowBlockInputStreamPtr stream,
         size_t function_index,
-        [[maybe_unused]] const ColumnNumbers & arguments) override
+        const ColumnNumbers &) override
     {
-        assert(arguments.empty());
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->peer_group_number);
@@ -115,7 +113,7 @@ struct WindowFunctionRowNumber final : public IWindowFunction
     DataTypePtr getReturnType() const override
     {
         RUNTIME_CHECK_MSG(
-            argument_types.size() == 0,
+            argument_types.empty(),
             "Number of arguments for window function {} doesn't match: passed {}, should be 0.",
             getName(),
             argument_types.size());
@@ -125,9 +123,8 @@ struct WindowFunctionRowNumber final : public IWindowFunction
     void windowInsertResultInto(
         WindowBlockInputStreamPtr stream,
         size_t function_index,
-        [[maybe_unused]] const ColumnNumbers & arguments) override
+        const ColumnNumbers &) override
     {
-        assert(arguments.empty());
         IColumn & to = *stream->outputAt(stream->current_row)[function_index];
         assert_cast<ColumnInt64 &>(to).getData().push_back(
             stream->current_row_number);
@@ -191,21 +188,22 @@ public:
 private:
     DataTypePtr getReturnTypeImpl() const
     {
+        size_t argument_num = argument_types.size();
         RUNTIME_CHECK_MSG(
-            argument_types.size() >= 1 && argument_types.size() <= 3,
+            1 <= argument_num && argument_num <= 3,
             "argument num {} of function {} isn't in [1, 3]",
-            argument_types.size(),
-            getName());
-        if (argument_types.size() >= 2)
+            argument_num,
+            name);
+        if (argument_num >= 2)
         {
             auto second_argument = removeNullable(argument_types[1]);
             RUNTIME_CHECK_MSG(
                 second_argument->isInteger(),
                 "Illegal type {} of second argument of function {}",
                 second_argument->getName(),
-                getName());
+                name);
         }
-        if (argument_types.size() == 3)
+        if (argument_num == 3)
         {
             auto first_argument = removeNullable(argument_types[0]);
             auto third_argument = removeNullable(argument_types[2]);
@@ -214,7 +212,7 @@ private:
                 "type {} of first argument is different from type {} of third argument of function {}",
                 first_argument->getName(),
                 third_argument->getName(),
-                getName());
+                name);
         }
         return argument_types[0];
     }
@@ -276,7 +274,7 @@ private:
                 M(Int64)
 #undef M
             default:
-                throw Exception(fmt::format("the argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(fmt::format("the argument type of {} is invalid, expect integer, got {}", name, type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             };
         }
     }
