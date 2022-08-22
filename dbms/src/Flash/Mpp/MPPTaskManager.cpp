@@ -152,6 +152,7 @@ void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, Abort
         /// just to double check the query still exists
         if (it != mpp_query_map.end())
             mpp_query_map.erase(it);
+        cv.notify_all();
     }
     LOG_WARNING(log, "Finish abort query: " + std::to_string(query_id));
 }
@@ -162,12 +163,10 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     const auto & it = mpp_query_map.find(task->id.start_ts);
     if (it != mpp_query_map.end() && it->second->to_be_aborted)
     {
-        cv.notify_all();
-        return {false, "query is been aborted"};
+        return {false, "query is being aborted"};
     }
     if (it != mpp_query_map.end() && it->second->task_map.find(task->id) != it->second->task_map.end())
     {
-        cv.notify_all();
         return {false, "task has been registered"};
     }
     if (it == mpp_query_map.end()) /// the first one
@@ -210,7 +209,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(MPPTask * task)
     if (it != mpp_query_map.end())
     {
         if (it->second->to_be_aborted)
-            return {false, "query is been aborted"};
+            return {false, "query is being aborted"};
         auto task_it = it->second->task_map.find(task->id);
         if (task_it != it->second->task_map.end())
         {
@@ -221,6 +220,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(MPPTask * task)
                 scheduler->deleteQuery(task->id.start_ts, *this, false);
                 mpp_query_map.erase(it);
             }
+            cv.notify_all();
             return {true, ""};
         }
     }
