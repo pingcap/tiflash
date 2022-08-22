@@ -1012,7 +1012,10 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             {
                 break;
             }
-<<<<<<< HEAD
+            else if (!try_until_succeed)
+            {
+                return false;
+            }
 
             // Flush could fail. Typical cases:
             // #1. The segment is abandoned (due to an update is finished)
@@ -1020,12 +1023,6 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
             // Let's sleep 5ms ~ 100ms and then retry flush again.
             std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
             sleep_ms = std::min(sleep_ms * 2, 100);
-=======
-            else if (!try_until_succeed)
-            {
-                return false;
-            }
->>>>>>> 6da631c99c (Optimize apply speed under heavy write pressure (#4883))
         }
 
         cur_range.setStart(segment_range.end);
