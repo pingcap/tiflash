@@ -3625,9 +3625,14 @@ CATCH
 
 
 // There is another flush cache executing for the same segment.
-TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryByFlushCache)
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, DISABLED_RetryByFlushCache)
 try
 {
+    // In release-6.1, as https://github.com/pingcap/tiflash/commit/6da631c99c918bfffcf183128306a5e6bd35c7f7
+    // is not cherry picked, when a flush is in commit stage, another flush will be just
+    // waiting, instead of returning false immediately. The SyncPoint in this test case
+    // is not suitable any more.
+
     {
         // Write new data to segment[1] without flush.
         auto newly_written_rows = helper->rows_by_segments[1];
