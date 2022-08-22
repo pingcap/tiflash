@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FailPoint.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Poco/Logger.h>
 #include <Storages/ColumnsDescription.h>
@@ -31,10 +31,6 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char pause_before_server_merge_one_delta[];
-} // namespace FailPoints
 
 namespace tests
 {
@@ -341,18 +337,12 @@ CATCH
 TEST_P(BasicManualCompactTest, DuplicatedLogicalId)
 try
 {
-    using namespace std::chrono_literals;
-
-    FailPointHelper::enableFailPoint(FailPoints::pause_before_server_merge_one_delta);
-
-    auto thread_1_is_ready = std::promise<void>();
-    std::thread t_req1([&]() {
-        // req1
+    auto sp_req1_merge_delta = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment");
+    auto req1 = std::async([&]() {
         auto request = ::kvrpcpb::CompactRequest();
         request.set_physical_table_id(TABLE_ID);
         request.set_logical_table_id(2);
         auto response = ::kvrpcpb::CompactResponse();
-        thread_1_is_ready.set_value();
         auto status_code = manager->handleRequest(&request, &response);
         ASSERT_EQ(status_code.error_code(), grpc::StatusCode::OK);
         ASSERT_FALSE(response.has_error());
@@ -361,13 +351,12 @@ try
         helper->verifyExpectedRowsForAllSegments();
     });
 
-    {
-        // send req1, wait request being processed.
-        thread_1_is_ready.get_future().wait();
-        std::this_thread::sleep_for(500ms); // TODO: Maybe better to use sync_channel to avoid hardcoded wait duration.
+    sp_req1_merge_delta.waitAndPause();
 
-        // req2: Now let's send another request with the same logical id.
-        // Although worker pool size is 1, this request will be returned immediately, but with an error.
+    // req2: Another request with the same logical id.
+    // Although worker pool size is 1, this request will be returned immediately with an error,
+    // because there is already same logic id working in progress.
+    {
         auto request = ::kvrpcpb::CompactRequest();
         request.set_physical_table_id(TABLE_ID);
         request.set_logical_table_id(2);
@@ -379,9 +368,9 @@ try
         helper->verifyExpectedRowsForAllSegments();
     }
 
-    // Now let's continue req1's work
-    FailPointHelper::disableFailPoint(FailPoints::pause_before_server_merge_one_delta);
-    t_req1.join();
+    // Proceed the execution of req1. Everything should work normally.
+    sp_req1_merge_delta.next();
+    req1.wait();
 }
 CATCH
 
