@@ -158,7 +158,7 @@ void appendWindowDescription(
     TiDB::TiDBCollators & arg_collators,
     const String & window_func_name,
     WindowDescription & window_description,
-    NamesAndTypes source_columns,
+    NamesAndTypes & source_columns,
     NamesAndTypes & window_columns)
 {
     assert(arg_names.size() == arg_collators.size() && arg_names.size() == arg_types.size());

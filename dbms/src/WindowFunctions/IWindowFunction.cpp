@@ -170,8 +170,6 @@ public:
         size_t function_index,
         const ColumnNumbers & arguments) override
     {
-        std::cout << "windowInsertResultInto false" << std::endl;
-
         const auto & cur_block = stream->blockAt(stream->current_row);
 
         IColumn & to = *cur_block.output_columns[function_index];
@@ -180,14 +178,12 @@ public:
         auto value_row = stream->current_row;
         if (Impl::locateRowNumber(stream, value_row, offset))
         {
-            std::cout << "locateRowNumber true" << std::endl;
             const auto & value_column = *stream->inputAt(value_row)[arguments[0]];
             const auto & value_field = value_column[value_row.row];
             to.insert(value_field);
         }
         else
         {
-            std::cout << "locateRowNumber false" << std::endl;
             default_value_setter(cur_block.input_columns, arguments, stream->current_row.row, to);
         }
     }
@@ -195,7 +191,6 @@ public:
 private:
     DataTypePtr getReturnTypeImpl() const
     {
-        std::cout << "getReturnTypeImpl start" << std::endl;
         RUNTIME_CHECK_MSG(
             argument_types.size() >= 1 && argument_types.size() <= 3,
             "argument num {} of function {} isn't in [1, 3]",
@@ -226,7 +221,6 @@ private:
                 third_argument->getName(),
                 getName());
         }
-        std::cout << "return type: " << argument_types[0]->getName() << std::endl;
         return argument_types[0];
     }
 
@@ -244,7 +238,6 @@ private:
         else
         {
             return [](const Columns & input_columns, const ColumnNumbers & arguments, size_t row, IColumn & to) {
-                std::cout << "initDefaultValueSetter" << std::endl;
                 const auto & default_value_column = *input_columns[arguments[2]];
                 to.insert(default_value_column[row]);
             };
