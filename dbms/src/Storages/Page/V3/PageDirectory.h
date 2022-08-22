@@ -201,7 +201,7 @@ public:
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
-        PageEntriesV3 & entries_removed,
+        PageEntriesV3 * entries_removed,
         const PageLock & page_lock,
         bool keep_last_valid_var_entry = false);
     bool derefAndClean(
@@ -209,7 +209,7 @@ public:
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
         Int64 deref_count,
-        PageEntriesV3 & entries_removed,
+        PageEntriesV3 * entries_removed,
         bool keep_last_valid_var_entry = false);
 
     void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);

@@ -496,7 +496,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
 bool VersionedPageEntries::cleanOutdatedEntries(
     UInt64 lowest_seq,
     std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
-    PageEntriesV3 & entries_removed,
+    PageEntriesV3 * entries_removed,
     const PageLock & /*page_lock*/,
     bool keep_last_valid_var_entry)
 {
@@ -568,7 +568,10 @@ bool VersionedPageEntries::cleanOutdatedEntries(
             {
                 if (!keep_last_valid_var_entry && iter->second.being_ref_count == 1)
                 {
-                    entries_removed.emplace_back(iter->second.entry);
+                    if (entries_removed)
+                    {
+                        entries_removed->emplace_back(iter->second.entry);
+                    }
                     iter = entries.erase(iter);
                 }
                 // The `being_ref_count` for this version is valid. While for older versions,
@@ -578,7 +581,10 @@ bool VersionedPageEntries::cleanOutdatedEntries(
             else
             {
                 // else there are newer "entry" in the version list, the outdated entries should be removed
-                entries_removed.emplace_back(iter->second.entry);
+                if (entries_removed)
+                {
+                    entries_removed->emplace_back(iter->second.entry);
+                }
                 iter = entries.erase(iter);
             }
         }
@@ -591,7 +597,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     return entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete());
 }
 
-bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 & entries_removed, bool keep_last_valid_var_entry)
+bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 * entries_removed, bool keep_last_valid_var_entry)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -1397,7 +1403,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool keep_last_valid_var_entry)
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
             &normal_entries_to_deref,
-            all_del_entries,
+            &all_del_entries,
             iter->second->acquireLock(),
             keep_last_valid_var_entry);
 
