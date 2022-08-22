@@ -20,6 +20,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
@@ -150,8 +151,7 @@ void appendAggDescription(
     aggregate_descriptions.emplace_back(std::move(aggregate));
 }
 
-/// Generate AggregateDescription and append it to AggregateDescriptions if need.
-/// And append output column to aggregated_columns.
+/// Generate AggregateDescription and append it to WindowDescription if need.
 void appendWindowDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
@@ -498,12 +498,55 @@ void DAGExpressionAnalyzer::buildLeadLag(
     NamesAndTypes & window_columns)
 {
     auto child_size = expr.children_size();
+    RUNTIME_CHECK(
+        child_size >= 1 && child_size <= 3,
+        "arguments num of lead/lag must >= 1 and <= 3, but {}",
+        child_size);
+
     Names arg_names;
     DataTypes arg_types;
     TiDB::TiDBCollators arg_collators;
-    for (Int32 i = 0; i < child_size; ++i)
+
+    if (child_size <= 2)
     {
-        fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
+        for (Int32 i = 0; i < child_size; ++i)
+        {
+            fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
+        }
+    }
+    else // child_size == 3
+    {
+        const auto & sample_block = actions->getSampleBlock();
+
+        const auto first_arg = expr.children(0);
+        auto first_arg_name = getActions(first_arg, actions);
+        auto first_arg_type = sample_block.getByName(first_arg_name).type;
+        
+        const auto third_arg = expr.children(2);
+        auto third_arg_name = getActions(third_arg, actions);
+        auto third_arg_type = sample_block.getByName(third_arg_name).type;
+
+        auto final_type = getLeastSupertype({first_arg_type, third_arg_type});
+        if (!final_type->equals(*first_arg_type))
+        {
+            first_arg_name = appendCast(final_type, actions, first_arg_name);
+            first_arg_type = final_type;
+        }
+        if (!final_type->equals(*third_arg_type))
+        {
+            third_arg_name = appendCast(final_type, actions, third_arg_name);
+            third_arg_type = final_type;
+        }
+
+        arg_names.push_back(first_arg_name);
+        arg_types.push_back(first_arg_type);
+        arg_collators.push_back(removeNullable(first_arg_type)->isString() ? getCollatorFromExpr(expr.children(0)) : nullptr);
+
+        fillArgumentDetail(actions, expr.children(1), arg_names, arg_types, arg_collators);
+
+        arg_names.push_back(third_arg_name);
+        arg_types.push_back(third_arg_type);
+        arg_collators.push_back(removeNullable(third_arg_type)->isString() ? getCollatorFromExpr(expr.children(2)) : nullptr);
     }
 
     appendWindowDescription(
