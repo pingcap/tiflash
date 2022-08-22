@@ -55,7 +55,6 @@ else
   BUILD_DIR="$SRCPATH/release-centos7-llvm/build-debug"
   ENABLE_FAILPOINTS="ON"
   JEMALLOC_NARENAS="40"
-else
 fi
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
