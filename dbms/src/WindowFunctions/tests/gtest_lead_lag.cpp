@@ -58,55 +58,55 @@ public:
         actual_input[2].name = value_col_name;
         context.addMockTable(
             {"test_db", "test_table_for_lead_lag"},
-            {{"partition", TiDB::TP::TypeLongLong}, 
+            {{"partition", TiDB::TP::TypeLongLong},
              {"order", TiDB::TP::TypeLongLong},
              {value_col_name, value_tp}},
             actual_input);
 
         auto request = context
-                       .scan("test_db", "test_table_for_lead_lag")
-                       .sort({{"partition", false}, {"order", false}}, true)
-                       .window(function, {"order", false}, {"partition", false}, MockWindowFrame{})
-                       .build(context);
+                           .scan("test_db", "test_table_for_lead_lag")
+                           .sort({{"partition", false}, {"order", false}}, true)
+                           .window(function, {"order", false}, {"partition", false}, MockWindowFrame{})
+                           .build(context);
 
         ColumnsWithTypeAndName expect = input;
         expect.push_back(result);
         executeWithConcurrency(request, expect);
     }
 
-template<typename IntType>
-void testInt()
-{
-    executeFunctionAndAssert(
-        toNullableVec<IntType>({Limits<IntType>::max(), Limits<IntType>::min(), 4, {}, 6, 0, 8, {}}),
-        Lead2(value_col, lit(Field(static_cast<UInt64>(1)))),
-        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
-         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-         toNullableVec<IntType>(/*value*/ {1, Limits<IntType>::max(), Limits<IntType>::min(), 4, 5, 6, 0, 8})});
-    executeFunctionAndAssert(
-        toNullableVec<IntType>({{}, 1, Limits<IntType>::max(), Limits<IntType>::min(), {}, 5, 6, 0}),
-        Lag2(value_col, lit(Field(static_cast<UInt64>(1)))),
-        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
-         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-         toNullableVec<IntType>(/*value*/ {1, Limits<IntType>::max(), Limits<IntType>::min(), 4, 5, 6, 0, 8})});
-}
+    template <typename IntType>
+    void testInt()
+    {
+        executeFunctionAndAssert(
+            toNullableVec<IntType>({Limits<IntType>::max(), Limits<IntType>::min(), 4, {}, 6, 0, 8, {}}),
+            Lead2(value_col, lit(Field(static_cast<UInt64>(1)))),
+            {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+             toNullableVec<IntType>(/*value*/ {1, Limits<IntType>::max(), Limits<IntType>::min(), 4, 5, 6, 0, 8})});
+        executeFunctionAndAssert(
+            toNullableVec<IntType>({{}, 1, Limits<IntType>::max(), Limits<IntType>::min(), {}, 5, 6, 0}),
+            Lag2(value_col, lit(Field(static_cast<UInt64>(1)))),
+            {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+             toNullableVec<IntType>(/*value*/ {1, Limits<IntType>::max(), Limits<IntType>::min(), 4, 5, 6, 0, 8})});
+    }
 
-template<typename FloatType>
-void testFloat()
-{
-    executeFunctionAndAssert(
-        toNullableVec<FloatType>({Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, {}, 6.6, 0, 8.8, {}}),
-        Lead2(value_col, lit(Field(static_cast<UInt64>(1)))),
-        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
-         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-         toNullableVec<FloatType>(/*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
-    executeFunctionAndAssert(
-        toNullableVec<FloatType>({{}, 1, Limits<FloatType>::max(), Limits<FloatType>::min(), {}, 5.5, 6.6, 0}),
-        Lag2(value_col, lit(Field(static_cast<UInt64>(1)))),
-        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
-         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-         toNullableVec<FloatType>(/*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
-}
+    template <typename FloatType>
+    void testFloat()
+    {
+        executeFunctionAndAssert(
+            toNullableVec<FloatType>({Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, {}, 6.6, 0, 8.8, {}}),
+            Lead2(value_col, lit(Field(static_cast<UInt64>(1)))),
+            {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+             toNullableVec<FloatType>(/*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
+        executeFunctionAndAssert(
+            toNullableVec<FloatType>({{}, 1, Limits<FloatType>::max(), Limits<FloatType>::min(), {}, 5.5, 6.6, 0}),
+            Lag2(value_col, lit(Field(static_cast<UInt64>(1)))),
+            {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+             toNullableVec<FloatType>(/*value*/ {1, Limits<FloatType>::max(), Limits<FloatType>::min(), 4.4, 5.5, 6.6, 0, 8.8})});
+    }
 };
 
 TEST_F(LeadLag, one_arg)
@@ -143,7 +143,7 @@ try
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
-    
+
     // arg2 < partition_size
     executeFunctionAndAssert(
         toNullableVec<String>({"2", "3", "4", {}, "6", "7", "8", {}}),
@@ -202,7 +202,7 @@ try
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
-    
+
     // arg2 < partition_size
     executeFunctionAndAssert(
         toNullableVec<String>({"2", "3", "4", "0", "6", "7", "8", "0"}),
