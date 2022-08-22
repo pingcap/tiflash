@@ -40,6 +40,7 @@
 #include <Functions/StringUtil.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
+#include <common/detect_features.h>
 #include <fmt/core.h>
 
 #include <limits>
@@ -72,18 +73,19 @@ extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 template <typename A, typename B, typename Op>
 struct NumComparisonImpl
 {
-    /// If you don't specify NO_INLINE, the compiler will inline this function, but we don't need this as this function contains tight loop inside.
-    static void NO_INLINE vectorVector(const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    using ContainerA = PaddedPODArray<A>;
+    using ContainerB = PaddedPODArray<B>;
+
+    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt"))) void vectorVectorImpl_avx2(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
     {
         /** GCC 4.8.2 vectorizes a loop only if it is written in this form.
-          * In this case, if you loop through the array index (the code will look simpler),
+           * In this case, if you loop through the array index (the code will look simpler),
           *  the loop will not be vectorized.
           */
-
         size_t size = a.size();
-        const A * __restrict a_pos = &a[0];
-        const B * __restrict b_pos = &b[0];
-        UInt8 * __restrict c_pos = &c[0];
+        const A * __restrict a_pos = a.data();
+        const B * __restrict b_pos = b.data();
+        UInt8 * __restrict c_pos = c.data();
         const A * a_end = a_pos + size;
 
         while (a_pos < a_end)
@@ -95,11 +97,61 @@ struct NumComparisonImpl
         }
     }
 
-    static void NO_INLINE vectorConstant(const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c)
+    static __attribute__((target("avx,avx2"))) void vectorVectorImpl_sse4(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
     {
         size_t size = a.size();
-        const A * __restrict a_pos = &a[0];
-        UInt8 * __restrict c_pos = &c[0];
+        const A * __restrict a_pos = a.data();
+        const B * __restrict b_pos = b.data();
+        UInt8 * __restrict c_pos = c.data();
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply(*a_pos, *b_pos);
+            ++a_pos;
+            ++b_pos;
+            ++c_pos;
+        }
+    }
+
+    static __attribute__((noinline)) void vectorVectorImpl_generic(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = a.data();
+        const B * __restrict b_pos = b.data();
+        UInt8 * __restrict c_pos = c.data();
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply(*a_pos, *b_pos);
+            ++a_pos;
+            ++b_pos;
+            ++c_pos;
+        }
+    }
+
+    static void NO_INLINE vectorVector(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c)
+    {
+        if (common::cpu_feature_flags.avx || common::cpu_feature_flags.avx2)
+        {
+            vectorVectorImpl_avx2(a, b, c);
+        }
+        else if (common::cpu_feature_flags.sse || common::cpu_feature_flags.sse2 || common::cpu_feature_flags.sse3 || common::cpu_feature_flags.sse4_1 || common::cpu_feature_flags.sse4_2 || common::cpu_feature_flags.sse4a || common::cpu_feature_flags.popcnt)
+        {
+            vectorVectorImpl_sse4(a, b, c);
+        }
+        else
+        {
+            vectorVectorImpl_generic(a, b, c);
+        }
+    }
+
+    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt"))) void NO_INLINE vectorConstantImpl_avx2(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = a.data();
+        UInt8 * __restrict c_pos = c.data();
         const A * a_end = a_pos + size;
 
         while (a_pos < a_end)
@@ -110,7 +162,53 @@ struct NumComparisonImpl
         }
     }
 
-    static void constantVector(A a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c)
+    static __attribute__((target("avx,avx2"))) void NO_INLINE vectorConstantImpl_sse4(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = a.data();
+        UInt8 * __restrict c_pos = c.data();
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply(*a_pos, b);
+            ++a_pos;
+            ++c_pos;
+        }
+    }
+
+    static __attribute__((noinline)) void NO_INLINE vectorConstantImpl_generic(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = a.data();
+        UInt8 * __restrict c_pos = c.data();
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply(*a_pos, b);
+            ++a_pos;
+            ++c_pos;
+        }
+    }
+
+    static void NO_INLINE vectorConstant(const ContainerA & a, B b, PaddedPODArray<UInt8> & c)
+    {
+        if (common::cpu_feature_flags.avx || common::cpu_feature_flags.avx2)
+        {
+            vectorConstantImpl_avx2(a, b, c);
+        }
+        else if (common::cpu_feature_flags.sse || common::cpu_feature_flags.sse2 || common::cpu_feature_flags.sse3 || common::cpu_feature_flags.sse4_1 || common::cpu_feature_flags.sse4_2 || common::cpu_feature_flags.sse4a || common::cpu_feature_flags.popcnt)
+        {
+            vectorConstantImpl_sse4(a, b, c);
+        }
+        else
+        {
+            vectorConstantImpl_generic(a, b, c);
+        }
+    }
+
+    static void constantVector(A a, const ContainerB & b, PaddedPODArray<UInt8> & c)
     {
         NumComparisonImpl<B, A, typename Op::SymmetricOp>::vectorConstant(b, a, c);
     }
@@ -403,7 +501,7 @@ struct StringComparisonImpl
     {
         size_t size = a_offsets.size();
         ColumnString::Offset b_size = b.size() + 1;
-        const UInt8 * b_data = reinterpret_cast<const UInt8 *>(b.data());
+        const auto * b_data = reinterpret_cast<const UInt8 *>(b.data());
         for (size_t i = 0; i < size; ++i)
         {
             /// Trailing zero byte of the smaller string is included in the comparison.
@@ -462,7 +560,7 @@ struct StringEqualsImpl
     {
         size_t size = a_offsets.size();
         ColumnString::Offset b_n = b.size();
-        const UInt8 * b_data = reinterpret_cast<const UInt8 *>(b.data());
+        const auto * b_data = reinterpret_cast<const UInt8 *>(b.data());
         for (size_t i = 0; i < size; ++i)
             c[i] = positive == ((i == 0) ? (a_offsets[0] == b_n + 1 && !memcmp(&a_data[0], b_data, b_n)) : (a_offsets[i] - a_offsets[i - 1] == b_n + 1 && !memcmp(&a_data[a_offsets[i - 1]], b_data, b_n)));
     }
@@ -865,7 +963,7 @@ private:
                 throw Exception(fmt::format("String is too long for Date: {}", string_value));
 
             ColumnPtr parsed_const_date_holder = DataTypeDate().createColumnConst(block.rows(), UInt64(date));
-            const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
+            const auto * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
             executeNumLeftType<DataTypeDate::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date, left_is_num ? parsed_const_date : col_right_untyped);
         }
         else if (is_my_date || is_my_datetime)
@@ -873,7 +971,7 @@ private:
             Field parsed_time = parseMyDateTime(string_value.toString());
             const DataTypePtr & time_type = left_is_num ? left_type : right_type;
             ColumnPtr parsed_const_date_holder = time_type->createColumnConst(block.rows(), parsed_time);
-            const ColumnConst * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
+            const auto * parsed_const_date = static_cast<const ColumnConst *>(parsed_const_date_holder.get());
             executeNumLeftType<DataTypeMyTimeBase::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date, left_is_num ? parsed_const_date : col_right_untyped);
         }
         else if (is_date_time)
@@ -885,7 +983,7 @@ private:
                 throw Exception(fmt::format("String is too long for DateTime: {}", string_value));
 
             ColumnPtr parsed_const_date_time_holder = DataTypeDateTime().createColumnConst(block.rows(), UInt64(date_time));
-            const ColumnConst * parsed_const_date_time = static_cast<const ColumnConst *>(parsed_const_date_time_holder.get());
+            const auto * parsed_const_date_time = static_cast<const ColumnConst *>(parsed_const_date_time_holder.get());
             executeNumLeftType<DataTypeDateTime::FieldType>(block, result, left_is_num ? col_left_untyped : parsed_const_date_time, left_is_num ? parsed_const_date_time : col_right_untyped);
         }
 
