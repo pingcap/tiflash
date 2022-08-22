@@ -13,10 +13,11 @@
 // limitations under the License.
 
 #pragma once
-#include <common/types.h>
-#include <unordered_map>
-#include <Poco/Util/LayeredConfiguration.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <Poco/Util/LayeredConfiguration.h>
+#include <common/types.h>
+
+#include <unordered_map>
 
 namespace DB
 {
