@@ -97,6 +97,7 @@ size_t DeltaValueSpace::getValidCacheRows() const
 void DeltaValueSpace::recordRemoveColumnFilesPages(WriteBatches & wbs) const
 {
     persisted_file_set->recordRemoveColumnFilesPages(wbs);
+    mem_table_set->recordRemoveColumnFilesPages(wbs);
 }
 
 bool DeltaValueSpace::appendColumnFile(DMContext & /*context*/, const ColumnFilePtr & column_file)

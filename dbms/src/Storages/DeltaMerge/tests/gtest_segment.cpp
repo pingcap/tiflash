@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Common/CurrentMetrics.h>
+#include <Common/Logger.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <future>
 
 namespace DB
 {
@@ -28,6 +31,13 @@ class SegmentOperationTest : public SegmentTestBasic
 {
 protected:
     static void SetUpTestCase() {}
+
+    void SetUp() override
+    {
+        log = DB::Logger::get("SegmentOperationTest");
+    }
+
+    DB::LoggerPtr log;
 };
 
 TEST_F(SegmentOperationTest, Issue4956)
@@ -80,6 +90,188 @@ try
     options.is_common_handle = true;
     reloadWithOptions(options);
     randomSegmentTest(100);
+}
+CATCH
+
+TEST_F(SegmentOperationTest, WriteDuringSegmentMergeDelta)
+try
+{
+    SegmentTestOptions options;
+    reloadWithOptions(options);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    {
+        LOG_DEBUG(log, "beginSegmentMergeDelta");
+
+        // Start a segment merge and suspend it before applyMerge
+        auto sp_seg_merge_delta_apply = SyncPointCtl::enableInScope("before_Segment::applyMergeDelta");
+        auto th_seg_merge_delta = std::async([&]() {
+            mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID, /* check_rows */ false);
+        });
+        sp_seg_merge_delta_apply.waitAndPause();
+
+        LOG_DEBUG(log, "pausedBeforeApplyMergeDelta");
+
+        // flushed pack
+        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        sp_seg_merge_delta_apply.next();
+        th_seg_merge_delta.wait();
+
+        LOG_DEBUG(log, "finishApplyMergeDelta");
+    }
+
+    for (const auto & [seg_id, seg] : segments)
+    {
+        UNUSED(seg);
+        deleteRangeSegment(seg_id);
+        flushSegmentCache(seg_id);
+        mergeSegmentDelta(seg_id);
+    }
+    ASSERT_EQ(segments.size(), 1);
+
+    /// make sure all column file in delta value space is deleted
+    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
+    if (storage_pool->log_storage_v3)
+    {
+        storage_pool->log_storage_v3->gc(/* not_skip */ true);
+        storage_pool->data_storage_v3->gc(/* not_skip */ true);
+        ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
+        ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
+    }
+    if (storage_pool->log_storage_v2)
+    {
+        storage_pool->log_storage_v2->gc(/* not_skip */ true);
+        storage_pool->data_storage_v2->gc(/* not_skip */ true);
+        ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
+        ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
+    }
+}
+CATCH
+
+TEST_F(SegmentOperationTest, WriteDuringSegmentSplit)
+try
+{
+    SegmentTestOptions options;
+    reloadWithOptions(options);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    {
+        LOG_DEBUG(log, "beginSegmentSplit");
+
+        // Start a segment merge and suspend it before applyMerge
+        auto sp_seg_split_apply = SyncPointCtl::enableInScope("before_Segment::applySplit");
+        PageId new_seg_id;
+        auto th_seg_split = std::async([&]() {
+            auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, /* check_rows */ false);
+            ASSERT_TRUE(new_seg_id_opt.has_value());
+            new_seg_id = new_seg_id_opt.value();
+        });
+        sp_seg_split_apply.waitAndPause();
+
+        LOG_DEBUG(log, "pausedBeforeApplySplit");
+
+        // flushed pack
+        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        sp_seg_split_apply.next();
+        th_seg_split.wait();
+
+        LOG_DEBUG(log, "finishApplySplit");
+        mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id);
+    }
+
+    for (const auto & [seg_id, seg] : segments)
+    {
+        UNUSED(seg);
+        deleteRangeSegment(seg_id);
+        flushSegmentCache(seg_id);
+        mergeSegmentDelta(seg_id);
+    }
+    ASSERT_EQ(segments.size(), 1);
+
+    /// make sure all column file in delta value space is deleted
+    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
+    if (storage_pool->log_storage_v3)
+    {
+        storage_pool->log_storage_v3->gc(/* not_skip */ true);
+        storage_pool->data_storage_v3->gc(/* not_skip */ true);
+        ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
+        ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
+    }
+    if (storage_pool->log_storage_v2)
+    {
+        storage_pool->log_storage_v2->gc(/* not_skip */ true);
+        storage_pool->data_storage_v2->gc(/* not_skip */ true);
+        ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
+        ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
+    }
+}
+CATCH
+
+TEST_F(SegmentOperationTest, WriteDuringSegmentMerge)
+try
+{
+    SegmentTestOptions options;
+    reloadWithOptions(options);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    auto new_seg_id = new_seg_id_opt.value();
+
+    {
+        LOG_DEBUG(log, "beginSegmentMerge");
+
+        // Start a segment merge and suspend it before applyMerge
+        auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
+        auto th_seg_merge = std::async([&]() {
+            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /* check_rows */ false);
+        });
+        sp_seg_merge_apply.waitAndPause();
+
+        LOG_DEBUG(log, "pausedBeforeApplyMerge");
+
+        // flushed pack
+        writeSegment(new_seg_id, 100);
+        ingestDTFileIntoSegment(new_seg_id, 100);
+        sp_seg_merge_apply.next();
+        th_seg_merge.wait();
+
+        LOG_DEBUG(log, "finishApplyMerge");
+    }
+
+    for (const auto & [seg_id, seg] : segments)
+    {
+        UNUSED(seg);
+        deleteRangeSegment(seg_id);
+        flushSegmentCache(seg_id);
+        mergeSegmentDelta(seg_id);
+    }
+    ASSERT_EQ(segments.size(), 1);
+
+    /// make sure all column file in delta value space is deleted
+    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
+    if (storage_pool->log_storage_v3)
+    {
+        storage_pool->log_storage_v3->gc(/* not_skip */ true);
+        storage_pool->data_storage_v3->gc(/* not_skip */ true);
+        ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
+        ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
+    }
+    if (storage_pool->log_storage_v2)
+    {
+        storage_pool->log_storage_v2->gc(/* not_skip */ true);
+        storage_pool->data_storage_v2->gc(/* not_skip */ true);
+        ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
+        ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
+    }
 }
 CATCH
 
