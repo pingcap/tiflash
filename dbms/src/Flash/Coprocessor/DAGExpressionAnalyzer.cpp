@@ -518,12 +518,10 @@ void DAGExpressionAnalyzer::buildLeadLag(
     {
         const auto & sample_block = actions->getSampleBlock();
 
-        const auto first_arg = expr.children(0);
-        auto first_arg_name = getActions(first_arg, actions);
+        auto first_arg_name = getActions(expr.children(0), actions);
         auto first_arg_type = sample_block.getByName(first_arg_name).type;
-        
-        const auto third_arg = expr.children(2);
-        auto third_arg_name = getActions(third_arg, actions);
+
+        auto third_arg_name = getActions(expr.children(2), actions);
         auto third_arg_type = sample_block.getByName(third_arg_name).type;
 
         auto final_type = getLeastSupertype({first_arg_type, third_arg_type});

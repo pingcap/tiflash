@@ -22,6 +22,34 @@
 
 namespace DB::tests
 {
+TiDB::TP dataTypeToTP(const DataTypePtr & type)
+{
+    // TODO support more types.
+    switch (removeNullable(type)->getTypeId())
+    {
+    case TypeIndex::UInt8:
+    case TypeIndex::Int8:
+        return TiDB::TP::TypeTiny;
+    case TypeIndex::UInt16:
+    case TypeIndex::Int16:
+        return TiDB::TP::TypeShort;
+    case TypeIndex::UInt32:
+    case TypeIndex::Int32:
+        return TiDB::TP::TypeLong;
+    case TypeIndex::UInt64:
+    case TypeIndex::Int64:
+        return TiDB::TP::TypeLongLong;
+    case TypeIndex::String:
+        return TiDB::TP::TypeString;
+    case TypeIndex::Float32:
+        return TiDB::TP::TypeFloat;
+    case TypeIndex::Float64:
+        return TiDB::TP::TypeDouble;
+    default:
+        throw Exception("Unsupport type");
+    }
+}
+
 DAGContext & ExecutorTest::getDAGContext()
 {
     assert(dag_context_ptr != nullptr);

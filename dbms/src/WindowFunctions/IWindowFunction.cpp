@@ -196,12 +196,6 @@ private:
             "argument num {} of function {} isn't in [1, 3]",
             argument_types.size(),
             getName());
-        auto first_argument = removeNullable(argument_types[0]);
-        RUNTIME_CHECK_MSG(
-            first_argument->getTypeId() != TypeIndex::Float32,
-            "Illegal type {} of first argument of function {}",
-            first_argument->getName(),
-            getName());
         if (argument_types.size() >= 2)
         {
             auto second_argument = removeNullable(argument_types[1]);
@@ -213,6 +207,7 @@ private:
         }
         if (argument_types.size() == 3)
         {
+            auto first_argument = removeNullable(argument_types[0]);
             auto third_argument = removeNullable(argument_types[2]);
             RUNTIME_CHECK_MSG(
                 third_argument->equals(*first_argument),

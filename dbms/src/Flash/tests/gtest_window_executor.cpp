@@ -58,13 +58,6 @@ public:
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
             {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
              toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
-
-        context.addMockTable(
-            {"test_db", "test_table_for_lead_lag"},
-            {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}, {"value", TiDB::TP::TypeString}},
-            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-             toVec<Int64>("order", {1, 2, 3, 4, 5, 6, 7, 8}),
-             toVec<String>("value", {"1", "2", "3", "4", "5", "6", "7", "8"})});
     }
 
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
@@ -221,33 +214,6 @@ try
                        toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2}),
                        toNullableVec<Int64>("rank", {1, 2, 1, 1, 3, 3, 1, 1, 3, 3}),
                        toNullableVec<Int64>("dense_rank", {1, 2, 1, 1, 2, 2, 1, 1, 2, 2})}));
-}
-CATCH
-
-TEST_F(WindowExecutorTestRunner, testWindowFunctionLeadLag)
-try
-{
-    auto request = context
-                       .scan("test_db", "test_table_for_lead_lag")
-                       .sort({{"partition", false}, {"order", false}}, true)
-                       .window(Lead3(col("value"), lit(Field(static_cast<UInt64>(1))), lit(Field(String("0")))), {"order", false}, {"partition", false}, MockWindowFrame{})
-                       .build(context);
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
-                                          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-                                          toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"}),
-                                          toNullableVec<String>(/*lead*/ {"2", "3", "4", "0", "6", "7", "8", "0"})}));
-
-    request = context
-                  .scan("test_db", "test_table_for_lead_lag")
-                  .sort({{"partition", false}, {"order", false}}, true)
-                  .window(Lag3(col("value"), lit(Field(static_cast<UInt64>(1))), lit(Field(String("0")))), {"order", false}, {"partition", false}, MockWindowFrame{})
-                  .build(context);
-    executeWithConcurrency(request,
-                           createColumns({toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
-                                          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
-                                          toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"}),
-                                          toNullableVec<String>(/*lead*/ {"0", "1", "2", "3", "0", "5", "6", "7"})}));
 }
 CATCH
 
