@@ -95,8 +95,6 @@ public:
             std::mutex sm_lock;
             const SpaceMapPtr smap;
 
-            // The map capacity of the whole BlobFile
-            UInt64 file_total_caps = 0;
             // The max capacity hint of all available slots in SpaceMap
             // A hint means that it is not an absolutely accurate value after inserting data,
             // but is useful for quickly choosing BlobFile.
@@ -110,11 +108,10 @@ public:
             double sm_valid_rate = 0.0;
 
         public:
-            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_)
+            BlobStat(BlobFileId id_, SpaceMap::SpaceMapType sm_type, UInt64 sm_max_caps_, BlobStatType type_)
                 : id(id_)
-                , type(BlobStatType::NORMAL)
+                , type(type_)
                 , smap(SpaceMap::createSpaceMap(sm_type, 0, sm_max_caps_))
-                , file_total_caps(sm_max_caps_)
                 , sm_max_caps(sm_max_caps_)
             {}
 

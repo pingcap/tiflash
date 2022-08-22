@@ -114,14 +114,7 @@ void BlobStore::registerPaths()
 
 void BlobStore::reloadConfig(const BlobStore::Config & rhs)
 {
-    /// Don't reload config.file_limit_size here. Because there may be a potential race between write thread and gc thread.
-    /// For write thread, it will ignore all BlobFile which capacity is larger than config.file_limit_size.
-    /// For gc thread, if the contents of a BlobFile with capacity larger than config.file_limit_size is all removed, it will remove the BlobFile.
-    /// So if you reload config.file_limit_size with a larger value,
-    /// the write thread may see the change and select a BlobFile which capacity is larger than old config.file_limit_size but smaller than new value for write,
-    /// but the gc thread may not see the change and still think the BlobFile's capacity is larger than config.file_limit_size and remove it if all its contents have been removed.
-    /// And this may cause data loss.
-    //    config.file_limit_size = rhs.file_limit_size;
+    config.file_limit_size = rhs.file_limit_size;
     config.spacemap_type = rhs.spacemap_type;
     config.cached_fd_size = rhs.cached_fd_size;
     config.block_alignment_bytes = rhs.block_alignment_bytes;
@@ -509,7 +502,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
         auto remaining_valid_size = stat->removePosFromStat(offset, size, lock);
         // BlobFile which is read-only or with capacity larger than config.file_limit_size won't be reused for other write,
         // so it's safe and necessary to remove it here.
-        need_remove_stat = ((stat->isReadOnly() || stat->file_total_caps > config.file_limit_size) && remaining_valid_size == 0);
+        need_remove_stat = stat->isReadOnly() && (remaining_valid_size == 0);
     }
 
     // We don't need hold the BlobStat lock(Also can't do that).
@@ -1330,10 +1323,13 @@ BlobStatPtr BlobStore::BlobStats::createStat(BlobFileId blob_file_id, UInt64 max
 BlobStatPtr BlobStore::BlobStats::createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &)
 {
     LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}] [capacity={}]", blob_file_id, max_caps);
+    // Only BlobFile which total capacity is smaller or equal to config.file_limit_size can be reused for another write
+    auto stat_type = max_caps <= config.file_limit_size ? BlobStats::BlobStatType::NORMAL : BlobStats::BlobStatType::READ_ONLY;
     BlobStatPtr stat = std::make_shared<BlobStat>(
         blob_file_id,
         static_cast<SpaceMap::SpaceMapType>(config.spacemap_type.get()),
-        max_caps);
+        max_caps,
+        stat_type);
 
     PageFileIdAndLevel id_lvl{blob_file_id, 0};
     auto path = delegator->choosePath(id_lvl);
@@ -1404,11 +1400,9 @@ std::pair<BlobStatPtr, BlobFileId> BlobStore::BlobStats::chooseStat(size_t buf_s
         for (const auto & stat : stats_iter->second)
         {
             auto lock = stat->lock(); // TODO: will it bring performance regression?
-            // Only BlobFile which total capacity is smaller or equal to config.file_limit_size can be reused for another write
             if (stat->isNormal()
                 && stat->sm_max_caps >= buf_size
-                && stat->sm_valid_rate < smallest_valid_rate
-                && stat->file_total_caps <= config.file_limit_size)
+                && stat->sm_valid_rate < smallest_valid_rate)
             {
                 smallest_valid_rate = stat->sm_valid_rate;
                 stat_ptr = stat;
