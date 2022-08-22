@@ -443,5 +443,4 @@ void FlashService::setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_)
 {
     mpp_test_info = mpp_test_info_;
 }
-
 } // namespace DB

@@ -84,5 +84,4 @@ private:
     std::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
     std::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
 };
-
 } // namespace DB::tests

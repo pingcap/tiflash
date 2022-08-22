@@ -150,6 +150,4 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
     }
     throw Exception(fmt::format("Failed to get table columns by table_id '{}'", table_id));
 }
-
-
 } // namespace DB::tests

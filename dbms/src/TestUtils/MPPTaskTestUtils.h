@@ -19,6 +19,10 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
+#include <cstddef>
+
+#include "common/types.h"
+
 namespace DB::tests
 {
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
@@ -38,6 +42,10 @@ class MockServerAddrGenerator : public ext::Singleton<MockServerAddrGenerator>
 public:
     String nextAddr()
     {
+        if (port >= port_upper_bound)
+        {
+            throw Exception("Failed to get next server addr");
+        }
         return "0.0.0.0:" + std::to_string(port++);
     }
 
@@ -47,6 +55,7 @@ public:
     }
 
 private:
+    const Int64 port_upper_bound = 65536;
     std::atomic<Int64> port = 3931;
 };
 

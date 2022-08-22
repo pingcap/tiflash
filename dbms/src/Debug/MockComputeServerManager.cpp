@@ -97,5 +97,4 @@ void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<Fl
     server_map[partition_id] = std::move(server);
 }
 } // namespace tests
-
 } // namespace DB
