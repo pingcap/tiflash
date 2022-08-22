@@ -97,7 +97,7 @@ struct NumComparisonImpl
         }
     }
 
-    static __attribute__((target("avx,avx2"))) void vectorVectorImpl_sse4(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
+    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2"))) void vectorVectorImpl_sse4(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
     {
         size_t size = a.size();
         const A * __restrict a_pos = a.data();
@@ -162,7 +162,7 @@ struct NumComparisonImpl
         }
     }
 
-    static __attribute__((target("avx,avx2"))) void NO_INLINE vectorConstantImpl_sse4(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
+    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2"))) void NO_INLINE vectorConstantImpl_sse4(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
     {
         size_t size = a.size();
         const A * __restrict a_pos = a.data();
