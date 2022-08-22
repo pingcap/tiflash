@@ -332,7 +332,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
     {
         // If `ignore_delete` is true, we need the origin page id even if it is logical deleted.
         // Checkout the details in `PageDirectory::getNormalPageId`.
-        bool ok = ignore_delete ? true : (!is_deleted || seq < delete_ver.sequence);
+        bool ok = ignore_delete || (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
             return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
