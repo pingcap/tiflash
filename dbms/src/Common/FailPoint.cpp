@@ -101,8 +101,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_when_writing_to_dt_store)        \
     M(pause_when_ingesting_to_dt_store)      \
     M(pause_when_altering_dt_store)          \
-    M(pause_after_copr_streams_acquired)     \
-    M(pause_before_server_merge_one_delta)
+    M(pause_after_copr_streams_acquired)
 
 namespace FailPoints
 {
