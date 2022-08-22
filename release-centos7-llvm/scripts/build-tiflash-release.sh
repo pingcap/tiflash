@@ -50,9 +50,12 @@ rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
 if [ $CMAKE_BUILD_TYPE == "RELWITHDEBINFO" ]; then
   BUILD_DIR="$SRCPATH/release-centos7-llvm/build-release"
   ENABLE_FAILPOINTS="OFF"
+  JEMALLOC_NARENAS_40="OFF"
 else
   BUILD_DIR="$SRCPATH/release-centos7-llvm/build-debug"
   ENABLE_FAILPOINTS="ON"
+  JEMALLOC_NARENAS_40="ON"
+else
 fi
 rm -rf ${BUILD_DIR} && mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
 
@@ -62,6 +65,7 @@ cmake -S "${SRCPATH}" \
   -DENABLE_TESTING=OFF \
   -DENABLE_TESTS=OFF \
   -DENABLE_FAILPOINTS=${ENABLE_FAILPOINTS} \
+  -DJEMALLOC_NARENAS_40=${JEMALLOC_NARENAS_40} \
   -Wno-dev \
   -DUSE_CCACHE=OFF \
   -DRUN_HAVE_STD_REGEX=0 \

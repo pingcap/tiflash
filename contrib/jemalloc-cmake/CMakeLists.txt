@@ -87,10 +87,14 @@ if (ARCH_LINUX)
     # avoid spurious latencies and additional work associated with
     # MADV_DONTNEED. See
     # https://github.com/ClickHouse/ClickHouse/issues/11121 for motivation.
-    set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
-else()
+    if (JEMALLOC_NARENAS_40)
+        set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000,narenas:40")
+    else (JEMALLOC_NARENAS_40)
+        set (JEMALLOC_CONFIG_MALLOC_CONF "percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
+    endif (JEMALLOC_NARENAS_40)
+else(ARCH_LINUX)
     set (JEMALLOC_CONFIG_MALLOC_CONF "oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000")
-endif()
+endif(ARCH_LINUX)
 
 message (STATUS "jemalloc malloc_conf: ${JEMALLOC_CONFIG_MALLOC_CONF}")
 
