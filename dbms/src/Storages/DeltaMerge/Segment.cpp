@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
@@ -37,6 +38,7 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
@@ -91,6 +93,12 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char try_segment_logical_split[];
+extern const char force_segment_logical_split[];
+} // namespace FailPoints
 
 namespace DM
 {
@@ -868,9 +876,16 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
 {
     SYNC_FOR("before_Segment::prepareSplit");
 
-    if (!dm_context.enable_logical_split //
-        || segment_snap->stable->getPacks() <= 3 //
-        || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+    bool try_logical_split = dm_context.enable_logical_split //
+        && segment_snap->stable->getPacks() > 3 //
+        && segment_snap->delta->getRows() <= segment_snap->stable->getRows();
+#ifdef FIU_ENABLE
+    bool force_logical_split = false;
+    fiu_do_on(FailPoints::try_segment_logical_split, { try_logical_split = true; });
+    fiu_do_on(FailPoints::force_segment_logical_split, { try_logical_split = true; force_logical_split = true; });
+#endif
+
+    if (!try_logical_split)
     {
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
     }
@@ -887,6 +902,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
                 "Got bad split point [{}] for segment {}, fall back to split physical.",
                 (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value"),
                 info());
+#ifdef FIU_ENABLE
+            RUNTIME_CHECK(!force_logical_split, Exception, "Can not perform logical split while failpoint `force_segment_logical_split` is true");
+#endif
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
         }
         else
@@ -1172,6 +1190,8 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
 
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
+
+    SYNC_FOR("before_Segment::applyMerge"); // pause without holding the lock on segments to be merged
 
     auto left_lock = left->mustGetUpdateLock();
     auto right_lock = right->mustGetUpdateLock();
