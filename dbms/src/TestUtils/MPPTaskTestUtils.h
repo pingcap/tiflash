@@ -19,10 +19,6 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
-#include <cstddef>
-
-#include "common/types.h"
-
 namespace DB::tests
 {
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
