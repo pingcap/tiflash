@@ -264,8 +264,11 @@ try
         ASSERT_TRUE(new_seg_id2_opt.has_value());
         new_seg_id = new_seg_id2_opt.value();
 
-        const auto file_usage = storage_pool->getLogFileUsage();
-        LOG_FMT_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
+        if (storage_pool)
+        {
+            const auto file_usage = storage_pool->getLogFileUsage();
+            LOG_FMT_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
+        }
     }
     for (const auto & [seg_id, seg] : segments)
     {
@@ -274,9 +277,13 @@ try
         flushSegmentCache(seg_id);
         mergeSegmentDelta(seg_id);
     }
-    storage_pool->gc();
-    const auto file_usage = storage_pool->getLogFileUsage();
-    LOG_FMT_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
+    // TODO: make it compatible run under ps v2
+    if (storage_pool)
+    {
+        storage_pool->gc();
+        const auto file_usage = storage_pool->getLogFileUsage();
+        LOG_FMT_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
+    }
 }
 CATCH
 
