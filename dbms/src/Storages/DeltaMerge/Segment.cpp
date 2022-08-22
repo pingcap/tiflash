@@ -612,6 +612,8 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
 
+    SYNC_FOR("before_Segment::applyMergeDelta"); // pause without holding the lock on the segment
+
     auto lock = mustGetUpdateLock();
     auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
 
@@ -701,6 +703,8 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
     split_info.other_stable->enableDMFilesGC();
+
+    SYNC_FOR("before_Segment::applySplit"); // pause without holding the lock on the segment
 
     auto lock = mustGetUpdateLock();
     auto segment_pair = applySplit(dm_context, segment_snap, wbs, split_info);
@@ -1198,6 +1202,8 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
 
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
+
+    SYNC_FOR("before_Segment::applyMerge"); // pause without holding the lock on segments to be merged
 
     auto left_lock = left->mustGetUpdateLock();
     auto right_lock = right->mustGetUpdateLock();
