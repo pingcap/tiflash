@@ -471,7 +471,7 @@ else (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are disabled")
 endif (ENABLE_FAILPOINTS)
 
-# Since JEMALLOC_NARENAS_COUNT is introduced for very limited usage, default to -1
+# Since JEMALLOC_NARENAS is introduced for very limited usage, default to -1
 set (JEMALLOC_NARENAS_DEFAULT -1)
 option (JEMALLOC_NARENAS "Set Jemalloc narenas " ${JEMALLOC_NARENAS_DEFAULT})
 if (JEMALLOC_NARENAS LESS_EQUAL 0)
