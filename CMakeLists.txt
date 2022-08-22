@@ -476,9 +476,9 @@ set (JEMALLOC_NARENAS_DEFAULT -1)
 option (JEMALLOC_NARENAS "Set Jemalloc narenas " ${JEMALLOC_NARENAS_DEFAULT})
 if (JEMALLOC_NARENAS LESS_EQUAL 0)
     message (STATUS "No jemalloc narenas settings")
-else
-    message (STATUS "Set jemalloc narenas to ${JEMALLOC_NARENAS}")
-endif
+else (JEMALLOC_NARENAS LESS_EQUAL 0)
+    message (STATUS "Set jemalloc narenas ${JEMALLOC_NARENAS}")
+endif (JEMALLOC_NARENAS LESS_EQUAL 0)
 
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
