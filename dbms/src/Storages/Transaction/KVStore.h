@@ -70,6 +70,7 @@ class ReadIndexWorkerManager;
 using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 class ReadIndexStressTest;
 struct FileUsageStatistics;
+class PathPool;
 class RegionPersister;
 
 /// TODO: brief design document.
@@ -77,7 +78,7 @@ class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_);
-    void restore(const TiFlashRaftProxyHelper *);
+    void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(RegionID region_id) const;
 

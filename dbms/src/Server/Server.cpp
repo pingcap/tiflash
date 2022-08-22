@@ -1229,8 +1229,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
             throw Exception("Raft Proxy Helper is not set, should not happen");
+        auto & path_pool = global_context->getPathPool();
         /// initialize TMTContext
-        global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
+        global_context->getTMTContext().restore(path_pool, tiflash_instance_wrap.proxy_helper);
     }
 
     /// setting up elastic thread pool

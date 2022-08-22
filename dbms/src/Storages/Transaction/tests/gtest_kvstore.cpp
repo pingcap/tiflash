@@ -14,6 +14,7 @@
 
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
+#include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
@@ -53,16 +54,29 @@ private:
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
     static void testRaftChangePeer(KVStore & kvs, TMTContext & tmt);
     static void testRaftMergeRollback(KVStore & kvs, TMTContext & tmt);
+
+    static std::unique_ptr<PathPool> createCleanPathPool(const String & path)
+    {
+        // Drop files on disk
+        Poco::File file(path);
+        if (file.exists())
+            file.remove(true);
+        file.createDirectories();
+
+        auto & global_ctx = TiFlashTestEnv::getGlobalContext();
+        auto path_capacity = global_ctx.getPathCapacity();
+        auto provider = global_ctx.getFileProvider();
+        // Create a PathPool instance on the clean directory
+        Strings main_data_paths{path};
+        return std::make_unique<PathPool>(main_data_paths, main_data_paths, Strings{}, path_capacity, provider);
+    };
 };
 
 void RegionKVStoreTest::testNewProxy()
 {
     std::string path = TiFlashTestEnv::getTemporaryPath("/region_kvs_tmp") + "/basic";
 
-    Poco::File file(path);
-    if (file.exists())
-        file.remove(true);
-    file.createDirectories();
+    auto path_pool = createCleanPathPool(path);
 
     auto ctx = TiFlashTestEnv::getContext(
         DB::Settings(),
@@ -76,7 +90,7 @@ void RegionKVStoreTest::testNewProxy()
         proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(100);
     }
-    kvs.restore(&proxy_helper);
+    kvs.restore(*path_pool, &proxy_helper);
     {
         auto store = metapb::Store{};
         store.set_id(1234);
@@ -119,10 +133,7 @@ void RegionKVStoreTest::testReadIndex()
 {
     std::string path = TiFlashTestEnv::getTemporaryPath("/region_kvs_tmp") + "/basic";
 
-    Poco::File file(path);
-    if (file.exists())
-        file.remove(true);
-    file.createDirectories();
+    auto path_pool = createCleanPathPool(path);
 
     auto ctx = TiFlashTestEnv::getContext(
         DB::Settings(),
@@ -142,7 +153,7 @@ void RegionKVStoreTest::testReadIndex()
         proxy_instance.testRunNormal(over);
     });
     KVStore & kvs = *ctx.getTMTContext().getKVStore();
-    kvs.restore(&proxy_helper);
+    kvs.restore(*path_pool, &proxy_helper);
     ASSERT_EQ(kvs.getProxyHelper(), &proxy_helper);
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
@@ -828,16 +839,11 @@ void RegionKVStoreTest::testKVStore()
 {
     std::string path = TiFlashTestEnv::getTemporaryPath("/region_kvs_tmp") + "/basic";
 
-    Poco::File file(path);
-    if (file.exists())
-        file.remove(true);
-    file.createDirectories();
+    auto path_pool = createCleanPathPool(path);
 
-    auto ctx = TiFlashTestEnv::getContext(
-        DB::Settings(),
-        Strings{
-            path,
-        });
+    auto ctx = TiFlashTestEnv::getContext(DB::Settings(), Strings{
+                                                              path,
+                                                          });
     KVStore & kvs = *ctx.getTMTContext().getKVStore();
     MockRaftStoreProxy proxy_instance;
     TiFlashRaftProxyHelper proxy_helper;
@@ -845,7 +851,7 @@ void RegionKVStoreTest::testKVStore()
         proxy_helper = MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr{&proxy_instance});
         proxy_instance.init(100);
     }
-    kvs.restore(&proxy_helper);
+    kvs.restore(*path_pool, &proxy_helper);
     {
         // Run without read-index workers
 

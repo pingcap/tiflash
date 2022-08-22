@@ -50,13 +50,13 @@ KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_met
     // default config about compact-log: period 120s, rows 40k, bytes 32MB.
 }
 
-void KVStore::restore(const TiFlashRaftProxyHelper * proxy_helper)
+void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
     auto task_lock = genTaskLock();
     auto manage_lock = genRegionWriteLock(task_lock);
 
     this->proxy_helper = proxy_helper;
-    manage_lock.regions = region_persister->restore(proxy_helper);
+    manage_lock.regions = region_persister->restore(path_pool, proxy_helper);
 
     LOG_FMT_INFO(log, "Restored {} regions", manage_lock.regions.size());
 
