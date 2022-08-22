@@ -471,14 +471,14 @@ else (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are disabled")
 endif (ENABLE_FAILPOINTS)
 
-# Since JEMALLOC_NARENAS_40 is introduced for very limited usage, just hard code to 40
-set (JEMALLOC_NARENAS_40_DEFAULT OFF)
-option (JEMALLOC_NARENAS_40 "Set Jemalloc narenas to 40" ${JEMALLOC_NARENAS_40_DEFAULT})
-if (JEMALLOC_NARENAS_40)
-    message (STATUS "Set Jemalloc narenas to 40")
-else (JEMALLOC_NARENAS_40)
-    message (STATUS "No settings of Jemalloc narenas")
-endif (JEMALLOC_NARENAS_40)
+# Since JEMALLOC_NARENAS_COUNT is introduced for very limited usage, default to -1
+set (JEMALLOC_NARENAS_DEFAULT -1)
+option (JEMALLOC_NARENAS "Set Jemalloc narenas " ${JEMALLOC_NARENAS_DEFAULT})
+if (JEMALLOC_NARENAS LESS_EQUAL 0)
+    message (STATUS "No jemalloc narenas settings")
+else
+    message (STATUS "Set jemalloc narenas to ${JEMALLOC_NARENAS}")
+endif
 
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
