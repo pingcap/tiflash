@@ -1443,7 +1443,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool keep_last_valid_var_entry)
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-            all_del_entries,
+            &all_del_entries,
             keep_last_valid_var_entry);
 
         if (all_deleted)
