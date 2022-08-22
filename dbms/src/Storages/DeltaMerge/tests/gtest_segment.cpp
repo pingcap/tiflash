@@ -460,7 +460,6 @@ try
         flushSegmentCache(seg_id);
         mergeSegmentDelta(seg_id);
     }
-
     // TODO: make it compatible run under ps v2
     if (storage_pool)
     {
