@@ -6180,7 +6180,7 @@
           "color": {
             "cardColor": "#b4ff00",
             "colorScale": "sqrt",
-            "colorScheme": "interpolateOranges",
+            "colorScheme": "interpolateSpectral",
             "exponent": 0.5,
             "mode": "spectrum"
           },
