@@ -6184,7 +6184,7 @@
             "exponent": 0.5,
             "mode": "spectrum"
           },
-          "dataFormat": "timeseries",
+          "dataFormat": "tsbuckets",
           "datasource": "${DS_TEST-CLUSTER}",
           "fieldConfig": {
             "defaults": {},

@@ -151,7 +151,7 @@ namespace DB
         F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                          \
-        F(type_v3, {{"type", "v3"}}, EqualWidthBuckets{1 * 1024 * 1024, 100, 10 * 1024 * 1024}))                                          \
+        F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                        \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
     M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
