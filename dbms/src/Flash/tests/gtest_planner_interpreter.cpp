@@ -614,7 +614,7 @@ try
 Union: <for test>
  Expression x 10: <final projection>
   SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+   Expression: <expr after window>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      MergeSorting, limit = 0
       Union: <for partial order>
@@ -634,7 +634,7 @@ Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    SharedQuery: <restore concurrency>
-    Expression: <cast after window>
+    Expression: <expr after window>
      Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
       MergeSorting, limit = 0
        Union: <for partial order>
@@ -655,7 +655,7 @@ Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    SharedQuery: <restore concurrency>
-    Expression: <cast after window>
+    Expression: <expr after window>
      Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
       Union: <merge into one for window input>
        Expression x 10: <projection>
@@ -684,7 +684,7 @@ try
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <cast after window>
+  Expression: <expr after window>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     MergeSorting: <enable fine grained shuffle>, limit = 0
      PartialSorting: <enable fine grained shuffle>: limit = 0
@@ -719,7 +719,7 @@ Union: <for test>
 Union: <for test>
  Expression x 10: <final projection>
   SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+   Expression: <expr after window>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      MergeSorting, limit = 0
       Union: <for partial order>

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Server/FlashGrpcServerHolder.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -182,6 +183,8 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         flash_grpc_server.reset();
         if (GRPCCompletionQueuePool::global_instance)
             GRPCCompletionQueuePool::global_instance->markShutdown();
+
+        GRPCCompletionQueuePool::global_instance = nullptr;
         LOG_FMT_INFO(log, "Shut down flash grpc server");
 
         /// Close flash service.
@@ -196,5 +199,15 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
         std::terminate();
     }
+}
+
+void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
+{
+    flash_service->setMockStorage(mock_storage);
+}
+
+void FlashGrpcServerHolder::setMockMPPServerInfo(MockMPPServerInfo info)
+{
+    flash_service->setMockMPPServerInfo(info);
 }
 } // namespace DB
