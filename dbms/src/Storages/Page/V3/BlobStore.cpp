@@ -502,7 +502,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     {
         auto lock = stat->lock();
         auto remaining_valid_size = stat->removePosFromStat(offset, size, lock);
-        // BlobFile which is read-only or with capacity larger than config.file_limit_size won't be reused for other write,
+        // BlobFile which is read-only won't be reused for another writing,
         // so it's safe and necessary to remove it here.
         need_remove_stat = stat->isReadOnly() && (remaining_valid_size == 0);
     }
