@@ -24,18 +24,18 @@ template <typename T>
 class CircularScanList
 {
 public:
-    using Value = std::shared_ptr<T>;
+    using ElemPtr = std::shared_ptr<T>;
 
     CircularScanList()
         : last_itr(l.end())
     {}
 
-    void add(const Value & ptr)
+    void add(const ElemPtr & ptr)
     {
         l.push_back(ptr);
     }
 
-    Value next()
+    ElemPtr next()
     {
         last_itr = nextItr(last_itr);
         while (!l.empty())
@@ -70,7 +70,7 @@ public:
         return {valid, invalid};
     }
 
-    Value get(uint64_t pool_id) const
+    ElemPtr get(uint64_t pool_id) const
     {
         for (const auto & p : l)
         {
@@ -83,7 +83,7 @@ public:
     }
 
 private:
-    using Iter = typename std::list<Value>::iterator;
+    using Iter = typename std::list<ElemPtr>::iterator;
     Iter nextItr(Iter itr)
     {
         if (itr == l.end() || std::next(itr) == l.end())
@@ -99,10 +99,10 @@ private:
     bool needScheduled(Iter itr)
     {
         // If other components hold this SegmentReadTaskPool, schedule it for read blocks or clean MergedTaskPool if necessary.
-        return (*itr)->valid() || itr->use_count() > 1;
+        return itr->use_count() > 1;
     }
 
-    std::list<Value> l;
+    std::list<ElemPtr> l;
     Iter last_itr;
 };
 
