@@ -154,6 +154,8 @@ class AsyncTunnelSender : public TunnelSender
 public:
     AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, grpc_call * call_);
 
+    virtual ~AsyncTunnelSender();
+
     virtual bool push(const mpp::MPPDataPacket & data) override;
     virtual bool finish() override;
 

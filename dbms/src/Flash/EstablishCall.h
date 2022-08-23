@@ -54,11 +54,13 @@ public:
 
     ~EstablishCallData();
 
-    void setAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_);
-
     bool write(const mpp::MPPDataPacket & packet) override;
 
     void writeDone(const ::grpc::Status & status) override;
+
+    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override;
+
+    grpc_call * grpcCall() override;
 
     void writeErr(const mpp::MPPDataPacket & packet);
 
@@ -74,8 +76,6 @@ public:
         grpc::ServerCompletionQueue * cq,
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
-
-    grpc_call * grpc_call();
 
 private:
     void initRpc();

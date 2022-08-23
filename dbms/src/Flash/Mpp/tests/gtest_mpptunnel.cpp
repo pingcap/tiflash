@@ -128,67 +128,27 @@ using MockTerminateLocalReaderPtr = std::shared_ptr<MockTerminateLocalReader>;
 class MockAsyncWriter : public PacketWriter
 {
 public:
-    explicit MockAsyncWriter() {}
+    MockAsyncWriter() = default;
 
     bool write(const mpp::MPPDataPacket & packet) override
     {
         write_packet_vec.push_back(packet.data());
-        // Simulate the async process, write success then check if exist msg, then write again
-        if (async_sender->isSendQueueNextPopNonBlocking())
-        {
-            async_sender->sendOne();
-        }
         return true;
     }
 
-    void tryFlushOne() override
+    void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> & async_tunnel_sender_) override
     {
-        if (ready && async_sender->isSendQueueNextPopNonBlocking())
-        {
-            async_sender->sendOne();
-        }
-        ready = true;
+        async_tunnel_sender = async_tunnel_sender_;
     }
-    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override
+
+    grpc_call * grpcCall() override
     {
-        async_sender = async_tunnel_sender_;
+        // Hack: make grpc_call not null to pass subsequent assert.
+        return (grpc_call *)1;
     }
-    AsyncTunnelSenderPtr async_sender;
+
+    std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::vector<String> write_packet_vec;
-    bool ready = false;
-};
-
-class MockFailedAsyncWriter : public PacketWriter
-{
-public:
-    explicit MockFailedAsyncWriter() {}
-    bool write(const mpp::MPPDataPacket & packet) override
-    {
-        write_packet_vec.push_back(packet.data());
-        // Simulate the async process, write success then check if exist msg, then write again
-        if (async_sender->isSendQueueNextPopNonBlocking())
-        {
-            async_sender->sendOne();
-        }
-        return false;
-    }
-
-    void tryFlushOne() override
-    {
-        if (ready && async_sender->isSendQueueNextPopNonBlocking())
-        {
-            async_sender->sendOne();
-        }
-        ready = true;
-    }
-
-    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override
-    {
-        async_sender = async_tunnel_sender_;
-    }
-    AsyncTunnelSenderPtr async_sender;
-    std::vector<String> write_packet_vec;
-    bool ready = false;
 };
 
 class TestMPPTunnel : public testing::Test
@@ -647,28 +607,6 @@ try
     GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec.size(), 0);
 }
 CATCH
-
-TEST_F(TestMPPTunnel, AsyncWriteError)
-{
-    try
-    {
-        auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
-        std::unique_ptr<PacketWriter> async_writer_ptr = std::make_unique<MockFailedAsyncWriter>();
-        mpp_tunnel_ptr->connect(async_writer_ptr.get());
-        GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-        auto data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
-        data_packet_ptr->set_data("First");
-        mpp_tunnel_ptr->write(*data_packet_ptr);
-        data_packet_ptr->set_data("Second");
-        mpp_tunnel_ptr->write(*data_packet_ptr);
-        mpp_tunnel_ptr->waitForFinish();
-        GTEST_FAIL();
-    }
-    catch (Exception & e)
-    {
-        GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, 0000_0001 meet error: grpc writes failed.");
-    }
-}
 
 } // namespace tests
 } // namespace DB

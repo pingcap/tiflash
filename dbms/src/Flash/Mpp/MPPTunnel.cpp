@@ -207,10 +207,9 @@ void MPPTunnel::connect(PacketWriter * writer)
         }
         case TunnelSenderMode::ASYNC_GRPC:
         {
-            auto * calldata = dynamic_cast<EstablishCallData *>(writer);
-            RUNTIME_ASSERT(calldata != nullptr, log, "Async writer's type must be EstablishCallData");
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, calldata->grpc_call());
-            calldata->setAsyncTunnelSender(async_tunnel_sender);
+            RUNTIME_ASSERT(writer != nullptr, log, "Async writer shouldn't be null");
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, writer->grpcCall());
+            writer->attachAsyncTunnelSender(async_tunnel_sender);
             tunnel_sender = async_tunnel_sender;
             break;
         }
@@ -352,7 +351,20 @@ AsyncTunnelSender::AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, co
     : TunnelSender(queue_size, log_, tunnel_id_)
     , call(call_)
     , tag(nullptr)
-{}
+{
+    RUNTIME_ASSERT(call != nullptr, log, "call is null");
+}
+
+AsyncTunnelSender::~AsyncTunnelSender()
+{
+    if (tag != nullptr)
+    {
+        LOG_ERROR(log, "tag is not null in deconstruction, tag's memory may leak");
+#ifndef NDEBUG
+        assert(false);
+#endif
+    }
+}
 
 bool AsyncTunnelSender::push(const mpp::MPPDataPacket & data)
 {

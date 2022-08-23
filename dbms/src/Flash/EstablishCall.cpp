@@ -50,12 +50,6 @@ EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::
     return new EstablishCallData(service, cq, notify_cq, is_shutdown);
 }
 
-void EstablishCallData::setAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
-{
-    stopwatch = std::make_shared<Stopwatch>();
-    async_tunnel_sender = async_tunnel_sender_;
-}
-
 void EstablishCallData::responderFinish(const grpc::Status & status)
 {
     responder.Finish(status, this);
@@ -113,6 +107,18 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
     }
     responderFinish(status);
 }
+
+void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
+{
+    stopwatch = std::make_shared<Stopwatch>();
+    async_tunnel_sender = async_tunnel_sender_;
+}
+
+grpc_call * EstablishCallData::grpcCall()
+{
+    return ctx.c_call();
+}
+
 
 void EstablishCallData::cancel()
 {
@@ -180,11 +186,6 @@ void EstablishCallData::sendOne()
     {
         writeDone(grpc::Status::OK);
     }
-}
-
-grpc_call * EstablishCallData::grpc_call()
-{
-    return ctx.c_call();
 }
 
 } // namespace DB
