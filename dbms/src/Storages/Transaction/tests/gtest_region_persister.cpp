@@ -230,18 +230,8 @@ public:
             /*enable_raft_compatible_mode_=*/true);
     }
 
-    void runTest(const String & path, bool sync_on_write);
-    void testFunc(const String & path, const PageStorage::Config & config, int region_num, bool is_gc, bool clean_up);
-
 protected:
     String dir_path;
-
-    DB::Timestamp tso = 0;
-
-    static String getPageStorageV3MetaPath(String & path)
-    {
-        return path + "/page/kvstore/wal/log_1_0";
-    }
 
     std::unique_ptr<PathPool> mocked_path_pool;
 };
