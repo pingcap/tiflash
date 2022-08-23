@@ -20,16 +20,9 @@ void TrackedMppDataPacket::trackAlloc() const
 {
     if (size)
     {
-        try
+        if (memory_tracker)
         {
-            if (memory_tracker)
-            {
-                memory_tracker->alloc(size);
-            }
-        }
-        catch (...)
-        {
-            std::rethrow_exception(std::current_exception());
+            memory_tracker->alloc(size);
         }
     }
 }
