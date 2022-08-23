@@ -399,7 +399,7 @@ try
 CATCH
 
 
-TEST_F(SegmentOperationTest, Issue5570Case2)
+TEST_F(SegmentOperationTest, DeltaPagesAfterDeltaMerge)
 try
 {
     {
@@ -419,7 +419,10 @@ try
     ASSERT_TRUE(new_seg_id_opt.has_value());
     auto new_seg_id = new_seg_id_opt.value();
 
-    const auto storage_pool = db_context->getGlobalContext().getGlobalStoragePool();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(0, 5);
+
     for (size_t round = 0; round < 50; ++round)
     {
         LOG_DEBUG(log, "beginSegmentMerge");
@@ -432,9 +435,12 @@ try
         sp_seg_merge_apply.waitAndPause();
         LOG_DEBUG(log, "pausedBeforeApplyMerge");
 
-        // non-flushed pack
+        // randomly flushed or non flushed column file
         writeSegment(new_seg_id, 100);
-        // flushSegmentCache(new_seg_id); // do not flush
+        if (auto r = distrib(gen); r > 0)
+        {
+            flushSegmentCache(new_seg_id); // do not flush
+        }
 
         // Finish the segment merge
         LOG_DEBUG(log, "continueApplyMerge");
@@ -448,9 +454,10 @@ try
         ASSERT_TRUE(new_seg_id2_opt.has_value());
         new_seg_id = new_seg_id2_opt.value();
 
-        const auto file_usage = storage_pool->getLogFileUsage();
-        LOG_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
+        const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
+        LOG_FMT_DEBUG(log, "log valid size on disk: {}", file_usage.total_valid_size);
     }
+    // apply delete range && flush && delta-merge on all segments
     for (const auto & [seg_id, seg] : segments)
     {
         UNUSED(seg);
@@ -458,9 +465,27 @@ try
         flushSegmentCache(seg_id);
         mergeSegmentDelta(seg_id);
     }
-    storage_pool->gc();
-    const auto file_usage = storage_pool->getLogFileUsage();
-    LOG_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
+
+    {
+        /// make sure all column file in delta value space is deleted
+        ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
+        if (storage_pool->log_storage_v3)
+        {
+            storage_pool->log_storage_v3->gc(/* not_skip */ true);
+            storage_pool->data_storage_v3->gc(/* not_skip */ true);
+            EXPECT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
+        }
+        if (storage_pool->log_storage_v2)
+        {
+            storage_pool->log_storage_v2->gc(/* not_skip */ true);
+            storage_pool->data_storage_v2->gc(/* not_skip */ true);
+            EXPECT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
+        }
+
+        const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
+        LOG_FMT_DEBUG(log, "All delta-merged, log valid size on disk: {}", file_usage.total_valid_size);
+        EXPECT_EQ(file_usage.total_valid_size, 0);
+    }
 }
 CATCH
 
