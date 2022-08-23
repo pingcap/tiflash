@@ -240,13 +240,6 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     const size_t all_page_data_size = wb.getTotalDataSize();
 
-    // If the WriteBatch is too big, we will split the Writes in the WriteBatch to different `BlobFile`.
-    // This can avoid allocating a big buffer for writing data and can smooth memory usage.
-    if (all_page_data_size > config.file_limit_size)
-    {
-        return handleLargeWrite(wb, write_limiter);
-    }
-
     PageEntriesEdit edit;
 
     auto ns_id = wb.getNamespaceId();
@@ -280,6 +273,15 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
         }
         return edit;
+    }
+
+    GET_METRIC(tiflash_storage_page_write_batch_size).Observe(all_page_data_size);
+
+    // If the WriteBatch is too big, we will split the Writes in the WriteBatch to different `BlobFile`.
+    // This can avoid allocating a big buffer for writing data and can smooth memory usage.
+    if (all_page_data_size > config.file_limit_size)
+    {
+        return handleLargeWrite(wb, write_limiter);
     }
 
     char * buffer = static_cast<char *>(alloc(all_page_data_size));
