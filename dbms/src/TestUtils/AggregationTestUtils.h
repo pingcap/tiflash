@@ -29,7 +29,7 @@ public:
     {
         AggregateFunctionPtr agg_ptr = DB::AggregateFunctionFactory::instance().get(agg_name, data_types, {});
         const DataTypePtr & ret_type = agg_ptr->getReturnType();
-        if (ret_type->getName() == expect_type->getName())
+        if (ret_type->equals(*expect_type))
             return ::testing::AssertionSuccess();
         return ::testing::AssertionFailure() << "Expect type: " << expect_type->getName() << " Actual type: " << ret_type->getName();
     }
