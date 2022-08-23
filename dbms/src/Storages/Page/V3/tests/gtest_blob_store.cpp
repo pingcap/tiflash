@@ -1697,8 +1697,8 @@ try
     PageEntryV3 entry_from_write1;
     PageEntryV3 entry_from_write2;
     PageEntryV3 entry_from_write3;
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
         size_t size_100 = 100;
         size_t size_500 = 500;
         size_t size_200 = 200;
@@ -1726,16 +1726,11 @@ try
     config_with_small_file_limit_size.file_limit_size = 400;
     config_with_small_file_limit_size.heavy_gc_valid_rate = 0.99;
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
-        blob_store.registerPaths();
-
-        blob_store.blob_stats.restoreByEntry(entry_from_write1);
-        blob_store.blob_stats.restoreByEntry(entry_from_write2);
-        blob_store.blob_stats.restoreByEntry(entry_from_write3);
-        blob_store.blob_stats.restore();
+        blob_store.reloadConfig(config_with_small_file_limit_size);
 
         Poco::File file1(blob_store.getBlobFile(1)->getPath());
         ASSERT_EQ(file1.getSize(), 800);
+        ASSERT_TRUE(blob_store.blob_stats.blobIdToStat(1)->isNormal()); // BlobStat type doesn't change after reload
         blob_store.remove({entry_from_write3});
         auto blob_need_gc = blob_store.getGCStats();
         ASSERT_EQ(blob_need_gc.size(), 0);
