@@ -36,13 +36,21 @@ public:
         return Poco::Path(path).absolute().toString();
     }
 
-    static void tryRemovePath(const std::string & path)
+    static void tryRemovePath(const std::string & path, bool recreate = false)
     {
         try
         {
-            if (Poco::File p(path); p.exists())
+            // drop the data on disk
+            Poco::File p(path);
+            if (p.exists())
             {
                 p.remove(true);
+            }
+
+            // re-create empty directory for testing
+            if (recreate)
+            {
+                p.createDirectories();
             }
         }
         catch (...)
