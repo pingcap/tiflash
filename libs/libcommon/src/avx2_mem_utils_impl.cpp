@@ -30,4 +30,9 @@ bool avx2_mem_equal(const char * p1, const char * p2, size_t n)
     return mem_utils::avx2_mem_equal(p1, p2, n);
 }
 
+const char * avx2_memchr(const char * src, size_t n, char target)
+{
+    return mem_utils::avx2_memchr(src, n, target);
+}
+
 #endif

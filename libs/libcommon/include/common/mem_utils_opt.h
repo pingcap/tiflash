@@ -25,6 +25,7 @@
 // - return the position where `needle` occur first
 size_t avx2_strstr(std::string_view src, std::string_view needle);
 size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k);
+const char * avx2_memchr(const char * src, size_t n, char target);
 
 bool avx2_mem_equal(const char * p1, const char * p2, size_t n);
 

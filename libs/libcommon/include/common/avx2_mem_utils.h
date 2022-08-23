@@ -46,34 +46,38 @@ constexpr int BLOCK32_SIZE = sizeof(Block32);
 using Block16 = __m128i;
 constexpr int BLOCK16_SIZE = sizeof(Block16);
 constexpr auto Block32Mask = std::numeric_limits<uint32_t>::max();
+constexpr auto AVX2_UNROLL_NUM = 4;
 
 // `N` is `1U << xxx`
 #define OFFSET_ALIGNED(ADDR, N) ((ADDR) % (N)) // (ADDR) & (N-1)
 #define ALIGNED_ADDR(ADDR, N) ((ADDR) / (N) * (N)) // (ADDR) & (-N)
 
+FLATTEN_INLINE_PURE static inline bool check_block32_eq(const char * a, const char * b)
+{
+    auto data = _mm256_xor_si256(
+        _mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(a)),
+        _mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(b)));
+    return 0 != _mm256_testz_si256(data, data);
+};
+
+FLATTEN_INLINE_PURE static inline bool check_block32x4_eq(const char * a, const char * b)
+{
+    auto all_ones = _mm256_set1_epi8(0xFF);
+
+    mem_utils::Block32 data = all_ones;
+    for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
+        data = _mm256_and_si256(data, _mm256_cmpeq_epi8(_mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(a + i * mem_utils::BLOCK32_SIZE)), _mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(b + i * mem_utils::BLOCK32_SIZE))));
+
+    return 0 != _mm256_testc_si256(data, all_ones);
+};
+
 // https://github.com/lattera/glibc/blob/master/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
 FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const char * p2, size_t n)
 {
-    constexpr auto unroll_num = 4;
-    constexpr size_t loop_4x32_size = unroll_num * mem_utils::BLOCK32_SIZE;
-
-    const auto && fn_check_eq_32 = [](const char * a, const char * b) -> bool {
-        auto data = _mm256_xor_si256(
-            _mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(a)),
-            _mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(b)));
-        return 0 != _mm256_testz_si256(data, data);
-    };
-    const auto && fn_check_eq_4x32 = [](const char * a, const char * b) -> bool {
-        uint32_t data = mem_utils::Block32Mask;
-        for (size_t i = 0; i < unroll_num; ++i)
-            data &= (_mm256_movemask_epi8(_mm256_cmpeq_epi8(
-                _mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(a + i * mem_utils::BLOCK32_SIZE)),
-                _mm256_loadu_si256(reinterpret_cast<const mem_utils::Block32 *>(b + i * mem_utils::BLOCK32_SIZE)))));
-        return data == mem_utils::Block32Mask;
-    };
+    constexpr size_t loop_4x32_size = AVX2_UNROLL_NUM * mem_utils::BLOCK32_SIZE;
 
     // n < 32
-    if (n < mem_utils::BLOCK32_SIZE)
+    if (unlikely(n < mem_utils::BLOCK32_SIZE))
     {
 #ifdef M
         static_assert(false, "`M` is defined");
@@ -115,15 +119,16 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         }
 #undef M
 
+
 #if defined(NORMAL_IF_ELSE_TEST)
-        if (n < 2)
+        if (unlikely(n < 2))
         {
             // 0~1
             if (n == 1)
                 return p1[0] == p2[0];
             return true;
         }
-        else if (n <= 4)
+        else if (unlikely(n <= 4))
         {
             // 2~4
             auto a1 = *reinterpret_cast<const uint16_t *>(p1);
@@ -132,7 +137,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             auto b2 = *reinterpret_cast<const uint16_t *>(p2 + n - 2);
             return (a1 == b1) & (a2 == b2);
         }
-        else if (n <= 8)
+        else if (unlikely(n <= 8))
         {
             // 5~8
             auto a1 = *reinterpret_cast<const uint32_t *>(p1);
@@ -141,7 +146,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             auto b2 = *reinterpret_cast<const uint32_t *>(p2 + n - 4);
             return (a1 == b1) & (a2 == b2);
         }
-        else if (n <= 16)
+        else if (unlikely(n <= 16))
         {
             // 9~16
             auto a1 = *reinterpret_cast<const uint64_t *>(p1);
@@ -163,10 +168,10 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
     }
 
     //  8 * 32 < n
-    if (8 * mem_utils::BLOCK32_SIZE < n)
+    if (likely(8 * mem_utils::BLOCK32_SIZE < n))
     {
         // check first block
-        if (!fn_check_eq_32(p1, p2))
+        if (unlikely(!check_block32_eq(p1, p2)))
             return false;
         {
             // align addr of one data pointer
@@ -178,7 +183,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
 
         for (; n >= loop_4x32_size;)
         {
-            if (!fn_check_eq_4x32(p1, p2))
+            if (unlikely(!check_block32x4_eq(p1, p2)))
                 return false;
 
             n -= loop_4x32_size;
@@ -188,32 +193,32 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         // n < 4 * 32
     }
 
-    if (n <= 2 * mem_utils::BLOCK32_SIZE)
+    if (unlikely(n <= 2 * mem_utils::BLOCK32_SIZE))
     {
         //  32 < n <= 2 * 32
-        if (!fn_check_eq_32(p1, p2))
+        if (unlikely(!check_block32_eq(p1, p2)))
             return false;
-        return fn_check_eq_32(p1 + n - mem_utils::BLOCK32_SIZE, p2 + n - mem_utils::BLOCK32_SIZE);
+        return check_block32_eq(p1 + n - mem_utils::BLOCK32_SIZE, p2 + n - mem_utils::BLOCK32_SIZE);
     }
-    if (n <= 4 * mem_utils::BLOCK32_SIZE)
+    if (unlikely(n <= 4 * mem_utils::BLOCK32_SIZE))
     {
         //  2 * 32 < n <= 4 * 32
-        if (!fn_check_eq_32(p1, p2))
+        if (unlikely(!check_block32_eq(p1, p2)))
             return false;
-        if (!fn_check_eq_32(p1 + mem_utils::BLOCK32_SIZE, p2 + mem_utils::BLOCK32_SIZE))
+        if (unlikely(!check_block32_eq(p1 + mem_utils::BLOCK32_SIZE, p2 + mem_utils::BLOCK32_SIZE)))
             return false;
         p1 = p1 + n - 2 * mem_utils::BLOCK32_SIZE;
         p2 = p2 + n - 2 * mem_utils::BLOCK32_SIZE;
-        if (!fn_check_eq_32(p1, p2))
+        if (unlikely(!check_block32_eq(p1, p2)))
             return false;
-        return fn_check_eq_32(p1 + mem_utils::BLOCK32_SIZE, p2 + mem_utils::BLOCK32_SIZE);
+        return check_block32_eq(p1 + mem_utils::BLOCK32_SIZE, p2 + mem_utils::BLOCK32_SIZE);
     }
     // assert (n <= 8 * mem_utils::BLOCK32_SIZE)
     {
         //  4 * 32 < n <= 8 * 32
-        if (!fn_check_eq_4x32(p1, p2))
+        if (unlikely(!check_block32x4_eq(p1, p2)))
             return false;
-        return fn_check_eq_4x32(p1 + n - loop_4x32_size, p2 + n - loop_4x32_size);
+        return check_block32x4_eq(p1 + n - loop_4x32_size, p2 + n - loop_4x32_size);
     }
 }
 } // namespace mem_utils

@@ -35,6 +35,7 @@ add_executable (gtests_libcommon
     gtest_json_test.cpp
     gtest_strong_typedef.cpp
     gtest_mem_utils.cpp
+    gtest_mem_utils_opt.cpp
     gtest_crc64.cpp
     gtest_logger.cpp
     gtest_arithmetic_overflow.cpp

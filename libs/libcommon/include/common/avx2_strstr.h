@@ -36,106 +36,96 @@ ALWAYS_INLINE static inline uint32_t get_block32_cmp_eq_mask(const Block32 * s,
 }
 
 template <typename F>
+ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * src, ssize_t n, const char *& res, const Block32 & check_block32, F && callback)
+{
+    auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
+                                        check_block32);
+    for (; unlikely(mask); mask = clear_rightmost(mask))
+    {
+        auto c = get_rightmost_bit_pos(mask);
+        // check boundary
+        if (unlikely(c >= n))
+        {
+            res = nullptr;
+            return true;
+        }
+        //
+        const auto * t = c + src;
+        if (likely(callback(t)))
+        {
+            res = t;
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename F>
+ALWAYS_INLINE static inline bool check_block32_x1(const char * src, const char *& res, const Block32 & check_block32, F && callback)
+{
+    auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
+                                        check_block32);
+    for (; unlikely(mask); mask = clear_rightmost(mask))
+    {
+        const auto * t = src + get_rightmost_bit_pos(mask);
+        if (likely(callback(t)))
+        {
+            res = t;
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename F>
+ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *& res, const Block32 & check_block32, F && callback)
+{
+    {
+        uint32_t data{};
+        for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
+            data |= get_block32_cmp_eq_mask(
+                reinterpret_cast<const Block32 *>(src + BLOCK32_SIZE * i),
+                check_block32);
+
+        if (unlikely(data))
+        {
+            // there must be matched mask
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
+    {
+        const auto * start = src + BLOCK32_SIZE * i;
+        auto mask = get_block32_cmp_eq_mask(
+            reinterpret_cast<const Block32 *>(start),
+            check_block32);
+        for (; unlikely(mask); mask = clear_rightmost(mask))
+        {
+            auto c = get_rightmost_bit_pos(mask);
+            const auto * t = c + start;
+            if (likely(callback(t)))
+            {
+                res = t;
+                return true;
+            }
+        }
+    }
+    return false;
+};
+
+template <typename F>
 ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, const char target, ssize_t n, F && callback)
 {
     assert(n >= 1);
 
     const char * res = nullptr;
-    constexpr auto unroll_num = 4;
     const auto check_block32 = _mm256_set1_epi8(target);
 
-    const auto && fn_check_32_may_exceed = [&]() -> bool {
-        auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
-                                            check_block32);
-        while (mask)
-        {
-            auto c = get_rightmost_bit_pos(mask);
-            // check boundary
-            if (c >= n)
-            {
-                res = nullptr;
-                return true;
-            }
-            //
-            const auto * t = c + src;
-            if (callback(t))
-            {
-                res = t;
-                return true;
-            }
-            mask = clear_rightmost(mask);
-        }
-        return false;
-    };
-
-    const auto && fn_check_32 = [&]() -> bool {
-        auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
-                                            check_block32);
-        while (mask)
-        {
-            const auto * t = src + get_rightmost_bit_pos(mask);
-            if (callback(t))
-            {
-                res = t;
-                return true;
-            }
-            mask = clear_rightmost(mask);
-        }
-        return false;
-    };
-
-    const auto && fn_check_32_vec_x4 = [&]() -> bool {
-        assert(n >= unroll_num * BLOCK32_SIZE);
-        {
-            /*
-            vpcmpeqb        ymm4, ymm0, ymmword ptr [rcx]
-            vpcmpeqb        ymm3, ymm0, ymmword ptr [rcx + 32]
-            vpor    ymm5, ymm3, ymm4
-            vpcmpeqb        ymm2, ymm0, ymmword ptr [rcx + 64]
-            vpcmpeqb        ymm1, ymm0, ymmword ptr [rcx + 96]
-            vpor    ymm6, ymm2, ymm1
-            vpor    ymm5, ymm5, ymm6
-            vpmovmskb       eax, ymm5
-            test    eax, eax
-            */
-            uint32_t data{};
-            for (size_t i = 0; i < unroll_num; ++i)
-                data |= get_block32_cmp_eq_mask(
-                    reinterpret_cast<const Block32 *>(src + BLOCK32_SIZE * i),
-                    check_block32);
-
-            if (data)
-            {
-                // there must be matched mask
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        for (size_t i = 0; i < unroll_num; ++i)
-        {
-            const auto * start = src + BLOCK32_SIZE * i;
-            auto mask = get_block32_cmp_eq_mask(
-                reinterpret_cast<const Block32 *>(start),
-                check_block32);
-            while (mask)
-            {
-                auto c = get_rightmost_bit_pos(mask);
-                const auto * t = c + start;
-                if (callback(t))
-                {
-                    res = t;
-                    return true;
-                }
-                mask = clear_rightmost(mask);
-            }
-        }
-        return true;
-    };
-
-    if (uint8_t rcx = OFFSET_ALIGNED(size_t(src), BLOCK32_SIZE); rcx != 0)
+    if (uint8_t rcx = OFFSET_ALIGNED(size_t(src), BLOCK32_SIZE); likely(rcx != 0))
     {
         // align to 32
         src = reinterpret_cast<decltype(src)>(ALIGNED_ADDR(size_t(src), BLOCK32_SIZE));
@@ -144,18 +134,19 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
                                             check_block32)
             >> rcx;
 
-        while (mask)
+        for (; unlikely(mask); mask = clear_rightmost(mask))
         {
             auto c = get_rightmost_bit_pos(mask);
-            if (c >= n)
+            if (unlikely(c >= n))
                 return nullptr;
-            const auto * t = c + src + rcx;
-            if (callback(t))
+            const auto * t = c + src + rcx; // add offset
+            if (likely(callback(t)))
                 return t;
-            mask = clear_rightmost(mask);
         }
 
-        if ((n -= BLOCK32_SIZE - rcx) <= 0)
+        n -= BLOCK32_SIZE - rcx;
+
+        if (unlikely(n <= 0))
         {
             return nullptr;
         }
@@ -165,24 +156,24 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
 
     assert(size_t(src) % BLOCK32_SIZE == 0);
 
-    for (; n >= unroll_num * BLOCK32_SIZE; src += unroll_num * BLOCK32_SIZE, n -= unroll_num * BLOCK32_SIZE)
+    for (; (n >= AVX2_UNROLL_NUM * BLOCK32_SIZE); src += AVX2_UNROLL_NUM * BLOCK32_SIZE, n -= AVX2_UNROLL_NUM * BLOCK32_SIZE)
     {
-        if (fn_check_32_vec_x4())
+        if (check_block32_x4(src, res, check_block32, callback))
             return res;
     }
 
-    assert(n < unroll_num * BLOCK32_SIZE);
+    assert(n < AVX2_UNROLL_NUM * BLOCK32_SIZE);
 
-    for (; n >= BLOCK32_SIZE; n -= BLOCK32_SIZE, src += BLOCK32_SIZE)
+    for (; (n >= BLOCK32_SIZE); n -= BLOCK32_SIZE, src += BLOCK32_SIZE)
     {
-        if (fn_check_32())
+        if (check_block32_x1(src, res, check_block32, callback))
             return res;
     }
 
-    if (n == 0)
+    if (unlikely(n == 0))
         return nullptr;
 
-    fn_check_32_may_exceed();
+    check_aligned_block32_may_exceed(src, n, res, check_block32, callback);
     return res;
 }
 
@@ -207,7 +198,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, size
     }
 #endif
 
-    if (n < k)
+    if (unlikely(n < k))
     {
         return nullptr;
     }
@@ -259,5 +250,15 @@ ALWAYS_INLINE static inline size_t avx2_strstr(const char * src, size_t n, const
 ALWAYS_INLINE static inline size_t avx2_strstr(std::string_view src, std::string_view needle)
 {
     return avx2_strstr(src.data(), src.size(), needle.data(), needle.size());
+}
+ALWAYS_INLINE static inline const char * avx2_memchr(const char * src, size_t n, char target)
+{
+    return avx2_strstr_impl(
+        src,
+        target,
+        n,
+        [&](const char *) constexpr {
+            return true;
+        });
 }
 } // namespace mem_utils
