@@ -70,9 +70,13 @@ public:
 
     ~MPMCQueue()
     {
-        std::unique_lock lock(mu);
-        for (; read_pos < write_pos; ++read_pos)
-            destruct(getObj(read_pos));
+        drain();
+    }
+
+    void finishAndDrain()
+    {
+        finish();
+        drain();
     }
 
     // Cannot to use copy/move constructor,
@@ -387,6 +391,13 @@ private:
     {
         if constexpr (!std::is_trivially_destructible_v<T>)
             obj.~T();
+    }
+
+    void drain()
+    {
+        std::unique_lock lock(mu);
+        for (; read_pos < write_pos; ++read_pos)
+            destruct(getObj(read_pos));
     }
 
 private:
