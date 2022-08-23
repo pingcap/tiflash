@@ -50,7 +50,23 @@ private:
     bool all_match;
 };
 
+class RoaringBitmap32Filter
+{
+public:
+    RoaringBitmap32Filter(UInt32 size_, SegmentSnapshotPtr snapshot_);
+    void set(const ColumnPtr & col);
+    void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
+    SegmentSnapshotPtr snapshot() const;
+    void runOptimize();
+private:
+    UInt32 sz;
+    roaring::Roaring rrbitmap;
+    SegmentSnapshotPtr snap;
+    bool all_match;
+};
+
+using BitmapFilter = RoaringBitmap32Filter;
 //using BitmapFilter = RoaringBitmapFilter;
-using BitmapFilter = ArrayBitmapFilter;
+//using BitmapFilter = ArrayBitmapFilter;
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 } // namespace DB::DM
