@@ -79,8 +79,8 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
             stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
         });
-        RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, Exception("exchange_sender has to be hash partition when fine grained shuffle is enabled"));
-        RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, Exception("fine_grained_shuffle_stream_count should not be greater than 1024"));
+        RUNTIME_CHECK(exchange_type == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_type));
+        RUNTIME_CHECK(fine_grained_shuffle.stream_count <= 1024, fine_grained_shuffle.stream_count);
     }
     else
     {

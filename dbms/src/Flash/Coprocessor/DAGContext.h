@@ -306,6 +306,7 @@ public:
         mpp_receiver_set = receiver_set;
     }
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
+    std::vector<CoprocessorReaderPtr> & getCoprocessorReaders();
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
@@ -373,6 +374,7 @@ private:
     std::atomic<UInt64> warning_count;
 
     MPPReceiverSetPtr mpp_receiver_set;
+    std::vector<CoprocessorReaderPtr> coprocessor_readers;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
