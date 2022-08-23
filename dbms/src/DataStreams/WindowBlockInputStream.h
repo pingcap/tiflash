@@ -161,7 +161,7 @@ public:
 
     bool onlyHaveRowNumber();
 
-    bool onlyHaveWindowFunction();
+    bool onlyHaveRowNumberAndRank();
 
 protected:
     Block readImpl() override;

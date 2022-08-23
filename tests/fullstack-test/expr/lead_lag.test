@@ -1,0 +1,53 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.test_str
+mysql> CREATE TABLE test.test_str (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_str varchar(20) DEFAULT NULL, value_char CHAR DEFAULT NULL);
+mysql> alter table test.test_str set tiflash replica 1
+
+mysql> drop table if exists test.test_int
+mysql> CREATE TABLE test.test_int (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_tinyint TINYINT DEFAULT NULL, value_smallint SMALLINT DEFAULT NULL, value_mediumint MEDIUMINT DEFAULT NULL, value_int INT DEFAULT NULL, value_bigint bigint DEFAULT NULL);
+mysql> alter table test.test_int set tiflash replica 1
+
+mysql> drop table if exists test.test_float
+mysql> CREATE TABLE test.test_float (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_float float DEFAULT NULL, value_double double DEFAULT NULL);
+mysql> alter table test.test_float set tiflash replica 1
+
+mysql> drop table if exists test.test_decimal
+mysql> CREATE TABLE test.test_decimal (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_decimal decimal(9, 1) DEFAULT NULL, value_decimal decimal(18, 1) DEFAULT NULL, value_decimal decimal(38, 1) DEFAULT NULL, value_decimal decimal(65, 1) DEFAULT NULL);
+mysql> alter table test.test_decimal set tiflash replica 1
+
+mysql> drop table if exists test.test_enum
+mysql> CREATE TABLE test.test_enum (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_enum enum('a','b') DEFAULT NULL);
+mysql> alter table test.test_enum set tiflash replica 1
+
+mysql> drop table if exists test.test_time
+mysql> CREATE TABLE test.test_time (part bigint(20) DEFAULT NULL, orde bigint(20) DEFAULT NULL, value_date DATE DEFAULT NULL, value_time TIME DEFAULT NULL, value_datetime DATETIME DEFAULT NULL, value_timestamp TIMESTAMP DEFAULT NULL);
+mysql> alter table test.test_time set tiflash replica 1
+
+func> wait_table test test_str
+func> wait_table test test_int
+func> wait_table test test_float
+func> wait_table test test_decimal
+func> wait_table test test_enum
+func> wait_table test test_time
+
+
+
+mysql> drop table if exists test.test_str
+mysql> drop table if exists test.test_int
+mysql> drop table if exists test.test_float
+mysql> drop table if exists test.test_decimal
+mysql> drop table if exists test.test_enum
+mysql> drop table if exists test.test_time

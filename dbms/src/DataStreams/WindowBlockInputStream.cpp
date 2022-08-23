@@ -70,7 +70,7 @@ void WindowBlockInputStream::initialWorkspaces()
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
-    only_have_pure_window = onlyHaveWindowFunction();
+    only_have_pure_window = onlyHaveRowNumberAndRank();
 }
 
 Block WindowBlockInputStream::readImpl()
@@ -243,8 +243,12 @@ void WindowBlockInputStream::advanceFrameStart()
         return;
     }
 
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                    "window function only support pure window function now.");
+    frame_start = current_row;
+    frame_started = true;
+    return;
+
+    // throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+    //                 "window function only support pure window function now.");
 }
 
 bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) const
@@ -312,8 +316,12 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
         return;
     }
 
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                    "window function only support pure window function now.");
+    frame_end = current_row;
+    advanceRowNumber(frame_end);
+    frame_ended = true;
+
+    // throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+    //                 "window function only support pure window function now.");
 }
 
 void WindowBlockInputStream::advanceFrameEnd()
@@ -401,9 +409,12 @@ bool WindowBlockInputStream::onlyHaveRowNumber()
     return true;
 }
 
-bool WindowBlockInputStream::onlyHaveWindowFunction()
-{
-    /// Now WindowBlockInputStream only support window function.
+bool WindowBlockInputStream::onlyHaveRowNumberAndRank()
+    for (const auto & workspace : workspaces)
+    {
+        if (workspace.window_function->getName() != "row_number" && workspace.window_function->getName() != "rank" && workspace.window_function->getName() != "dense_rank")
+            return false;
+    }
     return true;
 }
 
