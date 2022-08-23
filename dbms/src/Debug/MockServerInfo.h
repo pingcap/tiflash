@@ -13,22 +13,19 @@
 // limitations under the License.
 
 #pragma once
+#include <common/types.h>
 
-#include <Dictionaries/Embedded/GeodataProviders/INamesProvider.h>
-
-#include <IO/ReadBuffer.h>
-
-
-// Reads regions names list in geoexport format
-class LanguageRegionsNamesFormatReader : public ILanguageRegionsNamesReader
+namespace DB::tests
 {
-private:
-    DB::ReadBufferPtr input;
-
-public:
-    LanguageRegionsNamesFormatReader(DB::ReadBufferPtr input_)
-        : input(std::move(input_))
-    {}
-
-    bool readNext(RegionNameEntry & entry) override;
+struct MockServerConfig
+{
+    String addr;
+    size_t partition_id;
 };
+
+struct MockMPPServerInfo
+{
+    size_t partition_id;
+    size_t partition_num;
+};
+} // namespace DB::tests

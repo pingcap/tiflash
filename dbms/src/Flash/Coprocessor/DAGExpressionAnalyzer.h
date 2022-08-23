@@ -83,7 +83,7 @@ public:
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
-    std::tuple<WindowDescription, NamesAndTypes> appendWindowColumns(const tipb::Window & window, ExpressionActionsChain::Step & step);
+    void appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, ExpressionActionsChain::Step & step);
 
     WindowDescription buildWindowDescription(const tipb::Window & window);
 

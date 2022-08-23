@@ -186,6 +186,8 @@ grpc::Status FlashService::Coprocessor(
     {
         return status;
     }
+    context->setMockStorage(mock_storage);
+    context->setMockMPPServerInfo(mpp_test_info);
 
     MPPHandler mpp_handler(*request);
     return mpp_handler.execute(context, response);
@@ -231,7 +233,8 @@ grpc::Status FlashService::Coprocessor(
     // We need to find it out and bind the grpc stream with it.
     LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
+    // For MPP test, we don't care about security config.
+    if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
     {
         return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
     }
@@ -262,36 +265,28 @@ grpc::Status FlashService::Coprocessor(
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
-    std::string err_msg;
-    MPPTunnelPtr tunnel = nullptr;
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    if (tunnel == nullptr)
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
-        if (sender_task != nullptr)
+        if (calldata)
         {
-            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
+            LOG_ERROR(log, err_msg);
+            // In Async version, writer::Write() return void.
+            // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
+            calldata->writeErr(getPacketWithError(err_msg));
+            return grpc::Status::OK;
         }
-        if (tunnel == nullptr)
+        else
         {
-            if (calldata)
+            LOG_ERROR(log, err_msg);
+            if (sync_writer->Write(getPacketWithError(err_msg)))
             {
-                LOG_ERROR(log, err_msg);
-                // In Async version, writer::Write() return void.
-                // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
-                calldata->writeErr(getPacketWithError(err_msg));
                 return grpc::Status::OK;
             }
             else
             {
-                LOG_ERROR(log, err_msg);
-                if (sync_writer->Write(getPacketWithError(err_msg)))
-                {
-                    return grpc::Status::OK;
-                }
-                else
-                {
-                    LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
-                    return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
-                }
+                LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
+                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
             }
         }
     }
@@ -439,4 +434,13 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     return manual_compact_manager->handleRequest(request, response);
 }
 
+void FlashService::setMockStorage(MockStorage & mock_storage_)
+{
+    mock_storage = mock_storage_;
+}
+
+void FlashService::setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_)
+{
+    mpp_test_info = mpp_test_info_;
+}
 } // namespace DB

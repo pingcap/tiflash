@@ -22,6 +22,9 @@
 
 namespace DB
 {
+using MockStorage = tests::MockStorage;
+using MockMPPServerInfo = tests::MockMPPServerInfo;
+
 class FlashGrpcServerHolder
 {
 public:
@@ -32,6 +35,9 @@ public:
         const TiFlashRaftConfig & raft_config,
         const LoggerPtr & log_);
     ~FlashGrpcServerHolder();
+
+    void setMockStorage(MockStorage & mock_storage);
+    void setMockMPPServerInfo(MockMPPServerInfo info);
 
 private:
     const LoggerPtr & log;

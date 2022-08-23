@@ -96,10 +96,12 @@ void MPPTask::abortTunnels(const String & message, AbortType abort_type)
 
 void MPPTask::abortReceivers()
 {
-    if (likely(receiver_set != nullptr))
     {
-        receiver_set->cancel();
+        std::unique_lock lock(tunnel_and_receiver_mu);
+        if unlikely (receiver_set == nullptr)
+            return;
     }
+    receiver_set->cancel();
 }
 
 void MPPTask::abortDataStreams(AbortType abort_type)
@@ -111,8 +113,12 @@ void MPPTask::abortDataStreams(AbortType abort_type)
 
 void MPPTask::closeAllTunnels(const String & reason)
 {
-    if (likely(tunnel_set))
-        tunnel_set->close(reason);
+    {
+        std::unique_lock lock(tunnel_and_receiver_mu);
+        if (unlikely(tunnel_set == nullptr))
+            return;
+    }
+    tunnel_set->close(reason);
 }
 
 void MPPTask::finishWrite()
@@ -128,7 +134,7 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
-    tunnel_set = std::make_shared<MPPTunnelSet>(log->identifier());
+    auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_req.root_executor().exchange_sender();
 
@@ -141,20 +147,27 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
-        LOG_FMT_DEBUG(log, "begin to register the tunnel {}", tunnel->id());
+        LOG_FMT_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
-        tunnel_set->registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
+        tunnel_set_local->registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
         if (!dag_context->isRootMPPTask())
         {
             FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_register_tunnel_for_non_root_mpp_task);
         }
     }
+    {
+        std::unique_lock lock(tunnel_and_receiver_mu);
+        if (status != INITIALIZING)
+            throw Exception(fmt::format("The tunnels can not be registered, because the task is not in initializing state"));
+        tunnel_set = std::move(tunnel_set_local);
+    }
+    dag_context->tunnel_set = tunnel_set;
 }
 
 void MPPTask::initExchangeReceivers()
 {
-    receiver_set = std::make_shared<MPPReceiverSet>(log->identifier());
+    auto receiver_set_local = std::make_shared<MPPReceiverSet>(log->identifier());
     traverseExecutors(&dag_req, [&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
         {
@@ -177,11 +190,17 @@ void MPPTask::initExchangeReceivers()
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
-            receiver_set->addExchangeReceiver(executor_id, exchange_receiver);
+            receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
             new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
         }
         return true;
     });
+    {
+        std::unique_lock lock(tunnel_and_receiver_mu);
+        if (status != RUNNING)
+            throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
+        receiver_set = std::move(receiver_set_local);
+    }
     dag_context->setMPPReceiverSet(receiver_set);
 }
 
@@ -293,7 +312,6 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     // register tunnels
     registerTunnels(task_request);
 
-    dag_context->tunnel_set = tunnel_set;
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
     LOG_FMT_DEBUG(log, "begin to register the task {}", id.toString());
@@ -320,6 +338,13 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     initExchangeReceivers();
     executeQuery(*context);
+    {
+        std::unique_lock lock(tunnel_and_receiver_mu);
+        if (status != RUNNING)
+            throw Exception("task not in running state, may be cancelled");
+        for (auto & r : dag_context->getCoprocessorReaders())
+            receiver_set->addCoprocessorReader(r);
+    }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
     mpp_task_statistics.setCompileTimestamp(start_time, end_time);

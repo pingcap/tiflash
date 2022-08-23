@@ -33,8 +33,9 @@ MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     , log(&Poco::Logger::get("TaskManager"))
 {}
 
-MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::chrono::seconds timeout, std::string & errMsg)
+std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout)
 {
+    const auto & meta = request->sender_meta();
     MPPTaskId id{meta.start_ts(), meta.task_id()};
     std::unordered_map<MPPTaskId, MPPTaskPtr>::iterator it;
     bool cancelled = false;
@@ -59,16 +60,30 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
     fiu_do_on(FailPoints::random_task_manager_find_task_failure_failpoint, ret = false;);
     if (cancelled)
     {
-        errMsg = fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id());
-        return nullptr;
+        return {nullptr, fmt::format("Task [{},{}] has been cancelled.", meta.start_ts(), meta.task_id())};
     }
     else if (!ret)
     {
-        errMsg = fmt::format("Can't find task [{},{}] within {} s.", meta.start_ts(), meta.task_id(), timeout.count());
-        return nullptr;
+        return {nullptr, fmt::format("Can't find task [{},{}] within {} s.", meta.start_ts(), meta.task_id(), timeout.count())};
     }
-    return it->second;
+    return it->second->getTunnel(request);
 }
+
+class MPPTaskCancelHelper
+{
+public:
+    MPPTaskPtr task;
+    String reason;
+    MPPTaskCancelHelper(MPPTaskPtr && task_, const String & reason_)
+        : task(std::move(task_))
+        , reason(reason_)
+    {}
+    DISALLOW_COPY_AND_MOVE(MPPTaskCancelHelper);
+    void run() const
+    {
+        task->cancel(reason);
+    }
+};
 
 void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
 {
@@ -99,12 +114,29 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
     fmt_buf.fmtAppend("Remaining task in query {} are: ", query_id);
     // TODO: cancel tasks in order rather than issuing so many threads to cancel tasks
     auto thread_manager = newThreadManager();
-    for (auto it = task_set->task_map.begin(); it != task_set->task_map.end();)
+    try
     {
-        fmt_buf.fmtAppend("{} ", it->first.toString());
-        auto current_task = it->second;
-        it = task_set->task_map.erase(it);
-        thread_manager->schedule(false, "CancelMPPTask", [task = std::move(current_task), &reason] { task->cancel(reason); });
+        for (auto it = task_set->task_map.begin(); it != task_set->task_map.end();)
+        {
+            fmt_buf.fmtAppend("{} ", it->first.toString());
+            auto current_task = it->second;
+            it = task_set->task_map.erase(it);
+            // Note it is not acceptable to destruct `current_task` inside the loop, because destruct a mpp task before all
+            // other mpp tasks are cancelled may cause some deadlock issues, so `current_task` has to be moved to cancel thread.
+            // At first, we use std::move to move `current_task` to lambda like this:
+            // thread_manager->schedule(false, "CancelMPPTask", [task = std::move(current_task), &reason] { task->cancel(reason); });
+            // However, due to SOO in llvm(https://github.com/llvm/llvm-project/issues/32472), there is still a copy of `current_task`
+            // remaining in the current scope, as a workaround we add a wrap(MPPTaskCancelHelper) here to make sure `current_task`
+            // can be moved to cancel thread.
+            thread_manager->schedule(false, "CancelMPPTask", [helper = new MPPTaskCancelHelper(std::move(current_task), reason)] {
+                std::unique_ptr<MPPTaskCancelHelper>(helper)->run();
+            });
+        }
+    }
+    catch (...)
+    {
+        thread_manager->wait();
+        throw;
     }
     LOG_WARNING(log, fmt_buf.toString());
     thread_manager->wait();
@@ -176,29 +208,6 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
         }
     }
     LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
-}
-
-std::vector<UInt64> MPPTaskManager::getCurrentQueries()
-{
-    std::vector<UInt64> ret;
-    std::lock_guard lock(mu);
-    for (auto & it : mpp_query_map)
-    {
-        ret.push_back(it.first);
-    }
-    return ret;
-}
-
-std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
-{
-    std::vector<MPPTaskPtr> ret;
-    std::lock_guard lock(mu);
-    const auto & it = mpp_query_map.find(query_id);
-    if (it == mpp_query_map.end() || it->second->to_be_cancelled)
-        return ret;
-    for (const auto & task_it : it->second->task_map)
-        ret.push_back(task_it.second);
-    return ret;
 }
 
 String MPPTaskManager::toString()

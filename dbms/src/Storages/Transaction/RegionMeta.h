@@ -110,8 +110,9 @@ public:
     metapb::Region getMetaRegion() const;
     raft_serverpb::MergeState getMergeState() const;
 
-private:
     RegionMeta() = delete;
+
+private:
     friend class MetaRaftCommandDelegate;
     friend class tests::RegionKVStoreTest;
 
@@ -157,8 +158,6 @@ class MetaRaftCommandDelegate
     friend class RegionRaftCommandDelegate;
     friend class tests::RegionKVStoreTest;
 
-    MetaRaftCommandDelegate() = delete;
-
     const metapb::Peer & getPeer() const;
     const raft_serverpb::RaftApplyState & applyState() const;
     const RegionState & regionState() const;
@@ -192,6 +191,8 @@ public:
     static RegionMergeResult computeRegionMergeResult(
         const metapb::Region & source_region,
         const metapb::Region & target_region);
+
+    MetaRaftCommandDelegate() = delete;
 };
 
 } // namespace DB
