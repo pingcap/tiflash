@@ -1659,6 +1659,7 @@ try
         ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
         ASSERT_EQ(stat->sm_valid_size, 700);
         ASSERT_EQ(stat->sm_total_size, 700);
+        ASSERT_TRUE(stat->isReadOnly());
 
         blob_store.remove({entry_from_write1});
 
