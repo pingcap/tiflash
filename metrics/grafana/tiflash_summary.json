@@ -6201,7 +6201,7 @@
           "highlightCards": true,
           "id": 133,
           "legend": {
-            "show": false
+            "show": true
           },
           "pluginVersion": "6.1.6",
           "reverseYBuckets": false,
