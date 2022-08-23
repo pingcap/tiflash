@@ -14,6 +14,7 @@
 
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
 namespace DB::DM
 {
@@ -24,9 +25,10 @@ ArrayBitmapFilter::ArrayBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapshot_)
 
 void ArrayBitmapFilter::set(const ColumnPtr & col)
 {
-    for (size_t i = 0; i < col->size(); i++)
+    const auto * v = toColumnVectorDataPtr<UInt64>(col);
+    for (auto p = v->begin(); p != v->end(); ++p)
     {
-        UInt64 row_id = col->getUInt(i);
+        UInt64 row_id = *p;
         if (likely(row_id < filter.size()))
         {
             filter[row_id] = 1;
@@ -57,12 +59,12 @@ RoaringBitmapFilter::RoaringBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapsh
     , all_match(false)
 {}
 
-// TODO(jinhelin): since most of the bits in bitmap is 1, reverse it to save memory.
 void RoaringBitmapFilter::set(const ColumnPtr & col)
 {
-    for (size_t i = 0; i < col->size(); i++)
+    const auto * v = toColumnVectorDataPtr<UInt64>(col);
+    for (auto p = v->begin(); p != v->end(); ++p)
     {
-        UInt64 row_id = col->getUInt(i);
+        UInt64 row_id = *p;
         if (likely(row_id < sz))
         {
             rrbitmap.add(row_id);

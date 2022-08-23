@@ -50,7 +50,7 @@ private:
     bool all_match;
 };
 
-using BitmapFilter = RoaringBitmapFilter;
-//using BitmapFilter = ArrayBitmapFilter;
+//using BitmapFilter = RoaringBitmapFilter;
+using BitmapFilter = ArrayBitmapFilter;
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 } // namespace DB::DM
