@@ -95,7 +95,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
-        bool is_rss_too_large = (current_limit
+        bool is_rss_too_large = (!next.load(std::memory_order_relaxed) && current_limit
                                  && real_rss > current_limit + 5LL * 1024 * 1024 * 1024
                                  && will_be > current_limit - (real_rss - current_limit - 5LL * 1024 * 1024 * 1024));
         if (is_rss_too_large

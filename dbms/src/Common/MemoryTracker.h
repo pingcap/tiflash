@@ -31,7 +31,6 @@ extern const Metric MemoryTracking;
   */
 class MemoryTracker
 {
-public:
     std::atomic<Int64> amount{0};
     std::atomic<Int64> peak{0};
     std::atomic<Int64> limit{0};

@@ -145,7 +145,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
             size_t tmtsize = 0;
             if constexpr (send_exec_summary_at_last)
                 tmtsize = response.ByteSizeLong();
-            TmpMemTracker tmt(tmtsize);
+            TmpMemTracker tmt(tmtsize); // track mem usage of local MPPDataPacket in nearly realtime
             mpp::MPPDataPacket packet;
             if constexpr (send_exec_summary_at_last)
             {
@@ -190,7 +190,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
     }
     else /// passthrough data to a TiDB node
     {
-        TmpMemTracker tmt(0);
+        TmpMemTracker tmt(0); // track mem usage of response in nearly realtime
         response.set_encode_type(dag_context.encode_type);
         if (input_blocks.empty())
         {
@@ -368,7 +368,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::p
     size_t tmtsize = 0;
     if constexpr (send_exec_summary_at_last)
         tmtsize = response.ByteSizeLong();
-    TmpMemTracker tmt(tmtsize);
+    TmpMemTracker tmt(tmtsize); // track mem usage of local vector of MPPDataPacket in nearly realtime
     handleExecSummary<send_exec_summary_at_last>(input_blocks, packet, response);
     if (input_blocks.empty())
         return;
