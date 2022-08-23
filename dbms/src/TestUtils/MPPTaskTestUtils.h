@@ -139,7 +139,7 @@ size_t MPPTaskTestUtils::server_num = 0;
     {                                                                                  \
         for (auto encode_type : encode_types)                                          \
         {                                                                              \
-            auto properties = getDAGPropertiesForTest(serverNum(), encode_type);                 \
+            auto properties = getDAGPropertiesForTest(serverNum(), encode_type);       \
             auto tasks = (builder).buildMPPTasks(context, properties);                 \
             size_t task_size = tasks.size();                                           \
             for (size_t i = 0; i < task_size; ++i)                                     \
