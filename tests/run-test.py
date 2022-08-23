@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import re
 import sys
 import time
 import urllib2
@@ -30,6 +31,7 @@ UNFINISHED_1_PREFIX = '\t'
 UNFINISHED_2_PREFIX = '   '
 WORD_PH = '{#WORD}'
 LINE_PH = '{#LINE}'
+REGEXP_MATCH = '{#REGEXP}'
 CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 
 verbose = False
@@ -145,6 +147,8 @@ def match_ph_word(line):
 
 # TODO: Support more place holders, eg: {#NUMBER}
 def compare_line(line, template):
+    if template.startswith(REGEXP_MATCH):
+        return re.match(template[len(REGEXP_MATCH):], line) != None
     l = template.find(LINE_PH)
     if l >= 0:
         return True

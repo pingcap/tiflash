@@ -69,7 +69,7 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
         paths.first,
         paths.second,
         Strings{},
-        true,
+        /*enable_raft_compatible_mode=*/true,
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
@@ -85,7 +85,8 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 
-    global_context->getTMTContext().restore();
+    auto & path_pool = global_context->getPathPool();
+    global_context->getTMTContext().restore(path_pool);
 }
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)

@@ -15,7 +15,6 @@
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
-#include <Storages/Page/V3/spacemap/SpaceMapBig.h>
 #include <Storages/Page/V3/spacemap/SpaceMapRBTree.h>
 #include <Storages/Page/V3/spacemap/SpaceMapSTDMap.h>
 #include <common/likely.h>
@@ -43,9 +42,6 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
     case SMAP64_STD_MAP:
         smap = STDMapSpaceMap::create(start, end);
         break;
-    case SMAP64_BIG:
-        smap = BigSpaceMap::create(start, end);
-        break;
     default:
         throw Exception(fmt::format("Invalid [type={}] to create spaceMap", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
     }
@@ -60,11 +56,6 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
 
 bool SpaceMap::checkSpace(UInt64 offset, size_t size) const
 {
-    // If we used `SMAP64_BIG`, we won't check the space.
-    if (type == SMAP64_BIG)
-    {
-        return false;
-    }
     return (offset < start) || (offset > end) || (offset + size - 1 > end);
 }
 
