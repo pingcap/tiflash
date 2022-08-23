@@ -114,6 +114,11 @@ void BlobStore::registerPaths()
 
 void BlobStore::reloadConfig(const BlobStore::Config & rhs)
 {
+    // Currently, we don't add any config for `file_limit_size`, so it won't reload at run time.
+    // And if we support it in the future(although it seems there is no need to do that),
+    // it must be noted that if the `file_limit_size` is changed to a smaller value,
+    // there may be some old BlobFile with size larger than new `file_limit_size` that can be used for rewrite
+    // until it is changed to read only type by gc thread or tiflash is restarted.
     config.file_limit_size = rhs.file_limit_size;
     config.spacemap_type = rhs.spacemap_type;
     config.cached_fd_size = rhs.cached_fd_size;
