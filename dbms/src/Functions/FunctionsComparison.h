@@ -20,6 +20,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsNumber.h>
+#include <Common/TargetSpecific.h>
 #include <Common/assert_cast.h>
 #include <Core/DecimalComparison.h>
 #include <Core/callOnTypeIndex.h>
@@ -70,142 +71,65 @@ namespace ErrorCodes
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (typename A, typename B, typename Op),
+    (A, B, Op),
+    void,
+    vectorVectorImpl,
+    (a, b, c),
+    (const PaddedPODArray<A> & a, const PaddedPODArray<B> & b, PaddedPODArray<UInt8> & c),
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = a.data();
+        const B * __restrict b_pos = b.data();
+        UInt8 * __restrict c_pos = c.data();
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply(*a_pos, *b_pos);
+            ++a_pos;
+            ++b_pos;
+            ++c_pos;
+        }
+    })
+
+TIFLASH_DECLARE_MULTITARGET_FUNCTION_TP(
+    (typename A, typename B, typename Op),
+    (A, B, Op),
+    void,
+    vectorConstantImpl,
+    (a, b, c),
+    (const PaddedPODArray<A> & a, B b, PaddedPODArray<UInt8> & c),
+    {
+        size_t size = a.size();
+        const A * __restrict a_pos = a.data();
+        UInt8 * __restrict c_pos = c.data();
+        const A * a_end = a_pos + size;
+
+        while (a_pos < a_end)
+        {
+            *c_pos = Op::apply(*a_pos, b);
+            ++a_pos;
+            ++c_pos;
+        }
+    })
+
+
 template <typename A, typename B, typename Op>
 struct NumComparisonImpl
 {
     using ContainerA = PaddedPODArray<A>;
     using ContainerB = PaddedPODArray<B>;
 
-    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt"))) void vectorVectorImpl_avx2(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
-    {
-        /** GCC 4.8.2 vectorizes a loop only if it is written in this form.
-           * In this case, if you loop through the array index (the code will look simpler),
-          *  the loop will not be vectorized.
-          */
-        size_t size = a.size();
-        const A * __restrict a_pos = a.data();
-        const B * __restrict b_pos = b.data();
-        UInt8 * __restrict c_pos = c.data();
-        const A * a_end = a_pos + size;
-
-        while (a_pos < a_end)
-        {
-            *c_pos = Op::apply(*a_pos, *b_pos);
-            ++a_pos;
-            ++b_pos;
-            ++c_pos;
-        }
-    }
-
-    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2"))) void vectorVectorImpl_sse4(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
-    {
-        size_t size = a.size();
-        const A * __restrict a_pos = a.data();
-        const B * __restrict b_pos = b.data();
-        UInt8 * __restrict c_pos = c.data();
-        const A * a_end = a_pos + size;
-
-        while (a_pos < a_end)
-        {
-            *c_pos = Op::apply(*a_pos, *b_pos);
-            ++a_pos;
-            ++b_pos;
-            ++c_pos;
-        }
-    }
-
-    static __attribute__((noinline)) void vectorVectorImpl_generic(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
-    {
-        size_t size = a.size();
-        const A * __restrict a_pos = a.data();
-        const B * __restrict b_pos = b.data();
-        UInt8 * __restrict c_pos = c.data();
-        const A * a_end = a_pos + size;
-
-        while (a_pos < a_end)
-        {
-            *c_pos = Op::apply(*a_pos, *b_pos);
-            ++a_pos;
-            ++b_pos;
-            ++c_pos;
-        }
-    }
-
     static void NO_INLINE vectorVector(const ContainerA & a, const ContainerB & b, PaddedPODArray<UInt8> & c)
     {
-        if (common::cpu_feature_flags.avx || common::cpu_feature_flags.avx2)
-        {
-            vectorVectorImpl_avx2(a, b, c);
-        }
-        else if (common::cpu_feature_flags.sse || common::cpu_feature_flags.sse2 || common::cpu_feature_flags.sse3 || common::cpu_feature_flags.sse4_1 || common::cpu_feature_flags.sse4_2 || common::cpu_feature_flags.sse4a || common::cpu_feature_flags.popcnt)
-        {
-            vectorVectorImpl_sse4(a, b, c);
-        }
-        else
-        {
-            vectorVectorImpl_generic(a, b, c);
-        }
-    }
-
-    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt"))) void NO_INLINE vectorConstantImpl_avx2(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
-    {
-        size_t size = a.size();
-        const A * __restrict a_pos = a.data();
-        UInt8 * __restrict c_pos = c.data();
-        const A * a_end = a_pos + size;
-
-        while (a_pos < a_end)
-        {
-            *c_pos = Op::apply(*a_pos, b);
-            ++a_pos;
-            ++c_pos;
-        }
-    }
-
-    static __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2"))) void NO_INLINE vectorConstantImpl_sse4(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
-    {
-        size_t size = a.size();
-        const A * __restrict a_pos = a.data();
-        UInt8 * __restrict c_pos = c.data();
-        const A * a_end = a_pos + size;
-
-        while (a_pos < a_end)
-        {
-            *c_pos = Op::apply(*a_pos, b);
-            ++a_pos;
-            ++c_pos;
-        }
-    }
-
-    static __attribute__((noinline)) void NO_INLINE vectorConstantImpl_generic(const ContainerA & a, B b, PaddedPODArray<UInt8> & c) // NOLINT(readability-identifier-naming)
-    {
-        size_t size = a.size();
-        const A * __restrict a_pos = a.data();
-        UInt8 * __restrict c_pos = c.data();
-        const A * a_end = a_pos + size;
-
-        while (a_pos < a_end)
-        {
-            *c_pos = Op::apply(*a_pos, b);
-            ++a_pos;
-            ++c_pos;
-        }
+        vectorVectorImpl<A, B, Op>(a, b, c);
     }
 
     static void NO_INLINE vectorConstant(const ContainerA & a, B b, PaddedPODArray<UInt8> & c)
     {
-        if (common::cpu_feature_flags.avx || common::cpu_feature_flags.avx2)
-        {
-            vectorConstantImpl_avx2(a, b, c);
-        }
-        else if (common::cpu_feature_flags.sse || common::cpu_feature_flags.sse2 || common::cpu_feature_flags.sse3 || common::cpu_feature_flags.sse4_1 || common::cpu_feature_flags.sse4_2 || common::cpu_feature_flags.sse4a || common::cpu_feature_flags.popcnt)
-        {
-            vectorConstantImpl_sse4(a, b, c);
-        }
-        else
-        {
-            vectorConstantImpl_generic(a, b, c);
-        }
+        vectorConstantImpl<A, B, Op>(a, b, c);
     }
 
     static void constantVector(A a, const ContainerB & b, PaddedPODArray<UInt8> & c)
