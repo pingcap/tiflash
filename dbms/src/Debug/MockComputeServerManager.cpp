@@ -27,9 +27,10 @@ void MockComputeServerManager::addServer(String addr)
     MockServerConfig config;
     for (const auto & server : server_config_map)
     {
-        RUNTIME_CHECK(
+        RUNTIME_CHECK_MSG(
             server.second.addr != addr,
-            Exception(fmt::format("Already register mock compute server with addr = {}", addr), ErrorCodes::IP_ADDRESS_NOT_ALLOWED));
+            "Already register mock compute server with addr = {}",
+            addr);
     }
     config.partition_id = server_config_map.size();
     config.addr = addr;
