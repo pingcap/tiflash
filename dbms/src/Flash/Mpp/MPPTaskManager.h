@@ -27,12 +27,13 @@ namespace DB
 {
 struct MPPQueryTaskSet
 {
-    /// to_be_cancelled is kind of lock, if to_be_cancelled is set
+    /// to_be_aborted is kind of lock, if to_be_aborted is set
     /// to true, then task_map can only be accessed by query cancel
     /// thread, which means no task can register/un-register for the
     /// query, here we do not need mutex because all the write/read
     /// to MPPQueryTaskSet is protected by the mutex in MPPTaskManager
-    bool to_be_cancelled = false;
+    bool to_be_aborted = false;
+    String error_message;
     MPPTaskMap task_map;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
@@ -65,11 +66,11 @@ public:
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
 
-    bool registerTask(MPPTaskPtr task);
+    std::pair<bool, String> registerTask(MPPTaskPtr task);
 
-    void unregisterTask(MPPTask * task);
+    std::pair<bool, String> unregisterTask(MPPTask * task);
 
-    bool isQueryToBeCancelled(UInt64 query_id);
+    void waitUntilQueryStartsAbort(UInt64 query_id);
 
     bool tryToScheduleTask(const MPPTaskPtr & task);
 
@@ -77,7 +78,7 @@ public:
 
     std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
 
-    void cancelMPPQuery(UInt64 query_id, const String & reason);
+    void abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type);
 
     String toString();
 };

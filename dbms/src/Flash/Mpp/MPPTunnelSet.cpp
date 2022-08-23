@@ -136,7 +136,7 @@ void MPPTunnelSetBase<Tunnel>::writeError(const String & msg)
         }
         catch (...)
         {
-            tunnel->close("Failed to write error msg to tunnel");
+            tunnel->close(fmt::format("Failed to write error msg to tunnel, error message: {}", msg));
             tryLogCurrentException(log, "Failed to write error " + msg + " to tunnel: " + tunnel->id());
         }
     }
