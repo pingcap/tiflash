@@ -1859,29 +1859,24 @@ bool Context::isTest() const
     return test_mode != non_test;
 }
 
-void Context::setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_)
+void Context::setMockStorage(MockStorage & mock_storage_)
 {
-    columns_for_test_map = columns_for_test_map_;
+    mock_storage = mock_storage_;
 }
 
-std::unordered_map<String, ColumnsWithTypeAndName> & Context::getColumnsForTestMap()
+MockStorage Context::mockStorage() const
 {
-    return columns_for_test_map;
+    return mock_storage;
 }
 
-ColumnsWithTypeAndName Context::columnsForTest(String executor_id)
+MockMPPServerInfo Context::mockMPPServerInfo() const
 {
-    auto it = columns_for_test_map.find(executor_id);
-    if (unlikely(it == columns_for_test_map.end()))
-    {
-        throw DB::Exception("Don't have columns for mock source executors");
-    }
-    return it->second;
+    return mpp_server_info;
 }
 
-bool Context::columnsForTestEmpty()
+void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
-    return columns_for_test_map.empty();
+    mpp_server_info = info;
 }
 
 SessionCleaner::~SessionCleaner()
