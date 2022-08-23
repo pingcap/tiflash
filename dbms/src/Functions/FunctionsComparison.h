@@ -41,7 +41,6 @@
 #include <Functions/StringUtil.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
-#include <common/detect_features.h>
 #include <fmt/core.h>
 
 #include <limits>
