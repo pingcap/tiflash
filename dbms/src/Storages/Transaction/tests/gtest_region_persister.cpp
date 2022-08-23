@@ -48,8 +48,7 @@ static ::testing::AssertionResult PeerCompare(
 {
     if (lhs.id() == rhs.id() && lhs.role() == rhs.role())
         return ::testing::AssertionSuccess();
-    else
-        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.ShortDebugString(), rhs.ShortDebugString(), false);
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.ShortDebugString(), rhs.ShortDebugString(), false);
 }
 #define ASSERT_PEER_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::PeerCompare, val1, val2)
 
@@ -61,16 +60,31 @@ static ::testing::AssertionResult RegionCompare(
 {
     if (lhs == rhs)
         return ::testing::AssertionSuccess();
-    else
-        return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
 }
 #define ASSERT_REGION_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::RegionCompare, val1, val2)
 
-TEST(RegionSeriTest, peer)
+class RegionSeriTest : public ::testing::Test
+{
+public:
+    RegionSeriTest()
+        : dir_path(TiFlashTestEnv::getTemporaryPath("RegionSeriTest"))
+    {
+    }
+
+    void SetUp() override
+    {
+        TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true);
+    }
+
+    std::string dir_path;
+};
+
+TEST_F(RegionSeriTest, peer)
 try
 {
     auto peer = createPeer(100, true);
-    const auto path = TiFlashTestEnv::getTemporaryPath("RegionSeriTest") + "/peer.test";
+    const auto path = dir_path + "/peer.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     auto size = writeBinary2(peer, write_buf);
     write_buf.next();
@@ -83,11 +97,11 @@ try
 }
 CATCH
 
-TEST(RegionSeriTest, RegionInfo)
+TEST_F(RegionSeriTest, RegionInfo)
 try
 {
     auto region_info = createRegionInfo(233, "", "");
-    const auto path = TiFlashTestEnv::getTemporaryPath("RegionSeriTest") + "/region_info.test";
+    const auto path = dir_path + "/region_info.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     auto size = writeBinary2(region_info, write_buf);
     write_buf.next();
@@ -105,11 +119,11 @@ try
 }
 CATCH
 
-TEST(RegionSeriTest, RegionMeta)
+TEST_F(RegionSeriTest, RegionMeta)
 try
 {
     RegionMeta meta = createRegionMeta(888, 66);
-    const auto path = TiFlashTestEnv::getTemporaryPath("RegionSeriTest") + "/meta.test";
+    const auto path = dir_path + "/meta.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     auto size = std::get<0>(meta.serialize(write_buf));
     write_buf.next();
@@ -122,7 +136,7 @@ try
 }
 CATCH
 
-TEST(RegionSeriTest, Region)
+TEST_F(RegionSeriTest, Region)
 try
 {
     TableID table_id = 100;
@@ -132,7 +146,7 @@ try
     region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
     region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-    const auto path = TiFlashTestEnv::getTemporaryPath("RegionSeriTest") + "/region.test";
+    const auto path = dir_path + "/region.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     size_t region_ser_size = std::get<0>(region->serialize(write_buf));
     write_buf.next();
@@ -145,7 +159,7 @@ try
 }
 CATCH
 
-TEST(RegionSeriTest, RegionStat)
+TEST_F(RegionSeriTest, RegionStat)
 try
 {
     RegionPtr region = nullptr;
@@ -175,7 +189,7 @@ try
     region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
     region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-    const auto path = TiFlashTestEnv::getTemporaryPath("RegionSeriTest") + "/region_state.test";
+    const auto path = dir_path + "/region_state.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     size_t region_ser_size = std::get<0>(region->serialize(write_buf));
     write_buf.next();
@@ -200,7 +214,7 @@ public:
 
     void SetUp() override
     {
-        dropFiles();
+        TiFlashTestEnv::tryRemovePath(dir_path);
 
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         auto path_capacity = global_ctx.getPathCapacity();
@@ -214,15 +228,6 @@ public:
             path_capacity,
             provider,
             /*enable_raft_compatible_mode_=*/true);
-    }
-
-    void dropFiles()
-    {
-        // cleanup
-        Poco::File file(dir_path);
-        if (file.exists())
-            file.remove(true);
-        file.createDirectories();
     }
 
     void runTest(const String & path, bool sync_on_write);
