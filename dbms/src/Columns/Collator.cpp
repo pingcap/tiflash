@@ -47,6 +47,7 @@ extern const int SUPPORT_IS_DISABLED;
 
 Collator::Collator(const std::string & locale_)
     : locale(Poco::toLower(locale_))
+    , collator(nullptr)
 {
 #if USE_ICU
     UErrorCode status = U_ZERO_ERROR;
