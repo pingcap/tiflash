@@ -64,7 +64,7 @@ Collator::Collator(const std::string & locale_)
 }
 
 
-Collator::~Collator()
+Collator::~Collator() // NOLINT(modernize-use-equals-default)
 {
 #if USE_ICU
     ucol_close(collator);
