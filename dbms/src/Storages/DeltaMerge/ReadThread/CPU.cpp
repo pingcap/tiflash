@@ -45,6 +45,8 @@ static inline std::vector<int> getCPUs(const std::string & dir_name)
 {
     std::vector<int> cpus;
     Poco::File dir(dir_name);
+    if (!dir.exists())
+        return cpus;
     Poco::DirectoryIterator end;
     for (auto iter = Poco::DirectoryIterator(dir); iter != end; ++iter)
     {
