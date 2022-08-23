@@ -120,6 +120,17 @@ ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange
     return cloned_column_files;
 }
 
+void MemTableSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const
+{
+    for (const auto & column_file : column_files)
+    {
+        if (auto * p = column_file->tryToColumnFilePersisted(); p)
+        {
+            p->removeData(wbs);
+        }
+    }
+}
+
 void MemTableSet::appendColumnFile(const ColumnFilePtr & column_file)
 {
     appendColumnFileInner(column_file);

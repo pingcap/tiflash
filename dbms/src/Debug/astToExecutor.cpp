@@ -15,6 +15,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Debug/MockComputeServerManager.h>
 #include <Debug/astToExecutor.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -31,6 +32,7 @@
 namespace DB
 {
 using ASTPartitionByElement = ASTOrderByElement;
+using MockComputeServerManager = tests::MockComputeServerManager;
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
 {
     *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
@@ -771,6 +773,7 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
 namespace Debug
 {
 String LOCAL_HOST = "127.0.0.1:3930";
+
 void setServiceAddr(const std::string & addr)
 {
     LOCAL_HOST = addr;
@@ -822,13 +825,16 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         tipb_type.set_collate(collator_id);
         *exchange_sender->add_types() = tipb_type;
     }
+
     for (auto task_id : mpp_info.sender_target_task_ids)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        meta.set_address(Debug::LOCAL_HOST);
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        meta.set_address(addr);
+
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
@@ -845,7 +851,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
-bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &)
+bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
     tipb_executor->set_executor_id(name);
@@ -862,13 +868,16 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     auto it = mpp_info.receiver_source_task_ids_map.find(name);
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
-    for (size_t i = 0; i < it->second.size(); i++)
+
+    auto size = it->second.size();
+    for (size_t i = 0; i < size; ++i)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        meta.set_address(Debug::LOCAL_HOST);
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
@@ -877,8 +886,19 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
 
 void TableScan::columnPrune(std::unordered_set<String> & used_columns)
 {
-    output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
-                        output_schema.end());
+    DAGSchema new_schema;
+    for (const auto & col : output_schema)
+    {
+        for (const auto & used_col : used_columns)
+        {
+            if (splitQualifiedName(used_col).column_name == splitQualifiedName(col.first).column_name && splitQualifiedName(used_col).table_name == splitQualifiedName(col.first).table_name)
+            {
+                new_schema.push_back({used_col, col.second});
+            }
+        }
+    }
+
+    output_schema = new_schema;
 }
 
 bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &)
@@ -1183,19 +1203,28 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
     std::unordered_set<String> right_columns;
 
     for (auto & field : children[0]->output_schema)
-        left_columns.emplace(field.first);
-    for (auto & field : children[1]->output_schema)
-        right_columns.emplace(field.first);
+    {
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        left_columns.emplace(table_name + "." + column_name);
+    }
 
+    for (auto & field : children[1]->output_schema)
+    {
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        right_columns.emplace(table_name + "." + column_name);
+    }
     std::unordered_set<String> left_used_columns;
     std::unordered_set<String> right_used_columns;
 
     for (const auto & s : used_columns)
     {
-        if (left_columns.find(s) != left_columns.end())
-            left_used_columns.emplace(s);
-        else
-            right_used_columns.emplace(s);
+        auto [db_name, table_name, col_name] = splitQualifiedName(s);
+        auto t = table_name + "." + col_name;
+        if (left_columns.find(t) != left_columns.end())
+            left_used_columns.emplace(t);
+
+        if (right_columns.find(t) != right_columns.end())
+            right_used_columns.emplace(t);
     }
 
     for (const auto & child : join_cols)
@@ -1205,17 +1234,19 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
             auto col_name = identifier->getColumnName();
             for (auto & field : children[0]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).column_name)
+                auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+                if (col_name == column_name)
                 {
-                    left_used_columns.emplace(field.first);
+                    left_used_columns.emplace(table_name + "." + column_name);
                     break;
                 }
             }
             for (auto & field : children[1]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).column_name)
+                auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+                if (col_name == column_name)
                 {
-                    right_used_columns.emplace(field.first);
+                    right_used_columns.emplace(table_name + "." + column_name);
                     break;
                 }
             }
@@ -1231,6 +1262,7 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
 
     /// update output schema
     output_schema.clear();
+
     for (auto & field : children[0]->output_schema)
     {
         if (tp == tipb::TypeRightOuterJoin && field.second.hasNotNullFlag())
@@ -1775,6 +1807,7 @@ ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr r
     }
     return compileJoin(executor_index, left, right, tp, join_cols);
 }
+
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type)
 {
