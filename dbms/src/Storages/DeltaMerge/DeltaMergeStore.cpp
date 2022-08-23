@@ -99,9 +99,6 @@ extern const char exception_after_drop_segment[];
 
 namespace DM
 {
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
-
 // ================================================
 //   MergeDeltaTaskPool
 // ================================================
@@ -210,7 +207,6 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
     , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
 {
     // for mock test, table_id_ should be DB::InvalidTableID
@@ -502,7 +498,6 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     auto * ctx = new DMContext(db_context.getGlobalContext(),
                                path_pool,
                                *storage_pool,
-                               hash_salt,
                                latest_gc_safe_point.load(std::memory_order_acquire),
                                settings.not_compress_columns,
                                is_common_handle,
