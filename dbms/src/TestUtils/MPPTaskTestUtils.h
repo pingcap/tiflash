@@ -55,11 +55,12 @@ private:
     std::atomic<Int64> port = 3931;
 };
 
-DAGProperties getDAGPropertiesForTest(int server_num)
+DAGProperties getDAGPropertiesForTest(int server_num, const String encode_type = "")
 {
     DAGProperties properties;
     // enable mpp
     properties.is_mpp_query = true;
+    properties.encode_type = encode_type;
     properties.mpp_partition_num = server_num;
     properties.start_ts = MockTimeStampGenerator::instance().nextTs();
     return properties;
@@ -107,6 +108,7 @@ public:
 protected:
     static LoggerPtr log_ptr;
     static size_t server_num;
+    std::vector<String> encode_types = {"", "chunk", "chblock"};
 };
 
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
@@ -135,16 +137,19 @@ size_t MPPTaskTestUtils::server_num = 0;
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
     do                                                                                 \
     {                                                                                  \
-        auto properties = getDAGPropertiesForTest(serverNum());                        \
-        auto tasks = (builder).buildMPPTasks(context, properties);                     \
-        size_t task_size = tasks.size();                                               \
-        for (size_t i = 0; i < task_size; ++i)                                         \
+        for (auto encode_type : encode_types)                                          \
         {                                                                              \
-            ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);      \
+            auto properties = getDAGPropertiesForTest(serverNum(), encode_type);                 \
+            auto tasks = (builder).buildMPPTasks(context, properties);                 \
+            size_t task_size = tasks.size();                                           \
+            for (size_t i = 0; i < task_size; ++i)                                     \
+            {                                                                          \
+                ASSERT_DAGREQUEST_EQAUL((expected_strings)[i], tasks[i].dag_request);  \
+            }                                                                          \
+            ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(                                      \
+                builder,                                                               \
+                properties,                                                            \
+                expect_cols);                                                          \
         }                                                                              \
-        ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(                                          \
-            builder,                                                                   \
-            properties,                                                                \
-            expect_cols);                                                              \
     } while (0)
 } // namespace DB::tests
