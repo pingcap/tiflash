@@ -89,10 +89,9 @@ public:
         // TODO support multi-streams.
         size_t max_streams = 1;
 
-        context.context.setColumnsForTest(context.executorIdColumnsMap());
-
         DAGContext dag_context(*request, "executor_test", max_streams);
         context.context.setDAGContext(&dag_context);
+        context.context.setMockStorage(context.mockStorage());
 
         PhysicalPlan physical_plan{context.context, log->identifier()};
         assert(request);
@@ -112,7 +111,7 @@ public:
             ASSERT_EQ(Poco::trim(expected_streams), Poco::trim(fb.toString()));
         }
 
-        ASSERT_COLUMNS_EQ_R(expect_columns, readBlock(final_stream));
+        ASSERT_COLUMNS_EQ_UR(expect_columns, readBlock(final_stream));
     }
 
     std::tuple<DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder> multiTestScan()
