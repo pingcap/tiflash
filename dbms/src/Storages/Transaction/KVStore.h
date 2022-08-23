@@ -163,7 +163,9 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
@@ -232,7 +234,9 @@ private:
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     RegionManager region_manager;
 
     std::unique_ptr<RegionPersister> region_persister;

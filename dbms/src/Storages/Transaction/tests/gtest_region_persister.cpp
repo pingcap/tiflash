@@ -28,7 +28,6 @@
 #include <common/logger_useful.h>
 
 #include <ext/scope_guard.h>
-#include <sstream>
 
 namespace DB
 {

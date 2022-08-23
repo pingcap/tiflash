@@ -47,12 +47,12 @@ namespace tests
 class RegionKVStoreTest : public ::testing::Test
 {
 public:
-    RegionKVStoreTest() = default;
-
-    static void SetUpTestCase()
+    RegionKVStoreTest()
     {
         test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
     }
+
+    static void SetUpTestCase() {}
 
     void SetUp() override
     {
@@ -69,34 +69,21 @@ public:
         kvstore->restore(*path_pool, proxy_helper.get());
     }
 
-    void TearDown() override
-    {
-        proxy_helper.reset();
-        proxy_instance.reset();
-        kvstore.reset();
-        path_pool.reset();
-    }
-
-    static void testBasic();
-    static void testKVStore();
-    static void testRegion();
-    static void testReadIndex();
-    static void testNewProxy();
-    static void testKVStoreRestore();
+    void TearDown() override {}
 
 protected:
-    static KVStore & getKVS() { return *kvstore; }
-    static KVStore & reloadKVSFromDisk()
+    KVStore & getKVS() { return *kvstore; }
+    KVStore & reloadKVSFromDisk()
     {
         kvstore.reset();
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
         kvstore = std::make_unique<KVStore>(global_ctx, TiDB::SnapshotApplyMethod::DTFile_Directory);
-        // TODO: Do we need to recreate proxy_instance and proxy_helper here?
+        // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
         return *kvstore;
     }
 
-private:
+protected:
     static void testRaftSplit(KVStore & kvs, TMTContext & tmt);
     static void testRaftMerge(KVStore & kvs, TMTContext & tmt);
     static void testRaftChangePeer(KVStore & kvs, TMTContext & tmt);
@@ -118,22 +105,16 @@ private:
         return std::make_unique<PathPool>(main_data_paths, main_data_paths, Strings{}, path_capacity, provider);
     }
 
-    static std::string test_path;
+    std::string test_path;
 
-    static std::unique_ptr<PathPool> path_pool;
-    static std::unique_ptr<KVStore> kvstore;
+    std::unique_ptr<PathPool> path_pool;
+    std::unique_ptr<KVStore> kvstore;
 
-    static std::unique_ptr<MockRaftStoreProxy> proxy_instance;
-    static std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
+    std::unique_ptr<MockRaftStoreProxy> proxy_instance;
+    std::unique_ptr<TiFlashRaftProxyHelper> proxy_helper;
 };
 
-std::string RegionKVStoreTest::test_path;
-std::unique_ptr<PathPool> RegionKVStoreTest::path_pool;
-std::unique_ptr<KVStore> RegionKVStoreTest::kvstore;
-std::unique_ptr<MockRaftStoreProxy> RegionKVStoreTest::proxy_instance;
-std::unique_ptr<TiFlashRaftProxyHelper> RegionKVStoreTest::proxy_helper;
-
-void RegionKVStoreTest::testNewProxy()
+TEST_F(RegionKVStoreTest, NewProxy)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
@@ -176,7 +157,7 @@ void RegionKVStoreTest::testNewProxy()
     }
 }
 
-void RegionKVStoreTest::testReadIndex()
+TEST_F(RegionKVStoreTest, ReadIndex)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
@@ -771,7 +752,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
     }
 }
 
-void RegionKVStoreTest::testRegion()
+TEST_F(RegionKVStoreTest, Region)
 {
     TableID table_id = 100;
     {
@@ -868,7 +849,7 @@ void RegionKVStoreTest::testRegion()
     }
 }
 
-void RegionKVStoreTest::testKVStore()
+TEST_F(RegionKVStoreTest, KVStore)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
@@ -1280,7 +1261,7 @@ void RegionKVStoreTest::testKVStore()
     }
 }
 
-void RegionKVStoreTest::testKVStoreRestore()
+TEST_F(RegionKVStoreTest, KVStoreRestore)
 {
     {
         KVStore & kvs = getKVS();
@@ -1367,7 +1348,7 @@ void test_mergeresult()
     }
 }
 
-void RegionKVStoreTest::testBasic()
+TEST_F(RegionKVStoreTest, Basic)
 {
     {
         RegionsRangeIndex region_index;
@@ -1528,48 +1509,6 @@ void RegionKVStoreTest::testBasic()
         }
     }
 }
-
-TEST_F(RegionKVStoreTest, Basic)
-try
-{
-    testBasic();
-}
-CATCH
-
-TEST_F(RegionKVStoreTest, KVStore)
-try
-{
-    testKVStore();
-}
-CATCH
-
-TEST_F(RegionKVStoreTest, KVStoreRestore)
-try
-{
-    testKVStoreRestore();
-}
-CATCH
-
-TEST_F(RegionKVStoreTest, Region)
-try
-{
-    testRegion();
-}
-CATCH
-
-TEST_F(RegionKVStoreTest, ReadIndex)
-try
-{
-    testReadIndex();
-}
-CATCH
-
-TEST_F(RegionKVStoreTest, NewProxy)
-try
-{
-    testNewProxy();
-}
-CATCH
 
 } // namespace tests
 } // namespace DB
