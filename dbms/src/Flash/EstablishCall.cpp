@@ -58,10 +58,7 @@ void EstablishCallData::setAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunn
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
 {
-    if (*is_shutdown)
-        finishTunnelAndResponder();
-    else
-        responder.Finish(status, this);
+    responder.Finish(status, this);
 }
 
 void EstablishCallData::initRpc()
@@ -86,14 +83,7 @@ void EstablishCallData::initRpc()
 
 bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 {
-    if (*is_shutdown)
-    {
-        finishTunnelAndResponder();
-    }
-    else
-    {
-        responder.Write(packet, this);
-    }
+    responder.Write(packet, this);
     return true;
 }
 
@@ -152,6 +142,12 @@ void EstablishCallData::proceed()
     }
     else if (state == PROCESSING)
     {
+        if (unlikely(is_shutdown->load(std::memory_order_relaxed)))
+        {
+            finishTunnelAndResponder();
+            return;
+        }
+
         sendOne();
     }
     else if (state == ERR_HANDLE)

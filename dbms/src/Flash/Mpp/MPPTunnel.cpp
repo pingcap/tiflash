@@ -411,7 +411,7 @@ void AsyncTunnelSender::kickCompletionQueue()
     // GRPC_CALL_OK, the tag is put in the completion queue immediately.
     // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
     auto error = grpc_call_start_batch(call, nullptr, 0, old_tag, nullptr);
-    // If an error occur, there must be something wrong about shutdown process
+    // If an error occur, there must be something wrong about shutdown process.
     RUNTIME_ASSERT(error != grpc_call_error::GRPC_CALL_OK, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
 }
 

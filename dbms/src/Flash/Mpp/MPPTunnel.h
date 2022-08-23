@@ -178,6 +178,7 @@ private:
     // Thread 2: push/finish the data in queue.
     // Thread 2: do not kick the completion queue because tag is nullptr.
     // Thread 1: set the tag.
+    //
     // If there is no more data, this connection will get stuck forever.
     std::mutex mu;
 
