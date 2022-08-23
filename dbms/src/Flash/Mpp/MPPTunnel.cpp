@@ -193,14 +193,14 @@ void MPPTunnel::connect(PacketWriter * writer)
         {
         case TunnelSenderMode::LOCAL:
         {
-            local_tunnel_sender = std::make_shared<LocalTunnelSender>(mode, queue_size, log, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender>(queue_size, log, tunnel_id);
             tunnel_sender = local_tunnel_sender;
             break;
         }
         case TunnelSenderMode::SYNC_GRPC:
         {
             RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
-            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(mode, queue_size, log, tunnel_id);
+            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, log, tunnel_id);
             sync_tunnel_sender->startSendThread(writer);
             tunnel_sender = sync_tunnel_sender;
             break;
@@ -208,12 +208,9 @@ void MPPTunnel::connect(PacketWriter * writer)
         case TunnelSenderMode::ASYNC_GRPC:
         {
             auto * calldata = dynamic_cast<EstablishCallData *>(writer);
-            RUNTIME_ASSERT(calldata != nullptr, log, "Async writer shouldn't be null");
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(mode, queue_size, log, tunnel_id);
-
+            RUNTIME_ASSERT(calldata != nullptr, log, "Async writer's type must be EstablishCallData");
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, calldata->grpc_call());
             calldata->setAsyncTunnelSender(async_tunnel_sender);
-            async_tunnel_sender->setKicker(calldata->getKicker());
-
             tunnel_sender = async_tunnel_sender;
             break;
         }
@@ -302,7 +299,7 @@ StringRef MPPTunnel::statusToString()
 void TunnelSender::consumerFinish(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
-    send_queue->finish();
+    send_queue.finish();
     consumer_state.setMsg(msg);
 }
 
@@ -320,7 +317,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
     try
     {
         MPPDataPacketPtr res;
-        while (send_queue->pop(res))
+        while (send_queue.pop(res))
         {
             if (!writer->write(*res))
             {
@@ -351,35 +348,77 @@ void SyncTunnelSender::startSendThread(PacketWriter * writer)
     });
 }
 
-void AsyncTunnelSender::setKicker(const CompletionQueueKickerPtr & kicker)
-{
-    cq_kicker = kicker;
-}
+AsyncTunnelSender::AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, grpc_call * call_)
+    : TunnelSender(queue_size, log_, tunnel_id_)
+    , call(call_)
+    , tag(nullptr)
+{}
 
 bool AsyncTunnelSender::push(const mpp::MPPDataPacket & data)
 {
-    auto ret = send_queue->push(std::make_shared<mpp::MPPDataPacket>(data));
+    auto ret = send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
     if (ret)
     {
-        cq_kicker->kick();
+        kickCompletionQueue();
     }
     return ret;
 }
 
 bool AsyncTunnelSender::finish()
 {
-    auto ret = send_queue->finish();
+    auto ret = send_queue.finish();
     if (ret)
     {
-        cq_kicker->kick();
+        kickCompletionQueue();
     }
     return ret;
+}
+
+bool AsyncTunnelSender::pop(MPPDataPacketPtr & data, bool & ok, void * new_tag)
+{
+    RUNTIME_ASSERT(new_tag != nullptr, "new_tag is nullptr when popping");
+    if (!send_queue.isNextPopNonBlocking())
+    {
+        // Next pop is blocking.
+        std::unique_lock lock(mu);
+        RUNTIME_ASSERT(tag == nullptr, "tag is not nullptr when popping");
+        // Double check if next pop is blocking.
+        if (!send_queue.isNextPopNonBlocking())
+        {
+            // If blocking, set the tag and return.
+            tag = new_tag;
+            return false;
+        }
+        // If not blocking, pop will be called.
+    }
+    ok = send_queue.pop(data);
+    return true;
+}
+
+void AsyncTunnelSender::kickCompletionQueue()
+{
+    void * old_tag;
+    {
+        std::unique_lock lock(mu);
+        old_tag = tag;
+        tag = nullptr;
+    }
+    if (!old_tag)
+    {
+        return;
+    }
+    // If a call to grpc_call_start_batch with an empty batch returns
+    // GRPC_CALL_OK, the tag is put in the completion queue immediately.
+    // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
+    auto error = grpc_call_start_batch(call, nullptr, 0, old_tag, nullptr);
+    // If an error occur, there must be something wrong about shutdown process
+    RUNTIME_ASSERT(error != grpc_call_error::GRPC_CALL_OK, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
 }
 
 MPPDataPacketPtr LocalTunnelSender::readForLocal()
 {
     MPPDataPacketPtr res;
-    if (send_queue->pop(res))
+    if (send_queue.pop(res))
         return res;
     consumerFinish("");
     return nullptr;

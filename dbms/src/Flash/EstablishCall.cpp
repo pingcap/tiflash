@@ -32,7 +32,6 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     , is_shutdown(is_shutdown)
     , responder(&ctx)
     , state(NEW_REQUEST)
-    , cq_kicker(std::make_shared<CompletionQueueKicker>(ctx.c_call()))
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Increment();
     // As part of the initial CREATE state, we *request* that the system
@@ -55,11 +54,6 @@ void EstablishCallData::setAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunn
 {
     stopwatch = std::make_shared<Stopwatch>();
     async_tunnel_sender = async_tunnel_sender_;
-}
-
-const CompletionQueueKickerPtr & EstablishCallData::getKicker()
-{
-    return cq_kicker;
 }
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
@@ -95,19 +89,18 @@ bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
     if (*is_shutdown)
     {
         finishTunnelAndResponder();
-        return true;
     }
-    responder.Write(packet, this);
+    else
+    {
+        responder.Write(packet, this);
+    }
     return true;
 }
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
     state = ERR_HANDLE;
-    if (write(packet))
-        err_status = grpc::Status::OK;
-    else
-        err_status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+    write(packet);
 }
 
 void EstablishCallData::setFinishState(const String & msg)
@@ -159,14 +152,11 @@ void EstablishCallData::proceed()
     }
     else if (state == PROCESSING)
     {
-        if (!sendOne())
-        {
-            cq_kicker->setTag(this);
-        }
+        sendOne();
     }
     else if (state == ERR_HANDLE)
     {
-        writeDone(err_status);
+        writeDone(grpc::Status::OK);
     }
     else
     {
@@ -178,42 +168,27 @@ void EstablishCallData::proceed()
     }
 }
 
-bool EstablishCallData::sendOne()
+void EstablishCallData::sendOne()
 {
-    if (async_tunnel_sender->getSendQueue()->isNextPopNonBlocking())
+    MPPDataPacketPtr res;
+    bool ok;
+    if (!async_tunnel_sender->pop(res, ok, this))
     {
-        return false;
+        return;
     }
-    String err_msg;
-    bool queue_empty_flag = false;
-    try
+    if (ok)
     {
-        MPPDataPacketPtr res;
-        queue_empty_flag = !async_tunnel_sender->getSendQueue()->pop(res);
-        if (!queue_empty_flag)
-        {
-            if (!write(*res))
-            {
-                err_msg = "grpc writes failed.";
-            }
-        }
+        write(*res);
     }
-    catch (...)
+    else
     {
-        err_msg = getCurrentExceptionMessage(true);
-    }
-    if (!err_msg.empty())
-    {
-        err_msg = fmt::format("{} meet error: {}", async_tunnel_sender->getTunnelId(), err_msg);
-        LOG_ERROR(async_tunnel_sender->getLogger(), err_msg);
-        trimStackTrace(err_msg);
-    }
-    if (!err_msg.empty() || queue_empty_flag)
-    {
-        async_tunnel_sender->consumerFinish(err_msg);
         writeDone(grpc::Status::OK);
     }
-    return true;
+}
+
+grpc_call * EstablishCallData::grpc_call()
+{
+    return ctx.c_call();
 }
 
 } // namespace DB

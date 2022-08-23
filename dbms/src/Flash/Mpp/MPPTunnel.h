@@ -18,7 +18,6 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCCompletionQueueKicker.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
@@ -58,7 +57,6 @@ enum class TunnelSenderMode
 };
 
 using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
 
 /// TunnelSender is responsible for consuming data from Tunnel's internal send_queue and do the actual sending work
 /// After TunnelSend finished its work, either normally or abnormally, set ConsumerState to inform Tunnel
@@ -66,26 +64,21 @@ class TunnelSender : private boost::noncopyable
 {
 public:
     virtual ~TunnelSender() = default;
-    TunnelSender(TunnelSenderMode mode_, size_t queue_size, const LoggerPtr log_, const String & tunnel_id_)
-        : mode(mode_)
-        , send_queue(std::make_shared<MPMCQueue<MPPDataPacketPtr>>(queue_size))
+    TunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_)
+        : send_queue(MPMCQueue<MPPDataPacketPtr>(queue_size))
         , log(log_)
         , tunnel_id(tunnel_id_)
     {
     }
-    DataPacketMPMCQueuePtr & getSendQueue()
-    {
-        return send_queue;
-    }
 
     virtual bool push(const mpp::MPPDataPacket & data)
     {
-        return send_queue->push(std::make_shared<mpp::MPPDataPacket>(data));
+        return send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
     }
 
     virtual bool finish()
     {
-        return send_queue->finish();
+        return send_queue.finish();
     }
 
     void consumerFinish(const String & err_msg);
@@ -134,11 +127,10 @@ protected:
         std::shared_future<String> future;
         std::atomic<bool> msg_has_set{false};
     };
-    TunnelSenderMode mode;
-    DataPacketMPMCQueuePtr send_queue;
+    MPMCQueue<MPPDataPacketPtr> send_queue;
     ConsumerState consumer_state;
     const LoggerPtr log;
-    String tunnel_id;
+    const String tunnel_id;
 };
 
 /// SyncTunnelSender maintains a new thread itself to consume and send data
@@ -160,15 +152,37 @@ private:
 class AsyncTunnelSender : public TunnelSender
 {
 public:
-    using Base = TunnelSender;
-    using Base::Base;
+    AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, grpc_call * call_);
 
-    void setKicker(const CompletionQueueKickerPtr & kicker);
     virtual bool push(const mpp::MPPDataPacket & data) override;
     virtual bool finish() override;
 
+    // Pop the data from queue.
+    // Returns true if pop is done and `ok` means the if there is
+    // new data from queue.
+    // Returns false if pop isn't done due to blocking and `new_tag`
+    // is saved. When the next push/finish is called, the `new_tag` will
+    // be pushed into grpc completion queue.
+    bool pop(MPPDataPacketPtr & data, bool & ok, void * new_tag);
+
 private:
-    CompletionQueueKickerPtr cq_kicker;
+    // Wakes up its completion queue.
+    void kickCompletionQueue();
+
+    // The mutex is used to synchronize the concurrent calls between push/finish and pop.
+    // The concurrency problem we want to prevent here is LOST NOTIFICATION.
+    // Note that this mutex is necessary. It's useless to just change the `tag` to atomic.
+    //
+    // Imagine this case:
+    // Thread 1: want to pop the data from queue but find no data there.
+    // Thread 2: push/finish the data in queue.
+    // Thread 2: do not kick the completion queue because tag is nullptr.
+    // Thread 1: set the tag.
+    // If there is no more data, this connection will get stuck forever.
+    std::mutex mu;
+
+    grpc_call * call;
+    void * tag;
 };
 
 /// LocalTunnelSender just provide readForLocal method to return one element one time

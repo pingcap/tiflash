@@ -17,7 +17,6 @@
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/GRPCCompletionQueueKicker.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
 
@@ -57,8 +56,6 @@ public:
 
     void setAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_);
 
-    const CompletionQueueKickerPtr & getKicker();
-
     bool write(const mpp::MPPDataPacket & packet) override;
 
     void writeDone(const ::grpc::Status & status) override;
@@ -78,14 +75,16 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
+    grpc_call * grpc_call();
+
 private:
     void initRpc();
 
-    bool sendOne();
+    void sendOne();
 
     void finishTunnelAndResponder();
 
-    // will try to call async_sender's consumerFinish if needed
+    // Will try to call async_sender's consumerFinish if needed
     void setFinishState(const String & msg);
 
     void responderFinish(const grpc::Status & status);
@@ -98,7 +97,6 @@ private:
     ::grpc::ServerCompletionQueue * notify_cq;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
     ::grpc::ServerContext ctx;
-    ::grpc::Status err_status;
 
     // What we get from the client.
     ::mpp::EstablishMPPConnectionRequest request;
@@ -116,7 +114,6 @@ private:
     };
     // The current serving state.
     CallStatus state;
-    CompletionQueueKickerPtr cq_kicker;
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::shared_ptr<Stopwatch> stopwatch;
 };
