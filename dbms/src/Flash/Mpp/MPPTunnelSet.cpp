@@ -27,13 +27,6 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 } // namespace FailPoints
 namespace
 {
-inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & response)
-{
-    mpp::MPPDataPacket packet;
-    if (!response.SerializeToString(packet.mutable_data()))
-        throw Exception(fmt::format("[MPPTunnel]Fail to serialize response, response size: {}", response.ByteSizeLong()));
-    return packet;
-}
 
 void checkPacketSize(size_t size)
 {
