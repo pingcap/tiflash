@@ -224,7 +224,7 @@ try
             const auto & property = propertys.property(i);
             ASSERT_EQ((size_t)property.num_rows(), (size_t)block_propertys[i].effective_num_rows);
             ASSERT_EQ((size_t)property.gc_hint_version(), (size_t)block_propertys[i].effective_num_rows);
-            ASSERT_EQ((size_t)property.deleted_rows(), (size_t)block_propertys[i].is_deleted_rows);
+            ASSERT_EQ((size_t)property.deleted_rows(), (size_t)block_propertys[i].deleted_rows);
         }
     }
     {
