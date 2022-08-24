@@ -38,6 +38,15 @@
 namespace DB
 {
 class MPPTaskManager;
+
+enum class AbortType
+{
+    /// todo add ONKILL to distinguish between silent cancellation and kill
+    ONCANCELLATION,
+    ONERROR,
+};
+String abortTypeToString(AbortType abort_type);
+
 class MPPTask : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
@@ -56,8 +65,6 @@ public:
     bool isRootMPPTask() const { return dag_context->isRootMPPTask(); }
 
     TaskStatus getStatus() const { return status.load(); }
-
-    void cancel(const String & reason);
 
     void handleError(const String & error_msg);
 
@@ -78,8 +85,6 @@ public:
 
     bool scheduleThisTask(ScheduleState state);
 
-    bool isScheduled();
-
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
 
@@ -96,12 +101,6 @@ private:
     /// without waiting the tunnel to be connected
     void closeAllTunnels(const String & reason);
 
-    enum class AbortType
-    {
-        /// todo add ONKILL to distinguish between silent cancellation and kill
-        ONCANCELLATION,
-        ONERROR,
-    };
     void abort(const String & message, AbortType abort_type);
 
     void abortTunnels(const String & message, AbortType abort_type);
@@ -152,6 +151,7 @@ private:
     MPPTaskStatistics mpp_task_statistics;
 
     friend class MPPTaskManager;
+    friend class MPPTaskCancelHelper;
 
     int needed_threads;
 

@@ -16,19 +16,27 @@
 #include <Common/Exception.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <DataStreams/MockExchangeReceiverInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
+
 template <typename SourceType>
-std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(Context & context, size_t max_streams, DB::LoggerPtr log, String executor_id)
+std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStream(Context & context, size_t max_streams, DB::LoggerPtr log, String executor_id, Int64 table_id = 0)
 {
     ColumnsWithTypeAndName columns_with_type_and_name;
     NamesAndTypes names_and_types;
     size_t rows = 0;
     std::vector<std::shared_ptr<SourceType>> mock_source_streams;
-    columns_with_type_and_name = context.columnsForTest(executor_id);
+    if constexpr (std::is_same_v<SourceType, MockExchangeReceiverInputStream>)
+        columns_with_type_and_name = context.mockStorage().getExchangeColumns(executor_id);
+    else if (context.isMPPTest())
+        columns_with_type_and_name = context.mockStorage().getColumnsForMPPTableScan(table_id, context.mockMPPServerInfo().partition_id, context.mockMPPServerInfo().partition_num);
+    else
+        columns_with_type_and_name = context.mockStorage().getColumns(table_id);
+
     for (const auto & col : columns_with_type_and_name)
     {
         if (rows == 0)

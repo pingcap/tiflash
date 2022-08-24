@@ -25,6 +25,7 @@ namespace DB
 {
 class Context;
 
+class PathPool;
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 using RegionMap = std::unordered_map<RegionID, RegionPtr>;
@@ -50,7 +51,7 @@ public:
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr, PageStorage::Config config = PageStorage::Config{});
+    RegionMap restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr, PageStorage::Config config = PageStorage::Config{});
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
