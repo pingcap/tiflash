@@ -375,7 +375,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
         {
             not_clean_rows += countBytesInFilter(not_clean);
-            is_deleted_rows += countBytesInFilter(is_deleted);
+            deleted_rows += countBytesInFilter(is_deleted);
             effective_num_rows += countBytesInFilter(effective);
         }
 

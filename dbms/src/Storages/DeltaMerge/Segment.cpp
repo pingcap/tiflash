@@ -114,12 +114,12 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
     {
         size_t last_effective_num_rows = 0;
         size_t last_not_clean_rows = 0;
-        size_t last_is_deleted_rows = 0;
+        size_t last_deleted_rows = 0;
         if (mvcc_stream)
         {
             last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
             last_not_clean_rows = mvcc_stream->getNotCleanRows();
-            last_is_deleted_rows = mvcc_stream->getIsDeletedRows();
+            last_deleted_rows = mvcc_stream->getDeletedRows();
         }
         Block block = input_stream->read();
         if (!block)
@@ -130,22 +130,22 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
         // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
         size_t cur_effective_num_rows = block.rows();
         size_t cur_not_clean_rows = 1;
-        // If the stream is not mvcc_stream, it will not calculate the is_deleted_rows.
+        // If the stream is not mvcc_stream, it will not calculate the deleted_rows.
         // Thus we set it to 1 to ensure when read this block will not use related optimization.
-        size_t cur_is_deleted_rows = 1;
+        size_t cur_deleted_rows = 1;
         size_t gc_hint_version = std::numeric_limits<UInt64>::max();
         if (mvcc_stream)
         {
             cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
             cur_not_clean_rows = mvcc_stream->getNotCleanRows();
-            cur_is_deleted_rows = mvcc_stream->getIsDeletedRows();
+            cur_deleted_rows = mvcc_stream->getDeletedRows();
             gc_hint_version = mvcc_stream->getGCHintVersion();
         }
 
         DMFileBlockOutputStream::BlockProperty block_property;
         block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
         block_property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
-        block_property.is_deleted_rows = cur_is_deleted_rows - last_is_deleted_rows;
+        block_property.deleted_rows = cur_deleted_rows - last_deleted_rows;
         block_property.gc_hint_version = gc_hint_version;
         output_stream->write(block, block_property);
     }

@@ -75,7 +75,7 @@ public:
                       complete_passed * 100.0 / total_blocks,
                       complete_not_passed * 100.0 / total_blocks,
                       not_clean_rows * 100.0 / passed_rows,
-                      is_deleted_rows * 100.0 / passed_rows,
+                      deleted_rows * 100.0 / passed_rows,
                       effective_num_rows * 100.0 / passed_rows,
                       version_limit);
     }
@@ -96,7 +96,7 @@ public:
 
     size_t getEffectiveNumRows() const { return effective_num_rows; }
     size_t getNotCleanRows() const { return not_clean_rows; }
-    size_t getIsDeletedRows() const { return is_deleted_rows; }
+    size_t getDeletedRows() const { return deleted_rows; }
     UInt64 getGCHintVersion() const { return gc_hint_version; }
 
 private:
@@ -213,7 +213,7 @@ private:
     IColumn::Filter effective{};
     // not_clean = selected & (handle equals with next || deleted)
     IColumn::Filter not_clean{};
-    // is_deleted_rows = selected & deleted
+    // is_deleted = selected & deleted
     IColumn::Filter is_deleted{};
 
     // Calculate per block, when gc_safe_point exceed this version, there must be some data obsolete in this block
@@ -241,7 +241,7 @@ private:
     size_t complete_not_passed = 0;
     size_t not_clean_rows = 0;
     size_t effective_num_rows = 0;
-    size_t is_deleted_rows = 0;
+    size_t deleted_rows = 0;
 
     const LoggerPtr log;
 };

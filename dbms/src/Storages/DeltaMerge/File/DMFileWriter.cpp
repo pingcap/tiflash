@@ -13,10 +13,9 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
-
-#include "Storages/DeltaMerge/DeltaMergeDefines.h"
 
 #ifndef NDEBUG
 #include <sys/stat.h>
@@ -154,7 +153,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     auto * property = properties.add_property();
     property->set_num_rows(block_property.effective_num_rows);
     property->set_gc_hint_version(block_property.gc_hint_version);
-    property->set_num_rows_with_deleted(block_property.is_deleted_rows);
+    property->set_deleted_rows(block_property.deleted_rows);
 }
 
 void DMFileWriter::finalize()

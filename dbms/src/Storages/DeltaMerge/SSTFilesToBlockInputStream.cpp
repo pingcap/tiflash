@@ -306,7 +306,7 @@ BoundedSSTFilesToBlockInputStream::getMvccStatistics() const
     return std::make_tuple(
         mvcc_compact_stream->getEffectiveNumRows(),
         mvcc_compact_stream->getNotCleanRows(),
-        mvcc_compact_stream->getIsDeletedRows(),
+        mvcc_compact_stream->getDeletedRows(),
         mvcc_compact_stream->getGCHintVersion());
 }
 

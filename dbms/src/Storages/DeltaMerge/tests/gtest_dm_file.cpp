@@ -174,11 +174,11 @@ try
     DMFileBlockOutputStream::BlockProperty block_property1;
     block_property1.effective_num_rows = 1;
     block_property1.gc_hint_version = 1;
-    block_property1.is_deleted_rows = 1;
+    block_property1.deleted_rows = 1;
     DMFileBlockOutputStream::BlockProperty block_property2;
     block_property2.effective_num_rows = 2;
     block_property2.gc_hint_version = 2;
-    block_property2.is_deleted_rows = 2;
+    block_property2.deleted_rows = 2;
     std::vector<DMFileBlockOutputStream::BlockProperty> block_propertys;
     block_propertys.push_back(block_property1);
     block_propertys.push_back(block_property2);
@@ -224,7 +224,7 @@ try
             const auto & property = propertys.property(i);
             ASSERT_EQ((size_t)property.num_rows(), (size_t)block_propertys[i].effective_num_rows);
             ASSERT_EQ((size_t)property.gc_hint_version(), (size_t)block_propertys[i].effective_num_rows);
-            ASSERT_EQ((size_t)property.num_rows_with_deleted(), (size_t)block_propertys[i].is_deleted_rows);
+            ASSERT_EQ((size_t)property.deleted_rows(), (size_t)block_propertys[i].is_deleted_rows);
         }
     }
     {

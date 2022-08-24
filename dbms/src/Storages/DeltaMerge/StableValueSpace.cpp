@@ -232,7 +232,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                 auto * pack_property = new_pack_properties.add_property();
                 pack_property->set_num_rows(cur_effective_num_rows - last_effective_num_rows);
                 pack_property->set_gc_hint_version(gc_hint_version);
-                pack_property->set_num_rows_with_deleted(mvcc_stream->getIsDeletedRows());
+                pack_property->set_deleted_rows(mvcc_stream->getDeletedRows());
             }
             mvcc_stream->readSuffix();
         }

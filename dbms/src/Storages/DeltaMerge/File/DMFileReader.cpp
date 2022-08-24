@@ -325,7 +325,7 @@ Block DMFileReader::read()
 
     size_t read_rows = 0;
     size_t not_clean_rows = 0;
-    size_t is_deleted_rows = 0;
+    size_t deleted_rows = 0;
 
     const std::vector<RSResult> & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
     RSResult expected_handle_res = handle_res[next_pack_id];
@@ -338,10 +338,10 @@ Block DMFileReader::read()
 
         read_rows += pack_stats[next_pack_id].rows;
         not_clean_rows += pack_stats[next_pack_id].not_clean;
-        // Because num_rows_with_deleted is a new field in pack_properties, we need to check whehter this pack has this field.
-        // If this pack doesn't have this field, then we can't know whether this pack is deleted or not.
-        // Thus we just is_deleted_rows += 1, to make sure we will not do the optimization with del column(just to make is_deleted_rows != 0).
-        is_deleted_rows += static_cast<size_t>(pack_properties.property_size()) > next_pack_id && pack_properties.property(next_pack_id).has_num_rows_with_deleted() ? pack_properties.property(next_pack_id).num_rows_with_deleted() : 1;
+        // Because deleted_rows is a new field in pack_properties, we need to check whehter this pack has this field.
+        // If this pack doesn't have this field, then we can't know whether this pack contains deleted rows.
+        // Thus we just deleted_rows += 1, to make sure we will not do the optimization with del column(just to make deleted_rows != 0).
+        deleted_rows += static_cast<size_t>(pack_properties.property_size()) > next_pack_id && pack_properties.property(next_pack_id).has_deleted_rows() ? pack_properties.property(next_pack_id).deleted_rows() : 1;
     }
 
     if (read_rows == 0)
@@ -360,7 +360,7 @@ Block DMFileReader::read()
     bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
 
     bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_mode && expected_handle_res == All;
-    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && is_deleted_rows == 0;
+    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && deleted_rows == 0;
 
     if (do_clean_read_on_normal_mode)
     {
