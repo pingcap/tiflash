@@ -62,9 +62,12 @@ TEST(CircularScanListTest, Normal)
         ASSERT_EQ(lst.get(1), nullptr);
     }
 
+    std::unordered_map<uint64_t, std::shared_ptr<Node>> nodes;
     for (uint64_t i = 0; i < 10; i++)
     {
-        lst.add(std::make_shared<Node>(i));
+        auto p = std::make_shared<Node>(i);
+        lst.add(p);
+        nodes.emplace(i, p);
     }
 
     {
@@ -89,6 +92,17 @@ TEST(CircularScanListTest, Normal)
         ASSERT_EQ(invalid, 3);
     }
 
+    // Invalid node still can be scanned if it is holded by other components.
+    for (uint64_t i = 0; i < 20; i++)
+    {
+        auto sp = lst.next();
+        ASSERT_EQ(sp->poolId(), i % 10);
+    }
+
+    nodes.erase(1);
+    nodes.erase(3);
+    nodes.erase(5);
+
     const std::vector<uint64_t> valid_ids = {0, 2, 4, 6, 7, 8, 9};
     for (uint64_t i = 0; i < 20; i++)
     {
@@ -105,6 +119,7 @@ TEST(CircularScanListTest, Normal)
     for (uint64_t id : valid_ids)
     {
         lst.get(id)->setInvalid();
+        nodes.erase(id);
     }
 
     {
@@ -119,16 +134,19 @@ TEST(CircularScanListTest, Normal)
 TEST(CircularScanListTest, Valid)
 {
     CircularScanList<Node> l;
-    l.add(std::make_shared<Node>(1));
+    auto p1 = std::make_shared<Node>(1);
+    l.add(p1);
 
     ASSERT_EQ(l.next()->poolId(), 1);
     ASSERT_EQ(l.next()->poolId(), 1);
 
     l.next()->setInvalid();
+    p1.reset();
 
     ASSERT_EQ(l.next(), nullptr);
     ASSERT_EQ(l.next(), nullptr);
-    l.add(std::make_shared<Node>(2));
+    auto p2 = std::make_shared<Node>(2);
+    l.add(p2);
 
     ASSERT_EQ(l.next()->poolId(), 2);
     ASSERT_EQ(l.next()->poolId(), 2);
@@ -139,14 +157,17 @@ TEST(CircularScanListTest, ScheduleInvalid)
     CircularScanList<Node> l;
 
     // Add tasks.
-    l.add(std::make_shared<Node>(1));
-    l.add(std::make_shared<Node>(2));
-    l.add(std::make_shared<Node>(3));
+    auto n1 = std::make_shared<Node>(1);
+    l.add(n1);
+    auto n2 = std::make_shared<Node>(2);
+    l.add(n2);
+    auto n3 = std::make_shared<Node>(3);
+    l.add(n3);
 
     // Some tasks hold the shared_ptr.
-    auto n1 = l.next();
-    auto n2 = l.next();
-    auto n3 = l.next();
+    //auto n1 = l.next();
+    //auto n2 = l.next();
+    //auto n3 = l.next();
 
     {
         auto [valid, invalid] = l.count(0);
