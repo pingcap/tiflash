@@ -43,7 +43,7 @@ static_assert(TEST_ALIGN_SIZE > TEST_ALIGN_OFF_2);
 
 static constexpr bool varify_res = false;
 
-class MemUtilsEqBase : public benchmark::Fixture
+class MemUtilsEqual : public benchmark::Fixture
 {
 protected:
     std::string inner_data1;
@@ -174,10 +174,10 @@ NO_INLINE size_t stl_mem_strstsr(std::string_view s, std::string_view p)
     BENCHMARK_REGISTER_F(name1, name2)->Iterations(iter_cnt);
 
 
-#define BENCH_MEM_EQ_ALL(cnt, iter_cnt)                                                        \
-    BENCH_MEM_EQ(MemUtilsEqBase, stl_mem_eq, stl_mem_eq, cnt, iter_cnt)                        \
-    BENCH_MEM_EQ(MemUtilsEqBase, mem_utils_memoryEqual, mem_utils::memoryEqual, cnt, iter_cnt) \
-    BENCH_MEM_EQ(MemUtilsEqBase, avx2_mem_equal, avx2_mem_equal, cnt, iter_cnt)
+#define BENCH_MEM_EQ_ALL(cnt, iter_cnt)                                                       \
+    BENCH_MEM_EQ(MemUtilsEqual, stl_mem_eq, stl_mem_eq, cnt, iter_cnt)                        \
+    BENCH_MEM_EQ(MemUtilsEqual, mem_utils_memoryEqual, mem_utils::memoryEqual, cnt, iter_cnt) \
+    BENCH_MEM_EQ(MemUtilsEqual, avx2_mem_equal, avx2_mem_equal, cnt, iter_cnt)
 
 #define BENCH_MEM_STRSTR_ALL(max_cnt, max_src_size, max_needle_size, iter_cnt)                                                      \
     using MemUtilsStrStr##_##max_cnt##_##max_src_size##_##max_needle_size = MemUtilsStrStr<max_cnt, max_src_size, max_needle_size>; \
