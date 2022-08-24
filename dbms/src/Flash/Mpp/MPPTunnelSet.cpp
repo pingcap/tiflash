@@ -68,7 +68,7 @@ void MPPTunnelSetBase<Tunnel>::updateMemTracker()
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
-    TmpMemTracker tmt(response.ByteSizeLong());
+    TmpMemTracker tmt(response.ByteSizeLong()); // track mem usage of local MPPDataPacket
     auto packet = serializeToPacket(response);
     tunnels[0]->write(packet);
 
@@ -107,7 +107,7 @@ void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
 {
-    TmpMemTracker tmt(response.ByteSizeLong());
+    TmpMemTracker tmt(response.ByteSizeLong()); // track mem usage of serializeToPacket(response)
     if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
 
