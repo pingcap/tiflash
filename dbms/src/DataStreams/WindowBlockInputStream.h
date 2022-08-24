@@ -163,6 +163,8 @@ public:
 
     bool onlyHaveRowNumberAndRank();
 
+    bool onlyHaveLeadLag();
+
 protected:
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;

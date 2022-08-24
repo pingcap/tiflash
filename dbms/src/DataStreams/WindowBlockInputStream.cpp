@@ -243,12 +243,15 @@ void WindowBlockInputStream::advanceFrameStart()
         return;
     }
 
-    frame_start = current_row;
-    frame_started = true;
-    return;
+    if (onlyHaveLeadLag())
+    {
+        frame_start = partition_start;
+        frame_started = true;
+        return;
+    }
 
-    // throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-    //                 "window function only support pure window function now.");
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                    "window function only support pure window function now.");
 }
 
 bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) const
@@ -316,12 +319,20 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
         return;
     }
 
-    frame_end = current_row;
-    advanceRowNumber(frame_end);
-    frame_ended = true;
+    if (onlyHaveLeadLag())
+    {
+        if (!partition_ended)
+            frame_ended = false;
+        else
+        {
+            frame_end = partition_end;
+            frame_ended = true;
+        }
+        return;
+    }
 
-    // throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-    //                 "window function only support pure window function now.");
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
+                    "window function only support pure window function now.");
 }
 
 void WindowBlockInputStream::advanceFrameEnd()
@@ -410,9 +421,20 @@ bool WindowBlockInputStream::onlyHaveRowNumber()
 }
 
 bool WindowBlockInputStream::onlyHaveRowNumberAndRank()
+{
     for (const auto & workspace : workspaces)
     {
         if (workspace.window_function->getName() != "row_number" && workspace.window_function->getName() != "rank" && workspace.window_function->getName() != "dense_rank")
+            return false;
+    }
+    return true;
+}
+
+bool WindowBlockInputStream::onlyHaveLeadLag()
+{
+    for (const auto & workspace : workspaces)
+    {
+        if (workspace.window_function->getName() != "lead" && workspace.window_function->getName() != "lag")
             return false;
     }
     return true;
@@ -629,8 +651,8 @@ bool WindowBlockInputStream::advanceRowNumber(RowNumber & x, size_t offset) cons
     x.row += offset;
     if (x.row < block_rows)
     {
-        assert(partition_ended || partition_end == blocksEnd());
-        return x < partition_end;
+        assert(frame_ended);
+        return x < frame_end;
     }
 
     ++x.block;
@@ -649,7 +671,8 @@ bool WindowBlockInputStream::backRowNumber(RowNumber & x, size_t offset) const
     if (x.row >= offset)
     {
         x.row -= offset;
-        return partition_start <= x;
+        assert(frame_started);
+        return frame_start <= x;
     }
 
     if (x.block <= first_block_number)
