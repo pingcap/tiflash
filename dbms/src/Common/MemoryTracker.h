@@ -35,6 +35,9 @@ class MemoryTracker
     std::atomic<Int64> peak{0};
     std::atomic<Int64> limit{0};
 
+    // How many bytes RSS(Resident Set Size) can be larger than limit(max_memory_usage_for_all_queries). Default: 5GB
+    Int64 bytes_rss_larger_than_limit = 5368709120;
+
     /// To test exception safety of calling code, memory tracker throws an exception on each memory allocation with specified probability.
     double fault_probability = 0;
 
@@ -78,6 +81,8 @@ public:
       * Otherwise, set limit to new value, if new value is greater than previous limit.
       */
     void setOrRaiseLimit(Int64 value);
+
+    void setBytesThatRssLargerThanLimit(Int64 value) { bytes_rss_larger_than_limit = value; }
 
     void setFaultProbability(double value) { fault_probability = value; }
 
