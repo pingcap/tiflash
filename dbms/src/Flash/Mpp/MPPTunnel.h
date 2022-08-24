@@ -18,6 +18,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
@@ -71,9 +72,9 @@ public:
     {
     }
 
-    virtual bool push(const mpp::MPPDataPacket & data)
+    virtual bool push(MPPDataPacketPtr && data)
     {
-        return send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
+        return send_queue.push(data);
     }
 
     virtual bool finish()
@@ -139,7 +140,7 @@ class SyncTunnelSender : public TunnelSender
 public:
     using Base = TunnelSender;
     using Base::Base;
-    virtual ~SyncTunnelSender();
+    ~SyncTunnelSender() override;
     void startSendThread(PacketWriter * writer);
 
 private:
@@ -150,42 +151,23 @@ private:
 
 /// AsyncTunnelSender is mainly triggered by the Async PacketWriter which handles GRPC request/response in async mode, send one element one time
 class AsyncTunnelSender : public TunnelSender
+    , public GRPCSendQueue<MPPDataPacketPtr>
 {
 public:
-    AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, grpc_call * call_);
+    AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, grpc_call * call_)
+        : TunnelSender(0, log_, tunnel_id_)
+        , GRPCSendQueue<MPPDataPacketPtr>(queue_size, call_, log_)
+    {}
 
-    virtual ~AsyncTunnelSender();
+    bool push(MPPDataPacketPtr && data) override
+    {
+        return GRPCSendQueue<MPPDataPacketPtr>::push(data);
+    }
 
-    virtual bool push(const mpp::MPPDataPacket & data) override;
-    virtual bool finish() override;
-
-    // Pop the data from queue.
-    // Returns true if pop is done and `ok` means the if there is
-    // new data from queue.
-    // Returns false if pop isn't done due to blocking and `new_tag`
-    // is saved. When the next push/finish is called, the `new_tag` will
-    // be pushed into grpc completion queue.
-    bool pop(MPPDataPacketPtr & data, bool & ok, void * new_tag);
-
-private:
-    // Wakes up its completion queue.
-    void kickCompletionQueue();
-
-    // The mutex is used to synchronize the concurrent calls between push/finish and pop.
-    // The concurrency problem we want to prevent here is LOST NOTIFICATION.
-    // Note that this mutex is necessary. It's useless to just change the `tag` to atomic.
-    //
-    // Imagine this case:
-    // Thread 1: want to pop the data from queue but find no data there.
-    // Thread 2: push/finish the data in queue.
-    // Thread 2: do not kick the completion queue because tag is nullptr.
-    // Thread 1: set the tag.
-    //
-    // If there is no more data, this connection will get stuck forever.
-    std::mutex mu;
-
-    grpc_call * call;
-    void * tag;
+    bool finish() override
+    {
+        return GRPCSendQueue<MPPDataPacketPtr>::finish();
+    }
 };
 
 /// LocalTunnelSender just provide readForLocal method to return one element one time
@@ -266,6 +248,9 @@ public:
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(PacketWriter * writer);
+
+    // like `connect` but it's intended to connect async grpc.
+    void connectAsync(EstablishCallData * calldata);
 
     // wait until all the data has been transferred.
     void waitForFinish();

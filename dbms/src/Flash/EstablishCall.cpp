@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 
 namespace DB
@@ -45,104 +46,10 @@ EstablishCallData::~EstablishCallData()
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
 }
 
-EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
-{
-    return new EstablishCallData(service, cq, notify_cq, is_shutdown);
-}
-
-void EstablishCallData::responderFinish(const grpc::Status & status)
-{
-    responder.Finish(status, this);
-}
-
-void EstablishCallData::initRpc()
-{
-    std::exception_ptr eptr = nullptr;
-    try
-    {
-        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
-        service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
-    }
-    catch (...)
-    {
-        eptr = std::current_exception();
-    }
-    if (eptr)
-    {
-        setFinishState("initRpc called");
-        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
-        responderFinish(status);
-    }
-}
-
-bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
-{
-    responder.Write(packet, this);
-    return true;
-}
-
-void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
-{
-    state = ERR_HANDLE;
-    write(packet);
-}
-
-void EstablishCallData::setFinishState(const String & msg)
-{
-    state = FINISH;
-    if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
-    {
-        async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
-                                                        async_tunnel_sender->getTunnelId(),
-                                                        msg)); //trigger mpp tunnel finish work
-    }
-}
-
-void EstablishCallData::writeDone(const ::grpc::Status & status)
-{
-    setFinishState("writeDone called");
-    if (stopwatch)
-    {
-        LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
-    }
-    responderFinish(status);
-}
-
-void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
-{
-    stopwatch = std::make_shared<Stopwatch>();
-    async_tunnel_sender = async_tunnel_sender_;
-}
-
-grpc_call * EstablishCallData::grpcCall()
-{
-    return ctx.c_call();
-}
-
-
-void EstablishCallData::cancel()
-{
-    if (state == NEW_REQUEST || state == FINISH) // state == NEW_REQUEST means the server is shutdown and no new rpc has come.
-    {
-        delete this;
-        return;
-    }
-    finishTunnelAndResponder();
-}
-
-void EstablishCallData::finishTunnelAndResponder()
-{
-    setFinishState("finishTunnelAndResponder called");
-    grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
-    responder.Finish(status, this);
-}
-
 void EstablishCallData::proceed()
 {
     if (state == NEW_REQUEST)
     {
-        state = PROCESSING;
-
         spawn(service, cq, notify_cq, is_shutdown);
         initRpc();
     }
@@ -150,15 +57,15 @@ void EstablishCallData::proceed()
     {
         if (unlikely(is_shutdown->load(std::memory_order_relaxed)))
         {
-            finishTunnelAndResponder();
+            unexpectedWriteDone();
             return;
         }
 
-        sendOne();
+        sendOneMsg();
     }
     else if (state == ERR_HANDLE)
     {
-        writeDone(grpc::Status::OK);
+        writeDone("state is ERR_HANDLE", grpc::Status::OK);
     }
     else
     {
@@ -170,12 +77,117 @@ void EstablishCallData::proceed()
     }
 }
 
-void EstablishCallData::sendOne()
+void EstablishCallData::cancel()
+{
+    if (state == NEW_REQUEST || state == FINISH) // state == NEW_REQUEST means the server is shutdown and no new rpc has come.
+    {
+        delete this;
+        return;
+    }
+    unexpectedWriteDone();
+}
+
+grpc_call * EstablishCallData::grpcCall()
+{
+    return ctx.c_call();
+}
+
+void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
+{
+    stopwatch = std::make_shared<Stopwatch>();
+    async_tunnel_sender = async_tunnel_sender_;
+}
+
+EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
+{
+    return new EstablishCallData(service, cq, notify_cq, is_shutdown);
+}
+
+void EstablishCallData::initRpc()
+{
+    std::exception_ptr eptr = nullptr;
+    try
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
+
+        auto [status, err_msg] = service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
+        if (!status.ok())
+        {
+            writeDone("initRpc called with no-ok status", status);
+            return;
+        }
+        if (!err_msg.empty())
+        {
+            writeErr(getPacketWithError(err_msg));
+            return;
+        }
+    }
+    catch (...)
+    {
+        eptr = std::current_exception();
+    }
+    if (eptr)
+    {
+        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
+        writeDone("initRpc called with exception", status);
+        return;
+    }
+
+    // Initialization is successful.
+    state = PROCESSING;
+
+    // Try to send one message.
+    // If there is no message, this structure will be saved in `async_tunnel_sender`
+    // and wait for new messages.
+    sendOneMsg();
+}
+
+void EstablishCallData::write(const mpp::MPPDataPacket & packet)
+{
+    responder.Write(packet, this);
+}
+
+void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
+{
+    state = ERR_HANDLE;
+    write(packet);
+}
+
+void EstablishCallData::writeDone(const String & msg, const grpc::Status & status)
+{
+    state = FINISH;
+
+    if (async_tunnel_sender)
+    {
+        if (stopwatch)
+        {
+            LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
+        }
+
+        if (!async_tunnel_sender->isConsumerFinished())
+        {
+            async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
+                                                            async_tunnel_sender->getTunnelId(),
+                                                            msg)); //trigger mpp tunnel finish work
+        }
+    }
+
+    responder.Finish(status, this);
+}
+
+void EstablishCallData::unexpectedWriteDone()
+{
+    grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
+    writeDone("unexpectedWriteDone called", status);
+}
+
+void EstablishCallData::sendOneMsg()
 {
     MPPDataPacketPtr res;
     bool ok;
     if (!async_tunnel_sender->pop(res, ok, this))
     {
+        // No new message.
         return;
     }
     if (ok)
@@ -184,7 +196,7 @@ void EstablishCallData::sendOne()
     }
     else
     {
-        writeDone(grpc::Status::OK);
+        writeDone("", grpc::Status::OK);
     }
 }
 

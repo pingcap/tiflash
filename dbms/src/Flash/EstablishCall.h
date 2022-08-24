@@ -17,29 +17,14 @@
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/PacketWriter.h>
+#include <kvproto/tikvpb.grpc.pb.h>
 
 namespace DB
 {
-class MPPTunnel;
 class AsyncTunnelSender;
 class AsyncFlashService;
 
-class SyncPacketWriter : public PacketWriter
-{
-public:
-    explicit SyncPacketWriter(grpc::ServerWriter<mpp::MPPDataPacket> * writer)
-        : writer(writer)
-    {}
-
-    bool write(const mpp::MPPDataPacket & packet) override { return writer->Write(packet); }
-
-private:
-    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
-};
-
-class EstablishCallData : public PacketWriter
+class EstablishCallData
 {
 public:
     // A state machine used for async grpc api EstablishMPPConnection. When a relative grpc event arrives,
@@ -54,19 +39,13 @@ public:
 
     ~EstablishCallData();
 
-    bool write(const mpp::MPPDataPacket & packet) override;
-
-    void writeDone(const ::grpc::Status & status) override;
-
-    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override;
-
-    grpc_call * grpcCall() override;
-
-    void writeErr(const mpp::MPPDataPacket & packet);
-
     void proceed();
 
     void cancel();
+
+    grpc_call * grpcCall();
+
+    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_);
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -80,29 +59,30 @@ public:
 private:
     void initRpc();
 
-    void sendOne();
+    void write(const mpp::MPPDataPacket & packet);
 
-    void finishTunnelAndResponder();
-
+    void writeErr(const mpp::MPPDataPacket & packet);
     // Will try to call async_sender's consumerFinish if needed
-    void setFinishState(const String & msg);
+    void writeDone(const String & msg, const grpc::Status & status);
 
-    void responderFinish(const grpc::Status & status);
+    void unexpectedWriteDone();
 
-    // server instance
+    void sendOneMsg();
+
+    // Server instance
     AsyncFlashService * service;
 
     // The producer-consumer queue where for asynchronous server notifications.
-    ::grpc::ServerCompletionQueue * cq;
-    ::grpc::ServerCompletionQueue * notify_cq;
+    grpc::ServerCompletionQueue * cq;
+    grpc::ServerCompletionQueue * notify_cq;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
-    ::grpc::ServerContext ctx;
+    grpc::ServerContext ctx;
 
     // What we get from the client.
-    ::mpp::EstablishMPPConnectionRequest request;
+    mpp::EstablishMPPConnectionRequest request;
 
     // The means to get back to the client.
-    ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
+    grpc::ServerAsyncWriter<mpp::MPPDataPacket> responder;
 
     // Let's implement a state machine with the following states.
     enum CallStatus
@@ -114,6 +94,7 @@ private:
     };
     // The current serving state.
     CallStatus state;
+
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::shared_ptr<Stopwatch> stopwatch;
 };

@@ -25,30 +25,28 @@
 
 namespace DB
 {
-// PacketWriter is a common interface of both sync and async gRPC writer.
+// PacketWriter is a common interface of sync gRPC writer.
 // It is used as the template parameter of `MPPTunnel`.
-//
-// TODO: In async grpc writer, the `write` function should only be called
-// through the grpc thread. Also, the `attachAsyncTunnelSender` and `grpcCall`
-// functions are used only for async grpc writer. We should find a more suitable
-// abstraction.
-class AsyncTunnelSender;
 class PacketWriter
 {
 public:
     virtual ~PacketWriter() = default;
 
     // Write a packet and return false if any error occurs.
-    // Note: in async mode the end of `Write` doesn't mean the `packet` is actually written done.
     virtual bool write(const mpp::MPPDataPacket & packet) = 0;
-
-    // Finish rpc with a status. Needed by async writer. For sync writer it is useless but not harmful.
-    virtual void writeDone(const ::grpc::Status & /*status*/) {}
-
-    // Attach async sender to async writer so that async writer can use it to get/transfer DataPacket and set consumer finish msg directly
-    virtual void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> &) {}
-
-    // Get the pointer of `grpc_call`.
-    virtual grpc_call * grpcCall() { return nullptr; }
 };
+
+class SyncPacketWriter : public PacketWriter
+{
+public:
+    explicit SyncPacketWriter(grpc::ServerWriter<mpp::MPPDataPacket> * writer)
+        : writer(writer)
+    {}
+
+    bool write(const mpp::MPPDataPacket & packet) override { return writer->Write(packet); }
+
+private:
+    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
+};
+
 }; // namespace DB

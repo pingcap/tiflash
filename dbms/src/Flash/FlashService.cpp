@@ -212,19 +212,10 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-::grpc::Status returnStatus(EstablishCallData * calldata, const grpc::Status & status)
-{
-    if (calldata)
-    {
-        calldata->writeDone(status);
-    }
-    return status;
-}
-
-::grpc::Status FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
-                                                               const ::mpp::EstablishMPPConnectionRequest * request,
-                                                               ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
-                                                               EstablishCallData * calldata)
+std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
+                                                                                       const ::mpp::EstablishMPPConnectionRequest * request,
+                                                                                       ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
+                                                                                       EstablishCallData * calldata)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
@@ -233,7 +224,7 @@ grpc::Status FlashService::Coprocessor(
 
     if (!security_config->checkGrpcContext(grpc_context))
     {
-        return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
+        return {grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg), {}};
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -256,7 +247,7 @@ grpc::Status FlashService::Coprocessor(
     auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        return returnStatus(calldata, status);
+        return {status, {}};
     }
 
     auto & tmt_context = db_context->getTMTContext();
@@ -275,22 +266,19 @@ grpc::Status FlashService::Coprocessor(
             if (calldata)
             {
                 LOG_ERROR(log, err_msg);
-                // In Async version, writer::Write() return void.
-                // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
-                calldata->writeErr(getPacketWithError(err_msg));
-                return grpc::Status::OK;
+                return {grpc::Status::OK, err_msg};
             }
             else
             {
                 LOG_ERROR(log, err_msg);
                 if (sync_writer->Write(getPacketWithError(err_msg)))
                 {
-                    return grpc::Status::OK;
+                    return {grpc::Status::OK, {}};
                 }
                 else
                 {
                     LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
-                    return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                    return {grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason."), {}};
                 }
             }
         }
@@ -299,7 +287,7 @@ grpc::Status FlashService::Coprocessor(
     if (calldata)
     {
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
-        tunnel->connect(calldata);
+        tunnel->connectAsync(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
     else
@@ -313,7 +301,7 @@ grpc::Status FlashService::Coprocessor(
 
     // TODO: Check if there are errors in task.
 
-    return grpc::Status::OK;
+    return {grpc::Status::OK, {}};
 }
 
 ::grpc::Status FlashService::CancelMPPTask(

@@ -117,7 +117,7 @@ void MPPTunnel::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    tunnel_sender->push(getPacketWithError(reason));
+                    tunnel_sender->push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
                 }
                 catch (...)
                 {
@@ -150,7 +150,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
                 throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         }
 
-        if (tunnel_sender->push(data))
+        if (tunnel_sender->push(std::make_shared<mpp::MPPDataPacket>(data)))
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -205,16 +205,33 @@ void MPPTunnel::connect(PacketWriter * writer)
             tunnel_sender = sync_tunnel_sender;
             break;
         }
-        case TunnelSenderMode::ASYNC_GRPC:
-        {
-            RUNTIME_ASSERT(writer != nullptr, log, "Async writer shouldn't be null");
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, writer->grpcCall());
-            writer->attachAsyncTunnelSender(async_tunnel_sender);
-            tunnel_sender = async_tunnel_sender;
-            break;
-        }
         default:
-            RUNTIME_ASSERT(false, log, "Unsupported TunnelSenderMode: {}", mode);
+            RUNTIME_ASSERT(false, log, "Unsupported TunnelSenderMode in connect: {}", mode);
+        }
+        status = TunnelStatus::Connected;
+        cv_for_status_changed.notify_all();
+    }
+    LOG_DEBUG(log, "connected");
+}
+
+void MPPTunnel::connectAsync(EstablishCallData * calldata)
+{
+    {
+        std::unique_lock lk(mu);
+        if (status != TunnelStatus::Unconnected)
+            throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
+
+        LOG_FMT_TRACE(log, "ready to connect async");
+        if (mode == TunnelSenderMode::ASYNC_GRPC)
+        {
+            RUNTIME_ASSERT(calldata != nullptr, log, "Async writer shouldn't be null");
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, calldata->grpcCall());
+            calldata->attachAsyncTunnelSender(async_tunnel_sender);
+            tunnel_sender = async_tunnel_sender;
+        }
+        else
+        {
+            RUNTIME_ASSERT(false, log, "Unsupported TunnelSenderMode: {} in connectAsync", mode);
         }
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
@@ -345,86 +362,6 @@ void SyncTunnelSender::startSendThread(PacketWriter * writer)
     thread_manager->schedule(true, "MPPTunnel", [this, writer] {
         sendJob(writer);
     });
-}
-
-AsyncTunnelSender::AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, grpc_call * call_)
-    : TunnelSender(queue_size, log_, tunnel_id_)
-    , call(call_)
-    , tag(nullptr)
-{
-    RUNTIME_ASSERT(call != nullptr, log, "call is null");
-}
-
-AsyncTunnelSender::~AsyncTunnelSender()
-{
-    if (tag != nullptr)
-    {
-        LOG_ERROR(log, "tag is not null in deconstruction, tag's memory may leak");
-#ifndef NDEBUG
-        assert(false);
-#endif
-    }
-}
-
-bool AsyncTunnelSender::push(const mpp::MPPDataPacket & data)
-{
-    auto ret = send_queue.push(std::make_shared<mpp::MPPDataPacket>(data));
-    if (ret)
-    {
-        kickCompletionQueue();
-    }
-    return ret;
-}
-
-bool AsyncTunnelSender::finish()
-{
-    auto ret = send_queue.finish();
-    if (ret)
-    {
-        kickCompletionQueue();
-    }
-    return ret;
-}
-
-bool AsyncTunnelSender::pop(MPPDataPacketPtr & data, bool & ok, void * new_tag)
-{
-    RUNTIME_ASSERT(new_tag != nullptr, "new_tag is nullptr when popping");
-    if (!send_queue.isNextPopNonBlocking())
-    {
-        // Next pop is blocking.
-        std::unique_lock lock(mu);
-        RUNTIME_ASSERT(tag == nullptr, "tag is not nullptr when popping");
-        // Double check if next pop is blocking.
-        if (!send_queue.isNextPopNonBlocking())
-        {
-            // If blocking, set the tag and return.
-            tag = new_tag;
-            return false;
-        }
-        // If not blocking, pop will be called.
-    }
-    ok = send_queue.pop(data);
-    return true;
-}
-
-void AsyncTunnelSender::kickCompletionQueue()
-{
-    void * old_tag;
-    {
-        std::unique_lock lock(mu);
-        old_tag = tag;
-        tag = nullptr;
-    }
-    if (!old_tag)
-    {
-        return;
-    }
-    // If a call to grpc_call_start_batch with an empty batch returns
-    // GRPC_CALL_OK, the tag is put in the completion queue immediately.
-    // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-    auto error = grpc_call_start_batch(call, nullptr, 0, old_tag, nullptr);
-    // If an error occur, there must be something wrong about shutdown process.
-    RUNTIME_ASSERT(error != grpc_call_error::GRPC_CALL_OK, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
 }
 
 MPPDataPacketPtr LocalTunnelSender::readForLocal()
