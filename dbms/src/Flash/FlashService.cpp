@@ -343,7 +343,7 @@ grpc::Status FlashService::Coprocessor(
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
+    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
