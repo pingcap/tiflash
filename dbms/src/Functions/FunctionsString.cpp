@@ -5664,10 +5664,10 @@ public:
 
 private:
     static void executeString(const ColumnString::Chars_t & data,
-                        const ColumnString::Offsets & offsets,
-                        ColumnString::Chars_t & res_data,
-                        ColumnString::Offsets & res_offsets,
-                        ColumnUInt8::Container & res_null_map)
+                              const ColumnString::Offsets & offsets,
+                              ColumnString::Chars_t & res_data,
+                              ColumnString::Offsets & res_offsets,
+                              ColumnUInt8::Container & res_null_map)
     {
         size_t size = offsets.size();
         res_data.resize(data.size() / 2 + size);
@@ -5687,10 +5687,10 @@ private:
     }
 
     static void executeFixedString(const ColumnString::Chars_t & data,
-                        const size_t size,
-                        ColumnString::Chars_t & res_data,
-                        ColumnString::Offsets & res_offsets,
-                        ColumnUInt8::Container & res_null_map)
+                                   const size_t size,
+                                   ColumnString::Chars_t & res_data,
+                                   ColumnString::Offsets & res_offsets,
+                                   ColumnUInt8::Container & res_null_map)
     {
         size_t length = data.size() / size;
         if (length % 2 != 0)
@@ -5714,13 +5714,13 @@ private:
     }
 
     static void unhexOne(const ColumnString::Chars_t & data,
-                        const size_t length,
-                        const size_t idx,
-                        size_t begin,
-                        size_t pos,
-                        ColumnString::Chars_t & res_data,
-                        ColumnString::Offsets & res_offsets,
-                        ColumnUInt8::Container & res_null_map)
+                         const size_t length,
+                         const size_t idx,
+                         size_t begin,
+                         size_t pos,
+                         ColumnString::Chars_t & res_data,
+                         ColumnString::Offsets & res_offsets,
+                         ColumnUInt8::Container & res_null_map)
     {
         char low;
         char high;
@@ -5756,7 +5756,8 @@ private:
         res_offsets[idx] = pos;
     }
 
-    static bool fromHexChar(const char *in, char &out) {
+    static bool fromHexChar(const char * in, char & out)
+    {
         if (*in >= '0' && *in <= '9')
         {
             out = *in - '0';
@@ -5775,7 +5776,6 @@ private:
         }
         return true;
     }
-
 };
 
 // clang-format off
