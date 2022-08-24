@@ -60,18 +60,11 @@ struct WindowFrame
 
     FrameType type = FrameType::Ranges;
 
-    // UNBOUNDED FOLLOWING for the frame end is forbidden by the standard, but for
-    // uniformity the begin_preceding still has to be set to true for UNBOUNDED
-    // frame start.
-    // Offset might be both preceding and following, controlled by begin_preceding,
-    // but the offset value must be positive.
     BoundaryType begin_type = BoundaryType::Unbounded;
     Field begin_offset = Field(UInt64(0));
     bool begin_preceding = true;
 
-    // Here as well, Unbounded can only be UNBOUNDED FOLLOWING, and end_preceding
-    // must be false.
-    BoundaryType end_type = BoundaryType::Current;
+    BoundaryType end_type = BoundaryType::Unbounded;
     Field end_offset = Field(UInt64(0));
     bool end_preceding = false;
 

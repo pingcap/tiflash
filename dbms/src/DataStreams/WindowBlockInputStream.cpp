@@ -238,24 +238,24 @@ void WindowBlockInputStream::advanceFrameStart()
 
     switch (window_description.frame.begin_type)
     {
-        case WindowFrame::BoundaryType::Unbounded:
-            // UNBOUNDED PRECEDING, just mark it valid. It is initialized when
-            // the new partition starts.
-            frame_started = true;
-            break;
-        case WindowFrame::BoundaryType::Current:
-        {
-            RUNTIME_CHECK_MSG(only_have_pure_window, "window function only support pure window function now.");
-            frame_start = current_row;
-            frame_started = true;
-            break;
-        }
-        case WindowFrame::BoundaryType::Offset:
-        default:
-            throw Exception(
-                ErrorCodes::NOT_IMPLEMENTED,
-                "The frame begin type '{}' is not implemented",
-                window_description.frame.begin_type);
+    case WindowFrame::BoundaryType::Unbounded:
+        // UNBOUNDED PRECEDING, just mark it valid. It is initialized when
+        // the new partition starts.
+        frame_started = true;
+        break;
+    case WindowFrame::BoundaryType::Current:
+    {
+        RUNTIME_CHECK_MSG(only_have_pure_window, "window function only support pure window function now.");
+        frame_start = current_row;
+        frame_started = true;
+        break;
+    }
+    case WindowFrame::BoundaryType::Offset:
+    default:
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "The frame begin type '{}' is not implemented",
+            window_description.frame.begin_type);
     }
 }
 
