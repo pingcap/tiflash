@@ -120,7 +120,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
 #undef M
 
 
-#if defined(NORMAL_IF_ELSE_TEST)
+#if defined(AVX2_MEM_EQ_NORMAL_IF_ELSE)
         if (unlikely(n < 2))
         {
             // 0~1
