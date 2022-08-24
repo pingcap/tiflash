@@ -235,8 +235,11 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
         // so that we can propagate current_memory_tracker into them.
-        context.getDAGContext()->tunnel_set->updateMemTracker();
-        context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+        if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
+        {
+            context.getDAGContext()->tunnel_set->updateMemTracker();
+            context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+        }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
         auto interpreter = query_src.interpreter(context, stage);
