@@ -64,10 +64,10 @@ private:
 
     template <bool send_exec_summary_at_last>
     void handleExecSummary(const std::vector<Block> & input_blocks,
-                           std::vector<mpp::MPPDataPacket> & packet,
+                           std::vector<TrackedMppDataPacket> & packet,
                            tipb::SelectResponse & response) const;
     template <bool send_exec_summary_at_last>
-    void writePackets(const std::vector<size_t> & responses_row_count, std::vector<mpp::MPPDataPacket> & packets) const;
+    void writePackets(const std::vector<size_t> & responses_row_count, std::vector<TrackedMppDataPacket> & packets) const;
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.

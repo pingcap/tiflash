@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -27,6 +28,7 @@
 #include <grpcpp/server_context.h>
 #include <kvproto/mpp.pb.h>
 #include <kvproto/tikvpb.grpc.pb.h>
+#include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
 #include <memory>
 
@@ -53,6 +55,7 @@ struct TrackedMppDataPacket
         packet = std::make_shared<mpp::MPPDataPacket>(data);
     }
 
+    // note: this is shallow copy, we shouldn't pass the std::shared_ptr of packet into more than one TrackedMppDataPacket.
     explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_, MemoryTracker * memory_tracker)
         : memory_tracker(memory_tracker)
     {
@@ -60,6 +63,43 @@ struct TrackedMppDataPacket
         trackAlloc();
         packet = packet_;
     }
+
+    explicit TrackedMppDataPacket()
+        : memory_tracker(current_memory_tracker)
+        , packet(std::make_shared<mpp::MPPDataPacket>())
+    {}
+
+    explicit TrackedMppDataPacket(MemoryTracker * memory_tracker)
+        : memory_tracker(memory_tracker)
+        , packet(std::make_shared<mpp::MPPDataPacket>())
+    {}
+
+    void addChunk(std::string && value)
+    {
+        alloc(value.size());
+        packet->add_chunks(value);
+    }
+
+    void serializeByResponse(const tipb::SelectResponse & response)
+    {
+        alloc(response.ByteSizeLong());
+        if (!response.SerializeToString(packet->mutable_data()))
+            throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
+    }
+
+    void alloc(size_t delta)
+    {
+        if (memory_tracker)
+        {
+            memory_tracker->alloc(delta);
+            size += delta;
+        }
+    }
+    mpp::MPPDataPacket & getPacket()
+    {
+        return *packet;
+    }
+
 
     void trackAlloc() const;
 
@@ -71,7 +111,7 @@ struct TrackedMppDataPacket
     }
 
     MemoryTracker * memory_tracker = nullptr;
-    int size;
+    int size = 0;
     std::shared_ptr<mpp::MPPDataPacket> packet;
 };
 
@@ -98,4 +138,23 @@ struct TmpMemTracker
     }
     size_t size;
 };
+
+struct TrackedSelectResp
+{
+    TrackedSelectResp(tipb::SelectResponse * response)
+        : memory_tracker(response->ByteSizeLong())
+        , response(response)
+    {}
+
+    void addChunk(std::string && value)
+    {
+        memory_tracker.alloc(value.size());
+        auto * dag_chunk = response->add_chunks();
+        dag_chunk->set_rows_data(value);
+    }
+
+    TmpMemTracker memory_tracker;
+    tipb::SelectResponse * response;
+};
+
 } // namespace DB
