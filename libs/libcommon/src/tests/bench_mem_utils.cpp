@@ -43,6 +43,7 @@ static_assert(TEST_ALIGN_SIZE > TEST_ALIGN_OFF_2);
 
 static constexpr bool varify_res = false;
 
+template <size_t max_src_size>
 class MemUtilsEqual : public benchmark::Fixture
 {
 protected:
@@ -52,7 +53,7 @@ protected:
     std::string_view data2;
 
 public:
-    static constexpr size_t max_size = 1024 * 1024 * 2;
+    static constexpr size_t max_size = max_src_size;
 
     void SetUp(const ::benchmark::State & /*state*/) override
     {
@@ -124,20 +125,19 @@ ALWAYS_INLINE static inline bool stl_mem_eq(const char * p1, const char * p2, si
     return std::memcmp(p1, p2, n) == 0; // call bcmp@plt
 }
 
-NO_INLINE size_t stl_mem_strstsr(std::string_view s, std::string_view p)
+NO_INLINE size_t stl_str_find(std::string_view s, std::string_view p)
 {
     return s.find(p); // call memchr@plt -> bcmp@plt
 }
 
 // volatile value is used to prevent compiler optimization for fixed context
 
-#define BENCH_MEM_EQ(name1, name2, func, cnt_, iter_cnt)             \
-    BENCHMARK_DEFINE_F(name1, name2##_##cnt_)                        \
+#define BENCH_MEM_EQ(name1, name2, func, iter_cnt)                   \
+    BENCHMARK_DEFINE_F(name1, name2)                                 \
     (benchmark::State & state)                                       \
     {                                                                \
-        static_assert((cnt_) < max_size);                            \
         [[maybe_unused]] volatile size_t _volatile_flags = 1;        \
-        [[maybe_unused]] volatile size_t cnt = cnt_;                 \
+        [[maybe_unused]] volatile size_t cnt = max_size;             \
         for (auto _ : state)                                         \
         {                                                            \
             _volatile_flags = func(data1.data(), data2.data(), cnt); \
@@ -148,7 +148,7 @@ NO_INLINE size_t stl_mem_strstsr(std::string_view s, std::string_view p)
             }                                                        \
         }                                                            \
     }                                                                \
-    BENCHMARK_REGISTER_F(name1, name2##_##cnt_)->Iterations(iter_cnt);
+    BENCHMARK_REGISTER_F(name1, name2)->Iterations(iter_cnt);
 
 
 #define BENCH_MEM_STRSTR(name1, name2, func, iter_cnt)                        \
@@ -174,15 +174,16 @@ NO_INLINE size_t stl_mem_strstsr(std::string_view s, std::string_view p)
     BENCHMARK_REGISTER_F(name1, name2)->Iterations(iter_cnt);
 
 
-#define BENCH_MEM_EQ_ALL(cnt, iter_cnt)                                                       \
-    BENCH_MEM_EQ(MemUtilsEqual, stl_mem_eq, stl_mem_eq, cnt, iter_cnt)                        \
-    BENCH_MEM_EQ(MemUtilsEqual, mem_utils_memoryEqual, mem_utils::memoryEqual, cnt, iter_cnt) \
-    BENCH_MEM_EQ(MemUtilsEqual, avx2_mem_equal, avx2_mem_equal, cnt, iter_cnt)
+#define BENCH_MEM_EQ_ALL(max_src_size, iter_cnt)                                                                 \
+    using MemUtilsEqual##_##max_src_size = MemUtilsEqual<max_src_size>;                                          \
+    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, stl_mem_eq, stl_mem_eq, iter_cnt)                               \
+    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, mem_utils_memoryEqual_avx512, mem_utils::memoryEqual, iter_cnt) \
+    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, avx2_mem_equal, avx2_mem_equal, iter_cnt)
 
-#define BENCH_MEM_STRSTR_ALL(max_cnt, max_src_size, max_needle_size, iter_cnt)                                                      \
-    using MemUtilsStrStr##_##max_cnt##_##max_src_size##_##max_needle_size = MemUtilsStrStr<max_cnt, max_src_size, max_needle_size>; \
-    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_cnt##_##max_src_size##_##max_needle_size, stl_mem_strstsr, stl_mem_strstsr, iter_cnt)   \
-    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_cnt##_##max_src_size##_##max_needle_size, avx2_strstr, avx2_strstr, iter_cnt)
+#define BENCH_MEM_STRSTR_ALL(max_cnt, max_src_size, max_needle_size, iter_cnt)                                          \
+    using MemUtilsStrStr##_##max_src_size##_##max_needle_size = MemUtilsStrStr<max_cnt, max_src_size, max_needle_size>; \
+    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, stl_str_find, stl_str_find, iter_cnt)         \
+    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, avx2_strstr, avx2_strstr, iter_cnt)
 
 BENCH_MEM_EQ_ALL(13, 2000)
 BENCH_MEM_EQ_ALL(65, 2000)
