@@ -40,18 +40,18 @@ ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * s
 {
     auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
                                         check_block32);
-    for (; unlikely(mask); mask = clear_rightmost(mask))
+    for (; mask; mask = clear_rightmost(mask))
     {
         auto c = get_rightmost_bit_pos(mask);
         // check boundary
-        if (unlikely(c >= n))
+        if (c >= n)
         {
             res = nullptr;
             return true;
         }
         //
         const auto * t = c + src;
-        if (likely(callback(t)))
+        if (callback(t))
         {
             res = t;
             return true;
@@ -65,10 +65,10 @@ ALWAYS_INLINE static inline bool check_block32_x1(const char * src, const char *
 {
     auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
                                         check_block32);
-    for (; unlikely(mask); mask = clear_rightmost(mask))
+    for (; mask; mask = clear_rightmost(mask))
     {
         const auto * t = src + get_rightmost_bit_pos(mask);
-        if (likely(callback(t)))
+        if (callback(t))
         {
             res = t;
             return true;
@@ -87,7 +87,7 @@ ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *
                 reinterpret_cast<const Block32 *>(src + BLOCK32_SIZE * i),
                 check_block32);
 
-        if (unlikely(data))
+        if (data)
         {
             // there must be matched mask
         }
@@ -103,11 +103,11 @@ ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *
         auto mask = get_block32_cmp_eq_mask(
             reinterpret_cast<const Block32 *>(start),
             check_block32);
-        for (; unlikely(mask); mask = clear_rightmost(mask))
+        for (; mask; mask = clear_rightmost(mask))
         {
             auto c = get_rightmost_bit_pos(mask);
             const auto * t = c + start;
-            if (likely(callback(t)))
+            if (callback(t))
             {
                 res = t;
                 return true;
@@ -125,7 +125,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
     const char * res = nullptr;
     const auto check_block32 = _mm256_set1_epi8(target);
 
-    if (uint8_t rcx = OFFSET_ALIGNED(size_t(src), BLOCK32_SIZE); likely(rcx != 0))
+    if (uint8_t rcx = OFFSET_ALIGNED(size_t(src), BLOCK32_SIZE); rcx != 0)
     {
         // align to 32
         src = reinterpret_cast<decltype(src)>(ALIGNED_ADDR(size_t(src), BLOCK32_SIZE));
@@ -134,19 +134,19 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
                                             check_block32)
             >> rcx;
 
-        for (; unlikely(mask); mask = clear_rightmost(mask))
+        for (; mask; mask = clear_rightmost(mask))
         {
             auto c = get_rightmost_bit_pos(mask);
-            if (unlikely(c >= n))
+            if (c >= n)
                 return nullptr;
             const auto * t = c + src + rcx; // add offset
-            if (likely(callback(t)))
+            if (callback(t))
                 return t;
         }
 
         n -= BLOCK32_SIZE - rcx;
 
-        if (unlikely(n <= 0))
+        if (n <= 0)
         {
             return nullptr;
         }
