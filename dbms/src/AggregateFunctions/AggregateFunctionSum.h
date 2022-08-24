@@ -278,14 +278,40 @@ struct AggregateFunctionSumKahanData
 };
 
 
+#define DEFAULT_DECIMAL_INFER                                                          \
+    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale) \
+    {                                                                                  \
+        return SumDecimalInferer::infer(prec, scale);                                  \
+    }
+
+
 struct NameSum
 {
     static constexpr auto name = "sum";
+    DEFAULT_DECIMAL_INFER
 };
+
+struct NameSumWithOverFlow
+{
+    static constexpr auto name = "sumWithOverflow";
+    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
+    {
+        return {prec, scale};
+    }
+};
+
+using NameSumOnPartialResult = NameSumWithOverFlow;
 
 struct NameCountSecondStage
 {
     static constexpr auto name = "countSecondStage";
+    DEFAULT_DECIMAL_INFER
+};
+
+struct NameSumKahan
+{
+    static constexpr auto name = "sumKahan";
+    DEFAULT_DECIMAL_INFER
 };
 
 /// Counts the sum of the numbers.
@@ -308,7 +334,7 @@ public:
 
     AggregateFunctionSum(PrecType prec, ScaleType scale)
     {
-        std::tie(result_prec, result_scale) = SumDecimalInferer::infer(prec, scale);
+        std::tie(result_prec, result_scale) = Name::decimalInfer(prec, scale);
     };
 
     DataTypePtr getReturnType() const override
