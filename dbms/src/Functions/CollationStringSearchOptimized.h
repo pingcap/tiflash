@@ -34,9 +34,9 @@ FLATTEN_INLINE_PURE static inline size_t BuiltinStrFind(std::string_view src, st
 {
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 #ifdef TIFLASH_USE_AVX2_COMPILE_FLAG
-    return mem_utils::avx2_strstr(src, needle);
+    return mem_utils::details::avx2_strstr(src, needle);
 #else
-    return avx2_strstr(src, needle);
+    return mem_utils::avx2_strstr(src, needle);
 #endif
 #else
     return src.find(needle);

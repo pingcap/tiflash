@@ -20,7 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace mem_utils
+namespace mem_utils::details
 {
 
 ALWAYS_INLINE static inline uint32_t get_block32_cmp_eq_mask(const Block32 * s,
@@ -261,4 +261,4 @@ ALWAYS_INLINE static inline const char * avx2_memchr(const char * src, size_t n,
             return true;
         });
 }
-} // namespace mem_utils
+} // namespace mem_utils::details

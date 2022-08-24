@@ -12,27 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-
 #include <common/mem_utils_opt.h>
 
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+namespace mem_utils
+{
 size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k)
 {
-    return mem_utils::avx2_strstr(src, n, needle, k);
+    return details::avx2_strstr(src, n, needle, k);
 }
 size_t avx2_strstr(std::string_view src, std::string_view needle)
 {
-    return mem_utils::avx2_strstr(src, needle);
+    return details::avx2_strstr(src, needle);
 }
 
 bool avx2_mem_equal(const char * p1, const char * p2, size_t n)
 {
-    return mem_utils::avx2_mem_equal(p1, p2, n);
+    return details::avx2_mem_equal(p1, p2, n);
 }
 
 const char * avx2_memchr(const char * src, size_t n, char target)
 {
-    return mem_utils::avx2_memchr(src, n, target);
+    return details::avx2_memchr(src, n, target);
 }
+
+} // namespace mem_utils
 
 #endif

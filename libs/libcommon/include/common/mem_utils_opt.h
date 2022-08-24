@@ -16,18 +16,7 @@
 
 #include <string_view>
 
-
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-
-// same function like `std::string_view::find`
-// - return `-1` if failed to find `needle` in `src`
-// - return `0` if size of `needle` is 0
-// - return the position where `needle` occur first
-size_t avx2_strstr(std::string_view src, std::string_view needle);
-size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k);
-const char * avx2_memchr(const char * src, size_t n, char target);
-
-bool avx2_mem_equal(const char * p1, const char * p2, size_t n);
 
 #if defined(__AVX2__)
 
@@ -38,5 +27,29 @@ bool avx2_mem_equal(const char * p1, const char * p2, size_t n);
 #include <common/avx2_strstr.h>
 
 #endif
+
+#endif
+
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+
+namespace mem_utils
+{
+
+// same function like `std::string_view::find`
+// - return `-1` if failed to find `needle` in `src`
+// - return `0` if size of `needle` is 0
+// - return the position where `needle` occur first
+size_t avx2_strstr(std::string_view src, std::string_view needle);
+size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k);
+
+// same function like `std::memchr`
+// - return the first address pointer which equal to target `char`
+// - reeurn `nullptr` if no match
+const char * avx2_memchr(const char * src, size_t n, char target);
+
+// same function like `bcmp` or `std::memcmp(p1,p2,n) == 0`
+bool avx2_mem_equal(const char * p1, const char * p2, size_t n);
+
+} // namespace mem_utils
 
 #endif

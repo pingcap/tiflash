@@ -37,9 +37,9 @@ FLATTEN_INLINE_PURE static inline bool IsRawStrEqual(const std::string_view & lh
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 #ifdef TIFLASH_USE_AVX2_COMPILE_FLAG
-    return mem_utils::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
+    return mem_utils::details::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
 #else
-    return avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
+    return mem_utils::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
 #endif
 #else
     return 0 == std::memcmp(lhs.data(), rhs.data(), lhs.size());
