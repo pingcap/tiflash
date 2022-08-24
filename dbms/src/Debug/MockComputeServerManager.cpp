@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Debug/MockComputeServerManager.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <fmt/core.h>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -47,6 +47,23 @@ void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, Context &
         raft_config.flash_server_addr = server_config.second.addr;
         Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
         addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(global_context, *config, security_config, raft_config, log_ptr));
+    }
+
+    prepareMockMPPServerInfo();
+}
+
+void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, int start_idx)
+{
+    for (const auto & server_config : server_config_map)
+    {
+        TiFlashSecurityConfig security_config;
+        TiFlashRaftConfig raft_config;
+        raft_config.flash_server_addr = server_config.second.addr;
+        std::cout << "ywq test flash server addr: " << raft_config.flash_server_addr << std::endl;
+        Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
+        auto & context = TiFlashTestEnv::getGlobalContext(start_idx++);
+        context.setMPPTest();
+        addServer(server_config.first, std::make_unique<FlashGrpcServerHolder>(context, *config, security_config, raft_config, log_ptr));
     }
 
     prepareMockMPPServerInfo();

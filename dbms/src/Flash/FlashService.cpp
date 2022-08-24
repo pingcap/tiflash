@@ -35,6 +35,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "common/logger_useful.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -52,6 +54,7 @@ FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Conte
           context.getGlobalContext(),
           context.getGlobalContext().getSettingsRef()))
 {
+    std::cout << "ywq test wtf is mpp test: " << context.isMPPTest() << std::endl;
     auto settings = context.getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
@@ -157,6 +160,7 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
+    LOG_FMT_DEBUG(log, "ywq test is mpptest : {}", context.isMPPTest());
     // For MPP test, we don't care about security config.
     if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
     {
@@ -409,7 +413,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
+    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -418,7 +422,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
     LOG_FMT_DEBUG(log, "show task info for service, partition_id = {}", mpp_test_info.partition_id);
-  
+
 
     auto [context, status] = createDBContextForTest();
     if (!status.ok())

@@ -19,7 +19,7 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
-#include "DataStreams/IBlockInputStream.h"
+#include <cstddef>
 
 namespace DB::tests
 {
@@ -74,26 +74,34 @@ public:
         MockComputeServerManager::instance().reset();
     }
 
-    void startServers()
+    static void startServers()
     {
         startServers(server_num);
     }
 
-    void startServers(size_t server_num_)
+    static void startServers(size_t server_num_)
     {
         server_num = server_num_;
         MockComputeServerManager::instance().reset();
         auto size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
+        std::cout << "ywq test globalContext size: " << TiFlashTestEnv::globalContextSize() << std::endl;
+        auto start_idx = TiFlashTestEnv::globalContextSize();
         for (size_t i = 0; i < server_num; ++i)
         {
             MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
+            TiFlashTestEnv::addGlobalContext();
         }
-        MockComputeServerManager::instance().startServers(log_ptr, TiFlashTestEnv::getGlobalContext());
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();
+
+        MockComputeServerManager::instance().startServers(log_ptr, start_idx);
+        std::cout << "ywq test globalContext size: " << TiFlashTestEnv::globalContextSize() << std::endl;
+
         MockServerAddrGenerator::instance().reset();
     }
 
-    size_t serverNum() const
+    static size_t serverNum()
     {
         return server_num;
     }
@@ -102,7 +110,8 @@ public:
     {
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
         auto tasks = builder.buildMPPTasks(context, properties);
-        TiFlashTestEnv::getGlobalContext().setMPPTest();
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();
         MockComputeServerManager::instance().setMockStorage(context.mockStorage());
         executeMPPTasksForCancel(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
     }

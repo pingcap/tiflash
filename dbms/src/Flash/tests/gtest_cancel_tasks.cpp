@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "TestUtils/TiFlashTestException.h"
 #include <TestUtils/MPPTaskTestUtils.h>
+
+#include "TestUtils/TiFlashTestException.h"
 
 namespace DB
 {
@@ -49,54 +50,12 @@ try
 {
     startServers(4);
     {
-        std::vector<String> expected_strings = {
-            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
- aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
-)",
-            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
- aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
-)",
-            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
- aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
-)",
-            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
- aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
-)",
-            R"(exchange_sender_3 | type:PassThrough, {<0, Long>}
- project_2 | {<0, Long>}
-  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
-)",
-            R"(exchange_sender_3 | type:PassThrough, {<0, Long>}
- project_2 | {<0, Long>}
-  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
-)",
-            R"(
-exchange_sender_3 | type:PassThrough, {<0, Long>}
- project_2 | {<0, Long>}
-  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
-)",
-            R"(exchange_sender_3 | type:PassThrough, {<0, Long>}
- project_2 | {<0, Long>}
-  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
-   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
-)"};
-
         injectCancel(context
-                .scan("test_db", "test_table_1")
-                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                .project({"max(s1)"}));
+                         .scan("test_db", "test_table_1")
+                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                         .project({"max(s1)"}));
         MockComputeServerManager::instance().cancelTest();
-
-        throw TiFlashTestException("ywq test done");
     }
-    
 }
 CATCH
 

@@ -92,7 +92,7 @@ public:
 
 void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type)
 {
-    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}", query_id, abortTypeToString(abort_type)));
+    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}, reason: {}", query_id, abortTypeToString(abort_type), reason));
     MPPQueryTaskSetPtr task_set;
     {
         /// abort task may take a long time, so first

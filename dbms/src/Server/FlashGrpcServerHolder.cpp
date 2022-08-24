@@ -41,7 +41,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             // tells us whether there is any kind of event or cq is shutting down.
             if (!curcq->Next(&tag, &ok))
             {
-                LOG_FMT_INFO(log, "CQ is fully drained and shut down");
+                // LOG_FMT_INFO(log, "CQ is fully drained and shut down");
                 break;
             }
             GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
@@ -85,6 +85,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
     grpc::ServerBuilder builder;
+    std::cout << "ywq test context is mpp test: " << context.isMPPTest() << std::endl;
     if (security_config.has_tls_config)
     {
         grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);

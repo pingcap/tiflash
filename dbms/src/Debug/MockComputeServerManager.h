@@ -34,6 +34,8 @@ public:
     /// call startServers to run all servers in current test.
     void startServers(const LoggerPtr & log_ptr, Context & global_context);
 
+    void startServers(const LoggerPtr & log_ptr, int start_idx);
+
     /// set MockStorage for Compute Server in order to mock input columns.
     void setMockStorage(MockStorage & mock_storage);
 
@@ -62,7 +64,7 @@ public:
 
     void showTaskInfo()
     {
-        for (const auto & server: server_map)
+        for (const auto & server : server_map)
             server.second->getFlashService()->showTaskInfoForTest();
     }
 
