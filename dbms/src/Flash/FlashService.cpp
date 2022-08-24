@@ -347,6 +347,91 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
+std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() const
+{
+    try
+    {
+        /// Create DB context.
+        auto tmp_context = std::make_shared<Context>(context);
+        tmp_context->setGlobalContext(context);
+
+        String query_id;
+        tmp_context->setCurrentQueryId(query_id);
+        ClientInfo & client_info = tmp_context->getClientInfo();
+        client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        client_info.interface = ClientInfo::Interface::GRPC;
+
+        String max_threads;
+        tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
+        tmp_context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
+        tmp_context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
+        return std::make_tuple(tmp_context, grpc::Status::OK);
+    }
+    catch (Exception & e)
+    {
+        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
+    }
+    catch (const std::exception & e)
+    {
+        LOG_FMT_ERROR(log, "std exception: {}", e.what());
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
+    }
+    catch (...)
+    {
+        LOG_FMT_ERROR(log, "other exception");
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
+    }
+}
+
+
+::grpc::Status FlashService::cancelMPPTaskForTest(const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    // CancelMPPTask cancels the query of the task.
+    LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    GET_METRIC(tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+    });
+
+    auto [context, status] = createDBContextForTest();
+    if (!status.ok())
+    {
+        auto err = std::make_unique<mpp::Error>();
+        err->set_msg("error status");
+        response->set_allocated_error(err.release());
+        return status;
+    }
+    auto & tmt_context = context->getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
+    return grpc::Status::OK;
+}
+
+::grpc::Status FlashService::showTaskInfoForTest()
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    // CancelMPPTask cancels the query of the task.
+    LOG_FMT_DEBUG(log, "show task info for service, partition_id = {}", mpp_test_info.partition_id);
+  
+
+    auto [context, status] = createDBContextForTest();
+    if (!status.ok())
+    {
+        return status;
+    }
+    auto & tmt_context = context->getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    task_manager->toString();
+    return grpc::Status::OK;
+}
+
+
 String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {
     if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())

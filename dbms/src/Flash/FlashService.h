@@ -21,6 +21,8 @@
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
+
+#include "grpcpp/impl/codegen/status.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
@@ -81,6 +83,8 @@ public:
     }
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
+    ::grpc::Status cancelMPPTaskForTest(const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response);
+    ::grpc::Status showTaskInfoForTest();
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
@@ -88,6 +92,7 @@ public:
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
 
 protected:
+    std::tuple<ContextPtr, grpc::Status> createDBContextForTest() const;
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
     const TiFlashSecurityConfig & security_config;

@@ -18,6 +18,9 @@ namespace DB
 {
 namespace tests
 {
+
+LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
+size_t MPPTaskTestUtils::server_num = 0;
 class ComputeServerRunner : public DB::tests::MPPTaskTestUtils
 {
 public:

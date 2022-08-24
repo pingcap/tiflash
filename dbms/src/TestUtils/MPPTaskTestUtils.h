@@ -19,8 +19,12 @@
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 
+#include "DataStreams/IBlockInputStream.h"
+
 namespace DB::tests
 {
+
+DAGProperties getDAGPropertiesForTest(int server_num);
 class MockTimeStampGenerator : public ext::Singleton<MockTimeStampGenerator>
 {
 public:
@@ -54,16 +58,6 @@ private:
     const Int64 port_upper_bound = 65536;
     std::atomic<Int64> port = 3931;
 };
-
-DAGProperties getDAGPropertiesForTest(int server_num)
-{
-    DAGProperties properties;
-    // enable mpp
-    properties.is_mpp_query = true;
-    properties.mpp_partition_num = server_num;
-    properties.start_ts = MockTimeStampGenerator::instance().nextTs();
-    return properties;
-}
 
 class MPPTaskTestUtils : public ExecutorTest
 {
@@ -104,13 +98,25 @@ public:
         return server_num;
     }
 
+    void injectCancel(DAGRequestBuilder builder)
+    {
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
+        auto tasks = builder.buildMPPTasks(context, properties);
+        TiFlashTestEnv::getGlobalContext().setMPPTest();
+        MockComputeServerManager::instance().setMockStorage(context.mockStorage());
+        executeMPPTasksForCancel(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
+    }
+
+    // ywq todo just poc
+    BlockInputStreamPtr executeMPPTasksForCancel(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+    {
+        return executeMPPQuery(context.context, properties, tasks, server_config_map);
+    }
+
 protected:
     static LoggerPtr log_ptr;
     static size_t server_num;
 };
-
-LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
-size_t MPPTaskTestUtils::server_num = 0;
 
 #define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                \
     do                                                                                                                                      \
@@ -135,7 +141,7 @@ size_t MPPTaskTestUtils::server_num = 0;
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
     do                                                                                 \
     {                                                                                  \
-        auto properties = getDAGPropertiesForTest(serverNum());                        \
+        auto properties = DB::tests::getDAGPropertiesForTest(serverNum());             \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \
         size_t task_size = tasks.size();                                               \
         for (size_t i = 0; i < task_size; ++i)                                         \
@@ -147,4 +153,5 @@ size_t MPPTaskTestUtils::server_num = 0;
             properties,                                                                \
             expect_cols);                                                              \
     } while (0)
+
 } // namespace DB::tests

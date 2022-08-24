@@ -316,6 +316,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     {
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
         auto addr = server_config_map[task.partition_id].addr;
+        std::cout << "ywq test addr: " << addr << std::endl;
         prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, addr);
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
