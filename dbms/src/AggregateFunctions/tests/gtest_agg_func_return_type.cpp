@@ -16,8 +16,8 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <TestUtils/AggregationTestUtils.h>
-#include <TestUtils/mockExecutor.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TestUtils/mockExecutor.h>
 
 #include <tuple>
 #include <vector>
@@ -38,9 +38,9 @@ public:
             PrecType max_precision = maxDecimalPrecision<T>();
             std::vector<std::pair<PrecType, ScaleType>> cases{
                 {max_precision, 0},
-                {max_precision-1, 1},
-                {max_precision-2, 2},
-                {max_precision-3, 3},
+                {max_precision - 1, 1},
+                {max_precision - 2, 2},
+                {max_precision - 3, 3},
             };
 
             for (const auto & p : cases)

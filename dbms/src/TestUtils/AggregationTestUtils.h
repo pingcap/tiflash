@@ -14,16 +14,17 @@
 
 #pragma once
 
-#include <TestUtils/TiFlashTestEnv.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <gtest/gtest.h>
-#include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <AggregateFunctions/IAggregateFunction.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
+#include <TestUtils/TiFlashTestEnv.h>
+#include <gtest/gtest.h>
 
 namespace DB::tests
 {
 
-class AggregationTest : public ::testing::Test {
+class AggregationTest : public ::testing::Test
+{
 public:
     ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
     {
