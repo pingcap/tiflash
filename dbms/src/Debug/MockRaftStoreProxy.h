@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ReadIndexWorker.h>
 #include <kvproto/raft_serverpb.pb.h>
+#include <raft_cmdpb.pb.h>
 
 #include <ext/singleton.h>
 
@@ -26,14 +28,13 @@ kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t star
 struct MockProxyRegion : MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
-
     raft_serverpb::RaftApplyState getApply();
-
+    void updateAppliedIndex(uint64_t index);
+    uint64_t getLatestAppliedIndex();
+    uint64_t getLatestCommitTerm();
     uint64_t getLatestCommitIndex();
-
     void updateCommitIndex(uint64_t index);
     void setSate(raft_serverpb::RegionLocalState);
-
     explicit MockProxyRegion(uint64_t id);
 
     const uint64_t id;
@@ -104,6 +105,28 @@ struct MockRaftStoreProxy : MutexLockWrap
     void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
 
     static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
+    /// Mutation funcs.
+    struct FailCond {
+        bool fail_before_kvstore = false;
+        bool fail_before_proxy = false;
+    };
+
+    /// We assume that we generate one command, and immediately commit.
+    /// boostrap a region
+    void bootstrap(
+        const Context & ctx,
+        UInt64 region_id);
+
+    /// normal write to a region
+    void normalWrite(
+        const Context & ctx,
+        const FailCond & cond,
+        UInt64 region_id,
+        std::vector<HandleID> keys,
+        std::vector<std::string> vals,
+        std::vector<WriteCmdType> cmd_types,
+        std::vector<ColumnFamilyType> cmd_cf);
+    void compactLog(UInt64 region_id, UInt64 index);
 
     std::unordered_set<uint64_t> region_id_to_drop;
     std::unordered_set<uint64_t> region_id_to_error;

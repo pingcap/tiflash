@@ -15,9 +15,20 @@
 #include <Common/Exception.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
+#include <Storages/Transaction/RegionMeta.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Interpreters/Context.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <Storages/Transaction/tests/region_helper.h>
 
 namespace DB
 {
+namespace RegionBench
+{
+extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &, const TiKVValue &);
+extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
+} // namespace RegionBench
+
 kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t start_ts)
 {
     kvrpcpb::ReadIndexRequest req;
@@ -145,6 +156,22 @@ raft_serverpb::RaftApplyState MockProxyRegion::getApply()
     return apply;
 }
 
+void MockProxyRegion::updateAppliedIndex(uint64_t index)
+{
+    auto _ = genLockGuard();
+    this->apply.set_applied_index(index);
+}
+
+uint64_t MockProxyRegion::getLatestAppliedIndex()
+{
+    return this->getApply().applied_index();
+}
+
+uint64_t MockProxyRegion::getLatestCommitTerm()
+{
+    return this->getApply().commit_term();
+}
+
 uint64_t MockProxyRegion::getLatestCommitIndex()
 {
     return this->getApply().commit_index();
@@ -165,7 +192,11 @@ void MockProxyRegion::setSate(raft_serverpb::RegionLocalState s)
 MockProxyRegion::MockProxyRegion(uint64_t id_)
     : id(id_)
 {
-    apply.set_commit_index(5);
+    apply.set_commit_index(RAFT_INIT_LOG_INDEX);
+    apply.set_commit_term(RAFT_INIT_LOG_TERM);
+    apply.set_applied_index(RAFT_INIT_LOG_INDEX);
+    apply.mutable_truncated_state()->set_index(RAFT_INIT_LOG_INDEX);
+    apply.mutable_truncated_state()->set_term(RAFT_INIT_LOG_TERM);
     state.mutable_region()->set_id(id);
 }
 
@@ -293,6 +324,70 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
 {
     auto _ = genLockGuard();
     cb(*this);
+}
+
+void MockRaftStoreProxy::bootstrap(
+    const Context & ctx,
+    UInt64 region_id)
+{
+    auto _ = genLockGuard();
+    regions.emplace(region_id, std::make_shared<MockProxyRegion>(region_id));
+
+    KVStore & kvs = *ctx.getTMTContext().getKVStore();
+    auto task_lock = kvs.genTaskLock();
+    auto lock = kvs.genRegionWriteLock(task_lock);
+    {
+        auto region = tests::makeRegion(region_id, RecordKVFormat::genKey(region_id, 0), RecordKVFormat::genKey(region_id, 10));
+        lock.regions.emplace(region_id, region);
+        lock.index.add(region);
+    }
+}
+
+void MockRaftStoreProxy::normalWrite(
+    const Context & ctx,
+    const FailCond & cond,
+    UInt64 region_id,
+    std::vector<HandleID> keys,
+    std::vector<std::string> vals,
+    std::vector<WriteCmdType> cmd_types,
+    std::vector<ColumnFamilyType> cmd_cf)
+{
+    auto region = getRegion(region_id);
+    assert(region != nullptr);
+    auto index = region->getLatestCommitIndex() + 1;
+    auto term = region->getLatestCommitTerm();
+    raft_cmdpb::RaftCmdRequest request;
+    size_t n = keys.size();
+    assert(n == vals.size());
+    assert(n == cmd_types.size());
+    assert(n == cmd_cf.size());
+    for (size_t i = 0; i < n; i++)
+    {
+        if (cmd_types[i] == WriteCmdType::Put)
+        {
+            auto cf_name = CFToName(cmd_cf[i]);
+            auto key = RecordKVFormat::genKey(1, keys[i], 1);
+            TiKVValue value = std::move(vals[i]);
+            RegionBench::setupPutRequest(request.add_requests(), cf_name, key, value);
+        }
+        else
+        {
+            auto cf_name = CFToName(cmd_cf[i]);
+            auto key = RecordKVFormat::genKey(1, keys[i], 1);
+            RegionBench::setupDelRequest(request.add_requests(), cf_name, key);
+        }
+    }
+
+    if (cond.fail_before_kvstore) return;
+
+    // TiFlash write
+    KVStore & kvs = *ctx.getTMTContext().getKVStore();
+    kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, ctx.getTMTContext());
+
+    if (cond.fail_before_proxy) return;
+
+    // Proxy advance
+    region->updateAppliedIndex(index);
 }
 
 void GCMonitor::add(RawObjType type, int64_t diff)
