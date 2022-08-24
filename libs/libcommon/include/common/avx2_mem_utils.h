@@ -34,8 +34,7 @@ ALWAYS_INLINE static inline T clear_rightmost(const T value)
     return value & (value - 1);
 }
 
-template <typename T>
-ALWAYS_INLINE static inline uint32_t get_rightmost_bit_pos(const T value)
+ALWAYS_INLINE static inline uint32_t get_rightmost_bit_pos(const uint32_t value)
 {
     assert(value != 0);
     return __builtin_ctz(value);
@@ -74,10 +73,10 @@ FLATTEN_INLINE_PURE static inline bool check_block32x4_eq(const char * a, const 
 // https://github.com/lattera/glibc/blob/master/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
 FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const char * p2, size_t n)
 {
-    constexpr size_t loop_4x32_size = AVX2_UNROLL_NUM * BLOCK32_SIZE;
+    constexpr size_t loop_block32x4_size = AVX2_UNROLL_NUM * BLOCK32_SIZE;
 
-    // n < 32
-    if (unlikely(n < BLOCK32_SIZE))
+    // n <= 32
+    if (likely(n <= BLOCK32_SIZE))
     {
 #ifdef M
         static_assert(false, "`M` is defined");
@@ -109,7 +108,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             M(16);
         default:
         {
-            // 17~31
+            // 17~32
             if (!mem_utils::memcmp_eq_fixed_size<BLOCK16_SIZE>(p1, p2))
                 return false;
             if (!mem_utils::memcmp_eq_fixed_size<BLOCK16_SIZE>(p1 + n - BLOCK16_SIZE, p2 + n - BLOCK16_SIZE))
@@ -119,7 +118,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         }
 #undef M
 
-
+// an optional way to check small str
 #if defined(AVX2_MEM_EQ_NORMAL_IF_ELSE)
         if (unlikely(n < 2))
         {
@@ -157,7 +156,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         }
         else
         {
-            // 17~31
+            // 17~32
             if (!memcmp_eq_fixed_size<BLOCK16_SIZE>(p1, p2))
                 return false;
             if (!memcmp_eq_fixed_size<BLOCK16_SIZE>(p1 + n - BLOCK16_SIZE, p2 + n - BLOCK16_SIZE))
@@ -168,7 +167,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
     }
 
     //  8 * 32 < n
-    if (likely(8 * BLOCK32_SIZE < n))
+    if (unlikely(8 * BLOCK32_SIZE < n))
     {
         // check first block
         if (unlikely(!check_block32_eq(p1, p2)))
@@ -181,14 +180,14 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             n -= offset;
         }
 
-        for (; n >= loop_4x32_size;)
+        for (; n >= loop_block32x4_size;)
         {
             if (unlikely(!check_block32x4_eq(p1, p2)))
                 return false;
 
-            n -= loop_4x32_size;
-            p1 += loop_4x32_size;
-            p2 += loop_4x32_size;
+            n -= loop_block32x4_size;
+            p1 += loop_block32x4_size;
+            p2 += loop_block32x4_size;
         }
         // n < 4 * 32
     }
@@ -218,7 +217,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         //  4 * 32 < n <= 8 * 32
         if (unlikely(!check_block32x4_eq(p1, p2)))
             return false;
-        return check_block32x4_eq(p1 + n - loop_4x32_size, p2 + n - loop_4x32_size);
+        return check_block32x4_eq(p1 + n - loop_block32x4_size, p2 + n - loop_block32x4_size);
     }
 }
 } // namespace mem_utils::details

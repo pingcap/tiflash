@@ -42,7 +42,7 @@ SRCPATH=$(
 )
 NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
 ENABLE_THINLTO=${ENABLE_THINLTO:-ON}
-ENABLE_PCH=OFF # disable PCH temporarily because some source files need to use specific cxx flags
+ENABLE_PCH=${ENABLE_PCH:-ON}
 
 INSTALL_DIR="${SRCPATH}/release-centos7-llvm/tiflash"
 rm -rf ${INSTALL_DIR} && mkdir -p ${INSTALL_DIR}
