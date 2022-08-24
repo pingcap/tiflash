@@ -236,22 +236,27 @@ void WindowBlockInputStream::advanceFrameStart()
         return;
     }
 
-    if (only_have_pure_window)
+    switch (window_description.frame.begin_type)
     {
-        frame_start = current_row;
-        frame_started = true;
-        return;
+        case WindowFrame::BoundaryType::Unbounded:
+            // UNBOUNDED PRECEDING, just mark it valid. It is initialized when
+            // the new partition starts.
+            frame_started = true;
+            break;
+        case WindowFrame::BoundaryType::Current:
+        {
+            RUNTIME_CHECK_MSG(only_have_pure_window, "window function only support pure window function now.");
+            frame_start = current_row;
+            frame_started = true;
+            break;
+        }
+        case WindowFrame::BoundaryType::Offset:
+        default:
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED,
+                "The frame begin type '{}' is not implemented",
+                window_description.frame.begin_type);
     }
-
-    if (onlyHaveLeadLag())
-    {
-        frame_start = partition_start;
-        frame_started = true;
-        return;
-    }
-
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                    "window function only support pure window function now.");
 }
 
 bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) const
@@ -311,28 +316,10 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
            || frame_end.block + 1 == partition_end.block);
 
     // If window only have row_number or rank/dense_rank functions, set frame_end to the next row of current_row and frame_ended to true
-    if (only_have_pure_window)
-    {
-        frame_end = current_row;
-        advanceRowNumber(frame_end);
-        frame_ended = true;
-        return;
-    }
-
-    if (onlyHaveLeadLag())
-    {
-        if (!partition_ended)
-            frame_ended = false;
-        else
-        {
-            frame_end = partition_end;
-            frame_ended = true;
-        }
-        return;
-    }
-
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                    "window function only support pure window function now.");
+    RUNTIME_CHECK(only_have_pure_window, "window function only support pure window function now.");
+    frame_end = current_row;
+    advanceRowNumber(frame_end);
+    frame_ended = true;
 }
 
 void WindowBlockInputStream::advanceFrameEnd()
@@ -355,6 +342,12 @@ void WindowBlockInputStream::advanceFrameEnd()
         advanceFrameEndCurrentRow();
         break;
     case WindowFrame::BoundaryType::Unbounded:
+    {
+        // The UNBOUNDED FOLLOWING frame ends when the partition ends.
+        frame_end = partition_end;
+        frame_ended = partition_ended;
+        break;
+    }
     case WindowFrame::BoundaryType::Offset:
     default:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
@@ -425,16 +418,6 @@ bool WindowBlockInputStream::onlyHaveRowNumberAndRank()
     for (const auto & workspace : workspaces)
     {
         if (workspace.window_function->getName() != "row_number" && workspace.window_function->getName() != "rank" && workspace.window_function->getName() != "dense_rank")
-            return false;
-    }
-    return true;
-}
-
-bool WindowBlockInputStream::onlyHaveLeadLag()
-{
-    for (const auto & workspace : workspaces)
-    {
-        if (workspace.window_function->getName() != "lead" && workspace.window_function->getName() != "lag")
             return false;
     }
     return true;
