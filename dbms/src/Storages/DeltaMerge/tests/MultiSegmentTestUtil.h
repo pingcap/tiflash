@@ -26,6 +26,7 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 #include <cstdint>
 #include <vector>
