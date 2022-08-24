@@ -629,7 +629,6 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     new_stable->enableDMFilesGC();
 
     auto lock = mustGetUpdateLock();
-
     auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
 
     wbs.writeAll();

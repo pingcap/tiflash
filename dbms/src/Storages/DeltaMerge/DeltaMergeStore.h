@@ -305,14 +305,8 @@ public:
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const
-    {
-        return db_name;
-    }
-    const String & getTableName() const
-    {
-        return table_name;
-    }
+    const String & getDatabaseName() const { return db_name; }
+    const String & getTableName() const { return table_name; }
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
 
@@ -382,6 +376,7 @@ public:
         auto dm_context = newDMContext(context, context.getSettingsRef());
         return flushCache(dm_context, range, try_until_succeed);
     }
+
     bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
 
     /// Merge delta into the stable layer for all segments.
@@ -414,36 +409,18 @@ public:
         std::shared_lock lock(read_write_mutex);
         return store_columns;
     }
-    const ColumnDefines & getTableColumns() const
-    {
-        return original_table_columns;
-    }
-    const ColumnDefine & getHandle() const
-    {
-        return original_table_handle_define;
-    }
+    const ColumnDefines & getTableColumns() const { return original_table_columns; }
+    const ColumnDefine & getHandle() const { return original_table_handle_define; }
     BlockPtr getHeader() const;
-    const Settings & getSettings() const
-    {
-        return settings;
-    }
-    DataTypePtr getPKDataType() const
-    {
-        return original_table_handle_define.type;
-    }
+    const Settings & getSettings() const { return settings; }
+    DataTypePtr getPKDataType() const { return original_table_handle_define.type; }
     SortDescription getPrimarySortDescription() const;
 
     void check(const Context & db_context);
     DeltaMergeStoreStat getStat();
     SegmentStats getSegmentStats();
-    bool isCommonHandle() const
-    {
-        return is_common_handle;
-    }
-    size_t getRowKeyColumnSize() const
-    {
-        return rowkey_column_size;
-    }
+    bool isCommonHandle() const { return is_common_handle; }
+    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
 
 public:
     /// Methods mainly used by region split.

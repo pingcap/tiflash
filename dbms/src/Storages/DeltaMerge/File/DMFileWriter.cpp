@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/File/DMFileWriter.h>
 
