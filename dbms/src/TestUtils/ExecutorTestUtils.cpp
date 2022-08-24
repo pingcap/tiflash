@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "TestUtils/TiFlashTestEnv.h"
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
@@ -137,6 +138,12 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
 DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     auto res = executeMPPQuery(context.context, properties, tasks, server_config_map);
+    return readBlock(res);
+}
+
+DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasksForTest(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+{
+    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(1), properties, tasks, server_config_map);
     return readBlock(res);
 }
 

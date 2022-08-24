@@ -86,7 +86,7 @@ public:
         auto size = std::thread::hardware_concurrency();
         GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         std::cout << "ywq test globalContext size: " << TiFlashTestEnv::globalContextSize() << std::endl;
-        auto start_idx = TiFlashTestEnv::globalContextSize();
+        // auto start_idx = TiFlashTestEnv::globalContextSize();
         for (size_t i = 0; i < server_num; ++i)
         {
             MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
@@ -95,7 +95,7 @@ public:
         for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
             TiFlashTestEnv::getGlobalContext(i).setMPPTest();
 
-        MockComputeServerManager::instance().startServers(log_ptr, start_idx);
+        MockComputeServerManager::instance().startServers(log_ptr, 1); // ywq todo amazing change the code will affect task dispatch
         std::cout << "ywq test globalContext size: " << TiFlashTestEnv::globalContextSize() << std::endl;
 
         MockServerAddrGenerator::instance().reset();
@@ -127,14 +127,14 @@ protected:
     static size_t server_num;
 };
 
-#define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                \
-    do                                                                                                                                      \
-    {                                                                                                                                       \
-        TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
-        MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                         \
-        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+#define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                       \
+    do                                                                                                                                             \
+    {                                                                                                                                              \
+        TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                           \
+        MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                                \
+        ASSERT_COLUMNS_EQ_UR(executeMPPTasksForTest(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
     } while (0)
-
+// ywq todo a hack...
 #define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
     do                                                                         \
     {                                                                          \
@@ -151,6 +151,7 @@ protected:
     do                                                                                 \
     {                                                                                  \
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());             \
+        std::cout << "ywq test properties serverNum: " << serverNum() << std::endl;    \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \
         size_t task_size = tasks.size();                                               \
         for (size_t i = 0; i < task_size; ++i)                                         \

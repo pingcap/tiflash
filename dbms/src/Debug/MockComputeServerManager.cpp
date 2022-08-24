@@ -59,7 +59,6 @@ void MockComputeServerManager::startServers(const LoggerPtr & log_ptr, int start
         TiFlashSecurityConfig security_config;
         TiFlashRaftConfig raft_config;
         raft_config.flash_server_addr = server_config.second.addr;
-        std::cout << "ywq test flash server addr: " << raft_config.flash_server_addr << std::endl;
         Poco::AutoPtr<Poco::Util::LayeredConfiguration> config = new Poco::Util::LayeredConfiguration;
         auto & context = TiFlashTestEnv::getGlobalContext(start_idx++);
         context.setMPPTest();
@@ -97,6 +96,8 @@ void MockComputeServerManager::prepareMockMPPServerInfo()
 {
     for (const auto & server : server_map)
     {
+        auto t = getMockMPPServerInfo(server.first);
+        std::cout << "partition_id: " << t.partition_id << ", partition_num: " << t.partition_num << std::endl;
         server.second->setMockMPPServerInfo(getMockMPPServerInfo(server.first));
     }
 }

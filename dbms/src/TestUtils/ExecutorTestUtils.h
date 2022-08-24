@@ -94,6 +94,7 @@ public:
         size_t concurrency = 1);
 
     ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    ColumnsWithTypeAndName executeMPPTasksForTest(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 protected:
     MockDAGRequestContext context;
