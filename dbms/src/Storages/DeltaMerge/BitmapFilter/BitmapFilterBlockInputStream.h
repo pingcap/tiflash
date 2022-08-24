@@ -19,15 +19,12 @@
 
 namespace DB::DM
 {
-//class BitmapFilter;
-//using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
-
 class BitmapFilterBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "BitmapFilterBlockInputStream";
 
 public:
-    BitmapFilterBlockInputStream(BlockInputStreamPtr stable_, BlockInputStreamPtr delta_, size_t stable_rows_, const BitmapFilterPtr & bitmap_filter_, const String & req_id_);
+    BitmapFilterBlockInputStream(BlockInputStreamPtr stable_, BlockInputStreamPtr delta_, size_t stable_rows_, const ArrayBitmapFilterPtr & bitmap_filter_, const String & req_id_);
 
     String getName() const override { return NAME; }
 
@@ -48,7 +45,7 @@ private:
     BlockInputStreamPtr stable;
     BlockInputStreamPtr delta;
     size_t stable_rows;
-    BitmapFilterPtr bitmap_filter;
+    ArrayBitmapFilterPtr bitmap_filter;
     const LoggerPtr log;
     IColumn::Filter filter{};
 };

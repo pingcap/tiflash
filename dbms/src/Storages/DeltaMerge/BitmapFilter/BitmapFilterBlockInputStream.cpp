@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 
 namespace DB::DM
 {
-BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(BlockInputStreamPtr stable_, BlockInputStreamPtr delta_, size_t stable_rows_, const BitmapFilterPtr & bitmap_filter_, const String & req_id_)
-    : stable(stable_), delta(delta_), stable_rows(stable_rows_), bitmap_filter(bitmap_filter_), log(Logger::get(NAME, req_id_))
+BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(BlockInputStreamPtr stable_, BlockInputStreamPtr delta_, size_t stable_rows_, const ArrayBitmapFilterPtr & bitmap_filter_, const String & req_id_)
+    : stable(stable_)
+    , delta(delta_)
+    , stable_rows(stable_rows_)
+    , bitmap_filter(bitmap_filter_)
+    , log(Logger::get(NAME, req_id_))
 {}
 
 Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
@@ -30,7 +34,7 @@ Block BitmapFilterBlockInputStream::readImpl(FilterPtr & res_filter, bool return
         {
             block.setStartOffset(block.startOffset() + stable_rows);
         }
-        
+
         static const UInt8 zero = 0;
         filter.assign(block.rows(), zero);
         bitmap_filter->get(filter, block.startOffset(), block.rows());
@@ -80,4 +84,4 @@ std::pair<Block, bool> BitmapFilterBlockInputStream::readBlock()
     }
 }
 
-}
+} // namespace DB::DM

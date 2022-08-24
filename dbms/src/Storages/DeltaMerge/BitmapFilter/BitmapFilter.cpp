@@ -13,23 +13,29 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include "common/types.h"
+#include <Storages/DeltaMerge/Segment.h>
 
 namespace DB::DM
 {
-ArrayBitmapFilter::ArrayBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapshot_)
+ArrayBitmapFilter::ArrayBitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, const std::vector<UInt32> & data)
     : filter(size_, 0)
     , snap(snapshot_)
+    , all_match(false)
+{
+    set(data.data(), data.size());
+}
+
+ArrayBitmapFilter::ArrayBitmapFilter(const SegmentSnapshotPtr & snapshot_)
+    : snap(snapshot_)
+    , all_match(true)
 {}
 
-void ArrayBitmapFilter::set(const ColumnPtr & col)
+void ArrayBitmapFilter::set(const UInt32 * data, UInt32 size)
 {
-    const auto * v = toColumnVectorDataPtr<UInt64>(col);
-    for (auto p = v->begin(); p != v->end(); ++p)
+    for (UInt32 i = 0; i < size; i++)
     {
-        UInt64 row_id = *p;
+        UInt32 row_id = *(data + i);
         if (likely(row_id < filter.size()))
         {
             filter[row_id] = 1;
@@ -41,9 +47,36 @@ void ArrayBitmapFilter::set(const ColumnPtr & col)
     }
 }
 
-void ArrayBitmapFilter::get(IColumn::Filter & f, UInt64 start, UInt64 limit) const
+std::vector<UInt32> ArrayBitmapFilter::toUInt32Array() const
 {
-    for (UInt64 i = 0; i < limit; i++)
+    std::vector<UInt32> v;
+    v.reserve(filter.size());
+    for (UInt32 i = 0; i < filter.size(); i++)
+    {
+        if (filter[i])
+        {
+            v.emplace_back(i);
+        }
+    }
+    return v;
+}
+
+void ArrayBitmapFilter::set(const ColumnPtr & col)
+{
+    const auto * v = toColumnVectorDataPtr<UInt32>(col);
+    set(v->data(), v->size());
+}
+
+void ArrayBitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
+{
+    if (all_match)
+    {
+        static const UInt8 match = 1;
+        f.assign(static_cast<size_t>(limit), match);
+        return;
+    }
+
+    for (UInt32 i = 0; i < limit; i++)
     {
         f[i] = filter[start + i];
     }
@@ -54,12 +87,41 @@ SegmentSnapshotPtr ArrayBitmapFilter::snapshot() const
     return snap;
 }
 
-//===================================
+void ArrayBitmapFilter::runOptimize()
+{
+    bool temp = true;
+    for (auto i : filter)
+    {
+        temp = (temp && i);
+    }
+    all_match = temp;
+}
 
-RoaringBitmapFilter::RoaringBitmapFilter(UInt32 size_, SegmentSnapshotPtr snapshot_)
+RoaringBitmapFilterPtr ArrayBitmapFilter::toRoaringBitmapFilter() const
+{
+    if (all_match)
+    {
+        return std::make_shared<RoaringBitmapFilter>(snap);
+    }
+    else
+    {
+        auto v = toUInt32Array();
+        return std::make_shared<RoaringBitmapFilter>(filter.size(), snap, v);
+    }
+}
+// =================================================================================
+
+RoaringBitmapFilter::RoaringBitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, const std::vector<UInt32> & data)
     : sz(size_)
+    , rrbitmap(data.size(), data.data())
     , snap(snapshot_)
     , all_match(false)
+{}
+
+RoaringBitmapFilter::RoaringBitmapFilter(const SegmentSnapshotPtr & snapshot_)
+    : sz(0)
+    , snap(snapshot_)
+    , all_match(true)
 {}
 
 void RoaringBitmapFilter::set(const ColumnPtr & col)
@@ -74,7 +136,7 @@ void RoaringBitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) c
     if (all_match)
     {
         static const UInt8 match = 1;
-        f.assign(f.size(), match);
+        f.assign(static_cast<size_t>(limit), match);
         return;
     }
 
@@ -94,9 +156,20 @@ void RoaringBitmapFilter::runOptimize()
     rrbitmap.runOptimize();
     rrbitmap.shrinkToFit();
     all_match = rrbitmap.cardinality() == sz;
+}
+
+ArrayBitmapFilterPtr RoaringBitmapFilter::toArrayBitmapFilter() const
+{
     if (all_match)
     {
-        //rrbitmap.clear();
+        return std::make_shared<ArrayBitmapFilter>(snap);
+    }
+    else
+    {
+        std::vector<UInt32> v(rrbitmap.cardinality());
+        rrbitmap.toUint32Array(v.data());
+        return std::make_shared<ArrayBitmapFilter>(sz, snap, v);
     }
 }
+
 } // namespace DB::DM

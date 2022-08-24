@@ -1811,7 +1811,7 @@ bool Segment::placeDelete(const DMContext & dm_context,
     return fully_indexed;
 }
 
-BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
+ArrayBitmapFilterPtr Segment::buildArrayBitmapFilter(const DMContext & dm_context,
                                            const SegmentSnapshotPtr & segment_snap,
                                            const RowKeyRanges & read_ranges,
                                            const RSOperatorPtr & filter,
@@ -1821,7 +1821,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
     Stopwatch sw_total;
     static ColumnDefines columns_to_read{getExtraHandleColumnDefine(is_common_handle), getVersionColumnDefine(), getTagColumnDefine()};
     auto stream = getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size, /*for_bitmap*/ true);
-    auto bitmap_filter = std::make_shared<BitmapFilter>(segment_snap->getRows(), segment_snap);
+    auto bitmap_filter = std::make_shared<ArrayBitmapFilter>(segment_snap->getRows(), segment_snap);
     for (;;)
     {
         auto blk = stream->read();
@@ -1831,9 +1831,19 @@ BitmapFilterPtr Segment::buildBitmapFilter(const DMContext & dm_context,
         }
         bitmap_filter->set(blk.segmentRowIdCol());
     }
-    Stopwatch sw_run_opt;
+    Stopwatch sw;
     bitmap_filter->runOptimize();
-    LOG_FMT_DEBUG(log, "buildBitmapFilter rows {} use {} ms, run optimize use {} ms", segment_snap->getRows(), sw_total.elapsedMilliseconds(), sw_run_opt.elapsedMilliseconds());
+    auto run_opt_ms = sw.elapsedMilliseconds();
+
+    sw.restart();
+    auto rr_bitmap = bitmap_filter->toRoaringBitmapFilter();
+    auto to_rr_bitmap_ms = sw.elapsedMilliseconds();
+    sw.restart();
+    bitmap_filter = rr_bitmap->toArrayBitmapFilter();
+    auto to_arr_bitmap_ms = sw.elapsedMilliseconds();
+
+    LOG_FMT_DEBUG(log, "buildArrayBitmapFilter rows {} use {} ms, run optimize use {} ms, to rrbitmap use {} ms, to array bitmap use {} ms",
+        segment_snap->getRows(), sw_total.elapsedMilliseconds(), run_opt_ms, to_rr_bitmap_ms, to_arr_bitmap_ms);
     return bitmap_filter;
 }
 
@@ -1846,7 +1856,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
                                                         size_t expected_block_size)
 {
     // For normal mode, already filter rowkey in bitmap.
-    auto bitmap_filter = buildBitmapFilter(dm_context, segment_snap, data_ranges, filter, max_version, expected_block_size);
+    auto bitmap_filter = buildArrayBitmapFilter(dm_context, segment_snap, data_ranges, filter, max_version, expected_block_size);
 
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
@@ -1863,7 +1873,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(const DMContext & dm_con
 
     return std::make_shared<BitmapFilterBlockInputStream>(stable_stream, delta_stream, segment_snap->stable->getRows(), bitmap_filter, dm_context.tracing_id);
 }
-
+/*
 void Segment::updateFastmodeBitmapFilter(const DMContext & dm_context)
 {
     auto snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfBuildFastModeBitmap);
@@ -1873,7 +1883,7 @@ void Segment::updateFastmodeBitmapFilter(const DMContext & dm_context)
     }
     fast_mode_bitmap_filter = buildBitmapFilter(dm_context, snap, {rowkey_range}, nullptr, std::numeric_limits<UInt64>::max(), dm_context.db_context.getSettingsRef().max_block_size);
     fast_mode_bitmap_filter->snapshot()->stable->clearColumnCaches();
-}
+}*/
 
 } // namespace DM
 } // namespace DB

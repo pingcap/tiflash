@@ -317,7 +317,7 @@ public:
 
     void setLastCheckGCSafePoint(DB::Timestamp gc_safe_point) { last_check_gc_safe_point.store(gc_safe_point, std::memory_order_relaxed); }
 
-    void updateFastmodeBitmapFilter(const DMContext & dm_context);
+    //void updateFastmodeBitmapFilter(const DMContext & dm_context);
 private:
     ReadInfo getReadInfo(
         const DMContext & dm_context,
@@ -402,7 +402,7 @@ private:
         const RowKeyRange & relevant_range,
         bool relevant_place) const;
 
-    BitmapFilterPtr buildBitmapFilter(const DMContext & dm_context,
+    ArrayBitmapFilterPtr buildArrayBitmapFilter(const DMContext & dm_context,
                                            const SegmentSnapshotPtr & segment_snap,
                                            const RowKeyRanges & read_ranges,
                                            const RSOperatorPtr & filter,
@@ -433,8 +433,6 @@ private:
     bool split_forbidden = false;
 
     Poco::Logger * log;
-
-    BitmapFilterPtr fast_mode_bitmap_filter;
 };
 
 } // namespace DB::DM

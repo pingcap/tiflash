@@ -15,42 +15,53 @@
 #pragma once
 
 #include <Columns/IColumn.h>
-#include <roaring64map.hh>
+
+#include <roaring.hh>
 
 namespace DB::DM
 {
 struct SegmentSnapshot;
 using SegmentSnapshotPtr = std::shared_ptr<SegmentSnapshot>;
 
+class ArrayBitmapFilter;
+class RoaringBitmapFilter;
+using ArrayBitmapFilterPtr = std::shared_ptr<ArrayBitmapFilter>;
+using RoaringBitmapFilterPtr = std::shared_ptr<RoaringBitmapFilter>;
+
 class ArrayBitmapFilter
 {
 public:
-    ArrayBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapshot_);
+    ArrayBitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, const std::vector<UInt32> & data = {});
+    explicit ArrayBitmapFilter(const SegmentSnapshotPtr & snapshot_);
     void set(const ColumnPtr & col);
-    void get(IColumn::Filter & f, UInt64 start, UInt64 limit) const;
+    void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
     SegmentSnapshotPtr snapshot() const;
-    void runOptimize() const { /*do nothing*/ }
+    void runOptimize();
+    RoaringBitmapFilterPtr toRoaringBitmapFilter() const;
 private:
+    void set(const UInt32 * data, UInt32 size);
+    std::vector<UInt32> toUInt32Array() const;
+
     IColumn::Filter filter;
     SegmentSnapshotPtr snap;
+    bool all_match;
 };
 
 class RoaringBitmapFilter
 {
 public:
-    RoaringBitmapFilter(UInt32 size_, SegmentSnapshotPtr snapshot_);
+    RoaringBitmapFilter(UInt32 size_, const SegmentSnapshotPtr & snapshot_, const std::vector<UInt32> & data = {});
+    explicit RoaringBitmapFilter(const SegmentSnapshotPtr & snapshot_);
     void set(const ColumnPtr & col);
     void get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
     SegmentSnapshotPtr snapshot() const;
     void runOptimize();
+    ArrayBitmapFilterPtr toArrayBitmapFilter() const;
+
 private:
     UInt32 sz;
-    roaring::Roaring64Map rrbitmap;
+    roaring::Roaring rrbitmap;
     SegmentSnapshotPtr snap;
     bool all_match;
 };
-
-using BitmapFilter = RoaringBitmapFilter;
-//using BitmapFilter = ArrayBitmapFilter;
-using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 } // namespace DB::DM
