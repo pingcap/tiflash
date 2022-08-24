@@ -72,6 +72,17 @@ static IAggregateFunction * createWithDecimalType(const IDataType & argument_typ
     return nullptr;
 }
 
+template <template <typename, typename, typename> class AggregateSumTemplate, typename ResultType, typename SumName, typename... TArgs>
+static IAggregateFunction * createSumAggWithDecimalType(const IDataType & argument_type, TArgs &&... args)
+{
+#define DISPATCH(FIELDTYPE, DATATYPE)                  \
+    if (typeid_cast<const DATATYPE *>(&argument_type)) \
+        return new AggregateSumTemplate<FIELDTYPE, ResultType, SumName>(std::forward<TArgs>(args)...);
+    FOR_DECIMAL_TYPES(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
 /** Create an aggregate function with a numeric type in the template parameter, depending on the type of the argument.
   */
 template <template <typename, typename... TArgs> class AggregateFunctionTemplate, typename... TArgs>
