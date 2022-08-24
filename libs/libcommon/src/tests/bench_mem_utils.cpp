@@ -178,12 +178,12 @@ NO_INLINE size_t stl_str_find(std::string_view s, std::string_view p)
     using MemUtilsEqual##_##max_src_size = MemUtilsEqual<max_src_size>;                                          \
     BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, stl_mem_eq, stl_mem_eq, iter_cnt)                               \
     BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, mem_utils_memoryEqual_avx512, mem_utils::memoryEqual, iter_cnt) \
-    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, avx2_mem_equal, avx2_mem_equal, iter_cnt)
+    BENCH_MEM_EQ(MemUtilsEqual##_##max_src_size, avx2_mem_equal, mem_utils::avx2_mem_equal, iter_cnt)
 
 #define BENCH_MEM_STRSTR_ALL(max_cnt, max_src_size, max_needle_size, iter_cnt)                                          \
     using MemUtilsStrStr##_##max_src_size##_##max_needle_size = MemUtilsStrStr<max_cnt, max_src_size, max_needle_size>; \
     BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, stl_str_find, stl_str_find, iter_cnt)         \
-    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, avx2_strstr, avx2_strstr, iter_cnt)
+    BENCH_MEM_STRSTR(MemUtilsStrStr##_##max_src_size##_##max_needle_size, avx2_strstr, mem_utils::avx2_strstr, iter_cnt)
 
 BENCH_MEM_EQ_ALL(13, 2000)
 BENCH_MEM_EQ_ALL(65, 2000)
