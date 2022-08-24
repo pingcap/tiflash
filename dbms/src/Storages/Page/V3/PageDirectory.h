@@ -32,6 +32,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
+#include "Storages/Page/PageDefines.h"
 
 namespace CurrentMetrics
 {
@@ -349,6 +350,7 @@ public:
     PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
 
     std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
+    std::map<NamespaceId, std::set<PageId>> getAliveExternalIds() const;
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 

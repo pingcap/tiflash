@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/PageStorage.h>
@@ -20,6 +21,9 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
+#include <common/logger_useful.h>
+
+#include "Storages/Page/PageDefines.h"
 
 namespace DB
 {
@@ -269,6 +273,13 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
     }
 }
 
+struct GCTimeConsume
+{
+    UInt64 external_page_scan_ns = 0;
+    UInt64 external_page_get_alive_ns = 0;
+    UInt64 external_page_remove_ns = 0;
+};
+
 bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
     // If another thread is running gc, just return;
@@ -284,17 +295,45 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    auto clean_external_page = [this]() {
+    GCTimeConsume consume;
+
+    // Remove external pages for all tables
+    auto clean_external_page = [&gc_watch, &consume, this]() -> UInt64 {
         std::scoped_lock lock{callbacks_mutex};
         if (!callbacks_container.empty())
         {
+            Stopwatch external_watch;
+#if 0
+            auto alive_external_ids = page_directory->getAliveExternalIds();
+            consume.external_page_get_alive_ns = external_watch.elapsedFromLastTime();
             for (const auto & [ns_id, callbacks] : callbacks_container)
             {
                 auto pending_external_pages = callbacks.scanner();
-                auto alive_external_ids = getAliveExternalPageIds(ns_id);
-                callbacks.remover(pending_external_pages, alive_external_ids);
+                consume.external_page_scan_ns += external_watch.elapsedFromLastTime();
+                if (auto iter = alive_external_ids.find(ns_id); iter != alive_external_ids.end())
+                {
+                    callbacks.remover(pending_external_pages, iter->second);
+                }
+                else
+                {
+                    callbacks.remover(pending_external_pages, {});
+                }
+                consume.external_page_remove_ns += external_watch.elapsedFromLastTime();
             }
+#else
+            for (const auto & [ns_id, callbacks] : callbacks_container)
+            {
+                auto pending_external_pages = callbacks.scanner();
+                consume.external_page_scan_ns += external_watch.elapsedFromLastTime();
+                auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
+                consume.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
+                callbacks.remover(pending_external_pages, alive_external_ids);
+                consume.external_page_remove_ns += external_watch.elapsedFromLastTime();
+            }
+#endif
+            LOG_FMT_DEBUG(log, "scanner={:.3f} get_alive={:.3f} remover={:.3f}", consume.external_page_scan_ns / 1000000.0, consume.external_page_get_alive_ns / 1000000.0, consume.external_page_remove_ns / 1000000.0);
         }
+        return gc_watch.elapsedMillisecondsFromLastTime();
     };
 
     // 1. Do the MVCC gc, clean up expired snapshot.
@@ -320,15 +359,17 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     const auto blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_need_gc.empty())
     {
+        const auto clean_external_page_ms = clean_external_page();
         LOG_FMT_INFO(log, "GC finished without any blob need full gc. [total time(ms)={}]"
                           " [dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
-                          " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]",
+                          " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
+                          " [external page(ms)={}]",
                      gc_watch.elapsedMilliseconds(),
                      dump_snapshots_ms,
                      gc_in_mem_entries_ms,
                      blobstore_remove_entries_ms,
-                     blobstore_get_gc_stats_ms);
-        clean_external_page();
+                     blobstore_get_gc_stats_ms,
+                     clean_external_page_ms);
         return false;
     }
     else
@@ -344,18 +385,19 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     const auto gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_gc_info.empty())
     {
+        const auto clean_external_page_ms = clean_external_page();
         LOG_FMT_INFO(log, "GC finished without any entry need be moved. [total time(ms)={}]"
                           " [dump snapshots(ms)={}] [in mem entries(ms)={}]"
                           " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
-                          " [get entries(ms)={}]",
+                          " [get entries(ms)={}]"
+                          " [external page(ms)={}]",
                      gc_watch.elapsedMilliseconds(),
                      dump_snapshots_ms,
                      gc_in_mem_entries_ms,
                      blobstore_remove_entries_ms,
                      blobstore_get_gc_stats_ms,
-                     gc_get_entries_ms);
-
-        clean_external_page();
+                     gc_get_entries_ms,
+                     clean_external_page_ms);
         return false;
     }
 
@@ -378,11 +420,13 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     const auto gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    const auto clean_external_page_ms = clean_external_page();
     LOG_FMT_INFO(log, "GC finished. [total time(ms)={}]"
                       " [dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
                       " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
                       " [get gc entries(ms)={}] [blobstore full gc(ms)={}]"
-                      " [gc apply(ms)={}]",
+                      " [gc apply(ms)={}]"
+                      " [external page(ms)={}]",
                  gc_watch.elapsedMilliseconds(),
                  dump_snapshots_ms,
                  gc_in_mem_entries_ms,
@@ -390,9 +434,8 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
                  blobstore_get_gc_stats_ms,
                  gc_get_entries_ms,
                  blobstore_full_gc_ms,
-                 gc_apply_ms);
-
-    clean_external_page();
+                 gc_apply_ms,
+                 clean_external_page_ms);
 
     return true;
 }
