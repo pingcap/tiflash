@@ -36,6 +36,7 @@ class ColumnFileInMemory;
 class ColumnFileTiny;
 class ColumnFileDeleteRange;
 class ColumnFileBig;
+class ColumnFilePersisted;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
@@ -97,19 +98,23 @@ public:
 
     virtual Type getType() const = 0;
 
-    /// Is a ColumnInMemoryFile or not.
+    /// Is a ColumnFileInMemory or not.
     bool isInMemoryFile() const { return getType() == Type::INMEMORY_FILE; }
-    /// Is a ColumnTinyFile or not.
+    /// Is a ColumnFileTiny or not.
     bool isTinyFile() const { return getType() == Type::TINY_FILE; }
-    /// Is a ColumnDeleteRangeFile or not.
+    /// Is a ColumnFileDeleteRange or not.
     bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
-    /// Is a ColumnBigFile or not.
+    /// Is a ColumnFileBig or not.
     bool isBigFile() const { return getType() == Type::BIG_FILE; };
+    /// Is a ColumnFilePersisted or not
+    bool isPersisted() const { return getType() != Type::INMEMORY_FILE; };
 
     ColumnFileInMemory * tryToInMemoryFile();
     ColumnFileTiny * tryToTinyFile();
     ColumnFileDeleteRange * tryToDeleteRange();
     ColumnFileBig * tryToBigFile();
+
+    ColumnFilePersisted * tryToColumnFilePersisted();
 
     virtual ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;

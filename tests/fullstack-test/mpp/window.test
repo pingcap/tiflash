@@ -16,7 +16,12 @@ mysql> drop table if exists test.t1;
 mysql> create table test.t1(c1 int, c2 int);
 mysql> insert into test.t1 values(1, 1),(2, 2),(3, 3),(1, 1),(2, 2),(3, 3),(4, 4);
 mysql> alter table test.t1 set tiflash replica 1;
+mysql> drop table if exists test.t2;
+mysql> CREATE TABLE `test`.`t2` (`c1` bigint(20) DEFAULT NULL, `c2` varchar(20) DEFAULT NULL);
+mysql> insert into test.t2 values(1, 'a'), (1, 'a'), (2, 'a'), (2, 'a'), (3, 'b'), (3, 'b'), (4, 'b'), (4, 'b');
+mysql> alter table test.t2 set tiflash replica 1;
 func> wait_table test t1
+func> wait_table test t2
 mysql> use test; set @@tidb_isolation_read_engines='tiflash'; select c1, c2, row_number() over w2, row_number() over w1 from test.t1 window w1 as(partition by c1), w2 as (partition by c1, c2) order by 1, 2, 3, 4;
 +------+------+----------------------+----------------------+
 | c1   | c2   | row_number() over w2 | row_number() over w1 |
@@ -29,4 +34,24 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; select c1, c2, row
 |    3 |    3 |                    2 |                    2 |
 |    4 |    4 |                    1 |                    1 |
 +------+------+----------------------+----------------------+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; SELECT Rank() OVER (PARTITION BY c2 ORDER BY c1), Rank() OVER (PARTITION BY c2 ORDER BY c1), Dense_Rank() OVER (PARTITION BY c2 ORDER BY c1), Dense_Rank() OVER (PARTITION BY c2 ORDER BY c1), ROW_NUMBER() OVER (PARTITION BY c2 ORDER BY c1), ROW_NUMBER() OVER (PARTITION BY c2 ORDER BY c1) FROM test.t2;
++-------------------------------------------+-------------------------------------------+-------------------------------------------------+-------------------------------------------------+-------------------------------------------------+-------------------------------------------------+
+| Rank() OVER (PARTITION BY c2 ORDER BY c1) | Rank() OVER (PARTITION BY c2 ORDER BY c1) | Dense_Rank() OVER (PARTITION BY c2 ORDER BY c1) | Dense_Rank() OVER (PARTITION BY c2 ORDER BY c1) | ROW_NUMBER() OVER (PARTITION BY c2 ORDER BY c1) | ROW_NUMBER() OVER (PARTITION BY c2 ORDER BY c1) |
++-------------------------------------------+-------------------------------------------+-------------------------------------------------+-------------------------------------------------+-------------------------------------------------+-------------------------------------------------+
+|                                         1 |                                         1 |                                               1 |                                               1 |                                               1 |                                               1 |
+|                                         1 |                                         1 |                                               1 |                                               1 |                                               2 |                                               2 |
+|                                         3 |                                         3 |                                               2 |                                               2 |                                               3 |                                               3 |
+|                                         3 |                                         3 |                                               2 |                                               2 |                                               4 |                                               4 |
+|                                         1 |                                         1 |                                               1 |                                               1 |                                               1 |                                               1 |
+|                                         1 |                                         1 |                                               1 |                                               1 |                                               2 |                                               2 |
+|                                         3 |                                         3 |                                               2 |                                               2 |                                               3 |                                               3 |
+|                                         3 |                                         3 |                                               2 |                                               2 |                                               4 |                                               4 |
++-------------------------------------------+-------------------------------------------+-------------------------------------------------+-------------------------------------------------+-------------------------------------------------+-------------------------------------------------+
+mysql> use test; set @@tidb_isolation_read_engines='tiflash'; select count(*) from (SELECT Rank() OVER (PARTITION BY c2 ORDER BY c1), Dense_Rank() OVER (PARTITION BY c2 ORDER BY c1), ROW_NUMBER() OVER (PARTITION BY c2 ORDER BY c1) FROM test.t2) t1;
++----------+
+| count(*) |
++----------+
+|        8 |
++----------+
 mysql> drop table if exists test.t1;
+mysql> drop table if exists test.t2;
