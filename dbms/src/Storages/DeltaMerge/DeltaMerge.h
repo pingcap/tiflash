@@ -92,7 +92,7 @@ private:
     size_t last_handle_read_num = 0;
 
     // Use for calculating MVCC-bitmap-filter when `for_bitmap` is true.
-    inline static DataTypeUInt64 seg_row_id_col_type{};
+    inline static DataTypeUInt32 seg_row_id_col_type{};  // `UInt32` is enough from segment row id.
     MutableColumnPtr seg_row_id_col;
     UInt64 stable_rows;
 public:

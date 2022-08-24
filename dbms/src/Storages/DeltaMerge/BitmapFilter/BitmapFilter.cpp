@@ -54,7 +54,9 @@ SegmentSnapshotPtr ArrayBitmapFilter::snapshot() const
     return snap;
 }
 
-RoaringBitmapFilter::RoaringBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapshot_)
+//===================================
+
+RoaringBitmapFilter::RoaringBitmapFilter(UInt32 size_, SegmentSnapshotPtr snapshot_)
     : sz(size_)
     , snap(snapshot_)
     , all_match(false)
@@ -62,90 +64,12 @@ RoaringBitmapFilter::RoaringBitmapFilter(UInt64 size_, SegmentSnapshotPtr snapsh
 
 void RoaringBitmapFilter::set(const ColumnPtr & col)
 {
-    const auto * v = toColumnVectorDataPtr<UInt64>(col);
+    const auto * v = toColumnVectorDataPtr<UInt32>(col);
     // TODO(jinhelin): check row_id < sz
-    rrbitmap.addMany(col->size(), v->data());
-/*
-    for (auto p = v->begin(); p != v->end(); ++p)
-    {
-        UInt64 row_id = *p;
-        if (likely(row_id < sz))
-        {
-            rrbitmap.add(row_id);
-        }
-        else
-        {
-            throw Exception(fmt::format("SegmentRowId {} is greater or equal than filter size {}", row_id, sz));
-        }
-    }*/
+    rrbitmap.addMany(v->size(), v->data());
 }
 
-void RoaringBitmapFilter::get(IColumn::Filter & f, UInt64 start, UInt64 limit) const
-{
-    if (all_match)
-    {
-        static const UInt8 match = 1;
-        f.assign(f.size(), match);
-        return;
-    }
-
-    for (UInt64 i = 0; i < limit; i++)
-    {
-        f[i] = rrbitmap.contains(start + i);
-    }
-}
-
-SegmentSnapshotPtr RoaringBitmapFilter::snapshot() const
-{
-    return snap;
-}
-
-void RoaringBitmapFilter::runOptimize()
-{
-    rrbitmap.runOptimize();
-    rrbitmap.shrinkToFit();
-    all_match = rrbitmap.cardinality() == sz;
-    if (all_match)
-    {
-        rrbitmap.clear();
-    }
-}
-//===================================
-
-RoaringBitmap32Filter::RoaringBitmap32Filter(UInt32 size_, SegmentSnapshotPtr snapshot_)
-    : sz(size_)
-    , snap(snapshot_)
-    , all_match(false)
-{}
-
-void RoaringBitmap32Filter::set(const ColumnPtr & col)
-{
-    const auto * v = toColumnVectorDataPtr<UInt64>(col);
-
-    std::vector<UInt32> t;
-    t.reserve(col->size());
-    for (auto p = v->begin(); p != v->end(); ++p)
-    {
-        t.push_back(static_cast<UInt32>(*p));
-    }
-    // TODO(jinhelin): check row_id < sz
-    rrbitmap.addMany(t.size(), t.data());
-/*
-    for (auto p = v->begin(); p != v->end(); ++p)
-    {
-        UInt64 row_id = *p;
-        if (likely(row_id < sz))
-        {
-            rrbitmap.add(row_id);
-        }
-        else
-        {
-            throw Exception(fmt::format("SegmentRowId {} is greater or equal than filter size {}", row_id, sz));
-        }
-    }*/
-}
-
-void RoaringBitmap32Filter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
+void RoaringBitmapFilter::get(IColumn::Filter & f, UInt32 start, UInt32 limit) const
 {
     if (all_match)
     {
@@ -160,12 +84,12 @@ void RoaringBitmap32Filter::get(IColumn::Filter & f, UInt32 start, UInt32 limit)
     }
 }
 
-SegmentSnapshotPtr RoaringBitmap32Filter::snapshot() const
+SegmentSnapshotPtr RoaringBitmapFilter::snapshot() const
 {
     return snap;
 }
 
-void RoaringBitmap32Filter::runOptimize()
+void RoaringBitmapFilter::runOptimize()
 {
     rrbitmap.runOptimize();
     rrbitmap.shrinkToFit();
