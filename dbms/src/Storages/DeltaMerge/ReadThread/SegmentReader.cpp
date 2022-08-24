@@ -42,9 +42,9 @@ public:
 
     ~SegmentReader()
     {
-        LOG_FMT_DEBUG(log, "SegmentReader stop begin");
+        LOG_FMT_DEBUG(log, "Stop begin");
         t.join();
-        LOG_FMT_DEBUG(log, "SegmentReader stop end");
+        LOG_FMT_DEBUG(log, "Stop end");
     }
 
     std::thread::id getId() const
@@ -91,7 +91,7 @@ private:
         {
             if (!task_queue.pop(merged_task))
             {
-                LOG_FMT_INFO(log, "pop fail, stop {}", isStop());
+                LOG_FMT_INFO(log, "Pop fail, stop={}", isStop());
                 return;
             }
 
@@ -114,7 +114,7 @@ private:
             }
             if (read_count <= 0)
             {
-                LOG_FMT_DEBUG(log, "pool {} seg_id {} read_count {}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
+                LOG_FMT_DEBUG(log, "pool_ids={} seg_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
             }
         }
         catch (DB::Exception & e)
@@ -160,6 +160,8 @@ private:
     std::vector<int> cpus;
 };
 
+// ===== SegmentReaderPool ===== //
+
 void SegmentReaderPool::addTask(MergedTaskPtr && task)
 {
     if (!task_queue.push(std::forward<MergedTaskPtr>(task), nullptr))
@@ -171,12 +173,12 @@ void SegmentReaderPool::addTask(MergedTaskPtr && task)
 SegmentReaderPool::SegmentReaderPool(int thread_count, const std::vector<int> & cpus)
     : log(&Poco::Logger::get("SegmentReaderPool"))
 {
-    LOG_FMT_INFO(log, "Create SegmentReaderPool thread_count {} cpus {} start", thread_count, cpus);
+    LOG_FMT_INFO(log, "Create start, thread_count={} cpus={}", thread_count, cpus);
     for (int i = 0; i < thread_count; i++)
     {
         readers.push_back(std::make_unique<SegmentReader>(task_queue, cpus));
     }
-    LOG_FMT_INFO(log, "Create SegmentReaderPool thread_count {} cpus {} end", thread_count, cpus);
+    LOG_FMT_INFO(log, "Create end, thread_count={} cpus={}", thread_count, cpus);
 }
 
 SegmentReaderPool::~SegmentReaderPool()
@@ -198,6 +200,8 @@ std::vector<std::thread::id> SegmentReaderPool::getReaderIds() const
     return ids;
 }
 
+// ===== SegmentReaderPoolManager ===== //
+
 SegmentReaderPoolManager::SegmentReaderPoolManager()
     : log(&Poco::Logger::get("SegmentReaderPoolManager"))
 {}
@@ -215,7 +219,7 @@ void SegmentReaderPoolManager::init(const ServerInfo & server_info)
         auto ids = reader_pools.back()->getReaderIds();
         reader_ids.insert(ids.begin(), ids.end());
     }
-    LOG_FMT_INFO(log, "readers count {}", reader_ids.size());
+    LOG_FMT_INFO(log, "num_readers={}", reader_ids.size());
 }
 
 void SegmentReaderPoolManager::addTask(MergedTaskPtr && task)
