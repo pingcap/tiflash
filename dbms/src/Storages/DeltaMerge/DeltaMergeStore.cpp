@@ -1042,12 +1042,7 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
     for (auto & segment : all_segments)
     {
-        auto res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
-        // just for the bench test
-        while (res == nullptr)
-        {
-            res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
-        }
+        segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
     }
 }
 
@@ -1232,8 +1227,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
                 extra_table_id_index,
                 physical_table_id,
-                req_info,
-                false);
+                req_info);
         }
         res.push_back(stream);
     }
@@ -1256,8 +1250,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         bool is_fast_mode,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
-                                        size_t extra_table_id_index,
-                                        bool use_del_optimization)
+                                        size_t extra_table_id_index)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
@@ -1324,8 +1317,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
                 extra_table_id_index,
                 physical_table_id,
-                req_info,
-                use_del_optimization);
+                req_info);
         }
         res.push_back(stream);
     }

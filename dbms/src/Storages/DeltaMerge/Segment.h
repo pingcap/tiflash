@@ -185,8 +185,7 @@ public:
         const RowKeyRanges & data_ranges,
         const RSOperatorPtr & filter,
         bool filter_delete_mark = true,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE,
-        bool use_del_optimization = false);
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamRaw(
         const DMContext & dm_context,

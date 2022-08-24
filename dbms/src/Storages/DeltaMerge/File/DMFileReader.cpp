@@ -341,7 +341,14 @@ Block DMFileReader::read()
         // Because deleted_rows is a new field in pack_properties, we need to check whehter this pack has this field.
         // If this pack doesn't have this field, then we can't know whether this pack contains deleted rows.
         // Thus we just deleted_rows += 1, to make sure we will not do the optimization with del column(just to make deleted_rows != 0).
-        deleted_rows += static_cast<size_t>(pack_properties.property_size()) > next_pack_id && pack_properties.property(next_pack_id).has_deleted_rows() ? pack_properties.property(next_pack_id).deleted_rows() : 1;
+        if (static_cast<size_t>(pack_properties.property_size()) > next_pack_id && pack_properties.property(next_pack_id).has_deleted_rows())
+        {
+            deleted_rows += pack_properties.property(next_pack_id).deleted_rows();
+        }
+        else
+        {
+            deleted_rows += 1;
+        }
     }
 
     if (read_rows == 0)

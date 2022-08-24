@@ -374,8 +374,7 @@ public:
                            bool is_fast_mode = false, // set true when read in fast mode
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
-                           size_t extra_table_id_index = InvalidColumnID,
-                           bool use_del_optimization = false);
+                           size_t extra_table_id_index = InvalidColumnID);
 
     /// Try flush all data in `range` to disk and return whether the task succeed.
     bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)

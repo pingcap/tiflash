@@ -520,8 +520,7 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                const RowKeyRanges & data_ranges,
                                                const RSOperatorPtr & filter,
                                                bool filter_delete_mark,
-                                               size_t expected_block_size,
-                                               bool use_del_optimization)
+                                               size_t expected_block_size)
 {
     /// Now, we use filter_delete_mark to determine whether it is in fast mode or just from `selraw * xxxx`
     /// But this way seems not to be robustness enough, maybe we need another flag?
@@ -554,11 +553,6 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         {
             enable_handle_clean_read = false;
         }
-    }
-
-    if (!use_del_optimization)
-    {
-        enable_del_clean_read = false;
     }
 
     /// when we read in fast mode, if columns_to_read does not include EXTRA_HANDLE_COLUMN_ID,
