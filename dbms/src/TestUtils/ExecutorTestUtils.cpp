@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "TestUtils/TiFlashTestEnv.h"
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
@@ -133,19 +132,6 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     return readBlock(executeQuery(context.context).in);
-}
-
-DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
-{
-    auto res = executeMPPQuery(context.context, properties, tasks, server_config_map);
-    return readBlock(res);
-}
-
-DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasksForTest(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
-{
-    // ywq todo a hack...
-    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(1), properties, tasks, server_config_map);
-    return readBlock(res);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

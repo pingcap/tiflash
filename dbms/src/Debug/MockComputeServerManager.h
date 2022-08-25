@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include "Flash/Mpp/MPPTaskManager.h"
-#include "Storages/Transaction/TMTContext.h"
-#include "TestUtils/TiFlashTestEnv.h"
 #include <Debug/MockStorage.h>
+#include <Flash/Mpp/MPPTaskManager.h>
 #include <Server/FlashGrpcServerHolder.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <TestUtils/TiFlashTestEnv.h>
 
 #include <unordered_map>
 
@@ -51,28 +51,9 @@ public:
 
     void resetMockMPPServerInfo(size_t partition_num);
 
-    void cancelTest()
-    {
-        std::cout << "ywq test server num: " << server_map.size() << std::endl;
-        mpp::CancelTaskRequest req;
-        auto * meta = req.mutable_meta();
-        meta->set_start_ts(1);
-        mpp::CancelTaskResponse response;
-        showTaskInfo();
-        for (const auto & server : server_map)
-            server.second->getFlashService()->cancelMPPTaskForTest(&req, &response);
+    void cancelTest();
 
-        showTaskInfo();
-    }
-
-    void showTaskInfo()
-    {
-        // ywq todo know the current context in use...
-        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
-        {
-            std::cout << TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->toString() << std::endl;
-        }
-    }
+    void showTaskInfo();
 
 private:
     void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);

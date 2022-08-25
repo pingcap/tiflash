@@ -115,5 +115,28 @@ void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<Fl
 {
     server_map[partition_id] = std::move(server);
 }
+
+void MockComputeServerManager::cancelTest()
+{
+    mpp::CancelTaskRequest req;
+    auto * meta = req.mutable_meta();
+    meta->set_start_ts(1);
+    // ywq todo start_ts set...
+    mpp::CancelTaskResponse response;
+    showTaskInfo();
+    for (const auto & server : server_map)
+        server.second->getFlashService()->cancelMPPTaskForTest(&req, &response);
+
+    showTaskInfo();
+}
+
+void MockComputeServerManager::showTaskInfo()
+{
+    // ywq todo know the current context in use...
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
+    {
+        std::cout << TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->toString() << std::endl;
+    }
+}
 } // namespace tests
 } // namespace DB

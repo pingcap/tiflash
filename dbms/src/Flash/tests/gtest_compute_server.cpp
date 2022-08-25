@@ -21,6 +21,8 @@ namespace tests
 
 LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
 size_t MPPTaskTestUtils::server_num = 0;
+MPPTestMeta MPPTaskTestUtils::test_meta = {};
+
 class ComputeServerRunner : public DB::tests::MPPTaskTestUtils
 {
 public:
