@@ -367,6 +367,7 @@ private:
             // We shouldn't throw error directly, since the caller works in a standalone thread.
             try
             {
+                packet->recomputeTrackedMem();
                 if (!pushPacket<enable_fine_grained_shuffle, false>(
                         request->source_index,
                         req_info,

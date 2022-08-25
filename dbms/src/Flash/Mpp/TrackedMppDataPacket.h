@@ -123,8 +123,19 @@ struct TrackedMppDataPacket
     void read(const std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> & reader, void * callback)
     {
         reader->Read(&packet, callback);
-        mem_tracker_wrapper.freeAll();
-        mem_tracker_wrapper.alloc(estimateAllocatedSize(packet));
+        need_recompute = true;
+        //we shouldn't update tracker now, since it's an async reader!!
+    }
+
+    // we need recompute in some cases we can't update memory counter timely, such as async read
+    void recomputeTrackedMem()
+    {
+        if (need_recompute)
+        {
+            mem_tracker_wrapper.freeAll();
+            mem_tracker_wrapper.alloc(estimateAllocatedSize(packet));
+            need_recompute = false;
+        }
     }
 
     bool read(const std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> & reader)
@@ -157,6 +168,7 @@ struct TrackedMppDataPacket
 
     MemTrackerWrapper mem_tracker_wrapper;
     mpp::MPPDataPacket packet;
+    bool need_recompute = false;
 };
 
 struct TrackedSelectResp
