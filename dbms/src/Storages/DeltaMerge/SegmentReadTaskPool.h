@@ -223,7 +223,7 @@ private:
     std::atomic<bool> exception_happened;
     DB::Exception exception;
 
-    [[maybe_unused]]MemoryTracker * mem_tracker;
+    [[maybe_unused]] MemoryTracker * mem_tracker;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;
