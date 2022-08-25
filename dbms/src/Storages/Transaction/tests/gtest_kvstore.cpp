@@ -64,9 +64,19 @@ public:
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
         proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
             RaftStoreProxyPtr{proxy_instance.get()}));
-        proxy_instance->init(100);
-
         kvstore->restore(*path_pool, proxy_helper.get());
+    }
+
+    void init(bool create_regions = true) {
+        if (create_regions) {
+            proxy_instance->init(100);
+        }
+        {
+            auto store = metapb::Store{};
+            store.set_id(1234);
+            kvstore.setStore(store);
+            ASSERT_EQ(kvstore.getStoreID(), store.id());
+        }
     }
 
     void TearDown() override {}
@@ -116,15 +126,10 @@ protected:
 
 TEST_F(RegionKVStoreTest, NewProxy)
 {
+    init();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
-    {
-        auto store = metapb::Store{};
-        store.set_id(1234);
-        kvs.setStore(store);
-        ASSERT_EQ(kvs.getStoreID(), store.id());
-    }
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
         auto task_lock = kvs.genTaskLock();
@@ -159,6 +164,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
 
 TEST_F(RegionKVStoreTest, ReadIndex)
 {
+    init();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     // start mock proxy in other thread
@@ -754,6 +760,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 
 TEST_F(RegionKVStoreTest, Region)
 {
+    init();
     TableID table_id = 100;
     {
         auto meta = RegionMeta(createPeer(2, true), createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)), initialApplyState());
@@ -851,6 +858,7 @@ TEST_F(RegionKVStoreTest, Region)
 
 TEST_F(RegionKVStoreTest, KVStore)
 {
+    init();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -1263,14 +1271,9 @@ TEST_F(RegionKVStoreTest, KVStore)
 
 TEST_F(RegionKVStoreTest, KVStoreRestore)
 {
+    init();
     {
         KVStore & kvs = getKVS();
-        {
-            auto store = metapb::Store{};
-            store.set_id(1234);
-            kvs.setStore(store);
-            ASSERT_EQ(kvs.getStoreID(), store.id());
-        }
         {
             ASSERT_EQ(kvs.getRegion(0), nullptr);
             auto task_lock = kvs.genTaskLock();
@@ -1350,6 +1353,7 @@ void test_mergeresult()
 
 TEST_F(RegionKVStoreTest, Basic)
 {
+    init();
     {
         RegionsRangeIndex region_index;
         const auto & root_map = region_index.getRoot();
