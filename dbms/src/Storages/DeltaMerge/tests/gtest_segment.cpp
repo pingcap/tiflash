@@ -439,7 +439,7 @@ try
         writeSegment(new_seg_id, 100);
         if (auto r = distrib(gen); r > 0)
         {
-            flushSegmentCache(new_seg_id); // do not flush
+            flushSegmentCache(new_seg_id);
         }
 
         // Finish the segment merge
