@@ -86,13 +86,19 @@ public:
     void bindSelfOtherThread() const {}
     void bindSelfGrpcThread() const {}
 
-    std::string toString() const { return "Not Support"; }
+    static std::string toString() 
+    {
+        return "Not Support";
+    }
 
     void bindThreadCPUAffinity() const {}
 #endif
 
 private:
 #ifdef __linux__
+    // for unittest
+    friend class CPUAffinityManagerTest_CPUAffinityManager_Test;
+
     void initCPUSet();
     int getCPUCores() const;
     int getQueryCPUCores() const;
