@@ -78,5 +78,5 @@ private:
     bool keep_order;
     bool is_fast_scan;
 };
- 
+
 } // namespace DB
