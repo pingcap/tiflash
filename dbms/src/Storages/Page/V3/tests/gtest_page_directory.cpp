@@ -483,7 +483,9 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
         PageEntriesEdit edit;
         edit.putExternal(10);
         dir->apply(std::move(edit));
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        auto alive_ids_all = dir->getAliveExternalIds();
+        EXPECT_GT(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
+        auto alive_ids = alive_ids_all[TEST_NAMESPACE_ID];
         EXPECT_EQ(alive_ids.size(), 1);
         EXPECT_GT(alive_ids.count(10), 0);
     }
@@ -492,7 +494,9 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
         PageEntriesEdit edit;
         edit.putExternal(10); // should be idempotent
         dir->apply(std::move(edit));
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        auto alive_ids_all = dir->getAliveExternalIds();
+        EXPECT_GT(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
+        auto alive_ids = alive_ids_all[TEST_NAMESPACE_ID];
         EXPECT_EQ(alive_ids.size(), 1);
         EXPECT_GT(alive_ids.count(10), 0);
     }
@@ -502,9 +506,8 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
         edit.del(10);
         dir->apply(std::move(edit));
         dir->gcInMemEntries(); // clean in memory
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        EXPECT_EQ(alive_ids.size(), 0);
-        EXPECT_EQ(alive_ids.count(10), 0); // removed
+        auto alive_ids_all = dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids_all.count(TEST_NAMESPACE_ID), 0); // removed
     }
 
     {
@@ -512,7 +515,9 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
         PageEntriesEdit edit;
         edit.putExternal(10);
         dir->apply(std::move(edit));
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        auto alive_ids_all = dir->getAliveExternalIds();
+        EXPECT_GT(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
+        auto alive_ids = alive_ids_all[TEST_NAMESPACE_ID];
         EXPECT_EQ(alive_ids.size(), 1);
         EXPECT_GT(alive_ids.count(10), 0);
     }
@@ -851,7 +856,9 @@ try
             }
         }
         auto snap = dir->createSnapshot();
-        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        auto alive_ids_all = dir->getAliveExternalIds();
+        EXPECT_GT(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
+        auto alive_ids = alive_ids_all[TEST_NAMESPACE_ID];
         EXPECT_EQ(alive_ids.size(), 1);
         EXPECT_GT(alive_ids.count(50), 0);
     }
@@ -2215,7 +2222,9 @@ try
     {
         auto outdated_entries = dir->gcInMemEntries();
         EXPECT_TRUE(outdated_entries.empty());
-        auto alive_ex_id = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        auto alive_ids_all = dir->getAliveExternalIds();
+        EXPECT_GT(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
+        auto alive_ex_id = alive_ids_all[TEST_NAMESPACE_ID];
         ASSERT_EQ(alive_ex_id.size(), 1);
         ASSERT_EQ(*alive_ex_id.begin(), 10);
     }
@@ -2230,8 +2239,8 @@ try
     {
         auto outdated_entries = dir->gcInMemEntries();
         EXPECT_EQ(0, outdated_entries.size());
-        auto alive_ex_id = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        ASSERT_EQ(alive_ex_id.size(), 0);
+        auto alive_ids_all = dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
     }
 }
 CATCH
@@ -2372,7 +2381,9 @@ try
         EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
-        auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        auto alive_ids_all = restored_dir->getAliveExternalIds();
+        EXPECT_GT(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
+        auto alive_ex = alive_ids_all[TEST_NAMESPACE_ID];
         EXPECT_EQ(alive_ex.size(), 3);
         EXPECT_GT(alive_ex.count(10), 0);
         EXPECT_GT(alive_ex.count(20), 0);
@@ -2410,7 +2421,9 @@ try
         EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
-        auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        auto alive_ids_all = restored_dir->getAliveExternalIds();
+        EXPECT_GT(alive_ids_all.count(TEST_NAMESPACE_ID), 0);
+        auto alive_ex = alive_ids_all[TEST_NAMESPACE_ID];
         EXPECT_EQ(alive_ex.size(), 2);
         EXPECT_GT(alive_ex.count(10), 0);
         EXPECT_EQ(restored_dir->getNormalPageId(11, temp_snap).low, 10);
@@ -2450,11 +2463,8 @@ try
         EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
-        auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        EXPECT_EQ(alive_ex.size(), 0);
-        EXPECT_EQ(alive_ex.count(10), 0); // removed
-        EXPECT_EQ(alive_ex.count(20), 0); // removed
-        EXPECT_EQ(alive_ex.count(30), 0); // removed
+        auto alive_ids_all = restored_dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids_all.count(TEST_NAMESPACE_ID), 0); // removed
 
         EXPECT_ANY_THROW(restored_dir->get(50, temp_snap));
         EXPECT_SAME_ENTRY(restored_dir->get(51, temp_snap).second, entry_50);
@@ -2482,11 +2492,8 @@ try
         EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
-        auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
-        EXPECT_EQ(alive_ex.size(), 0);
-        EXPECT_EQ(alive_ex.count(10), 0); // removed
-        EXPECT_EQ(alive_ex.count(20), 0); // removed
-        EXPECT_EQ(alive_ex.count(30), 0); // removed
+        auto alive_ids_all = restored_dir->getAliveExternalIds();
+        EXPECT_EQ(alive_ids_all.count(TEST_NAMESPACE_ID), 0); // removed
 
         EXPECT_ANY_THROW(restored_dir->get(50, temp_snap));
         EXPECT_ANY_THROW(restored_dir->get(51, temp_snap));
