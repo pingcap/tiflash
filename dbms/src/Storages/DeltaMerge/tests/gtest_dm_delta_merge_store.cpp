@@ -3257,8 +3257,6 @@ try
     th_merge_delta.wait();
 }
 CATCH
-
-
 } // namespace tests
 } // namespace DM
 } // namespace DB

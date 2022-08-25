@@ -99,8 +99,8 @@ namespace FailPoints
 {
 extern const char try_segment_logical_split[];
 extern const char force_segment_logical_split[];
+extern const char non_del_optimization[];
 } // namespace FailPoints
-
 namespace DM
 {
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
@@ -391,6 +391,17 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
 {
     LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream", segment_id, epoch);
 
+    
+    bool enable_del_clean_read = true;
+    fiu_do_on(FailPoints::non_del_optimization, {enable_del_clean_read = false;});
+    for (const auto & c : columns_to_read)
+    {
+        if (c.id == TAG_COLUMN_ID)
+        {
+            enable_del_clean_read = false;
+            break;
+        }
+    }
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
     RowKeyRanges real_ranges;
@@ -417,7 +428,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
             filter,
             max_version,
             expected_block_size,
-            false);
+            /* enable_handle_clean_read */ false,
+            /* is_fast_mode */ false,
+            /* enable_del_clean_read */ enable_del_clean_read);
     }
     else if (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0 //
              && !hasColumn(columns_to_read, EXTRA_HANDLE_COLUMN_ID) //
@@ -432,7 +445,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
             filter,
             max_version,
             expected_block_size,
-            true);
+            /* enable_handle_clean_read */ true,
+            /* is_fast_mode */ false,
+            /* enable_del_clean_read */ enable_del_clean_read);
     }
     else
     {
@@ -445,7 +460,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
                                  read_info.index_begin,
                                  read_info.index_end,
                                  expected_block_size,
-                                 max_version);
+                                 max_version,
+                                 enable_del_clean_read);
     }
 
     stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, real_ranges, 0);
@@ -1520,15 +1536,16 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(const DMContext & dm_conte
                                                       const IndexIterator & delta_index_begin,
                                                       const IndexIterator & delta_index_end,
                                                       size_t expected_block_size,
-                                                      UInt64 max_version)
+                                                      UInt64 max_version,
+                                                      bool enable_del_clean_read)
 {
     if (unlikely(rowkey_ranges.empty()))
         throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
 
     SkippableBlockInputStreamPtr stable_input_stream
-        = stable_snap->getInputStream(dm_context, read_columns, rowkey_ranges, filter, max_version, expected_block_size, false);
+        = stable_snap->getInputStream(dm_context, read_columns, rowkey_ranges, filter, max_version, expected_block_size, false, false, enable_del_clean_read);
     RowKeyRange rowkey_range = rowkey_ranges.size() == 1 ? rowkey_ranges[0] : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
-    return std::make_shared<DeltaMergeBlockInputStream<DeltaValueReader, IndexIterator, skippable_place>>( //
+    return std::make_shared<DeltaMergeBlockInputStream<DeltaValueReader, IndexIterator, skippable_place>>( //确认一下这边会不会用到 del 列
         stable_input_stream,
         delta_reader,
         delta_index_begin,

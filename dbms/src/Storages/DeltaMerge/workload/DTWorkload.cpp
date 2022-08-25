@@ -31,6 +31,7 @@
 #include <Storages/DeltaMerge/workload/Utils.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <cpptoml.h>
+#include "Storages/DeltaMerge/DeltaMergeDefines.h"
 
 namespace DB::DM::tests
 {
@@ -250,8 +251,14 @@ void DTWorkload::verifyHandle(uint64_t r)
 
     try
     {
+        ColumnDefines read_columns;
+        for (const auto& col : columns){
+            if (col.id != TAG_COLUMN_ID) {
+                read_columns.push_back(col);
+            }
+        }
         Stopwatch sw;
-        read(columns, stream_count, verify);
+        read(read_columns, stream_count, verify);
 
         auto handle_count = handle_table->count();
         if (read_count.load(std::memory_order_relaxed) != handle_count)
@@ -283,8 +290,15 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
                     read_count.fetch_add(block.rows(), std::memory_order_relaxed);
                 }
             };
+
+            ColumnDefines read_columns;
+            for (const auto& col : columns){
+                if (col.id != TAG_COLUMN_ID) {
+                    read_columns.push_back(col);
+                }
+            }
             Stopwatch sw;
-            read(columns, stream_count, count_row);
+            read(read_columns, stream_count, count_row);
             read_stat.ms = sw.elapsedMilliseconds();
             read_stat.count = read_count;
             LOG_FMT_INFO(log, "scanAll: columns {} streams {} read_stat {}", columns.size(), stream_count, read_stat.toString());

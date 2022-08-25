@@ -339,7 +339,8 @@ private:
         const IndexIterator & delta_index_begin,
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
-        UInt64 max_version = std::numeric_limits<UInt64>::max());
+        UInt64 max_version = std::numeric_limits<UInt64>::max(),
+        bool enable_del_clean_read = false);
 
     /// Merge delta & stable, and then take the middle one.
     std::optional<RowKeyValue> getSplitPointSlow(
