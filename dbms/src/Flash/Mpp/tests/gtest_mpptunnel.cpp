@@ -81,7 +81,7 @@ struct MockLocalReader
             bool success = tmp_packet != nullptr;
             if (success)
             {
-                write_packet_vec.push_back(tmp_packet->data());
+                write_packet_vec.push_back(tmp_packet->packet.data());
             }
             else
             {
