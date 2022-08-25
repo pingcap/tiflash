@@ -23,6 +23,7 @@
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
+#include "Common/Exception.h"
 #include "Storages/Page/PageDefines.h"
 
 namespace DB
@@ -273,12 +274,49 @@ void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & pag
     }
 }
 
-struct GCTimeConsume
+String PageStorageImpl::GCTimeConsume::toLogging() const
 {
-    UInt64 external_page_scan_ns = 0;
-    UInt64 external_page_get_alive_ns = 0;
-    UInt64 external_page_remove_ns = 0;
-};
+    const std::string_view stage_suffix = [this]() {
+        switch (stage)
+        {
+        case GCStageType::Unknown:
+            return " <unknown>";
+        case GCStageType::OnlyInMem:
+            return " without full gc";
+        case GCStageType::FullGCNothingMoved:
+            return " without moving any entry";
+        case GCStageType::FullGC:
+            return "";
+        }
+    }();
+    const auto get_external_msg = [this]() -> String {
+        if (num_external_callbacks == 0)
+            return String("");
+        return fmt::format(" [external callbacks={}] [external gc={}ms] [get alive={:.2f}ms] [scanner={:.2f}ms] [remover={:.2f}ms]",
+                           num_external_callbacks,
+                           clean_external_page_ms,
+                           external_page_get_alive_ns / 1'000'000.0,
+                           external_page_scan_ns / 1'000'000.0,
+                           external_page_remove_ns / 1'000'000.0);
+    };
+    return fmt::format("GC finished{}."
+                       " [total time={}ms]"
+                       " [dump snapshots={}ms] [gc in mem entries={}ms]"
+                       " [blobstore remove entries={}ms] [blobstore get status={}ms]"
+                       " [get gc entries={}ms] [blobstore full gc={}ms]"
+                       " [gc apply={}ms]"
+                       "{}", // a placeholder for external page gc at last
+                       stage_suffix,
+                       total_cost_ms,
+                       dump_snapshots_ms,
+                       gc_in_mem_entries_ms,
+                       blobstore_remove_entries_ms,
+                       blobstore_get_gc_stats_ms,
+                       gc_get_entries_ms,
+                       blobstore_full_gc_ms,
+                       gc_apply_ms,
+                       get_external_msg());
+}
 
 bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
 {
@@ -287,6 +325,15 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     if (!gc_is_running.compare_exchange_strong(v, true))
         return false;
 
+    const GCTimeConsume consume = doGC(write_limiter, read_limiter);
+    assert(consume.stage != GCStageType::Unknown); // `doGC` must set the stage
+    LOG_DEBUG(log, consume.toLogging());
+
+    return consume.executeNextImmediately();
+}
+
+PageStorageImpl::GCTimeConsume PageStorageImpl::doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
+{
     Stopwatch gc_watch;
     SCOPE_EXIT({
         GET_METRIC(tiflash_storage_page_gc_count, type_v3).Increment();
@@ -300,6 +347,7 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     // Remove external pages for all tables
     auto clean_external_page = [&gc_watch, &consume, this]() -> UInt64 {
         std::scoped_lock lock{callbacks_mutex};
+        consume.num_external_callbacks = callbacks_container.size();
         if (!callbacks_container.empty())
         {
             Stopwatch external_watch;
@@ -331,7 +379,6 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
                 consume.external_page_remove_ns += external_watch.elapsedFromLastTime();
             }
 #endif
-            LOG_FMT_DEBUG(log, "scanner={:.3f} get_alive={:.3f} remover={:.3f}", consume.external_page_scan_ns / 1000000.0, consume.external_page_get_alive_ns / 1000000.0, consume.external_page_remove_ns / 1000000.0);
         }
         return gc_watch.elapsedMillisecondsFromLastTime();
     };
@@ -342,74 +389,50 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }
-    const auto dump_snapshots_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.dump_snapshots_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
     const auto & del_entries = page_directory->gcInMemEntries();
-    const auto gc_in_mem_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.gc_in_mem_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
     // It will only update the SpaceMap which in memory.
     blob_store.remove(del_entries);
-    const auto blobstore_remove_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.blobstore_remove_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
     // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `heavy GC`.
     // Blobs that do not need to do heavy GC will also do ftruncate to reduce space enlargement.
     const auto & blob_need_gc = blob_store.getGCStats();
-    const auto blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_need_gc.empty())
     {
-        const auto clean_external_page_ms = clean_external_page();
-        LOG_FMT_INFO(log, "GC finished without any blob need full gc. [total time(ms)={}]"
-                          " [dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
-                          " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
-                          " [external page(ms)={}]",
-                     gc_watch.elapsedMilliseconds(),
-                     dump_snapshots_ms,
-                     gc_in_mem_entries_ms,
-                     blobstore_remove_entries_ms,
-                     blobstore_get_gc_stats_ms,
-                     clean_external_page_ms);
-        return false;
-    }
-    else
-    {
-        GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc).Increment(blob_need_gc.size());
+        consume.clean_external_page_ms = clean_external_page();
+        consume.stage = GCStageType::OnlyInMem;
+        consume.total_cost_ms = gc_watch.elapsedMilliseconds();
+        return consume;
     }
 
     // Execute full gc
+    GET_METRIC(tiflash_storage_page_gc_count, type_v3_bs_full_gc).Increment(blob_need_gc.size());
     // 4. Filter out entries in MVCC by BlobId.
     // We also need to filter the version of the entry.
     // So that the `gc_apply` can proceed smoothly.
     auto [blob_gc_info, total_page_size] = page_directory->getEntriesByBlobIds(blob_need_gc);
-    const auto gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_gc_info.empty())
     {
-        const auto clean_external_page_ms = clean_external_page();
-        LOG_FMT_INFO(log, "GC finished without any entry need be moved. [total time(ms)={}]"
-                          " [dump snapshots(ms)={}] [in mem entries(ms)={}]"
-                          " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
-                          " [get entries(ms)={}]"
-                          " [external page(ms)={}]",
-                     gc_watch.elapsedMilliseconds(),
-                     dump_snapshots_ms,
-                     gc_in_mem_entries_ms,
-                     blobstore_remove_entries_ms,
-                     blobstore_get_gc_stats_ms,
-                     gc_get_entries_ms,
-                     clean_external_page_ms);
-        return false;
+        consume.clean_external_page_ms = clean_external_page();
+        consume.stage = GCStageType::FullGCNothingMoved;
+        consume.total_cost_ms = gc_watch.elapsedMilliseconds();
+        return consume;
     }
 
     // 5. Do the BlobStore GC
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
     PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
-    const auto blobstore_full_gc_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    if (gc_edit.empty())
-    {
-        throw Exception("Something wrong after BlobStore GC.", ErrorCodes::LOGICAL_ERROR);
-    }
+    consume.blobstore_full_gc_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    RUNTIME_CHECK_MSG(!gc_edit.empty(), "Something wrong after BlobStore GC");
 
     // 6. MVCC gc apply
     // MVCC will apply the migrated entries.
@@ -419,25 +442,12 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
-    const auto gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    const auto clean_external_page_ms = clean_external_page();
-    LOG_FMT_INFO(log, "GC finished. [total time(ms)={}]"
-                      " [dump snapshots(ms)={}] [gc in mem entries(ms)={}]"
-                      " [blobstore remove entries(ms)={}] [blobstore get status(ms)={}]"
-                      " [get gc entries(ms)={}] [blobstore full gc(ms)={}]"
-                      " [gc apply(ms)={}]"
-                      " [external page(ms)={}]",
-                 gc_watch.elapsedMilliseconds(),
-                 dump_snapshots_ms,
-                 gc_in_mem_entries_ms,
-                 blobstore_remove_entries_ms,
-                 blobstore_get_gc_stats_ms,
-                 gc_get_entries_ms,
-                 blobstore_full_gc_ms,
-                 gc_apply_ms,
-                 clean_external_page_ms);
+    consume.gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
-    return true;
+    consume.clean_external_page_ms = clean_external_page();
+    consume.stage = GCStageType::FullGC;
+    consume.total_cost_ms = gc_watch.elapsedMilliseconds();
+    return consume;
 }
 
 void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks)
