@@ -70,13 +70,13 @@ bool CompareStringVectorStringVector(
     return CompareStringVectorStringVectorImpl<Op>(a_data, a_offsets, b_data, b_offsets, collator, c);
 }
 
-#define M(OP, Column)                                                                                \
-    template bool CompareStringVectorStringVector<OP<int, int>, PaddedPODArray<Column::value_type>>( \
-        const ColumnString::Chars_t & a_data,                                                        \
-        const ColumnString::Offsets & a_offsets,                                                     \
-        const ColumnString::Chars_t & b_data,                                                        \
-        const ColumnString::Offsets & b_offsets,                                                     \
-        const TiDB::TiDBCollatorPtr & collator,                                                      \
+#define M(OP, Column)                                                                                           \
+    template bool CompareStringVectorStringVector<OP<int, int> /*NOLINT*/, PaddedPODArray<Column::value_type>>( \
+        const ColumnString::Chars_t & a_data,                                                                   \
+        const ColumnString::Offsets & a_offsets,                                                                \
+        const ColumnString::Chars_t & b_data,                                                                   \
+        const ColumnString::Offsets & b_offsets,                                                                \
+        const TiDB::TiDBCollatorPtr & collator,                                                                 \
         PaddedPODArray<Column::value_type> & c)
 
 
@@ -102,12 +102,12 @@ bool CompareStringVectorConstant(
     return CompareStringVectorConstantImpl<Op>(a_data, a_offsets, _b, collator, c);
 }
 
-#define M(OP, Column)                                                                            \
-    template bool CompareStringVectorConstant<OP<int, int>, PaddedPODArray<Column::value_type>>( \
-        const ColumnString::Chars_t & a_data,                                                    \
-        const ColumnString::Offsets & a_offsets,                                                 \
-        const std::string_view & _b,                                                             \
-        const TiDB::TiDBCollatorPtr & collator,                                                  \
+#define M(OP, Column)                                                                                       \
+    template bool CompareStringVectorConstant<OP<int, int> /*NOLINT*/, PaddedPODArray<Column::value_type>>( \
+        const ColumnString::Chars_t & a_data,                                                               \
+        const ColumnString::Offsets & a_offsets,                                                            \
+        const std::string_view & _b,                                                                        \
+        const TiDB::TiDBCollatorPtr & collator,                                                             \
         PaddedPODArray<Column::value_type> & c)
 
 
