@@ -50,7 +50,7 @@ func> wait_table test test_enum
 func> wait_table test test_time
 
 ## test_str
-mysql> select lead(value_str, 1, 'default') over w, lead(value_str, 1, 123) over w, lead(value_char, 1, 'default') over w, lead(value_char, 1, 123) over w,lag(value_str, 1, 'default') over w,lag(value_str, 1, 123) over w,lag(value_char, 1, 'default') over w,lag(value_char, 1, 123) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_str, 1, 'default') over w, lead(value_str, 1, 123) over w, lead(value_char, 1, 'default') over w, lead(value_char, 1, 123) over w,lag(value_str, 1, 'default') over w,lag(value_str, 1, 123) over w,lag(value_char, 1, 'default') over w,lag(value_char, 1, 123) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
 +--------------------------------------+--------------------------------+---------------------------------------+---------------------------------+-------------------------------------+-------------------------------+--------------------------------------+--------------------------------+
 | lead(value_str, 1, 'default') over w | lead(value_str, 1, 123) over w | lead(value_char, 1, 'default') over w | lead(value_char, 1, 123) over w | lag(value_str, 1, 'default') over w | lag(value_str, 1, 123) over w | lag(value_char, 1, 'default') over w | lag(value_char, 1, 123) over w |
 +--------------------------------------+--------------------------------+---------------------------------------+---------------------------------+-------------------------------------+-------------------------------+--------------------------------------+--------------------------------+
@@ -65,7 +65,7 @@ mysql> select lead(value_str, 1, 'default') over w, lead(value_str, 1, 123) over
 +--------------------------------------+--------------------------------+---------------------------------------+---------------------------------+-------------------------------------+-------------------------------+--------------------------------------+--------------------------------+
 
 ## test_int
-mysql> select lead(value_tinyint) over w,lead(value_smallint, 1, 'default') over w,lag(value_mediumint, 1, NULL) over w,lag(value_int, 1, 88888) over w,lag(value_bigint, 1, 1.11) over w from test.test_int window w as(PARTITION BY part ORDER BY orde) order by orde;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_tinyint) over w,lead(value_smallint, 1, 'default') over w,lag(value_mediumint, 1, NULL) over w,lag(value_int, 1, 88888) over w,lag(value_bigint, 1, 1.11) over w from test.test_int window w as(PARTITION BY part ORDER BY orde) order by orde;
 +----------------------------+-------------------------------------------+--------------------------------------+---------------------------------+-----------------------------------+
 | lead(value_tinyint) over w | lead(value_smallint, 1, 'default') over w | lag(value_mediumint, 1, NULL) over w | lag(value_int, 1, 88888) over w | lag(value_bigint, 1, 1.11) over w |
 +----------------------------+-------------------------------------------+--------------------------------------+---------------------------------+-----------------------------------+
@@ -80,7 +80,7 @@ mysql> select lead(value_tinyint) over w,lead(value_smallint, 1, 'default') over
 +----------------------------+-------------------------------------------+--------------------------------------+---------------------------------+-----------------------------------+
 
 ## test_float
-mysql> select lead(value_float) over w,lead(value_double, 1, 'default') over w,lag(value_float, 1, NULL) over w,lag(value_float, 1, 88888) over w,lag(value_float, 1, 1.11) over w,lag(value_double, 1, 99.99) over w from test.test_float window w as(PARTITION BY part ORDER BY orde) order by orde;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_float) over w,lead(value_double, 1, 'default') over w,lag(value_float, 1, NULL) over w,lag(value_float, 1, 88888) over w,lag(value_float, 1, 1.11) over w,lag(value_double, 1, 99.99) over w from test.test_float window w as(PARTITION BY part ORDER BY orde) order by orde;
 +--------------------------+-----------------------------------------+----------------------------------+-----------------------------------+----------------------------------+------------------------------------+
 | lead(value_float) over w | lead(value_double, 1, 'default') over w | lag(value_float, 1, NULL) over w | lag(value_float, 1, 88888) over w | lag(value_float, 1, 1.11) over w | lag(value_double, 1, 99.99) over w |
 +--------------------------+-----------------------------------------+----------------------------------+-----------------------------------+----------------------------------+------------------------------------+
@@ -95,7 +95,7 @@ mysql> select lead(value_float) over w,lead(value_double, 1, 'default') over w,l
 +--------------------------+-----------------------------------------+----------------------------------+-----------------------------------+----------------------------------+------------------------------------+
 
 ## test_decimal
-mysql> select lead(value_decimal32) over w,lead(value_decimal32, 1, 'default') over w,lead(value_decimal64, 1, NULL) over w,lag(value_decimal128, 1, 88888) over w,lag(value_decimal256, 1, 1.11) over w,lag(value_decimal256, 1, 99.99) over w from test.test_decimal window w as(PARTITION BY part ORDER BY orde) order by orde;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_decimal32) over w,lead(value_decimal32, 1, 'default') over w,lead(value_decimal64, 1, NULL) over w,lag(value_decimal128, 1, 88888) over w,lag(value_decimal256, 1, 1.11) over w,lag(value_decimal256, 1, 99.99) over w from test.test_decimal window w as(PARTITION BY part ORDER BY orde) order by orde;
 +------------------------------+--------------------------------------------+---------------------------------------+----------------------------------------+---------------------------------------+----------------------------------------+
 | lead(value_decimal32) over w | lead(value_decimal32, 1, 'default') over w | lead(value_decimal64, 1, NULL) over w | lag(value_decimal128, 1, 88888) over w | lag(value_decimal256, 1, 1.11) over w | lag(value_decimal256, 1, 99.99) over w |
 +------------------------------+--------------------------------------------+---------------------------------------+----------------------------------------+---------------------------------------+----------------------------------------+
@@ -110,7 +110,7 @@ mysql> select lead(value_decimal32) over w,lead(value_decimal32, 1, 'default') o
 +------------------------------+--------------------------------------------+---------------------------------------+----------------------------------------+---------------------------------------+----------------------------------------+
 
 ## test_enum
-mysql> select lead(value_enum) over w,lead(value_enum, 1, 'default') over w,lag(value_enum, 1, NULL) over w,lag(value_enum, 1, 'a') over w,lag(value_enum, 1, 1.11) over w from test.test_enum window w as(PARTITION BY part ORDER BY orde) order by orde;
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_enum) over w,lead(value_enum, 1, 'default') over w,lag(value_enum, 1, NULL) over w,lag(value_enum, 1, 'a') over w,lag(value_enum, 1, 1.11) over w from test.test_enum window w as(PARTITION BY part ORDER BY orde) order by orde;
 +-------------------------+---------------------------------------+---------------------------------+--------------------------------+---------------------------------+
 | lead(value_enum) over w | lead(value_enum, 1, 'default') over w | lag(value_enum, 1, NULL) over w | lag(value_enum, 1, 'a') over w | lag(value_enum, 1, 1.11) over w |
 +-------------------------+---------------------------------------+---------------------------------+--------------------------------+---------------------------------+
@@ -121,7 +121,7 @@ mysql> select lead(value_enum) over w,lead(value_enum, 1, 'default') over w,lag(
 +-------------------------+---------------------------------------+---------------------------------+--------------------------------+---------------------------------+
 
 ## test_time
-mysql> select lead(value_date) over w, lead(value_time, 1, 'default') over w, lag(value_datetime, 1, NULL) over w, lag(value_timestamp, 1, 88888) over w from test.test_time window w as(PARTITION BY part ORDER BY orde);
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_date) over w, lead(value_time, 1, 'default') over w, lag(value_datetime, 1, NULL) over w, lag(value_timestamp, 1, 88888) over w from test.test_time window w as(PARTITION BY part ORDER BY orde);
 +-------------------------+---------------------------------------+-------------------------------------+---------------------------------------+
 | lead(value_date) over w | lead(value_time, 1, 'default') over w | lag(value_datetime, 1, NULL) over w | lag(value_timestamp, 1, 88888) over w |
 +-------------------------+---------------------------------------+-------------------------------------+---------------------------------------+
