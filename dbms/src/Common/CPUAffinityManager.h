@@ -33,6 +33,10 @@ class LayeredConfiguration;
 
 namespace DB
 {
+namespace tests
+{
+class CPUAffinityManagerTest_CPUAffinityManager_Test;
+}
 struct CPUAffinityConfig
 {
     CPUAffinityConfig()
