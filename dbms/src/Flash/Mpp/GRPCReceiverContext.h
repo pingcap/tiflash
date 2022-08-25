@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <common/types.h>
-#include <grpc++/grpc++.h>
+#include <grpcpp/grpcpp.h>
 #include <kvproto/mpp.pb.h>
 #include <pingcap/kv/Cluster.h>
 #include <tipb/executor.pb.h>

@@ -15,7 +15,7 @@
 #include <Common/Exception.h>
 #include <coprocessor.pb.h>
 #include <fmt/core.h>
-#include <grpc++/grpc++.h>
+#include <grpcpp/grpcpp.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 using grpc::Status;
 using grpc_impl::Channel;

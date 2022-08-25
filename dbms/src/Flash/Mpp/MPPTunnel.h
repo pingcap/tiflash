@@ -48,7 +48,7 @@ namespace tests
 class TestMPPTunnel;
 } // namespace tests
 
-class EstablishCallData;
+class IAsyncCallData;
 
 enum class TunnelSenderMode
 {
@@ -159,6 +159,12 @@ public:
         , GRPCSendQueue<MPPDataPacketPtr>(queue_size, call_, log_)
     {}
 
+    /// For gtest usage.
+    AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, GRPCKickFunc func)
+        : TunnelSender(0, log_, tunnel_id_)
+        , GRPCSendQueue<MPPDataPacketPtr>(queue_size, func)
+    {}
+
     bool push(MPPDataPacketPtr && data) override
     {
         return GRPCSendQueue<MPPDataPacketPtr>::push(data);
@@ -250,7 +256,7 @@ public:
     void connect(PacketWriter * writer);
 
     // like `connect` but it's intended to connect async grpc.
-    void connectAsync(EstablishCallData * calldata);
+    void connectAsync(IAsyncCallData * data);
 
     // wait until all the data has been transferred.
     void waitForFinish();

@@ -25,35 +25,38 @@
 namespace DB
 {
 
+namespace tests
+{
+class TestGRPCSendQueue;
+} // namespace tests
+
+using GRPCKickFunc = std::function<grpc_call_error(void *)>;
+
 /// A multi-producer-single-consumer queue dedicated to async grpc send work.
 template <typename T>
 class GRPCSendQueue
 {
 public:
-    using KickFunc = std::function<grpc_call_error(grpc_call *, void *)>;
-
-    GRPCSendQueue(size_t queue_size, grpc_call * call_, const LoggerPtr log_)
+    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr log_)
         : send_queue(MPMCQueue<T>(queue_size))
-        , call(call_)
         , tag(nullptr)
         , log(log_)
     {
         RUNTIME_ASSERT(call != nullptr, log, "call is null");
         // If a call to `grpc_call_start_batch` with an empty batch returns
-        // `GRPC_CALL_OK`, the tag is put in the completion queue immediately.
+        // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
         // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        kick_func = [](grpc_call * c, void * t) {
-            return grpc_call_start_batch(c, nullptr, 0, t, nullptr);
+        kick_func = [call](void * t) {
+            return grpc_call_start_batch(call, nullptr, 0, new KickTag(t), nullptr);
         };
     }
 
-    // For test purpose.
-    GRPCSendQueue(size_t queue_size, grpc_call * call_, KickFunc func, const LoggerPtr log_)
+    // For gtest usage.
+    GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
         : send_queue(MPMCQueue<T>(queue_size))
-        , call(call_)
         , tag(nullptr)
         , kick_func(func)
-        , log(log_)
+        , log(Logger::get("GRPCSendQueue", "test"))
     {}
 
     ~GRPCSendQueue()
@@ -68,6 +71,7 @@ public:
     }
 
     /// Push the data from queue and kick the grpc completion queue.
+    ///
     /// For return value meanings, see `MPMCQueue::finish`.
     template <typename U>
     bool push(U && u)
@@ -81,8 +85,10 @@ public:
     }
 
     /// Pop the data from queue.
+    ///
     /// Return true if pop is done and `ok` means the if there is
     /// new data from queue(see `MPMCQueue::pop`).
+    ///
     /// Return false if pop can't be done due to blocking and `new_tag`
     /// is saved. When the next push/finish is called, the `new_tag` will
     /// be pushed into grpc completion queue.
@@ -108,6 +114,7 @@ public:
     }
 
     /// Finish the queue and kick the grpc completion queue.
+    ///
     /// For return value meanings, see `MPMCQueue::finish`.
     bool finish()
     {
@@ -120,6 +127,7 @@ public:
     }
 
 private:
+    friend class tests::TestGRPCSendQueue;
     /// In grpc cpp framework, the tag that is pushed into grpc completion
     /// queue must be inherited from `CompletionQueueTag`.
     class KickTag : public ::grpc::internal::CompletionQueueTag
@@ -155,7 +163,7 @@ private:
         {
             return;
         }
-        grpc_call_error error = kick_func(call, new KickTag(old_tag));
+        grpc_call_error error = kick_func(old_tag);
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
@@ -175,10 +183,9 @@ private:
     /// If there is no more data, this connection will get stuck forever.
     std::mutex mu;
 
-    grpc_call * call;
     void * tag;
 
-    KickFunc kick_func;
+    GRPCKickFunc kick_func;
     const LoggerPtr log;
 };
 

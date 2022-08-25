@@ -17,6 +17,7 @@
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/GRPCSendQueue.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 
 namespace DB
@@ -24,7 +25,28 @@ namespace DB
 class AsyncTunnelSender;
 class AsyncFlashService;
 
-class EstablishCallData
+class IAsyncCallData
+{
+public:
+    virtual ~IAsyncCallData() = default;
+
+    /// Should return a non-null `grpc_call`.
+    virtual grpc_call * grpcCall() = 0;
+
+    /// Attach async sender in order to notify consumer finish msg directly.
+    virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) = 0;
+
+    virtual bool isTest() { return false; }
+
+    virtual GRPCKickFunc getKickFuncForTest()
+    {
+        return [](void *) {
+            return grpc_call_error::GRPC_CALL_OK;
+        };
+    }
+};
+
+class EstablishCallData : public IAsyncCallData
 {
 public:
     // A state machine used for async grpc api EstablishMPPConnection. When a relative grpc event arrives,
@@ -37,15 +59,15 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
-    ~EstablishCallData();
+    virtual ~EstablishCallData();
 
     void proceed();
 
     void cancel();
 
-    grpc_call * grpcCall();
+    grpc_call * grpcCall() override;
 
-    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_);
+    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -57,6 +79,10 @@ public:
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
 private:
+    /// WARNING: Since a event from one grpc completion queue may be handled by different
+    /// thread, it's VERY DANGEROUS to read/write any data after calling a grpc function
+    /// with a pointer of this class.
+    /// Keep it in mind if you want to change any logic here.
     void initRpc();
 
     void write(const mpp::MPPDataPacket & packet);

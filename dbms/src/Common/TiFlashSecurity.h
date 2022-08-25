@@ -23,7 +23,7 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #endif
-#include <grpc++/grpc++.h>
+#include <grpcpp/grpcpp.h>
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

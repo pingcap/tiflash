@@ -220,7 +220,7 @@ void MPPTunnel::connect(PacketWriter * writer)
     LOG_DEBUG(log, "connected");
 }
 
-void MPPTunnel::connectAsync(EstablishCallData * calldata)
+void MPPTunnel::connectAsync(IAsyncCallData * call_data)
 {
     {
         std::unique_lock lk(mu);
@@ -230,9 +230,16 @@ void MPPTunnel::connectAsync(EstablishCallData * calldata)
         LOG_FMT_TRACE(log, "ready to connect async");
         if (mode == TunnelSenderMode::ASYNC_GRPC)
         {
-            RUNTIME_ASSERT(calldata != nullptr, log, "Async writer shouldn't be null");
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, calldata->grpcCall());
-            calldata->attachAsyncTunnelSender(async_tunnel_sender);
+            RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
+            if (unlikely(call_data->isTest()))
+            {
+                async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, call_data->getKickFuncForTest());
+            }
+            else
+            {
+                async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, call_data->grpcCall());
+            }
+            call_data->attachAsyncTunnelSender(async_tunnel_sender);
             tunnel_sender = async_tunnel_sender;
         }
         else
