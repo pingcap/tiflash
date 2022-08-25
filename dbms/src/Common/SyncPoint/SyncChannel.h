@@ -17,8 +17,8 @@
 #include <Common/SyncPoint/Ctl.h>
 #include <Common/nocopyable.h>
 
-#include <mutex>
 #include <condition_variable>
+#include <mutex>
 
 namespace DB
 {
