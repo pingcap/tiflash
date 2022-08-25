@@ -2006,9 +2006,17 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+    if (is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
+    else
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
     Stopwatch watch_seg_split;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds());
+        else
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
+    });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
@@ -2158,9 +2166,17 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
+    if (is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge_fg).Increment();
+    else
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
     Stopwatch watch_seg_merge;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge_fg).Observe(watch_seg_merge.elapsedSeconds());
+        else
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
+    });
 
     auto left_range = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
