@@ -24,6 +24,7 @@
 namespace DB
 {
 
+/// A multi-producer-single-consumer queue dedicated to async grpc send work.
 template <typename T>
 class GRPCSendQueue
 {
@@ -48,6 +49,8 @@ public:
         }
     }
 
+    /// Push the data from queue and kick the completion queue.
+    /// For return value meanings, see `MPMCQueue::finish`.
     template <typename U>
     bool push(U && u)
     {
@@ -60,11 +63,13 @@ public:
     }
 
     /// Pop the data from queue.
-    /// Returns true if pop is done and `ok` means the if there is
-    /// new data from queue.
-    /// Returns false if pop can't be done due to blocking and `new_tag`
+    /// Return true if pop is done and `ok` means the if there is
+    /// new data from queue(see `MPMCQueue::pop`).
+    /// Return false if pop can't be done due to blocking and `new_tag`
     /// is saved. When the next push/finish is called, the `new_tag` will
     /// be pushed into grpc completion queue.
+    ///
+    /// Note that
     bool pop(T & data, bool & ok, void * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr when popping");
@@ -76,7 +81,7 @@ public:
             // Double check if next pop is blocking.
             if (!send_queue.isNextPopNonBlocking())
             {
-                // If blocking, set the tag and return.
+                // If blocking, set the tag and return false.
                 tag = new_tag;
                 return false;
             }
@@ -86,6 +91,8 @@ public:
         return true;
     }
 
+    /// Finish the queue and kick the completion queue.
+    /// For return value meanings, see `MPMCQueue::finish`.
     bool finish()
     {
         auto ret = send_queue.finish();
@@ -97,7 +104,7 @@ public:
     }
 
 private:
-    /// In cpp grpc framework, the tag that is pushed into grpc completion
+    /// In grpc cpp framework, the tag that is pushed into grpc completion
     /// queue must be inherited from `CompletionQueueTag`.
     class KickTag : public ::grpc::internal::CompletionQueueTag
     {
@@ -119,7 +126,7 @@ private:
         void * tag;
     };
 
-    /// Wakes up its completion queue.
+    /// Wake up its completion queue.
     void kickCompletionQueue()
     {
         void * old_tag;

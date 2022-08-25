@@ -137,8 +137,7 @@ void EstablishCallData::initRpc()
     state = PROCESSING;
 
     // Try to send one message.
-    // If there is no message, this structure will be saved in `async_tunnel_sender`
-    // and wait for new messages.
+    // If there is no message, the pointer of this struct will be saved in `async_tunnel_sender`.
     sendOneMsg();
 }
 
@@ -153,7 +152,7 @@ void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
     write(packet);
 }
 
-void EstablishCallData::writeDone(const String & msg, const grpc::Status & status)
+void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 {
     state = FINISH;
 
@@ -166,9 +165,12 @@ void EstablishCallData::writeDone(const String & msg, const grpc::Status & statu
 
         if (!async_tunnel_sender->isConsumerFinished())
         {
-            async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
-                                                            async_tunnel_sender->getTunnelId(),
-                                                            msg)); //trigger mpp tunnel finish work
+            if (!msg.empty())
+            {
+                msg = fmt::format("{}: {}", async_tunnel_sender->getTunnelId(), msg);
+            }
+            // Trigger mpp tunnel finish work
+            async_tunnel_sender->consumerFinish(msg);
         }
     }
 

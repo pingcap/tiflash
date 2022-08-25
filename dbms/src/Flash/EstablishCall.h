@@ -63,7 +63,7 @@ private:
 
     void writeErr(const mpp::MPPDataPacket & packet);
     // Will try to call async_sender's consumerFinish if needed
-    void writeDone(const String & msg, const grpc::Status & status);
+    void writeDone(String msg, const grpc::Status & status);
 
     void unexpectedWriteDone();
 

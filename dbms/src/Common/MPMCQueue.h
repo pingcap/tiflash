@@ -136,7 +136,7 @@ public:
 
     /// Non-blocking function.
     /// Return true if push succeed.
-    /// else return false.
+    /// Else return false.
     template <typename U>
     ALWAYS_INLINE bool tryPush(U && u)
     {
