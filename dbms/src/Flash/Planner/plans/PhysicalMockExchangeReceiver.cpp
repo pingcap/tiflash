@@ -37,7 +37,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 
-    if (context.columnsForTestEmpty() || context.columnsForTest(executor_id).empty())
+    if (!context.mockStorage().exchangeExists(executor_id))
     {
         /// build with default blocks.
         for (size_t i = 0; i < max_streams; ++i)
@@ -93,6 +93,7 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
 
 void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
+    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 

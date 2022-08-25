@@ -64,7 +64,7 @@ public:
     class CommittedScanner : private boost::noncopyable
     {
     public:
-        CommittedScanner(const RegionPtr & store_, bool use_lock = true)
+        explicit CommittedScanner(const RegionPtr & store_, bool use_lock = true)
             : store(store_)
         {
             if (use_lock)
@@ -97,7 +97,7 @@ public:
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_, bool use_lock = true)
+        explicit CommittedRemover(const RegionPtr & store_, bool use_lock = true)
             : store(store_)
         {
             if (use_lock)
@@ -245,10 +245,10 @@ public:
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 
+    RegionRaftCommandDelegate() = delete;
+
 private:
     friend class tests::RegionKVStoreTest;
-
-    RegionRaftCommandDelegate() = delete;
 
     Regions execBatchSplit(
         const raft_cmdpb::AdminRequest & request,
