@@ -86,7 +86,7 @@ public:
     void bindSelfOtherThread() const {}
     void bindSelfGrpcThread() const {}
 
-    static std::string toString() 
+    static std::string toString()
     {
         return "Not Support";
     }
@@ -97,7 +97,7 @@ public:
 private:
 #ifdef __linux__
     // for unittest
-    friend class CPUAffinityManagerTest_CPUAffinityManager_Test;
+    friend class DB::tests::CPUAffinityManagerTest_CPUAffinityManager_Test;
 
     void initCPUSet();
     int getCPUCores() const;
