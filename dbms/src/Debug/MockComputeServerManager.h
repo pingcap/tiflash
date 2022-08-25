@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include "Flash/Mpp/MPPTaskManager.h"
+#include "Storages/Transaction/TMTContext.h"
+#include "TestUtils/TiFlashTestEnv.h"
 #include <Debug/MockStorage.h>
 #include <Server/FlashGrpcServerHolder.h>
 
@@ -64,8 +67,11 @@ public:
 
     void showTaskInfo()
     {
-        for (const auto & server : server_map)
-            server.second->getFlashService()->showTaskInfoForTest();
+        // ywq todo know the current context in use...
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
+        {
+            std::cout << TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->toString() << std::endl;
+        }
     }
 
 private:

@@ -14,13 +14,10 @@
 
 #include <TestUtils/MPPTaskTestUtils.h>
 
-#include "TestUtils/TiFlashTestException.h"
-
 namespace DB
 {
 namespace tests
 {
-
 class CancelTaskRunner : public DB::tests::MPPTaskTestUtils
 {
 public:

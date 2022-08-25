@@ -135,6 +135,7 @@ protected:
         ASSERT_COLUMNS_EQ_UR(executeMPPTasksForTest(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
     } while (0)
 // ywq todo a hack...
+
 #define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
     do                                                                         \
     {                                                                          \

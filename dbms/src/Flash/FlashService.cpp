@@ -394,15 +394,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
     LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
-    GET_METRIC(tiflash_coprocessor_request_count, type_cancel_mpp_task).Increment();
-    GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Increment();
-    Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_cancel_mpp_task).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cancel_mpp_task).Observe(watch.elapsedSeconds());
-        GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
-    });
-
     auto [context, status] = createDBContextForTest();
     if (!status.ok())
     {
@@ -413,28 +404,9 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
+    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
-
-::grpc::Status FlashService::showTaskInfoForTest()
-{
-    CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    // CancelMPPTask cancels the query of the task.
-    LOG_FMT_DEBUG(log, "show task info for service, partition_id = {}", mpp_test_info.partition_id);
-
-
-    auto [context, status] = createDBContextForTest();
-    if (!status.ok())
-    {
-        return status;
-    }
-    auto & tmt_context = context->getTMTContext();
-    auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->toString();
-    return grpc::Status::OK;
-}
-
 
 String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
 {

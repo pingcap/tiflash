@@ -143,6 +143,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, con
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasksForTest(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
+    // ywq todo a hack...
     auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(1), properties, tasks, server_config_map);
     return readBlock(res);
 }
