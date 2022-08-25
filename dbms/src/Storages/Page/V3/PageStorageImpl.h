@@ -15,11 +15,15 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/WALStore.h>
+
+#include <unordered_set>
 
 namespace DB
 {
@@ -175,6 +179,8 @@ private:
     // Only std::map not std::unordered_map. We need insert/erase do not invalid iterators.
     using ExternalPageCallbacksContainer = std::map<NamespaceId, ExternalPageCallbacks>;
     ExternalPageCallbacksContainer callbacks_container;
+    std::mutex callbacks_remove_mutex;
+    std::unordered_set<NamespaceId> callbacks_remove_queue;
 };
 
 } // namespace PS::V3
