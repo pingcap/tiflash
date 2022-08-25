@@ -507,7 +507,7 @@ void DAGExpressionAnalyzer::buildLeadLag(
     NamesAndTypes & window_columns)
 {
     auto child_size = expr.children_size();
-    RUNTIME_CHECK(
+    RUNTIME_CHECK_MSG(
         child_size >= 1 && child_size <= 3,
         "arguments num of lead/lag must >= 1 and <= 3, but {}",
         child_size);
@@ -526,34 +526,33 @@ void DAGExpressionAnalyzer::buildLeadLag(
     else // child_size == 3
     {
         const auto & sample_block = actions->getSampleBlock();
-
-        auto first_arg_name = getActions(expr.children(0), actions);
-        auto first_arg_type = sample_block.getByName(first_arg_name).type;
-
-        auto third_arg_name = getActions(expr.children(2), actions);
-        auto third_arg_type = sample_block.getByName(third_arg_name).type;
+        auto get_name_type = [&](const tipb::Expr & arg_expr) -> std::pair<String, DataTypePtr> {
+            auto arg_name = getActions(arg_expr, actions);
+            auto arg_type = sample_block.getByName(arg_name).type;
+            return {std::move(arg_name), std::move(arg_type)};
+        };
+        auto [first_arg_name, first_arg_type] = get_name_type(expr.children(0));
+        auto [third_arg_name, third_arg_type] = get_name_type(expr.children(2));
 
         auto final_type = getLeastSupertype({first_arg_type, third_arg_type});
-        if (!final_type->equals(*first_arg_type))
-        {
-            first_arg_name = appendCast(final_type, actions, first_arg_name);
-            first_arg_type = final_type;
-        }
-        if (!final_type->equals(*third_arg_type))
-        {
-            third_arg_name = appendCast(final_type, actions, third_arg_name);
-            third_arg_type = final_type;
-        }
+        auto append_cast_if_need = [&](String & name, DataTypePtr & type) {
+            if (!final_type->equals(*type))
+            {
+                name = appendCast(final_type, actions, name);
+                type = final_type;
+            }
+        };
+        append_cast_if_need(first_arg_name, first_arg_type);
+        append_cast_if_need(third_arg_name, third_arg_type);
 
-        arg_names.push_back(first_arg_name);
-        arg_types.push_back(first_arg_type);
-        arg_collators.push_back(removeNullable(first_arg_type)->isString() ? getCollatorFromExpr(expr.children(0)) : nullptr);
-
+        auto fill_arg_detail = [&](const tipb::Expr & arg_expr, const String & arg_name, const DataTypePtr & arg_type) {
+            arg_names.push_back(arg_name);
+            arg_types.push_back(arg_type);
+            arg_collators.push_back(removeNullable(arg_type)->isString() ? getCollatorFromExpr(arg_expr) : nullptr);
+        };
+        fill_arg_detail(expr.children(0), first_arg_name, first_arg_type);
         fillArgumentDetail(actions, expr.children(1), arg_names, arg_types, arg_collators);
-
-        arg_names.push_back(third_arg_name);
-        arg_types.push_back(third_arg_type);
-        arg_collators.push_back(removeNullable(third_arg_type)->isString() ? getCollatorFromExpr(expr.children(2)) : nullptr);
+        fill_arg_detail(expr.children(2), third_arg_name, third_arg_type);
     }
 
     appendWindowDescription(
