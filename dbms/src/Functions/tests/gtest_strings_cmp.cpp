@@ -92,5 +92,66 @@ try
     }
 }
 CATCH
+
+TEST_F(Strcmp, StrEq)
+try
+{
+    const std::string equals_fn_name = "equals";
+    for (const auto col_id : {
+             TiDB::ITiDBCollator::UTF8MB4_BIN,
+             TiDB::ITiDBCollator::BINARY,
+         })
+    {
+        const auto * collator = TiDB::ITiDBCollator::getCollator(col_id);
+
+        // with collation
+        {
+            // column : column
+            ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 1, 1, 0}), executeFunction(equals_fn_name, {createColumn<String>({"a", "b", "a", "", "00"}), createColumn<String>({"b", "a", "a", "", "0"})}, collator));
+            // column : constant
+            // constant : column
+            {
+                for (size_t size = 1; size < 35; ++size)
+                {
+                    std::string a(size, '0');
+                    std::string b(size, '0');
+                    b.back() = '1';
+                    ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0}), executeFunction(equals_fn_name, {createConstColumn<String>(2, a), createColumn<String>({a, b})}, collator));
+                    ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0}), executeFunction(equals_fn_name, {createColumn<String>({a, b}), createConstColumn<String>(2, a)}, collator));
+                    {
+                        auto c = a;
+                        a += " ";
+                        b += "    ";
+                        c += "  ";
+                        if (!collator->isBinary())
+                        {
+                            ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0}), executeFunction(equals_fn_name, {createConstColumn<String>(2, c), createColumn<String>({a, b})}, collator));
+                            ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0}), executeFunction(equals_fn_name, {createColumn<String>({a, b}), createConstColumn<String>(2, c)}, collator));
+                        }
+                        else
+                        {
+                            ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 1}), executeFunction(equals_fn_name, {createConstColumn<String>(3, c), createColumn<String>({a, b, c})}, collator));
+                            ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 1}), executeFunction(equals_fn_name, {createColumn<String>({a, b, c}), createConstColumn<String>(3, c)}, collator));
+                        }
+                    }
+                }
+            }
+
+            // column : nullable
+            ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({0, 0, 1, std::nullopt, std::nullopt}), executeFunction(equals_fn_name, {createColumn<Nullable<String>>({"1", "123", "45", "123", std::nullopt}), createColumn<Nullable<String>>({"123", "1", "45", std::nullopt, "123"})}, collator));
+
+            // column with constant
+            ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({0, 1, std::nullopt}), executeFunction(equals_fn_name, {createColumn<Nullable<String>>({"aa", "bb", std::nullopt}), createConstColumn<Nullable<String>>(3, "bb")}, collator));
+
+            // constant with column
+            ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({0, 1, std::nullopt}), executeFunction(equals_fn_name, {createConstColumn<Nullable<String>>(3, "bb"), createColumn<Nullable<String>>({"aa", "bb", std::nullopt})}, collator));
+
+            // constant with nullable
+            ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({0}), executeFunction(equals_fn_name, {createColumn<String>({"a"}), createColumn<Nullable<String>>({"b"})}, collator));
+            ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({std::nullopt}), executeFunction(equals_fn_name, {createColumn<String>({"a"}), createColumn<Nullable<String>>({std::nullopt})}, collator));
+        }
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB
