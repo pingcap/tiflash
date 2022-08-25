@@ -146,9 +146,9 @@ public:
 
     void advanceRowNumber(RowNumber & x) const;
 
-    bool advanceRowNumber(RowNumber & x, size_t offset) const;
+    bool lead(RowNumber & x, size_t offset) const;
 
-    bool backRowNumber(RowNumber & x, size_t offset) const;
+    bool lag(RowNumber & x, size_t offset) const;
 
     RowNumber blocksEnd() const
     {

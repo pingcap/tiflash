@@ -173,7 +173,7 @@ public:
 
         auto offset = offset_getter(cur_block.input_columns, arguments, stream->current_row.row);
         auto value_row = stream->current_row;
-        if (Impl::locateRowNumber(stream, value_row, offset))
+        if (Impl::locate(stream, value_row, offset))
         {
             const auto & value_column = *stream->inputAt(value_row)[arguments[0]];
             const auto & value_field = value_column[value_row.row];
@@ -289,12 +289,12 @@ struct LeadImpl
 {
     static constexpr auto name = "lead";
 
-    static bool locateRowNumber(
+    static bool locate(
         const WindowBlockInputStreamPtr & stream,
         RowNumber & value_row,
         UInt64 offset)
     {
-        return stream->advanceRowNumber(value_row, offset);
+        return stream->lead(value_row, offset);
     }
 };
 
@@ -302,12 +302,12 @@ struct LagImpl
 {
     static constexpr auto name = "lag";
 
-    static bool locateRowNumber(
+    static bool locate(
         const WindowBlockInputStreamPtr & stream,
         RowNumber & value_row,
         UInt64 offset)
     {
-        return stream->backRowNumber(value_row, offset);
+        return stream->lag(value_row, offset);
     }
 };
 

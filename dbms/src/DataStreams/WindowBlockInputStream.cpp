@@ -245,7 +245,9 @@ void WindowBlockInputStream::advanceFrameStart()
         break;
     case WindowFrame::BoundaryType::Current:
     {
-        RUNTIME_CHECK_MSG(only_have_pure_window, "window function only support pure window function now.");
+        RUNTIME_CHECK_MSG(
+            only_have_pure_window,
+            "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
         frame_start = current_row;
         frame_started = true;
         break;
@@ -316,7 +318,9 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
            || frame_end.block + 1 == partition_end.block);
 
     // If window only have row_number or rank/dense_rank functions, set frame_end to the next row of current_row and frame_ended to true
-    RUNTIME_CHECK(only_have_pure_window, "window function only support pure window function now.");
+    RUNTIME_CHECK(
+        only_have_pure_window,
+        "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
     frame_end = current_row;
     advanceRowNumber(frame_end);
     frame_ended = true;
@@ -620,7 +624,7 @@ void WindowBlockInputStream::advanceRowNumber(RowNumber & x) const
     ++x.block;
 }
 
-bool WindowBlockInputStream::advanceRowNumber(RowNumber & x, size_t offset) const
+bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
 {
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
@@ -643,10 +647,10 @@ bool WindowBlockInputStream::advanceRowNumber(RowNumber & x, size_t offset) cons
         return false;
     size_t new_offset = x.row - block_rows;
     x.row = 0;
-    return advanceRowNumber(x, new_offset);
+    return lead(x, new_offset);
 }
 
-bool WindowBlockInputStream::backRowNumber(RowNumber & x, size_t offset) const
+bool WindowBlockInputStream::lag(RowNumber & x, size_t offset) const
 {
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
@@ -664,6 +668,6 @@ bool WindowBlockInputStream::backRowNumber(RowNumber & x, size_t offset) const
     --x.block;
     size_t new_offset = offset - x.row;
     x.row = blockAt(x.block).rows - 1;
-    return backRowNumber(x, new_offset);
+    return lag(x, new_offset);
 }
 } // namespace DB
