@@ -61,25 +61,17 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     const auto & storage_schema = storage_interpreter.analyzer->getCurrentInputColumns();
     RUNTIME_CHECK(
         storage_schema.size() == schema.size(),
-        TiFlashException(
-            fmt::format(
-                "Expected col num does not match actual col num {}",
-                schema.size(),
-                storage_schema.size()),
-            Errors::Planner::Internal));
+        storage_schema.size(),
+        schema.size());
     NamesWithAliases schema_project_cols;
     for (size_t i = 0; i < schema.size(); ++i)
     {
         RUNTIME_CHECK(
             schema[i].type->equals(*storage_schema[i].type),
-            TiFlashException(
-                fmt::format(
-                    "The type of schema col <{}, {}> does not match the type of actual col <{}, {}>",
-                    schema[i].name,
-                    schema[i].type->getName(),
-                    storage_schema[i].name,
-                    storage_schema[i].type->getName()),
-                Errors::Planner::Internal));
+            schema[i].name,
+            schema[i].type->getName(),
+            storage_schema[i].name,
+            storage_schema[i].type->getName());
         assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
         schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
     }
@@ -115,5 +107,11 @@ bool PhysicalTableScan::pushDownFilter(const String & filter_executor_id, const 
 bool PhysicalTableScan::hasPushDownFilter() const
 {
     return push_down_filter.hasValue();
+}
+
+const String & PhysicalTableScan::getPushDownFilterId() const
+{
+    assert(hasPushDownFilter());
+    return push_down_filter.executor_id;
 }
 } // namespace DB

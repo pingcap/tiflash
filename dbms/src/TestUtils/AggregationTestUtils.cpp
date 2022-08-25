@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <TestUtils/AggregationTestUtils.h>
 
-#include <Dictionaries/Embedded/GeodataProviders/INamesProvider.h>
-
-#include <IO/ReadBuffer.h>
-
-
-// Reads regions names list in geoexport format
-class LanguageRegionsNamesFormatReader : public ILanguageRegionsNamesReader
+namespace DB::tests
 {
-private:
-    DB::ReadBufferPtr input;
+void AggregationTest::SetUpTestCase()
+{
+    auto register_func = [](std::function<void()> func) {
+        try
+        {
+            func();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registered, ignore exception here.
+        }
+    };
 
-public:
-    LanguageRegionsNamesFormatReader(DB::ReadBufferPtr input_)
-        : input(std::move(input_))
-    {}
-
-    bool readNext(RegionNameEntry & entry) override;
-};
+    register_func(DB::registerAggregateFunctions);
+}
+} // namespace DB::tests

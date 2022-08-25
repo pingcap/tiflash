@@ -39,7 +39,6 @@ public:
         SMAP64_INVALID = 0,
         SMAP64_RBTREE = 1,
         SMAP64_STD_MAP = 2,
-        SMAP64_BIG = 3 // support for writebatch bigger than blobstore.config.file_limit_size
     };
 
     /**
@@ -143,8 +142,6 @@ public:
             return "RB-Tree";
         case SMAP64_STD_MAP:
             return "STD Map";
-        case SMAP64_BIG:
-            return "STD Big";
         default:
             return "Invalid";
         }

@@ -84,6 +84,7 @@ public:
 
     ColumnFiles cloneColumnFiles(DMContext & context, const RowKeyRange & target_range, WriteBatches & wbs);
 
+    void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 
     /// The following methods returning false means this operation failed, caused by other threads could have done
     /// some updates on this instance. E.g. this instance have been abandoned.

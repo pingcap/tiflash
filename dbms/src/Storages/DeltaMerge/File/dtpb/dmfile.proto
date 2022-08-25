@@ -21,6 +21,8 @@ message PackProperty {
     required uint64 gc_hint_version = 1;
     // effective rows(multiple versions of one row is count as one include delete)
     required uint64 num_rows = 2;
+    // the number of rows in this pack which are deleted
+    optional uint64 deleted_rows = 3;
 }
 
 message PackProperties {
