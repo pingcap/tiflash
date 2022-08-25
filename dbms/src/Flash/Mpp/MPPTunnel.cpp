@@ -28,6 +28,24 @@ extern const char exception_during_mpp_close_tunnel[];
 extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
+namespace
+{
+String tunnelSenderModeToString(TunnelSenderMode mode)
+{
+    switch (mode)
+    {
+    case TunnelSenderMode::ASYNC_GRPC:
+        return "async";
+    case TunnelSenderMode::SYNC_GRPC:
+        return "sync";
+    case TunnelSenderMode::LOCAL:
+        return "local";
+    default:
+        return "unknown";
+    }
+}
+} // namespace
+
 MPPTunnel::MPPTunnel(
     const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
@@ -207,7 +225,7 @@ void MPPTunnel::connect(PacketWriter * writer)
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_DEBUG(log, "connected");
+    LOG_FMT_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
 }
 
 void MPPTunnel::waitForFinish()
