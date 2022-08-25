@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
@@ -22,9 +24,6 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
-
-#include "Common/Exception.h"
-#include "Storages/Page/PageDefines.h"
 
 namespace DB
 {
@@ -107,7 +106,10 @@ size_t PageStorageImpl::getNumberOfPages()
 
 std::set<PageId> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
 {
-    return page_directory->getAliveExternalIds(ns_id);
+    auto alive_ex_ids_all_ns = page_directory->getAliveExternalIds();
+    if (auto iter = alive_ex_ids_all_ns.find(ns_id); iter != alive_ex_ids_all_ns.end())
+        return iter->second;
+    return {};
 }
 
 void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
@@ -312,9 +314,9 @@ String PageStorageImpl::GCTimeConsume::toLogging() const
                        gc_in_mem_entries_ms,
                        blobstore_remove_entries_ms,
                        blobstore_get_gc_stats_ms,
-                       gc_get_entries_ms,
-                       blobstore_full_gc_ms,
-                       gc_apply_ms,
+                       full_gc_get_entries_ms,
+                       full_gc_blobstore_copy_ms,
+                       full_gc_apply_ms,
                        get_external_msg());
 }
 
@@ -351,7 +353,7 @@ PageStorageImpl::GCTimeConsume PageStorageImpl::doGC(const WriteLimiterPtr & wri
         if (!callbacks_container.empty())
         {
             Stopwatch external_watch;
-#if 0
+            // get all alive external ids from all namespaces
             auto alive_external_ids = page_directory->getAliveExternalIds();
             consume.external_page_get_alive_ns = external_watch.elapsedFromLastTime();
             for (const auto & [ns_id, callbacks] : callbacks_container)
@@ -368,17 +370,6 @@ PageStorageImpl::GCTimeConsume PageStorageImpl::doGC(const WriteLimiterPtr & wri
                 }
                 consume.external_page_remove_ns += external_watch.elapsedFromLastTime();
             }
-#else
-            for (const auto & [ns_id, callbacks] : callbacks_container)
-            {
-                auto pending_external_pages = callbacks.scanner();
-                consume.external_page_scan_ns += external_watch.elapsedFromLastTime();
-                auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
-                consume.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
-                callbacks.remover(pending_external_pages, alive_external_ids);
-                consume.external_page_remove_ns += external_watch.elapsedFromLastTime();
-            }
-#endif
         }
         return gc_watch.elapsedMillisecondsFromLastTime();
     };
@@ -418,7 +409,7 @@ PageStorageImpl::GCTimeConsume PageStorageImpl::doGC(const WriteLimiterPtr & wri
     // We also need to filter the version of the entry.
     // So that the `gc_apply` can proceed smoothly.
     auto [blob_gc_info, total_page_size] = page_directory->getEntriesByBlobIds(blob_need_gc);
-    consume.gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.full_gc_get_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_gc_info.empty())
     {
         consume.clean_external_page_ms = clean_external_page();
@@ -431,7 +422,7 @@ PageStorageImpl::GCTimeConsume PageStorageImpl::doGC(const WriteLimiterPtr & wri
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
     PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
-    consume.blobstore_full_gc_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.full_gc_blobstore_copy_ms = gc_watch.elapsedMillisecondsFromLastTime();
     RUNTIME_CHECK_MSG(!gc_edit.empty(), "Something wrong after BlobStore GC");
 
     // 6. MVCC gc apply
@@ -442,7 +433,7 @@ PageStorageImpl::GCTimeConsume PageStorageImpl::doGC(const WriteLimiterPtr & wri
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
-    consume.gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    consume.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
     consume.clean_external_page_ms = clean_external_page();
     consume.stage = GCStageType::FullGC;

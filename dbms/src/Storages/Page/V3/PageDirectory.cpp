@@ -1235,27 +1235,6 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     LOG_FMT_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
 }
 
-
-std::set<PageId> PageDirectory::getAliveExternalIds(NamespaceId ns_id) const
-{
-    std::set<PageId> valid_external_ids;
-    {
-        std::lock_guard guard(external_ids_mutex);
-        for (auto iter = external_ids.begin(); iter != external_ids.end(); /*empty*/)
-        {
-            if (auto holder = iter->lock(); holder == nullptr)
-                iter = external_ids.erase(iter);
-            else
-            {
-                if (holder->high == ns_id)
-                    valid_external_ids.emplace(holder->low);
-                ++iter;
-            }
-        }
-    }
-    return valid_external_ids;
-}
-
 std::map<NamespaceId, std::set<PageId>> PageDirectory::getAliveExternalIds() const
 {
     std::map<NamespaceId, std::set<PageId>> valid_external_ids;
@@ -1264,12 +1243,18 @@ std::map<NamespaceId, std::set<PageId>> PageDirectory::getAliveExternalIds() con
         for (auto iter = external_ids.begin(); iter != external_ids.end(); /*empty*/)
         {
             if (auto holder = iter->lock(); holder == nullptr)
+            {
+                // the external id is removed from `PageDirectory`,
+                // cleanup the invalid weak_ptr
                 iter = external_ids.erase(iter);
+                continue;
+            }
             else
             {
-                auto ns_id = holder->high;
+                const auto ns_id = holder->high;
                 if (auto iter = valid_external_ids.find(ns_id); iter != valid_external_ids.end())
                 {
+                    // insert the valid external id for this ns_id
                     iter->second.emplace(holder->low);
                 }
                 else

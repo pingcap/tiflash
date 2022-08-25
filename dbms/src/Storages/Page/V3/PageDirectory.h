@@ -20,6 +20,7 @@
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -32,8 +33,6 @@
 #include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
-
-#include "Storages/Page/PageDefines.h"
 
 namespace CurrentMetrics
 {
@@ -350,7 +349,8 @@ public:
     // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
     PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
 
-    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
+    // Get the external id that is not deleted or being ref by another id over
+    // all NamespaceIds.
     std::map<NamespaceId, std::set<PageId>> getAliveExternalIds() const;
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
