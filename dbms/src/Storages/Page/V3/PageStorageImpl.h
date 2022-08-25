@@ -172,7 +172,8 @@ private:
     const static String manifests_file_name;
 
     std::mutex callbacks_mutex;
-    using ExternalPageCallbacksContainer = std::unordered_map<NamespaceId, ExternalPageCallbacks>;
+    // Only std::map not std::unordered_map. We need insert/erase do not invalid iterators.
+    using ExternalPageCallbacksContainer = std::map<NamespaceId, ExternalPageCallbacks>;
     ExternalPageCallbacksContainer callbacks_container;
 };
 

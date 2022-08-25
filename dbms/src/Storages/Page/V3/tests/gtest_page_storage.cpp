@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
@@ -34,6 +35,8 @@
 #include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
+
+#include <future>
 
 namespace DB
 {
@@ -1235,6 +1238,33 @@ try
         page_storage->gc();
         EXPECT_EQ(times_remover_called, 3);
     }
+}
+CATCH
+
+TEST_F(PageStorageTest, ConcurrencyRemoveExtCallbacks)
+try
+{
+    ExternalPageCallbacks callbacks;
+    callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
+        return {};
+    };
+    callbacks.remover = [](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+    };
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    page_storage->registerExternalPagesCallbacks(callbacks);
+
+    // Start a segment merge and suspend it before applyMerge
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::doGC_clean_external_page");
+    auto th_gc = std::async([&]() {
+        page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr);
+    });
+    sp_gc.waitAndPause();
+
+    page_storage->unregisterExternalPagesCallbacks(TEST_NAMESPACE_ID);
+
+    sp_gc.next();
+
+    th_gc.wait();
 }
 CATCH
 
