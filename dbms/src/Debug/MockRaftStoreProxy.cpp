@@ -327,13 +327,14 @@ void MockRaftStoreProxy::unsafeInvokeForTest(std::function<void(MockRaftStorePro
 }
 
 void MockRaftStoreProxy::bootstrap(
-    const Context & ctx,
+    KVStore & kvs,
+    TMTContext & tmt,
     UInt64 region_id)
 {
+    (void)tmt;
     auto _ = genLockGuard();
     regions.emplace(region_id, std::make_shared<MockProxyRegion>(region_id));
 
-    KVStore & kvs = *ctx.getTMTContext().getKVStore();
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
     {
@@ -344,7 +345,8 @@ void MockRaftStoreProxy::bootstrap(
 }
 
 void MockRaftStoreProxy::normalWrite(
-    const Context & ctx,
+    KVStore & kvs,
+    TMTContext & tmt,
     const FailCond & cond,
     UInt64 region_id,
     std::vector<HandleID> keys,
@@ -381,8 +383,7 @@ void MockRaftStoreProxy::normalWrite(
     if (cond.fail_before_kvstore) return;
 
     // TiFlash write
-    KVStore & kvs = *ctx.getTMTContext().getKVStore();
-    kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, ctx.getTMTContext());
+    kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
 
     if (cond.fail_before_proxy) return;
 

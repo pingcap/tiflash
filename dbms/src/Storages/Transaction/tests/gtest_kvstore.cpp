@@ -74,8 +74,8 @@ public:
         {
             auto store = metapb::Store{};
             store.set_id(1234);
-            kvstore.setStore(store);
-            ASSERT_EQ(kvstore.getStoreID(), store.id());
+            kvstore->setStore(store);
+            ASSERT_EQ(kvstore->getStoreID(), store.id());
         }
     }
 
@@ -1266,6 +1266,33 @@ TEST_F(RegionKVStoreTest, KVStore)
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+    }
+}
+
+TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
+    init(false);
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto applied_index = 0;
+    {
+        KVStore & kvs = getKVS();
+        proxy_instance->bootstrap(kvs, ctx.getTMTContext(), 1);
+        MockRaftStoreProxy::FailCond cond;
+        cond.fail_before_proxy = false;
+
+        auto kvr1 = kvs.getRegion(1);
+        auto r1 = proxy_instance->getRegion(1);
+        applied_index = r1->getLatestAppliedIndex();
+        proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, 1, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        ASSERT_NE(r1, nullptr);
+        ASSERT_NE(kvr1, nullptr);
+        ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+        ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+        kvs.tryPersist(1);
+    }
+    {
+        const KVStore & kvs = reloadKVSFromDisk();
+        ASSERT_EQ(proxy_instance->getRegion(1)->getLatestAppliedIndex(), applied_index + 1);
+        ASSERT_EQ(kvs.getRegion(1)->appliedIndex(), applied_index + 1);
     }
 }
 

@@ -114,12 +114,14 @@ struct MockRaftStoreProxy : MutexLockWrap
     /// We assume that we generate one command, and immediately commit.
     /// boostrap a region
     void bootstrap(
-        const Context & ctx,
+        KVStore & kvs,
+        TMTContext & tmt,
         UInt64 region_id);
 
     /// normal write to a region
     void normalWrite(
-        const Context & ctx,
+        KVStore & kvs,
+        TMTContext & tmt,
         const FailCond & cond,
         UInt64 region_id,
         std::vector<HandleID> keys,
