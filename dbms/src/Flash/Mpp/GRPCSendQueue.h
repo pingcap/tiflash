@@ -67,7 +67,7 @@ public:
         }
     }
 
-    /// Push the data from queue and kick the completion queue.
+    /// Push the data from queue and kick the grpc completion queue.
     /// For return value meanings, see `MPMCQueue::finish`.
     template <typename U>
     bool push(U && u)
@@ -107,7 +107,7 @@ public:
         return true;
     }
 
-    /// Finish the queue and kick the completion queue.
+    /// Finish the queue and kick the grpc completion queue.
     /// For return value meanings, see `MPMCQueue::finish`.
     bool finish()
     {

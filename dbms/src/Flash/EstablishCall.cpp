@@ -61,7 +61,7 @@ void EstablishCallData::proceed()
             return;
         }
 
-        sendOneMsg();
+        trySendOneMsg();
     }
     else if (state == ERR_HANDLE)
     {
@@ -137,8 +137,8 @@ void EstablishCallData::initRpc()
     state = PROCESSING;
 
     // Try to send one message.
-    // If there is no message, the pointer of this struct will be saved in `async_tunnel_sender`.
-    sendOneMsg();
+    // If there is no message, the pointer of this class will be saved in `async_tunnel_sender`.
+    trySendOneMsg();
 }
 
 void EstablishCallData::write(const mpp::MPPDataPacket & packet)
@@ -183,7 +183,7 @@ void EstablishCallData::unexpectedWriteDone()
     writeDone("unexpectedWriteDone called", status);
 }
 
-void EstablishCallData::sendOneMsg()
+void EstablishCallData::trySendOneMsg()
 {
     MPPDataPacketPtr res;
     bool ok;

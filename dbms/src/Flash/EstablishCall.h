@@ -67,7 +67,7 @@ private:
 
     void unexpectedWriteDone();
 
-    void sendOneMsg();
+    void trySendOneMsg();
 
     // Server instance
     AsyncFlashService * service;
