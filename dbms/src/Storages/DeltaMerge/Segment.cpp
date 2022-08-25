@@ -391,9 +391,9 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
 {
     LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream", segment_id, epoch);
 
-    
+
     bool enable_del_clean_read = true;
-    fiu_do_on(FailPoints::non_del_optimization, {enable_del_clean_read = false;});
+    fiu_do_on(FailPoints::non_del_optimization, { enable_del_clean_read = false; });
     for (const auto & c : columns_to_read)
     {
         if (c.id == TAG_COLUMN_ID)

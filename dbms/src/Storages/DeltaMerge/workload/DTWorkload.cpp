@@ -31,6 +31,7 @@
 #include <Storages/DeltaMerge/workload/Utils.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <cpptoml.h>
+
 #include "Storages/DeltaMerge/DeltaMergeDefines.h"
 
 namespace DB::DM::tests
@@ -252,8 +253,10 @@ void DTWorkload::verifyHandle(uint64_t r)
     try
     {
         ColumnDefines read_columns;
-        for (const auto& col : columns){
-            if (col.id != TAG_COLUMN_ID) {
+        for (const auto & col : columns)
+        {
+            if (col.id != TAG_COLUMN_ID)
+            {
                 read_columns.push_back(col);
             }
         }
@@ -292,8 +295,10 @@ void DTWorkload::scanAll(ThreadStat & read_stat)
             };
 
             ColumnDefines read_columns;
-            for (const auto& col : columns){
-                if (col.id != TAG_COLUMN_ID) {
+            for (const auto & col : columns)
+            {
+                if (col.id != TAG_COLUMN_ID)
+                {
                     read_columns.push_back(col);
                 }
             }

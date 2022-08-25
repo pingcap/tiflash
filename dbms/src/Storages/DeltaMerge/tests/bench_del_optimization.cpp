@@ -220,7 +220,8 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
     store = reload(read_columns);
     store->write(*db_context, db_context->getSettingsRef(), block);
 
-    for (int i = 1; i < file_num; i++){
+    for (int i = 1; i < file_num; i++)
+    {
         Block block = createBlock(block_rows, columns_num, delete_rows_num, begin_value);
         store->write(*db_context, db_context->getSettingsRef(), block);
         begin_value += block_rows;
@@ -250,7 +251,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
                                              /* expected_block_size= */ 1024,
                                              {},
                                              InvalidColumnID)[0];
-        while (in->read()){};
+        while (in->read()) {};
     }
     FailPointHelper::disableFailPoint(FailPoints::non_del_optimization);
 }
@@ -281,12 +282,13 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
     store = reload(read_columns);
     store->write(*db_context, db_context->getSettingsRef(), block);
 
-    for (int i = 1; i < file_num; i++){
+    for (int i = 1; i < file_num; i++)
+    {
         Block block = createBlock(block_rows, columns_num, delete_rows_num, begin_value);
         store->write(*db_context, db_context->getSettingsRef(), block);
         begin_value += block_rows;
     }
-    
+
     store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
 
     store->mergeDeltaAll(*db_context);
@@ -310,7 +312,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
                                              {},
                                              InvalidColumnID)[0];
 
-        while (in->read()){};
+        while (in->read()) {};
     }
 }
 
@@ -415,5 +417,4 @@ BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iter
 
 } // namespace tests
 } // namespace DM
-} // namespace DB 
-	
+} // namespace DB

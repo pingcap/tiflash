@@ -440,7 +440,8 @@ Block DMFileReader::read()
 
                 skip_packs_by_column[i] = read_packs;
             }
-            else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_normal_mode) { // do_clean_read_on_normal_mode = false but do_clean_read_on_del_on_normal_mode = true
+            else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_normal_mode)
+            { // do_clean_read_on_normal_mode = false but do_clean_read_on_del_on_normal_mode = true
                 ColumnPtr column;
                 column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)))->convertToFullColumnIfConst();
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
