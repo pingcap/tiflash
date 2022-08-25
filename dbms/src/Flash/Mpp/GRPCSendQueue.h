@@ -20,6 +20,7 @@
 #include <common/logger_useful.h>
 #include <grpcpp/grpcpp.h>
 
+#include <functional>
 
 namespace DB
 {
@@ -29,6 +30,8 @@ template <typename T>
 class GRPCSendQueue
 {
 public:
+    using KickFunc = std::function<grpc_call_error(grpc_call *, void *)>;
+
     GRPCSendQueue(size_t queue_size, grpc_call * call_, const LoggerPtr log_)
         : send_queue(MPMCQueue<T>(queue_size))
         , call(call_)
@@ -36,7 +39,22 @@ public:
         , log(log_)
     {
         RUNTIME_ASSERT(call != nullptr, log, "call is null");
+        // If a call to `grpc_call_start_batch` with an empty batch returns
+        // `GRPC_CALL_OK`, the tag is put in the completion queue immediately.
+        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
+        kick_func = [](grpc_call * c, void * t) {
+            return grpc_call_start_batch(c, nullptr, 0, t, nullptr);
+        };
     }
+
+    // For test purpose.
+    GRPCSendQueue(size_t queue_size, grpc_call * call_, KickFunc func, const LoggerPtr log_)
+        : send_queue(MPMCQueue<T>(queue_size))
+        , call(call_)
+        , tag(nullptr)
+        , kick_func(func)
+        , log(log_)
+    {}
 
     ~GRPCSendQueue()
     {
@@ -68,8 +86,6 @@ public:
     /// Return false if pop can't be done due to blocking and `new_tag`
     /// is saved. When the next push/finish is called, the `new_tag` will
     /// be pushed into grpc completion queue.
-    ///
-    /// Note that
     bool pop(T & data, bool & ok, void * new_tag)
     {
         RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr when popping");
@@ -139,10 +155,7 @@ private:
         {
             return;
         }
-        // If a call to `grpc_call_start_batch` with an empty batch returns
-        // `GRPC_CALL_OK`, the tag is put in the completion queue immediately.
-        // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        auto error = grpc_call_start_batch(call, nullptr, 0, new KickTag(old_tag), nullptr);
+        grpc_call_error error = kick_func(call, new KickTag(old_tag));
         // If an error occur, there must be something wrong about shutdown process.
         RUNTIME_ASSERT(error == grpc_call_error::GRPC_CALL_OK, log, "grpc_call_start_batch returns {} != GRPC_CALL_OK, memory of tag may leak", error);
     }
@@ -165,6 +178,7 @@ private:
     grpc_call * call;
     void * tag;
 
+    KickFunc kick_func;
     const LoggerPtr log;
 };
 

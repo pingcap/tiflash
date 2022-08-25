@@ -136,12 +136,12 @@ public:
         return true;
     }
 
-    void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> & async_tunnel_sender_) override
+    void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> & async_tunnel_sender_)
     {
         async_tunnel_sender = async_tunnel_sender_;
     }
 
-    grpc_call * grpcCall() override
+    grpc_call * grpcCall()
     {
         // Hack: make grpc_call not null to pass subsequent assert.
         return (grpc_call *)1;
@@ -556,7 +556,7 @@ try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
     std::unique_ptr<PacketWriter> async_writer_ptr = std::make_unique<MockAsyncWriter>();
-    mpp_tunnel_ptr->connect(async_writer_ptr.get());
+    mpp_tunnel_ptr->connectAsync(async_writer_ptr.get());
 
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
 

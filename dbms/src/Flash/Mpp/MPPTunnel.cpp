@@ -198,6 +198,7 @@ void MPPTunnel::connect(PacketWriter * writer)
         {
         case TunnelSenderMode::LOCAL:
         {
+            RUNTIME_ASSERT(writer == nullptr, log);
             local_tunnel_sender = std::make_shared<LocalTunnelSender>(queue_size, log, tunnel_id);
             tunnel_sender = local_tunnel_sender;
             break;
@@ -320,7 +321,7 @@ StringRef MPPTunnel::statusToString()
 void TunnelSender::consumerFinish(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
-    send_queue.finish();
+    finish();
     consumer_state.setMsg(msg);
 }
 
