@@ -160,7 +160,7 @@ void appendAggDescription(
     aggregate_descriptions.emplace_back(std::move(aggregate));
 }
 
-/// Generate AggregateDescription and append it to WindowDescription if need.
+/// Generate WindowFunctionDescription and append it to WindowDescription if need.
 void appendWindowDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
@@ -184,8 +184,8 @@ void appendWindowDescription(
     window_function_description.argument_names = arg_names;
     window_function_description.column_name = func_string;
     window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, arg_types);
-    DataTypePtr result_type = window_function_description.window_function->getReturnType();
     window_description.window_functions_descriptions.emplace_back(std::move(window_function_description));
+    DataTypePtr result_type = window_function_description.window_function->getReturnType();
     window_columns.emplace_back(func_string, result_type);
     source_columns.emplace_back(func_string, result_type);
 }
