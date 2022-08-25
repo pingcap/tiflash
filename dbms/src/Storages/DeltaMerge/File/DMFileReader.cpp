@@ -24,9 +24,6 @@
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
-
-#include <string>
-
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -211,7 +208,8 @@ DMFileReader::DMFileReader(
     const ColumnDefines & read_columns_,
     bool is_common_handle_,
     // clean read
-    bool enable_clean_read_,
+    bool enable_handle_clean_read_,
+    bool enable_del_clean_read_,
     bool is_fast_mode_,
     UInt64 max_read_version_,
     // filters
@@ -233,7 +231,8 @@ DMFileReader::DMFileReader(
     , is_common_handle(is_common_handle_)
     , read_one_pack_every_time(read_one_pack_every_time_)
     , single_file_mode(dmfile_->isSingleFileMode())
-    , enable_clean_read(enable_clean_read_)
+    , enable_handle_clean_read(enable_handle_clean_read_)
+    , enable_del_clean_read(enable_del_clean_read_)
     , is_fast_mode(is_fast_mode_)
     , max_read_version(max_read_version_)
     , pack_filter(std::move(pack_filter_))
@@ -321,8 +320,12 @@ Block DMFileReader::read()
     size_t read_pack_limit = (single_file_mode || read_one_pack_every_time) ? 1 : 0;
 
     const auto & pack_stats = dmfile->getPackStats();
+
+    const auto & pack_properties = dmfile->getPackProperties();
+
     size_t read_rows = 0;
     size_t not_clean_rows = 0;
+    size_t deleted_rows = 0;
 
     const std::vector<RSResult> & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
     RSResult expected_handle_res = handle_res[next_pack_id];
@@ -330,11 +333,22 @@ Block DMFileReader::read()
     {
         if (read_pack_limit != 0 && next_pack_id - start_pack_id >= read_pack_limit)
             break;
-        if (enable_clean_read && handle_res[next_pack_id] != expected_handle_res)
+        if (enable_handle_clean_read && handle_res[next_pack_id] != expected_handle_res)
             break;
 
         read_rows += pack_stats[next_pack_id].rows;
         not_clean_rows += pack_stats[next_pack_id].not_clean;
+        // Because deleted_rows is a new field in pack_properties, we need to check whehter this pack has this field.
+        // If this pack doesn't have this field, then we can't know whether this pack contains deleted rows.
+        // Thus we just deleted_rows += 1, to make sure we will not do the optimization with del column(just to make deleted_rows != 0).
+        if (static_cast<size_t>(pack_properties.property_size()) > next_pack_id && pack_properties.property(next_pack_id).has_deleted_rows())
+        {
+            deleted_rows += pack_properties.property(next_pack_id).deleted_rows();
+        }
+        else
+        {
+            deleted_rows += 1;
+        }
     }
 
     if (read_rows == 0)
@@ -350,9 +364,10 @@ Block DMFileReader::read()
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
-    bool do_clean_read_on_normal_mode = enable_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
+    bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
 
-    bool do_clean_read_on_handle = enable_clean_read && is_fast_mode && expected_handle_res == All;
+    bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_mode && expected_handle_res == All;
+    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && deleted_rows == 0;
 
     if (do_clean_read_on_normal_mode)
     {
@@ -368,7 +383,7 @@ Block DMFileReader::read()
         {
             // For clean read of column pk, version, tag, instead of loading data from disk, just create placeholder column is OK.
             auto & cd = read_columns[i];
-            if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle)
+            if (cd.id == EXTRA_HANDLE_COLUMN_ID && do_clean_read_on_handle_on_fast_mode)
             {
                 // Return the first row's handle
                 ColumnPtr column;
@@ -383,6 +398,15 @@ Block DMFileReader::read()
                     column = cd.type->createColumnConst(read_rows, Field(min_handle));
                 }
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+                skip_packs_by_column[i] = read_packs;
+            }
+            else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_fast_mode)
+            {
+                ColumnPtr column;
+
+                column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
+                res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
+
                 skip_packs_by_column[i] = read_packs;
             }
             else if (do_clean_read_on_normal_mode && isExtraColumn(cd))
@@ -503,7 +527,6 @@ Block DMFileReader::read()
             e.rethrow();
         }
     }
-
     return res;
 }
 
