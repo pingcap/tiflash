@@ -442,7 +442,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
 
                 chunk_codec_stream->encode(dest_block, 0, dest_block.rows());
                 tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
-                tracked_packets[part_id].packet->add_stream_ids(stream_idx);
+                tracked_packets[part_id].packet.add_stream_ids(stream_idx);
                 chunk_codec_stream->clear();
             }
             responses_row_count[part_id] = row_count_per_part;

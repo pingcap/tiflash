@@ -179,7 +179,7 @@ class LocalTunnelSender : public TunnelSender
 public:
     using Base = TunnelSender;
     using Base::Base;
-    std::shared_ptr<mpp::MPPDataPacket> readForLocal();
+    MPPDataPacketPtr readForLocal();
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;

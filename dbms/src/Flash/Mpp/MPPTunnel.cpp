@@ -316,7 +316,7 @@ void SyncTunnelSender::sendJob()
         MPPDataPacketPtr res;
         while (send_queue->pop(res))
         {
-            if (!writer->write(*(res->packet)))
+            if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -375,7 +375,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
         queue_empty_flag = !send_queue->pop(res);
         if (!queue_empty_flag)
         {
-            if (!writer->write(*(res->packet)))
+            if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
             }
@@ -405,11 +405,15 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     }
 }
 
-std::shared_ptr<mpp::MPPDataPacket> LocalTunnelSender::readForLocal()
+std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
 {
     MPPDataPacketPtr res;
     if (send_queue->pop(res))
-        return res->packet;
+    {
+        // switch tunnel's memory tracker into receiver's
+        res->switchMemTracker(current_memory_tracker);
+        return res;
+    }
     consumerFinish("");
     return nullptr;
 }

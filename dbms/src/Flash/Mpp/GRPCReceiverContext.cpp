@@ -65,7 +65,7 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
 
     bool read(MPPDataPacketPtr & packet) override
     {
-        return reader->Read(packet.get());
+        return packet->read(reader);
     }
 
     ::grpc::Status finish() override
@@ -103,7 +103,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
 
     void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) override
     {
-        reader->Read(packet.get(), callback);
+        packet->read(reader, callback);
     }
 
     void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override

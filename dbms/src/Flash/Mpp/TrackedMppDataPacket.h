@@ -30,6 +30,8 @@
 #include <kvproto/tikvpb.grpc.pb.h>
 #include <tipb/select.pb.h>
 #pragma GCC diagnostic pop
+#include <Common/UnaryCallback.h>
+
 #include <memory>
 
 namespace DB
@@ -44,47 +46,13 @@ inline size_t estimateAllocatedSize(const mpp::MPPDataPacket & data)
     return ret;
 }
 
-
-struct TrackedMppDataPacket
+struct MemTrackerWrapper
 {
-    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
+    MemTrackerWrapper(size_t _size, MemoryTracker * memory_tracker)
         : memory_tracker(memory_tracker)
+        , size(0)
     {
-        size = estimateAllocatedSize(data);
-        trackAlloc();
-        packet = std::make_shared<mpp::MPPDataPacket>(data);
-    }
-
-    // note: this is shallow copy, we shouldn't pass the std::shared_ptr of packet into more than one TrackedMppDataPacket.
-    explicit TrackedMppDataPacket(const std::shared_ptr<mpp::MPPDataPacket> & packet_, MemoryTracker * memory_tracker)
-        : memory_tracker(memory_tracker)
-    {
-        size = estimateAllocatedSize(*packet_);
-        trackAlloc();
-        packet = packet_;
-    }
-
-    explicit TrackedMppDataPacket()
-        : memory_tracker(current_memory_tracker)
-        , packet(std::make_shared<mpp::MPPDataPacket>())
-    {}
-
-    explicit TrackedMppDataPacket(MemoryTracker * memory_tracker)
-        : memory_tracker(memory_tracker)
-        , packet(std::make_shared<mpp::MPPDataPacket>())
-    {}
-
-    void addChunk(std::string && value)
-    {
-        alloc(value.size());
-        packet->add_chunks(value);
-    }
-
-    void serializeByResponse(const tipb::SelectResponse & response)
-    {
-        alloc(response.ByteSizeLong());
-        if (!response.SerializeToString(packet->mutable_data()))
-            throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
+        alloc(_size);
     }
 
     void alloc(size_t delta)
@@ -95,54 +63,106 @@ struct TrackedMppDataPacket
             size += delta;
         }
     }
-    mpp::MPPDataPacket & getPacket()
+
+    void switchMemTracker(MemoryTracker * new_memory_tracker)
     {
-        return *packet;
+        int bak_size = size;
+        freeAll();
+        memory_tracker = new_memory_tracker;
+        alloc(bak_size);
+    }
+    ~MemTrackerWrapper()
+    {
+        freeAll();
     }
 
-
-    void trackAlloc() const;
-
-    void trackFree() const;
-
-    ~TrackedMppDataPacket()
+    void freeAll()
     {
-        trackFree();
-    }
-
-    MemoryTracker * memory_tracker = nullptr;
-    int size = 0;
-    std::shared_ptr<mpp::MPPDataPacket> packet;
-};
-
-struct TmpMemTracker
-{
-    TmpMemTracker(size_t size)
-        : size(size)
-    {
-        if (current_memory_tracker)
-            current_memory_tracker->alloc(size);
-    }
-    void alloc(size_t delta)
-    {
-        if (current_memory_tracker)
+        if (size)
         {
-            current_memory_tracker->alloc(delta);
-            size += delta;
+            if (memory_tracker)
+            {
+                memory_tracker->free(size);
+                size = 0;
+            }
         }
     }
-    ~TmpMemTracker()
+    MemoryTracker * memory_tracker;
+    size_t size = 0;
+};
+
+struct TrackedMppDataPacket
+{
+    explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
+        : mem_tracker_wrapper(estimateAllocatedSize(data), memory_tracker)
     {
-        if (current_memory_tracker)
-            current_memory_tracker->free(size);
+        packet = data;
     }
-    size_t size;
+
+    explicit TrackedMppDataPacket()
+        : mem_tracker_wrapper(0, current_memory_tracker)
+    {}
+
+    explicit TrackedMppDataPacket(MemoryTracker * memory_tracker)
+        : mem_tracker_wrapper(0, memory_tracker)
+    {}
+
+    void addChunk(std::string && value)
+    {
+        mem_tracker_wrapper.alloc(value.size());
+        packet.add_chunks(value);
+    }
+
+    void serializeByResponse(const tipb::SelectResponse & response)
+    {
+        mem_tracker_wrapper.alloc(response.ByteSizeLong());
+        if (!response.SerializeToString(packet.mutable_data()))
+            throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
+    }
+
+    void read(const std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> & reader, void * callback)
+    {
+        reader->Read(&packet, callback);
+        mem_tracker_wrapper.freeAll();
+        mem_tracker_wrapper.alloc(estimateAllocatedSize(packet));
+    }
+
+    bool read(const std::unique_ptr<::grpc::ClientReader<::mpp::MPPDataPacket>> & reader)
+    {
+        bool ret = reader->Read(&packet);
+        mem_tracker_wrapper.freeAll();
+        mem_tracker_wrapper.alloc(estimateAllocatedSize(packet));
+        return ret;
+    }
+
+    void switchMemTracker(MemoryTracker * new_memory_tracker)
+    {
+        mem_tracker_wrapper.switchMemTracker(new_memory_tracker);
+    }
+
+    bool hasError() const
+    {
+        return packet.has_error();
+    }
+
+    const ::mpp::Error & error() const
+    {
+        return packet.error();
+    }
+
+    mpp::MPPDataPacket & getPacket()
+    {
+        return packet;
+    }
+
+    MemTrackerWrapper mem_tracker_wrapper;
+    mpp::MPPDataPacket packet;
 };
 
 struct TrackedSelectResp
 {
-    TrackedSelectResp(tipb::SelectResponse * response)
-        : memory_tracker(response->ByteSizeLong())
+    explicit TrackedSelectResp(tipb::SelectResponse * response)
+        : memory_tracker(response->ByteSizeLong(), current_memory_tracker)
         , response(response)
     {}
 
@@ -153,7 +173,7 @@ struct TrackedSelectResp
         dag_chunk->set_rows_data(value);
     }
 
-    TmpMemTracker memory_tracker;
+    MemTrackerWrapper memory_tracker;
     tipb::SelectResponse * response;
 };
 

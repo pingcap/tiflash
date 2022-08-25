@@ -67,19 +67,19 @@ bool pushPacket(size_t source_index,
 
     const mpp::Error * error_ptr = nullptr;
     auto & packet = tracked_packet->packet;
-    if (packet->has_error())
-        error_ptr = &packet->error();
+    if (packet.has_error())
+        error_ptr = &packet.error();
     const String * resp_ptr = nullptr;
-    if (!packet->data().empty())
-        resp_ptr = &packet->data();
+    if (!packet.data().empty())
+        resp_ptr = &packet.data();
 
     if constexpr (enable_fine_grained_shuffle)
     {
         std::vector<std::vector<const String *>> chunks(msg_channels.size());
-        if (!packet->chunks().empty())
+        if (!packet.chunks().empty())
         {
             // Packet not empty.
-            if (unlikely(packet->stream_ids().empty()))
+            if (unlikely(packet.stream_ids().empty()))
             {
                 // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
                 // This can happen when there are old version nodes when upgrading.
@@ -91,12 +91,12 @@ bool pushPacket(size_t source_index,
             }
             // packet.stream_ids[i] is corresponding to packet.chunks[i],
             // indicating which stream_id this chunk belongs to.
-            assert(packet->chunks_size() == packet->stream_ids_size());
+            assert(packet.chunks_size() == packet.stream_ids_size());
 
-            for (int i = 0; i < packet->stream_ids_size(); ++i)
+            for (int i = 0; i < packet.stream_ids_size(); ++i)
             {
-                UInt64 stream_id = packet->stream_ids(i) % msg_channels.size();
-                chunks[stream_id].push_back(&packet->chunks(i));
+                UInt64 stream_id = packet.stream_ids(i) % msg_channels.size();
+                chunks[stream_id].push_back(&packet.chunks(i));
             }
         }
         // Still need to send error_ptr or resp_ptr even if packet.chunks_size() is zero.
@@ -124,10 +124,10 @@ bool pushPacket(size_t source_index,
     }
     else
     {
-        std::vector<const String *> chunks(packet->chunks_size());
-        for (int i = 0; i < packet->chunks_size(); ++i)
+        std::vector<const String *> chunks(packet.chunks_size());
+        for (int i = 0; i < packet.chunks_size(); ++i)
         {
-            chunks[i] = &packet->chunks(i);
+            chunks[i] = &packet.chunks(i);
         }
 
         if (!(resp_ptr == nullptr && error_ptr == nullptr && chunks.empty()))
@@ -191,7 +191,7 @@ public:
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
-            packet = std::make_shared<MPPDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>();
 
         start();
     }
@@ -213,7 +213,7 @@ public:
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
                 ++read_packet_index;
-            if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->has_error())
+            if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->hasError())
                 notifyReactor();
             else
                 reader->read(packets[read_packet_index], thisAsUnaryCallback());
@@ -319,7 +319,7 @@ private:
     MPPDataPacketPtr getErrorPacket() const
     {
         // only the last packet may has error, see execute().
-        if (read_packet_index != 0 && packets[read_packet_index - 1]->has_error())
+        if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
             return packets[read_packet_index - 1];
         return nullptr;
     }
@@ -370,7 +370,7 @@ private:
                 if (!pushPacket<enable_fine_grained_shuffle, false>(
                         request->source_index,
                         req_info,
-                        std::make_shared<DB::TrackedMppDataPacket>(packet, current_memory_tracker),
+                        packet,
                         *msg_channels,
                         log))
                     return false;
@@ -381,7 +381,7 @@ private:
                 return false;
             }
             // can't reuse packet since it is sent to readers.
-            packet = std::make_shared<MPPDataPacket>();
+            packet = std::make_shared<TrackedMppDataPacket>();
         }
         return true;
     }
@@ -616,18 +616,18 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             for (;;)
             {
                 LOG_FMT_TRACE(log, "begin next ");
-                MPPDataPacketPtr packet = std::make_shared<MPPDataPacket>();
+                MPPDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
                 bool success = reader->read(packet);
                 if (!success)
                     break;
                 has_data = true;
-                if (packet->has_error())
+                if (packet->hasError())
                     throw Exception("Exchange receiver meet error : " + packet->error().msg());
 
                 if (!pushPacket<enable_fine_grained_shuffle, true>(
                         req.source_index,
                         req_info,
-                        std::make_shared<DB::TrackedMppDataPacket>(packet, current_memory_tracker),
+                        packet,
                         msg_channels,
                         log))
                 {
@@ -704,7 +704,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     auto & packet = recv_msg->packet->packet;
 
     // Record total packet size even if fine grained shuffle is enabled.
-    detail.packet_bytes = packet->ByteSizeLong();
+    detail.packet_bytes = packet.ByteSizeLong();
 
     for (const String * chunk : recv_msg->chunks)
     {
