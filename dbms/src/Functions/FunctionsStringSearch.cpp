@@ -17,7 +17,6 @@
 #include <Common/Volnitsky.h>
 #include <Common/config.h>
 #include <DataTypes/DataTypeFixedString.h>
-#include <Functions/CollationOperatorOptimized.h>
 #include <Functions/CollationStringSearch.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsStringSearch.h>
@@ -25,6 +24,7 @@
 #include <Functions/StringUtil.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
 

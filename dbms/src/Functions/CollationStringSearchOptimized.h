@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/UTF8Helpers.h>
-#include <Functions/CollationOperatorOptimized.h>
 #include <Storages/Transaction/CollatorUtils.h>
 #include <common/mem_utils_opt.h>
 

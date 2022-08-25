@@ -33,7 +33,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Functions/CollationOperatorOptimized.h>
+#include <Functions/CollationStringComparision.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsLogical.h>
 #include <Functions/IFunction.h>
@@ -558,7 +558,8 @@ struct NameStrcmp
 template <
     template <typename, typename>
     class Op,
-    typename Name>
+    typename Name,
+    typename DefaultReturnColumnType = ColumnUInt8>
 class FunctionComparison : public IFunction
 {
 public:
@@ -803,7 +804,7 @@ private:
 
     friend class FunctionStrcmp;
 
-    template <typename ReturnColumnType = ColumnUInt8>
+    template <typename ReturnColumnType = DefaultReturnColumnType>
     bool executeString(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
@@ -1299,7 +1300,8 @@ public:
     }
 };
 
-class FunctionStrcmp : public FunctionComparison<CmpOp, NameStrcmp>
+using StrcmpReturnColumnType = ColumnInt8;
+class FunctionStrcmp : public FunctionComparison<CmpOp, NameStrcmp, StrcmpReturnColumnType>
 {
 public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrcmp>(); };
@@ -1309,7 +1311,7 @@ public:
         const IColumn * col_left_untyped = block.getByPosition(arguments[0]).column.get();
         const IColumn * col_right_untyped = block.getByPosition(arguments[1]).column.get();
 
-        bool success = executeString<ColumnInt8>(block, result, col_left_untyped, col_right_untyped);
+        bool success = executeString<StrcmpReturnColumnType>(block, result, col_left_untyped, col_right_untyped);
         if (!success)
         {
             throw Exception(

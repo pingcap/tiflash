@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnsNumber.h>
+#include <Core/AccurateComparison.h>
+#include <Functions/CollationOperatorOptimized.h>
 #include <Functions/CollationStringSearch.h>
 #include <Functions/CollationStringSearchOptimized.h>
 
@@ -49,5 +52,75 @@ template bool StringPatternMatch<false>(
     uint8_t escape_char,
     const TiDB::TiDBCollatorPtr & collator,
     PaddedPODArray<UInt8> & c);
+
+
+#ifdef M
+static_assert(false, "`M` is defined");
+#endif
+
+template <typename Op, typename Result>
+bool CompareStringVectorStringVector(
+    const ColumnString::Chars_t & a_data,
+    const ColumnString::Offsets & a_offsets,
+    const ColumnString::Chars_t & b_data,
+    const ColumnString::Offsets & b_offsets,
+    const TiDB::TiDBCollatorPtr & collator,
+    Result & c)
+{
+    return CompareStringVectorStringVectorImpl<Op>(a_data, a_offsets, b_data, b_offsets, collator, c);
+}
+
+#define M(OP, Column)                                                                                \
+    template bool CompareStringVectorStringVector<OP<int, int>, PaddedPODArray<Column::value_type>>( \
+        const ColumnString::Chars_t & a_data,                                                        \
+        const ColumnString::Offsets & a_offsets,                                                     \
+        const ColumnString::Chars_t & b_data,                                                        \
+        const ColumnString::Offsets & b_offsets,                                                     \
+        const TiDB::TiDBCollatorPtr & collator,                                                      \
+        PaddedPODArray<Column::value_type> & c)
+
+
+M(EqualsOp, ColumnUInt8);
+M(NotEqualsOp, ColumnUInt8);
+M(LessOp, ColumnUInt8);
+M(GreaterOp, ColumnUInt8);
+M(LessOrEqualsOp, ColumnUInt8);
+M(GreaterOrEqualsOp, ColumnUInt8);
+M(ReversedCmpOp, ColumnInt8);
+M(CmpOp, ColumnInt8);
+
+#undef M
+
+template <typename Op, typename Result>
+bool CompareStringVectorConstant(
+    const ColumnString::Chars_t & a_data,
+    const ColumnString::Offsets & a_offsets,
+    const std::string_view & _b,
+    const TiDB::TiDBCollatorPtr & collator,
+    Result & c)
+{
+    return CompareStringVectorConstantImpl<Op>(a_data, a_offsets, _b, collator, c);
+}
+
+#define M(OP, Column)                                                                            \
+    template bool CompareStringVectorConstant<OP<int, int>, PaddedPODArray<Column::value_type>>( \
+        const ColumnString::Chars_t & a_data,                                                    \
+        const ColumnString::Offsets & a_offsets,                                                 \
+        const std::string_view & _b,                                                             \
+        const TiDB::TiDBCollatorPtr & collator,                                                  \
+        PaddedPODArray<Column::value_type> & c)
+
+
+M(EqualsOp, ColumnUInt8);
+M(NotEqualsOp, ColumnUInt8);
+M(LessOp, ColumnUInt8);
+M(GreaterOp, ColumnUInt8);
+M(LessOrEqualsOp, ColumnUInt8);
+M(GreaterOrEqualsOp, ColumnUInt8);
+M(ReversedCmpOp, ColumnInt8);
+M(CmpOp, ColumnInt8);
+
+#undef M
+
 
 } // namespace DB
