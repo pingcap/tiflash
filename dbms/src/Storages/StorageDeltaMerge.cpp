@@ -259,7 +259,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
             {
                 throw PrimaryKeyNotMatchException(*pks.begin(), actual_pri_keys[0]);
             }
-            // fallover
+            // fallthrough
         }
 
         // Unknown bug, throw an exception.

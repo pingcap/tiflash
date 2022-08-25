@@ -107,7 +107,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
+    {tipb::ScalarFuncSig::CastTimeAsDuration, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
 
     //{tipb::ScalarFuncSig::CastDurationAsInt, "cast"},
@@ -610,7 +610,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
-    //{tipb::ScalarFuncSig::Elt, "cast"},
+    {tipb::ScalarFuncSig::Elt, "elt"},
     //{tipb::ScalarFuncSig::ExportSet3Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet4Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet5Arg, "cast"},

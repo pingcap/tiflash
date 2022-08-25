@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/schema.pb.h>
 
 #include <optional>
 
@@ -421,5 +422,6 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
+ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
 
 } // namespace TiDB

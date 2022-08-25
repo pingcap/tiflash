@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Debug/MockStorage.h>
 #include <Debug/astToExecutor.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
@@ -71,9 +72,10 @@ public:
 
     std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
+    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfoVec & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns);
 
     DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
@@ -92,10 +94,23 @@ public:
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
-    // Currently only support inner join, left join and right join.
-    // TODO support more types of join.
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAstVec exprs);
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, MockAstVec exprs, tipb::JoinType tp);
+    /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
+    /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.
+    /// Note that since our framework does not support qualified column name yet, while building column reference
+    /// the first column with the matching name in correspoding table(s) will be used.
+    /// todo: support qualified name column reference in expression
+    ///
+    /// @param join_col_exprs matching columns for the joined table, which must have the same name
+    /// @param left_conds conditional expressions which only reference left table and the join type is left kind
+    /// @param right_conds conditional expressions which only reference right table and the join type is right kind
+    /// @param other_conds other conditional expressions
+    /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in);
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs)
+    {
+        return join(right, tp, join_col_exprs, {}, {}, {}, {});
+    }
+
 
     // aggregation
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
@@ -149,21 +164,17 @@ public:
     void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
     void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns);
 
-    std::unordered_map<String, ColumnsWithTypeAndName> & executorIdColumnsMap() { return executor_id_columns_map; }
-
-    DAGRequestBuilder scan(String db_name, String table_name);
-    DAGRequestBuilder receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder scan(const String & db_name, const String & table_name);
+    DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
 
     void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
     Int32 getCollation() const { return abs(collation); }
 
+    MockStorage & mockStorage() { return mock_storage; }
+
 private:
     size_t index;
-    std::unordered_map<String, MockColumnInfoVec> mock_tables;
-    std::unordered_map<String, MockColumnInfoVec> exchange_schemas;
-    std::unordered_map<String, ColumnsWithTypeAndName> mock_table_columns;
-    std::unordered_map<String, ColumnsWithTypeAndName> mock_exchange_columns;
-    std::unordered_map<String, ColumnsWithTypeAndName> executor_id_columns_map; /// <executor_id, columns>
+    MockStorage mock_storage;
 
 public:
     // Currently don't support task_id, so the following to structure is useless,

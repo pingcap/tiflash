@@ -64,6 +64,8 @@ struct WorkloadOptions
 
     bool is_fast_scan;
 
+    bool enable_read_thread;
+
     std::string toString(std::string seperator = "\n") const;
     std::pair<bool, std::string> parseOptions(int argc, char * argv[]);
     void initFailpoints() const;

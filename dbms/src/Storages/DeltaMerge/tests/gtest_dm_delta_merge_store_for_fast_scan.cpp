@@ -18,7 +18,6 @@
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-
 /// This test file is mainly test on the correctness of read in fast mode.
 /// Because the basic functions are tested in gtest_dm_delta_merge_storage.cpp, we will not cover it here.
 
@@ -1209,13 +1208,13 @@ try
 
     store->mergeDeltaAll(*db_context);
 
-    // could do clean read with handle optimization
+    // could do clean read with handle and del optimization
     {
         const auto & columns = store->getTableColumns();
         ColumnDefines real_columns;
         for (const auto & col : columns)
         {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME)
+            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             {
                 real_columns.emplace_back(col);
             }

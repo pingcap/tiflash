@@ -97,6 +97,11 @@ ColumnFileBig * ColumnFile::tryToBigFile()
     return !isBigFile() ? nullptr : static_cast<ColumnFileBig *>(this);
 }
 
+ColumnFilePersisted * ColumnFile::tryToColumnFilePersisted()
+{
+    return !isPersisted() ? nullptr : static_cast<ColumnFilePersisted *>(this);
+}
+
 template <class T>
 String columnFilesToString(const T & column_files)
 {
