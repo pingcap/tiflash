@@ -1119,6 +1119,10 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
         alloc_size = std::max(alloc_size, biggest_page_size);
     }
+    else
+    {
+        alloc_size = total_page_size;
+    }
 
     BlobFileOffset remaining_page_size = total_page_size - alloc_size;
 
@@ -1531,7 +1535,7 @@ void BlobStore::BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size
     if (!smap->markUsed(offset, buf_size))
     {
         smap->logDebugString();
-        throw Exception(fmt::format("Restore postion from BlobStat failed, the space/subspace is already being used [offset={}] [buf_size={}] [blob_id={}]",
+        throw Exception(fmt::format("Restore position from BlobStat failed, the space/subspace is already being used [offset={}] [buf_size={}] [blob_id={}]",
                                     offset,
                                     buf_size,
                                     id),
