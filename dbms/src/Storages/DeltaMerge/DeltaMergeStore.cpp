@@ -2467,10 +2467,6 @@ void DeltaMergeStore::applyAlters(
         }
         if (table_info.value().get().replica_info.count == 0)
         {
-            LOG_FMT_INFO(
-                log,
-                "TiFlash replica is 0. Table id:{}",
-                table_info.value().get().id);
             replica_exist.store(false);
         }
     }
