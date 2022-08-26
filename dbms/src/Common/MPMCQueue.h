@@ -353,6 +353,7 @@ private:
 
             /// See comments in `popObj`.
             notifyNext(reader_head);
+            return Status::NORMAL;
         }
         return isNormal() ? Status::FULL : status;
     }
