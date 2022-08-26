@@ -32,7 +32,18 @@ class TestGRPCSendQueue;
 
 using GRPCKickFunc = std::function<grpc_call_error(void *)>;
 
-/// A multi-producer-single-consumer queue dedicated to async grpc send work.
+/// A multi-producer-single-consumer queue dedicated to async grpc streaming send work.
+///
+/// In streaming rpc, a client/server may send messages continuous.
+/// However, async grpc is only allowed to have one outstanding write on the
+/// same side of the same stream without waiting for the completion queue.
+/// Further more, the message usually is generated from another thread which
+/// introduce a race between this thread and grpc threads.
+/// The grpc cpp framework provides a tool named `Alarm` can be used to push a tag into
+/// completion queue thus the write can be done in grpc threads. But `Alarm` must need
+/// a timeout and it uses a timer to trigger the notification, which is wasteful if we want
+/// to trigger it immediately.
+/// So we can say `GRPCSendQueue` is a immediately-triggered `Alarm`.
 template <typename T>
 class GRPCSendQueue
 {
