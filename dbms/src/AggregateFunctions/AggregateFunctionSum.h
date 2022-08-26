@@ -294,7 +294,7 @@ struct NameSum
 struct NameSumWithOverFlow
 {
     static constexpr auto name = "sumWithOverflow";
-    static std::pair<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
+    static std::tuple<PrecType, ScaleType> decimalInfer(PrecType prec, ScaleType scale)
     {
         return {prec, scale};
     }
