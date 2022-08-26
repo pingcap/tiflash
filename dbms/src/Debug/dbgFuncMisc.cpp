@@ -49,9 +49,9 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
     if (args.size() < 2)
         throw Exception("Args not matched, should be: key, thread_hint", ErrorCodes::BAD_ARGUMENTS);
 
-    String key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     // the candidate line must be printed by a thread which also print a line contains `thread_hint`
-    String tso_hint = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    auto tso_hint = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     auto log_path = context.getConfigRef().getString("logger.log");
 
     std::ifstream file(log_path);
