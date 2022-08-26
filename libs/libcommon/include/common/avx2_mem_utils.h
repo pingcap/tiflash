@@ -190,6 +190,11 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             p2 += loop_block32x4_size;
         }
         // n < 4 * 32
+        if (unlikely(n <= BLOCK32_SIZE))
+        {
+            return check_block32_eq(p1 + n - BLOCK32_SIZE, p2 + n - BLOCK32_SIZE);
+        }
+        // 32 < n < 4 * 32
     }
 
     if (unlikely(n <= 2 * BLOCK32_SIZE))

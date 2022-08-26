@@ -41,14 +41,19 @@ FLATTEN_INLINE_PURE static inline bool IsRawStrEqual(const std::string_view & lh
 void BaseTestFunc(size_t size,
                   size_t first_fail_pos)
 {
-    std::string a(size, '0');
-    std::string b = a;
+    std::string oa(size + 2, '0');
+    oa[size] = char(1);
+    std::string ob = oa;
+    ob[size] = char(2);
+
+    std::string_view a{oa.data(), size};
+    std::string_view b{ob.data(), size};
     ASSERT_TRUE(IsRawStrEqual(a, b));
     ASSERT_EQ(nullptr, mem_utils::avx2_memchr(a.data(), size, '1'));
 
     if (size == first_fail_pos)
         return;
-    b[first_fail_pos] = '1';
+    ob[first_fail_pos] = '1';
     ASSERT_FALSE(IsRawStrEqual(a, b));
     ASSERT_EQ(first_fail_pos, mem_utils::avx2_strstr(b, "1"));
 }
