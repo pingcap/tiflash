@@ -252,7 +252,7 @@ protected:
         for (int i = 0; i < reader_cnt; ++i)
         {
             readers[i].join();
-            ASSERT_EQ(reader_results[i], 0);
+            ASSERT_EQ(reader_results[i], MPMCQueueStatus::EMPTY);
         }
 
         ASSERT_EQ(queue.size(), 0);
@@ -291,7 +291,7 @@ protected:
         for (int i = 0; i < reader_cnt; ++i)
         {
             readers[i].join();
-            ASSERT_EQ(reader_results[i], 0);
+            ASSERT_EQ(reader_results[i], MPMCQueueStatus::EMPTY);
         }
 
         for (int i = 0; i < 10; ++i)
@@ -655,17 +655,17 @@ try
     MPMCQueue<int> q(2);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_FALSE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
+    ASSERT_TRUE(q.push(1) == MPMCQueueStatus::NORMAL);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
     int val;
-    ASSERT_TRUE(q.pop(val));
+    ASSERT_TRUE(q.pop(val) == MPMCQueueStatus::NORMAL);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_FALSE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
+    ASSERT_TRUE(q.push(1) == MPMCQueueStatus::NORMAL);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
+    ASSERT_TRUE(q.push(1) == MPMCQueueStatus::NORMAL);
     ASSERT_FALSE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
 
@@ -673,10 +673,10 @@ try
     ASSERT_FALSE(q.finish());
 
     //check isNextPush/PopNonBlocking after finish
-    ASSERT_TRUE(q.pop(val));
+    ASSERT_TRUE(q.pop(val) == MPMCQueueStatus::NORMAL);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.pop(val));
+    ASSERT_TRUE(q.pop(val) == MPMCQueueStatus::NORMAL);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
 }

@@ -292,7 +292,7 @@ private:
 
         InputData input;
 
-        while (work.unprepared_inputs.tryPop(input))
+        while (work.unprepared_inputs.tryPop(input) == MPMCQueueStatus::NORMAL)
         {
             input.in->readPrefix();
 
@@ -301,7 +301,7 @@ private:
 
         // The condition is false when all input streams are exhausted or
         // an exception occurred then the queue was cancelled.
-        while (work.available_inputs.pop(input))
+        while (work.available_inputs.pop(input) == MPMCQueueStatus::NORMAL)
         {
             /// The main work.
             Block block = input.in->read();
