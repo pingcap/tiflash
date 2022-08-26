@@ -559,7 +559,7 @@ template <
     template <typename, typename>
     class Op,
     typename Name,
-    typename DefaultReturnColumnType = ColumnUInt8>
+    typename StrCmpRetColType = ColumnUInt8>
 class FunctionComparison : public IFunction
 {
 public:
@@ -804,7 +804,6 @@ private:
 
     friend class FunctionStrcmp;
 
-    template <typename ReturnColumnType = DefaultReturnColumnType>
     bool executeString(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
@@ -816,9 +815,9 @@ private:
             return false;
 
         if (collator != nullptr)
-            return executeStringWithCollator<ReturnColumnType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
+            return executeStringWithCollator<StrCmpRetColType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
         else
-            return executeStringWithoutCollator<ReturnColumnType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
+            return executeStringWithoutCollator<StrCmpRetColType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
     }
 
     void executeDateOrDateTimeOrEnumWithConstString(
@@ -1311,7 +1310,7 @@ public:
         const IColumn * col_left_untyped = block.getByPosition(arguments[0]).column.get();
         const IColumn * col_right_untyped = block.getByPosition(arguments[1]).column.get();
 
-        bool success = executeString<StrcmpReturnColumnType>(block, result, col_left_untyped, col_right_untyped);
+        bool success = executeString(block, result, col_left_untyped, col_right_untyped);
         if (!success)
         {
             throw Exception(
