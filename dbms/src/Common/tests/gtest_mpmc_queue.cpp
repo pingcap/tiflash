@@ -97,7 +97,7 @@ protected:
                 throw_exp();
             if (try_op && ((push && op_ret != MPMCQueueStatus::FULL) || (!push && op_ret != MPMCQueueStatus::EMPTY)))
                 throw_exp();
-            if (!try_op && op_ret != MPMCQueueStatus::NORMAL)
+            if (!try_op && !timed_op && op_ret != MPMCQueueStatus::NORMAL)
                 throw_exp();
         }
         else
