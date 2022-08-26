@@ -185,6 +185,11 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows)
     std::pair<Int64, Int64> keys = getSegmentKeyRange(segment);
     Int64 start_key = keys.first;
     Int64 end_key = keys.second;
+
+    // If the length of segment key range is larger than `write_rows`, then
+    // write the new data with the same tso in one block.
+    // Otherwise create multiple block with increasing tso until the `remain_row_num`
+    // down to 0.
     UInt64 remain_row_num = 0;
     if (static_cast<UInt64>(end_key - start_key) > write_rows)
     {
@@ -256,6 +261,11 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
     std::pair<Int64, Int64> keys = getSegmentKeyRange(segment);
     Int64 start_key = keys.first;
     Int64 end_key = keys.second;
+
+    // If the length of segment key range is larger than `write_rows`, then
+    // write the new data with the same tso in one block.
+    // Otherwise create multiple block with increasing tso until the `remain_row_num`
+    // down to 0.
     UInt64 remain_row_num = 0;
     if (static_cast<UInt64>(end_key - start_key) > write_rows)
     {
@@ -292,6 +302,11 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id)
     std::pair<Int64, Int64> keys = getSegmentKeyRange(segment);
     Int64 start_key = keys.first;
     Int64 end_key = keys.second;
+
+    // If the length of segment key range is larger than `write_rows`, then
+    // write the new data with the same tso in one block.
+    // Otherwise create multiple block with increasing tso until the `remain_row_num`
+    // down to 0.
     UInt64 remain_row_num = 0;
     if (static_cast<UInt64>(end_key - start_key) > write_rows)
     {
@@ -408,7 +423,7 @@ void SegmentTestBasic::randomSegmentTest(size_t operator_count)
 {
     for (size_t i = 0; i < operator_count; i++)
     {
-        auto op = static_cast<SegmentOperaterType>(random() % SegmentOperaterMax);
+        auto op = static_cast<SegmentOperatorType>(random() % SegmentOperatorMax);
         segment_operator_entries[op]();
     }
 }
@@ -483,7 +498,6 @@ void SegmentTestBasic::setColumns(const ColumnDefinesPtr & columns)
     dm_context = std::make_unique<DMContext>(*db_context,
                                              *storage_path_pool,
                                              *storage_pool,
-                                             0,
                                              /*min_version_*/ 0,
                                              settings.not_compress_columns,
                                              options.is_common_handle,
