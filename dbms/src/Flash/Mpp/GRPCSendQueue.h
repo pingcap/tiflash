@@ -42,8 +42,8 @@ using GRPCKickFunc = std::function<grpc_call_error(void *)>;
 /// The grpc cpp framework provides a tool named `Alarm` can be used to push a tag into
 /// completion queue thus the write can be done in grpc threads. But `Alarm` must need
 /// a timeout and it uses a timer to trigger the notification, which is wasteful if we want
-/// to trigger it immediately.
-/// So we can say `GRPCSendQueue` is a immediately-triggered `Alarm`.
+/// to trigger it immediately. So we can say `kickCompletionQueue` function is a
+/// immediately-triggered `Alarm`.
 template <typename T>
 class GRPCSendQueue
 {
