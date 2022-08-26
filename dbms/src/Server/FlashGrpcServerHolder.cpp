@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #include <Server/FlashGrpcServerHolder.h>
+#include <Flash/Mpp/EstablishCall.h>
 
 namespace DB
 {

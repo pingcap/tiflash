@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/TiFlashSecurity.h>
-#include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
@@ -34,7 +33,7 @@
 namespace DB
 {
 class IServer;
-class EstablishCallData;
+class IAsyncCallData;
 
 using MockStorage = tests::MockStorage;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
@@ -73,7 +72,7 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-    std::pair<::grpc::Status, std::string> establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, EstablishCallData * calldata);
+    std::pair<::grpc::Status, std::string> establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, IAsyncCallData * call_data);
 
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * grpc_context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer) override
     {

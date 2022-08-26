@@ -14,8 +14,8 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
-#include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
+#include <Flash/Mpp/EstablishCall.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 

@@ -222,7 +222,7 @@ grpc::Status FlashService::Coprocessor(
 std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
                                                                                        const ::mpp::EstablishMPPConnectionRequest * request,
                                                                                        ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
-                                                                                       EstablishCallData * calldata)
+                                                                                       IAsyncCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
@@ -264,7 +264,7 @@ std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncO
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
     if (tunnel == nullptr)
     {
-        if (calldata)
+        if (call_data)
         {
             LOG_ERROR(log, err_msg);
             return {grpc::Status::OK, err_msg};
@@ -284,10 +284,10 @@ std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncO
         }
     }
     Stopwatch stopwatch;
-    if (calldata)
+    if (call_data)
     {
-        // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
-        tunnel->connectAsync(calldata);
+        // In async mode, this function won't wait for the request done and the finish event is handled in IAsyncCallData.
+        tunnel->connectAsync(call_data);
     }
     else
     {
