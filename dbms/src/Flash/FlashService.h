@@ -22,7 +22,6 @@
 
 #include <boost/noncopyable.hpp>
 
-#include "grpcpp/impl/codegen/status.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"

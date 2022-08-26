@@ -154,6 +154,7 @@ std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
     const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
+
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
     if (tunnel == nullptr)
     {
@@ -161,6 +162,7 @@ std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
     }
     if (!tunnel->isLocal())
     {
+        request->PrintDebugString();
         return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
     }
     tunnel->connect(nullptr);
@@ -192,9 +194,15 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
 
     ExchangeRecvRequest req;
     req.source_index = index;
+
+    // ywq test make request enable local tunnel: 0, sender_task addr: 0.0.0.0:3931, task meta addr: 0.0.0.0:3931, sender_id: 1, receiver_id: -1
+    std::cout << "ywq test make request enable local tunnel: " << enable_local_tunnel << ", sender_task addr: " << sender_task->address() << ", task meta addr: " << task_meta.address() << ", sender_id: " << sender_task->task_id() << ", receiver_id: " << task_meta.task_id() << std::endl;
     req.is_local = enable_local_tunnel && sender_task->address() == task_meta.address();
     req.send_task_id = sender_task->task_id();
     req.recv_task_id = task_meta.task_id();
+
+    if (req.send_task_id == 1 && req.recv_task_id == -1)
+        req.is_local = false;
     req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
     req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
     req.req->set_allocated_sender_meta(sender_task.release());

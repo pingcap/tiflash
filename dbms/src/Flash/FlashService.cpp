@@ -270,6 +270,7 @@ grpc::Status FlashService::Coprocessor(
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    std::cout << "ywq test fuck:" << task_manager->toString() << std::endl;
     if (tunnel == nullptr)
     {
         if (calldata)
@@ -298,6 +299,7 @@ grpc::Status FlashService::Coprocessor(
     if (calldata)
     {
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
+        std::cout << "ywq test tunnel, is local: " << tunnel->isLocal() << ", id: " << tunnel->id() << std::endl;
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }

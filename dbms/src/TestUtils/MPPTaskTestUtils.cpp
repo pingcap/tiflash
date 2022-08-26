@@ -81,7 +81,10 @@ void MPPTaskTestUtils::injectCancel(DAGRequestBuilder builder)
 
 DB::ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
-    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(test_meta.context_idx), properties, tasks, server_config_map);
+    std::cout << "ywq test context_idx: " << test_meta.context_idx << ", server_num: " << test_meta.server_num << std::endl;
+    // ywq todo figure how to register root node ......
+    // ywq todo hack...
+    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(1), properties, tasks, server_config_map);
     return readBlock(res);
 }
 

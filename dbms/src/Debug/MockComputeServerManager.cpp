@@ -96,8 +96,6 @@ void MockComputeServerManager::prepareMockMPPServerInfo()
 {
     for (const auto & server : server_map)
     {
-        auto t = getMockMPPServerInfo(server.first);
-        std::cout << "partition_id: " << t.partition_id << ", partition_num: " << t.partition_num << std::endl;
         server.second->setMockMPPServerInfo(getMockMPPServerInfo(server.first));
     }
 }

@@ -116,9 +116,12 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
 
 void TiFlashTestEnv::shutdown()
 {
-    global_contexts[0]->getTMTContext().setStatusTerminated();
-    global_contexts[0]->shutdown();
-    global_contexts[0].reset();
+    for (auto & context : global_contexts)
+    {
+        context->getTMTContext().setStatusTerminated();
+        context->shutdown();
+        context.reset();
+    }
 }
 
 void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)

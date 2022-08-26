@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "TestUtils/TiFlashTestEnv.h"
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Common/typeid_cast.h>
@@ -184,7 +185,7 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
-BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel)
+BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel[[maybe_unused]])
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
     for (const auto root_task_id : root_task_ids)
@@ -194,9 +195,12 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
         tm.set_address(Debug::LOCAL_HOST);
         tm.set_task_id(root_task_id);
         tm.set_partition_id(-1);
+        std::cout << "ywq test root task id: " << root_task_id << std::endl;
         auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
         tm.AppendToString(tm_string);
+        break; /// only one root task..
     }
+
     for (auto & field : root_task_schema)
     {
         auto tipb_type = TiDB::columnInfoToFieldType(field.second);
@@ -204,11 +208,22 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
         auto * field_type = tipb_exchange_receiver.add_field_types();
         *field_type = tipb_type;
     }
+    // ywq todo....
     mpp::TaskMeta root_tm;
     root_tm.set_start_ts(properties.start_ts);
-    root_tm.set_address(Debug::LOCAL_HOST);
+    // ywq todo just a hack..
+    root_tm.set_address("0.0.0.0:3930");
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
+
+    for (int i = 0; i < tests::TiFlashTestEnv::globalContextSize(); ++i)
+    {
+        auto & context = tests::TiFlashTestEnv::getGlobalContext(i);
+        std::cout << "ywq test root node" <<i << ":" << context.getTMTContext().getMPPTaskManager()->toString() << std::endl;
+        // context.getTMTContext().getMPPTaskManager()
+    }
+
+    // ywq todo add a interface don't use different context.....
     std::shared_ptr<ExchangeReceiver> exchange_receiver
         = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
@@ -216,7 +231,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
                 root_tm,
                 context.getTMTContext().getKVCluster(),
                 context.getTMTContext().getMPPTaskManager(),
-                enable_local_tunnel,
+                true,
                 context.getSettingsRef().enable_async_grpc_client),
             tipb_exchange_receiver.encoded_task_meta_size(),
             10,
@@ -312,18 +327,20 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;
+    std::cout << "ywq test query tasks size: " << query_tasks.size() << std::endl;
     for (auto & task : query_tasks)
     {
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
         auto addr = server_config_map[task.partition_id].addr;
-
         std::cout << "ywq test addr: " << addr << ", partition_id: " << task.partition_id << std::endl;
         prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, addr);
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
         client.runDispatchMPPTask(req);
     }
-    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, true);
+
+    // ywq todo enable local tunnel.....
+    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, tests::TiFlashTestEnv::globalContextSize() < 2);
 }
 
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)

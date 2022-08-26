@@ -41,17 +41,8 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mp
     bool cancelled = false;
     String error_message;
     std::unique_lock lock(mu);
+    std::cout << "ywq test find tuunel with timeout, ts = " << meta.start_ts() << ", task_id = " << meta.task_id() << std::endl;
     auto ret = cv.wait_for(lock, timeout, [&] {
-        for (auto kv : mpp_query_map)
-        {
-            std::cout << "ywq test query map: " << kv.first << std::endl;
-            std::cout << "ywq test task id: " << std::endl;
-
-            for (auto kkv : kv.second->task_map)
-            {
-                std::cout << kkv.first.toString() << ", ";
-            }
-        }
         auto query_it = mpp_query_map.find(id.start_ts);
         // TODO: how about the query has been cancelled in advance?
         if (query_it == mpp_query_map.end())

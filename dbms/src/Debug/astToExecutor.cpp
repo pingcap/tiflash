@@ -832,6 +832,7 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         meta.set_partition_id(mpp_info.partition_id);
         auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
+        std::cout << "ywq test construct sender, task_id: " << task_id << ", partition_id: " << mpp_info.partition_id << ", addr: " << addr << std::endl;
 
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
@@ -874,6 +875,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
+        std::cout << "ywq test ismpp test ywq: " << context.isMPPTest() << std::endl;
         auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();

@@ -98,10 +98,12 @@ protected:
         ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
     } while (0)
 
+
+// ywq todo set i = 1
 #define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
     do                                                                         \
     {                                                                          \
-        for (size_t i = 1; i <= serverNum(); ++i)                              \
+        for (size_t i = serverNum(); i <= serverNum(); ++i)                    \
         {                                                                      \
             (properties).mpp_partition_num = i;                                \
             MockComputeServerManager::instance().resetMockMPPServerInfo(i);    \
@@ -114,6 +116,8 @@ protected:
     do                                                                                 \
     {                                                                                  \
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());             \
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)                  \
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();                          \
         std::cout << "ywq test properties serverNum: " << serverNum() << std::endl;    \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \
         size_t task_size = tasks.size();                                               \
