@@ -17,21 +17,12 @@
 #include <fmt/core.h>
 #include <gtest/gtest.h>
 
+#include <cstddef>
+#include <cstring>
 #include <random>
+#include <string_view>
 #include <utility>
 
-struct AlignedCharArray
-{
-    std::align_val_t alignment;
-    char * data;
-
-    AlignedCharArray(size_t size_, std::align_val_t alignment_)
-        : alignment(alignment_)
-        , data(static_cast<char *>(operator new(size_, alignment)))
-    {}
-
-    ~AlignedCharArray() { ::operator delete(data, alignment); }
-};
 
 FLATTEN_INLINE_PURE static inline bool IsRawStrEqual(const std::string_view & lhs, const std::string_view & rhs)
 {
@@ -39,11 +30,7 @@ FLATTEN_INLINE_PURE static inline bool IsRawStrEqual(const std::string_view & lh
         return false;
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#ifdef TIFLASH_USE_AVX2_COMPILE_FLAG
-    return mem_utils::details::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
-#else
     return mem_utils::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
-#endif
 #else
     return 0 == std::memcmp(lhs.data(), rhs.data(), lhs.size());
 #endif
@@ -51,80 +38,100 @@ FLATTEN_INLINE_PURE static inline bool IsRawStrEqual(const std::string_view & lh
 
 #if defined(TIFLASH_ENABLE_AVX_SUPPORT)
 
-TEST(MemUtilsTestOPT, CompareTrivial)
+void BaseTestFunc(size_t size,
+                  size_t first_fail_pos)
 {
-    for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123", "123"},
-             {"abc", "abc"},
-             {"\v\a\t\n213@3213", "\v\a\t\n213@3213"},
-             {std::string(1024, '@'), std::string(1024, '@')}})
-    {
-        ASSERT_TRUE(IsRawStrEqual(std::string_view(a), std::string_view(b)));
-    }
+    std::string a(size, '0');
+    std::string b = a;
+    ASSERT_TRUE(IsRawStrEqual(a, b));
+    ASSERT_EQ(nullptr, mem_utils::avx2_memchr(a.data(), size, '1'));
 
-    for (auto & [a, b] : std::vector<std::pair<std::string, std::string>>{
-             {"123-", "-123"},
-             {"ab", "abc"},
-             {"\a\t\n213#3213", "\v\a\t\n213@3213"},
-             {std::string(1024, '@'), std::string(1024, '!')}})
-    {
-        ASSERT_FALSE(IsRawStrEqual(std::string_view(a), std::string_view(b)));
-    }
+    if (size == first_fail_pos)
+        return;
+    b[first_fail_pos] = '1';
+    ASSERT_FALSE(IsRawStrEqual(a, b));
+    ASSERT_EQ(first_fail_pos, mem_utils::avx2_strstr(b, "1"));
 }
 
-
-TEST(MemUtilsTestOPT, CompareLongEq)
+TEST(MemUtilsTestOPT, CompareNormal)
 {
-    std::random_device device{};
-    auto seed = device();
-    std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
-    std::string data(1024 * 1024 * 64, ' ');
+    // size not equal
+    ASSERT_FALSE(IsRawStrEqual("123", "1"));
 
-    auto tmp_aligned1 = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
-    auto tmp_aligned2 = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
-    auto * aligned1 = tmp_aligned1.data;
-    auto * aligned2 = tmp_aligned2.data;
-    aligned2 += 23;
-
-    for (auto & i : data)
+    for (size_t size = 0; size < (256 + 128 + 10); ++size)
     {
-        i = dist(eng);
+        for (size_t first_fail_pos = 0; first_fail_pos <= size; ++first_fail_pos)
+        {
+            BaseTestFunc(size, first_fail_pos);
+        }
     }
-
-    strcpy(aligned1, data.data());
-    strcpy(aligned2, data.data());
-
-    ASSERT_TRUE(IsRawStrEqual(std::string_view(aligned1, data.size()), std::string_view(aligned2, data.size()))) << " seed: " << seed;
-}
-
-TEST(MemUtilsTestOPT, CompareLongNe)
-{
-    std::random_device device{};
-    auto seed = device();
-    std::default_random_engine eng{seed};
-    std::uniform_int_distribution<char> dist(1, 'z');
-    std::string data(1024 * 1024 * 64, ' ');
-
-    auto tmp_aligned1 = AlignedCharArray(1024 * 1024 * 64 + 1, std::align_val_t{128});
-    auto tmp_aligned2 = AlignedCharArray(1024 * 1024 * 64 + 23 + 1, std::align_val_t{128});
-    auto * aligned1 = tmp_aligned1.data;
-    auto * aligned2 = tmp_aligned2.data;
-
-    aligned2 += 23;
-
-    for (auto & i : data)
     {
-        i = dist(eng);
+        std::string_view a = "12";
+        std::string_view b = "1234";
+        ASSERT_EQ(mem_utils::avx2_strstr(a, b), -1);
+        a = "";
+        b = "";
+        ASSERT_EQ(mem_utils::avx2_strstr(a, b), 0);
     }
+    for (size_t size = 0; size < 256; ++size)
+    {
+        std::string a(size + 50, char(0));
+        auto * start = reinterpret_cast<char *>((size_t(a.data()) + 32 - 1) / 32 * 32 + 10); // start address not aligned
 
-    strcpy(aligned1, data.data());
-    strcpy(aligned2, data.data());
-
-    auto target = eng() % data.size();
-    aligned2[target] = static_cast<char>(~aligned2[target]);
-
-    ASSERT_FALSE(IsRawStrEqual(std::string_view(aligned1, data.size()), std::string_view(aligned2, data.size()))) << " seed: " << seed;
+        for (size_t first_pos = 0; first_pos < size; ++first_pos)
+        {
+            for (size_t needle_size = 1; needle_size + first_pos <= size; ++needle_size)
+            {
+                std::memset(start + first_pos, -1, needle_size);
+                {
+                    ASSERT_EQ(mem_utils::avx2_strstr(start, size, start + first_pos, needle_size), first_pos);
+                }
+                std::memset(start + first_pos, 0, needle_size);
+            }
+        }
+    }
+    {
+        size_t size = 10;
+        std::string a(size + 50, char(0));
+        auto * start = reinterpret_cast<char *>((size_t(a.data()) + 32 - 1) / 32 * 32 + 10); // start address not aligned
+        start[-5] = 1;
+        start[5] = 1;
+        start[15] = 1;
+        std::string b(2, char(1));
+        ASSERT_EQ(-1,
+                  mem_utils::avx2_strstr({start, size}, b));
+    }
+    {
+        size_t size = 32 - 10 + 6;
+        std::string a(size + 50, char(0));
+        auto * start = reinterpret_cast<char *>((size_t(a.data()) + 32 - 1) / 32 * 32 + 10); // start address not aligned
+        start[-5] = 1;
+        start[23] = 1;
+        start[29] = 1;
+        std::string b(2, char(1));
+        ASSERT_EQ(-1,
+                  mem_utils::avx2_strstr({start, size}, b));
+    }
+    {
+        size_t size = 32 - 10 + 32 + 5;
+        std::string a(size + 50, char(0));
+        auto * start = reinterpret_cast<char *>((size_t(a.data()) + 32 - 1) / 32 * 32 + 10); // start address not aligned
+        start[23] = 1;
+        start[23 + 4] = 1;
+        std::string b(2, char(1));
+        ASSERT_EQ(-1,
+                  mem_utils::avx2_strstr({start, size}, b));
+    }
+    {
+        size_t size = 32 - 10 + 32 * 5 + 5;
+        std::string a(size + 50, char(0));
+        auto * start = reinterpret_cast<char *>((size_t(a.data()) + 32 - 1) / 32 * 32 + 10); // start address not aligned
+        start[22 + 2 * 32] = 1;
+        start[22 + 2 * 32 + 6] = 1;
+        std::string b(2, char(1));
+        ASSERT_EQ(-1,
+                  mem_utils::avx2_strstr({start, size}, b));
+    }
 }
 
 #endif

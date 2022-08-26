@@ -40,7 +40,7 @@ ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * s
 {
     auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
                                         check_block32);
-    for (; mask; mask = clear_rightmost(mask))
+    for (; mask;)
     {
         auto c = get_rightmost_bit_pos(mask);
         // check boundary
@@ -56,6 +56,7 @@ ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * s
             res = t;
             return true;
         }
+        mask = clear_rightmost(mask);
     }
     return false;
 }
@@ -65,7 +66,7 @@ ALWAYS_INLINE static inline bool check_block32_x1(const char * src, const char *
 {
     auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
                                         check_block32);
-    for (; mask; mask = clear_rightmost(mask))
+    for (; mask;)
     {
         const auto * t = src + get_rightmost_bit_pos(mask);
         if (callback(t))
@@ -73,6 +74,7 @@ ALWAYS_INLINE static inline bool check_block32_x1(const char * src, const char *
             res = t;
             return true;
         }
+        mask = clear_rightmost(mask);
     }
     return false;
 }
@@ -103,7 +105,7 @@ ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *
         auto mask = get_block32_cmp_eq_mask(
             reinterpret_cast<const Block32 *>(start),
             check_block32);
-        for (; mask; mask = clear_rightmost(mask))
+        for (; mask;)
         {
             auto c = get_rightmost_bit_pos(mask);
             const auto * t = c + start;
@@ -112,6 +114,7 @@ ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *
                 res = t;
                 return true;
             }
+            mask = clear_rightmost(mask);
         }
     }
     return false;
@@ -134,7 +137,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
                                             check_block32)
             >> rcx;
 
-        for (; mask; mask = clear_rightmost(mask))
+        for (; mask;)
         {
             auto c = get_rightmost_bit_pos(mask);
             if (c >= n)
@@ -142,6 +145,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
             const auto * t = c + src + rcx; // add offset
             if (callback(t))
                 return t;
+            mask = clear_rightmost(mask);
         }
 
         n -= BLOCK32_SIZE - rcx;
@@ -156,18 +160,20 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
 
     assert(size_t(src) % BLOCK32_SIZE == 0);
 
-    for (; (n >= AVX2_UNROLL_NUM * BLOCK32_SIZE); src += AVX2_UNROLL_NUM * BLOCK32_SIZE, n -= AVX2_UNROLL_NUM * BLOCK32_SIZE)
+    for (; (n >= AVX2_UNROLL_NUM * BLOCK32_SIZE);)
     {
         if (check_block32_x4(src, res, check_block32, callback))
             return res;
+        src += AVX2_UNROLL_NUM * BLOCK32_SIZE, n -= AVX2_UNROLL_NUM * BLOCK32_SIZE;
     }
 
     assert(n < AVX2_UNROLL_NUM * BLOCK32_SIZE);
 
-    for (; (n >= BLOCK32_SIZE); n -= BLOCK32_SIZE, src += BLOCK32_SIZE)
+    for (; (n >= BLOCK32_SIZE);)
     {
         if (check_block32_x1(src, res, check_block32, callback))
             return res;
+        n -= BLOCK32_SIZE, src += BLOCK32_SIZE;
     }
 
     if (unlikely(n == 0))
@@ -253,6 +259,10 @@ ALWAYS_INLINE static inline size_t avx2_strstr(std::string_view src, std::string
 }
 ALWAYS_INLINE static inline const char * avx2_memchr(const char * src, size_t n, char target)
 {
+    if (unlikely(n < 1))
+    {
+        return nullptr;
+    }
     return avx2_strstr_impl(
         src,
         target,
