@@ -982,19 +982,18 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Avoid divide by zero
             if (right_margin == 0)
             {
-                // Ignore the BlobFile if it is already truncated
-                if (stat->sm_total_size != 0)
-                {
-                    RUNTIME_CHECK_MSG(stat->sm_valid_size == 0, "Current blob is empty, but valid size is not 0. [blob_id={}] [valid_size={}] [valid_rate={}]", stat->id, stat->sm_valid_size, stat->sm_valid_rate);
+                // Note `stat->sm_total_size` isn't strictly the same as the actual size of underlying BlobFile after restart tiflash,
+                // because some entry may be deleted but the actual disk space is not reclaimed in previous run.
+                // TODO: avoid always truncate on empty BlobFile
+                RUNTIME_CHECK_MSG(stat->sm_valid_size == 0, "Current blob is empty, but valid size is not 0. [blob_id={}] [valid_size={}] [valid_rate={}]", stat->id, stat->sm_valid_size, stat->sm_valid_rate);
 
-                    // If current blob empty, the size of in disk blob may not empty
-                    // So we need truncate current blob, and let it be reused.
-                    auto blobfile = getBlobFile(stat->id);
-                    LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
-                    blobfile->truncate(right_margin);
-                    blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
-                    stat->sm_total_size = right_margin;
-                }
+                // If current blob empty, the size of in disk blob may not empty
+                // So we need truncate current blob, and let it be reused.
+                auto blobfile = getBlobFile(stat->id);
+                LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
+                blobfile->truncate(right_margin);
+                blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
+                stat->sm_total_size = right_margin;
                 continue;
             }
 
