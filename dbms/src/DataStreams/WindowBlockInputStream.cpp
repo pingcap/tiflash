@@ -629,9 +629,6 @@ bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
 
-    if (offset == 0)
-        return true;
-
     const auto block_rows = blockAt(x).rows;
     assert(x.row < block_rows);
 
@@ -666,7 +663,7 @@ bool WindowBlockInputStream::lag(RowNumber & x, size_t offset) const
         return false;
 
     --x.block;
-    size_t new_offset = offset - x.row;
+    size_t new_offset = offset - x.row - 1;
     x.row = blockAt(x.block).rows - 1;
     return lag(x, new_offset);
 }

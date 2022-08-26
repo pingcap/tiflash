@@ -33,13 +33,18 @@ public:
         ExecutorTest::initializeContext();
     }
 
-    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
+    void executeWithConcurrencyAndBlockSize(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
-        for (size_t i = 2; i <= max_concurrency_level; ++i)
+        std::vector<size_t> block_sizes{1, 2, 3, DEFAULT_BLOCK_SIZE};
+        for (auto block_size : block_sizes)
         {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
+            context.context.setSetting("max_block_size", block_size);
+            ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
+            for (size_t i = 2; i <= max_concurrency_level; ++i)
+            {
+                ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
+            }
         }
         WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
@@ -71,7 +76,7 @@ public:
 
         ColumnsWithTypeAndName expect = input;
         expect.push_back(result);
-        executeWithConcurrency(request, expect);
+        executeWithConcurrencyAndBlockSize(request, expect);
     }
 
     template <typename IntType>
@@ -152,8 +157,32 @@ try
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
     executeFunctionAndAssert(
+        toNullableVec<String>({"3", "4", {}, {}, "7", "8", {}, {}}),
+        Lead2(value_col, lit(Field(static_cast<UInt64>(2)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
+    executeFunctionAndAssert(
+        toNullableVec<String>({"4", {}, {}, {}, "8", {}, {}, {}}),
+        Lead2(value_col, lit(Field(static_cast<UInt64>(3)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
+    executeFunctionAndAssert(
         toNullableVec<String>({{}, "1", "2", "3", {}, "5", "6", "7"}),
         Lag2(value_col, lit(Field(static_cast<UInt64>(1)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
+    executeFunctionAndAssert(
+        toNullableVec<String>({{}, {}, "1", "2", {}, {}, "5", "6"}),
+        Lag2(value_col, lit(Field(static_cast<UInt64>(2)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
+    executeFunctionAndAssert(
+        toNullableVec<String>({{}, {}, {}, "1", {}, {}, {}, "5"}),
+        Lag2(value_col, lit(Field(static_cast<UInt64>(3)))),
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
