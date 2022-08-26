@@ -412,7 +412,11 @@ void MPPTask::runImpl()
         while (from->read())
             continue;
 
+        // finish DataStream
         from->readSuffix();
+        // finish receiver
+        receiver_set->close();
+        // finish MPPTunnel
         finishWrite();
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
