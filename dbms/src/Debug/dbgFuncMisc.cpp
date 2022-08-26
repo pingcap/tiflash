@@ -23,13 +23,13 @@
 
 namespace DB
 {
-inline size_t getThreadIdForLog(const String & line)
+inline size_t getReadTSOForLog(const String & line)
 {
-    auto sub_line = line.substr(line.find("thread_id="));
+    auto sub_line = line.substr(line.find("read_tso="));
     std::regex rx(R"((0|[1-9][0-9]*))");
     std::smatch m;
     if (regex_search(sub_line, m, rx))
-        return std::stoi(m[1]);
+        return std::stoul(m[1]);
     else
         return 0;
 }
@@ -51,31 +51,31 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
 
     String key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
     // the candidate line must be printed by a thread which also print a line contains `thread_hint`
-    String thread_hint = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    String tso_hint = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     auto log_path = context.getConfigRef().getString("logger.log");
 
     std::ifstream file(log_path);
     // get the lines containing `thread_hint` and `key`
-    std::vector<String> thread_hint_line_candidates;
+    std::vector<String> tso_hint_line_candidates;
     std::vector<String> key_line_candidates;
     {
         String line;
         while (std::getline(file, line))
         {
-            if ((line.find(thread_hint) != String::npos) && (line.find("DBGInvoke") == String::npos))
-                thread_hint_line_candidates.emplace_back(line);
+            if ((line.find(tso_hint) != String::npos) && (line.find("DBGInvoke") == String::npos))
+                tso_hint_line_candidates.emplace_back(line);
             else if ((line.find(key) != String::npos) && (line.find("DBGInvoke") == String::npos))
                 key_line_candidates.emplace_back(line);
         }
     }
-    // get target thread id
-    if (thread_hint_line_candidates.empty() || key_line_candidates.empty())
+    // get target read tso
+    if (tso_hint_line_candidates.empty() || key_line_candidates.empty())
     {
         output("Invalid");
         return;
     }
-    size_t target_thread_id = getThreadIdForLog(thread_hint_line_candidates.back());
-    if (target_thread_id == 0)
+    size_t target_read_tso = getReadTSOForLog(tso_hint_line_candidates.back());
+    if (target_read_tso == 0)
     {
         output("Invalid");
         return;
@@ -83,7 +83,7 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
     String target_line;
     for (auto iter = key_line_candidates.rbegin(); iter != key_line_candidates.rend(); iter++)
     {
-        if (getThreadIdForLog(*iter) == target_thread_id)
+        if (getReadTSOForLog(*iter) == target_read_tso)
         {
             target_line = *iter;
             break;
