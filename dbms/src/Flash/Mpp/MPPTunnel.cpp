@@ -231,9 +231,10 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         if (mode == TunnelSenderMode::ASYNC_GRPC)
         {
             RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
-            if (unlikely(call_data->isTest()))
+            auto kickFunForTest = call_data->getKickFuncForTest();
+            if (unlikely(kickFunForTest.has_value()))
             {
-                async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, call_data->getKickFuncForTest());
+                async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, kickFunForTest.value());
             }
             else
             {

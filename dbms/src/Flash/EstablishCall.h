@@ -36,14 +36,8 @@ public:
     /// Attach async sender in order to notify consumer finish msg directly.
     virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) = 0;
 
-    virtual bool isTest() { return false; }
-
-    virtual GRPCKickFunc getKickFuncForTest()
-    {
-        return [](void *) {
-            return grpc_call_error::GRPC_CALL_OK;
-        };
-    }
+    // Return a `GRPCKickFunc` only used for test.
+    virtual std::optional<GRPCKickFunc> getKickFuncForTest() { return std::nullopt; }
 };
 
 class EstablishCallData : public IAsyncCallData
@@ -80,8 +74,9 @@ public:
 
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
-    /// thread, it's VERY DANGEROUS to read/write any data after calling a grpc function
-    /// with a pointer of this class.
+    /// thread, it's EXTREMELY DANGEROUS to read/write any data after calling a grpc function
+    /// with a `this` pointer because the pointer may be gotten by another grpc thread in
+    /// a very short time.
     /// Keep it in mind if you want to change any logic here.
     void initRpc();
 

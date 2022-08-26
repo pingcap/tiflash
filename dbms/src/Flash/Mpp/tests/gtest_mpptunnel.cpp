@@ -128,9 +128,7 @@ using MockTerminateLocalReaderPtr = std::shared_ptr<MockTerminateLocalReader>;
 class MockAsyncCallData : public IAsyncCallData
 {
 public:
-    MockAsyncCallData()
-        : has_msg(false)
-    {}
+    MockAsyncCallData() = default;
 
     void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> & async_tunnel_sender_) override
     {
@@ -142,12 +140,7 @@ public:
         return nullptr;
     }
 
-    bool isTest() override
-    {
-        return true;
-    }
-
-    GRPCKickFunc getKickFuncForTest() override
+    std::optional<GRPCKickFunc> getKickFuncForTest() override
     {
         return [&](void *) {
             {
@@ -176,6 +169,12 @@ public:
             }
             if (ok)
             {
+                if (write_failed)
+                {
+                    async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
+                    return;
+                }
+
                 write_packet_vec.push_back(res->data());
             }
             else
@@ -191,7 +190,8 @@ public:
 
     std::mutex mu;
     std::condition_variable cv;
-    bool has_msg;
+    bool has_msg = false;
+    bool write_failed = false;
 };
 
 class TestMPPTunnel : public testing::Test
@@ -666,12 +666,13 @@ try
 }
 CATCH
 
-/*TEST_F(TestMPPTunnel, AsyncWriteError)
+TEST_F(TestMPPTunnel, AsyncWriteError)
 {
     try
     {
         auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
         std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
+        call_data->write_failed = true;
         mpp_tunnel_ptr->connectAsync(call_data.get());
 
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
@@ -683,6 +684,7 @@ CATCH
         mpp_tunnel_ptr->write(*data_packet_ptr);
         data_packet_ptr->set_data("Second");
         mpp_tunnel_ptr->write(*data_packet_ptr);
+        t.join();
         mpp_tunnel_ptr->waitForFinish();
         GTEST_FAIL();
     }
@@ -690,7 +692,7 @@ CATCH
     {
         GTEST_ASSERT_EQ(e.message(), "Consumer exits unexpected, 0000_0001 meet error: grpc writes failed.");
     }
-}*/
+}
 
 } // namespace tests
 } // namespace DB
