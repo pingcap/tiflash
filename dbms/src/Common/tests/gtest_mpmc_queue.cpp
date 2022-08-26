@@ -252,7 +252,7 @@ protected:
         for (int i = 0; i < reader_cnt; ++i)
         {
             readers[i].join();
-            ASSERT_EQ(reader_results[i], MPMCQueueStatus::EMPTY);
+            ASSERT_EQ(reader_results[i], MPMCQueueStatus::FINISHED);
         }
 
         ASSERT_EQ(queue.size(), 0);
@@ -291,7 +291,7 @@ protected:
         for (int i = 0; i < reader_cnt; ++i)
         {
             readers[i].join();
-            ASSERT_EQ(reader_results[i], MPMCQueueStatus::EMPTY);
+            ASSERT_EQ(reader_results[i], MPMCQueueStatus::CANCELLED);
         }
 
         for (int i = 0; i < 10; ++i)
