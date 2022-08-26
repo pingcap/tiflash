@@ -15,6 +15,11 @@
 #include <common/mem_utils_opt.h>
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
+
+#ifndef TIFLASH_USE_AVX2_COMPILE_FLAG
+static_assert(false, "`libs/libcommon/src/avx2_mem_utils_impl.cpp` need flag `-mavx2` to inline related functions");
+#endif
+
 namespace mem_utils
 {
 size_t avx2_strstr(const char * src, size_t n, const char * needle, size_t k)
