@@ -16,10 +16,8 @@
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <iostream>
 #include <string>
 #include <tuple>
-#include <vector>
 
 namespace DB
 {

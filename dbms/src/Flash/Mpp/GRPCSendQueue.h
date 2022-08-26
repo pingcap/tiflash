@@ -18,7 +18,14 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <common/logger_useful.h>
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
 #include <grpcpp/grpcpp.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #include <functional>
 
