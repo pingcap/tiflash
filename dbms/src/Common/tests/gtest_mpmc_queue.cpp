@@ -138,8 +138,8 @@ protected:
             queue,
             old_size,
             true,
-            true,
-            false);
+            false,
+            true);
     }
 
     template <typename T>
@@ -173,8 +173,8 @@ protected:
             queue,
             old_size,
             false,
-            true,
-            false);
+            false,
+            true);
     }
 
     template <typename T>
