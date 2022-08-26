@@ -70,6 +70,16 @@ try
         ASSERT_COLUMN_EQ(createColumn<Int8>({-1}), executeFunction("strcmp", {createColumn<String>({"A"}), createConstColumn<Nullable<String>>(1, "B")}, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)));
         ASSERT_COLUMN_EQ(createColumn<Int8>({-1, 0, 1, 1}), executeFunction("strcmp", {createColumn<String>({"A", "B", "C", "D"}), createConstColumn<Nullable<String>>(4, "B")}, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)));
 
+        {
+            std::string src(35, char(2));
+            std::string tar1 = src;
+            std::string tar2 = tar1;
+            std::string tar3 = tar1;
+            tar2.back() = char(1);
+            tar3.back() = char(3);
+            ASSERT_COLUMN_EQ(createColumn<Int8>({-1, 0, 1}), executeFunction("strcmp", {createColumn<String>({tar2, tar1, tar3}), createConstColumn<Nullable<String>>(3, src)}, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY)));
+        }
+
         // constant with column
         ASSERT_COLUMN_EQ(createColumn<Nullable<Int8>>({1, 0, -1, std::nullopt}), executeFunction("strcmp", {createConstColumn<Nullable<String>>(4, "b"), createColumn<Nullable<String>>({"a", "b", "c", std::nullopt})}, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)));
         ASSERT_COLUMN_EQ(createColumn<Nullable<Int8>>({1, 0, -1, std::nullopt}), executeFunction("strcmp", {createConstColumn<Nullable<String>>(4, "B"), createColumn<Nullable<String>>({"a", "b", "c", std::nullopt})}, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)));
@@ -150,6 +160,9 @@ try
             ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({0}), executeFunction(equals_fn_name, {createColumn<String>({"a"}), createColumn<Nullable<String>>({"b"})}, collator));
             ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({std::nullopt}), executeFunction(equals_fn_name, {createColumn<String>({"a"}), createColumn<Nullable<String>>({std::nullopt})}, collator));
         }
+    }
+    {
+        ASSERT_COLUMN_EQ(createColumn<Nullable<UInt8>>({0, 1, std::nullopt}), executeFunction(equals_fn_name, {createConstColumn<String>(3, ""), createColumn<Nullable<String>>({"123", "", std::nullopt})}, TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN)));
     }
 }
 CATCH
