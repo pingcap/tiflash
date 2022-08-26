@@ -1274,6 +1274,7 @@ TEST_F(BlobStoreTest, GC)
     ASSERT_TRUE(file1.exists());
     ASSERT_TRUE(file2.exists());
     ASSERT_EQ(file1.getSize(), file2.getSize());
+    ASSERT_EQ(blob_store.blob_stats.blobIdToStat(2)->sm_total_size, file2.getSize());
 }
 
 
