@@ -985,10 +985,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 // Ignore the BlobFile if it is already truncated
                 if (stat->sm_total_size != 0)
                 {
-                    RUNTIME_CHECK(stat->sm_valid_rate == 0, Exception(fmt::format("Current blob is empty, but valid rate is not 0. [blob_id={}][valid_size={}][valid_rate={}]",
+                    RUNTIME_CHECK_MSG(stat->sm_valid_rate == 0, "Current blob is empty, but valid rate is not 0. [blob_id={}][valid_size={}][valid_rate={}]",
                                                     stat->id,
                                                     stat->sm_valid_size,
-                                                    stat->sm_valid_rate));
+                                                    stat->sm_valid_rate);
 
                     // If current blob empty, the size of in disk blob may not empty
                     // So we need truncate current blob, and let it be reused.
