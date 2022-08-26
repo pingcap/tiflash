@@ -125,7 +125,7 @@ protected:
             throw Exception("read operation called after readSuffix");
 
         Block block;
-        if (!queue.pop(block))
+        if (queue.pop(block) != MPMCQueueStatus::NORMAL)
         {
             if (!isCancelled())
             {
@@ -152,7 +152,7 @@ protected:
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_sharedquery_failpoint);
                 Block block = in->read();
                 // in is finished or queue is canceled
-                if (!block || !queue.push(block))
+                if (!block || queue.push(block) != MPMCQueueStatus::NORMAL)
                     break;
             }
             in->readSuffix();
