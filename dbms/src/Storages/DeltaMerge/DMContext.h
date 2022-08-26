@@ -42,7 +42,6 @@ struct DMContext : private boost::noncopyable
 
     StoragePathPool & path_pool;
     StoragePool & storage_pool;
-    const UInt64 hash_salt;
 
     // gc safe-point, maybe update.
     DB::Timestamp min_version;
@@ -89,7 +88,6 @@ public:
     DMContext(const Context & db_context_,
               StoragePathPool & path_pool_,
               StoragePool & storage_pool_,
-              const UInt64 hash_salt_,
               const DB::Timestamp min_version_,
               const NotCompress & not_compress_,
               bool is_common_handle_,
@@ -99,7 +97,6 @@ public:
         : db_context(db_context_)
         , path_pool(path_pool_)
         , storage_pool(storage_pool_)
-        , hash_salt(hash_salt_)
         , min_version(min_version_)
         , not_compress(not_compress_)
         , is_common_handle(is_common_handle_)
