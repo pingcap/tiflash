@@ -29,19 +29,6 @@ namespace TiDB
 static constexpr char ANY = '%';
 static constexpr char ONE = '_';
 
-FLATTEN_INLINE_PURE static inline size_t BuiltinStrFind(std::string_view src, std::string_view needle)
-{
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#ifdef TIFLASH_USE_AVX2_COMPILE_FLAG
-    return mem_utils::details::avx2_strstr(src, needle);
-#else
-    return mem_utils::avx2_strstr(src, needle);
-#endif
-#else
-    return src.find(needle);
-#endif
-}
-
 /*
     Unicode Code    UTF-8 Code
     0000～007F      0xxxxxxx
@@ -213,7 +200,7 @@ struct BinStrPattern
             desc.makeSrcInvalid();
             return false;
         }
-        if (!DB::IsRawStrEqual(desc.getSrcStrView(src.data(), match_str.size()), match_str))
+        if (!mem_utils::IsStrViewEqual(desc.getSrcStrView(src.data(), match_str.size()), match_str))
         {
             return false;
         }
@@ -274,7 +261,7 @@ struct BinStrPattern
                     return false;
                 }
 
-                if (!DB::IsRawStrEqual({src.data() + cur_match_desc.src_index_end - match_str.size(), match_str.size()}, match_str))
+                if (!mem_utils::IsStrViewEqual({src.data() + cur_match_desc.src_index_end - match_str.size(), match_str.size()}, match_str))
                 {
                     return false;
                 }
@@ -332,7 +319,7 @@ struct BinStrPattern
             // search sub str
             // - seachers like `ASCIICaseSensitiveStringSearcher` or `Volnitsky` are too heavy for small str
             {
-                pos = BuiltinStrFind(src_view, match_str);
+                pos = mem_utils::StrFind(src_view, match_str);
             }
 
             if (pos == std::string_view::npos)

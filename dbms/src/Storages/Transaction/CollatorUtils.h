@@ -30,28 +30,12 @@ ALWAYS_INLINE inline int signum(T val)
     return (0 < val) - (val < 0);
 }
 
-FLATTEN_INLINE_PURE static inline bool IsRawStrEqual(const std::string_view & lhs, const std::string_view & rhs)
-{
-    if (lhs.size() != rhs.size())
-        return false;
-
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#ifdef TIFLASH_USE_AVX2_COMPILE_FLAG
-    return mem_utils::details::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
-#else
-    return mem_utils::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
-#endif
-#else
-    return 0 == std::memcmp(lhs.data(), rhs.data(), lhs.size());
-#endif
-}
-
 // Check equality is much faster than other comparison.
 // - check size first
 // - return 0 if equal else 1
 FLATTEN_INLINE_PURE static inline int RawStrEqualCompare(const std::string_view & lhs, const std::string_view & rhs)
 {
-    return IsRawStrEqual(lhs, rhs) ? 0 : 1;
+    return mem_utils::IsStrViewEqual(lhs, rhs) ? 0 : 1;
 }
 
 // Compare str view by memcmp

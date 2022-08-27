@@ -23,14 +23,15 @@
 namespace mem_utils::details
 {
 
-ALWAYS_INLINE static inline uint32_t get_block32_cmp_eq_mask(const Block32 * s,
-                                                             Block32 check_block)
+FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(
+    const void * s,
+    const Block32 & check_block)
 {
     /*
     vpcmpeqb  ymm0, ymm0, ymmword ptr [...]
     */
     // `_mm256_loadu_si256` and `_mm256_load_si256` are same in such case
-    const auto block = _mm256_loadu_si256(s);
+    const auto block = load_block32(s);
     uint32_t mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(block, check_block));
     return mask;
 }
@@ -38,11 +39,10 @@ ALWAYS_INLINE static inline uint32_t get_block32_cmp_eq_mask(const Block32 * s,
 template <typename F>
 ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * src, ssize_t n, const char *& res, const Block32 & check_block32, F && callback)
 {
-    auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
-                                        check_block32);
+    auto mask = get_block32_cmp_eq_mask(src, check_block32);
     for (; mask;)
     {
-        auto c = get_rightmost_bit_pos(mask);
+        auto c = rightmost_bit_one_index(mask);
         // check boundary
         if (c >= n)
         {
@@ -56,7 +56,7 @@ ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * s
             res = t;
             return true;
         }
-        mask = clear_rightmost(mask);
+        mask = clear_rightmost_bit_one(mask);
     }
     return false;
 }
@@ -64,17 +64,16 @@ ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * s
 template <typename F>
 ALWAYS_INLINE static inline bool check_block32_x1(const char * src, const char *& res, const Block32 & check_block32, F && callback)
 {
-    auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
-                                        check_block32);
+    auto mask = get_block32_cmp_eq_mask(src, check_block32);
     for (; mask;)
     {
-        const auto * t = src + get_rightmost_bit_pos(mask);
+        const auto * t = src + rightmost_bit_one_index(mask);
         if (callback(t))
         {
             res = t;
             return true;
         }
-        mask = clear_rightmost(mask);
+        mask = clear_rightmost_bit_one(mask);
     }
     return false;
 }
@@ -86,7 +85,7 @@ ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *
         uint32_t data{};
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
             data |= get_block32_cmp_eq_mask(
-                reinterpret_cast<const Block32 *>(src + BLOCK32_SIZE * i),
+                src + BLOCK32_SIZE * i,
                 check_block32);
 
         if (data)
@@ -103,18 +102,18 @@ ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *
     {
         const auto * start = src + BLOCK32_SIZE * i;
         auto mask = get_block32_cmp_eq_mask(
-            reinterpret_cast<const Block32 *>(start),
+            start,
             check_block32);
         for (; mask;)
         {
-            auto c = get_rightmost_bit_pos(mask);
+            auto c = rightmost_bit_one_index(mask);
             const auto * t = c + start;
             if (callback(t))
             {
                 res = t;
                 return true;
             }
-            mask = clear_rightmost(mask);
+            mask = clear_rightmost_bit_one(mask);
         }
     }
     return false;
@@ -133,19 +132,18 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
         // align to 32
         src = reinterpret_cast<decltype(src)>(ALIGNED_ADDR(size_t(src), BLOCK32_SIZE));
 
-        auto mask = get_block32_cmp_eq_mask(reinterpret_cast<const Block32 *>(src),
-                                            check_block32)
+        auto mask = get_block32_cmp_eq_mask(src, check_block32)
             >> rcx;
 
         for (; mask;)
         {
-            auto c = get_rightmost_bit_pos(mask);
+            auto c = rightmost_bit_one_index(mask);
             if (c >= n)
                 return nullptr;
             const auto * t = c + src + rcx; // add offset
             if (callback(t))
                 return t;
-            mask = clear_rightmost(mask);
+            mask = clear_rightmost_bit_one(mask);
         }
 
         n -= BLOCK32_SIZE - rcx;

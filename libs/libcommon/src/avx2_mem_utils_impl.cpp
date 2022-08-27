@@ -36,6 +36,11 @@ bool avx2_mem_equal(const char * p1, const char * p2, size_t n)
     return details::avx2_mem_equal(p1, p2, n);
 }
 
+int avx2_mem_cmp(const char * p1, const char * p2, size_t n)
+{
+    return details::avx2_mem_cmp(p1, p2, n);
+}
+
 const char * avx2_memchr(const char * src, size_t n, char target)
 {
     return details::avx2_memchr(src, n, target);
