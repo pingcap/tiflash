@@ -831,8 +831,20 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
         auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        // hack...
+        if (task_id == 1)
+            addr = "0.0.0.0:3933";
+        if (task_id == 2)
+            addr = "0.0.0.0:3932";
+        if (task_id == 3)
+            addr = "0.0.0.0:3931";
+        if (task_id == -1)
+            addr = "0.0.0.0:3932";
+        // ywq test must check here...
+
+
         meta.set_address(addr);
-        std::cout << "ywq test construct sender, task_id: " << task_id << ", partition_id: " << mpp_info.partition_id << ", addr: " << addr << std::endl;
+        std::cout << "ywq test construct sender, target_task_id: " << task_id << ", partition_id: " << mpp_info.partition_id << ", addr: " << addr << std::endl;
 
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
@@ -856,6 +868,8 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
+    exchange_receiver->set_tp(tipb::Hash); // ywq todo.....
+
     for (auto & field : output_schema)
     {
         auto tipb_type = TiDB::columnInfoToFieldType(field.second);
@@ -864,6 +878,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         auto * field_type = exchange_receiver->add_field_types();
         *field_type = tipb_type;
     }
+
     auto it = mpp_info.receiver_source_task_ids_map.find(name);
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
@@ -876,8 +891,29 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
         std::cout << "ywq test ismpp test ywq: " << context.isMPPTest() << std::endl;
+
         auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        // // ywq todo must hack it.....
+        auto id = it->second[i];
+        // ywq test todo must check here...
+        std::cout << "ywq???????id: " << id << std::endl;
+        if (id == 7 || id == 4 || id == 1)
+        {
+            std::cout << "ywq reach hre..." << std::endl;
+            addr = "0.0.0.0:3933";
+        }
+        else if (id == 2 || id == 5 || id == 8)
+        {
+            std::cout << "ywq reach hre..." << std::endl;
+            addr = "0.0.0.0:3932";
+        }
+        else
+        {
+            std::cout << "ywq reach he..." << std::endl;
+            addr = "0.0.0.0:3931";
+        }
         meta.set_address(addr);
+        std::cout << "ywq test receiver partition id = " << i << ", addr=" << addr << ", task_id: " << meta.task_id() << std::endl;
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }

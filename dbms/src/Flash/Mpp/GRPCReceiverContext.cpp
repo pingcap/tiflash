@@ -200,9 +200,6 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.is_local = enable_local_tunnel && sender_task->address() == task_meta.address();
     req.send_task_id = sender_task->task_id();
     req.recv_task_id = task_meta.task_id();
-
-    if (req.send_task_id == 1 && req.recv_task_id == -1)
-        req.is_local = false;
     req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
     req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
     req.req->set_allocated_sender_meta(sender_task.release());
@@ -216,6 +213,7 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) cons
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
 {
+    std::cout << "ywq test request islocal" << request.is_local << std::endl;
     if (request.is_local)
     {
         auto [tunnel, status] = establishMPPConnectionLocal(request.req.get(), task_manager);
@@ -241,6 +239,7 @@ void GRPCReceiverContext::makeAsyncReader(
     AsyncExchangePacketReaderPtr & reader,
     UnaryCallback<bool> * callback) const
 {
+    std::cout << "ywq test called make async reader???" << std::endl;
     reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, request);
     reader->init(callback);
 }

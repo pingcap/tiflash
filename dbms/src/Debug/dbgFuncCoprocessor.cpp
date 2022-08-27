@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "TestUtils/TiFlashTestEnv.h"
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Common/typeid_cast.h>
@@ -57,6 +56,8 @@
 #include <tipb/select.pb.h>
 
 #include <utility>
+
+#include "TestUtils/TiFlashTestEnv.h"
 
 namespace DB
 {
@@ -185,21 +186,29 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
-BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel[[maybe_unused]])
+BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids [[maybe_unused]], DAGSchema & root_task_schema, bool enable_local_tunnel [[maybe_unused]])
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
-    for (const auto root_task_id : root_task_ids)
-    {
-        mpp::TaskMeta tm;
-        tm.set_start_ts(properties.start_ts);
-        tm.set_address(Debug::LOCAL_HOST);
-        tm.set_task_id(root_task_id);
-        tm.set_partition_id(-1);
-        std::cout << "ywq test root task id: " << root_task_id << std::endl;
-        auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
-        tm.AppendToString(tm_string);
-        break; /// only one root task..
-    }
+    // for (const auto root_task_id : root_task_ids)
+    // {
+    //     mpp::TaskMeta tm;
+    //     tm.set_start_ts(properties.start_ts);
+    //     tm.set_address("0.0.0.0:3933");
+    //     tm.set_task_id(root_task_id);
+    //     tm.set_partition_id(-1);
+    //     std::cout << "ywq test root task id: " << root_task_id << std::endl;
+    //     auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
+    //     tm.AppendToString(tm_string);
+    //     break; /// only one root task..
+    // }
+    mpp::TaskMeta tm;
+    tm.set_start_ts(properties.start_ts);
+    tm.set_address("0.0.0.0:3932");
+    tm.set_task_id(2);
+    tm.set_partition_id(-1);
+    std::cout << "ywq test root task id: " << 2 << std::endl;
+    auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
+    tm.AppendToString(tm_string);
 
     for (auto & field : root_task_schema)
     {
@@ -212,14 +221,14 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     mpp::TaskMeta root_tm;
     root_tm.set_start_ts(properties.start_ts);
     // ywq todo just a hack..
-    root_tm.set_address("0.0.0.0:3930");
+    root_tm.set_address("0.0.0.0:3932");
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
 
     for (int i = 0; i < tests::TiFlashTestEnv::globalContextSize(); ++i)
     {
         auto & context = tests::TiFlashTestEnv::getGlobalContext(i);
-        std::cout << "ywq test root node" <<i << ":" << context.getTMTContext().getMPPTaskManager()->toString() << std::endl;
+        std::cout << "ywq test root node" << i << ":" << context.getTMTContext().getMPPTaskManager()->toString() << std::endl;
         // context.getTMTContext().getMPPTaskManager()
     }
 
@@ -331,8 +340,8 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     for (auto & task : query_tasks)
     {
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
-        auto addr = server_config_map[task.partition_id].addr;
-        std::cout << "ywq test addr: " << addr << ", partition_id: " << task.partition_id << std::endl;
+        auto addr = server_config_map[2 - task.partition_id].addr; // ywq a hack...
+        std::cout << "ywq test addr: " << addr << ", partition_id: " << task.partition_id << ", task_id:" << task.task_id << std::endl;
         prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, addr);
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
@@ -602,6 +611,7 @@ struct QueryFragment
         {
             for (size_t partition_id = 0; partition_id < task_ids.size(); partition_id++)
             {
+                // ywq todo maybe bug....
                 MPPInfo mpp_info(
                     properties.start_ts,
                     partition_id,

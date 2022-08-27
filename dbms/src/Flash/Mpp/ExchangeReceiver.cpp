@@ -342,6 +342,7 @@ private:
         stage = AsyncRequestStage::WAIT_MAKE_READER;
         // Use lock to ensure async reader is unreachable from grpc thread before this function returns
         std::unique_lock lock(mu);
+        // ywq todo figure why fail...
         rpc_context->makeAsyncReader(*request, reader, thisAsUnaryCallback());
     }
 
@@ -484,7 +485,9 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
     for (size_t index = 0; index < source_num; ++index)
     {
         auto req = rpc_context->makeRequest(index);
-        if (rpc_context->supportAsync(req))
+        std::cout << "ywq test wtf req islocal: " << req.is_local << std::endl;
+        bool nosupport_test = false;
+        if (rpc_context->supportAsync(req) && nosupport_test)
             async_requests.push_back(std::move(req));
         else
         {

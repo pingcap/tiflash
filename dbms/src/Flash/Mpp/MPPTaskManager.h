@@ -52,8 +52,10 @@ class MPPTaskManager : private boost::noncopyable
     MPPTaskSchedulerPtr scheduler;
 
     std::mutex mu;
+
 public:
     MPPQueryMap mpp_query_map;
+
 private:
     Poco::Logger * log;
 

@@ -270,9 +270,11 @@ grpc::Status FlashService::Coprocessor(
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
-    std::cout << "ywq test fuck:" << task_manager->toString() << std::endl;
     if (tunnel == nullptr)
     {
+        std::cout << "ywq test fuck:" << task_manager->toString() << std::endl;
+        request->PrintDebugString();
+
         if (calldata)
         {
             LOG_ERROR(log, err_msg);

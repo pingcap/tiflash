@@ -100,16 +100,18 @@ protected:
 
 
 // ywq todo set i = 1
-#define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
-    do                                                                         \
-    {                                                                          \
-        for (size_t i = serverNum(); i <= serverNum(); ++i)                    \
-        {                                                                      \
-            (properties).mpp_partition_num = i;                                \
-            MockComputeServerManager::instance().resetMockMPPServerInfo(i);    \
-            auto tasks = (builder).buildMPPTasks(context, properties);         \
-            ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols);              \
-        }                                                                      \
+#define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols)       \
+    do                                                                               \
+    {                                                                                \
+        for (size_t i = serverNum(); i <= serverNum(); ++i)                          \
+        {                                                                            \
+            (properties).mpp_partition_num = i;                                      \
+            MockComputeServerManager::instance().resetMockMPPServerInfo(i);          \
+            auto tasks = (builder).buildMPPTasks(context, properties);               \
+            for (auto task : tasks)                                                  \
+                std::cout << ExecutorSerializer().serialize(task.dag_request.get()); \
+            ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols);                    \
+        }                                                                            \
     } while (0)
 
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
