@@ -43,11 +43,11 @@ public:
 
     const Block & getSampleBlock() const override;
 
-private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
-
     /// the right side is the build side.
     const PhysicalPlanNodePtr & probe() const { return left; }
     const PhysicalPlanNodePtr & build() const { return right; }
+
+private:
+    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 };
 } // namespace DB
