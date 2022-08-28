@@ -16,6 +16,8 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
+#include <Debug/MockServerInfo.h>
+#include <Debug/MockStorage.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
@@ -96,6 +98,8 @@ class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
+using MockStorage = DB::tests::MockStorage;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -161,11 +165,12 @@ private:
     };
     TestMode test_mode = non_test;
 
+    MockStorage mock_storage;
+    MockMPPServerInfo mpp_server_info{};
+
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-    // TODO: add MockStorage.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
@@ -471,10 +476,11 @@ public:
     bool isExecutorTest() const;
     void setExecutorTest();
     bool isTest() const;
-    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_);
-    std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap();
-    ColumnsWithTypeAndName columnsForTest(String executor_id);
-    bool columnsForTestEmpty();
+
+    void setMockStorage(MockStorage & mock_storage_);
+    MockStorage mockStorage() const;
+    MockMPPServerInfo mockMPPServerInfo() const;
+    void setMockMPPServerInfo(MockMPPServerInfo & info);
 
 private:
     /** Check if the current client has access to the specified database.

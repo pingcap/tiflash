@@ -164,6 +164,7 @@ public:
     struct BlockProperty
     {
         size_t not_clean_rows;
+        size_t deleted_rows;
         size_t effective_num_rows;
         size_t gc_hint_version;
     };
