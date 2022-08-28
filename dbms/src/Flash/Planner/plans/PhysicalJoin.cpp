@@ -40,6 +40,8 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
+#include <Flash/Planner/plans/PhysicalJoinBuild.h>
+#include <Flash/Planner/plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -64,17 +66,6 @@ void recordJoinExecuteInfo(
     join_execute_info.join_ptr = join_ptr;
     assert(join_execute_info.join_ptr);
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
-}
-
-void executeUnionForPreviousNonJoinedData(DAGPipeline & probe_pipeline, Context & context, size_t max_streams, const LoggerPtr & log)
-{
-    // If there is non-joined-streams here, we need call `executeUnion`
-    // to ensure that non-joined-streams is executed after joined-streams.
-    if (!probe_pipeline.streams_with_non_joined_data.empty())
-    {
-        executeUnion(probe_pipeline, max_streams, log, false, "final union for non_joined_data");
-        restoreConcurrency(probe_pipeline, context.getDAGContext()->final_concurrency, log);
-    }
 }
 } // namespace
 
@@ -161,82 +152,36 @@ PhysicalPlanNodePtr PhysicalJoin::build(
 
     recordJoinExecuteInfo(dag_context, executor_id, build_plan->execId(), join_ptr);
 
-    auto physical_join = std::make_shared<PhysicalJoin>(
+    auto physical_join_build = std::make_shared<PhysicalJoinBuild>(
+        executor_id,
+        build_side_prepare_actions->getSampleBlock().getNamesAndTypes(),
+        log->identifier(),
+        build_plan,
+        join_ptr,
+        build_side_prepare_actions);
+    physical_join_build->notTiDBOperator();
+    physical_join_build->disableRestoreConcurrency();
+
+    auto physical_join_probe = std::make_shared<PhysicalJoinProbe>(
         executor_id,
         join_output_schema,
         log->identifier(),
         probe_plan,
-        build_plan,
         join_ptr,
         columns_added_by_join,
         probe_side_prepare_actions,
-        build_side_prepare_actions,
         is_tiflash_right_join,
         Block(join_output_schema));
+
+    auto physical_join = std::make_shared<PhysicalJoin>(
+        executor_id,
+        join_output_schema,
+        log->identifier(),
+        physical_join_probe,
+        physical_join_build);
+    physical_join->notTiDBOperator();
+    physical_join_build->disableRestoreConcurrency();
     return physical_join;
-}
-
-void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & context, size_t max_streams)
-{
-    const auto & settings = context.getSettingsRef();
-    auto & dag_context = *context.getDAGContext();
-
-    // TODO we can call `executeUnionForPreviousNonJoinedData` only when has_non_joined == true.
-    executeUnionForPreviousNonJoinedData(probe_pipeline, context, max_streams, log);
-
-    /// probe side streams
-    assert(probe_pipeline.streams_with_non_joined_data.empty());
-    executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");
-    auto join_probe_actions = PhysicalPlanHelper::newActions(probe_pipeline.firstStream()->getHeader(), context);
-    join_probe_actions->add(ExpressionAction::ordinaryJoin(join_ptr, columns_added_by_join));
-    /// add join input stream
-    if (has_non_joined)
-    {
-        auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
-        size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
-        const auto & input_header = probe_pipeline.firstStream()->getHeader();
-        for (size_t i = 0; i < not_joined_concurrency; ++i)
-        {
-            auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(input_header, i, not_joined_concurrency, settings.max_block_size);
-            non_joined_stream->setExtraInfo("add stream with non_joined_data if full_or_right_join");
-            probe_pipeline.streams_with_non_joined_data.push_back(non_joined_stream);
-            join_execute_info.non_joined_streams.push_back(non_joined_stream);
-        }
-    }
-    String join_probe_extra_info = fmt::format("join probe, join_executor_id = {}", execId());
-    for (auto & stream : probe_pipeline.streams)
-    {
-        stream = std::make_shared<HashJoinProbeBlockInputStream>(stream, join_probe_actions, log->identifier());
-        stream->setExtraInfo(join_probe_extra_info);
-    }
-}
-
-void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams)
-{
-    auto & dag_context = *context.getDAGContext();
-    const auto & settings = context.getSettingsRef();
-
-    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
-
-    /// build side streams
-    executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
-    // add a HashJoinBuildBlockInputStream to build a shared hash table
-    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
-    String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
-    auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
-    build_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
-        stream->setExtraInfo(join_build_extra_info);
-        join_execute_info.join_build_streams.push_back(stream);
-    });
-    // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
-
-    SubqueryForSet build_query;
-    build_query.source = build_pipeline.firstStream();
-    build_query.join = join_ptr;
-    join_ptr->init(build_query.source->getHeader(), join_build_concurrency);
-    dag_context.addSubquery(execId(), std::move(build_query));
 }
 
 void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
@@ -245,42 +190,18 @@ void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size
     {
         DAGPipeline build_pipeline;
         build()->transform(build_pipeline, context, max_streams);
-        buildSideTransform(build_pipeline, context, max_streams);
     }
 
-    {
-        DAGPipeline & probe_pipeline = pipeline;
-        probe()->transform(probe_pipeline, context, max_streams);
-        probeSideTransform(probe_pipeline, context, max_streams);
-    }
-
-    doSchemaProject(pipeline, context);
-}
-
-void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline, Context & context)
-{
-    /// add a project to remove all the useless column
-    NamesWithAliases schema_project_cols;
-    for (auto & c : schema)
-    {
-        /// do not need to care about duplicated column names because
-        /// it is guaranteed by its children physical plan nodes
-        schema_project_cols.emplace_back(c.name, c.name);
-    }
-    assert(!schema_project_cols.empty());
-    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
-    assert(schema_project && !schema_project->getActions().empty());
-    executeExpression(pipeline, schema_project, log, "remove useless column after join");
+    probe()->transform(pipeline, context, max_streams);
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)
 {
-    // schema.size() >= parent_require.size()
-    FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+    probe()->finalize(parent_require);
 }
 
 const Block & PhysicalJoin::getSampleBlock() const
 {
-    return sample_block;
+    return probe()->getSampleBlock();
 }
 } // namespace DB

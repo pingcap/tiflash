@@ -14,29 +14,26 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalBinary.h>
+#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/Join.h>
 #include <tipb/executor.pb.h>
 
 namespace DB
 {
-class PhysicalJoin : public PhysicalBinary
+class PhysicalJoinBuild : public PhysicalUnary
 {
 public:
-    static PhysicalPlanNodePtr build(
-        const Context & context,
-        const String & executor_id,
-        const LoggerPtr & log,
-        const tipb::Join & join,
-        const PhysicalPlanNodePtr & left,
-        const PhysicalPlanNodePtr & right);
-
-    PhysicalJoin(
+    PhysicalJoinBuild(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & probe_,
-        const PhysicalPlanNodePtr & build_)
-        : PhysicalBinary(executor_id_, PlanType::Join, schema_, req_id, probe_, build_)
+        const PhysicalPlanNodePtr & child_,
+        const JoinPtr & join_ptr_,
+        const ExpressionActionsPtr & build_side_prepare_actions_)
+        : PhysicalUnary(executor_id_, PlanType::JoinBuild, schema_, req_id, child_)
+        , join_ptr(join_ptr_)
+        , build_side_prepare_actions(build_side_prepare_actions_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -44,10 +41,13 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
+    void buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams);
+
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-    /// the right side is the build side.
-    const PhysicalPlanNodePtr & probe() const { return left; }
-    const PhysicalPlanNodePtr & build() const { return right; }
+private:
+    JoinPtr join_ptr;
+
+    ExpressionActionsPtr build_side_prepare_actions;
 };
 } // namespace DB

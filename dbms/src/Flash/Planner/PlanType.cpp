@@ -38,6 +38,8 @@ String PlanType::toString() const
         M(TableScan)
         M(MockTableScan)
         M(Join)
+        M(JoinProbe)
+        M(JoinBuild)
 #undef M
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);

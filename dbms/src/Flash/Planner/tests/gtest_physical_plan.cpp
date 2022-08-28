@@ -366,11 +366,13 @@ try
             request,
             /*expected_physical_plan=*/R"(
 <Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(String)>, <Join_2_Join_2_l_join_c, Nullable(String)>, <Join_2_Join_2_r_s, Nullable(String)>, <Join_2_Join_2_r_join_c, Nullable(String)>
- <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
-  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+ <Join, Join_2> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+  <JoinProbe, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+   <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
+    <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
+  <JoinBuild, Join_2> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>, <_r_k_Join_2_r_join_c, Nullable(String)>, <_r_k_Join_2_r_join_c_1, Nullable(String)>
+   <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
@@ -393,11 +395,13 @@ CreatingSets
             request,
             /*expected_physical_plan=*/R"(
 <Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(String)>, <Join_2_Join_2_l_join_c, Nullable(String)>, <Join_2_Join_2_r_s, Nullable(String)>, <Join_2_Join_2_r_join_c, Nullable(String)>
- <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
-  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+ <Join, Join_2> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+  <JoinProbe, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+   <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
+    <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
+  <JoinBuild, Join_2> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>, <_r_k_Join_2_r_join_c, Nullable(String)>, <_r_k_Join_2_r_join_c_1, Nullable(String)>
+   <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
@@ -420,11 +424,13 @@ CreatingSets
             request,
             /*expected_physical_plan=*/R"(
 <Projection, Join_2> | is_tidb_operator: false, schema: <Join_2_Join_2_l_s, Nullable(String)>, <Join_2_Join_2_l_join_c, Nullable(String)>, <Join_2_Join_2_r_s, Nullable(String)>, <Join_2_Join_2_r_join_c, Nullable(String)>
- <Join, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-  <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
-  <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
-   <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
+ <Join, Join_2> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+  <JoinProbe, Join_2> | is_tidb_operator: true, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>, <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+   <Projection, exchange_receiver_0> | is_tidb_operator: false, schema: <Join_2_l_s, Nullable(String)>, <Join_2_l_join_c, Nullable(String)>
+    <MockExchangeReceiver, exchange_receiver_0> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>
+  <JoinBuild, Join_2> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>, <_r_k_Join_2_r_join_c, Nullable(String)>, <_r_k_Join_2_r_join_c_1, Nullable(String)>
+   <Projection, exchange_receiver_1> | is_tidb_operator: false, schema: <Join_2_r_s, Nullable(String)>, <Join_2_r_join_c, Nullable(String)>
+    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
@@ -459,19 +465,25 @@ CreatingSets
             request,
             /*expected_physical_plan=*/R"(
 <Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_a, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_r_Join_5_r_b, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>
- <Join, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
-  <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
-   <Join, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
-    <Projection, table_scan_0> | is_tidb_operator: false, schema: <Join_4_l_a, Int32>, <Join_4_l_b, Int32>, <Join_4_l_c, Int32>
-     <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
-    <Projection, table_scan_1> | is_tidb_operator: false, schema: <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
-     <MockTableScan, table_scan_1> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
-  <Projection, Join_5> | is_tidb_operator: false, schema: <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
-   <Join, Join_5> | is_tidb_operator: true, schema: <Join_5_l_a, Nullable(Int32)>, <Join_5_l_b, Nullable(Int32)>, <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
-    <Projection, table_scan_2> | is_tidb_operator: false, schema: <Join_5_l_a, Int32>, <Join_5_l_b, Int32>
-     <MockTableScan, table_scan_2> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>
-    <Projection, table_scan_3> | is_tidb_operator: false, schema: <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
-     <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
+ <Join, Join_6> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
+  <JoinProbe, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
+   <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
+    <Join, Join_4> | is_tidb_operator: false, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
+     <JoinProbe, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
+      <Projection, table_scan_0> | is_tidb_operator: false, schema: <Join_4_l_a, Int32>, <Join_4_l_b, Int32>, <Join_4_l_c, Int32>
+       <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
+     <JoinBuild, Join_4> | is_tidb_operator: false, schema: <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>, <_r_k_Join_4_r_a, Int32>
+      <Projection, table_scan_1> | is_tidb_operator: false, schema: <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
+       <MockTableScan, table_scan_1> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
+  <JoinBuild, Join_6> | is_tidb_operator: false, schema: <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>, <_r_k_Join_6_r_Join_5_l_b, Nullable(Int32)>
+   <Projection, Join_5> | is_tidb_operator: false, schema: <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
+    <Join, Join_5> | is_tidb_operator: false, schema: <Join_5_l_a, Nullable(Int32)>, <Join_5_l_b, Nullable(Int32)>, <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
+     <JoinProbe, Join_5> | is_tidb_operator: true, schema: <Join_5_l_a, Nullable(Int32)>, <Join_5_l_b, Nullable(Int32)>, <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
+      <Projection, table_scan_2> | is_tidb_operator: false, schema: <Join_5_l_a, Int32>, <Join_5_l_b, Int32>
+       <MockTableScan, table_scan_2> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>
+     <JoinBuild, Join_5> | is_tidb_operator: false, schema: <Join_5_r_a, Int32>, <Join_5_r_b, Int32>, <_r_k_Join_5_r_a, Int32>
+      <Projection, table_scan_3> | is_tidb_operator: false, schema: <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
+       <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuildBlockInputStream x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
@@ -529,19 +541,25 @@ CreatingSets
             request,
             /*expected_physical_plan=*/R"(
 <Projection, Join_6> | is_tidb_operator: false, schema: <Join_6_Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_a, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_b, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_CAST(Join_6_l_Join_4_r_c, Nullable(Int32)_String)_collator_0 , Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_Join_6_r_Join_5_r_b, Nullable(Int32)>
- <Join, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_r_Join_5_r_b, Nullable(Int32)>
-  <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
-   <Join, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
-    <Projection, table_scan_0> | is_tidb_operator: false, schema: <Join_4_l_a, Int32>, <Join_4_l_b, Int32>, <Join_4_l_c, Int32>
-     <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
-    <Projection, table_scan_1> | is_tidb_operator: false, schema: <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
-     <MockTableScan, table_scan_1> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
-  <Projection, Join_5> | is_tidb_operator: false, schema: <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
-   <Join, Join_5> | is_tidb_operator: true, schema: <Join_5_l_a, Nullable(Int32)>, <Join_5_l_b, Nullable(Int32)>, <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
-    <Projection, table_scan_2> | is_tidb_operator: false, schema: <Join_5_l_a, Int32>, <Join_5_l_b, Int32>
-     <MockTableScan, table_scan_2> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>
-    <Projection, table_scan_3> | is_tidb_operator: false, schema: <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
-     <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
+ <Join, Join_6> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_r_Join_5_r_b, Nullable(Int32)>
+  <JoinProbe, Join_6> | is_tidb_operator: true, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>, <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Nullable(Int32)>, <Join_6_r_Join_5_r_b, Nullable(Int32)>
+   <Projection, Join_4> | is_tidb_operator: false, schema: <Join_6_l_Join_4_l_a, Nullable(Int32)>, <Join_6_l_Join_4_l_b, Nullable(Int32)>, <Join_6_l_Join_4_l_c, Nullable(Int32)>, <Join_6_l_Join_4_r_a, Int32>, <Join_6_l_Join_4_r_b, Int32>, <Join_6_l_Join_4_r_c, Int32>
+    <Join, Join_4> | is_tidb_operator: false, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
+     <JoinProbe, Join_4> | is_tidb_operator: true, schema: <Join_4_l_a, Nullable(Int32)>, <Join_4_l_b, Nullable(Int32)>, <Join_4_l_c, Nullable(Int32)>, <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
+      <Projection, table_scan_0> | is_tidb_operator: false, schema: <Join_4_l_a, Int32>, <Join_4_l_b, Int32>, <Join_4_l_c, Int32>
+       <MockTableScan, table_scan_0> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
+     <JoinBuild, Join_4> | is_tidb_operator: false, schema: <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>, <_r_k_Join_4_r_a, Int32>
+      <Projection, table_scan_1> | is_tidb_operator: false, schema: <Join_4_r_a, Int32>, <Join_4_r_b, Int32>, <Join_4_r_c, Int32>
+       <MockTableScan, table_scan_1> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>, <c, Int32>
+  <JoinBuild, Join_6> | is_tidb_operator: false, schema: <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>, <_r_k_Join_6_r_Join_5_l_b, Nullable(Int32)>
+   <Projection, Join_5> | is_tidb_operator: false, schema: <Join_6_r_Join_5_l_a, Nullable(Int32)>, <Join_6_r_Join_5_l_b, Nullable(Int32)>, <Join_6_r_Join_5_r_a, Int32>, <Join_6_r_Join_5_r_b, Int32>
+    <Join, Join_5> | is_tidb_operator: false, schema: <Join_5_l_a, Nullable(Int32)>, <Join_5_l_b, Nullable(Int32)>, <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
+     <JoinProbe, Join_5> | is_tidb_operator: true, schema: <Join_5_l_a, Nullable(Int32)>, <Join_5_l_b, Nullable(Int32)>, <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
+      <Projection, table_scan_2> | is_tidb_operator: false, schema: <Join_5_l_a, Int32>, <Join_5_l_b, Int32>
+       <MockTableScan, table_scan_2> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>
+     <JoinBuild, Join_5> | is_tidb_operator: false, schema: <Join_5_r_a, Int32>, <Join_5_r_b, Int32>, <_r_k_Join_5_r_a, Int32>
+      <Projection, table_scan_3> | is_tidb_operator: false, schema: <Join_5_r_a, Int32>, <Join_5_r_b, Int32>
+       <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
             /*expected_streams=*/R"(
 CreatingSets
  HashJoinBuildBlockInputStream x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right

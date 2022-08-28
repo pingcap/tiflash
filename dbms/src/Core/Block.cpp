@@ -440,6 +440,17 @@ NamesAndTypesList Block::getNamesAndTypesList() const
 }
 
 
+NamesAndTypes Block::getNamesAndTypes() const
+{
+    NamesAndTypes res;
+
+    for (const auto & elem : data)
+        res.emplace_back(elem.name, elem.type);
+
+    return res;
+}
+
+
 Names Block::getNames() const
 {
     Names res;

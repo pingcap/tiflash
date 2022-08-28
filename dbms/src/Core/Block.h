@@ -91,6 +91,7 @@ public:
 
     const ColumnsWithTypeAndName & getColumnsWithTypeAndName() const;
     NamesAndTypesList getNamesAndTypesList() const;
+    NamesAndTypes getNamesAndTypes() const;
     Names getNames() const;
 
     /// Returns number of rows from first column in block, not equal to nullptr. If no columns, returns 0.
