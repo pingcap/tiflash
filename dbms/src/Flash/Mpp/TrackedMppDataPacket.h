@@ -64,6 +64,15 @@ struct MemTrackerWrapper
         }
     }
 
+    void free(size_t delta)
+    {
+        if (memory_tracker)
+        {
+            memory_tracker->free(delta);
+            size -= delta;
+        }
+    }
+
     void switchMemTracker(MemoryTracker * new_memory_tracker)
     {
         int bak_size = size;
@@ -78,14 +87,7 @@ struct MemTrackerWrapper
 
     void freeAll()
     {
-        if (size)
-        {
-            if (memory_tracker)
-            {
-                memory_tracker->free(size);
-                size = 0;
-            }
-        }
+        free(size);
     }
     MemoryTracker * memory_tracker;
     size_t size = 0;
@@ -117,7 +119,10 @@ struct TrackedMppDataPacket
     {
         mem_tracker_wrapper.alloc(response.ByteSizeLong());
         if (!response.SerializeToString(packet.mutable_data()))
+        {
+            mem_tracker_wrapper.free(response.ByteSizeLong());
             throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
+        }
     }
 
     void read(const std::unique_ptr<::grpc::ClientAsyncReader<::mpp::MPPDataPacket>> & reader, void * callback)
@@ -173,20 +178,34 @@ struct TrackedMppDataPacket
 
 struct TrackedSelectResp
 {
-    explicit TrackedSelectResp(tipb::SelectResponse * response)
-        : memory_tracker(response->ByteSizeLong(), current_memory_tracker)
-        , response(response)
+    explicit TrackedSelectResp()
+        : memory_tracker(0, current_memory_tracker)
     {}
 
     void addChunk(std::string && value)
     {
         memory_tracker.alloc(value.size());
-        auto * dag_chunk = response->add_chunks();
+        auto * dag_chunk = response.add_chunks();
         dag_chunk->set_rows_data(value);
     }
 
+    tipb::SelectResponse & getResponse()
+    {
+        return response;
+    }
+
+    void setEncodeType(::tipb::EncodeType value)
+    {
+        response.set_encode_type(value);
+    }
+
+    tipb::ExecutorExecutionSummary * addExecutionSummary()
+    {
+        return response.add_execution_summaries();
+    }
+
     MemTrackerWrapper memory_tracker;
-    tipb::SelectResponse * response;
+    tipb::SelectResponse response;
 };
 
 } // namespace DB

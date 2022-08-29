@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 

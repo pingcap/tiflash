@@ -23,6 +23,7 @@
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/ThreadPool.h>
 #include <tipb/select.pb.h>
 
@@ -58,9 +59,9 @@ private:
     void batchWriteFineGrainedShuffle();
 
     template <bool send_exec_summary_at_last>
-    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks, TrackedSelectResp & response) const;
     template <bool send_exec_summary_at_last>
-    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, tipb::SelectResponse & response) const;
+    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks, TrackedSelectResp & response) const;
 
     template <bool send_exec_summary_at_last>
     void handleExecSummary(const std::vector<Block> & input_blocks,

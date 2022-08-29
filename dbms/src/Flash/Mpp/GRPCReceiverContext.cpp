@@ -63,7 +63,7 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
         call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
     }
 
-    bool read(MPPDataPacketPtr & packet) override
+    bool read(TrackedMppDataPacketPtr & packet) override
     {
         return packet->read(reader);
     }
@@ -101,7 +101,7 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
             callback);
     }
 
-    void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) override
+    void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) override
     {
         packet->read(reader, callback);
     }
@@ -131,9 +131,9 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         }
     }
 
-    bool read(MPPDataPacketPtr & packet) override
+    bool read(TrackedMppDataPacketPtr & packet) override
     {
-        MPPDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
+        TrackedMppDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
         bool success = tmp_packet != nullptr;
         if (success)
             packet = tmp_packet;

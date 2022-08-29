@@ -316,7 +316,7 @@ private:
         notify_queue->push(this);
     }
 
-    MPPDataPacketPtr getErrorPacket() const
+    TrackedMppDataPacketPtr getErrorPacket() const
     {
         // only the last packet may has error, see execute().
         if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
@@ -407,7 +407,7 @@ private:
     AsyncRequestStage stage = AsyncRequestStage::NEED_INIT;
 
     std::shared_ptr<AsyncReader> reader;
-    MPPDataPacketPtrs packets;
+    TrackedMPPDataPacketPtrs packets;
     size_t read_packet_index = 0;
     Status finish_status = RPCContext::getStatusOK();
     LoggerPtr log;
@@ -617,7 +617,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             for (;;)
             {
                 LOG_FMT_TRACE(log, "begin next ");
-                MPPDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
+                TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
                 bool success = reader->read(packet);
                 if (!success)
                     break;

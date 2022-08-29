@@ -68,7 +68,7 @@ MPPTunnel::MPPTunnel(
     , status(TunnelStatus::Unconnected)
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
-    , send_queue(std::make_shared<MPMCQueue<MPPDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
+    , send_queue(std::make_shared<MPMCQueue<TrackedMppDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
     , mem_tracker(current_memory_tracker)
 {
@@ -331,7 +331,7 @@ void SyncTunnelSender::sendJob()
     String err_msg;
     try
     {
-        MPPDataPacketPtr res;
+        TrackedMppDataPacketPtr res;
         while (send_queue->pop(res))
         {
             if (!writer->write(res->packet))
@@ -389,7 +389,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     bool queue_empty_flag = false;
     try
     {
-        MPPDataPacketPtr res;
+        TrackedMppDataPacketPtr res;
         queue_empty_flag = !send_queue->pop(res);
         if (!queue_empty_flag)
         {
@@ -425,7 +425,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
 
 std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
 {
-    MPPDataPacketPtr res;
+    TrackedMppDataPacketPtr res;
     if (send_queue->pop(res))
     {
         // switch tunnel's memory tracker into receiver's

@@ -136,7 +136,7 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
-    tipb::SelectResponse & response) const
+    TrackedSelectResp & response) const
 {
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
@@ -145,7 +145,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
             TrackedMppDataPacket tracked_packet(current_memory_tracker);
             if constexpr (send_exec_summary_at_last)
             {
-                tracked_packet.serializeByResponse(response);
+                tracked_packet.serializeByResponse(response.getResponse());
             }
             if (input_blocks.empty())
             {
@@ -165,34 +165,32 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
         }
         else /// passthrough data to a non-TiFlash node, like sending data to TiSpark
         {
-            response.set_encode_type(dag_context.encode_type);
+            response.setEncodeType(dag_context.encode_type);
             if (input_blocks.empty())
             {
                 if constexpr (send_exec_summary_at_last)
                 {
-                    writer->write(response);
+                    writer->write(response.getResponse());
                 }
                 return;
             }
             for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
-                auto * dag_chunk = response.add_chunks();
-                dag_chunk->set_rows_data(chunk_codec_stream->getString());
+                response.addChunk(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
-            writer->write(response);
+            writer->write(response.getResponse());
         }
     }
     else /// passthrough data to a TiDB node
     {
-        TrackedSelectResp tracked_resp(&response); // track mem usage of response in nearly realtime
-        response.set_encode_type(dag_context.encode_type);
+        response.setEncodeType(dag_context.encode_type);
         if (input_blocks.empty())
         {
             if constexpr (send_exec_summary_at_last)
             {
-                writer->write(response);
+                writer->write(response.getResponse());
             }
             return;
         }
@@ -205,7 +203,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
             {
                 if (current_records_num >= records_per_chunk)
                 {
-                    tracked_resp.addChunk(chunk_codec_stream->getString());
+                    response.addChunk(chunk_codec_stream->getString());
                     chunk_codec_stream->clear();
                     current_records_num = 0;
                 }
@@ -218,10 +216,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
 
         if (current_records_num > 0)
         {
-            tracked_resp.addChunk(chunk_codec_stream->getString());
+            response.addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(response);
+        writer->write(response.getResponse());
     }
 }
 
@@ -230,9 +228,9 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::batchWrite()
 {
-    tipb::SelectResponse response;
+    TrackedSelectResp response;
     if constexpr (send_exec_summary_at_last)
-        addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+        addExecuteSummaries(response.getResponse(), !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         partitionAndEncodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response);
@@ -354,12 +352,12 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::partitionAndEncodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
-    tipb::SelectResponse & response) const
+    TrackedSelectResp & response) const
 {
     static_assert(!enable_fine_grained_shuffle);
     std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
     std::vector<size_t> responses_row_count(partition_num);
-    handleExecSummary<send_exec_summary_at_last>(input_blocks, tracked_packets, response);
+    handleExecSummary<send_exec_summary_at_last>(input_blocks, tracked_packets, response.getResponse());
     if (input_blocks.empty())
         return;
 

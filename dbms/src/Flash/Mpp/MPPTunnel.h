@@ -63,8 +63,8 @@ enum class TunnelSenderMode
 class TunnelSender : private boost::noncopyable
 {
 public:
-    using MPPDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
-    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
+    using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
+    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<TrackedMppDataPacketPtr>>;
     virtual ~TunnelSender() = default;
     TunnelSender(TunnelSenderMode mode_, DataPacketMPMCQueuePtr send_queue_, PacketWriter * writer_, const LoggerPtr log_, const String & tunnel_id_)
         : mode(mode_)
@@ -179,7 +179,7 @@ class LocalTunnelSender : public TunnelSender
 public:
     using Base = TunnelSender;
     using Base::Base;
-    MPPDataPacketPtr readForLocal();
+    TrackedMppDataPacketPtr readForLocal();
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -296,8 +296,8 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    using MPPDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
-    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
+    using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
+    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<TrackedMppDataPacketPtr>>;
     DataPacketMPMCQueuePtr send_queue;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
