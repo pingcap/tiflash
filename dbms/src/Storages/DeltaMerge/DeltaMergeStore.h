@@ -550,6 +550,7 @@ public:
     ColumnDefinesPtr store_columns;
 
     std::atomic<bool> shutdown_called{false};
+    std::atomic<bool> replica_exist{true};
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle background_task_handle;
