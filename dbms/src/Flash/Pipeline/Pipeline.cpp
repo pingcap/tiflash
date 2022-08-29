@@ -15,6 +15,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Pipeline.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -35,6 +36,11 @@ void Pipeline::prepare(Context & context, size_t max_streams)
     executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for pipeline");
     stream = pipeline.firstStream();
     assert(stream);
+    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
+    {
+        p_stream->setProgressCallback(context.getProgressCallback());
+        p_stream->setProcessListElement(context.getProcessListElement());
+    }
 }
 
 void Pipeline::cancel(bool is_kill)
