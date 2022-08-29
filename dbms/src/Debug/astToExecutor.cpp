@@ -839,7 +839,9 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         if (task_id == 3)
             addr = "0.0.0.0:3931";
         if (task_id == -1)
-            addr = "0.0.0.0:3932";
+            addr = "0.0.0.0:3931";
+        // ywq must modify
+
         // ywq test must check here...
 
 

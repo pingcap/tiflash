@@ -85,7 +85,8 @@ DB::ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks,
     // ywq todo figure how to register root node ......
     // ywq todo hack...
     // ywq todo hack must check the context....
-    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(2), properties, tasks, server_config_map);
+    // ywq must modify
+    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(3), properties, tasks, server_config_map);
     return readBlock(res);
 }
 

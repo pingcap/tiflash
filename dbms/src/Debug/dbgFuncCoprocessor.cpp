@@ -203,8 +203,10 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     // }
     mpp::TaskMeta tm;
     tm.set_start_ts(properties.start_ts);
-    tm.set_address("0.0.0.0:3932");
-    tm.set_task_id(2);
+    tm.set_address("0.0.0.0:3931");
+    // ywq must modify
+
+    tm.set_task_id(3); // must modify..
     tm.set_partition_id(-1);
     std::cout << "ywq test root task id: " << 2 << std::endl;
     auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
@@ -221,7 +223,8 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     mpp::TaskMeta root_tm;
     root_tm.set_start_ts(properties.start_ts);
     // ywq todo just a hack..
-    root_tm.set_address("0.0.0.0:3932");
+    // ywq must modify
+    root_tm.set_address("0.0.0.0:3931");
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
 
