@@ -99,7 +99,6 @@ protected:
         dm_context = std::make_unique<DMContext>(*db_context,
                                                  *storage_path_pool,
                                                  *storage_pool,
-                                                 0,
                                                  /*min_version_*/ 0,
                                                  settings.not_compress_columns,
                                                  false,
