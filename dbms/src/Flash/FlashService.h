@@ -98,7 +98,6 @@ protected:
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
 
-
     /// for mpp unit test.
     MockStorage mock_storage;
     MockMPPServerInfo mpp_test_info{};
