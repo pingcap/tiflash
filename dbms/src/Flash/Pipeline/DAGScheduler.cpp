@@ -20,7 +20,7 @@
 
 namespace DB
 {
-void DAGScheduler::run(const PhysicalPlanNodePtr & plan_node)
+std::pair<bool, String> DAGScheduler::run(const PhysicalPlanNodePtr & plan_node)
 {
     assert(plan_node);
     auto final_pipeline = genPipeline(plan_node);
@@ -29,49 +29,97 @@ void DAGScheduler::run(const PhysicalPlanNodePtr & plan_node)
 
     auto thread_manager = newThreadManager();
 
-    bool is_running = true;
-    while(is_running)
+    PipelineEventPtr event;
+    String err_msg;
+    while (event_queue.pop(event))
     {
-        PipelineEventPtr event;
-        if (event_queue.pop(event))
+        assert(event);
+        switch (event->type)
         {
-            assert(event);
-            switch(event->type)
-            {
-            case PipelineEventType::submit:
-            {
-                thread_manager->schedule(true, "ExecutePipeline", [&, event]() {
-                    auto pipeline = event->pipeline;
-                    pipeline->execute(context, max_streams);
-                    status_machine.stateToComplete(pipeline->getId());
-                    event_queue.push(PipelineEvent::finish(pipeline));
-                });
-                break;
-            }
-            case PipelineEventType::finish:
-            {
-                if (status_machine.isCompleted(final_pipeline_id))
-                {
-                    // query finish
-                    is_running = false;
-                }
-                else
-                {
-                    const auto & finish_pipeline = event->pipeline;
-                    submitNext(finish_pipeline);
-                }
-                break;
-            }
-            default:
-                throw Exception("Unknown event type");
-            }
-        }
-        else
-        {
-            is_running = false;
+        case PipelineEventType::submit:
+            handlePipelineSubmit(event, thread_manager);
+            break;
+        case PipelineEventType::finish:
+            handlePipelineFinish(event);
+            break;
+        case PipelineEventType::fail:
+            handlePipelineFail(event, err_msg);
+            break;
+        case PipelineEventType::cancel:
+            handlePipelineCancel(event);
+            break;
+        default:
+            event_queue.push(PipelineEvent::fail("Unknown event type"));
         }
     }
     thread_manager->wait();
+    return {event_queue.getStatus() == MPMCQueueStatus::FINISHED, err_msg};
+}
+
+void DAGScheduler::cancel()
+{
+    event_queue.push(PipelineEvent::cancel());
+}
+
+void DAGScheduler::handlePipelineCancel(const PipelineEventPtr & event)
+{
+    assert(event && event->type == PipelineEventType::cancel);
+    event_queue.cancel();
+    cancelRunningPipelines(true);
+    status_machine.finish();
+}
+
+void DAGScheduler::cancelRunningPipelines(bool is_kill)
+{
+    for (const auto & pipeline : status_machine.getRunningPipelines())
+        pipeline->cancel(is_kill);
+}
+
+void DAGScheduler::handlePipelineFail(const PipelineEventPtr & event, String & err_msg)
+{
+    assert(event && event->type == PipelineEventType::fail);
+    if (event->pipeline)
+        status_machine.stateToComplete(event->pipeline->getId());
+    err_msg = event->err_msg;
+    event_queue.cancel();
+    cancelRunningPipelines(false);
+    status_machine.finish();
+}
+
+void DAGScheduler::handlePipelineFinish(const PipelineEventPtr & event)
+{
+    assert(event && event->type == PipelineEventType::finish && event->pipeline);
+    status_machine.stateToComplete(event->pipeline->getId());
+    if (status_machine.isCompleted(final_pipeline_id))
+    {
+        event_queue.finish();
+        status_machine.finish();
+    }
+    else
+    {
+        const auto & finish_pipeline = event->pipeline;
+        submitNext(finish_pipeline);
+    }
+}
+
+void DAGScheduler::handlePipelineSubmit(
+    const PipelineEventPtr & event,
+    std::shared_ptr<ThreadManager> & thread_manager)
+{
+    assert(event && event->type == PipelineEventType::submit && event->pipeline);
+    auto pipeline = event->pipeline;
+    thread_manager->schedule(true, "ExecutePipeline", [&, pipeline]() {
+        try
+        {
+            pipeline->execute(context, max_streams);
+            event_queue.push(PipelineEvent::finish(pipeline));
+        }
+        catch (...)
+        {
+            auto err_msg = getCurrentExceptionMessage(true, true);
+            event_queue.push(PipelineEvent::fail(pipeline, err_msg));
+        }
+    });
 }
 
 PipelinePtr DAGScheduler::genPipeline(const PhysicalPlanNodePtr & plan_node)
@@ -142,4 +190,4 @@ void DAGScheduler::submitNext(const PipelinePtr & pipeline)
     for (const auto & next_pipeline : next_pipelines)
         submitPipeline(next_pipeline);
 }
-}
+} // namespace DB

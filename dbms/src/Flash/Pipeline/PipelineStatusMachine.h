@@ -16,8 +16,8 @@
 
 #include <Flash/Pipeline/Pipeline.h>
 
-#include <unordered_set>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace DB
 {
@@ -35,7 +35,11 @@ public:
     void stateToRunning(UInt32 id);
     void stateToComplete(UInt32 id);
 
-    std::unordered_set<PipelinePtr> nextPipelines(UInt32 id) const;
+    std::vector<PipelinePtr> nextPipelines(UInt32 id) const;
+
+    std::vector<PipelinePtr> getRunningPipelines() const;
+
+    void finish();
 
 private:
     std::unordered_map<UInt32, PipelinePtr> id_to_pipeline;
@@ -43,4 +47,4 @@ private:
     std::unordered_set<UInt32> running_ids;
     std::unordered_set<UInt32> complete_ids;
 };
-}
+} // namespace DB

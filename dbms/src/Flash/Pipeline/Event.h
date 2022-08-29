@@ -24,6 +24,8 @@ enum PipelineEventType
 {
     submit,
     finish,
+    fail,
+    cancel,
 };
 
 struct PipelineEvent;
@@ -31,22 +33,42 @@ using PipelineEventPtr = std::shared_ptr<PipelineEvent>;
 
 struct PipelineEvent
 {
-static PipelineEventPtr submit(const PipelinePtr & pipeline)
-{
-    return std::make_shared<PipelineEvent>(pipeline, PipelineEventType::submit);
-}
+    static PipelineEventPtr submit(const PipelinePtr & pipeline)
+    {
+        return std::make_shared<PipelineEvent>(pipeline, "", PipelineEventType::submit);
+    }
 
-static PipelineEventPtr finish(const PipelinePtr & pipeline)
-{
-    return std::make_shared<PipelineEvent>(pipeline, PipelineEventType::finish);
-}
+    static PipelineEventPtr finish(const PipelinePtr & pipeline)
+    {
+        return std::make_shared<PipelineEvent>(pipeline, "", PipelineEventType::finish);
+    }
 
-PipelineEvent(const PipelinePtr & pipeline_, PipelineEventType type_)
-    : pipeline(pipeline_)
-    , type(type_)
-{}
+    static PipelineEventPtr fail(const PipelinePtr & pipeline, const String & err_msg)
+    {
+        return std::make_shared<PipelineEvent>(pipeline, err_msg, PipelineEventType::fail);
+    }
 
-const PipelinePtr pipeline;
-const PipelineEventType type;
+    static PipelineEventPtr fail(const String & err_msg)
+    {
+        return fail(nullptr, err_msg);
+    }
+
+    static PipelineEventPtr cancel()
+    {
+        return std::make_shared<PipelineEvent>(nullptr, "", PipelineEventType::cancel);
+    }
+
+    PipelineEvent(
+        const PipelinePtr & pipeline_,
+        const String & err_msg_,
+        PipelineEventType type_)
+        : pipeline(pipeline_)
+        , err_msg(err_msg_)
+        , type(type_)
+    {}
+
+    const PipelinePtr pipeline;
+    String err_msg;
+    const PipelineEventType type;
 };
-}
+} // namespace DB

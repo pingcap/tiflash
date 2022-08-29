@@ -66,16 +66,32 @@ void PipelineStatusMachine::stateToComplete(UInt32 id)
     complete_ids.insert(id);
 }
 
-std::unordered_set<PipelinePtr> PipelineStatusMachine::nextPipelines(UInt32 id) const
+std::vector<PipelinePtr> PipelineStatusMachine::nextPipelines(UInt32 id) const
 {
     assert(getPipeline(id));
-    std::unordered_set<PipelinePtr> next_pipelines;
+    std::vector<PipelinePtr> next_pipelines;
     for (const auto & [_, pipe] : id_to_pipeline)
     {
         const auto & parent_ids = pipe->getParentIds();
         if (parent_ids.find(id) != parent_ids.end())
-            next_pipelines.insert(pipe);
+            next_pipelines.emplace_back(pipe);
     }
     return next_pipelines;
 }
+
+std::vector<PipelinePtr> PipelineStatusMachine::getRunningPipelines() const
+{
+    std::vector<PipelinePtr> running_pipelines;
+    for (const auto & id : running_ids)
+        running_pipelines.emplace_back(getPipeline(id));
+    return running_pipelines;
 }
+
+void PipelineStatusMachine::finish()
+{
+    id_to_pipeline.clear();
+    waiting_ids.clear();
+    running_ids.clear();
+    complete_ids.clear();
+}
+} // namespace DB

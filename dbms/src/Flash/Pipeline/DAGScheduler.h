@@ -25,7 +25,8 @@ namespace DB
 {
 class PipelineIDGenerator
 {
-    UInt32 current_id = 0; 
+    UInt32 current_id = 0;
+
 public:
     UInt32 nextID()
     {
@@ -45,7 +46,10 @@ public:
         , log(Logger::get("DAGScheduler", req_id))
     {}
 
-    void run(const PhysicalPlanNodePtr & plan_node);
+    // return <is_success, err_msg>
+    std::pair<bool, String> run(const PhysicalPlanNodePtr & plan_node);
+
+    void cancel();
 
 private:
     PipelinePtr genPipeline(const PhysicalPlanNodePtr & plan_node);
@@ -55,6 +59,18 @@ private:
     void submitPipeline(const PipelinePtr & pipeline);
 
     void submitNext(const PipelinePtr & pipeline);
+
+    void handlePipelineSubmit(
+        const PipelineEventPtr & event,
+        std::shared_ptr<ThreadManager> & thread_manager);
+
+    void handlePipelineFinish(const PipelineEventPtr & event);
+
+    void handlePipelineFail(const PipelineEventPtr & event, String & err_msg);
+
+    void handlePipelineCancel(const PipelineEventPtr & event);
+
+    void cancelRunningPipelines(bool is_kill);
 
 private:
     UInt32 final_pipeline_id;
@@ -71,4 +87,4 @@ private:
 
     LoggerPtr log;
 };
-}
+} // namespace DB

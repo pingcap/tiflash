@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Pipeline.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Pipeline/Pipeline.h>
 
 namespace DB
 {
@@ -23,11 +24,21 @@ void Pipeline::execute(Context & context, size_t max_streams)
     DAGPipeline pipeline;
     plan_node->transform(pipeline, context, max_streams);
     executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for pipeline");
-    auto stream = pipeline.firstStream();
+    stream = pipeline.firstStream();
     assert(stream);
 
     stream->readPrefix();
-    while (stream->read());
+    while (stream->read())
+    {
+    }
     stream->readSuffix();
 }
+
+void Pipeline::cancel(bool is_kill)
+{
+    if (auto p_stream = dynamic_pointer_cast<IProfilingBlockInputStream>(stream.load()); p_stream)
+    {
+        p_stream->cancel(is_kill);
+    }
 }
+} // namespace DB
