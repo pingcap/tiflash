@@ -111,7 +111,7 @@ bool pushPacket(size_t source_index,
                 error_ptr,
                 resp_ptr,
                 std::move(chunks[i]));
-            push_succeed = msg_channels[i]->push(std::move(recv_msg)) == MPMCQueueStatus::NORMAL;
+            push_succeed = msg_channels[i]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
             if constexpr (is_sync)
                 fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
             else
@@ -139,7 +139,7 @@ bool pushPacket(size_t source_index,
                 resp_ptr,
                 std::move(chunks));
 
-            push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueStatus::NORMAL;
+            push_succeed = msg_channels[0]->push(std::move(recv_msg)) == MPMCQueueResult::OK;
             if constexpr (is_sync)
                 fiu_do_on(FailPoints::random_receiver_sync_msg_push_failure_failpoint, push_succeed = false;);
             else
@@ -543,7 +543,7 @@ void ExchangeReceiverBase<RPCContext>::reactor(const std::vector<Request> & asyn
         for (Int32 i = 0; i < check_waiting_requests_freq; ++i)
         {
             AsyncHandler * handler = nullptr;
-            if (unlikely(ready_requests.popTimeout(handler, timeout) != MPMCQueueStatus::NORMAL))
+            if (unlikely(ready_requests.popTimeout(handler, timeout) != MPMCQueueResult::OK))
                 break;
 
             handler->handle();
@@ -705,7 +705,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
         return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
     }
     std::shared_ptr<ReceivedMessage> recv_msg;
-    if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueStatus::NORMAL)
+    if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
     {
         std::unique_lock lock(mu);
 

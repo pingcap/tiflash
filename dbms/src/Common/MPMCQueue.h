@@ -43,11 +43,18 @@ struct WaitingNode : public SimpleIntrusiveNode<WaitingNode>
 enum class MPMCQueueStatus
 {
     NORMAL,
+    CANCELLED,
+    FINISHED,
+};
+
+enum class MPMCQueueResult
+{
+    OK,
+    CANCELLED,
+    FINISHED,
     TIMEOUT,
     EMPTY,
     FULL,
-    CANCELLED,
-    FINISHED,
 };
 
 /// MPMCQueue is a FIFO queue which supports concurrent operations from
@@ -64,6 +71,7 @@ class MPMCQueue
 {
 public:
     using Status = MPMCQueueStatus;
+    using Result = MPMCQueueResult;
 
     explicit MPMCQueue(Int64 capacity_)
         : capacity(capacity_)
@@ -84,22 +92,22 @@ public:
     DISALLOW_COPY_AND_MOVE(MPMCQueue);
 
     /*
-    * | Previous Status  | Empty      | Behavior                 |
+    * | Queue Status     | Empty      | Behavior                 |
     * |------------------|------------|--------------------------|
     * | Normal           | Yes        | Block                    |
-    * | Normal           | No         | Pop and return true      |
-    * | Finished         | Yes        | return false             |
-    * | Finished         | No         | Pop and return true      |
-    * | Cancelled        | Yes/No     | return false             |
+    * | Normal           | No         | Pop and return OK        |
+    * | Finished         | Yes        | return FINISHED          |
+    * | Finished         | No         | Pop and return OK        |
+    * | Cancelled        | Yes/No     | return CANCELLED         |
     * */
-    ALWAYS_INLINE Status pop(T & obj)
+    ALWAYS_INLINE Result pop(T & obj)
     {
         return popObj<true>(obj);
     }
 
-    /// Besides all conditions mentioned at `pop`, `popTimeout` will return false if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `pop`, `popTimeout` will return TIMEOUT if `timeout` is exceeded.
     template <typename Duration>
-    ALWAYS_INLINE Status popTimeout(T & obj, const Duration & timeout)
+    ALWAYS_INLINE Result popTimeout(T & obj, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -107,30 +115,29 @@ public:
     }
 
     /// Non-blocking function.
-    /// Return true if pop succeed.
-    /// else return false.
-    ALWAYS_INLINE Status tryPop(T & obj)
+    /// Besides all conditions mentioned at `pop`, `tryPop` will immediately return EMPTY if queue is `NORMAL` but empty.
+    ALWAYS_INLINE Result tryPop(T & obj)
     {
         return popObj<false>(obj);
     }
 
     /*
-    * | Previous Status  | Full       | Behavior                 |
+    * | Queue Status     | Empty      | Behavior                 |
     * |------------------|------------|--------------------------|
     * | Normal           | Yes        | Block                    |
-    * | Normal           | No         | Push and return true     |
-    * | Finished         | Yes/No     | return false             |
-    * | Cancelled        | Yes/No     | return false             |
+    * | Normal           | No         | Pop and return OK        |
+    * | Finished         | Yes/No     | return FINISHED          |
+    * | Cancelled        | Yes/No     | return CANCELLED         |
     * */
     template <typename U>
-    ALWAYS_INLINE Status push(U && u)
+    ALWAYS_INLINE Result push(U && u)
     {
         return pushObj<true>(std::forward<U>(u));
     }
 
-    /// Besides all conditions mentioned at `push`, `pushTimeout` will return false if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `push`, `pushTimeout` will return TIMEOUT if `timeout` is exceeded.
     template <typename U, typename Duration>
-    ALWAYS_INLINE Status pushTimeout(U && u, const Duration & timeout)
+    ALWAYS_INLINE Result pushTimeout(U && u, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -138,24 +145,23 @@ public:
     }
 
     /// Non-blocking function.
-    /// Return true if push succeed.
-    /// else return false.
+    /// Besides all conditions mentioned at `push`, `tryPush` will immediately return FULL if queue is `NORMAL` and full.
     template <typename U>
-    ALWAYS_INLINE Status tryPush(U && u)
+    ALWAYS_INLINE Result tryPush(U && u)
     {
         return pushObj<false>(std::forward<U>(u));
     }
 
     /// The same as `push` except it will construct the object in place.
     template <typename... Args>
-    ALWAYS_INLINE Status emplace(Args &&... args)
+    ALWAYS_INLINE Result emplace(Args &&... args)
     {
         return emplaceObj<true>(nullptr, std::forward<Args>(args)...);
     }
 
     /// The same as `pushTimeout` except it will construct the object in place.
     template <typename... Args, typename Duration>
-    ALWAYS_INLINE Status emplaceTimeout(Args &&... args, const Duration & timeout)
+    ALWAYS_INLINE Result emplaceTimeout(Args &&... args, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -164,7 +170,7 @@ public:
 
     /// The same as `tryPush` except it will construct the object in place.
     template <typename... Args>
-    ALWAYS_INLINE Status tryEmplace(Args &&... args)
+    ALWAYS_INLINE Result tryEmplace(Args &&... args)
     {
         return emplaceObj<false>(nullptr, std::forward<Args>(args)...);
     }
@@ -208,7 +214,7 @@ public:
         return write_pos - read_pos < capacity || !isNormal();
     }
 
-    MPMCQueueStatus getStatus() const
+    Status getStatus() const
     {
         std::unique_lock lock(mu);
         return status;
@@ -227,7 +233,6 @@ public:
         RUNTIME_ASSERT(isCancelled());
         return cancelReason;
     }
-
 
 private:
     using TimePoint = std::chrono::time_point<std::chrono::system_clock>;
@@ -283,7 +288,7 @@ private:
     }
 
     template <bool need_wait>
-    Status popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
+    Result popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -299,7 +304,7 @@ private:
                 return read_pos < write_pos || !isNormal();
             };
             if (!wait(lock, reader_head, node, pred, deadline))
-                return Status::TIMEOUT;
+                return Result::TIMEOUT;
         }
         if (!isCancelled() && read_pos < write_pos)
         {
@@ -317,13 +322,21 @@ private:
             /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
             ///    deadlock can be possible because different readers may notify one writer.
             notifyNext(writer_head);
-            return Status::NORMAL;
+            return Result::OK;
         }
-        return isNormal() ? Status::EMPTY : status;
+        switch (status)
+        {
+        case Status::NORMAL:
+            return Result::EMPTY;
+        case Status::CANCELLED:
+            return Result::CANCELLED;
+        case Status::FINISHED:
+            return Result::FINISHED;
+        }
     }
 
     template <bool need_wait, typename F>
-    Status assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
+    Result assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -338,7 +351,7 @@ private:
                 return write_pos - read_pos < capacity || !isNormal();
             };
             if (!wait(lock, writer_head, node, pred, deadline))
-                return Status::TIMEOUT;
+                return Result::TIMEOUT;
         }
 
         /// double check status after potential wait
@@ -353,19 +366,27 @@ private:
 
             /// See comments in `popObj`.
             notifyNext(reader_head);
-            return Status::NORMAL;
+            return Result::OK;
         }
-        return isNormal() ? Status::FULL : status;
+        switch (status)
+        {
+        case Status::NORMAL:
+            return Result::FULL;
+        case Status::CANCELLED:
+            return Result::CANCELLED;
+        case Status::FINISHED:
+            return Result::FINISHED;
+        }
     }
 
     template <bool need_wait, typename U>
-    ALWAYS_INLINE Status pushObj(U && u, const TimePoint * deadline = nullptr)
+    ALWAYS_INLINE Result pushObj(U && u, const TimePoint * deadline = nullptr)
     {
         return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<U>(u)); });
     }
 
     template <bool need_wait, typename... Args>
-    ALWAYS_INLINE Status emplaceObj(const TimePoint * deadline, Args &&... args)
+    ALWAYS_INLINE Result emplaceObj(const TimePoint * deadline, Args &&... args)
     {
         return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<Args>(args)...); });
     }
