@@ -550,6 +550,7 @@ public:
     ColumnDefinesPtr store_columns;
 
     std::atomic<bool> shutdown_called{false};
+    std::atomic<bool> replica_exist{true};
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle background_task_handle;
@@ -570,8 +571,6 @@ public:
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
-
-    UInt64 hash_salt;
 
     LoggerPtr log;
 }; // namespace DM

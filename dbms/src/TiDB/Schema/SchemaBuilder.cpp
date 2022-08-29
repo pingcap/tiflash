@@ -1247,10 +1247,11 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplicaOnPhysicalTable(
 
     // Get a copy of old table info and update replica info
     TiDB::TableInfo table_info = storage->getTableInfo();
+
+    LOG_FMT_INFO(log, "Updating replica info for {}, replica count from {} to {}", name_mapper.debugCanonicalName(*db_info, table_info), table_info.replica_info.count, latest_table_info->replica_info.count);
     table_info.replica_info = latest_table_info->replica_info;
 
     AlterCommands commands;
-    LOG_FMT_INFO(log, "Updating replica info for {}", name_mapper.debugCanonicalName(*db_info, table_info));
     // Note that update replica info will update table info in table create statement by modifying
     // original table info with new replica info instead of using latest_table_info directly, so that
     // other changes (ALTER commands) won't be saved.

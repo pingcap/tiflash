@@ -907,6 +907,15 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
         LOG_FMT_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
 }
 
+DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited()
+{
+    if (storeInited())
+    {
+        return _store;
+    }
+    return nullptr;
+}
+
 std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool need_block)
 {
     (void)table_structure_lock;

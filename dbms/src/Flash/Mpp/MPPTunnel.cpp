@@ -159,7 +159,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
         if (status == TunnelStatus::Finished)
             throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
 
-        if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)))
+        if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)) == MPMCQueueResult::OK)
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -322,7 +322,7 @@ void SyncTunnelSender::sendJob()
     try
     {
         MPPDataPacketPtr res;
-        while (send_queue->pop(res))
+        while (send_queue->pop(res) == MPMCQueueResult::OK)
         {
             if (!writer->write(*res))
             {
@@ -380,7 +380,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     try
     {
         MPPDataPacketPtr res;
-        queue_empty_flag = !send_queue->pop(res);
+        queue_empty_flag = send_queue->pop(res) != MPMCQueueResult::OK;
         if (!queue_empty_flag)
         {
             if (!writer->write(*res))
@@ -416,7 +416,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
 LocalTunnelSender::MPPDataPacketPtr LocalTunnelSender::readForLocal()
 {
     MPPDataPacketPtr res;
-    if (send_queue->pop(res))
+    if (send_queue->pop(res) == MPMCQueueResult::OK)
         return res;
     consumerFinish("");
     return nullptr;
