@@ -147,6 +147,8 @@ public:
         return getAndMaybeInitStore();
     }
 
+    DM::DeltaMergeStorePtr getStoreIfInited();
+
     bool isCommonHandle() const override { return is_common_handle; }
 
     size_t getRowKeyColumnSize() const override { return rowkey_column_size; }
