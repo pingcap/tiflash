@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/EstablishCall.h>
+#include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 
@@ -186,19 +187,17 @@ void EstablishCallData::unexpectedWriteDone()
 void EstablishCallData::trySendOneMsg()
 {
     MPPDataPacketPtr res;
-    bool ok;
-    if (!async_tunnel_sender->pop(res, ok, this))
+    switch (async_tunnel_sender->pop(res, this))
     {
+    case GRPCSendQueueRes::OK:
+        write(*res);
+        return;
+    case GRPCSendQueueRes::FINISHED:
+        writeDone("", grpc::Status::OK);
+        return;
+    case GRPCSendQueueRes::EMPTY:
         // No new message.
         return;
-    }
-    if (ok)
-    {
-        write(*res);
-    }
-    else
-    {
-        writeDone("", grpc::Status::OK);
     }
 }
 

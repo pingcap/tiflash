@@ -39,6 +39,13 @@ class TestGRPCSendQueue;
 
 using GRPCKickFunc = std::function<grpc_call_error(void *)>;
 
+enum class GRPCSendQueueRes
+{
+    OK,
+    FINISHED,
+    EMPTY,
+};
+
 /// A multi-producer-single-consumer queue dedicated to async grpc streaming send work.
 ///
 /// In streaming rpc, a client/server may send messages continuous.
@@ -90,11 +97,12 @@ public:
 
     /// Push the data from queue and kick the grpc completion queue.
     ///
-    /// For return value meanings, see `MPMCQueue::finish`.
+    /// Return true if push succeed.
+    /// Else return false.
     template <typename U>
-    MPMCQueueResult push(U && u)
+    bool push(U && u)
     {
-        auto ret = send_queue.push(u);
+        auto ret = send_queue.push(u) == MPMCQueueResult::OK;
         if (ret)
         {
             kickCompletionQueue();
@@ -104,37 +112,52 @@ public:
 
     /// Pop the data from queue.
     ///
-    /// Return true if pop is done and `ok` means the if there is
-    /// new data from queue(see `MPMCQueue::pop`).
-    ///
-    /// Return false if pop can't be done due to blocking and `new_tag`
-    /// is saved. When the next push/finish is called, the `new_tag` will
-    /// be pushed into grpc completion queue.
-    bool pop(T & data, bool & ok, void * new_tag)
+    /// Return OK if pop is done.
+    /// Return FINISHED if the queue is finished and empty.
+    /// Return EMPTY if there is no data in queue and `new_tag` is saved.
+    /// When the next push/finish is called, the `new_tag` will be pushed
+    /// into grpc completion queue.
+    GRPCSendQueueRes pop(T & data, void * new_tag)
     {
-        RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr when popping");
-        if (!send_queue.isNextPopNonBlocking())
+        RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
+        auto res = send_queue.tryPop(data);
+        switch (res)
         {
-            // Next pop is blocking.
-            std::unique_lock lock(mu);
-            RUNTIME_ASSERT(tag == nullptr, log, "tag is not nullptr when popping");
-            // Double check if next pop is blocking.
-            if (!send_queue.isNextPopNonBlocking())
-            {
-                // If blocking, set the tag and return false.
-                tag = new_tag;
-                return false;
-            }
-            // If not blocking, pop will be called.
+        case MPMCQueueResult::OK:
+            return GRPCSendQueueRes::OK;
+        case MPMCQueueResult::FINISHED:
+            return GRPCSendQueueRes::FINISHED;
+        case MPMCQueueResult::EMPTY:
+            // Handle this case latter.
+            break;
+        default:
+            RUNTIME_ASSERT(false, log, "Result {} is invalid", res);
         }
-        ok = send_queue.pop(data);
-        return true;
+
+        std::unique_lock lock(mu);
+
+        RUNTIME_ASSERT(tag == nullptr, log, "tag {} is not nullptr", tag);
+        // Double check if this queue is empty.
+        res = send_queue.tryPop(data);
+        switch (res)
+        {
+        case MPMCQueueResult::OK:
+            return GRPCSendQueueRes::OK;
+        case MPMCQueueResult::FINISHED:
+            return GRPCSendQueueRes::FINISHED;
+        case MPMCQueueResult::EMPTY:
+            // If empty, set the tag and return false.
+            tag = new_tag;
+            return GRPCSendQueueRes::EMPTY;
+        default:
+            RUNTIME_ASSERT(false, log, "Result {} is invalid", res);
+        }
     }
 
     /// Finish the queue and kick the grpc completion queue.
     ///
     /// For return value meanings, see `MPMCQueue::finish`.
-    MPMCQueueResult finish()
+    bool finish()
     {
         auto ret = send_queue.finish();
         if (ret)

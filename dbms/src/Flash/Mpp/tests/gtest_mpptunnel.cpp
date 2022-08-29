@@ -158,30 +158,26 @@ public:
         while (true)
         {
             MPPDataPacketPtr res;
-            bool ok;
-            if (!async_tunnel_sender->pop(res, ok, this))
+            switch (async_tunnel_sender->pop(res, this))
             {
+            case GRPCSendQueueRes::OK:
+                if (write_failed)
+                {
+                    async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
+                    return;
+                }
+                write_packet_vec.push_back(res->data());
+                return;
+            case GRPCSendQueueRes::FINISHED:
+                async_tunnel_sender->consumerFinish("");
+                return;
+            case GRPCSendQueueRes::EMPTY:
                 std::unique_lock<std::mutex> lock(mu);
                 cv.wait(lock, [&] {
                     return has_msg;
                 });
                 has_msg = false;
                 continue;
-            }
-            if (ok)
-            {
-                if (write_failed)
-                {
-                    async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
-                    return;
-                }
-
-                write_packet_vec.push_back(res->data());
-            }
-            else
-            {
-                async_tunnel_sender->consumerFinish("");
-                return;
             }
         }
     }

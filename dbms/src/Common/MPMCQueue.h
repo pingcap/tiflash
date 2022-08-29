@@ -202,18 +202,6 @@ public:
         });
     }
 
-    bool isNextPopNonBlocking() const
-    {
-        std::unique_lock lock(mu);
-        return read_pos < write_pos || !isNormal();
-    }
-
-    bool isNextPushNonBlocking() const
-    {
-        std::unique_lock lock(mu);
-        return write_pos - read_pos < capacity || !isNormal();
-    }
-
     Status getStatus() const
     {
         std::unique_lock lock(mu);

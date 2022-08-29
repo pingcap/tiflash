@@ -54,7 +54,6 @@ try
 {
     int p1, p2, p3;
     int data;
-    bool ok;
     GTEST_ASSERT_EQ(queue.push(1), true);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
@@ -62,20 +61,18 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p1), true);
-    GTEST_ASSERT_EQ(ok, true);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
     GTEST_ASSERT_EQ(data, 1);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p1), true);
-    GTEST_ASSERT_EQ(ok, true);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
     GTEST_ASSERT_EQ(data, 2);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
     // `queue` is empty, `tag` should be saved.
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p2), false);
+    GTEST_ASSERT_EQ(queue.pop(data, &p2), GRPCSendQueueRes::EMPTY);
     checkTagInQueue(&p2);
     checkTag(nullptr);
 
@@ -84,14 +81,13 @@ try
     checkTagInQueue(nullptr);
     checkTag(&p2);
 
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p3), true);
-    GTEST_ASSERT_EQ(ok, true);
+    GTEST_ASSERT_EQ(queue.pop(data, &p3), GRPCSendQueueRes::OK);
     GTEST_ASSERT_EQ(data, 3);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
     // `queue` is empty, `tag` should be saved.
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p3), false);
+    GTEST_ASSERT_EQ(queue.pop(data, &p3), GRPCSendQueueRes::EMPTY);
     checkTagInQueue(&p3);
     checkTag(nullptr);
 
@@ -105,9 +101,8 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    // `queue` is finished so `ok` is false.
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p3), true);
-    GTEST_ASSERT_EQ(ok, false);
+    // `queue` is finished and empty.
+    GTEST_ASSERT_EQ(queue.pop(data, &p3), GRPCSendQueueRes::FINISHED);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 }
@@ -118,9 +113,8 @@ try
 {
     int p1;
     int data;
-    bool ok;
     // `queue` is empty, `tag` should be saved.
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p1), false);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::EMPTY);
     checkTagInQueue(&p1);
     checkTag(nullptr);
 
@@ -132,9 +126,8 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p1), true);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
     GTEST_ASSERT_EQ(data, 1);
-    GTEST_ASSERT_EQ(ok, true);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
@@ -143,15 +136,13 @@ try
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p1), true);
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
     GTEST_ASSERT_EQ(data, 2);
-    GTEST_ASSERT_EQ(ok, true);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 
-    // `queue` is finished so `ok` is false.
-    GTEST_ASSERT_EQ(queue.pop(data, ok, &p1), true);
-    GTEST_ASSERT_EQ(ok, false);
+    // `queue` is finished and empty.
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::FINISHED);
     checkTagInQueue(nullptr);
     checkTag(nullptr);
 }

@@ -155,7 +155,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
                 throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         }
 
-        if (tunnel_sender->push(std::make_shared<mpp::MPPDataPacket>(data)) == MPMCQueueResult::OK)
+        if (tunnel_sender->push(std::make_shared<mpp::MPPDataPacket>(data)))
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
