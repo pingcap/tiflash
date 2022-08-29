@@ -23,8 +23,6 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/WALStore.h>
 
-#include <unordered_set>
-
 namespace DB
 {
 namespace PS::V3
@@ -176,11 +174,9 @@ private:
     const static String manifests_file_name;
 
     std::mutex callbacks_mutex;
-    // Only std::map not std::unordered_map. We need insert/erase do not invalid iterators.
-    using ExternalPageCallbacksContainer = std::map<NamespaceId, ExternalPageCallbacks>;
+    // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
+    using ExternalPageCallbacksContainer = std::map<NamespaceId, std::shared_ptr<ExternalPageCallbacks>>;
     ExternalPageCallbacksContainer callbacks_container;
-    std::mutex callbacks_remove_mutex;
-    std::unordered_set<NamespaceId> callbacks_remove_queue;
 };
 
 } // namespace PS::V3

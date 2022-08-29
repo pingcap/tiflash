@@ -1245,17 +1245,24 @@ CATCH
 TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
 try
 {
-    auto * ptr = new int(100); // mock the `StorageDeltaMerge`
-    SCOPE_EXIT({ delete ptr; });
+    auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.scanner = [&ptr]() -> ExternalPageCallbacks::PathAndIdsVec {
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return {};
+
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [&ptr](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return;
+
         (*ptr) += 1; // mock access the storage inside callback
     };
-    callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
 
     // Start a PageStorage gc and suspend it before clean external page
@@ -1268,36 +1275,53 @@ try
     // mock table created while gc is running
     {
         ExternalPageCallbacks new_callbacks;
-        new_callbacks.scanner = [&ptr]() -> ExternalPageCallbacks::PathAndIdsVec {
+        new_callbacks.ns_id = TEST_NAMESPACE_ID + 1;
+        new_callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+            auto ptr = ptr_weak_ref.lock();
+            if (!ptr)
+                return {};
+
             (*ptr) += 1; // mock access the storage inside callback
             return {};
         };
-        new_callbacks.remover = [&ptr](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+            auto ptr = ptr_weak_ref.lock();
+            if (!ptr)
+                return;
+
             (*ptr) += 1; // mock access the storage inside callback
         };
-        new_callbacks.ns_id = TEST_NAMESPACE_ID + 1;
         page_storage->registerExternalPagesCallbacks(new_callbacks);
     }
 
     sp_gc.next(); // continue the gc
     th_gc.wait();
+
+    ASSERT_EQ(*ptr, 100 + 4);
 }
 CATCH
 
 TEST_F(PageStorageTest, ConcurrencyRemoveExtCallbacks)
 try
 {
-    auto * ptr = new int(100); // mock the `StorageDeltaMerge`
-    SCOPE_EXIT({ delete ptr; });
+    auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
     ExternalPageCallbacks callbacks;
-    callbacks.scanner = [&ptr]() -> ExternalPageCallbacks::PathAndIdsVec {
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return {};
+
         (*ptr) += 1; // mock access the storage inside callback
         return {};
     };
-    callbacks.remover = [&ptr](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return;
+
         (*ptr) += 1; // mock access the storage inside callback
     };
-    callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
 
     // Start a PageStorage gc and suspend it before clean external page
@@ -1309,7 +1333,6 @@ try
 
     // mock table dropped while gc is running
     page_storage->unregisterExternalPagesCallbacks(TEST_NAMESPACE_ID);
-    delete ptr;
     ptr = nullptr;
 
     sp_gc.next(); // continue the gc

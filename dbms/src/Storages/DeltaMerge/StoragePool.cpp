@@ -135,7 +135,7 @@ FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
 
 bool GlobalStoragePool::gc()
 {
-    return gc(global_context.getSettingsRef(), true, DELTA_MERGE_GC_PERIOD);
+    return gc(global_context.getSettingsRef(), /*immediately=*/true, DELTA_MERGE_GC_PERIOD);
 }
 
 bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)

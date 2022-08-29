@@ -302,12 +302,12 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     // make the callbacks safe.
     ExternalPageCallbacks callbacks;
     callbacks.ns_id = storage_pool->getNamespaceId();
-    callbacks.scanner = [path_pool_ref = std::weak_ptr<StoragePathPool>(path_pool), file_provider = global_context.getFileProvider()]() {
+    callbacks.scanner = [path_pool_weak_ref = std::weak_ptr<StoragePathPool>(path_pool), file_provider = global_context.getFileProvider()]() {
         ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
 
         // If the StoragePathPool is invalid, meaning we call `scanner` after dropping the table,
         // simply return an empty list is OK.
-        auto path_pool = path_pool_ref.lock();
+        auto path_pool = path_pool_weak_ref.lock();
         if (!path_pool)
             return path_and_ids_vec;
 
@@ -326,12 +326,12 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         }
         return path_and_ids_vec;
     };
-    callbacks.remover = [path_pool_ref = std::weak_ptr<StoragePathPool>(path_pool), //
+    callbacks.remover = [path_pool_weak_ref = std::weak_ptr<StoragePathPool>(path_pool), //
                          file_provider = global_context.getFileProvider(),
                          logger = log](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
         // If the StoragePathPool is invalid, meaning we call `remover` after dropping the table,
         // simply skip is OK.
-        auto path_pool = path_pool_ref.lock();
+        auto path_pool = path_pool_weak_ref.lock();
         if (!path_pool)
             return;
 
