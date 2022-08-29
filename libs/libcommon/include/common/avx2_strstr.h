@@ -37,9 +37,9 @@ FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(
 }
 
 template <typename F>
-ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * src, ssize_t n, const char *& res, const Block32 & check_block32, F && callback)
+ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * src, ssize_t n, const char *& res, const Block32 & check_block, F && callback)
 {
-    auto mask = get_block32_cmp_eq_mask(src, check_block32);
+    auto mask = get_block32_cmp_eq_mask(src, check_block);
     for (; mask;)
     {
         auto c = rightmost_bit_one_index(mask);
@@ -62,9 +62,9 @@ ALWAYS_INLINE static inline bool check_aligned_block32_may_exceed(const char * s
 }
 
 template <typename F>
-ALWAYS_INLINE static inline bool check_block32_x1(const char * src, const char *& res, const Block32 & check_block32, F && callback)
+ALWAYS_INLINE static inline bool check_block32x1(const char * src, const char *& res, const Block32 & check_block, F && callback)
 {
-    auto mask = get_block32_cmp_eq_mask(src, check_block32);
+    auto mask = get_block32_cmp_eq_mask(src, check_block);
     for (; mask;)
     {
         const auto * t = src + rightmost_bit_one_index(mask);
@@ -79,14 +79,14 @@ ALWAYS_INLINE static inline bool check_block32_x1(const char * src, const char *
 }
 
 template <typename F>
-ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *& res, const Block32 & check_block32, F && callback)
+ALWAYS_INLINE static inline bool check_block32x4(const char * src, const char *& res, const Block32 & check_block, F && callback)
 {
     {
         uint32_t data{};
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
             data |= get_block32_cmp_eq_mask(
                 src + BLOCK32_SIZE * i,
-                check_block32);
+                check_block);
 
         if (data)
         {
@@ -103,7 +103,7 @@ ALWAYS_INLINE static inline bool check_block32_x4(const char * src, const char *
         const auto * start = src + BLOCK32_SIZE * i;
         auto mask = get_block32_cmp_eq_mask(
             start,
-            check_block32);
+            check_block);
         for (; mask;)
         {
             auto c = rightmost_bit_one_index(mask);
@@ -127,26 +127,29 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
     const char * res = nullptr;
     const auto check_block32 = _mm256_set1_epi8(target);
 
-    if (uint8_t rcx = OFFSET_ALIGNED(size_t(src), BLOCK32_SIZE); rcx != 0)
+    // align address to 32 for better performance
+    // memory allocator will always alloc memory aligned to `Page Size`(usually 4K, one Block `512B` at least) from system
+    // if there is valid data at address S, then it is safe to visit address [ALIGN_TO_PAGE_SIZE(S), S].
+    if (uint8_t offset = OFFSET_FROM_ALIGNED(size_t(src), BLOCK32_SIZE); offset != 0)
     {
         // align to 32
         src = reinterpret_cast<decltype(src)>(ALIGNED_ADDR(size_t(src), BLOCK32_SIZE));
 
-        auto mask = get_block32_cmp_eq_mask(src, check_block32)
-            >> rcx;
+        // right shift offset to remove useless mask bit
+        auto mask = get_block32_cmp_eq_mask(src, check_block32) >> offset;
 
         for (; mask;)
         {
             auto c = rightmost_bit_one_index(mask);
             if (c >= n)
                 return nullptr;
-            const auto * t = c + src + rcx; // add offset
+            const auto * t = c + src + offset; // add offset
             if (callback(t))
                 return t;
             mask = clear_rightmost_bit_one(mask);
         }
 
-        n -= BLOCK32_SIZE - rcx;
+        n -= BLOCK32_SIZE - offset;
 
         if (n <= 0)
         {
@@ -160,7 +163,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
 
     for (; (n >= AVX2_UNROLL_NUM * BLOCK32_SIZE);)
     {
-        if (check_block32_x4(src, res, check_block32, callback))
+        if (check_block32x4(src, res, check_block32, callback))
             return res;
         src += AVX2_UNROLL_NUM * BLOCK32_SIZE, n -= AVX2_UNROLL_NUM * BLOCK32_SIZE;
     }
@@ -169,7 +172,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
 
     for (; (n >= BLOCK32_SIZE);)
     {
-        if (check_block32_x1(src, res, check_block32, callback))
+        if (check_block32x1(src, res, check_block32, callback))
             return res;
         n -= BLOCK32_SIZE, src += BLOCK32_SIZE;
     }

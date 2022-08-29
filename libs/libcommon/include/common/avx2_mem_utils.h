@@ -52,7 +52,7 @@ constexpr uint32_t Block16Mask = std::numeric_limits<uint16_t>::max();
 constexpr auto AVX2_UNROLL_NUM = 4;
 
 // `N` is `1U << xxx`
-#define OFFSET_ALIGNED(ADDR, N) ((ADDR) % (N)) // (ADDR) & (N-1)
+#define OFFSET_FROM_ALIGNED(ADDR, N) ((ADDR) % (N)) // (ADDR) & (N-1)
 #define ALIGNED_ADDR(ADDR, N) ((ADDR) / (N) * (N)) // (ADDR) & (-N)
 
 template <typename T, typename S = T>
@@ -74,6 +74,11 @@ FLATTEN_INLINE_PURE static inline uint32_t get_block32_cmp_eq_mask(const void * 
     uint32_t mask = _mm256_movemask_epi8(_mm256_cmpeq_epi8(load_block32(p1), load_block32(p2)));
     return mask;
 }
+FLATTEN_INLINE_PURE static inline uint32_t get_block16_cmp_eq_mask(const void * p1, const void * p2)
+{
+    uint32_t mask = _mm_movemask_epi8(_mm_cmpeq_epi8(load_block16(p1), load_block16(p2)));
+    return mask;
+}
 FLATTEN_INLINE_PURE static inline bool check_block32_eq(const char * a, const char * b)
 {
     auto data = _mm256_xor_si256(
@@ -86,28 +91,23 @@ FLATTEN_INLINE_PURE static inline int cmp_block1(const void * p1, const void * p
     return int32_t(read<uint8_t>(p1)) - int32_t(read<uint8_t>(p2));
 }
 
-// can NOT use `pure` attribute becasue this function will update data from outside
-FLATTEN_INLINE static inline int cmp_block8(const char * p1, const char * p2)
+FLATTEN_INLINE_PURE static inline int cmp_block8(const void * p1, const void * p2)
 {
-    using T = uint64_t;
-    static_assert(sizeof(T) == 8);
-    auto a = _mm_set_epi64x(0, *reinterpret_cast<const T *>(p1));
-    auto b = _mm_set_epi64x(0, *reinterpret_cast<const T *>(p2));
-    uint32_t mask = _mm_movemask_epi8(_mm_cmpeq_epi8(a, b));
-    mask -= Block16Mask;
-    if (unlikely(mask != 0))
-    {
-        auto pos = rightmost_bit_one_index(mask);
-        return cmp_block1(p1 + pos, p2 + pos);
-    }
-    return 0;
+    // the left most bit may be 1, use std::memcmp(,,8) to use `sbb`
+    /*
+        bswap   rcx
+        bswap   rdx
+        xor     eax, eax
+        cmp     rcx, rdx
+        seta    al
+        sbb     eax, 0
+    */
+    return std::memcmp(p1, p2, 8);
 }
-FLATTEN_INLINE static inline int cmp_block16(const char * p1, const char * p2)
-{
-    auto a = load_block16(p1);
-    auto b = load_block16(p2);
 
-    uint32_t mask = _mm_movemask_epi8(_mm_cmpeq_epi8(a, b));
+FLATTEN_INLINE_PURE static inline int cmp_block16(const char * p1, const char * p2)
+{
+    uint32_t mask = get_block16_cmp_eq_mask(p1, p2); // mask is up to 0xffff
     mask -= Block16Mask;
     if (unlikely(mask != 0))
     {
@@ -116,9 +116,9 @@ FLATTEN_INLINE static inline int cmp_block16(const char * p1, const char * p2)
     }
     return 0;
 }
-FLATTEN_INLINE static inline int cmp_block32(const char * p1, const char * p2)
+FLATTEN_INLINE_PURE static inline int cmp_block32(const char * p1, const char * p2)
 {
-    auto mask = get_block32_cmp_eq_mask(p1, p2);
+    uint32_t mask = get_block32_cmp_eq_mask(p1, p2); // mask is up to 0xffffffff
     mask -= Block32Mask;
     if (unlikely(mask != 0))
     {
@@ -128,17 +128,27 @@ FLATTEN_INLINE static inline int cmp_block32(const char * p1, const char * p2)
     return 0;
 }
 
+template <bool use_vptest_instr = false>
 FLATTEN_INLINE_PURE static inline bool check_block32x4_eq(const char * a, const char * b)
 {
-    auto all_ones = _mm256_set1_epi8(0xFF);
-
-    Block32 data = all_ones;
-    for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
-        data = _mm256_and_si256(data, _mm256_cmpeq_epi8(load_block32(a + i * BLOCK32_SIZE), load_block32(b + i * BLOCK32_SIZE)));
-
-    return 0 != _mm256_testc_si256(data, all_ones);
+    if constexpr (use_vptest_instr)
+    {
+        auto all_ones = _mm256_set1_epi8(0xFF);
+        Block32 data = all_ones;
+        for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
+            data = _mm256_and_si256(data, _mm256_cmpeq_epi8(load_block32(a + i * BLOCK32_SIZE), load_block32(b + i * BLOCK32_SIZE)));
+        return 0 != _mm256_testc_si256(data, all_ones);
+    }
+    else
+    {
+        uint32_t mask = Block32Mask;
+        for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
+            mask &= get_block32_cmp_eq_mask(a + i * BLOCK32_SIZE, b + i * BLOCK32_SIZE);
+        return mask == Block32Mask;
+    }
 }
-FLATTEN_INLINE static inline int cmp_block32x4(const char * a, const char * b)
+
+FLATTEN_INLINE_PURE static inline int cmp_block32x4(const char * a, const char * b)
 {
     if (check_block32x4_eq(a, b))
         return 0;
@@ -188,6 +198,11 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
             // 2~3
             using T = uint16_t;
 
+            // load 2 bytes to one int32: [0, 0, p1, p0]
+            // shift left one byte: [0, p1, p0, 0]
+            // reverse swap: [0, p0, p1, 0]
+            // add one byte from high addr: [0, p0, p1, p2]
+            // the left most bit is always 0, it's safe to use subtraction directly
             int32_t a = read<T>(p1);
             int32_t b = read<T>(p2);
             a <<= sizeof(uint8_t) * 8;
@@ -203,6 +218,10 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
         {
             // 4~8
             using T = uint32_t;
+
+            // load high 4 bytes to one uint64: [0, 0, 0, 0, pn, p_n-1, p_n-2, p_n-3]
+            // shift left 4 byte: [pn, p_n-1, p_n-2, p_n-3, 0, 0, 0, 0]
+            // add low 4 bytes from high addr: [pn, p_n-1, p_n-2, p_n-3, p3, p2, p1, p0]
             uint64_t a = read<T>(p1 + n - sizeof(T));
             uint64_t b = read<T>(p2 + n - sizeof(T));
             a <<= sizeof(T) * 8;
@@ -210,7 +229,7 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
             a |= read<T>(p1);
             b |= read<T>(p2);
 
-            return std::memcmp(&a, &b, 8);
+            return cmp_block8(&a, &b);
         }
         else if (likely(n <= 16))
         {
@@ -236,7 +255,7 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
             return ret;
         {
             // align addr of one data pointer
-            auto offset = BLOCK32_SIZE - OFFSET_ALIGNED(size_t(p2), BLOCK32_SIZE);
+            auto offset = BLOCK32_SIZE - OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE);
             p1 += offset;
             p2 += offset;
             n -= offset;
@@ -396,7 +415,7 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             return false;
         {
             // align addr of one data pointer
-            auto offset = BLOCK32_SIZE - OFFSET_ALIGNED(size_t(p2), BLOCK32_SIZE);
+            auto offset = BLOCK32_SIZE - OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE);
             p1 += offset;
             p2 += offset;
             n -= offset;
