@@ -41,6 +41,13 @@ bool isAllowToUseTwoLevelGroupBy(size_t before_agg_streams_size, const Settings 
 }
 } // namespace
 
+bool isSumOnPartialResults(const tipb::Expr & expr)
+{
+    if (!expr.has_aggfuncmode())
+        return false;
+    return getAggFunctionName(expr) == "sum" && (expr.aggfuncmode() == tipb::AggFunctionMode::FinalMode || expr.aggfuncmode() == tipb::AggFunctionMode::Partial2Mode);
+}
+
 bool isFinalAgg(const tipb::Aggregation & aggregation)
 {
     /// set default value to true to make it compatible with old version of TiDB since before this

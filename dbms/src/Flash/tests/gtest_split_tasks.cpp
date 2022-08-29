@@ -25,6 +25,9 @@ public:
     void initializeContext() override
     {
         ExecutorTest::initializeContext();
+
+        enablePlanner(false);
+
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "l_table"}, {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
@@ -41,7 +44,7 @@ try
                      .topN("s2", false, 10)
                      .buildMPPTasks(context);
 
-    size_t task_size = tasks.size();
+    const auto task_size = tasks.size();
     std::vector<String> executors = {
         "exchange_sender_7 | type:Hash, {<0, String>, <1, String>, <2, String>}\n"
         " aggregation_6 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, String>)}\n"
@@ -90,17 +93,17 @@ try
                      .topN("join_c", false, 2)
                      .buildMPPTasks(context);
 
-    size_t task_size = tasks.size();
+    const auto task_size = tasks.size();
     std::vector<String> executors = {
-        "exchange_sender_6 | type:Hash, {<0, String>}\n"
-        " table_scan_1 | {<0, String>}",
+        "exchange_sender_6 | type:Hash, {<0, String>, <1, String>}\n"
+        " table_scan_1 | {<0, String>, <1, String>}",
         "exchange_sender_5 | type:Hash, {<0, String>, <1, String>}\n"
         " table_scan_0 | {<0, String>, <1, String>}",
-        "exchange_sender_4 | type:PassThrough, {<0, String>, <1, String>, <2, String>}\n"
+        "exchange_sender_4 | type:PassThrough, {<0, String>, <1, String>, <2, String>, <3, String>}\n"
         " topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
         "  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
         "   exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>}\n"
-        "   exchange_receiver_8 | type:PassThrough, {<0, String>}"};
+        "   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>}"};
     for (size_t i = 0; i < task_size; ++i)
     {
         ASSERT_DAGREQUEST_EQAUL(executors[i], tasks[i].dag_request);

@@ -56,6 +56,12 @@ public:
 
     const Context & getContext() const { return context; }
 
+    void reset(const std::vector<NameAndTypePair> & source_columns_)
+    {
+        source_columns = source_columns_;
+        prepared_sets.clear();
+    }
+
     const std::vector<NameAndTypePair> & getCurrentInputColumns() const;
 
     DAGPreparedSets & getPreparedSets() { return prepared_sets; }
@@ -77,7 +83,7 @@ public:
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
-    std::tuple<WindowDescription, NamesAndTypes> appendWindowColumns(const tipb::Window & window, ExpressionActionsChain::Step & step);
+    void appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, ExpressionActionsChain::Step & step);
 
     WindowDescription buildWindowDescription(const tipb::Window & window);
 

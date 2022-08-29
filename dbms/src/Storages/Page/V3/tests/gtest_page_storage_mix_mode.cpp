@@ -26,7 +26,6 @@
 
 namespace DB
 {
-using namespace DM;
 using namespace tests;
 namespace PS::V3::tests
 {
@@ -65,13 +64,13 @@ public:
         storage_path_pool_v2 = std::make_unique<StoragePathPool>(Strings{path}, Strings{path}, "test", "t1", true, cap_metrics, global_context.getFileProvider());
 
         global_context.setPageStorageRunMode(PageStorageRunMode::ONLY_V2);
-        storage_pool_v2 = std::make_unique<StoragePool>(global_context, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
+        storage_pool_v2 = std::make_unique<DM::StoragePool>(global_context, TEST_NAMESPACE_ID, *storage_path_pool_v2, "test.t1");
 
         global_context.setPageStorageRunMode(PageStorageRunMode::MIX_MODE);
-        storage_pool_mix = std::make_unique<StoragePool>(global_context,
-                                                         TEST_NAMESPACE_ID,
-                                                         *storage_path_pool_v2,
-                                                         "test.t1");
+        storage_pool_mix = std::make_unique<DM::StoragePool>(global_context,
+                                                             TEST_NAMESPACE_ID,
+                                                             *storage_path_pool_v2,
+                                                             "test.t1");
 
         reloadV2StoragePool();
     }
@@ -106,8 +105,8 @@ public:
 protected:
     std::unique_ptr<StoragePathPool> storage_path_pool_v2;
     static std::unique_ptr<PathPool> storage_path_pool_v3;
-    std::unique_ptr<StoragePool> storage_pool_v2;
-    std::unique_ptr<StoragePool> storage_pool_mix;
+    std::unique_ptr<DM::StoragePool> storage_pool_v2;
+    std::unique_ptr<DM::StoragePool> storage_pool_mix;
 
     PageWriterPtr page_writer_v2;
     PageWriterPtr page_writer_mix;
@@ -941,7 +940,7 @@ try
 
     {
         LOG_FMT_INFO(logger, "remove 100, create 105");
-        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(100);
@@ -951,7 +950,7 @@ try
     }
     {
         LOG_FMT_INFO(logger, "remove 101, create 106");
-        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(101);
@@ -961,7 +960,7 @@ try
     }
     {
         LOG_FMT_INFO(logger, "remove 102, create 107");
-        StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(102);

@@ -70,6 +70,7 @@ class ReadIndexWorkerManager;
 using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 class ReadIndexStressTest;
 struct FileUsageStatistics;
+class PathPool;
 class RegionPersister;
 
 /// TODO: brief design document.
@@ -77,7 +78,7 @@ class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_);
-    void restore(const TiFlashRaftProxyHelper *);
+    void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(RegionID region_id) const;
 
@@ -162,7 +163,9 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
@@ -231,7 +234,9 @@ private:
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     RegionManager region_manager;
 
     std::unique_ptr<RegionPersister> region_persister;
@@ -275,7 +280,7 @@ class KVStoreTaskLock : private boost::noncopyable
     std::lock_guard<std::mutex> lock;
 };
 
-void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t & terminate_signals_counter);
-void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t &, double, double, double);
+void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
+void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t &, double, double, double);
 
 } // namespace DB

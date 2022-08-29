@@ -29,6 +29,16 @@ void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Conte
 
 ::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
 
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
+
+#define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
+    std::vector<bool> bools{false, true}; \
+    for (auto flag : bools)               \
+    {                                     \
+        enablePlanner(flag);
+
+#define WRAP_FOR_DIS_ENABLE_PLANNER_END }
+
 class ExecutorTest : public ::testing::Test
 {
 protected:
@@ -42,6 +52,7 @@ public:
     ExecutorTest()
         : context(TiFlashTestEnv::getContext())
     {}
+
     static void SetUpTestCase();
 
     virtual void initializeContext();
@@ -49,6 +60,8 @@ public:
     void initializeClientInfo();
 
     DAGContext & getDAGContext();
+
+    void enablePlanner(bool is_enable);
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
@@ -78,20 +91,9 @@ public:
 
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map,
         size_t concurrency = 1);
 
-    ColumnsWithTypeAndName executeStreams(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        size_t concurrency = 1);
-
-    ColumnsWithTypeAndName executeStreamsWithSingleSource(
-        const std::shared_ptr<tipb::DAGRequest> & request,
-        const ColumnsWithTypeAndName & source_columns,
-        SourceType type = TableScan,
-        size_t concurrency = 1);
-
-    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks);
+    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 protected:
     MockDAGRequestContext context;
@@ -100,9 +102,5 @@ protected:
 
 #define ASSERT_DAGREQUEST_EQAUL(str, request) dagRequestEqual((str), (request));
 #define ASSERT_BLOCKINPUTSTREAM_EQAUL(str, request, concurrency) executeInterpreter((str), (request), (concurrency))
-#define ASSERT_MPPTASK_EQUAL(tasks, expect_cols)                                          \
-    TiFlashTestEnv::getGlobalContext().setColumnsForTest(context.executorIdColumnsMap()); \
-    TiFlashTestEnv::getGlobalContext().setMPPTest();                                      \
-    ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks), expected_cols);
 
 } // namespace DB::tests
