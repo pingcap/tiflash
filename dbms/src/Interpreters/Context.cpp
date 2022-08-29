@@ -32,8 +32,6 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/EmbeddedDictionaries.h>
-#include <Interpreters/ExternalDictionaries.h>
 #include <Interpreters/ExternalModels.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>
@@ -134,8 +132,6 @@ struct ContextShared
 
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
-    mutable std::shared_ptr<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaeis. Have lazy initialization.
-    mutable std::shared_ptr<ExternalDictionaries> external_dictionaries;
     mutable std::shared_ptr<ExternalModels> external_models;
     String default_profile_name; /// Default profile name used for default values.
     String system_profile_name; /// Profile used by system processes
@@ -1173,29 +1169,6 @@ Context & Context::getGlobalContext()
     return *global_context;
 }
 
-
-const EmbeddedDictionaries & Context::getEmbeddedDictionaries() const
-{
-    return getEmbeddedDictionariesImpl(false);
-}
-
-EmbeddedDictionaries & Context::getEmbeddedDictionaries()
-{
-    return getEmbeddedDictionariesImpl(false);
-}
-
-
-const ExternalDictionaries & Context::getExternalDictionaries() const
-{
-    return getExternalDictionariesImpl(false);
-}
-
-ExternalDictionaries & Context::getExternalDictionaries()
-{
-    return getExternalDictionariesImpl(false);
-}
-
-
 const ExternalModels & Context::getExternalModels() const
 {
     return getExternalModelsImpl(false);
@@ -1204,45 +1177,6 @@ const ExternalModels & Context::getExternalModels() const
 ExternalModels & Context::getExternalModels()
 {
     return getExternalModelsImpl(false);
-}
-
-
-EmbeddedDictionaries & Context::getEmbeddedDictionariesImpl(const bool throw_on_error) const
-{
-    std::lock_guard lock(shared->embedded_dictionaries_mutex);
-
-    if (!shared->embedded_dictionaries)
-    {
-        auto geo_dictionaries_loader = runtime_components_factory->createGeoDictionariesLoader();
-
-        shared->embedded_dictionaries = std::make_shared<EmbeddedDictionaries>(
-            std::move(geo_dictionaries_loader),
-            *this->global_context,
-            throw_on_error);
-    }
-
-    return *shared->embedded_dictionaries;
-}
-
-
-ExternalDictionaries & Context::getExternalDictionariesImpl(const bool throw_on_error) const
-{
-    std::lock_guard lock(shared->external_dictionaries_mutex);
-
-    if (!shared->external_dictionaries)
-    {
-        if (!this->global_context)
-            throw Exception("Logical error: there is no global context", ErrorCodes::LOGICAL_ERROR);
-
-        auto config_repository = runtime_components_factory->createExternalDictionariesConfigRepository();
-
-        shared->external_dictionaries = std::make_shared<ExternalDictionaries>(
-            std::move(config_repository),
-            *this->global_context,
-            throw_on_error);
-    }
-
-    return *shared->external_dictionaries;
 }
 
 ExternalModels & Context::getExternalModelsImpl(bool throw_on_error) const
@@ -1264,18 +1198,6 @@ ExternalModels & Context::getExternalModelsImpl(bool throw_on_error) const
 
     return *shared->external_models;
 }
-
-void Context::tryCreateEmbeddedDictionaries() const
-{
-    static_cast<void>(getEmbeddedDictionariesImpl(true));
-}
-
-
-void Context::tryCreateExternalDictionaries() const
-{
-    static_cast<void>(getExternalDictionariesImpl(true));
-}
-
 
 void Context::tryCreateExternalModels() const
 {
@@ -1894,7 +1816,7 @@ size_t Context::getMaxStreams() const
     bool is_cop_request = false;
     if (dag_context != nullptr)
     {
-        if (dag_context->isTest())
+        if (isExecutorTest())
             max_streams = dag_context->initialize_concurrency;
         else if (!dag_context->isBatchCop() && !dag_context->isMPPTask())
         {
@@ -1910,6 +1832,51 @@ size_t Context::getMaxStreams() const
         /// for cop request, the max_streams should be 1
         throw Exception("Cop request only support running with max_streams = 1");
     return max_streams;
+}
+
+bool Context::isMPPTest() const
+{
+    return test_mode == mpp_test;
+}
+
+void Context::setMPPTest()
+{
+    test_mode = mpp_test;
+}
+
+bool Context::isExecutorTest() const
+{
+    return test_mode == executor_test;
+}
+
+void Context::setExecutorTest()
+{
+    test_mode = executor_test;
+}
+
+bool Context::isTest() const
+{
+    return test_mode != non_test;
+}
+
+void Context::setMockStorage(MockStorage & mock_storage_)
+{
+    mock_storage = mock_storage_;
+}
+
+MockStorage Context::mockStorage() const
+{
+    return mock_storage;
+}
+
+MockMPPServerInfo Context::mockMPPServerInfo() const
+{
+    return mpp_server_info;
+}
+
+void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
+{
+    mpp_server_info = info;
 }
 
 SessionCleaner::~SessionCleaner()

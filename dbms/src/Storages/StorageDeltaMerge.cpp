@@ -258,7 +258,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
             {
                 throw PrimaryKeyNotMatchException(*pks.begin(), actual_pri_keys[0]);
             }
-            // fallover
+            // fallthrough
         }
 
         // Unknown bug, throw an exception.
@@ -904,6 +904,15 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
     size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     if (after_delete_rows != total_rows - delete_rows)
         LOG_FMT_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
+}
+
+DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited()
+{
+    if (storeInited())
+    {
+        return _store;
+    }
+    return nullptr;
 }
 
 std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool need_block)

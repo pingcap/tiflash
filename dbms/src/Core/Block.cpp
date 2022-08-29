@@ -49,6 +49,15 @@ Block::Block(const ColumnsWithTypeAndName & data_)
 }
 
 
+Block::Block(const NamesAndTypes & names_and_types)
+{
+    data.reserve(names_and_types.size());
+    for (const auto & name_and_type : names_and_types)
+        data.emplace_back(name_and_type.type, name_and_type.name);
+    initializeIndexByName();
+}
+
+
 void Block::initializeIndexByName()
 {
     for (size_t i = 0, size = data.size(); i < size; ++i)

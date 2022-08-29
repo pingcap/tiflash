@@ -106,10 +106,8 @@ bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
     state = ERR_HANDLE;
-    if (write(packet))
-        err_status = grpc::Status::OK;
-    else
-        err_status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+    err_status = grpc::Status::OK;
+    write(packet);
 }
 
 void EstablishCallData::setFinishState(const String & msg)
@@ -117,15 +115,16 @@ void EstablishCallData::setFinishState(const String & msg)
     state = FINISH;
     if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
     {
-        async_tunnel_sender->consumerFinish(fmt::format("{}: {}",
-                                                        async_tunnel_sender->getTunnelId(),
-                                                        msg)); //trigger mpp tunnel finish work
+        String complete_msg = fmt::format("{}: {}",
+                                          async_tunnel_sender->getTunnelId(),
+                                          msg);
+        async_tunnel_sender->consumerFinishWithLock(complete_msg);
     }
 }
 
 void EstablishCallData::writeDone(const ::grpc::Status & status)
 {
-    setFinishState("writeDone called");
+    state = FINISH;
     if (stopwatch)
     {
         LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
@@ -173,13 +172,20 @@ void EstablishCallData::proceed()
         {
             ready = false;
             lk.unlock();
-            async_tunnel_sender->sendOne();
+            async_tunnel_sender->sendOne(true);
         }
         else
             ready = true;
     }
     else if (state == ERR_HANDLE)
     {
+        if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
+        {
+            String complete_msg = fmt::format("{}: {}",
+                                              async_tunnel_sender->getTunnelId(),
+                                              "state is ERR_HANDLE");
+            async_tunnel_sender->consumerFinishWithLock(complete_msg);
+        }
         writeDone(err_status);
     }
     else

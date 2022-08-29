@@ -14,7 +14,10 @@
 
 #pragma once
 
+#include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
+#include <Debug/MockServerInfo.h>
+#include <Debug/MockStorage.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
@@ -47,8 +50,6 @@ namespace DB
 struct ContextShared;
 class IRuntimeComponentsFactory;
 class QuotaForIntervals;
-class EmbeddedDictionaries;
-class ExternalDictionaries;
 class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
@@ -97,6 +98,8 @@ class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
+using MockStorage = DB::tests::MockStorage;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -154,10 +157,20 @@ private:
 
     bool use_l0_opt = true;
 
+    enum TestMode
+    {
+        non_test,
+        mpp_test,
+        executor_test
+    };
+    TestMode test_mode = non_test;
+
+    MockStorage mock_storage;
+    MockMPPServerInfo mpp_server_info{};
+
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
@@ -271,14 +284,8 @@ public:
     /// Set a setting by name. Read the value in text form from a string (for example, from a config, or from a URL parameter).
     void setSetting(const String & name, const std::string & value);
 
-    const EmbeddedDictionaries & getEmbeddedDictionaries() const;
-    const ExternalDictionaries & getExternalDictionaries() const;
     const ExternalModels & getExternalModels() const;
-    EmbeddedDictionaries & getEmbeddedDictionaries();
-    ExternalDictionaries & getExternalDictionaries();
     ExternalModels & getExternalModels();
-    void tryCreateEmbeddedDictionaries() const;
-    void tryCreateExternalDictionaries() const;
     void tryCreateExternalModels() const;
 
     /// I/O formats.
@@ -463,6 +470,18 @@ public:
 
     size_t getMaxStreams() const;
 
+    /// For executor tests and MPPTask tests.
+    bool isMPPTest() const;
+    void setMPPTest();
+    bool isExecutorTest() const;
+    void setExecutorTest();
+    bool isTest() const;
+
+    void setMockStorage(MockStorage & mock_storage_);
+    MockStorage mockStorage() const;
+    MockMPPServerInfo mockMPPServerInfo() const;
+    void setMockMPPServerInfo(MockMPPServerInfo & info);
+
 private:
     /** Check if the current client has access to the specified database.
       * If access is denied, throw an exception.
@@ -470,8 +489,6 @@ private:
       */
     void checkDatabaseAccessRightsImpl(const std::string & database_name) const;
 
-    EmbeddedDictionaries & getEmbeddedDictionariesImpl(bool throw_on_error) const;
-    ExternalDictionaries & getExternalDictionariesImpl(bool throw_on_error) const;
     ExternalModels & getExternalModelsImpl(bool throw_on_error) const;
 
     StoragePtr getTableImpl(const String & database_name, const String & table_name, Exception * exception) const;

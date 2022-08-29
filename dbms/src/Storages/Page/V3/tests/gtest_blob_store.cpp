@@ -33,6 +33,8 @@ namespace DB::PS::V3::tests
 using BlobStat = BlobStore::BlobStats::BlobStat;
 using BlobStats = BlobStore::BlobStats;
 
+constexpr size_t path_num = 3;
+
 class BlobStoreStatsTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -42,7 +44,12 @@ public:
         auto path = getTemporaryPath();
         DB::tests::TiFlashTestEnv::tryRemovePath(path);
         createIfNotExist(path);
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        Strings paths;
+        for (size_t i = 0; i < path_num; i++)
+        {
+            paths.emplace_back(fmt::format("{}/{}", path, i));
+        }
+        delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(paths);
     }
 
 protected:
@@ -50,6 +57,16 @@ protected:
     LoggerPtr logger;
     PSDiskDelegatorPtr delegator;
 };
+
+static size_t getTotalStatsNum(const BlobStore::BlobStats::StatsMap & stats_map)
+{
+    size_t total_stats_num = 0;
+    for (auto iter = stats_map.begin(); iter != stats_map.end(); iter++)
+    {
+        total_stats_num += iter->second.size();
+    }
+    return total_stats_num;
+}
 
 TEST_F(BlobStoreStatsTest, RestoreEmpty)
 {
@@ -61,7 +78,7 @@ TEST_F(BlobStoreStatsTest, RestoreEmpty)
     ASSERT_TRUE(stats_copy.empty());
 
     EXPECT_EQ(stats.roll_id, 1);
-    EXPECT_NO_THROW(stats.createStat(stats.roll_id, stats.lock()));
+    EXPECT_NO_THROW(stats.createStat(stats.roll_id, config.file_limit_size, stats.lock()));
 }
 
 TEST_F(BlobStoreStatsTest, Restore)
@@ -74,8 +91,8 @@ try
 
     {
         const auto & lock = stats.lock();
-        stats.createStatNotChecking(file_id1, lock);
-        stats.createStatNotChecking(file_id2, lock);
+        stats.createStatNotChecking(file_id1, config.file_limit_size, lock);
+        stats.createStatNotChecking(file_id2, config.file_limit_size, lock);
     }
 
     {
@@ -108,8 +125,8 @@ try
 
     auto stats_copy = stats.getStats();
 
-    ASSERT_EQ(stats_copy.size(), 1);
-    ASSERT_EQ(stats_copy.begin()->second.size(), 2);
+    ASSERT_EQ(stats_copy.size(), std::min(getTotalStatsNum(stats_copy), path_num));
+    ASSERT_EQ(getTotalStatsNum(stats_copy), 2);
     EXPECT_EQ(stats.roll_id, 13);
 
     auto stat1 = stats.blobIdToStat(file_id1);
@@ -121,11 +138,11 @@ try
 
     // This will throw exception since we try to create
     // a new file bigger than restored `roll_id`
-    EXPECT_ANY_THROW({ stats.createStat(14, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(14, config.file_limit_size, stats.lock()); });
 
-    EXPECT_ANY_THROW({ stats.createStat(file_id1, stats.lock()); });
-    EXPECT_ANY_THROW({ stats.createStat(file_id2, stats.lock()); });
-    EXPECT_ANY_THROW({ stats.createStat(stats.roll_id + 1, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(file_id1, config.file_limit_size, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(file_id2, config.file_limit_size, stats.lock()); });
+    EXPECT_ANY_THROW({ stats.createStat(stats.roll_id + 1, config.file_limit_size, stats.lock()); });
 }
 CATCH
 
@@ -133,22 +150,22 @@ TEST_F(BlobStoreStatsTest, testStats)
 {
     BlobStats stats(logger, delegator, config);
 
-    auto stat = stats.createStat(0, stats.lock());
+    auto stat = stats.createStat(0, config.file_limit_size, stats.lock());
 
     ASSERT_TRUE(stat);
     ASSERT_TRUE(stat->smap);
-    stats.createStat(1, stats.lock());
-    stats.createStat(2, stats.lock());
+    stats.createStat(1, config.file_limit_size, stats.lock());
+    stats.createStat(2, config.file_limit_size, stats.lock());
 
     auto stats_copy = stats.getStats();
 
-    ASSERT_EQ(stats_copy.size(), 1);
-    ASSERT_EQ(stats_copy.begin()->second.size(), 3);
+    ASSERT_EQ(stats_copy.size(), std::min(getTotalStatsNum(stats_copy), path_num));
+    ASSERT_EQ(getTotalStatsNum(stats_copy), 3);
     ASSERT_EQ(stats.roll_id, 3);
 
     stats.eraseStat(0, stats.lock());
     stats.eraseStat(1, stats.lock());
-    ASSERT_EQ(stats.stats_map.size(), 1);
+    ASSERT_EQ(getTotalStatsNum(stats.getStats()), 1);
     ASSERT_EQ(stats.roll_id, 3);
 }
 
@@ -169,7 +186,7 @@ TEST_F(BlobStoreStatsTest, testStat)
     ASSERT_EQ(blob_file_id, 1);
     ASSERT_FALSE(stat);
 
-    stats.createStat(0, stats.lock());
+    stats.createStat(0, config.file_limit_size, stats.lock());
     std::tie(stat, blob_file_id) = stats.chooseStat(10, stats.lock());
     ASSERT_EQ(blob_file_id, INVALID_BLOBFILE_ID);
     ASSERT_TRUE(stat);
@@ -233,7 +250,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
 
     BlobStats stats(logger, delegator, config);
 
-    stat = stats.createStat(1, stats.lock());
+    stat = stats.createStat(1, config.file_limit_size, stats.lock());
     offset = stat->getPosFromStat(BLOBFILE_LIMIT_SIZE - 1, stats.lock());
     ASSERT_EQ(offset, 0);
 
@@ -252,7 +269,7 @@ TEST_F(BlobStoreStatsTest, testFullStats)
     ASSERT_FALSE(stat);
 
     // A new stat can use
-    stat = stats.createStat(blob_file_id, stats.lock());
+    stat = stats.createStat(blob_file_id, config.file_limit_size, stats.lock());
     offset = stat->getPosFromStat(100, stats.lock());
     ASSERT_EQ(offset, 0);
 
@@ -278,7 +295,16 @@ public:
         auto path = getTemporaryPath();
         DB::tests::TiFlashTestEnv::tryRemovePath(path);
         createIfNotExist(path);
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        Strings paths;
+        for (size_t i = 0; i < path_num; i++)
+        {
+            paths.emplace_back(fmt::format("{}/{}", path, i));
+        }
+        delegator = std::make_shared<DB::tests::MockDiskDelegatorMulti>(paths);
+
+        // Note although set config.cached_fd_size to 0, the cache fd size in blobstore still have capacity 1.
+        // Decrease cache size to make problems more easily be exposed.
+        config.cached_fd_size = 0;
     }
 
 protected:
@@ -296,10 +322,13 @@ try
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
 
-    const auto & path = getTemporaryPath();
-    createIfNotExist(path);
-    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
-    Poco::File(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
+    const auto & paths = delegator->listPaths();
+    for (const auto & path : paths)
+    {
+        createIfNotExist(path);
+    }
+    Poco::File(fmt::format("{}/{}{}", paths[rand() % path_num], BlobFile::BLOB_PREFIX_NAME, file_id1)).createFile();
+    Poco::File(fmt::format("{}/{}{}", paths[rand() % path_num], BlobFile::BLOB_PREFIX_NAME, file_id2)).createFile();
     blob_store.registerPaths();
 
     {
@@ -386,11 +415,20 @@ try
         write_batch.clear();
     };
 
-    auto check_in_disk_file = [](String parent_path, std::vector<BlobFileId> exited_blobs) -> bool {
+    auto check_in_disk_file = [](const Strings & paths, std::vector<BlobFileId> exited_blobs) -> bool {
         for (const auto blob_id : exited_blobs)
         {
-            Poco::File file(fmt::format("{}/{}{}", parent_path, BlobFile::BLOB_PREFIX_NAME, blob_id));
-            if (!file.exists())
+            bool exists = false;
+            for (const auto & path : paths)
+            {
+                Poco::File file(fmt::format("{}/{}{}", path, BlobFile::BLOB_PREFIX_NAME, blob_id));
+                if (file.exists())
+                {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists)
             {
                 return false;
             }
@@ -415,83 +453,95 @@ try
 
     // Case 1, all of blob been restored
     {
-        auto test_path = getTemporaryPath();
+        auto test_paths = delegator->listPaths();
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {1, 2, 3});
 
         blob_store_check.blob_stats.restore();
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
-        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
-        createIfNotExist(test_path);
+        ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
+        for (const auto & path : test_paths)
+        {
+            DB::tests::TiFlashTestEnv::tryRemovePath(path);
+            createIfNotExist(path);
+        }
     }
 
     // Case 2, only recover blob 1
     {
-        auto test_path = getTemporaryPath();
+        auto test_paths = delegator->listPaths();
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {1});
 
         blob_store_check.blob_stats.restore();
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {1}));
-        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
-        createIfNotExist(test_path);
+        ASSERT_TRUE(check_in_disk_file(test_paths, {1}));
+        for (const auto & path : test_paths)
+        {
+            DB::tests::TiFlashTestEnv::tryRemovePath(path);
+            createIfNotExist(path);
+        }
     }
 
     // Case 3, only recover blob 2
     {
-        auto test_path = getTemporaryPath();
+        auto test_paths = delegator->listPaths();
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {2});
 
         blob_store_check.blob_stats.restore();
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {2}));
-        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
-        createIfNotExist(test_path);
+        ASSERT_TRUE(check_in_disk_file(test_paths, {2}));
+        for (const auto & path : test_paths)
+        {
+            DB::tests::TiFlashTestEnv::tryRemovePath(path);
+            createIfNotExist(path);
+        }
     }
 
     // Case 4, only recover blob 3
     {
-        auto test_path = getTemporaryPath();
+        auto test_paths = delegator->listPaths();
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {3});
 
         blob_store_check.blob_stats.restore();
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {3}));
-        DB::tests::TiFlashTestEnv::tryRemovePath(test_path);
-        createIfNotExist(test_path);
+        ASSERT_TRUE(check_in_disk_file(test_paths, {3}));
+        for (const auto & path : test_paths)
+        {
+            DB::tests::TiFlashTestEnv::tryRemovePath(path);
+            createIfNotExist(path);
+        }
     }
 
     // Case 5, recover a not exist blob
     {
-        auto test_path = getTemporaryPath();
+        auto test_paths = delegator->listPaths();
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
-        ASSERT_TRUE(check_in_disk_file(test_path, {1, 2, 3}));
+        ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
         auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
         ASSERT_THROW(restore_blobs(blob_store_check, {4}), DB::Exception);
@@ -1034,14 +1084,16 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     auto edit = blob_store.write(wb, nullptr);
 
     size_t idx = 0;
-    PageEntriesV3 entries_del1, entries_del2;
+    PageEntriesV3 entries_del1, entries_del2, remain_entries;
     for (const auto & record : edit.getRecords())
     {
+        bool deleted = false;
         for (size_t index : remove_entries_idx1)
         {
             if (idx == index)
             {
                 entries_del1.emplace_back(record.entry);
+                deleted = true;
                 break;
             }
         }
@@ -1051,8 +1103,13 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
             if (idx == index)
             {
                 entries_del2.emplace_back(record.entry);
+                deleted = true;
                 break;
             }
+        }
+        if (!deleted)
+        {
+            remain_entries.emplace_back(record.entry);
         }
 
         idx++;
@@ -1089,6 +1146,13 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     String path = blob_store.getBlobFile(1)->getPath();
     Poco::File blob_file_in_disk(path);
     ASSERT_EQ(blob_file_in_disk.getSize(), stat->sm_total_size);
+
+    // Clear cache to reproduce https://github.com/pingcap/tiflash/issues/5532
+    blob_store.cached_files.reset();
+    // Check whether the stat can be totally removed
+    stat->changeToReadOnly();
+    blob_store.remove(remain_entries);
+    ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 0);
 }
 
 TEST_F(BlobStoreTest, testBlobStoreGcStats2)
@@ -1210,6 +1274,7 @@ TEST_F(BlobStoreTest, GC)
     ASSERT_TRUE(file1.exists());
     ASSERT_TRUE(file2.exists());
     ASSERT_EQ(file1.getSize(), file2.getSize());
+    ASSERT_EQ(blob_store.blob_stats.blobIdToStat(2)->sm_total_size, file2.getSize());
 }
 
 
@@ -1349,7 +1414,7 @@ try
         wb.clear();
     }
 
-    // PUT page_id 51 into blob 2 range [0,500] , stat will be a BIG_BLOB in mem
+    // PUT page_id 51 into blob 2 range [0,500]
     {
         size_t size_500 = 500;
         char c_buff[size_500];
@@ -1367,7 +1432,6 @@ try
 
         // verify blobstat
         const auto & stat = blob_store.blob_stats.blobIdToStat(2);
-        ASSERT_TRUE(stat->isBigBlob());
         ASSERT_EQ(stat->sm_max_caps, 0);
         ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
         ASSERT_EQ(stat->sm_valid_size, 500);
@@ -1478,7 +1542,6 @@ try
 }
 CATCH
 
-
 TEST_F(BlobStoreTest, TestBigBlobRemove)
 try
 {
@@ -1502,13 +1565,14 @@ try
         const auto & gc_info = blob_store.getGCStats();
         ASSERT_TRUE(gc_info.empty());
 
+        ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 1);
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         blob_store.remove({records[0].entry});
+        ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 0);
     }
 }
 CATCH
-
 
 TEST_F(BlobStoreTest, TestBigBlobRegisterPath)
 try
@@ -1539,11 +1603,9 @@ try
         auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
         blob_store.registerPaths();
 
-        const auto & stat = blob_store.blob_stats.blobIdToStat(1);
-        ASSERT_TRUE(stat->isBigBlob());
-
         blob_store.blob_stats.restoreByEntry(entry_from_write);
         blob_store.blob_stats.restore();
+        const auto & stat = blob_store.blob_stats.blobIdToStat(1);
         ASSERT_EQ(stat->sm_max_caps, 0);
         ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
         ASSERT_EQ(stat->sm_valid_size, 500);
@@ -1552,4 +1614,143 @@ try
 }
 CATCH
 
+TEST_F(BlobStoreTest, TestRestartWithSmallerFileLimitSize)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    PageId page_id = 50;
+
+    BlobStore::Config config_with_small_file_limit_size;
+    config_with_small_file_limit_size.file_limit_size = 800;
+
+    PageEntryV3 entry_from_write1;
+    PageEntryV3 entry_from_write2;
+    {
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+        size_t size_500 = 500;
+        size_t size_200 = 200;
+        char c_buff1[size_500];
+        char c_buff2[size_200];
+
+        WriteBatch wb;
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), size_500);
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), size_200);
+        wb.putPage(page_id, /* tag */ 0, buff1, size_500);
+        wb.putPage(page_id + 1, /* tag */ 0, buff2, size_200);
+        auto edit = blob_store.write(wb, nullptr);
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 2);
+        entry_from_write1 = records[0].entry;
+        entry_from_write2 = records[1].entry;
+        ASSERT_EQ(entry_from_write1.size, 500);
+        ASSERT_EQ(entry_from_write2.size, 200);
+
+        ASSERT_TRUE(blob_store.blob_stats.blobIdToStat(1)->isNormal());
+    }
+
+    config_with_small_file_limit_size.file_limit_size = 400;
+    {
+        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+        blob_store.registerPaths();
+        blob_store.blob_stats.restoreByEntry(entry_from_write1);
+        blob_store.blob_stats.restoreByEntry(entry_from_write2);
+        blob_store.blob_stats.restore();
+        const auto & stat = blob_store.blob_stats.blobIdToStat(1);
+        ASSERT_EQ(stat->sm_max_caps, 0);
+        ASSERT_DOUBLE_EQ(stat->sm_valid_rate, 1.0);
+        ASSERT_EQ(stat->sm_valid_size, 700);
+        ASSERT_EQ(stat->sm_total_size, 700);
+        ASSERT_TRUE(stat->isReadOnly());
+
+        blob_store.remove({entry_from_write1});
+
+        // new write will create new blob file
+        size_t size_100 = 100;
+        char c_buff[size_100];
+
+        WriteBatch wb;
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_100);
+        wb.putPage(page_id, /* tag */ 0, buff, size_100);
+        auto edit = blob_store.write(wb, nullptr);
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 1);
+        ASSERT_EQ(records[0].entry.file_id, 2);
+        ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 2);
+
+        // remove one shot blob file
+        blob_store.remove({entry_from_write2});
+        ASSERT_EQ(getTotalStatsNum(blob_store.blob_stats.getStats()), 1);
+    }
+}
+CATCH
+
+TEST_F(BlobStoreTest, TestBigBlobGC)
+try
+{
+    const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
+    PageId page_id1 = 50;
+    PageId page_id2 = 51;
+    PageId page_id3 = 52;
+
+    BlobStore::Config config_with_small_file_limit_size;
+    config_with_small_file_limit_size.file_limit_size = 800;
+
+    PageEntryV3 entry_from_write1;
+    PageEntryV3 entry_from_write2;
+    PageEntryV3 entry_from_write3;
+    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+    {
+        size_t size_100 = 100;
+        size_t size_500 = 500;
+        size_t size_200 = 200;
+        char c_buff1[size_100];
+        char c_buff2[size_500];
+        char c_buff3[size_200];
+
+        WriteBatch wb;
+        ReadBufferPtr buff1 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff1), size_100);
+        ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff2), size_500);
+        ReadBufferPtr buff3 = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff3), size_200);
+        wb.putPage(page_id1, /* tag */ 0, buff1, size_100);
+        wb.putPage(page_id2, /* tag */ 0, buff2, size_500);
+        wb.putPage(page_id3, /* tag */ 0, buff3, size_200);
+        auto edit = blob_store.write(wb, nullptr);
+        const auto & records = edit.getRecords();
+        ASSERT_EQ(records.size(), 3);
+        entry_from_write1 = records[0].entry;
+        entry_from_write2 = records[1].entry;
+        entry_from_write3 = records[2].entry;
+
+        ASSERT_TRUE(blob_store.blob_stats.blobIdToStat(1)->isNormal());
+    }
+
+    config_with_small_file_limit_size.file_limit_size = 400;
+    config_with_small_file_limit_size.heavy_gc_valid_rate = 0.99;
+    {
+        blob_store.reloadConfig(config_with_small_file_limit_size);
+
+        Poco::File file1(blob_store.getBlobFile(1)->getPath());
+        ASSERT_EQ(file1.getSize(), 800);
+        ASSERT_TRUE(blob_store.blob_stats.blobIdToStat(1)->isNormal()); // BlobStat type doesn't change after reload
+        blob_store.remove({entry_from_write3});
+        auto blob_need_gc = blob_store.getGCStats();
+        ASSERT_EQ(blob_need_gc.size(), 0);
+        ASSERT_EQ(file1.getSize(), 600);
+
+        blob_store.remove({entry_from_write1});
+
+        const auto & blob_need_gc2 = blob_store.getGCStats();
+        ASSERT_EQ(blob_need_gc2.size(), 1);
+        std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
+        PageIdAndVersionedEntries versioned_pageid_entries;
+        versioned_pageid_entries.emplace_back(page_id2, 1, entry_from_write2);
+        gc_context[1] = versioned_pageid_entries;
+        PageEntriesEdit gc_edit = blob_store.gc(gc_context, 500);
+        const auto & records = gc_edit.getRecords();
+        ASSERT_EQ(records.size(), 1);
+        ASSERT_EQ(records[0].entry.file_id, 2);
+        ASSERT_EQ(records[0].entry.size, 500);
+    }
+}
+CATCH
 } // namespace DB::PS::V3::tests

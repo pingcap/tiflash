@@ -99,9 +99,6 @@ extern const char exception_after_drop_segment[];
 
 namespace DM
 {
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
-
 // ================================================
 //   MergeDeltaTaskPool
 // ================================================
@@ -210,7 +207,6 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
     , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
 {
     // for mock test, table_id_ should be DB::InvalidTableID
@@ -502,7 +498,6 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     auto * ctx = new DMContext(db_context.getGlobalContext(),
                                path_pool,
                                *storage_pool,
-                               hash_salt,
                                latest_gc_safe_point.load(std::memory_order_acquire),
                                settings.not_compress_columns,
                                is_common_handle,
@@ -2006,9 +2001,17 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+    if (is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
+    else
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
     Stopwatch watch_seg_split;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds());
+        else
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
+    });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
@@ -2158,9 +2161,17 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
+    if (is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge_fg).Increment();
+    else
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
     Stopwatch watch_seg_merge;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge_fg).Observe(watch_seg_merge.elapsedSeconds());
+        else
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
+    });
 
     auto left_range = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();

@@ -99,9 +99,9 @@ public:
             throw Exception("Should not generate MockDiskDelegatorMulti with empty paths");
     }
 
-    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const
     {
-        return true;
+        return page_path_map.find(id_lvl) != page_path_map.end();
     }
 
 
@@ -115,9 +115,14 @@ public:
         return paths[0];
     }
 
-    String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const
     {
-        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+        auto iter = page_path_map.find(id_lvl);
+        if (likely(iter != page_path_map.end()))
+        {
+            return paths[iter->second];
+        }
+        throw Exception(fmt::format("Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second));
     }
 
     void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/) {}
@@ -127,19 +132,40 @@ public:
         return paths;
     }
 
-    String choosePath(const PageFileIdAndLevel & /*id_lvl*/)
+    String choosePath(const PageFileIdAndLevel & id_lvl)
     {
+        if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
+        {
+            return paths[iter->second];
+        }
         auto chosen = paths[choose_idx];
         choose_idx = (choose_idx + 1) % paths.size();
         return chosen;
     }
 
     size_t addPageFileUsedSize(
-        const PageFileIdAndLevel & /*id_lvl*/,
+        const PageFileIdAndLevel & id_lvl,
         size_t /*size_to_add*/,
-        const String & /*pf_parent_path*/,
-        bool /*need_insert_location*/)
+        const String & pf_parent_path,
+        bool need_insert_location)
     {
+        if (need_insert_location)
+        {
+            UInt32 index = UINT32_MAX;
+
+            for (size_t i = 0; i < paths.size(); i++)
+            {
+                if (paths[i] == pf_parent_path)
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (unlikely(index == UINT32_MAX))
+                throw Exception(fmt::format("Unrecognized path {}", pf_parent_path));
+            page_path_map[id_lvl] = index;
+        }
         return 0;
     }
 
@@ -154,6 +180,8 @@ public:
 private:
     Strings paths;
     size_t choose_idx = 0;
+    // PageFileID -> path index
+    PathPool::PageFilePathMap page_path_map;
 };
 
 } // namespace tests

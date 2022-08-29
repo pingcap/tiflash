@@ -49,12 +49,16 @@ public:
         return context.scan(db_name, table_name).project(param).build(context);
     };
 
+    static const size_t max_concurrency_level = 10;
+
     void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
-        for (size_t i = 1; i < 10; i += 2)
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+        for (size_t i = 1; i <= max_concurrency_level; i += 2)
         {
             ASSERT_COLUMNS_EQ_UR(executeStreams(request, i), expect_columns);
         }
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
     /// Prepare column data

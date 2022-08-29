@@ -232,6 +232,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
                 auto * pack_property = new_pack_properties.add_property();
                 pack_property->set_num_rows(cur_effective_num_rows - last_effective_num_rows);
                 pack_property->set_gc_hint_version(gc_hint_version);
+                pack_property->set_deleted_rows(mvcc_stream->getDeletedRows());
             }
             mvcc_stream->readSuffix();
         }
@@ -328,17 +329,18 @@ StableValueSpace::Snapshot::getInputStream(
     const RSOperatorPtr & filter,
     UInt64 max_data_version,
     size_t expected_block_size,
-    bool enable_clean_read,
-    bool is_fast_mode)
+    bool enable_handle_clean_read,
+    bool is_fast_mode,
+    bool enable_del_clean_read)
 {
-    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_clean_read: {}", max_data_version, enable_clean_read);
+    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_mode, enable_del_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
         builder
-            .enableCleanRead(enable_clean_read, is_fast_mode, max_data_version)
+            .enableCleanRead(enable_handle_clean_read, is_fast_mode, enable_del_clean_read, max_data_version)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
