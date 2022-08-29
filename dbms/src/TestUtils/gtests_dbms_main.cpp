@@ -61,7 +61,7 @@ int main(int argc, char ** argv)
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     DB::ServerInfo server_info;
-    // `DMFileReaderPool` should be destructed after `SegmentReaderPoolManager`.
+    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DB::DM::DMFileReaderPool::instance();
     DB::DM::SegmentReaderPoolManager::instance().init(server_info);
     DB::DM::SegmentReadTaskScheduler::instance();
