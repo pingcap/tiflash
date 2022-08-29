@@ -61,9 +61,10 @@ int main(int argc, char ** argv)
     DB::tests::TiFlashTestEnv::setupLogger();
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     DB::ServerInfo server_info;
+    // `DMFileReaderPool` should be destructed after `SegmentReaderPoolManager`.
+    DB::DM::DMFileReaderPool::instance();
     DB::DM::SegmentReaderPoolManager::instance().init(server_info);
     DB::DM::SegmentReadTaskScheduler::instance();
-    DB::DM::DMFileReaderPool::instance();
 
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
