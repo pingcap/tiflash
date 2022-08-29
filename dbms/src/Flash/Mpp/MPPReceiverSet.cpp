@@ -39,12 +39,11 @@ ExchangeReceiverPtr MPPReceiverSet::getExchangeReceiver(const String & executor_
 void MPPReceiverSet::cancel()
 {
     for (auto & it : exchange_receiver_map)
-    {
         it.second->cancel();
-    }
     for (auto & cop_reader : coprocessor_readers)
         cop_reader->cancel();
 }
+
 
 void MPPReceiverSet::setUpConnection()
 {
@@ -52,5 +51,13 @@ void MPPReceiverSet::setUpConnection()
     {
         it.second->setUpConnection();
     }
+
+void MPPReceiverSet::close()
+{
+    for (auto & it : exchange_receiver_map)
+        it.second->close();
+    for (auto & cop_reader : coprocessor_readers)
+        cop_reader->close();
+
 }
 } // namespace DB
