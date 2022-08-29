@@ -42,6 +42,7 @@
 #include <ext/scope_guard.h>
 #include <memory>
 #include <numeric>
+#include "fiu.h"
 
 namespace ProfileEvents
 {
@@ -92,6 +93,11 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
+
+namespace FailPoints
+{
+extern const char filter_once[];
+} // namespace FailPoints
 
 namespace DM
 {
@@ -560,18 +566,34 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
 
     BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
 
-    //delta_stream = std::make_shared<DMFilterAllBlockInputStream>(delta_stream, columns_to_read, data_ranges, 0, dm_context.tracing_id);
-    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
+    bool use_once_filter = false;
+
+    fiu_do_on(FailPoints::filter_once, { use_once_filter = true; });
+
+    if (use_once_filter)
+    {
+        delta_stream = std::make_shared<DMFilterAllBlockInputStream>(delta_stream, columns_to_read, data_ranges, 0, dm_context.tracing_id);
+    }
+    else
+    {
+        delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
+    }
+
+    //auto delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
     stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
 
     if (filter_delete_mark)
     {
-        delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read, dm_context.tracing_id);
+        if (!use_once_filter) {
+            delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read, dm_context.tracing_id);
+        }
         stable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, columns_to_read, dm_context.tracing_id);
     }
     else
     {
-        delta_stream = std::make_shared<DMColumnProjectionBlockInputStream>(delta_stream, columns_to_read);
+        if (!use_once_filter) {
+            delta_stream = std::make_shared<DMColumnProjectionBlockInputStream>(delta_stream, columns_to_read);
+        }
         stable_stream = std::make_shared<DMColumnProjectionBlockInputStream>(stable_stream, columns_to_read);
     }
 
