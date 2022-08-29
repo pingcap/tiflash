@@ -18,15 +18,8 @@
 
 namespace DB
 {
-void Pipeline::execute(Context & context, size_t max_streams)
+void Pipeline::execute()
 {
-    assert(plan_node);
-    DAGPipeline pipeline;
-    plan_node->transform(pipeline, context, max_streams);
-    executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for pipeline");
-    stream = pipeline.firstStream();
-    assert(stream);
-
     stream->readPrefix();
     while (stream->read())
     {
@@ -34,9 +27,19 @@ void Pipeline::execute(Context & context, size_t max_streams)
     stream->readSuffix();
 }
 
+void Pipeline::prepare(Context & context, size_t max_streams)
+{
+    assert(plan_node);
+    DAGPipeline pipeline;
+    plan_node->transform(pipeline, context, max_streams);
+    executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for pipeline");
+    stream = pipeline.firstStream();
+    assert(stream);
+}
+
 void Pipeline::cancel(bool is_kill)
 {
-    if (auto p_stream = dynamic_pointer_cast<IProfilingBlockInputStream>(stream.load()); p_stream)
+    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
     {
         p_stream->cancel(is_kill);
     }

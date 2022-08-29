@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/DAGScheduler.h>
@@ -108,10 +109,12 @@ void DAGScheduler::handlePipelineSubmit(
 {
     assert(event && event->type == PipelineEventType::submit && event->pipeline);
     auto pipeline = event->pipeline;
+    pipeline->prepare(context, max_streams);
     thread_manager->schedule(true, "ExecutePipeline", [&, pipeline]() {
+        CPUAffinityManager::getInstance().bindSelfQueryThread();
         try
         {
-            pipeline->execute(context, max_streams);
+            pipeline->execute();
             event_queue.push(PipelineEvent::finish(pipeline));
         }
         catch (...)

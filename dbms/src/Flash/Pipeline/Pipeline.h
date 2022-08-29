@@ -18,7 +18,6 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 
-#include <atomic>
 #include <unordered_set>
 
 namespace DB
@@ -37,7 +36,9 @@ public:
         , log(Logger::get("Pipeline", req_id))
     {}
 
-    void execute(Context & context, size_t max_streams);
+    void prepare(Context & context, size_t max_streams);
+
+    void execute();
 
     UInt32 getId() const { return id; }
     const std::unordered_set<UInt32> & getParentIds() const { return parent_ids; }
@@ -51,7 +52,7 @@ private:
 
     std::unordered_set<UInt32> parent_ids;
 
-    std::atomic<BlockInputStreamPtr> stream;
+    BlockInputStreamPtr stream;
 
     LoggerPtr log;
 };
