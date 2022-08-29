@@ -177,11 +177,14 @@ void AsynchronousMetrics::update()
 
                 if (auto dt_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(table); dt_storage)
                 {
-                    auto stat = dt_storage->getStore()->getStat();
-                    calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
-                    calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
-                    calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
-                    calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
+                    if (auto store = dt_storage->getStoreIfInited(); store)
+                    {
+                        auto stat = store->getStat();
+                        calculateMax(max_dt_stable_oldest_snapshot_lifetime, stat.storage_stable_oldest_snapshot_lifetime);
+                        calculateMax(max_dt_delta_oldest_snapshot_lifetime, stat.storage_delta_oldest_snapshot_lifetime);
+                        calculateMax(max_dt_meta_oldest_snapshot_lifetime, stat.storage_meta_oldest_snapshot_lifetime);
+                        calculateMax(max_dt_background_tasks_length, stat.background_tasks_length);
+                    }
                 }
             }
         }

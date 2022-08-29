@@ -92,7 +92,7 @@ public:
     ///
     /// For return value meanings, see `MPMCQueue::finish`.
     template <typename U>
-    bool push(U && u)
+    MPMCQueueResult push(U && u)
     {
         auto ret = send_queue.push(u);
         if (ret)
@@ -134,7 +134,7 @@ public:
     /// Finish the queue and kick the grpc completion queue.
     ///
     /// For return value meanings, see `MPMCQueue::finish`.
-    bool finish()
+    MPMCQueueResult finish()
     {
         auto ret = send_queue.finish();
         if (ret)

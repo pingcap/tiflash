@@ -72,12 +72,12 @@ public:
     {
     }
 
-    virtual bool push(MPPDataPacketPtr && data)
+    virtual MPMCQueueResult push(MPPDataPacketPtr && data)
     {
         return send_queue.push(data);
     }
 
-    virtual bool finish()
+    virtual MPMCQueueResult finish()
     {
         return send_queue.finish();
     }
@@ -165,12 +165,12 @@ public:
         , GRPCSendQueue<MPPDataPacketPtr>(queue_size, func)
     {}
 
-    bool push(MPPDataPacketPtr && data) override
+    MPMCQueueResult push(MPPDataPacketPtr && data) override
     {
         return GRPCSendQueue<MPPDataPacketPtr>::push(data);
     }
 
-    bool finish() override
+    MPMCQueueResult finish() override
     {
         return GRPCSendQueue<MPPDataPacketPtr>::finish();
     }

@@ -89,8 +89,18 @@ public:
     DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, int limit);
     DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, ASTPtr limit_expr);
 
+    DAGRequestBuilder & project(std::initializer_list<ASTPtr> exprs)
+    {
+        return project(MockAstVec{exprs});
+    }
     DAGRequestBuilder & project(MockAstVec exprs);
+
+    DAGRequestBuilder & project(std::initializer_list<String> exprs)
+    {
+        return project(MockColumnNameVec{exprs});
+    }
     DAGRequestBuilder & project(MockColumnNameVec col_names);
+
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
