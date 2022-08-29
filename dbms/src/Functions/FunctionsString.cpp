@@ -4397,6 +4397,8 @@ class FunctionSpace : public IFunction
 public:
     static constexpr auto name = "space";
 
+    static constexpr auto max = 16777216;
+
     FunctionSpace() = default;
 
     static FunctionPtr create(const Context & /*context*/)
@@ -4426,10 +4428,40 @@ public:
         auto col_res = ColumnString::create();
         col_res->reserve(val_num);
 
+        if (c0_col->isColumnConst())
+        {
+            const ColumnConst * c0_col_const = checkAndGetColumnConst<ColumnVector<Int64>>(c0_col.get());
+            if (c0_col_const == nullptr)
+            {
+                return;
+            }
+            else
+            {
+                auto space_num = c0_col_const->getValue<Int64>();
+                if (space_num < 0)
+                {
+                    space_num = 0;
+                }
+                if (space_num > max)
+                {
+                    return;
+                }
+            }
+        }
+
         for (int i = 0; i < val_num; i++)
         {
             c0_col->get(i, res_field);
             Int64 space_num = res_field.get<Int64>();
+            if (space_num < 0)
+            {
+                space_num = 0;
+            }
+            if (space_num > max)
+            {
+                return;
+            }
+
             std::string res_string(space_num, ' ');
             col_res->insert(res_string);
         }

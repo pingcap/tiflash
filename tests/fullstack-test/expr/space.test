@@ -13,19 +13,25 @@
 # limitations under the License.
 
 mysql> drop table if exists test.t;
-mysql> create table if not exists test.t(a varchar(20));
+mysql> create table if not exists test.t(a int(64));
 
-mysql> insert into test.t values('www.pingcap.com');
-mysql> insert into test.t values('中文测试');
+mysql> insert into test.t values(-1);
+mysql> insert into test.t values(0);
 mysql> insert into test.t values(NULL);
+mysql> insert into test.t values(10);
+mysql> insert into test.t values(16777216);
+mysql> insert into test.t values(16777217);
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
-mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select space(40),length(space(40)),space(NULL),length(space(NULL)),space(''),length(space('')) from test.t;
-+------------------------------------------+-------------------+-------------+---------------------+-----------+-------------------+
-| space(40)                                | length(space(40)) | space(NULL) | length(space(NULL)) | space('') | length(space('')) |
-+------------------------------------------+-------------------+-------------+---------------------+-----------+-------------------+
-|                                          |                40 | NULL        |                NULL |           |                 0 |
-|                                          |                40 | NULL        |                NULL |           |                 0 |
-|                                          |                40 | NULL        |                NULL |           |                 0 |
-+------------------------------------------+-------------------+-------------+---------------------+-----------+-------------------+
+mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select length(space(a)) from test.t;
++------------------+
+| length(space(a)) |
++------------------+
+|                0 |
+|                0 |
+|             NULL |
+|               10 |
+|         16777216 |
+|             NULL |
++------------------+

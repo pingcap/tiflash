@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnsNumber.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsString.h>
 #include <Interpreters/Context.h>
@@ -25,7 +21,6 @@
 #include <string>
 #include <vector>
 
-#pragma GCC diagnostic pop
 
 namespace DB::tests
 {
@@ -50,10 +45,10 @@ TEST_F(StringSpace, spaceTest)
 try
 {
     ASSERT_COLUMN_EQ(
-        toVec({"  ", "", "          "}),
+        toVec({"  ", "", "          ", "", {}}),
         executeFunction(
             func_name,
-            toVecInt({2, 0, 10})));
+            toVecInt({2, 0, 10, -1, 16777217})));
 }
 CATCH
 
