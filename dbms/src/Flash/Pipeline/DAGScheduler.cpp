@@ -32,7 +32,7 @@ std::pair<bool, String> DAGScheduler::run(const PhysicalPlanNodePtr & plan_node)
 
     PipelineEventPtr event;
     String err_msg;
-    while (event_queue.pop(event))
+    while (event_queue.pop(event) == MPMCQueueResult::OK)
     {
         assert(event);
         switch (event->type)
