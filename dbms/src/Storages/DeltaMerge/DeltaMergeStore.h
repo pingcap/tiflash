@@ -529,7 +529,7 @@ public:
 #endif
 
     Context & global_context;
-    StoragePathPool path_pool;
+    std::shared_ptr<StoragePathPool> path_pool;
     Settings settings;
     StoragePoolPtr storage_pool;
 
