@@ -164,7 +164,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
         if (status == TunnelStatus::Finished)
             throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
 
-        if (send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker)))
+        if (send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker)) == MPMCQueueResult::OK)
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -332,7 +332,7 @@ void SyncTunnelSender::sendJob()
     try
     {
         TrackedMppDataPacketPtr res;
-        while (send_queue->pop(res))
+        while (send_queue->pop(res) == MPMCQueueResult::OK)
         {
             if (!writer->write(res->packet))
             {
@@ -390,7 +390,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     try
     {
         TrackedMppDataPacketPtr res;
-        queue_empty_flag = !send_queue->pop(res);
+        queue_empty_flag = send_queue->pop(res) != MPMCQueueResult::OK;
         if (!queue_empty_flag)
         {
             if (!writer->write(res->packet))
@@ -426,7 +426,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
 std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
 {
     TrackedMppDataPacketPtr res;
-    if (send_queue->pop(res))
+    if (send_queue->pop(res) == MPMCQueueResult::OK)
     {
         // switch tunnel's memory tracker into receiver's
         res->switchMemTracker(current_memory_tracker);

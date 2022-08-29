@@ -18,6 +18,7 @@
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
 
 #include <boost/preprocessor/comparison/equal.hpp>
 #include <boost/preprocessor/control/if.hpp>
