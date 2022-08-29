@@ -28,6 +28,24 @@ extern const char exception_during_mpp_close_tunnel[];
 extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
+namespace
+{
+String tunnelSenderModeToString(TunnelSenderMode mode)
+{
+    switch (mode)
+    {
+    case TunnelSenderMode::ASYNC_GRPC:
+        return "async";
+    case TunnelSenderMode::SYNC_GRPC:
+        return "sync";
+    case TunnelSenderMode::LOCAL:
+        return "local";
+    default:
+        return "unknown";
+    }
+}
+} // namespace
+
 MPPTunnel::MPPTunnel(
     const mpp::TaskMeta & receiver_meta_,
     const mpp::TaskMeta & sender_meta_,
@@ -141,7 +159,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
         if (status == TunnelStatus::Finished)
             throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
 
-        if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)))
+        if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)) == MPMCQueueResult::OK)
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -207,7 +225,7 @@ void MPPTunnel::connect(PacketWriter * writer)
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_DEBUG(log, "connected");
+    LOG_FMT_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
 }
 
 void MPPTunnel::waitForFinish()
@@ -304,7 +322,7 @@ void SyncTunnelSender::sendJob()
     try
     {
         MPPDataPacketPtr res;
-        while (send_queue->pop(res))
+        while (send_queue->pop(res) == MPMCQueueResult::OK)
         {
             if (!writer->write(*res))
             {
@@ -362,7 +380,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     try
     {
         MPPDataPacketPtr res;
-        queue_empty_flag = !send_queue->pop(res);
+        queue_empty_flag = send_queue->pop(res) != MPMCQueueResult::OK;
         if (!queue_empty_flag)
         {
             if (!writer->write(*res))
@@ -398,7 +416,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
 LocalTunnelSender::MPPDataPacketPtr LocalTunnelSender::readForLocal()
 {
     MPPDataPacketPtr res;
-    if (send_queue->pop(res))
+    if (send_queue->pop(res) == MPMCQueueResult::OK)
         return res;
     consumerFinish("");
     return nullptr;

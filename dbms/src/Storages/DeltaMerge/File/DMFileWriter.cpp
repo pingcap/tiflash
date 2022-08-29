@@ -152,6 +152,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     auto * property = properties.add_property();
     property->set_num_rows(block_property.effective_num_rows);
     property->set_gc_hint_version(block_property.gc_hint_version);
+    property->set_deleted_rows(block_property.deleted_rows);
 }
 
 void DMFileWriter::finalize()
@@ -194,7 +195,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             {
                 // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
                 // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
-                iter->second->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
+                // For TAG Column, we also ignore del_mark when add minmax index.
+                iter->second->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
 
             auto offset_in_compressed_block = single_file_stream->original_layer.offset();
@@ -259,7 +261,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 {
                     // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
                     // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
-                    stream->minmaxes->addPack(column, col_id == EXTRA_HANDLE_COLUMN_ID ? nullptr : del_mark);
+                    // For TAG Column, we also ignore del_mark when add minmax index.
+                    stream->minmaxes->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
                 }
 
                 /// There could already be enough data to compress into the new block.

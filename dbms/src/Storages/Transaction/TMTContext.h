@@ -25,6 +25,8 @@ namespace DB
 {
 class Context;
 
+class PathPool;
+
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
@@ -85,7 +87,7 @@ public:
 
     MPPTaskManagerPtr getMPPTaskManager();
 
-    void restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 
