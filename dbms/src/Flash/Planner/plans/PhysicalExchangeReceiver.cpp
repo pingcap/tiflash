@@ -62,6 +62,8 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
 
 void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
+    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
+
     auto & dag_context = *context.getDAGContext();
     // todo choose a more reasonable stream number
     auto & exchange_receiver_io_input_streams = dag_context.getInBoundIOInputStreamsMap()[executor_id];

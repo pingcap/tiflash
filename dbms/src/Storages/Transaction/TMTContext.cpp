@@ -62,9 +62,9 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
 {}
 
-void TMTContext::restore(const TiFlashRaftProxyHelper * proxy_helper)
+void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
 {
-    kvstore->restore(proxy_helper);
+    kvstore->restore(path_pool, proxy_helper);
     region_table.restore();
     store_status = StoreStatus::Ready;
 

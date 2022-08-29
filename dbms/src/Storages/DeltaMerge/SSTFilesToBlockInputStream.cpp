@@ -65,7 +65,7 @@ void SSTFilesToBlockInputStream::readPrefix()
 {
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
-        auto & snapshot = snaps.views[i];
+        const auto & snapshot = snaps.views[i];
         switch (snapshot.type)
         {
         case ColumnFamilyType::Default:
@@ -117,7 +117,6 @@ Block SSTFilesToBlockInputStream::read()
             ++process_keys.write_cf;
             if (process_keys.write_cf % expected_size == 0)
             {
-                loaded_write_cf_key.clear();
                 loaded_write_cf_key.assign(key.data, key.len);
             }
         } // Notice: `key`, `value` are string-view-like object, should never use after `next` called
@@ -126,6 +125,7 @@ Block SSTFilesToBlockInputStream::read()
         if (process_keys.write_cf % expected_size == 0)
         {
             const DecodedTiKVKey rowkey = RecordKVFormat::decodeTiKVKey(TiKVKey(std::move(loaded_write_cf_key)));
+            loaded_write_cf_key.clear();
             // Batch the loading from other CFs until we need to decode data
             loadCFDataFromSST(ColumnFamilyType::Default, &rowkey);
             loadCFDataFromSST(ColumnFamilyType::Lock, &rowkey);
@@ -147,8 +147,8 @@ Block SSTFilesToBlockInputStream::read()
 void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * const rowkey_to_be_included)
 {
     SSTReader * reader;
-    size_t * p_process_keys = &process_keys.default_cf;
-    DecodedTiKVKey * last_loaded_rowkey = &default_last_loaded_rowkey;
+    size_t * p_process_keys;
+    DecodedTiKVKey * last_loaded_rowkey;
     if (cf == ColumnFamilyType::Default)
     {
         reader = default_cf_reader.get();
@@ -295,17 +295,18 @@ SSTFilesToBlockInputStream::ProcessKeys BoundedSSTFilesToBlockInputStream::getPr
     return _raw_child->process_keys;
 }
 
-const RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const
+RegionPtr BoundedSSTFilesToBlockInputStream::getRegion() const
 {
     return _raw_child->region;
 }
 
-std::tuple<size_t, size_t, UInt64> //
+std::tuple<size_t, size_t, size_t, UInt64> //
 BoundedSSTFilesToBlockInputStream::getMvccStatistics() const
 {
     return std::make_tuple(
         mvcc_compact_stream->getEffectiveNumRows(),
         mvcc_compact_stream->getNotCleanRows(),
+        mvcc_compact_stream->getDeletedRows(),
         mvcc_compact_stream->getGCHintVersion());
 }
 

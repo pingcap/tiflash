@@ -36,4 +36,31 @@ ExpressionActionsPtr newActions(const NamesAndTypes & input_columns, const Conte
     }
     return std::make_shared<ExpressionActions>(actions_input_column, context.getSettingsRef());
 }
+
+NamesAndTypes addSchemaProjectAction(
+    const ExpressionActionsPtr & expr_actions,
+    const NamesAndTypes & before_schema,
+    const String & column_prefix)
+{
+    assert(expr_actions);
+    assert(!before_schema.empty());
+
+    NamesAndTypes after_schema = before_schema;
+    NamesWithAliases project_aliases;
+    std::unordered_set<String> column_name_set;
+    for (size_t i = 0; i < before_schema.size(); ++i)
+    {
+        const auto & before_column_name = before_schema[i].name;
+        String after_column_name = column_prefix + before_column_name;
+        /// Duplicate columns don‘t need to project.
+        if (column_name_set.find(before_column_name) == column_name_set.end())
+        {
+            project_aliases.emplace_back(before_column_name, after_column_name);
+            column_name_set.emplace(before_column_name);
+        }
+        after_schema[i].name = after_column_name;
+    }
+    expr_actions->add(ExpressionAction::project(project_aliases));
+    return after_schema;
+}
 } // namespace DB::PhysicalPlanHelper
