@@ -129,7 +129,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
 
     // align address to 32 for better performance
     // memory allocator will always alloc memory aligned to `Page Size`(usually 4K, one Block `512B` at least) from system
-    // if there is valid data at address S, then it is safe to visit address [ALIGN_TO_PAGE_SIZE(S), S].
+    // if there is valid data at address S, then it is safe to visit address [ALIGN_TO_PAGE_SIZE(S), ALIGN_TO_PAGE_SIZE(S)+PAGE_SIZE).
     if (uint8_t offset = OFFSET_FROM_ALIGNED(size_t(src), BLOCK32_SIZE); offset != 0)
     {
         // align to 32
