@@ -1551,7 +1551,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     };
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
-        if (should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes)
+        // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
+        // or the raft-log apply threads may be blocked.
+        if ((should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes) && replica_exist.load())
         {
             delta_last_try_merge_delta_rows = delta_rows;
 
@@ -2473,6 +2475,10 @@ void DeltaMergeStore::applyAlters(
             // Only update primary key name if pk is handle and there is only one column with
             // primary key flag
             original_table_handle_define.name = pk_names[0];
+        }
+        if (table_info.value().get().replica_info.count == 0)
+        {
+            replica_exist.store(false);
         }
     }
 
