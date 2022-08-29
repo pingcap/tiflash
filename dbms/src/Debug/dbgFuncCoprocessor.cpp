@@ -53,14 +53,10 @@
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <tipb/select.pb.h>
 
-#include <cstddef>
-#include <ostream>
 #include <utility>
-
-#include "TestUtils/TiFlashTestEnv.h"
-#include "common/types.h"
 
 namespace DB
 {
@@ -73,6 +69,7 @@ extern const int NO_SUCH_COLUMN_IN_TABLE;
 
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
+using TiFlashTestEnv = tests::TiFlashTestEnv;
 static const String ENCODE_TYPE_NAME = "encode_type";
 static const String TZ_OFFSET_NAME = "tz_offset";
 static const String TZ_NAME_NAME = "tz_name";
@@ -189,7 +186,7 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
     range->set_end(RecordKVFormat::genRawKey(table_id, handle_range.second.handle_id));
 }
 
-BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids [[maybe_unused]], DAGSchema & root_task_schema, bool enable_local_tunnel [[maybe_unused]])
+BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids, DAGSchema & root_task_schema, bool enable_local_tunnel)
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
     for (const auto root_task_id : root_task_ids)
@@ -211,6 +208,7 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
         auto * field_type = tipb_exchange_receiver.add_field_types();
         *field_type = tipb_type;
     }
+
     mpp::TaskMeta root_tm;
     root_tm.set_start_ts(properties.start_ts);
     root_tm.set_address(Debug::LOCAL_HOST);
@@ -235,6 +233,8 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     return ret;
 }
 
+
+// todo rename..
 BlockInputStreamPtr prepareRootExchangeReceiverNew(Context & context, const DAGProperties & properties, Int64 task_id, DAGSchema & root_task_schema, String & addr, String & root_addr)
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
@@ -242,7 +242,6 @@ BlockInputStreamPtr prepareRootExchangeReceiverNew(Context & context, const DAGP
     mpp::TaskMeta tm;
     tm.set_start_ts(properties.start_ts);
     tm.set_address(addr);
-    // ywq must modify
     tm.set_task_id(task_id);
     tm.set_partition_id(-1);
     auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
@@ -265,7 +264,6 @@ BlockInputStreamPtr prepareRootExchangeReceiverNew(Context & context, const DAGP
     {
         auto & context = tests::TiFlashTestEnv::getGlobalContext(i);
         std::cout << "ywq test root node" << i << ":" << context.getTMTContext().getMPPTaskManager()->toString() << std::endl;
-        // context.getTMTContext().getMPPTaskManager()
     }
 
     std::shared_ptr<ExchangeReceiver> exchange_receiver
@@ -385,28 +383,7 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
     return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, context.getSettingsRef().enable_local_tunnel);
 }
 
-// execute MPP Query across multiple service
-BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
-{
-    DAGSchema root_task_schema;
-    std::vector<Int64> root_task_ids;
-    std::cout << "ywq test query tasks size: " << query_tasks.size() << std::endl;
-    for (auto & task : query_tasks)
-    {
-        auto req = std::make_shared<mpp::DispatchTaskRequest>();
-        auto addr = server_config_map[2 - task.partition_id].addr; // ywq a hack...
-        std::cout << "ywq test addr: " << addr << ", partition_id: " << task.partition_id << ", task_id:" << task.task_id << std::endl;
-        prepareDispatchTaskRequest(task, req, properties, root_task_ids, root_task_schema, addr);
-        MockComputeClient client(
-            grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
-        client.runDispatchMPPTask(req);
-    }
-
-    return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, tests::TiFlashTestEnv::globalContextSize() < 2);
-}
-
-// ywq test right here...
-std::vector<BlockInputStreamPtr> executeMPPQueryNew(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     DAGSchema root_task_schema;
     std::vector<Int64> root_task_ids;
@@ -425,13 +402,13 @@ std::vector<BlockInputStreamPtr> executeMPPQueryNew(const DAGProperties & proper
 
     std::vector<BlockInputStreamPtr> res;
     auto addr = server_config_map[root_task_partition_ids[0]].addr;
-    for (size_t i = 0; i < root_task_ids.size(); i++)
+    for (size_t i = 0; i < root_task_ids.size(); ++i)
     {
         auto id = root_task_ids[i];
         auto partition_id = root_task_partition_ids[i];
         std::cout << "ywq test index: " << i + 1 << ", addr: " << server_config_map[partition_id].addr << ", task_id: " << id << std::endl;
-        std::cout << "ywq test last log: " << tests::TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1).getTMTContext().getMPPTaskManager()->toString() << std::endl;
-        res.emplace_back(prepareRootExchangeReceiverNew(tests::TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
+        std::cout << "ywq test last log: " << TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1).getTMTContext().getMPPTaskManager()->toString() << std::endl;
+        res.emplace_back(prepareRootExchangeReceiverNew(TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
     }
     return res;
 }

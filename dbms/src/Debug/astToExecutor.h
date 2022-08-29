@@ -32,9 +32,6 @@
 #include <tipb/select.pb.h>
 
 #include <optional>
-#include <unordered_map>
-
-#include "common/types.h"
 
 namespace DB
 {
@@ -80,15 +77,12 @@ struct MPPCtx
 
 using MPPCtxPtr = std::shared_ptr<MPPCtx>;
 
-extern std::unordered_map<Int64, Int64> task_id_to_partition_id;
-
 struct MPPInfo
 {
     Timestamp start_ts;
     Int64 partition_id;
     Int64 task_id;
     const std::vector<Int64> sender_target_task_ids;
-    // const std::unordered_map<Int64, Int64> target_task_id_to_partition_id;
     const std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
 
     MPPInfo(
@@ -96,7 +90,6 @@ struct MPPInfo
         Int64 partition_id_,
         Int64 task_id_,
         const std::vector<Int64> & sender_target_task_ids_,
-        // const std::unordered_map<Int64, Int64> target_task_id_to_partition_id_ = {},
         const std::unordered_map<String, std::vector<Int64>> & receiver_source_task_ids_map_)
         : start_ts(start_ts_)
         , partition_id(partition_id_)

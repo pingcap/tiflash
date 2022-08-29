@@ -31,7 +31,6 @@
 
 namespace DB
 {
-std::unordered_map<Int64, Int64> task_id_to_partition_id = {};
 
 using ASTPartitionByElement = ASTOrderByElement;
 using MockComputeServerManager = tests::MockComputeServerManager;
@@ -859,7 +858,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
-    exchange_receiver->set_tp(tipb::PassThrough); // ywq todo.....
+    exchange_receiver->set_tp(tipb::PassThrough);
 
     for (auto & field : output_schema)
     {

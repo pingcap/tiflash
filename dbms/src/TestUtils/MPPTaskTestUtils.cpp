@@ -15,6 +15,7 @@
 
 #include <cstddef>
 
+#include "Debug/dbgFuncCoprocessor.h"
 #include "TestUtils/ExecutorTestUtils.h"
 #include "TestUtils/TiFlashTestEnv.h"
 
@@ -86,14 +87,14 @@ void MPPTaskTestUtils::injectCancel(DAGRequestBuilder builder)
 
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
-    std::cout << "ywq test context_idx: " << test_meta.context_idx << ", server_num: " << test_meta.server_num << std::endl;
-    auto res = executeMPPQueryNew(properties, tasks, server_config_map);
+    auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     return readBlocks(res);
 }
 
 BlockInputStreamPtr MPPTaskTestUtils::executeMPPTasksForCancel(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
-    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(test_meta.context_idx), properties, tasks, server_config_map);
-    return res;
+    auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
+    // ywq test todo
+    return res[0];
 }
 } // namespace DB::tests
