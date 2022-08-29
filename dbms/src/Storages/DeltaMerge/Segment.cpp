@@ -1148,7 +1148,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
                                 WriteBatches & wbs,
                                 SplitInfo & split_info) const
 {
-    LOG_FMT_INFO(log, "Begin segment applySplit start, segment={}", simpleInfo());
+    LOG_FMT_INFO(log, "Begin segment applySplit, segment={}", simpleInfo());
 
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
@@ -1380,7 +1380,7 @@ SegmentPtr Segment::dropNextSegment(WriteBatches & wbs, const RowKeyRange & next
                                                  stable);
     new_segment->serialize(wbs.meta);
     wbs.writeMeta();
-    LOG_FMT_INFO(log, "Segment drop its next segment done, segment={}", info());
+    LOG_FMT_INFO(log, "Finish segment drop its next segment, segment={}", info());
     return new_segment;
 }
 
@@ -1647,7 +1647,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
 
     LOG_FMT_DEBUG(
         log,
-        "Segment ensurePlace done, segment={} read_ranges={} placed_items={} shared_delta_index={} my_delta_index={}",
+        "Finish segment ensurePlace, segment={} read_ranges={} placed_items={} shared_delta_index={} my_delta_index={}",
         simpleInfo(),
         DB::DM::toDebugString(read_ranges),
         items.size(),

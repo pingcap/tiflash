@@ -1926,7 +1926,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     finish_gc_on_segment = true;
                     LOG_FMT_DEBUG(
                         log,
-                        "GC-merge-delta done, segment={} table={}",
+                        "Finish GC-merge-delta, segment={} table={}",
                         segment->simpleInfo(),
                         table_name);
                 }
