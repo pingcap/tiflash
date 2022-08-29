@@ -122,7 +122,7 @@ DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 {
     Blocks actual_blocks;
-    for (const auto& stream : streams)
+    for (const auto & stream : streams)
     {
         stream->readPrefix();
         while (auto block = stream->read())

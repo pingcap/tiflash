@@ -82,7 +82,7 @@ public:
     void injectCancel(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
-    
+
     BlockInputStreamPtr executeMPPTasksForCancel(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 protected:
