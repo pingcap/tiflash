@@ -131,7 +131,7 @@ private:
         FullGCNothingMoved,
         FullGC,
     };
-    struct GCTimeConsume
+    struct GCTimeStatistics
     {
         GCStageType stage = GCStageType::Unknown;
         bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
@@ -158,7 +158,8 @@ private:
         String toLogging() const;
     };
 
-    GCTimeConsume doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter);
+    GCTimeStatistics doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter);
+    void cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics);
 
     LoggerPtr log;
 
