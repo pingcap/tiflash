@@ -119,6 +119,21 @@ DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 
+DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
+{
+    Blocks actual_blocks;
+    for (const auto& stream : streams)
+    {
+        stream->readPrefix();
+        while (auto block = stream->read())
+        {
+            actual_blocks.push_back(block);
+        }
+        stream->readSuffix();
+    }
+    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
+}
+
 void ExecutorTest::enablePlanner(bool is_enable)
 {
     context.context.setSetting("enable_planner", is_enable ? "true" : "false");

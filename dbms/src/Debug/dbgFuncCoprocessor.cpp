@@ -55,9 +55,12 @@
 #include <Storages/Transaction/TypeMapping.h>
 #include <tipb/select.pb.h>
 
+#include <cstddef>
+#include <ostream>
 #include <utility>
 
 #include "TestUtils/TiFlashTestEnv.h"
+#include "common/types.h"
 
 namespace DB
 {
@@ -189,26 +192,59 @@ void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pa
 BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProperties & properties, std::vector<Int64> & root_task_ids [[maybe_unused]], DAGSchema & root_task_schema, bool enable_local_tunnel [[maybe_unused]])
 {
     tipb::ExchangeReceiver tipb_exchange_receiver;
-    // for (const auto root_task_id : root_task_ids)
-    // {
-    //     mpp::TaskMeta tm;
-    //     tm.set_start_ts(properties.start_ts);
-    //     tm.set_address("0.0.0.0:3933");
-    //     tm.set_task_id(root_task_id);
-    //     tm.set_partition_id(-1);
-    //     std::cout << "ywq test root task id: " << root_task_id << std::endl;
-    //     auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
-    //     tm.AppendToString(tm_string);
-    //     break; /// only one root task..
-    // }
+    for (const auto root_task_id : root_task_ids)
+    {
+        mpp::TaskMeta tm;
+        tm.set_start_ts(properties.start_ts);
+        tm.set_address(Debug::LOCAL_HOST);
+        tm.set_task_id(root_task_id);
+        tm.set_partition_id(-1);
+        std::cout << "ywq test root task id: " << root_task_id << std::endl;
+        auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
+        tm.AppendToString(tm_string);
+    }
+
+    for (auto & field : root_task_schema)
+    {
+        auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+        tipb_type.set_collate(properties.collator);
+        auto * field_type = tipb_exchange_receiver.add_field_types();
+        *field_type = tipb_type;
+    }
+    mpp::TaskMeta root_tm;
+    root_tm.set_start_ts(properties.start_ts);
+    root_tm.set_address(Debug::LOCAL_HOST);
+    root_tm.set_task_id(-1);
+    root_tm.set_partition_id(-1);
+
+    std::shared_ptr<ExchangeReceiver> exchange_receiver
+        = std::make_shared<ExchangeReceiver>(
+            std::make_shared<GRPCReceiverContext>(
+                tipb_exchange_receiver,
+                root_tm,
+                context.getTMTContext().getKVCluster(),
+                context.getTMTContext().getMPPTaskManager(),
+                enable_local_tunnel,
+                context.getSettingsRef().enable_async_grpc_client),
+            tipb_exchange_receiver.encoded_task_meta_size(),
+            10,
+            /*req_id=*/"",
+            /*executor_id=*/"",
+            /*fine_grained_shuffle_stream_count=*/0);
+    BlockInputStreamPtr ret = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver, /*req_id=*/"", /*executor_id=*/"", /*stream_id*/ 0);
+    return ret;
+}
+
+BlockInputStreamPtr prepareRootExchangeReceiverNew(Context & context, const DAGProperties & properties, Int64 task_id, DAGSchema & root_task_schema, String & addr, String & root_addr)
+{
+    tipb::ExchangeReceiver tipb_exchange_receiver;
+
     mpp::TaskMeta tm;
     tm.set_start_ts(properties.start_ts);
-    tm.set_address("0.0.0.0:3931");
+    tm.set_address(addr);
     // ywq must modify
-
-    tm.set_task_id(3); // must modify..
+    tm.set_task_id(task_id);
     tm.set_partition_id(-1);
-    std::cout << "ywq test root task id: " << 2 << std::endl;
     auto * tm_string = tipb_exchange_receiver.add_encoded_task_meta();
     tm.AppendToString(tm_string);
 
@@ -224,7 +260,8 @@ BlockInputStreamPtr prepareRootExchangeReceiver(Context & context, const DAGProp
     root_tm.set_start_ts(properties.start_ts);
     // ywq todo just a hack..
     // ywq must modify
-    root_tm.set_address("0.0.0.0:3931");
+    root_tm.set_address(root_addr);
+    // ywq todo...........
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
 
@@ -259,6 +296,25 @@ void prepareDispatchTaskRequest(QueryTask & task, std::shared_ptr<mpp::DispatchT
     if (task.is_root_task)
     {
         root_task_ids.push_back(task.task_id);
+        root_task_schema = task.result_schema;
+    }
+    auto * tm = req->mutable_meta();
+    tm->set_start_ts(properties.start_ts);
+    tm->set_partition_id(task.partition_id);
+    tm->set_address(addr);
+    tm->set_task_id(task.task_id);
+    auto * encoded_plan = req->mutable_encoded_plan();
+    task.dag_request->AppendToString(encoded_plan);
+    req->set_timeout(properties.mpp_timeout);
+    req->set_schema_ver(DEFAULT_UNSPECIFIED_SCHEMA_VERSION);
+}
+
+void prepareDispatchTaskRequestNew(QueryTask & task, std::shared_ptr<mpp::DispatchTaskRequest> req, const DAGProperties & properties, std::vector<Int64> & root_task_ids, std::vector<Int64> & root_task_partition_ids, DAGSchema & root_task_schema, String & addr)
+{
+    if (task.is_root_task)
+    {
+        root_task_ids.push_back(task.task_id);
+        root_task_partition_ids.push_back(task.partition_id);
         root_task_schema = task.result_schema;
     }
     auto * tm = req->mutable_meta();
@@ -353,6 +409,39 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
 
     // ywq todo enable local tunnel.....
     return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, tests::TiFlashTestEnv::globalContextSize() < 2);
+}
+
+// ywq test right here...
+std::vector<BlockInputStreamPtr> executeMPPQueryNew(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+{
+    DAGSchema root_task_schema;
+    std::vector<Int64> root_task_ids;
+    std::vector<Int64> root_task_partition_ids;
+    std::cout << "ywq test querytask size: " << query_tasks.size() << std::endl;
+    for (auto & task : query_tasks)
+    {
+        auto req = std::make_shared<mpp::DispatchTaskRequest>();
+        auto addr = server_config_map[task.partition_id].addr; // ywq a hack...
+        std::cout << "ywq test addr: " << addr << ", partition_id: " << task.partition_id << ", task_id:" << task.task_id << std::endl;
+        prepareDispatchTaskRequestNew(task, req, properties, root_task_ids, root_task_partition_ids, root_task_schema, addr);
+        MockComputeClient client(
+            grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
+        client.runDispatchMPPTask(req);
+    }
+
+    // ywq todo enable local tunnel.....
+    std::vector<BlockInputStreamPtr> res;
+    auto addr = server_config_map[root_task_partition_ids[0]].addr;
+    for (size_t i = 0; i < root_task_ids.size(); i++)
+    {
+        auto id = root_task_ids[i];
+        auto partition_id = root_task_partition_ids[i];
+        std::cout << "ywq test index: " << i + 1 << ", addr: " << server_config_map[partition_id].addr << ", task_id: " << id << std::endl;
+        std::cout << "ywq test last log: " << tests::TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1).getTMTContext().getMPPTaskManager()->toString() << std::endl;
+        res.emplace_back(prepareRootExchangeReceiverNew(tests::TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
+    }
+    // ywq todo.
+    return res;
 }
 
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream)
@@ -612,9 +701,9 @@ struct QueryFragment
         QueryTasks ret;
         if (properties.is_mpp_query)
         {
+            std::cout << "ywq test mpp partition num: " << properties.mpp_partition_num << std::endl;
             for (size_t partition_id = 0; partition_id < task_ids.size(); partition_id++)
             {
-                // ywq todo maybe bug....
                 MPPInfo mpp_info(
                     properties.start_ts,
                     partition_id,
@@ -695,6 +784,12 @@ QueryFragments mppQueryToQueryFragments(
     for (auto & exchange : exchange_map)
     {
         mpp_ctx->sender_target_task_ids = current_task_ids;
+        std::cout << "ywq test sender target ids:" << std::endl;
+
+        for (auto id : mpp_ctx->sender_target_task_ids)
+        {
+            std::cout << "id: " << id << std::endl;
+        }
         auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
         receiver_source_task_ids_map[exchange.first] = sub_fragments[sub_fragments.size() - 1].task_ids;
         fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());
@@ -713,6 +808,7 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
         root_executor = root_exchange_sender;
         MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts);
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
+        // ywq todo hack
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
     }
     else

@@ -13,6 +13,11 @@
 // limitations under the License.
 #include <TestUtils/MPPTaskTestUtils.h>
 
+#include <cstddef>
+
+#include "TestUtils/ExecutorTestUtils.h"
+#include "TestUtils/TiFlashTestEnv.h"
+
 namespace DB::tests
 {
 DAGProperties getDAGPropertiesForTest(int server_num)
@@ -86,8 +91,21 @@ DB::ColumnsWithTypeAndName MPPTaskTestUtils::executeMPPTasks(QueryTasks & tasks,
     // ywq todo hack...
     // ywq todo hack must check the context....
     // ywq must modify
-    auto res = executeMPPQuery(TiFlashTestEnv::getGlobalContext(3), properties, tasks, server_config_map);
-    return readBlock(res);
+    auto res = executeMPPQueryNew(properties, tasks, server_config_map);
+    return readBlocks(res);
+}
+
+ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasksWithMultipleContext(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+{
+    std::vector<BlockInputStreamPtr> res;
+    res.reserve(TiFlashTestEnv::globalContextSize());
+    // for (int i = 1; i < TiFlashTestEnv::globalContextSize(); ++i)
+    // {
+        res.emplace_back(executeMPPQuery(TiFlashTestEnv::getGlobalContext(1), properties, tasks, server_config_map));
+        // break;
+    // }
+    // todo read all blocks...
+    return readBlock(res[0]);
 }
 
 BlockInputStreamPtr MPPTaskTestUtils::executeMPPTasksForCancel(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
