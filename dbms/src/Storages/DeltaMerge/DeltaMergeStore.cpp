@@ -139,8 +139,8 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
 
     LOG_FMT_DEBUG(
         log_,
-        "Segment [{}] task [{}] add to background task pool by [{}]",
-        task.segment->segmentId(),
+        "Segment task add to background task pool, segment={} task={} by_whom={}",
+        task.segment->simpleInfo(),
         toString(task.type),
         toString(whom));
     return std::make_pair(true, is_heavy);
@@ -156,7 +156,7 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
     auto task = tasks.front();
     tasks.pop();
 
-    LOG_FMT_DEBUG(log_, "Segment [{}] task [{}] pop from background task pool", task.segment->segmentId(), toString(task.type));
+    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), toString(task.type));
 
     return task;
 }
@@ -216,7 +216,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}] [table_id = {}]", db_name, table_name, physical_table_id);
+    LOG_FMT_INFO(log, "Restore DeltaMerge Store start, store={}", simpleInfo());
 
     storage_pool = std::make_shared<StoragePool>(global_context,
                                                  ns_id,
@@ -286,16 +286,16 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     setUpBackgroundTask(dm_context);
 
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store end [{}.{}], [ps_run_mode={}]", db_name, table_name, static_cast<UInt8>(page_storage_run_mode));
+    LOG_FMT_INFO(log, "Restore DeltaMerge Store end, store={} ps_run_mode={}", simpleInfo(), static_cast<UInt8>(page_storage_run_mode));
 }
 
 DeltaMergeStore::~DeltaMergeStore()
 {
-    LOG_FMT_INFO(log, "Release DeltaMerge Store start [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Release DeltaMerge Store start, store={}", simpleInfo());
 
     shutdown();
 
-    LOG_FMT_INFO(log, "Release DeltaMerge Store end [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Release DeltaMerge Store end, store={}", simpleInfo());
 }
 
 void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
@@ -334,7 +334,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     dmfile->remove(global_context.getFileProvider());
                 }
 
-                LOG_FMT_INFO(log, "GC removed useless dmfile: {}", dmfile->path());
+                LOG_FMT_INFO(log, "GC removed useless DM file, dmfile={}", dmfile->path());
             }
         }
     };
@@ -450,13 +450,13 @@ void DeltaMergeStore::clearData()
 {
     // Remove all background task first
     shutdown();
-    LOG_FMT_INFO(log, "Clear DeltaMerge segments data [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data, store={}", simpleInfo());
     // We don't drop the first segment in clearData, because if we drop it and tiflash crashes before drop the table's metadata,
     // when restart the table will try to restore the first segment but failed to do it which cause tiflash crash again.
     // The reason this happens is that even we delete all data in a PageStorage instance,
     // the call to PageStorage::getMaxId is still not 0 so tiflash treat it as an old table and will try to restore it's first segment.
     dropAllSegments(true);
-    LOG_FMT_INFO(log, "Clear DeltaMerge segments data done [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data done, store={}", simpleInfo());
 }
 
 void DeltaMergeStore::drop()
@@ -464,13 +464,13 @@ void DeltaMergeStore::drop()
     // Remove all background task first
     shutdown();
 
-    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem, store={}", simpleInfo());
     dropAllSegments(false);
     storage_pool->drop();
 
     // Drop data in storage path pool
     path_pool.drop(/*recursive=*/true, /*must_success=*/false);
-    LOG_FMT_INFO(log, "Drop DeltaMerge done [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Drop DeltaMerge done, store={}", simpleInfo());
 }
 
 void DeltaMergeStore::shutdown()
@@ -479,7 +479,7 @@ void DeltaMergeStore::shutdown()
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start [{}.{}]", db_name, table_name);
+    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start, store={}", simpleInfo());
     // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
     // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
     storage_pool->shutdown();
@@ -489,7 +489,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end [{}.{}]", db_name, table_name);
+    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end, store={}", simpleInfo());
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
@@ -571,7 +571,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "table: {}.{}, rows: {}", db_name, table_name, block.rows());
+    LOG_FMT_TRACE(log, "Table write block, rows={} bytes={} store={}", block.rows(), block.bytes(), simpleInfo());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -732,7 +732,7 @@ void DeltaMergeStore::ingestFiles(
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
-        const auto msg = fmt::format("try to ingest files into a shutdown table: {}.{}", db_name, table_name);
+        const auto msg = fmt::format("Try to ingest files into a shutdown table, store={}", simpleInfo());
         LOG_FMT_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
@@ -762,14 +762,13 @@ void DeltaMergeStore::ingestFiles(
 
     LOG_FMT_INFO(
         log,
-        "table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
-        db_name,
-        table_name,
+        "Begin table ingest files, ingest_rows={} ingest_bytes={} ingest_bytes_on_disk={} range={} clear={} store={}",
         rows,
         bytes,
         bytes_on_disk,
         range.toDebugString(),
-        clear_data_in_range);
+        clear_data_in_range,
+        simpleInfo());
 
     Segments updated_segments;
     RowKeyRange cur_range = range;
@@ -879,33 +878,26 @@ void DeltaMergeStore::ingestFiles(
         // Example: "ingest dmf_1001,1002,1003 into segment [1,3]"
         //          "ingest <empty> into segment [1,3]"
         FmtBuffer fmt_buf;
-        if (file_ids.empty())
-        {
-            fmt_buf.append("ingest <empty>");
-        }
-        else
-        {
-            fmt_buf.append("ingest dmf_");
-            fmt_buf.joinStr(
-                file_ids.begin(),
-                file_ids.end(),
-                [](const PageId id, FmtBuffer & fb) { fb.fmtAppend("{}", id); },
-                ",");
-        }
-        fmt_buf.append(" into segment [");
+        fmt_buf.append("ingested_files=[");
+        fmt_buf.joinStr(
+            file_ids.begin(),
+            file_ids.end(),
+            [](const PageId id, FmtBuffer & fb) { fb.fmtAppend("dmf_{}", id); },
+            ",");
+        fmt_buf.append("] updated_segment=[");
         fmt_buf.joinStr(
             updated_segments.begin(),
             updated_segments.end(),
-            [](const auto & segment, FmtBuffer & fb) { fb.fmtAppend("{}", segment->segmentId()); },
+            [](const auto & segment, FmtBuffer & fb) { fb.fmtAppend("{}", segment->simpleInfo()); },
             ",");
         fmt_buf.append("]");
+
         LOG_FMT_INFO(
             log,
-            "table: {}.{}, clear_data: {}, {}",
-            db_name,
-            table_name,
+            "Finish table ingest files, ingested files into segments, {} clear={} store={}",
+            fmt_buf.toString(),
             clear_data_in_range,
-            fmt_buf.toString());
+            simpleInfo());
     }
 
     GET_METRIC(tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
@@ -920,7 +912,7 @@ void DeltaMergeStore::ingestFiles(
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_FMT_INFO(log, "table: {}.{} delete range {}", db_name, table_name, delete_range.toDebugString());
+    LOG_FMT_INFO(log, "Table delete range, range={} store={}", delete_range.toDebugString(), simpleInfo());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -1028,6 +1020,8 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
 
 void DeltaMergeStore::mergeDeltaAll(const Context & context)
 {
+    LOG_FMT_INFO(log, "Begin table mergeDeltaAll, store={}", simpleInfo());
+
     auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaAll");
 
     std::vector<SegmentPtr> all_segments;
@@ -1044,10 +1038,14 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     {
         segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
     }
+
+    LOG_FMT_INFO(log, "Finish table mergeDeltaAll, store={}", simpleInfo());
 }
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
 {
+    LOG_FMT_INFO(log, "Table mergeDeltaBySegment, start={} store={}", start_key.toDebugString(), simpleInfo());
+
     SYNC_FOR("before_DeltaMergeStore::mergeDeltaBySegment");
 
     updateGCSafePoint();
@@ -1325,7 +1323,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     {
         SegmentReadTaskScheduler::instance().add(read_task_pool);
     }
-    LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
+    LOG_FMT_DEBUG(tracing_logger, "Read create stream done, store={}", simpleInfo());
 
     return res;
 }
@@ -1502,7 +1500,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         {
             delta_last_try_flush_rows = delta_rows;
             delta_last_try_flush_bytes = delta_bytes;
-            LOG_FMT_DEBUG(log, "Foreground flush cache {}", segment->info());
+            LOG_FMT_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
             segment->flushCache(*dm_context);
         }
         else if (should_background_flush)
@@ -1744,10 +1742,10 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         LOG_FMT_ERROR(
             log,
-            "Task {} on Segment [{}]{} failed. Error msg: {}",
+            "Execute task on segment failed, task={} segment={}{} err={}",
             DeltaMergeStore::toString(task.type),
-            task.segment->segmentId(),
-            ((bool)task.next_segment ? (fmt::format(" and [{}]", task.next_segment->segmentId())) : ""),
+            task.segment->simpleInfo(),
+            ((bool)task.next_segment ? (fmt::format(" next_segment={}", task.next_segment->simpleInfo())) : ""),
             e.message());
         e.rethrow();
     }
@@ -1931,27 +1929,24 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     finish_gc_on_segment = true;
                     LOG_FMT_DEBUG(
                         log,
-                        "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
-                        segment_id,
-                        segment_range.toDebugString(),
+                        "GC-merge-delta done, segment={} table={}",
+                        segment->simpleInfo(),
                         table_name);
                 }
                 else
                 {
                     LOG_FMT_DEBUG(
                         log,
-                        "GC aborted on Segment [{}] [range={}] [table={}]",
-                        segment_id,
-                        segment_range.toDebugString(),
+                        "GC aborted, segment={} table={}",
+                        segment->simpleInfo(),
                         table_name);
                 }
             }
             if (!finish_gc_on_segment)
                 LOG_FMT_TRACE(
                     log,
-                    "GC is skipped Segment [{}] [range={}] [table={}]",
-                    segment_id,
-                    segment_range.toDebugString(),
+                    "GC skipped, segment={} table={}",
+                    segment->simpleInfo(),
                     table_name);
         }
         catch (Exception & e)
@@ -1963,7 +1958,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
     if (gc_segments_num != 0)
     {
-        LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+        LOG_FMT_DEBUG(log, "Finish GC, gc_segments={} store={}", gc_segments_num, simpleInfo());
     }
     return gc_segments_num;
 }
@@ -1972,10 +1967,11 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 {
     LOG_FMT_DEBUG(
         log,
-        "{} split segment {}, safe point: {}",
-        (is_foreground ? "Foreground" : "Background"),
+        "Begin segmentSplit, is_foreground={} safe_point={} segment={} store={}",
+        is_foreground,
+        dm_context.min_version,
         segment->info(),
-        dm_context.min_version);
+        simpleInfo());
 
     SegmentSnapshotPtr segment_snap;
     ColumnDefinesPtr schema_snap;
@@ -1985,14 +1981,14 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_DEBUG(log, "Give up segment [{}] split", segment->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentSplit, segment={}", segment->simpleInfo());
             return {};
         }
 
         segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         if (!segment_snap || !segment_snap->getRows())
         {
-            LOG_FMT_DEBUG(log, "Give up segment [{}] split", segment->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentSplit, segment={}", segment->simpleInfo());
             return {};
         }
         schema_snap = store_columns;
@@ -2019,7 +2015,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     {
         // Likely we can not find an appropriate split point for this segment later, forbid the split until this segment get updated through applying delta-merge. Or it will slow down the write a lot.
         segment->forbidSplit();
-        LOG_FMT_WARNING(log, "Giving up and forbid later split. Segment [{}]. Because of prepare split failed", segment->segmentId());
+        LOG_FMT_WARNING(log, "Give up segmentSplit and forbid later split because of prepare split failed, segment={}", segment->simpleInfo());
         return {};
     }
 
@@ -2035,12 +2031,12 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_DEBUG(log, "Give up segment [{}] split", segment->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentSplit, segment={}", segment->simpleInfo());
             wbs.setRollback();
             return {};
         }
 
-        LOG_FMT_DEBUG(log, "Apply split. Segment [{}]", segment->segmentId());
+        LOG_FMT_DEBUG(log, "segmentSplit - Begin segment applySplit, segment={}", segment->info());
 
         auto segment_lock = segment->mustGetUpdateLock();
 
@@ -2067,7 +2063,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         duplicated_bytes = new_left->getDelta()->getBytes();
         duplicated_rows = new_right->getDelta()->getBytes();
 
-        LOG_FMT_DEBUG(log, "Apply split done. Segment [{}]", segment->segmentId());
+        LOG_FMT_DEBUG(log, "segmentSplit - Finish segment applySplit, segment={}", segment->info());
     }
 
     wbs.writeRemoves();
@@ -2095,11 +2091,12 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 {
     LOG_FMT_DEBUG(
         log,
-        "{} merge Segment [{}] and [{}], safe point: {}",
-        (is_foreground ? "Foreground" : "Background"),
+        "Begin segmentMerge, is_foreground={} safe_point={} left={} right={} store={}",
+        is_foreground,
+        dm_context.min_version,
         left->info(),
         right->info(),
-        dm_context.min_version);
+        simpleInfo());
 
     /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
     /// And only saved data in this segment will be filtered by the segment range in the merge process,
@@ -2110,7 +2107,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         // keep flush until success if not abandoned
         if (left->hasAbandoned())
         {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMerge because left abandoned, left={} right={}", left->simpleInfo(), right->simpleInfo());
             return;
         }
     }
@@ -2119,7 +2116,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
         // keep flush until success if not abandoned
         if (right->hasAbandoned())
         {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMerge because right abandoned, left={} right={}", left->simpleInfo(), right->simpleInfo());
             return;
         }
     }
@@ -2133,12 +2130,12 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
         if (!isSegmentValid(lock, left))
         {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMerge because left not valid, left={} right={}", left->simpleInfo(), right->simpleInfo());
             return;
         }
         if (!isSegmentValid(lock, right))
         {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMerge because right not valid, left={} right={}", left->simpleInfo(), right->simpleInfo());
             return;
         }
 
@@ -2147,7 +2144,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
         if (!left_snap || !right_snap)
         {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMerge because snapshot failed, left={} right={}", left->simpleInfo(), right->simpleInfo());
             return;
         }
         schema_snap = store_columns;
@@ -2175,12 +2172,12 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 
         if (!isSegmentValid(lock, left) || !isSegmentValid(lock, right))
         {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMerge because left or right not valid, left={} right={}", left->simpleInfo(), right->simpleInfo());
             wbs.setRollback();
             return;
         }
 
-        LOG_FMT_DEBUG(log, "Apply merge. Left [{}], right [{}]", left->segmentId(), right->segmentId());
+        LOG_FMT_DEBUG(log, "segmentMerge - Begin segment applyMerge, left={} right={}", left->info(), right->info());
 
         auto left_lock = left->mustGetUpdateLock();
         auto right_lock = right->mustGetUpdateLock();
@@ -2204,7 +2201,7 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
             merged->check(dm_context, "After segment merge");
         }
 
-        LOG_FMT_DEBUG(log, "Apply merge done. [{}] and [{}]", left->info(), right->info());
+        LOG_FMT_DEBUG(log, "segmentMerge - Finish segment applyMerge, left={} right={}", left->info(), right->info());
     }
 
     wbs.writeRemoves();
@@ -2222,7 +2219,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     const TaskRunThread run_thread,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_DEBUG(log, "{} merge delta, segment [{}], safe point: {}", toString(run_thread), segment->segmentId(), dm_context.min_version);
+    LOG_FMT_DEBUG(log, "Begin segmentMergeDelta, thread={} safe_point={} segment={} store={}", toString(run_thread), dm_context.min_version, segment->info(), simpleInfo());
 
     ColumnDefinesPtr schema_snap;
 
@@ -2231,7 +2228,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_DEBUG(log, "Give up merge delta, segment [{}]", segment->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMergeDelta because segment not valid, segment={}", segment->simpleInfo());
             return {};
         }
 
@@ -2241,7 +2238,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (unlikely(!segment_snap))
         {
-            LOG_FMT_DEBUG(log, "Give up merge delta, segment [{}]", segment->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMergeDelta because snapshot failed, segment={}", segment->simpleInfo());
             return {};
         }
         schema_snap = store_columns;
@@ -2306,12 +2303,12 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (!isSegmentValid(read_write_lock, segment))
         {
-            LOG_FMT_DEBUG(log, "Give up merge delta, segment [{}]", segment->segmentId());
+            LOG_FMT_DEBUG(log, "Give up segmentMergeDelta because segment not valid, segment={}", segment->simpleInfo());
             wbs.setRollback();
             return {};
         }
 
-        LOG_FMT_DEBUG(log, "Apply merge delta. Segment [{}]", segment->info());
+        LOG_FMT_DEBUG(log, "segmentMergeDelta - Begin segment applyMergeDelta, segment={}", segment->info());
 
         auto segment_lock = segment->mustGetUpdateLock();
 
@@ -2332,10 +2329,10 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if constexpr (DM_RUN_CHECK)
         {
-            new_segment->check(dm_context, "After merge delta");
+            new_segment->check(dm_context, "After segmentMergeDelta");
         }
 
-        LOG_FMT_DEBUG(log, "Apply merge delta done. Segment [{}]", segment->segmentId());
+        LOG_FMT_DEBUG(log, "segmentMergeDelta - Finish segment applyMergeDelta, segment={}", segment->info());
     }
 
     wbs.writeRemoves();
@@ -2353,21 +2350,21 @@ bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
 {
     if (segment->hasAbandoned())
     {
-        LOG_FMT_DEBUG(log, "Segment [{}] instance has abandoned", segment->segmentId());
+        LOG_FMT_DEBUG(log, "Segment instance is abandoned, segment={}", segment->simpleInfo());
         return false;
     }
     // Segment instance could have been removed or replaced.
     auto it = segments.find(segment->getRowKeyRange().getEnd());
     if (it == segments.end())
     {
-        LOG_FMT_DEBUG(log, "Segment [{}] not found in segment map", segment->segmentId());
+        LOG_FMT_DEBUG(log, "Segment not found in segment map, segment={}", segment->simpleInfo());
 
         auto it2 = id_to_segment.find(segment->segmentId());
         if (it2 != id_to_segment.end())
         {
             LOG_FMT_DEBUG(
                 log,
-                "Found segment with same id in id_to_segment: {}, while my segment: {}",
+                "Found segment with same id in id_to_segment, found_segment={} my_segment={}",
                 it2->second->info(),
                 segment->info());
         }
@@ -2376,7 +2373,7 @@ bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
     auto & cur_segment = it->second;
     if (cur_segment.get() != segment.get())
     {
-        LOG_FMT_DEBUG(log, "Segment [{}] instance has been replaced in segment map", segment->segmentId());
+        LOG_FMT_DEBUG(log, "Segment instance has been replaced in segment map, segment={}", segment->simpleInfo());
         return false;
     }
     return true;
@@ -2610,7 +2607,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=data] [database={}] [table={}]", db_name, table_name);
+                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=data, store={}", simpleInfo());
             }
         }
     }
@@ -2632,7 +2629,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=log] [database={}] [table={}]", db_name, table_name);
+                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=log, store={}", simpleInfo());
             }
         }
     }
@@ -2654,7 +2651,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=meta] [database={}] [table={}]", db_name, table_name);
+                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=meta, store={}", simpleInfo());
             }
         }
     }

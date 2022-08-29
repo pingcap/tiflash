@@ -111,7 +111,7 @@ public:
     MemTableSetPtr getMemTableSet() const { return mem_table_set; }
     ColumnFilePersistedSetPtr getPersistedFileSet() const { return persisted_file_set; }
 
-    String simpleInfo() const { return "Delta [" + DB::toString(persisted_file_set->getId()) + "]"; }
+    String simpleInfo() const { return "{ delta_id=" + DB::toString(persisted_file_set->getId()) + " }"; }
     String info() const
     {
         return fmt::format("{}. {}", mem_table_set->info(), persisted_file_set->info());
@@ -174,7 +174,7 @@ public:
         // Other thread is doing structure update, just return.
         if (!is_updating.compare_exchange_strong(v, true))
         {
-            LOG_FMT_DEBUG(log, "{} Stop create snapshot because updating", simpleInfo());
+            LOG_FMT_DEBUG(log, "Stop create snapshot because updating, delta={}", simpleInfo());
             return false;
         }
         return true;
@@ -185,7 +185,7 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_FMT_ERROR(log, "!!!=========================delta [{}] is expected to be updating=========================!!!", getId());
+            LOG_FMT_ERROR(log, "!!!========================= delta={} is expected to be updating=========================!!!", simpleInfo());
             return false;
         }
         else
