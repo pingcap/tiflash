@@ -255,13 +255,9 @@ BlockInputStreamPtr prepareRootExchangeReceiverNew(Context & context, const DAGP
         auto * field_type = tipb_exchange_receiver.add_field_types();
         *field_type = tipb_type;
     }
-    // ywq todo....
     mpp::TaskMeta root_tm;
     root_tm.set_start_ts(properties.start_ts);
-    // ywq todo just a hack..
-    // ywq must modify
     root_tm.set_address(root_addr);
-    // ywq todo...........
     root_tm.set_task_id(-1);
     root_tm.set_partition_id(-1);
 
@@ -272,7 +268,6 @@ BlockInputStreamPtr prepareRootExchangeReceiverNew(Context & context, const DAGP
         // context.getTMTContext().getMPPTaskManager()
     }
 
-    // ywq todo add a interface don't use different context.....
     std::shared_ptr<ExchangeReceiver> exchange_receiver
         = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
@@ -407,7 +402,6 @@ BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & pro
         client.runDispatchMPPTask(req);
     }
 
-    // ywq todo enable local tunnel.....
     return prepareRootExchangeReceiver(context, properties, root_task_ids, root_task_schema, tests::TiFlashTestEnv::globalContextSize() < 2);
 }
 
@@ -429,7 +423,6 @@ std::vector<BlockInputStreamPtr> executeMPPQueryNew(const DAGProperties & proper
         client.runDispatchMPPTask(req);
     }
 
-    // ywq todo enable local tunnel.....
     std::vector<BlockInputStreamPtr> res;
     auto addr = server_config_map[root_task_partition_ids[0]].addr;
     for (size_t i = 0; i < root_task_ids.size(); i++)
@@ -440,7 +433,6 @@ std::vector<BlockInputStreamPtr> executeMPPQueryNew(const DAGProperties & proper
         std::cout << "ywq test last log: " << tests::TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1).getTMTContext().getMPPTaskManager()->toString() << std::endl;
         res.emplace_back(prepareRootExchangeReceiverNew(tests::TiFlashTestEnv::getGlobalContext(tests::TiFlashTestEnv::globalContextSize() - i - 1), properties, id, root_task_schema, server_config_map[partition_id].addr, addr));
     }
-    // ywq todo.
     return res;
 }
 
@@ -701,7 +693,6 @@ struct QueryFragment
         QueryTasks ret;
         if (properties.is_mpp_query)
         {
-            std::cout << "ywq test mpp partition num: " << properties.mpp_partition_num << std::endl;
             for (size_t partition_id = 0; partition_id < task_ids.size(); partition_id++)
             {
                 MPPInfo mpp_info(
@@ -808,7 +799,6 @@ QueryFragments queryPlanToQueryFragments(const DAGProperties & properties, Execu
         root_executor = root_exchange_sender;
         MPPCtxPtr mpp_ctx = std::make_shared<MPPCtx>(properties.start_ts);
         mpp_ctx->sender_target_task_ids.emplace_back(-1);
-        // ywq todo hack
         return mppQueryToQueryFragments(root_executor, executor_index, properties, true, mpp_ctx);
     }
     else

@@ -81,9 +81,7 @@ public:
 
     void injectCancel(DAGRequestBuilder builder);
 
-    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
-    // ywq todo change the function name
-    ColumnsWithTypeAndName exeucteMPPTasksWithMultipleContext(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
     
     BlockInputStreamPtr executeMPPTasksForCancel(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
@@ -98,11 +96,10 @@ protected:
     {                                                                                                                                       \
         TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
         MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                         \
-        ASSERT_COLUMNS_EQ_UR(executeMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+        ASSERT_COLUMNS_EQ_UR(exeucteMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
     } while (0)
 
 
-// ywq todo set i = 1
 #define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols)       \
     do                                                                               \
     {                                                                                \

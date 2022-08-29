@@ -197,7 +197,6 @@ void MPPTask::initExchangeReceivers()
                     dag_context->getMPPTaskMeta(),
                     context->getTMTContext().getKVCluster(),
                     context->getTMTContext().getMPPTaskManager(),
-                    /// ywq test todo
                     context->getSettingsRef().enable_local_tunnel,
                     context->getSettingsRef().enable_async_grpc_client),
                 executor.exchange_receiver().encoded_task_meta_size(),
