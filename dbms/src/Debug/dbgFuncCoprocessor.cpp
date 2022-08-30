@@ -58,8 +58,6 @@
 
 #include <utility>
 
-#include "DataStreams/IBlockInputStream.h"
-
 namespace DB
 {
 namespace ErrorCodes
@@ -366,7 +364,6 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
     {
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
         auto addr = server_config_map[task.partition_id].addr;
-        std::cout << "ywq test addr: " << addr << ", partition_id: " << task.partition_id << ", task_id:" << task.task_id << std::endl;
         prepareDispatchTaskRequestWithMultipleContext(task, req, properties, root_task_ids, root_task_partition_ids, root_task_schema, addr);
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
@@ -723,12 +720,6 @@ QueryFragments mppQueryToQueryFragments(
     for (auto & exchange : exchange_map)
     {
         mpp_ctx->sender_target_task_ids = current_task_ids;
-        std::cout << "ywq test sender target ids:" << std::endl;
-
-        for (auto id : mpp_ctx->sender_target_task_ids)
-        {
-            std::cout << "id: " << id << std::endl;
-        }
         auto sub_fragments = mppQueryToQueryFragments(exchange.second.second, executor_index, properties, false, mpp_ctx);
         receiver_source_task_ids_map[exchange.first] = sub_fragments[sub_fragments.size() - 1].task_ids;
         fragments.insert(fragments.end(), sub_fragments.begin(), sub_fragments.end());

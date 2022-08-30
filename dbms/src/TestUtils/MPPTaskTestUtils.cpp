@@ -13,8 +13,6 @@
 // limitations under the License.
 #include <TestUtils/MPPTaskTestUtils.h>
 
-#include "DataStreams/IBlockInputStream.h"
-
 namespace DB::tests
 {
 DAGProperties getDAGPropertiesForTest(int server_num)

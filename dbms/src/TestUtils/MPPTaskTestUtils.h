@@ -119,7 +119,6 @@ protected:
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());             \
         for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)                  \
             TiFlashTestEnv::getGlobalContext(i).setMPPTest();                          \
-        std::cout << "ywq test properties serverNum: " << serverNum() << std::endl;    \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \
         size_t task_size = tasks.size();                                               \
         for (size_t i = 0; i < task_size; ++i)                                         \

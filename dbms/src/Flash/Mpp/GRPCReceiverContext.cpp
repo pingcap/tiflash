@@ -192,8 +192,6 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
 
     ExchangeRecvRequest req;
     req.source_index = index;
-
-    std::cout << "ywq test make request enable local tunnel: " << enable_local_tunnel << ", sender_task addr: " << sender_task->address() << ", task meta addr: " << task_meta.address() << ", sender_id: " << sender_task->task_id() << ", receiver_id: " << task_meta.task_id() << std::endl;
     req.is_local = enable_local_tunnel && sender_task->address() == task_meta.address();
     req.send_task_id = sender_task->task_id();
     req.recv_task_id = task_meta.task_id();

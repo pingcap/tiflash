@@ -294,7 +294,6 @@ grpc::Status FlashService::Coprocessor(
     if (calldata)
     {
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
-        std::cout << "ywq test tunnel, is local: " << tunnel->isLocal() << ", id: " << tunnel->id() << std::endl;
         tunnel->connect(calldata);
         LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
@@ -401,7 +400,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    std::cout << "ywq test task map: " << task_manager->toString() << std::endl;
     task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }

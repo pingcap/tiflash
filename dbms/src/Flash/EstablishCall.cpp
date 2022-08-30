@@ -78,7 +78,6 @@ void EstablishCallData::initRpc()
     try
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
-        std::cout << "ywq test before establish mpp connection" << std::endl;
         service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
     }
     catch (...)

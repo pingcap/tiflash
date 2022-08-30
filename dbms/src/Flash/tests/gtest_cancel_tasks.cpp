@@ -61,7 +61,6 @@ try
 }
 CATCH
 
-// ywq todo must have bugs..
 TEST_F(CancelTaskRunner, runJoinTasks)
 try
 {

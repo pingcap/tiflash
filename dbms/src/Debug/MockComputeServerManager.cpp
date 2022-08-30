@@ -11,14 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <TestUtils/TiFlashTestEnv.h>
-#include <fmt/core.h>
 
-#include <cstddef>
-#include <ostream>
-
-#include "Common/FmtUtils.h"
+#include <chrono>
+#include <thread>
 namespace DB
 {
 namespace ErrorCodes
@@ -121,33 +119,28 @@ void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<Fl
 
 void MockComputeServerManager::cancelQuery(size_t start_ts)
 {
-    std::cout << "ywq test queryinfo():" << queryInfo() << std::endl;
-
     mpp::CancelTaskRequest req;
     auto * meta = req.mutable_meta();
     meta->set_start_ts(start_ts);
     mpp::CancelTaskResponse response;
-    std::cout << "ywq test server size: " << server_map.size() << std::endl;
     for (const auto & server : server_map)
         server.second->flashService()->cancelMPPTaskForTest(&req, &response);
-    std::cout << queryInfo() << std::endl;
+
+    std::this_thread::sleep_for(std::chrono::seconds(2)); // currently use 2 seconds to ensure all tasks have been cancelled.
     assertQueryCancelled(start_ts);
 }
 
 void MockComputeServerManager::assertQueryCancelled(size_t start_ts)
 {
     for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
-        RUNTIME_ASSERT(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) == nullptr);
+        RUNTIME_ASSERT(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) == nullptr, "fail...");
 }
 
 String MockComputeServerManager::queryInfo()
 {
-    // ywq todo know the current context in use...
     FmtBuffer buf;
-    // ywq todo need to handle context num
     for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
         buf.append(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->toString());
-
     return buf.toString();
 }
 } // namespace tests
