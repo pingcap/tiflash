@@ -47,13 +47,14 @@ namespace DB
 {
 namespace PS::V3::tests
 {
-TEST(AA, B)
+TEST(ExternalIdsByNamespace, Simple)
 {
+    NamespaceId ns_id = 100;
     ExternalIdsByNamespace external_ids_by_ns;
 
     std::atomic<Int32> who(0);
 
-    std::shared_ptr<PageIdV3Internal> holder = std::make_shared<PageIdV3Internal>(buildV3Id(100, 50));
+    std::shared_ptr<PageIdV3Internal> holder = std::make_shared<PageIdV3Internal>(buildV3Id(ns_id, 50));
 
     auto th_insert = std::async([&]() {
         external_ids_by_ns.addExternalId(holder);
@@ -62,16 +63,25 @@ TEST(AA, B)
         who.compare_exchange_strong(expect, 1);
     });
     auto th_get_alive = std::async([&]() {
-        external_ids_by_ns.getAliveIds(100);
+        external_ids_by_ns.getAliveIds(ns_id);
         Int32 expect = 0;
         who.compare_exchange_strong(expect, 2);
     });
     th_get_alive.wait();
     th_insert.wait();
 
-    auto ids = external_ids_by_ns.getAliveIds(100);
-    LOG_DEBUG(&Poco::Logger::root(), "{} end first, size={}", who.load(), ids.size());
-    ASSERT_EQ(*ids.begin(), 50);
+    {
+        auto ids = external_ids_by_ns.getAliveIds(ns_id);
+        LOG_DEBUG(&Poco::Logger::root(), "{} end first, size={}", who.load(), ids.size());
+        ASSERT_EQ(ids.size(), 1);
+        ASSERT_EQ(*ids.begin(), 50);
+    }
+
+    {
+        external_ids_by_ns.unregisterNamespace(ns_id);
+        auto ids = external_ids_by_ns.getAliveIds(ns_id);
+        ASSERT_EQ(ids.size(), 0);
+    }
 }
 
 class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic

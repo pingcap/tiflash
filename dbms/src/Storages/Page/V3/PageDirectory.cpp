@@ -1234,11 +1234,6 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     LOG_FMT_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
 }
 
-std::set<PageId> PageDirectory::getAliveExternalIds(NamespaceId ns_id) const
-{
-    return external_ids_by_ns.getAliveIds(ns_id);
-}
-
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
 PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const
 {

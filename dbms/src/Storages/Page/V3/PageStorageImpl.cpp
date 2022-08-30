@@ -345,6 +345,9 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         Stopwatch external_watch;
         for (const auto & [ns_id, callbacks] : callbacks_container)
         {
+            // Note that we must call `scanner` before `getAliveExternalIds`
+            // Or some committed external ids is not included and we may
+            // remove the external page by accident with `remover`.
             const auto pending_external_pages = callbacks.scanner();
             statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
             const auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
@@ -448,8 +451,12 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
 
 void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)
 {
-    std::scoped_lock lock{callbacks_mutex};
-    callbacks_container.erase(ns_id);
+    {
+        std::scoped_lock lock{callbacks_mutex};
+        callbacks_container.erase(ns_id);
+    }
+    // clean all external ids ptrs
+    page_directory->unregisterNamespace(ns_id);
 }
 
 const String PageStorageImpl::manifests_file_name = "manifests";

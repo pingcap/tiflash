@@ -24,10 +24,10 @@
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/MapUtils.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WALStore.h>
-#include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 #include <common/types.h>
 
 #include <memory>
@@ -352,7 +352,18 @@ public:
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.
-    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
+    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const
+    {
+        return external_ids_by_ns.getAliveIds(ns_id);
+    }
+
+    // After table dropped, the `getAliveIds` with specified
+    // `ns_id` will not be cleaned. We need this method to
+    // cleanup all external id ptrs.
+    void unregisterNamespace(NamespaceId ns_id)
+    {
+        external_ids_by_ns.unregisterNamespace(ns_id);
+    }
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
