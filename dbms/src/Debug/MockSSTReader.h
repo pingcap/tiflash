@@ -43,7 +43,7 @@ struct MockSSTReader
         Data() = default;
     };
 
-    MockSSTReader(const Data & data_)
+    explicit MockSSTReader(const Data & data_)
         : iter(data_.begin())
         , end(data_.end())
         , remained(iter != end)
@@ -70,16 +70,18 @@ private:
 };
 
 
-class RegionMockTest
+class RegionMockTest final
 {
 public:
-    RegionMockTest(KVStorePtr kvstore_, RegionPtr region_);
+    RegionMockTest(KVStore * kvstore_, RegionPtr region_);
     ~RegionMockTest();
+
+    DISALLOW_COPY_AND_MOVE(RegionMockTest);
 
 private:
     TiFlashRaftProxyHelper mock_proxy_helper{};
     const TiFlashRaftProxyHelper * ori_proxy_helper{};
-    KVStorePtr kvstore;
+    KVStore * kvstore;
     RegionPtr region;
 };
 } // namespace DB
