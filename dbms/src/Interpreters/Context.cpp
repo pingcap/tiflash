@@ -204,15 +204,17 @@ struct ContextShared
         : runtime_components_factory(std::move(runtime_components_factory_))
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
     {
-        // /// TODO: make it singleton (?)
-        // static std::atomic<size_t> num_calls{0};
-        // if (++num_calls > 1)
-        // {
-        //     std::cerr << "Attempting to create multiple ContextShared instances. Stack trace:\n"
-        //               << StackTrace().toString();
-        //     std::cerr.flush();
-        //     std::terminate();
-        // }
+        /// TODO: make it singleton (?)
+#ifndef MULTIPLE_CONTEXT_GTEST
+        static std::atomic<size_t> num_calls{0};
+        if (++num_calls > 1)
+        {
+            std::cerr << "Attempting to create multiple ContextShared instances. Stack trace:\n"
+                      << StackTrace().toString();
+            std::cerr.flush();
+            std::terminate();
+        }
+#endif
 
         initialize();
     }

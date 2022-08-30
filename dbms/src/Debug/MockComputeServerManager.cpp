@@ -126,20 +126,22 @@ void MockComputeServerManager::cancelQuery(size_t start_ts)
     for (const auto & server : server_map)
         server.second->flashService()->cancelMPPTaskForTest(&req, &response);
 
-    std::this_thread::sleep_for(std::chrono::seconds(2)); // currently use 2 seconds to ensure all tasks have been cancelled.
+    std::this_thread::sleep_for(std::chrono::seconds(15)); // currently use 5 seconds to ensure all tasks have been cancelled, maybe lead to unstable test.
     assertQueryCancelled(start_ts);
 }
 
 void MockComputeServerManager::assertQueryCancelled(size_t start_ts)
 {
-    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
-        RUNTIME_ASSERT(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) == nullptr, "fail...");
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+    {
+        while(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) != nullptr) {}
+    }
 }
 
 String MockComputeServerManager::queryInfo()
 {
     FmtBuffer buf;
-    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
         buf.append(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->toString());
     return buf.toString();
 }

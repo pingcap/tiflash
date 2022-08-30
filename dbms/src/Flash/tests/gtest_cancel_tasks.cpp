@@ -16,11 +16,6 @@
 
 namespace DB
 {
-
-namespace FailPoints
-{
-extern const char pause_after_register_tasks[];
-} // namespace FailPoints
 namespace tests
 {
 class CancelTaskRunner : public DB::tests::MPPTaskTestUtils

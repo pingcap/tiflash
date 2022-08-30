@@ -367,21 +367,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
         tmp_context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
         return std::make_tuple(tmp_context, grpc::Status::OK);
     }
-    catch (Exception & e)
-    {
-        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
-    }
-    catch (const std::exception & e)
-    {
-        LOG_FMT_ERROR(log, "std exception: {}", e.what());
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
-    }
-    catch (...)
-    {
-        LOG_FMT_ERROR(log, "other exception");
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
-    }
+    CATCHEXCEPTION
 }
 
 
@@ -463,21 +449,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         tmp_context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
         return std::make_tuple(tmp_context, grpc::Status::OK);
     }
-    catch (Exception & e)
-    {
-        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
-    }
-    catch (const std::exception & e)
-    {
-        LOG_FMT_ERROR(log, "std exception: {}", e.what());
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
-    }
-    catch (...)
-    {
-        LOG_FMT_ERROR(log, "other exception");
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
-    }
+    CATCHEXCEPTION
 }
 
 ::grpc::Status FlashService::Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)

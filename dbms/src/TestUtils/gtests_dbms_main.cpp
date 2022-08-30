@@ -59,6 +59,9 @@ int main(int argc, char ** argv)
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
     DB::tests::TiFlashTestEnv::setupLogger();
+    #ifndef MULTIPLE_CONTEXT_GTEST
+    std::cout << "ywq test can i reach" << std::endl;
+    #endif
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     DB::ServerInfo server_info;
     DB::DM::SegmentReaderPoolManager::instance().init(server_info);

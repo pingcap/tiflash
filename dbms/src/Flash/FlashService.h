@@ -136,4 +136,22 @@ public:
     }
 };
 
+
+#define CATCHEXCEPTION                                                                                                                              \
+    catch (Exception & e)                                                                                                                  \
+    {                                                                                                                                      \
+        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());                                                                               \
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message())); \
+    }                                                                                                                                      \
+    catch (const std::exception & e)                                                                                                       \
+    {                                                                                                                                      \
+        LOG_FMT_ERROR(log, "std exception: {}", e.what());                                                                                 \
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));                    \
+    }                                                                                                                                      \
+    catch (...)                                                                                                                            \
+    {                                                                                                                                      \
+        LOG_FMT_ERROR(log, "other exception");                                                                                             \
+        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));           \
+    }
+
 } // namespace DB
