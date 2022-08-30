@@ -14,6 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -92,23 +93,54 @@ void LogWriter::close()
 void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter)
 {
     // Header size varies depending on whether we are recycling or not.
-    const int header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
+    const UInt32 header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
 
-    // Fragment the record if necessary and emit it. Note that if payload is empty,
-    // we still want to iterate once to emit a single zero-length record.
-    bool begin = true;
-    size_t payload_left = payload_size;
-
-    size_t head_sizes = ((payload_size / Format::BLOCK_SIZE) + 1) * Format::RECYCLABLE_HEADER_SIZE;
-    if (payload_size + head_sizes >= buffer_size)
+    // Check whether the payload can fit in current block.
+    // If not, need to fragment the record and emit it.
+    // Note that if payload is empty, we still want to iterate once to emit a single zero-length record.
+    size_t total_write_size = 0;
+    assert(block_offset <= Format::BLOCK_SIZE);
+    size_t current_block_avail_size = Format::BLOCK_SIZE - block_offset;
+    if (payload_size + header_size <= current_block_avail_size)
     {
-        size_t new_buff_size = payload_size + ((head_sizes / Format::BLOCK_SIZE) + 1) * Format::BLOCK_SIZE;
+        total_write_size = payload_size + header_size;
+    }
+    else
+    {
+        auto current_avail_payload_space = header_size <= current_block_avail_size ? (current_block_avail_size - header_size) : 0;
+        auto complete_fragment_num = (payload_size - current_avail_payload_space) / (Format::BLOCK_SIZE - header_size);
+        // Fill current block
+        total_write_size += current_block_avail_size;
+        // Fill `complete_fragment_num` blocks
+        total_write_size += complete_fragment_num * Format::BLOCK_SIZE;
+        // Fill a partial tail block if needed
+        size_t remaining_payload_size = payload_size - current_avail_payload_space - (Format::BLOCK_SIZE - header_size) * complete_fragment_num;
+        assert(payload_size >= current_avail_payload_space + (Format::BLOCK_SIZE - header_size) * complete_fragment_num);
+        assert(remaining_payload_size + header_size <= Format::BLOCK_SIZE);
+        total_write_size += (remaining_payload_size > 0) ? (remaining_payload_size + header_size) : 0;
+    }
+    assert(total_write_size > 0);
 
+    size_t buffer_avail_size = buffer_size - write_buffer.offset();
+    if (total_write_size > buffer_avail_size)
+    {
+        // Flush the buffer if it has data before reset buffer
+        if (unlikely(write_buffer.offset() > 0))
+        {
+            flush(write_limiter, /* background */ false);
+        }
+        assert(write_buffer.offset() == 0);
+        // Accurate new_buff_size should be ((total_write_size - 1) / Format::BLOCK_SIZE + 1) * Format::BLOCK_SIZE
+        // Just be simple and conservative here.
+        size_t new_buff_size = (total_write_size / Format::BLOCK_SIZE + 1) * Format::BLOCK_SIZE;
         buffer = static_cast<char *>(realloc(buffer, buffer_size, new_buff_size));
+        RUNTIME_CHECK_MSG(buffer != nullptr, "LogWriter cannot reallocate buffer of size {}", new_buff_size);
         buffer_size = new_buff_size;
         resetBuffer();
     }
 
+    bool begin = true;
+    size_t payload_left = payload_size;
     do
     {
         const Int64 leftover = Format::BLOCK_SIZE - block_offset;
@@ -139,7 +171,16 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
             type = recycle_log_files ? Format::RecordType::RecyclableLastType : Format::RecordType::LastType;
         else
             type = recycle_log_files ? Format::RecordType::RecyclableMiddleType : Format::RecordType::MiddleType;
-        emitPhysicalRecord(type, payload, fragment_length);
+        try
+        {
+            emitPhysicalRecord(type, payload, fragment_length);
+        }
+        catch (...)
+        {
+            auto message = getCurrentExceptionMessage(false);
+            LOG_FMT_FATAL(&Poco::Logger::get("LogWriter"), "Write physical record failed with message: {}", message);
+            std::terminate();
+        }
         payload.ignore(fragment_length);
         payload_left -= fragment_length;
         begin = false;
