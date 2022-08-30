@@ -18,7 +18,6 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 
-#include <exception>
 #include <fstream>
 #include <regex>
 
@@ -101,8 +100,6 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
             break;
         }
     }
-    static auto * log = &Poco::Logger::get("SearchLog");
-    LOG_FMT_DEBUG(log, "target_read_tso {} target_line {}", target_read_tso, target_line);
     // try parse the first number following the key
     try
     {
