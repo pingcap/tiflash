@@ -295,13 +295,11 @@ grpc::Status FlashService::Coprocessor(
     {
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
         tunnel->connect(calldata);
-        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
     else
     {
         SyncPacketWriter writer(sync_writer);
         tunnel->connect(&writer);
-        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
         tunnel->waitForFinish();
         LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     }

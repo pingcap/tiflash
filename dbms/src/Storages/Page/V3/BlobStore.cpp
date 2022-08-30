@@ -982,13 +982,10 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Avoid divide by zero
             if (right_margin == 0)
             {
-                if (unlikely(stat->sm_valid_rate != 0))
-                {
-                    throw Exception(fmt::format("Current blob is empty, but valid rate is not 0. [blob_id={}][valid_size={}][valid_rate={}]",
-                                                stat->id,
-                                                stat->sm_valid_size,
-                                                stat->sm_valid_rate));
-                }
+                // Note `stat->sm_total_size` isn't strictly the same as the actual size of underlying BlobFile after restart tiflash,
+                // because some entry may be deleted but the actual disk space is not reclaimed in previous run.
+                // TODO: avoid always truncate on empty BlobFile
+                RUNTIME_CHECK_MSG(stat->sm_valid_size == 0, "Current blob is empty, but valid size is not 0. [blob_id={}] [valid_size={}] [valid_rate={}]", stat->id, stat->sm_valid_size, stat->sm_valid_rate);
 
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
@@ -1118,6 +1115,10 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             }
         }
         alloc_size = std::max(alloc_size, biggest_page_size);
+    }
+    else
+    {
+        alloc_size = total_page_size;
     }
 
     BlobFileOffset remaining_page_size = total_page_size - alloc_size;
@@ -1531,7 +1532,7 @@ void BlobStore::BlobStats::BlobStat::restoreSpaceMap(BlobFileOffset offset, size
     if (!smap->markUsed(offset, buf_size))
     {
         smap->logDebugString();
-        throw Exception(fmt::format("Restore postion from BlobStat failed, the space/subspace is already being used [offset={}] [buf_size={}] [blob_id={}]",
+        throw Exception(fmt::format("Restore position from BlobStat failed, the space/subspace is already being used [offset={}] [buf_size={}] [blob_id={}]",
                                     offset,
                                     buf_size,
                                     id),

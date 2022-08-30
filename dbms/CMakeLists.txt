@@ -363,7 +363,11 @@ endif ()
 
 # dbms
 add_target_pch("pch-dbms.h" dbms flash_service)
-add_target_pch("pch-common.h" clickhouse_common_io clickhouse_functions clickhouse_aggregate_functions)
+add_target_pch("pch-common.h" clickhouse_common_io clickhouse_aggregate_functions)
+
+# disable PCH for `clickhouse_functions` temporarily because some source files need to use specific cxx flags
+# add_target_pch("pch-common.h" clickhouse_functions)
+
 add_target_pch("pch-common.h" clickhouse_parsers clickhouse_storages_system dt-workload-lib clickhouse-server-lib)
 
 # common

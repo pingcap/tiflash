@@ -73,7 +73,7 @@ protected:
     // <segment_id, segment_ptr>
     std::map<PageId, SegmentPtr> segments;
 
-    enum SegmentOperaterType
+    enum SegmentOperatorType
     {
         Write = 0,
         DeleteRange,
@@ -82,7 +82,7 @@ protected:
         MergeDelta,
         FlushCache,
         WriteDeletedPack,
-        SegmentOperaterMax
+        SegmentOperatorMax
     };
 
     const std::vector<std::function<void()>> segment_operator_entries = {
