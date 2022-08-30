@@ -71,13 +71,14 @@ public:
         WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
 
-    void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
+    void executeWithTableScanAndConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const String & db, const String & table_name, const ColumnsWithTypeAndName & source_columns, const ColumnsWithTypeAndName & expect_columns)
     {
+        context.addMockTableColumnData(db, table_name, source_columns);
+        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        ASSERT_COLUMNS_EQ_R(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
         for (size_t i = 2; i <= max_concurrency_level; ++i)
         {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreamsWithSingleSource(request, source_columns, SourceType::TableScan));
+            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
         }
         WRAP_FOR_DIS_ENABLE_PLANNER_END
     }
@@ -101,12 +102,16 @@ try
 
     // null input
     executeWithTableScanAndConcurrency(request,
+                                       "test_db",
+                                       "test_table",
                                        {toNullableVec<Int64>("partition", {}), toNullableVec<Int64>("order", {})},
                                        createColumns({}));
 
     // nullable
     executeWithTableScanAndConcurrency(
         request,
+        "test_db",
+        "test_table",
         {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}),
          {toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2})}},
         createColumns({toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}),
@@ -127,6 +132,8 @@ try
 
     // nullable
     executeWithTableScanAndConcurrency(request,
+                                       "test_db",
+                                       "test_table_string",
                                        {toNullableVec<String>("partition", {"banana", "banana", "banana", "banana", {}, "apple", "apple", "apple", "apple"}),
                                         toNullableVec<String>("order", {"apple", "apple", "banana", "banana", {}, "apple", "apple", "banana", "banana"})},
                                        createColumns({toNullableVec<String>("partition", {{}, "apple", "apple", "apple", "apple", "banana", "banana", "banana", "banana"}),
@@ -147,6 +154,8 @@ try
 
     // nullable
     executeWithTableScanAndConcurrency(request,
+                                       "test_db",
+                                       "test_table_float64",
                                        {toNullableVec<Float64>("partition", {{}, 1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
                                         toNullableVec<Float64>("order", {{}, 1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00})},
                                        createColumns({toNullableVec<Float64>("partition", {{}, 1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
@@ -160,6 +169,8 @@ try
                   .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
                   .build(context);
     executeWithTableScanAndConcurrency(request,
+                                       "test_db",
+                                       "test_table_datetime",
                                        {toNullableDatetimeVec("partition", {"20220101010102", "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
                                         toDatetimeVec("order", {"20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
                                        createColumns({toNullableDatetimeVec("partition", {"20220101010101", "20220101010101", "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010102", "20220101010102"}, 0),
@@ -168,6 +179,8 @@ try
 
     // nullable
     executeWithTableScanAndConcurrency(request,
+                                       "test_db",
+                                       "test_table_datetime",
                                        {toNullableDatetimeVec("partition", {"20220101010102", {}, "20220101010102", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010101", "20220101010101"}, 0),
                                         toNullableDatetimeVec("order", {"20220101010101", {}, "20220101010101", "20220101010102", "20220101010102", "20220101010101", "20220101010101", "20220101010102", "20220101010102"}, 0)},
                                        createColumns({toNullableDatetimeVec("partition", {{}, "20220101010101", "20220101010101", "20220101010101", "20220101010101", "20220101010102", "20220101010102", "20220101010102", "20220101010102"}, 0),
@@ -199,6 +212,8 @@ try
 
     // nullable
     executeWithTableScanAndConcurrency(request,
+                                       "test_db",
+                                       "test_table_for_rank",
                                        {toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}),
                                         toNullableVec<Int64>("order", {{}, 1, 1, 2, 2, 1, 1, 2, 2})},
                                        createColumns({toNullableVec<Int64>("partition", {{}, 1, 1, 1, 1, 2, 2, 2, 2}),
@@ -208,6 +223,8 @@ try
 
     executeWithTableScanAndConcurrency(
         request,
+        "test_db",
+        "test_table_for_rank",
         {toNullableVec<Int64>("partition", {{}, {}, 1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>("order", {{}, 1, 1, 1, 2, 2, 1, 1, 2, 2})},
         createColumns({toNullableVec<Int64>("partition", {{}, {}, 1, 1, 1, 1, 2, 2, 2, 2}),

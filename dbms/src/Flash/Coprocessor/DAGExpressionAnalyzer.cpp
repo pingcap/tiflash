@@ -16,10 +16,12 @@
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
@@ -34,7 +36,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -49,6 +50,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
 {}
 
 extern const String count_second_stage;
+extern const String sum_on_partial_result;
 
 namespace
 {
@@ -83,6 +85,14 @@ String getAggFuncName(
         /// must be the second stage for count, in this case we should return 0 instead of null if the input is empty.
         return count_second_stage;
     }
+
+    // sum functions in mpp are multistage and we need to distinguish them with function name.
+    // "sum" represents the first stage.
+    // "sum_on_partial_result" represents other stages whose input is partial result.
+    // Return type of sum function in different stages is calculated in different ways which is determined
+    // by function name, so we need to distinguish them with function names.
+    if (AggregationInterpreterHelper::isSumOnPartialResults(expr))
+        return sum_on_partial_result;
 
     return agg_func_name;
 }
@@ -144,7 +154,6 @@ void appendAggDescription(
     aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, arg_types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
 
-    DataTypePtr result_type = aggregate.function->getReturnType();
     aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
 
     aggregate_descriptions.push_back(std::move(aggregate));

@@ -99,9 +99,6 @@ extern const char exception_after_drop_segment[];
 
 namespace DM
 {
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
-
 // ================================================
 //   MergeDeltaTaskPool
 // ================================================
@@ -210,7 +207,6 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
     , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
 {
     // for mock test, table_id_ should be DB::InvalidTableID
@@ -502,7 +498,6 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     auto * ctx = new DMContext(db_context.getGlobalContext(),
                                path_pool,
                                *storage_pool,
-                               hash_salt,
                                latest_gc_safe_point.load(std::memory_order_acquire),
                                settings.not_compress_columns,
                                is_common_handle,
@@ -1247,7 +1242,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
                                         bool keep_order,
-                                        bool is_fast_mode,
+                                        bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1282,8 +1277,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* is_raw = */ is_fast_mode,
-        /* do_delete_mark_filter_for_raw = */ is_fast_mode,
+        /* is_raw = */ is_fast_scan,
+        /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
         after_segment_read);
 
@@ -1313,8 +1308,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 filter,
                 max_version,
                 expected_block_size,
-                /* is_raw_ */ is_fast_mode,
-                /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
+                /* is_raw_= */ is_fast_scan,
+                /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
                 extra_table_id_index,
                 physical_table_id,
                 req_info);
@@ -1556,7 +1551,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     };
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
-        if (should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes)
+        // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
+        // or the raft-log apply threads may be blocked.
+        if ((should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes) && replica_exist.load())
         {
             delta_last_try_merge_delta_rows = delta_rows;
 
@@ -2006,9 +2003,17 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+    if (is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
+    else
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
     Stopwatch watch_seg_split;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds());
+        else
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
+    });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
@@ -2158,9 +2163,17 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
+    if (is_foreground)
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge_fg).Increment();
+    else
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
     Stopwatch watch_seg_merge;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds()); });
+    SCOPE_EXIT({
+        if (is_foreground)
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge_fg).Observe(watch_seg_merge.elapsedSeconds());
+        else
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
+    });
 
     auto left_range = left->getRowKeyRange();
     auto right_range = right->getRowKeyRange();
@@ -2462,6 +2475,10 @@ void DeltaMergeStore::applyAlters(
             // Only update primary key name if pk is handle and there is only one column with
             // primary key flag
             original_table_handle_define.name = pk_names[0];
+        }
+        if (table_info.value().get().replica_info.count == 0)
+        {
+            replica_exist.store(false);
         }
     }
 
