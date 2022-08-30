@@ -19,7 +19,6 @@ mysql> alter table test.t set tiflash replica 1
 
 func> wait_table test t
 
-
 mysql> insert into test.t values(1,2);
 mysql> insert into test.t values(2,4);
 mysql> insert into test.t values(5,7);
