@@ -74,7 +74,6 @@ public:
 
     static void TearDownTestCase(); // NOLINT(readability-identifier-naming))
 
-
     static void startServers();
 
     static void startServers(size_t server_num_);
@@ -101,25 +100,23 @@ protected:
     } while (0)
 
 
-#define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols)       \
-    do                                                                               \
-    {                                                                                \
-        for (size_t i = serverNum(); i <= serverNum(); ++i)                          \
-        {                                                                            \
-            (properties).mpp_partition_num = i;                                      \
-            MockComputeServerManager::instance().resetMockMPPServerInfo(i);          \
-            auto tasks = (builder).buildMPPTasks(context, properties);               \
-            for (auto task : tasks)                                                  \
-                std::cout << ExecutorSerializer().serialize(task.dag_request.get()); \
-            ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols);                    \
-        }                                                                            \
+#define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
+    do                                                                         \
+    {                                                                          \
+        for (size_t i = serverNum(); i <= serverNum(); ++i)                    \
+        {                                                                      \
+            (properties).mpp_partition_num = i;                                \
+            MockComputeServerManager::instance().resetMockMPPServerInfo(i);    \
+            auto tasks = (builder).buildMPPTasks(context, properties);         \
+            ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols);              \
+        }                                                                      \
     } while (0)
 
 #define ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(builder, expected_strings, expected_cols) \
     do                                                                                 \
     {                                                                                  \
         auto properties = DB::tests::getDAGPropertiesForTest(serverNum());             \
-        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)                  \
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)                  \
             TiFlashTestEnv::getGlobalContext(i).setMPPTest();                          \
         auto tasks = (builder).buildMPPTasks(context, properties);                     \
         size_t task_size = tasks.size();                                               \

@@ -71,7 +71,7 @@ std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::injectCan
 {
     auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
-    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
         TiFlashTestEnv::getGlobalContext(i).setMPPTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
