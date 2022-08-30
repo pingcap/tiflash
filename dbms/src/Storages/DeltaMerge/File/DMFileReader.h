@@ -78,7 +78,7 @@ public:
         // If you have no idea what it means, then simply set it to false.
         bool enable_handle_clean_read_,
         bool enable_del_clean_read_,
-        bool is_fast_mode_,
+        bool is_fast_scan_,
         // The the MVCC filter version. Used by clean read check.
         UInt64 max_read_version_,
         // filters
@@ -148,7 +148,8 @@ private:
     //               if we don't need del column, we will try to do clean read on del_column(enable_del_clean_read is true).
     const bool enable_handle_clean_read;
     const bool enable_del_clean_read;
-    const bool is_fast_mode;
+    const bool is_fast_scan;
+
     const UInt64 max_read_version;
 
     /// Filters
