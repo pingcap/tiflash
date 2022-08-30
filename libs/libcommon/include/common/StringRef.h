@@ -82,6 +82,9 @@ constexpr const inline char empty_string_ref_addr{};
 
 using StringRefs = std::vector<StringRef>;
 
+// According to https://github.com/pingcap/tiflash/pull/5658
+// - if size of memory area is bigger than 1M, instructions about avx512 may begin to get better results
+// - otherwise, use `std::string_view == std::string_view` or `mem_utils::avx2_mem_equal`(under x86-64 with avx2)
 inline bool operator==(StringRef lhs, StringRef rhs)
 {
     if (lhs.size != rhs.size)
