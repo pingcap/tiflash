@@ -29,6 +29,7 @@
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogReader.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
+#include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
@@ -301,6 +302,15 @@ TEST_P(LogFileRWTest, Fragmentation)
     ASSERT_EQ(repeatedString("medium", 50000), read());
     ASSERT_EQ(repeatedString("large", 100000), read());
     ASSERT_EQ("EOF", read());
+}
+
+// This test may take a lot of time
+TEST_P(LogFileRWTest, DifferentPayloadSize)
+{
+    for (size_t i = 0; i < 40000; i += 1)
+    {
+        write(repeatedString("a", i));
+    }
 }
 
 TEST_P(LogFileRWTest, MarginalTrailer)
@@ -789,4 +799,58 @@ INSTANTIATE_TEST_CASE_P(
         return fmt::format("{}_{}", recycle_log, allow_retry_read);
     });
 
+TEST(LogFileRWTest2, ManuallyFlush)
+{
+    auto provider = TiFlashTestEnv::getContext().getFileProvider();
+    auto path = TiFlashTestEnv::getTemporaryPath("LogFileRWTest2");
+    DB::tests::TiFlashTestEnv::tryRemovePath(path);
+
+    Poco::File file(path);
+    if (!file.exists())
+    {
+        file.createDirectories();
+    }
+
+    auto file_name = path + "/log_0";
+    auto payload = repeatedString("medium", 50000);
+    Format::LogNumberType log_num = 30;
+
+    auto writer = std::make_unique<LogWriter>(file_name, provider, log_num, /* recycle_log */ true, /* manual_flush */ true);
+    {
+        ReadBufferFromString buff(payload);
+        ASSERT_NO_THROW(writer->addRecord(buff, payload.size()));
+    }
+    {
+        ReadBufferFromString buff(payload);
+        ASSERT_NO_THROW(writer->addRecord(buff, payload.size()));
+    }
+    writer->flush();
+
+    auto read_buf = createReadBufferFromFileBaseByFileProvider(
+        provider,
+        file_name,
+        EncryptionPath{file_name, ""},
+        /*estimated_size*/ Format::BLOCK_SIZE,
+        /*aio_threshold*/ 0,
+        /*read_limiter*/ nullptr,
+        /*buffer_size*/ Format::BLOCK_SIZE // Must be `Format::BLOCK_SIZE`
+    );
+
+    DB::PS::V3::ReportCollector reporter;
+    auto reader = std::make_unique<LogReader>(std::move(read_buf),
+                                              &reporter,
+                                              /* verify_checksum */ true,
+                                              log_num,
+                                              WALRecoveryMode::PointInTimeRecovery);
+    {
+        auto [ok, scratch] = reader->readRecord();
+        ASSERT_TRUE(ok);
+        ASSERT_EQ(scratch, payload);
+    }
+    {
+        auto [ok, scratch] = reader->readRecord();
+        ASSERT_TRUE(ok);
+        ASSERT_EQ(scratch, payload);
+    }
+}
 } // namespace DB::PS::V3::tests
