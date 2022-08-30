@@ -85,7 +85,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
     grpc::ServerBuilder builder;
-    std::cout << "ywq test context is mpp test: " << context.isMPPTest() << std::endl;
     if (security_config.has_tls_config)
     {
         grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
@@ -208,5 +207,10 @@ void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
 void FlashGrpcServerHolder::setMockMPPServerInfo(MockMPPServerInfo info)
 {
     flash_service->setMockMPPServerInfo(info);
+}
+
+std::unique_ptr<FlashService> & FlashGrpcServerHolder::flashService()
+{
+    return flash_service;
 }
 } // namespace DB

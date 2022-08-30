@@ -35,8 +35,6 @@
 
 #include <ext/scope_guard.h>
 
-#include "common/logger_useful.h"
-
 namespace DB
 {
 namespace ErrorCodes
@@ -54,7 +52,6 @@ FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Conte
           context.getGlobalContext(),
           context.getGlobalContext().getSettingsRef()))
 {
-    std::cout << "ywq test wtf is mpp test: " << context.isMPPTest() << std::endl;
     auto settings = context.getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
@@ -160,7 +157,6 @@ grpc::Status FlashService::Coprocessor(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
-    LOG_FMT_DEBUG(log, "ywq test is mpptest : {}", context.isMPPTest());
     // For MPP test, we don't care about security config.
     if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
     {
@@ -272,9 +268,6 @@ grpc::Status FlashService::Coprocessor(
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
     if (tunnel == nullptr)
     {
-        std::cout << "ywq test fuck:" << task_manager->toString() << std::endl;
-        request->PrintDebugString();
-
         if (calldata)
         {
             LOG_ERROR(log, err_msg);

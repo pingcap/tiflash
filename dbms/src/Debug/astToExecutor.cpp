@@ -858,7 +858,6 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
-    exchange_receiver->set_tp(tipb::PassThrough);
 
     for (auto & field : output_schema)
     {
@@ -880,8 +879,6 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        std::cout << "ywq test ismpp test ywq: " << context.isMPPTest() << std::endl;
-
         auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[i].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
         std::cout << "ywq test receiver partition id = " << i << ", addr=" << addr << ", task_id: " << meta.task_id() << std::endl;

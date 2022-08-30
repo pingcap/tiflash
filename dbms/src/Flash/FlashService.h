@@ -21,7 +21,6 @@
 #include <common/logger_useful.h>
 
 #include <boost/noncopyable.hpp>
-
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"

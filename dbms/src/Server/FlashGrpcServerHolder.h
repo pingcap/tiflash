@@ -39,10 +39,7 @@ public:
     void setMockStorage(MockStorage & mock_storage);
     void setMockMPPServerInfo(MockMPPServerInfo info);
 
-    std::unique_ptr<FlashService> & getFlashService()
-    {
-        return flash_service;
-    }
+    std::unique_ptr<FlashService> & flashService();
 
 private:
     const LoggerPtr & log;

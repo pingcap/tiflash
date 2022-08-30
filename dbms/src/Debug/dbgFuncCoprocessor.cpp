@@ -392,7 +392,7 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
     for (auto & task : query_tasks)
     {
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
-        auto addr = server_config_map[task.partition_id].addr; // ywq a hack...
+        auto addr = server_config_map[task.partition_id].addr;
         std::cout << "ywq test addr: " << addr << ", partition_id: " << task.partition_id << ", task_id:" << task.task_id << std::endl;
         prepareDispatchTaskRequestNew(task, req, properties, root_task_ids, root_task_partition_ids, root_task_schema, addr);
         MockComputeClient client(

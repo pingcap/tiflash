@@ -13,12 +13,6 @@
 // limitations under the License.
 #include <TestUtils/MPPTaskTestUtils.h>
 
-#include <cstddef>
-
-#include "Debug/dbgFuncCoprocessor.h"
-#include "TestUtils/ExecutorTestUtils.h"
-#include "TestUtils/TiFlashTestEnv.h"
-
 namespace DB::tests
 {
 DAGProperties getDAGPropertiesForTest(int server_num)
@@ -56,7 +50,6 @@ void MPPTaskTestUtils::startServers(size_t server_num_)
     MockComputeServerManager::instance().reset();
     auto size = std::thread::hardware_concurrency();
     GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
-    std::cout << "ywq test globalContext size: " << TiFlashTestEnv::globalContextSize() << std::endl;
     for (size_t i = 0; i < test_meta.server_num; ++i)
     {
         MockComputeServerManager::instance().addServer(MockServerAddrGenerator::instance().nextAddr());
@@ -65,7 +58,6 @@ void MPPTaskTestUtils::startServers(size_t server_num_)
     }
 
     MockComputeServerManager::instance().startServers(log_ptr, test_meta.context_idx);
-    std::cout << "ywq test globalContext size: " << TiFlashTestEnv::globalContextSize() << std::endl;
     MockServerAddrGenerator::instance().reset();
 }
 

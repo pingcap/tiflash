@@ -124,7 +124,7 @@ void MockComputeServerManager::cancelTest()
     mpp::CancelTaskResponse response;
     showTaskInfo();
     for (const auto & server : server_map)
-        server.second->getFlashService()->cancelMPPTaskForTest(&req, &response);
+        server.second->flashService()->cancelMPPTaskForTest(&req, &response);
 
     showTaskInfo();
 }

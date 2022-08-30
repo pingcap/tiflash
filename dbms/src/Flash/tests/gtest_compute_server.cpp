@@ -169,12 +169,6 @@ try
                                                  .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
                                              expected_strings,
                                              expect_cols);
-        // auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
-        // ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(context
-        //                                          .scan("test_db", "l_table")
-        //                                          .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
-        //                                      properties,
-        //                                      expect_cols);
     }
 
     {

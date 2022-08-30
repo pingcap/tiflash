@@ -154,7 +154,6 @@ std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
     const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
-
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
     if (tunnel == nullptr)
     {
@@ -162,7 +161,6 @@ std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
     }
     if (!tunnel->isLocal())
     {
-        request->PrintDebugString();
         return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
     }
     tunnel->connect(nullptr);
@@ -195,7 +193,6 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     ExchangeRecvRequest req;
     req.source_index = index;
 
-    // ywq test make request enable local tunnel: 0, sender_task addr: 0.0.0.0:3931, task meta addr: 0.0.0.0:3931, sender_id: 1, receiver_id: -1
     std::cout << "ywq test make request enable local tunnel: " << enable_local_tunnel << ", sender_task addr: " << sender_task->address() << ", task meta addr: " << task_meta.address() << ", sender_id: " << sender_task->task_id() << ", receiver_id: " << task_meta.task_id() << std::endl;
     req.is_local = enable_local_tunnel && sender_task->address() == task_meta.address();
     req.send_task_id = sender_task->task_id();
@@ -213,7 +210,6 @@ bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) cons
 
 ExchangePacketReaderPtr GRPCReceiverContext::makeReader(const ExchangeRecvRequest & request) const
 {
-    std::cout << "ywq test request islocal" << request.is_local << std::endl;
     if (request.is_local)
     {
         auto [tunnel, status] = establishMPPConnectionLocal(request.req.get(), task_manager);
@@ -239,7 +235,6 @@ void GRPCReceiverContext::makeAsyncReader(
     AsyncExchangePacketReaderPtr & reader,
     UnaryCallback<bool> * callback) const
 {
-    std::cout << "ywq test called make async reader???" << std::endl;
     reader = std::make_shared<AsyncGrpcExchangePacketReader>(cluster, request);
     reader->init(callback);
 }

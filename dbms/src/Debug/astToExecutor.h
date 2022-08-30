@@ -68,7 +68,6 @@ struct MPPCtx
     Timestamp start_ts;
     Int64 next_task_id;
     std::vector<Int64> sender_target_task_ids;
-
     explicit MPPCtx(Timestamp start_ts_)
         : start_ts(start_ts_)
         , next_task_id(1)
