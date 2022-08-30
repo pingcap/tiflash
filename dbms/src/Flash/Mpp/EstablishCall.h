@@ -56,9 +56,7 @@ public:
 
     ~EstablishCallData() override;
 
-    void proceed();
-
-    void cancel();
+    void proceed(bool ok);
 
     grpc_call * grpcCall() override;
 

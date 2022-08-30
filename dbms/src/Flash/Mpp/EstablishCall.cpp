@@ -47,8 +47,20 @@ EstablishCallData::~EstablishCallData()
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
 }
 
-void EstablishCallData::proceed()
+void EstablishCallData::proceed(bool ok)
 {
+    if (unlikely(!ok))
+    {
+        /// state == NEW_REQUEST means the server is shutdown and no new rpc has come.
+        if (state == NEW_REQUEST || state == FINISH)
+        {
+            delete this;
+            return;
+        }
+        unexpectedWriteDone();
+        return;
+    }
+
     if (state == NEW_REQUEST)
     {
         spawn(service, cq, notify_cq, is_shutdown);
@@ -76,16 +88,6 @@ void EstablishCallData::proceed()
         delete this;
         return;
     }
-}
-
-void EstablishCallData::cancel()
-{
-    if (state == NEW_REQUEST || state == FINISH) // state == NEW_REQUEST means the server is shutdown and no new rpc has come.
-    {
-        delete this;
-        return;
-    }
-    unexpectedWriteDone();
 }
 
 grpc_call * EstablishCallData::grpcCall()
