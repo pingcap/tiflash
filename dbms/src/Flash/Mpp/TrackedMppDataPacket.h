@@ -112,7 +112,7 @@ struct TrackedMppDataPacket
     void addChunk(std::string && value)
     {
         mem_tracker_wrapper.alloc(value.size());
-        packet.add_chunks(value);
+        packet.add_chunks(std::move(value));
     }
 
     void serializeByResponse(const tipb::SelectResponse & response)
@@ -186,7 +186,7 @@ struct TrackedSelectResp
     {
         memory_tracker.alloc(value.size());
         auto * dag_chunk = response.add_chunks();
-        dag_chunk->set_rows_data(value);
+        dag_chunk->set_rows_data(std::move(value));
     }
 
     tipb::SelectResponse & getResponse()
