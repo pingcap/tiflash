@@ -16,7 +16,6 @@
 mysql> drop table if exists test.t
 mysql> create table test.t (a int, b int)
 mysql> alter table test.t set tiflash replica 1
-mysql> set @@tiflash_fastscan=ON;
 
 func> wait_table test t
 
@@ -24,7 +23,7 @@ mysql> insert into test.t values(1,2);
 mysql> insert into test.t values(2,4);
 mysql> insert into test.t values(5,7);
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set @@tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+-----+
 | a    | b   |
 +------+-----+
@@ -35,7 +34,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 
 mysql> delete from test.t where a = 1;
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set @@tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+-----+
 | a    | b   |
 +------+-----+
@@ -44,8 +43,7 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 |    5 |    7|
 +------+-----+
 
-mysql> set @@tiflash_fastscan=OFF;
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set @@tiflash_fastscan=OFF; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+-----+
 | a    | b   |
 +------+-----+
@@ -53,10 +51,9 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 |    5 |    7|
 +------+-----+
 
-mysql> set @@tiflash_fastscan=ON;
 mysql> alter table test.t compact tiflash replica;
 
-mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t;
+mysql> set @@tiflash_fastscan=ON; set session tidb_isolation_read_engines='tiflash'; select * from test.t;
 +------+-----+
 | a    | b   |
 +------+-----+
