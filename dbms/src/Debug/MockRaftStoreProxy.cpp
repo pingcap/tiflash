@@ -356,8 +356,12 @@ void MockRaftStoreProxy::normalWrite(
 {
     auto region = getRegion(region_id);
     assert(region != nullptr);
+    // We have a new entry.
     auto index = region->getLatestCommitIndex() + 1;
     auto term = region->getLatestCommitTerm();
+    // The new entry is committed on Proxy's side.
+    region->updateCommitIndex(index);
+    // We apply this committed entry.
     raft_cmdpb::RaftCmdRequest request;
     size_t n = keys.size();
     assert(n == vals.size());
