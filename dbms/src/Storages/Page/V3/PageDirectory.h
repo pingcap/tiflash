@@ -27,6 +27,7 @@
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WALStore.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 #include <common/types.h>
 
 #include <memory>
@@ -349,9 +350,9 @@ public:
     // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
     PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
 
-    // Get the external id that is not deleted or being ref by another id over
-    // all NamespaceIds.
-    std::map<NamespaceId, std::set<PageId>> getAliveExternalIds() const;
+    // Get the external id that is not deleted or being ref by another id by
+    // `ns_id`.
+    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
@@ -394,8 +395,7 @@ private:
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
-    mutable std::mutex external_ids_mutex;
-    mutable std::list<std::weak_ptr<PageIdV3Internal>> external_ids;
+    mutable ExternalIdsByNamespace external_ids_by_ns;
 
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;

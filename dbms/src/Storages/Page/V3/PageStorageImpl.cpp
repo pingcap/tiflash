@@ -106,10 +106,7 @@ size_t PageStorageImpl::getNumberOfPages()
 
 std::set<PageId> PageStorageImpl::getAliveExternalPageIds(NamespaceId ns_id)
 {
-    auto alive_ex_ids_all_ns = page_directory->getAliveExternalIds();
-    if (auto iter = alive_ex_ids_all_ns.find(ns_id); iter != alive_ex_ids_all_ns.end())
-        return iter->second;
-    return {};
+    return page_directory->getAliveExternalIds(ns_id);
 }
 
 void PageStorageImpl::writeImpl(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter)
@@ -346,21 +343,13 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
     if (!callbacks_container.empty())
     {
         Stopwatch external_watch;
-        // get all alive external ids from all namespaces
-        auto alive_external_ids = page_directory->getAliveExternalIds();
-        statistics.external_page_get_alive_ns = external_watch.elapsedFromLastTime();
         for (const auto & [ns_id, callbacks] : callbacks_container)
         {
             const auto pending_external_pages = callbacks.scanner();
             statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
-            if (auto iter = alive_external_ids.find(ns_id); iter != alive_external_ids.end())
-            {
-                callbacks.remover(pending_external_pages, iter->second);
-            }
-            else
-            {
-                callbacks.remover(pending_external_pages, {});
-            }
+            const auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
+            statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
+            callbacks.remover(pending_external_pages, alive_external_ids);
             statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
         }
     }
