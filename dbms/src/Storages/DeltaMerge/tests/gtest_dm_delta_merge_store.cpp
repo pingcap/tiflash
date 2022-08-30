@@ -259,7 +259,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -358,7 +358,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, 0);
     }
@@ -437,7 +437,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -486,7 +486,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -513,7 +513,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -588,7 +588,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -663,7 +663,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -680,11 +680,11 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -729,7 +729,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -759,7 +759,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -802,7 +802,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -821,7 +821,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -840,7 +840,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -859,7 +859,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -916,7 +916,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -942,7 +942,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -968,7 +968,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -987,7 +987,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1008,7 +1008,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1065,7 +1065,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1091,7 +1091,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1117,7 +1117,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1169,7 +1169,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1195,7 +1195,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1277,7 +1277,7 @@ try
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
-                                                /* is_fast_mode= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -1366,7 +1366,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1455,7 +1455,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1531,7 +1531,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1615,7 +1615,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1681,7 +1681,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1747,7 +1747,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1812,7 +1812,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1877,7 +1877,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1941,7 +1941,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         std::vector<DataTypeMyDateTime::FieldType> datetime_data(
@@ -2011,7 +2011,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -2091,7 +2091,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2208,7 +2208,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2256,7 +2256,7 @@ try
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
-                                                /* is_fast_mode= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
@@ -2342,7 +2342,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -2384,7 +2384,7 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         // FIXME!!!
@@ -2495,7 +2495,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         // mock common handle
@@ -2597,7 +2597,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2669,7 +2669,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2694,11 +2694,11 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2754,7 +2754,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2791,7 +2791,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle, data range after deletion is [64, 128)
         auto common_handle_coldata = []() {
@@ -2858,7 +2858,7 @@ try
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
-                                                /* is_fast_mode= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
