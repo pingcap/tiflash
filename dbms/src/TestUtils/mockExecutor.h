@@ -43,6 +43,12 @@ inline int32_t convertToTiDBCollation(int32_t collation)
     return -(abs(collation));
 }
 
+enum class DAGRequestType
+{
+    tree,
+    list,
+};
+
 /** Responsible for Hand write tipb::DAGRequest
   * Use this class to mock DAGRequest, then feed the DAGRequest into 
   * the Interpreter for test purpose.
@@ -70,8 +76,7 @@ public:
         return root;
     }
 
-    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
-    std::shared_ptr<tipb::DAGRequest> buildToListStruct(MockDAGRequestContext & mock_context);
+    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context, DAGRequestType type = DAGRequestType::tree);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 

@@ -640,7 +640,7 @@ try
                            .filter(eq(col("s1"), col("s2")))
                            .aggregation(Max(col("s1")), col("s2"))
                            .limit(10)
-                           .buildToListStruct(context);
+                           .build(context, DAGRequestType::list);
         String expected = R"(
 Limit, limit = 10
  Expression: <final projection>
@@ -658,7 +658,7 @@ Limit, limit = 10
                            .filter(eq(col("s1"), col("s2")))
                            .aggregation(Max(col("s1")), col("s2"))
                            .topN("s2", false, 10)
-                           .buildToListStruct(context);
+                           .build(context, DAGRequestType::list);
         String expected = R"(
 Union: <for test>
  SharedQuery x 20: <restore concurrency>

@@ -351,7 +351,7 @@ try
                            .aggregation(Max(col("s1")), col("s2"))
                            .filter(eq(col("s2"), lit(Field("1", 1))))
                            .limit(10)
-                           .buildToListStruct(context);
+                           .build(context, DAGRequestType::list);
         String expected = R"(
 Limit | 10
  Selection | equals(<1, String>, <-5692549928996306944, String>)}
@@ -368,7 +368,7 @@ Limit | 10
                            .aggregation(Max(col("s1")), col("s2"))
                            .filter(eq(col("s2"), lit(Field("1", 1))))
                            .topN("s2", false, 10)
-                           .buildToListStruct(context);
+                           .build(context, DAGRequestType::list);
         String expected = R"(
 TopN | order_by: {(<1, String>, desc: false)}, limit: 10
  Selection | equals(<1, String>, <-5692549928996306944, String>)}
