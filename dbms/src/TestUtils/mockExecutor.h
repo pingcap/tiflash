@@ -71,6 +71,7 @@ public:
     }
 
     std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
+    std::shared_ptr<tipb::DAGRequest> buildToListStruct(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
     QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 

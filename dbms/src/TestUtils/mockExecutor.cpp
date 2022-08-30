@@ -15,6 +15,7 @@
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/astToExecutor.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -94,6 +95,20 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     root.reset();
     executor_index = 0;
     return dag_request_ptr;
+}
+
+std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::buildToListStruct(MockDAGRequestContext & mock_context)
+{
+    auto tree_struct_req = build(mock_context);
+    std::shared_ptr<tipb::DAGRequest> list_struct_req = std::make_shared<tipb::DAGRequest>();
+    auto & mutable_executors = *list_struct_req->mutable_executors();
+    traverseExecutors(tree_struct_req.get(), [&](const tipb::Executor & executor) -> bool {
+        auto * mutable_executor = mutable_executors.Add();
+        (*mutable_executor) = executor;
+        mutable_executor->clear_executor_id();
+        return true;
+    });
+    return list_struct_req;
 }
 
 // Currently Sort and Window Executors don't support columnPrune.

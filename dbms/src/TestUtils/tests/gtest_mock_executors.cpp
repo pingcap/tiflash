@@ -340,5 +340,16 @@ try
     }
 }
 CATCH
+
+TEST_F(MockDAGRequestTest, ListBase)
+try
+{
+    auto request = context.scan("test_db", "test_table").filter(eq(col("s1"), col("s2"))).buildToListStruct(context);
+    {
+        String expected = R"()";
+        ASSERT_DAGREQUEST_EQAUL(expected, request);
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB
