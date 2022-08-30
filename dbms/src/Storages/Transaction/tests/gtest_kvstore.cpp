@@ -1273,26 +1273,71 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
     init(false);
     auto ctx = TiFlashTestEnv::getGlobalContext();
     auto applied_index = 0;
+    auto region_id = 1;
     {
         KVStore & kvs = getKVS();
-        proxy_instance->bootstrap(kvs, ctx.getTMTContext(), 1);
+        proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
         MockRaftStoreProxy::FailCond cond;
         cond.fail_before_proxy = false;
 
-        auto kvr1 = kvs.getRegion(1);
-        auto r1 = proxy_instance->getRegion(1);
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
         applied_index = r1->getLatestAppliedIndex();
-        proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, 1, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
         ASSERT_NE(r1, nullptr);
         ASSERT_NE(kvr1, nullptr);
         ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
         ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
-        kvs.tryPersist(1);
+        kvs.tryPersist(region_id);
     }
     {
         const KVStore & kvs = reloadKVSFromDisk();
-        ASSERT_EQ(proxy_instance->getRegion(1)->getLatestAppliedIndex(), applied_index + 1);
-        ASSERT_EQ(kvs.getRegion(1)->appliedIndex(), applied_index + 1);
+        ASSERT_EQ(proxy_instance->getRegion(region_id)->getLatestAppliedIndex(), applied_index + 1);
+        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index + 1);
+    }
+
+    {
+        KVStore & kvs = getKVS();
+        proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+        MockRaftStoreProxy::FailCond cond;
+        cond.fail_before_proxy = true;
+
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        applied_index = r1->getLatestAppliedIndex();
+        proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        ASSERT_NE(r1, nullptr);
+        ASSERT_NE(kvr1, nullptr);
+        ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+        ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+        kvs.tryPersist(region_id);
+    }
+    {
+        const KVStore & kvs = reloadKVSFromDisk();
+        ASSERT_EQ(proxy_instance->getRegion(region_id)->getLatestAppliedIndex(), applied_index);
+        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index);
+    }
+
+    {
+        KVStore & kvs = getKVS();
+        proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+        MockRaftStoreProxy::FailCond cond;
+        cond.fail_before_kvstore = true;
+
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        applied_index = r1->getLatestAppliedIndex();
+        proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        ASSERT_NE(r1, nullptr);
+        ASSERT_NE(kvr1, nullptr);
+        ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+        ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+        kvs.tryPersist(region_id);
+    }
+    {
+        const KVStore & kvs = reloadKVSFromDisk();
+        ASSERT_EQ(proxy_instance->getRegion(region_id)->getLatestAppliedIndex(), applied_index);
+        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index);
     }
 }
 
