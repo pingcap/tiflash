@@ -35,6 +35,7 @@ add_executable (gtests_libcommon
     gtest_json_test.cpp
     gtest_strong_typedef.cpp
     gtest_mem_utils.cpp
+    gtest_mem_utils_opt.cpp
     gtest_crc64.cpp
     gtest_logger.cpp
     gtest_arithmetic_overflow.cpp
@@ -43,9 +44,11 @@ target_link_libraries (gtests_libcommon gtest_main common)
 add_check(gtests_libcommon)
 
 add_executable(bench_libcommon
-    bench_logger.cpp
+    # TODO: need to fix broken src file if necessary
+    # bench_logger.cpp 
+    bench_mem_utils.cpp
 )
-target_link_libraries(bench_libcommon benchmark::benchmark_main common)
+target_link_libraries(bench_libcommon benchmark::benchmark_main common m)
 
 add_executable (dump_variable dump_variable.cpp)
 target_link_libraries (dump_variable clickhouse_common_io)

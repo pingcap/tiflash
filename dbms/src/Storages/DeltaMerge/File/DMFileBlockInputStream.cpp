@@ -64,7 +64,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
         is_common_handle,
         enable_handle_clean_read,
         enable_del_clean_read,
-        is_fast_mode,
+        is_fast_scan,
         max_data_version,
         std::move(pack_filter),
         mark_cache,

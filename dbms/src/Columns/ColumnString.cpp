@@ -17,7 +17,7 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <Functions/CollationOperatorOptimized.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <fmt/core.h>
 
 
