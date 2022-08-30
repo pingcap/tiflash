@@ -12,7 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/QueryExecutor.h>
+
 namespace DB
 {
-    
+const ResultHandler QueryExecutor::default_result_handler = [](const Block &) {};
+
+std::pair<bool, String> DataStreamExecutor::execute(ResultHandler result_handler)
+{
+    try
+    {
+        data_stream->readPrefix();
+        while (Block block = data_stream->read())
+        {
+            result_handler(block);
+        }
+        data_stream->readSuffix();
+        return {true, ""};
+    }
+    catch (...)
+    {
+        return {false, getCurrentExceptionMessage(true, true)};
+    }
+}
+
+BlockInputStreamPtr DataStreamExecutor::dataStream() const
+{
+    return data_stream;
+}
 }

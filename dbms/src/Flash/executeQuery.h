@@ -16,11 +16,12 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
+#include <Flash/QueryExecutor.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
-BlockIO executeQuery(
+QueryExecutorPtr executeQuery(
     Context & context,
     bool internal = false,
     QueryProcessingStage::Enum stage = QueryProcessingStage::Complete);

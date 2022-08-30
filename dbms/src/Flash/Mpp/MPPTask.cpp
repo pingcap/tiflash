@@ -356,7 +356,7 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
-    executeQuery(*context);
+    executor = executeQuery(*context);
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
         if (status != RUNNING)
@@ -405,27 +405,24 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = dag_context->getBlockIO().in;
-        from->readPrefix();
-        LOG_DEBUG(log, "begin read ");
+        assert(executor);
+        bool is_success;
+        std::tie(is_success, err_msg) = executor->execute();
+        if (is_success)
+        {
+            // finish receiver
+            receiver_set->close();
+            // finish MPPTunnel
+            finishWrite();
 
-        while (from->read())
-            continue;
-
-        // finish DataStream
-        from->readSuffix();
-        // finish receiver
-        receiver_set->close();
-        // finish MPPTunnel
-        finishWrite();
-
-        const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
-        LOG_FMT_DEBUG(
-            log,
-            "finish write with {} rows, {} blocks, {} bytes",
-            return_statistics.rows,
-            return_statistics.blocks,
-            return_statistics.bytes);
+            const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+            LOG_FMT_DEBUG(
+                log,
+                "finish write with {} rows, {} blocks, {} bytes",
+                return_statistics.rows,
+                return_statistics.blocks,
+                return_statistics.bytes);
+        }
     }
     catch (...)
     {

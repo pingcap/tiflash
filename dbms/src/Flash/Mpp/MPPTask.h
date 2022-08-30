@@ -19,6 +19,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/QueryExecutor.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
@@ -128,6 +129,8 @@ private:
     // before `context`.
     std::unique_ptr<DAGContext> dag_context;
     MemoryTracker * memory_tracker = nullptr;
+
+    QueryExecutorPtr executor = nullptr;
 
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;
