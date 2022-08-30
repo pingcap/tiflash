@@ -1281,18 +1281,22 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
 
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
-        applied_index = r1->getLatestAppliedIndex();
-        proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
         ASSERT_NE(r1, nullptr);
         ASSERT_NE(kvr1, nullptr);
+        applied_index = r1->getLatestAppliedIndex();
+        ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+        proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
         ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
         ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
         kvs.tryPersist(region_id);
     }
     {
         const KVStore & kvs = reloadKVSFromDisk();
-        ASSERT_EQ(proxy_instance->getRegion(region_id)->getLatestAppliedIndex(), applied_index + 1);
-        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index + 1);
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+        ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+        ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
     }
 
     {
@@ -1304,17 +1308,19 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
         applied_index = r1->getLatestAppliedIndex();
+        ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
         proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-        ASSERT_NE(r1, nullptr);
-        ASSERT_NE(kvr1, nullptr);
         ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
         ASSERT_EQ(kvr1->appliedIndex(), applied_index);
         kvs.tryPersist(region_id);
     }
     {
         const KVStore & kvs = reloadKVSFromDisk();
-        ASSERT_EQ(proxy_instance->getRegion(region_id)->getLatestAppliedIndex(), applied_index);
-        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index);
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+        ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+        ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
     }
 
     {
@@ -1326,18 +1332,20 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
         applied_index = r1->getLatestAppliedIndex();
+        ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
         LOG_FMT_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
         proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-        ASSERT_NE(r1, nullptr);
-        ASSERT_NE(kvr1, nullptr);
         ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
         ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
         kvs.tryPersist(region_id);
     }
     {
         const KVStore & kvs = reloadKVSFromDisk();
-        ASSERT_EQ(proxy_instance->getRegion(region_id)->getLatestAppliedIndex(), applied_index);
-        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index + 1);
+        auto kvr1 = kvs.getRegion(region_id);
+        auto r1 = proxy_instance->getRegion(region_id);
+        ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+        ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+        ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
     }
 }
 
