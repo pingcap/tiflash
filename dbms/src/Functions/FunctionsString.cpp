@@ -4397,7 +4397,7 @@ class FunctionSpace : public IFunction
 public:
     static constexpr auto name = "space";
 
-    static constexpr auto max = 16777216;
+    static constexpr auto MAX = 16777216;
 
     FunctionSpace() = default;
 
@@ -4408,6 +4408,8 @@ public:
 
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -4416,57 +4418,57 @@ public:
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        return std::make_shared<DataTypeString>();
+
+        return arguments[0]->onlyNull()
+            ? makeNullable(std::make_shared<DataTypeNothing>())
+            : makeNullable(std::make_shared<DataTypeString>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        const ColumnPtr c0_col = block.getByPosition(arguments[0]).column;
+        auto & c0_col = block.getByPosition(arguments[0]);
+        if (c0_col.type->onlyNull())
+        {
+            DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
+            block.getByPosition(result).column = data_type->createColumnConst(c0_col.column->size(), Null());
+            return;
+        }
 
         Field res_field;
-        int val_num = c0_col->size();
+        auto c0_col_column = c0_col.column;
+        size_t val_num = block.rows();
+        auto result_null_map = ColumnUInt8::create(val_num);
         auto col_res = ColumnString::create();
         col_res->reserve(val_num);
 
-        if (c0_col->isColumnConst())
+        for (size_t row = 0; row < val_num; ++row)
         {
-            const ColumnConst * c0_col_const = checkAndGetColumnConst<ColumnVector<Int64>>(c0_col.get());
-            if (c0_col_const == nullptr)
+            if (c0_col_column->isNullAt(row))
             {
-                return;
+                result_null_map->getData()[row] = true;
             }
             else
             {
-                auto space_num = c0_col_const->getValue<Int64>();
+                result_null_map->getData()[row] = false;
+
+                c0_col_column->get(row, res_field);
+                Int64 space_num = res_field.get<Int64>();
                 if (space_num < 0)
                 {
                     space_num = 0;
                 }
-                if (space_num > max)
+                if (space_num > MAX)
                 {
-                    return;
+                    result_null_map->getData()[row] = true;
+                    space_num = 0;
                 }
+
+                std::string res_string(space_num, ' ');
+                col_res->insert(res_string);
             }
         }
 
-        for (int i = 0; i < val_num; i++)
-        {
-            c0_col->get(i, res_field);
-            Int64 space_num = res_field.get<Int64>();
-            if (space_num < 0)
-            {
-                space_num = 0;
-            }
-            if (space_num > max)
-            {
-                return;
-            }
-
-            std::string res_string(space_num, ' ');
-            col_res->insert(res_string);
-        }
-
-        block.getByPosition(result).column = std::move(col_res);
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
     }
 
 private:

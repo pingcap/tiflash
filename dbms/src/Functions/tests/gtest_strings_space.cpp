@@ -30,13 +30,23 @@ public:
     static constexpr auto func_name = "space";
 
 protected:
-    ColumnWithTypeAndName toVec(const std::vector<std::optional<String>> & v)
+    static ColumnWithTypeAndName toVec(const std::vector<String> & v)
+    {
+        return createColumn<String>(v);
+    }
+    static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
     {
         return createColumn<Nullable<String>>(v);
     }
-    ColumnWithTypeAndName toVecInt(const std::vector<std::optional<Int64>> & v)
+
+    static ColumnWithTypeAndName toVecInt(const std::vector<std::optional<Int64>> & v)
     {
         return createColumn<Nullable<Int64>>(v);
+    }
+
+    static ColumnWithTypeAndName toConst(const Int64 & v)
+    {
+        return createConstColumn<Int64>(8, v);
     }
 };
 
@@ -45,10 +55,10 @@ TEST_F(StringSpace, spaceTest)
 try
 {
     ASSERT_COLUMN_EQ(
-        toVec({"  ", "", "          ", "", {}}),
+        toNullableVec({"  ", "", "          ", ""}),
         executeFunction(
             func_name,
-            toVecInt({2, 0, 10, -1, 16777217})));
+            toVecInt({2, 0, 10, -1})));
 }
 CATCH
 
@@ -57,10 +67,16 @@ TEST_F(StringSpace, nullTest)
 try
 {
     ASSERT_COLUMN_EQ(
-        toVec({{}}),
+        toNullableVec({}),
         executeFunction(
             func_name,
-            toVec({{}})));
+            toVecInt({})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec({{}}),
+        executeFunction(
+            func_name,
+            toVecInt({16777217})));
 }
 CATCH
 
