@@ -13,6 +13,8 @@
 // limitations under the License.
 #include <TestUtils/MPPTaskTestUtils.h>
 
+#include <cstddef>
+
 namespace DB::tests
 {
 DAGProperties getDAGPropertiesForTest(int server_num)
@@ -66,27 +68,20 @@ size_t MPPTaskTestUtils::serverNum()
     return server_num;
 }
 
-void MPPTaskTestUtils::injectCancel(DAGRequestBuilder builder)
+size_t MPPTaskTestUtils::injectCancel(DAGRequestBuilder builder)
 {
     auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
     for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
         TiFlashTestEnv::getGlobalContext(i).setMPPTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
-    executeMPPTasksForCancel(tasks, properties, MockComputeServerManager::instance().getServerConfigMap());
+    executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
+    return properties.start_ts;
 }
-
 
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     return readBlocks(res);
-}
-
-BlockInputStreamPtr MPPTaskTestUtils::executeMPPTasksForCancel(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
-{
-    auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
-    // ywq test todo
-    return res[0];
 }
 } // namespace DB::tests

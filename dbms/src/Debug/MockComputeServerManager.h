@@ -51,7 +51,7 @@ public:
 
     void resetMockMPPServerInfo(size_t partition_num);
 
-    void cancelTest();
+    void cancelQuery(size_t start_ts);
 
     void showTaskInfo();
 

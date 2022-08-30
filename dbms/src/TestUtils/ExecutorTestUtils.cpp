@@ -107,15 +107,20 @@ Block mergeBlocks(Blocks blocks)
 }
 } // namespace
 
-DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
+void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {
-    Blocks actual_blocks;
     stream->readPrefix();
     while (auto block = stream->read())
     {
-        actual_blocks.push_back(block);
+        blocks.push_back(block);
     }
     stream->readSuffix();
+}
+
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
+{
+    Blocks actual_blocks;
+    readStream(actual_blocks, stream);
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 
@@ -123,14 +128,7 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
 {
     Blocks actual_blocks;
     for (const auto & stream : streams)
-    {
-        stream->readPrefix();
-        while (auto block = stream->read())
-        {
-            actual_blocks.push_back(block);
-        }
-        stream->readSuffix();
-    }
+        readStream(actual_blocks, stream);
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 

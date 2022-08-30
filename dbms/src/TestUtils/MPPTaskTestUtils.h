@@ -79,11 +79,10 @@ public:
     static void startServers(size_t server_num_);
     static size_t serverNum();
 
-    void injectCancel(DAGRequestBuilder builder);
+    // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
+    size_t injectCancel(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
-
-    BlockInputStreamPtr executeMPPTasksForCancel(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 protected:
     static LoggerPtr log_ptr;

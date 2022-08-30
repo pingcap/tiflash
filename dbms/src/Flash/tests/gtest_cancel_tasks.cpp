@@ -47,11 +47,11 @@ try
 {
     startServers(4);
     {
-        injectCancel(context
-                         .scan("test_db", "test_table_1")
-                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                         .project({"max(s1)"}));
-        MockComputeServerManager::instance().cancelTest();
+        auto start_ts = injectCancel(context
+                                         .scan("test_db", "test_table_1")
+                                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                         .project({"max(s1)"}));
+        MockComputeServerManager::instance().cancelQuery(start_ts);
     }
 }
 CATCH

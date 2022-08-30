@@ -14,6 +14,8 @@
 #include <Debug/MockComputeServerManager.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <fmt/core.h>
+
+#include <cstddef>
 namespace DB
 {
 namespace ErrorCodes
@@ -114,13 +116,11 @@ void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<Fl
     server_map[partition_id] = std::move(server);
 }
 
-void MockComputeServerManager::cancelTest()
+void MockComputeServerManager::cancelQuery(size_t start_ts)
 {
     mpp::CancelTaskRequest req;
     auto * meta = req.mutable_meta();
-    // ywq test todo...
-    meta->set_start_ts(1);
-    // ywq todo start_ts set...
+    meta->set_start_ts(start_ts);
     mpp::CancelTaskResponse response;
     showTaskInfo();
     for (const auto & server : server_map)

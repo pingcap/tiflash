@@ -31,7 +31,6 @@
 
 namespace DB
 {
-
 using ASTPartitionByElement = ASTOrderByElement;
 using MockComputeServerManager = tests::MockComputeServerManager;
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
