@@ -18,6 +18,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 
+#include <exception>
 #include <fstream>
 #include <regex>
 
@@ -25,13 +26,25 @@ namespace DB
 {
 inline size_t getReadTSOForLog(const String & line)
 {
-    auto sub_line = line.substr(line.find("read_tso="));
-    std::regex rx(R"((0|[1-9][0-9]*))");
-    std::smatch m;
-    if (regex_search(sub_line, m, rx))
-        return std::stoul(m[1]);
-    else
-        return 0;
+    String sub_line;
+    try
+    {
+        std::regex rx(R"((0|[1-9][0-9]*))");
+        std::smatch m;
+        sub_line = line.substr(line.find("read_tso="));
+        if (!sub_line.empty() && regex_search(sub_line, m, rx))
+        {
+            return std::stoul(m[1]);
+        }
+        else
+        {
+            return 0;
+        }
+    }
+    catch (std::exception & e)
+    {
+        throw Exception(fmt::format("Parse 'read tso' failed, exception: {}, sub_line {}, line {}", e.what(), sub_line, line));
+    }
 }
 
 // Usage example:
@@ -89,14 +102,28 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
             break;
         }
     }
+    static auto * log = &Poco::Logger::get("SearchLog");
+    LOG_FMT_DEBUG(log, "target_read_tso {} target_line {}", target_read_tso, target_line);
     // try parse the first number following the key
-    auto sub_line = target_line.substr(target_line.find(key));
-    std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
-    std::smatch m;
-    if (regex_search(sub_line, m, rx))
-        output(m[1]);
-    else
-        output("Invalid");
+    String sub_line;
+    try
+    {
+        std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
+        std::smatch m;
+        sub_line = target_line.substr(target_line.find(key));
+        if (!sub_line.empty() && regex_search(sub_line, m, rx))
+        {
+            output(m[1]);
+        }
+        else
+        {
+            output("Invalid");
+        }
+    }
+    catch (std::exception & e)
+    {
+        throw Exception(fmt::format("Parse 'RSFilter exclude rate' failed, exception: {}, sub_line {}, target_line {}", e.what(), sub_line, target_line));
+    }
 }
 
 void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)
