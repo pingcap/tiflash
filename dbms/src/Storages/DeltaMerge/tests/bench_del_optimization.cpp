@@ -46,7 +46,7 @@ public:
         // dropDataOnDisk
         try
         {
-            const auto * path = "/data2/hongyunyan/tiflash/build_release/dbms/bench_hyy/";
+            const auto * path = "/Users/hongyunyan/Desktop/origin_tiflash/tiflash/build_release/dbms/bench_hyy/";
             if (Poco::File file(path); file.exists())
             {
                 file.remove(true);
@@ -88,7 +88,7 @@ public:
 
     void tiFlashStorageTestBasicReload(DB::Settings && db_settings = DB::Settings())
     {
-        String path = "/data2/hongyunyan/tiflash/build_release/dbms/bench_hyy/";
+        String path = "/Users/hongyunyan/Desktop/origin_tiflash/tiflash/build_release/dbms/bench_hyy/";
         Strings test_paths;
         test_paths.emplace_back(path);
         // test_paths.push_back(base::TiFlashStorageTestBasic::getTemporaryPath());
@@ -191,9 +191,6 @@ Block createBlock(size_t rows, size_t columns, size_t delete_rows, size_t begin_
     return block;
 }
 
-constexpr size_t num_iterations_test = 100000;
-
-
 BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
 (benchmark::State & state)
 {
@@ -247,7 +244,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
                                              EMPTY_FILTER,
                                              "",
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ true,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024,
                                              {},
                                              InvalidColumnID)[0];
@@ -307,7 +304,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
                                              EMPTY_FILTER,
                                              "",
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ true,
+                                             /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024,
                                              {},
                                              InvalidColumnID)[0];
@@ -331,6 +328,9 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)
     {
         read_columns->emplace_back(std::move(col));
     }
+
+    store = reload(read_columns);
+    store->write(*db_context, db_context->getSettingsRef(), block);
 
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto [store_path, file_id] = store->preAllocateIngestFile();
@@ -408,11 +408,13 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization
     }
 }
 
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0})->Args({5000, 15, 0})->Args({5000, 10, 0})->Args({5000, 8, 0})->Args({5000, 5, 0});
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0})->Args({5000, 15, 0})->Args({5000, 10, 0})->Args({5000, 8, 0})->Args({5000, 5, 0});
+constexpr size_t num_iterations_test = 1;
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10})->Args({5000, 20, 0, 100})->Args({5000, 15, 0, 100})->Args({5000, 10, 0, 100})->Args({5000, 8, 0, 100})->Args({5000, 5, 0, 100});
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10})->Args({5000, 20, 0, 100})->Args({5000, 15, 0, 100})->Args({5000, 10, 0, 100})->Args({5000, 8, 0, 100})->Args({5000, 5, 0, 100});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
+
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10});
 
 
 } // namespace tests

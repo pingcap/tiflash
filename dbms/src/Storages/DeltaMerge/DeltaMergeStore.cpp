@@ -1037,7 +1037,12 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        auto res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        while (res == nullptr) {
+            std::cout << " hyy segmentMergeDelta retry" << std::endl;
+            res = segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        }
+       
     }
 }
 

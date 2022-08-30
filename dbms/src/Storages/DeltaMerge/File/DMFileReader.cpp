@@ -368,8 +368,10 @@ Block DMFileReader::read()
 
     bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_mode && expected_handle_res == All;
     bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && deleted_rows == 0;
-    bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_mode && deleted_rows == 0;
+    // bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_mode && deleted_rows == 0;
+    bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_mode; // just for test single dmfile
 
+    //std::cout << "do_clean_read_on_normal_mode " << do_clean_read_on_normal_mode << " do_clean_read_on_handle_on_fast_mode " << do_clean_read_on_handle_on_fast_mode << " do_clean_read_on_del_on_fast_mode " << do_clean_read_on_del_on_fast_mode << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << " enable_del_clean_read " <<  enable_del_clean_read << std::endl;
     if (do_clean_read_on_normal_mode)
     {
         UInt64 max_version = 0;
@@ -442,6 +444,7 @@ Block DMFileReader::read()
             }
             else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_normal_mode)
             { // do_clean_read_on_normal_mode = false but do_clean_read_on_del_on_normal_mode = true
+                //std::cout << " into do_clean_read_on_del_on_normal_mode " << std::endl;
                 ColumnPtr column;
                 column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)))->convertToFullColumnIfConst();
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
