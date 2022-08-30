@@ -13,7 +13,7 @@
 // limitations under the License.
 #include <TestUtils/MPPTaskTestUtils.h>
 
-#include <cstddef>
+#include "DataStreams/IBlockInputStream.h"
 
 namespace DB::tests
 {
@@ -68,15 +68,15 @@ size_t MPPTaskTestUtils::serverNum()
     return server_num;
 }
 
-size_t MPPTaskTestUtils::injectCancel(DAGRequestBuilder builder)
+std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::injectCancel(DAGRequestBuilder builder)
 {
     auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
     for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
         TiFlashTestEnv::getGlobalContext(i).setMPPTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
-    executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
-    return properties.start_ts;
+    auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
+    return {properties.start_ts, res};
 }
 
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)

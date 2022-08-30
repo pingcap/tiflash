@@ -16,6 +16,9 @@
 #include <fmt/core.h>
 
 #include <cstddef>
+#include <ostream>
+
+#include "Common/FmtUtils.h"
 namespace DB
 {
 namespace ErrorCodes
@@ -118,24 +121,34 @@ void MockComputeServerManager::addServer(size_t partition_id, std::unique_ptr<Fl
 
 void MockComputeServerManager::cancelQuery(size_t start_ts)
 {
+    std::cout << "ywq test queryinfo():" << queryInfo() << std::endl;
+
     mpp::CancelTaskRequest req;
     auto * meta = req.mutable_meta();
     meta->set_start_ts(start_ts);
     mpp::CancelTaskResponse response;
-    showTaskInfo();
+    std::cout << "ywq test server size: " << server_map.size() << std::endl;
     for (const auto & server : server_map)
         server.second->flashService()->cancelMPPTaskForTest(&req, &response);
-
-    showTaskInfo();
+    std::cout << queryInfo() << std::endl;
+    assertQueryCancelled(start_ts);
 }
 
-void MockComputeServerManager::showTaskInfo()
+void MockComputeServerManager::assertQueryCancelled(size_t start_ts)
+{
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
+        RUNTIME_ASSERT(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) == nullptr);
+}
+
+String MockComputeServerManager::queryInfo()
 {
     // ywq todo know the current context in use...
+    FmtBuffer buf;
+    // ywq todo need to handle context num
     for (int i = 0; i < TiFlashTestEnv::globalContextSize(); i++)
-    {
-        std::cout << TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->toString() << std::endl;
-    }
+        buf.append(TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->toString());
+
+    return buf.toString();
 }
 } // namespace tests
 } // namespace DB

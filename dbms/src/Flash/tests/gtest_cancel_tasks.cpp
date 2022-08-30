@@ -16,6 +16,11 @@
 
 namespace DB
 {
+
+namespace FailPoints
+{
+extern const char pause_after_register_tasks[];
+} // namespace FailPoints
 namespace tests
 {
 class CancelTaskRunner : public DB::tests::MPPTaskTestUtils
@@ -47,10 +52,39 @@ try
 {
     startServers(4);
     {
-        auto start_ts = injectCancel(context
-                                         .scan("test_db", "test_table_1")
-                                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                                         .project({"max(s1)"}));
+        auto [start_ts, res] = injectCancel(context
+                                                .scan("test_db", "test_table_1")
+                                                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                                .project({"max(s1)"}));
+        MockComputeServerManager::instance().cancelQuery(start_ts);
+    }
+}
+CATCH
+
+// ywq todo must have bugs..
+TEST_F(CancelTaskRunner, runJoinTasks)
+try
+{
+    startServers(4);
+    {
+        auto [start_ts, res] = injectCancel(context
+                                                .scan("test_db", "l_table")
+                                                .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        MockComputeServerManager::instance().cancelQuery(start_ts);
+    }
+}
+CATCH
+
+TEST_F(CancelTaskRunner, runJoinThenAggTasks)
+try
+{
+    startServers(4);
+    {
+        auto [start_ts, res] = injectCancel(context
+                                                .scan("test_db", "l_table")
+                                                .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                .project({col("max(l_table.s)"), col("l_table.s")}));
         MockComputeServerManager::instance().cancelQuery(start_ts);
     }
 }

@@ -20,8 +20,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
-#include <unordered_map>
-
 namespace DB::tests
 {
 
@@ -53,7 +51,9 @@ public:
 
     void cancelQuery(size_t start_ts);
 
-    void showTaskInfo();
+    String queryInfo();
+
+    void assertQueryCancelled(size_t start_ts);
 
 private:
     void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);
