@@ -26,13 +26,12 @@ namespace DB
 {
 inline size_t getReadTSOForLog(const String & line)
 {
-    String sub_line;
     try
     {
         std::regex rx(R"((0|[1-9][0-9]*))");
         std::smatch m;
-        sub_line = line.substr(line.find("read_tso="));
-        if (!sub_line.empty() && regex_search(sub_line, m, rx))
+        auto pos = line.find("read_tso=");
+        if (pos != std::string::npos && regex_search(line.cbegin() + pos, line.cend(), m, rx))
         {
             return std::stoul(m[1]);
         }
@@ -43,7 +42,7 @@ inline size_t getReadTSOForLog(const String & line)
     }
     catch (std::exception & e)
     {
-        throw Exception(fmt::format("Parse 'read tso' failed, exception: {}, sub_line {}, line {}", e.what(), sub_line, line));
+        throw Exception(fmt::format("Parse 'read tso' failed, exception: {}, line {}", e.what(), line));
     }
 }
 
@@ -105,13 +104,12 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
     static auto * log = &Poco::Logger::get("SearchLog");
     LOG_FMT_DEBUG(log, "target_read_tso {} target_line {}", target_read_tso, target_line);
     // try parse the first number following the key
-    String sub_line;
     try
     {
         std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
         std::smatch m;
-        sub_line = target_line.substr(target_line.find(key));
-        if (!sub_line.empty() && regex_search(sub_line, m, rx))
+        auto pos = target_line.find(key);
+        if (pos != std::string::npos && regex_search(target_line.cbegin() + pos, target_line.cend(), m, rx))
         {
             output(m[1]);
         }
@@ -122,7 +120,7 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
     }
     catch (std::exception & e)
     {
-        throw Exception(fmt::format("Parse 'RSFilter exclude rate' failed, exception: {}, sub_line {}, target_line {}", e.what(), sub_line, target_line));
+        throw Exception(fmt::format("Parse 'RSFilter exclude rate' failed, exception: {}, target_line {}", e.what(), target_line));
     }
 }
 
