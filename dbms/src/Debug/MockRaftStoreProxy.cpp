@@ -350,10 +350,10 @@ void MockRaftStoreProxy::normalWrite(
     TMTContext & tmt,
     const FailCond & cond,
     UInt64 region_id,
-    std::vector<HandleID> keys,
-    std::vector<std::string> vals,
-    std::vector<WriteCmdType> cmd_types,
-    std::vector<ColumnFamilyType> cmd_cf){
+    std::vector<HandleID> && keys,
+    std::vector<std::string> && vals,
+    std::vector<WriteCmdType> && cmd_types,
+    std::vector<ColumnFamilyType> && cmd_cf){
     uint64_t index = 0;
     uint64_t term = 0;
     {
@@ -373,10 +373,10 @@ void MockRaftStoreProxy::normalWrite(
     TMTContext & tmt,
     const FailCond & cond,
     UInt64 region_id,
-    std::vector<HandleID> keys,
-    std::vector<std::string> vals,
-    std::vector<WriteCmdType> cmd_types,
-    std::vector<ColumnFamilyType> cmd_cf,
+    std::vector<HandleID> && keys,
+    std::vector<std::string> && vals,
+    std::vector<WriteCmdType> && cmd_types,
+    std::vector<ColumnFamilyType> && cmd_cf,
     uint64_t index,
     uint64_t term)
 {

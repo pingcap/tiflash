@@ -1350,7 +1350,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         }
         {
             MockRaftStoreProxy::FailCond cond;
-            const KVStore & kvs = reloadKVSFromDisk();
+            KVStore & kvs = reloadKVSFromDisk();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
