@@ -52,6 +52,7 @@ try
                                                 .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
                                                 .project({"max(s1)"}));
         MockComputeServerManager::instance().cancelQuery(start_ts);
+        assertQueryCancelled(start_ts);
     }
 }
 CATCH
@@ -65,6 +66,7 @@ try
                                                 .scan("test_db", "l_table")
                                                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
         MockComputeServerManager::instance().cancelQuery(start_ts);
+        assertQueryCancelled(start_ts);
     }
 }
 CATCH
@@ -80,6 +82,7 @@ try
                                                 .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                                                 .project({col("max(l_table.s)"), col("l_table.s")}));
         MockComputeServerManager::instance().cancelQuery(start_ts);
+        assertQueryCancelled(start_ts);
     }
 }
 CATCH

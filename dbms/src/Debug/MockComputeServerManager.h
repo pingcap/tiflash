@@ -53,8 +53,6 @@ public:
 
     String queryInfo();
 
-    void assertQueryCancelled(size_t start_ts);
-
 private:
     void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);
     void prepareMockMPPServerInfo();

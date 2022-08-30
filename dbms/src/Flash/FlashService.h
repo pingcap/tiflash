@@ -137,7 +137,7 @@ public:
 };
 
 
-#define CATCHEXCEPTION                                                                                                                              \
+#define CATCHEXCEPTION                                                                                                                     \
     catch (Exception & e)                                                                                                                  \
     {                                                                                                                                      \
         LOG_FMT_ERROR(log, "DB Exception: {}", e.message());                                                                               \

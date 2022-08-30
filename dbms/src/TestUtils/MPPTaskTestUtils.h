@@ -18,6 +18,7 @@
 #include <Debug/MockStorage.h>
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
+#include <gtest/gtest.h>
 
 namespace DB::tests
 {
@@ -83,6 +84,7 @@ public:
     std::tuple<size_t, std::vector<BlockInputStreamPtr>> injectCancel(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    static ::testing::AssertionResult assertQueryCancelled(size_t start_ts);
 
 protected:
     static LoggerPtr log_ptr;

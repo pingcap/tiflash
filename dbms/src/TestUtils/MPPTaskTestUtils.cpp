@@ -83,4 +83,24 @@ ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, con
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     return readBlocks(res);
 }
+
+::testing::AssertionResult MPPTaskTestUtils::assertQueryCancelled(size_t start_ts)
+{
+    auto seconds = std::chrono::seconds(3);
+    auto retry_times = 0;
+    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+    {
+        // wait until the task is empty for <query:start_ts>
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) != nullptr)
+        {
+            std::this_thread::sleep_for(seconds);
+            retry_times++;
+            if (retry_times >= 10)
+            {
+                return ::testing::AssertionFailure();
+            }
+        }
+    }
+    return ::testing::AssertionSuccess();
+}
 } // namespace DB::tests

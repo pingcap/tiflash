@@ -27,10 +27,7 @@ namespace DB::tests
 {
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
 
-::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
-
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
-
 DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
