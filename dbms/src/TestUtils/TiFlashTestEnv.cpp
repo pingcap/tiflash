@@ -24,9 +24,11 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
+#include <memory>
+
 namespace DB::tests
 {
-std::vector<std::unique_ptr<Context>> TiFlashTestEnv::global_contexts = {};
+std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
 
 void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
@@ -35,12 +37,9 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
 
 void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
-    global_contexts.reserve(global_contexts.size() + 1);
-    auto & global_context = global_contexts[global_contexts.size()];
-    global_contexts.resize(global_contexts.size() + 1);
-
     // set itself as global context
-    global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
+    auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
+    global_contexts.push_back(global_context);
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
 
