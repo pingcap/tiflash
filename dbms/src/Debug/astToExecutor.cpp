@@ -1440,6 +1440,8 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id,
         case tipb::ExprType::Lead:
         case tipb::ExprType::Lag:
         {
+            // TODO handling complex situations
+            // like lead(col, offset, NULL), lead(data_type1, offset, data_type2)
             assert(window_expr->children_size() < 3
                    || window_expr->children(0).field_type().tp() == window_expr->children(2).field_type().tp());
             const auto first_arg_type = window_expr->children(0).field_type();
@@ -1881,6 +1883,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             case tipb::ExprType::Lag:
             {
                 // TODO handling complex situations
+                // like lead(col, offset, NULL), lead(data_type1, offset, data_type2)
                 assert(children_ci.size() < 3 || children_ci[0].tp == children_ci[2].tp);
                 ci = children_ci[0];
                 break;

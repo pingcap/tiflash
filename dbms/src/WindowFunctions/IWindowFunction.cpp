@@ -161,7 +161,6 @@ public:
         return return_type;
     }
 
-    // todo hanlde nullable, etc
     void windowInsertResultInto(
         WindowBlockInputStreamPtr stream,
         size_t function_index,
