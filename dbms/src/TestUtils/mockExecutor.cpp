@@ -102,7 +102,7 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::buildToListStruct(MockDAGRe
     auto tree_struct_req = build(mock_context);
     std::shared_ptr<tipb::DAGRequest> list_struct_req = std::make_shared<tipb::DAGRequest>();
     auto & mutable_executors = *list_struct_req->mutable_executors();
-    traverseExecutors(tree_struct_req.get(), [&](const tipb::Executor & executor) -> bool {
+    traverseExecutorsReverse(tree_struct_req.get(), [&](const tipb::Executor & executor) -> bool {
         auto * mutable_executor = mutable_executors.Add();
         (*mutable_executor) = executor;
         mutable_executor->clear_executor_id();
