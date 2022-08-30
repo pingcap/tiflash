@@ -125,20 +125,20 @@ struct MockRaftStoreProxy : MutexLockWrap
         TMTContext & tmt,
         const FailCond & cond,
         UInt64 region_id,
-        std::vector<HandleID> keys,
-        std::vector<std::string> vals,
-        std::vector<WriteCmdType> cmd_types,
-        std::vector<ColumnFamilyType> cmd_cf);
+        std::vector<HandleID> && keys,
+        std::vector<std::string> && vals,
+        std::vector<WriteCmdType> && cmd_types,
+        std::vector<ColumnFamilyType> && cmd_cf);
 
     void normalWrite(
         KVStore & kvs,
         TMTContext & tmt,
         const FailCond & cond,
         UInt64 region_id,
-        std::vector<HandleID> keys,
-        std::vector<std::string> vals,
-        std::vector<WriteCmdType> cmd_types,
-        std::vector<ColumnFamilyType> cmd_cf,
+        std::vector<HandleID> && keys,
+        std::vector<std::string> && vals,
+        std::vector<WriteCmdType> && cmd_types,
+        std::vector<ColumnFamilyType> && cmd_cf,
         uint64_t index,
         uint64_t term);
 
