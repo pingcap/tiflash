@@ -1242,7 +1242,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
                                         bool keep_order,
-                                        bool is_fast_mode,
+                                        bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1277,8 +1277,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* is_raw = */ is_fast_mode,
-        /* do_delete_mark_filter_for_raw = */ is_fast_mode,
+        /* is_raw = */ is_fast_scan,
+        /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
         after_segment_read);
 
@@ -1308,8 +1308,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 filter,
                 max_version,
                 expected_block_size,
-                /* is_raw_ */ is_fast_mode,
-                /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
+                /* is_raw_= */ is_fast_scan,
+                /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
                 extra_table_id_index,
                 physical_table_id,
                 req_info);
@@ -1551,7 +1551,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     };
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
-        if (should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes)
+        // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
+        // or the raft-log apply threads may be blocked.
+        if ((should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes) && replica_exist.load())
         {
             delta_last_try_merge_delta_rows = delta_rows;
 
@@ -2473,6 +2475,10 @@ void DeltaMergeStore::applyAlters(
             // Only update primary key name if pk is handle and there is only one column with
             // primary key flag
             original_table_handle_define.name = pk_names[0];
+        }
+        if (table_info.value().get().replica_info.count == 0)
+        {
+            replica_exist.store(false);
         }
     }
 
