@@ -27,25 +27,28 @@ class TestGRPCSendQueue : public testing::Test
 {
 protected:
     TestGRPCSendQueue()
-        : kick_tag(nullptr)
-        , queue(10, [this](void * t) -> grpc_call_error {
-            kick_tag = t;
+        : tag(nullptr)
+        , queue(10, [this](KickTag * t) -> grpc_call_error {
+            bool no_use;
+            t->FinalizeResult(&tag, &no_use);
             return grpc_call_error::GRPC_CALL_OK;
         })
     {}
-    void * kick_tag;
+    void * tag;
     GRPCSendQueue<int> queue;
 
 public:
-    void checkTag(void * tag)
+    using Status = KickTag::Status;
+
+    void checkTag(void * t)
     {
-        GTEST_ASSERT_EQ(tag, kick_tag);
-        kick_tag = nullptr;
+        GTEST_ASSERT_EQ(t, tag);
+        tag = nullptr;
     }
 
-    void checkTagInQueue(void * tag)
+    void checkTagInQueue(void * t)
     {
-        GTEST_ASSERT_EQ(tag, queue.tag);
+        GTEST_ASSERT_EQ(t, queue.kick_tag.tag);
     }
 };
 

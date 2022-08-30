@@ -36,7 +36,8 @@ public:
     /// Attach async sender in order to notify consumer finish msg directly.
     virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) = 0;
 
-    // Return a `GRPCKickFunc` only used for test.
+    /// The default `GRPCKickFunc` implementation is to push tag into completion queue.
+    /// Here return a user-defined `GRPCKickFunc` only for test.
     virtual std::optional<GRPCKickFunc> getKickFuncForTest() { return std::nullopt; }
 };
 
@@ -53,7 +54,7 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
-    virtual ~EstablishCallData();
+    ~EstablishCallData() override;
 
     void proceed();
 
@@ -81,11 +82,13 @@ private:
     void initRpc();
 
     void write(const mpp::MPPDataPacket & packet);
-
+    /// Called when a application error happens.
+    /// Connection will finish after writing this packet.
     void writeErr(const mpp::MPPDataPacket & packet);
-    // Will try to call async_sender's consumerFinish if needed
+    /// Called when write is done.
+    /// It will try to call async_sender's consumerFinish to inform it's finished.
     void writeDone(String msg, const grpc::Status & status);
-
+    /// Called when a grpc error happens or in shutdown progress.
     void unexpectedWriteDone();
 
     void trySendOneMsg();

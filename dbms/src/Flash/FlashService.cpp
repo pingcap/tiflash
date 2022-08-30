@@ -41,12 +41,7 @@ extern const int NOT_IMPLEMENTED;
 
 constexpr char tls_err_msg[] = "common name check is failed";
 
-FlashService::FlashService()
-    : security_config(nullptr)
-    , context(nullptr)
-    , log(nullptr)
-{}
-
+FlashService::FlashService() = default;
 
 void FlashService::init(const TiFlashSecurityConfig & security_config_, Context & context_)
 {
