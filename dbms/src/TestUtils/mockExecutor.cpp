@@ -99,16 +99,16 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
 
 std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::buildToListStruct(MockDAGRequestContext & mock_context)
 {
-    auto tree_struct_req = build(mock_context);
-    std::shared_ptr<tipb::DAGRequest> list_struct_req = std::make_shared<tipb::DAGRequest>();
-    auto & mutable_executors = *list_struct_req->mutable_executors();
-    traverseExecutorsReverse(tree_struct_req.get(), [&](const tipb::Executor & executor) -> bool {
+    auto dag_request_ptr = build(mock_context);
+    auto & mutable_executors = *dag_request_ptr->mutable_executors();
+    traverseExecutorsReverse(dag_request_ptr.get(), [&](const tipb::Executor & executor) -> bool {
         auto * mutable_executor = mutable_executors.Add();
         (*mutable_executor) = executor;
         mutable_executor->clear_executor_id();
         return true;
     });
-    return list_struct_req;
+    dag_request_ptr->release_root_executor();
+    return dag_request_ptr;
 }
 
 // Currently Sort and Window Executors don't support columnPrune.

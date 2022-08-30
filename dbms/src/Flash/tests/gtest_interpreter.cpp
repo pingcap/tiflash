@@ -631,5 +631,50 @@ CreatingSets
 }
 CATCH
 
+TEST_F(InterpreterExecuteTest, ListBase)
+try
+{
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .limit(10)
+                           .buildToListStruct(context);
+        String expected = R"(
+Limit, limit = 10
+ Expression: <final projection>
+  Aggregating
+   Concat
+    Expression: <before aggregation>
+     Filter: <execute where>
+      MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .topN("s2", false, 10)
+                           .buildToListStruct(context);
+        String expected = R"(
+Union: <for test>
+ SharedQuery x 20: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 20: limit = 10
+      SharedQuery: <restore concurrency>
+       ParallelAggregating, max_threads: 20, final: true
+        Expression x 20: <before aggregation>
+         Filter: <execute where>
+          MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
