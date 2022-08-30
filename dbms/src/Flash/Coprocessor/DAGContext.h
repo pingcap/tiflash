@@ -27,6 +27,7 @@
 #include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
@@ -116,13 +117,6 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
-
-inline bool enableFineGrainedShuffle(uint64_t stream_count)
-{
-    return stream_count > 0;
-}
-
-static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
 
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
@@ -312,6 +306,7 @@ public:
         mpp_receiver_set = receiver_set;
     }
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
+    std::vector<CoprocessorReaderPtr> & getCoprocessorReaders();
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
@@ -379,6 +374,7 @@ private:
     std::atomic<UInt64> warning_count;
 
     MPPReceiverSetPtr mpp_receiver_set;
+    std::vector<CoprocessorReaderPtr> coprocessor_readers;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;

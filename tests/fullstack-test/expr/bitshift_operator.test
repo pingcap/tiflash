@@ -40,4 +40,30 @@ mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tifl
 |   -1 |
 +------+
 
+mysql> insert into test.t values(1), (NULL);
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select a<<0 as v1, a <<64 as v2, a << 10 as v3 from test.t;
++----------------------+------+----------------------+
+| v1                   | v2   | v3                   |
++----------------------+------+----------------------+
+| 18446744073709551615 |    0 | 18446744073709550592 |
+|                    1 |    0 |                 1024 |
+|                 NULL | NULL |                 NULL |
++----------------------+------+----------------------+
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select a from test.t where a<<100000=0;
++------+
+| a    |
++------+
+|   -1 |
+|    1 |
++------+
+
+mysql> set tidb_enforce_mpp=1; set @@session.tidb_isolation_read_engines = "tiflash"; select a from test.t where a<<6=64;
++------+
+| a    |
++------+
+|    1 |
++------+
+
 mysql> drop table if exists test.t

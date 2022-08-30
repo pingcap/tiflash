@@ -222,8 +222,7 @@ int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 
 int64_t SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    double block_slots_scale = dm_context->db_context.getSettingsRef().dt_block_slots_scale;
-    auto block_slots = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * block_slots_scale));
+    auto block_slots = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
     if (block_slots < 3)
     {
         block_slots = 3;
@@ -233,8 +232,7 @@ int64_t SegmentReadTaskPool::getFreeBlockSlots() const
 
 int64_t SegmentReadTaskPool::getFreeActiveSegmentCountUnlock()
 {
-    double active_segments_scale = dm_context->db_context.getSettingsRef().dt_active_segments_scale;
-    auto active_segment_limit = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * active_segments_scale));
+    auto active_segment_limit = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
     if (active_segment_limit < 2)
     {
         active_segment_limit = 2;
