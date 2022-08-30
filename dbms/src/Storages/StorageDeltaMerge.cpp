@@ -24,7 +24,6 @@
 #include <DataTypes/isSupportedDataTypeCast.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
-#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
@@ -759,7 +758,7 @@ BlockInputStreams StorageDeltaMerge::read(
         rs_operator,
         query_info.req_id,
         query_info.keep_order,
-        /* is_fast_scan */ query_info.is_fast_scan, // read in normal mode or read in fast mode
+        /* is_fast_scan */ query_info.is_fast_scan,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);

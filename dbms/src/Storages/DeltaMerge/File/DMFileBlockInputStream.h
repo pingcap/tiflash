@@ -83,14 +83,13 @@ public:
     // **** filters **** //
 
     // Only set enable_handle_clean_read_ param to true when
-    // in normal mode:
-    //    1. There is no delta.
-    //    2. You don't need pk, version and delete_tag columns
-    // in fast mode:
-    //    1. You don't need pk columns
-    // If you have no idea what it means, then simply set it to false.
-    // Only set is_fast_mode_ param to true when read in fast mode.
-    // Only set enable_del_clean_read_ param to true when you don't need del columns in fast mode.
+    //    in normal mode (is_fast_scan_ == false):
+    //      1. There is no delta.
+    //      2. You don't need pk, version and delete_tag columns
+    //    in fast scan mode (is_fast_scan_ == true):
+    //      1. You don't need pk columns
+    //    If you have no idea what it means, then simply set it to false.
+    // Only set enable_del_clean_read_ param to true when you don't need del columns in fast scan.
     // `max_data_version_` is the MVCC filter version for reading. Used by clean read check
     DMFileBlockInputStreamBuilder & enableCleanRead(bool enable_handle_clean_read_, bool is_fast_scan_, bool enable_del_clean_read_, UInt64 max_data_version_)
     {
