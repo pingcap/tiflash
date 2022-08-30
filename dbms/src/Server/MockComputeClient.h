@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <common/grpcpp.h>
+#include <Common/grpcpp.h>
 #include <coprocessor.pb.h>
 #include <fmt/core.h>
 #include <kvproto/tikvpb.grpc.pb.h>

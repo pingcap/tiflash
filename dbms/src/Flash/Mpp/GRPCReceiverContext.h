@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/UnaryCallback.h>
+#include <Common/grpcpp.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Mpp/MPPTaskManager.h>
-#include <common/grpcpp.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
 #include <pingcap/kv/Cluster.h>

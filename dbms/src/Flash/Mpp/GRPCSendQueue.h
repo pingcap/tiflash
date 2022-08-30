@@ -17,7 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
-#include <common/grpcpp.h>
+#include <Common/grpcpp.h>
 #include <common/logger_useful.h>
 
 #include <functional>

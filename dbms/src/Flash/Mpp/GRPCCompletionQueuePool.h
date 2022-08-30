@@ -16,7 +16,7 @@
 
 #include <Common/ThreadFactory.h>
 #include <Common/UnaryCallback.h>
-#include <common/grpcpp.h>
+#include <Common/grpcpp.h>
 
 #include <atomic>
 
