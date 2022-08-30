@@ -64,11 +64,11 @@ namespace PS::V3
  * Recyclable record format:
  *
  * +--------------+-----------+-----------+----------------+--- ... ---+
- * |CheckSum (8B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
+ * |CheckSum (8B) | Size (2B) | Type (1B) | Log number (8B)| Payload   |
  * +--------------+-----------+-----------+----------------+--- ... ---+
  *
  * Same as above, with the addition of
- * Log number = 32bit log file number, so that we can distinguish between
+ * Log number = 64bit log file number, so that we can distinguish between
  * records written by the most recent log writer vs a previous one.
  */
 class LogWriter final : private Allocator<false>
