@@ -314,15 +314,15 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)
 }
 
 // rowkey value All
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({5000, 10, 0, 1})->Args({5000, 10, 10, 1})->Args({5000, 10, 50, 1})->Args({5000, 10, 100, 1})->Args({5000, 10, 0, 10})->Args({5000, 10, 10, 10})->Args({5000, 10, 50, 10})->Args({5000, 10, 100, 10})->Args({5000, 10, 0, 100})->Args({5000, 10, 10, 100})->Args({5000, 10, 50, 100})->Args({5000, 10, 100, 100});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({5000, 10, 0, 1})->Args({5000, 10, 10, 1})->Args({5000, 10, 50, 1})->Args({5000, 10, 100, 1})->Args({5000, 10, 0, 10})->Args({5000, 10, 10, 10})->Args({5000, 10, 50, 10})->Args({5000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
 // BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({5000, 10, 0, 100})->Args({5000, 10, 10, 100})->Args({5000, 10, 50, 100})->Args({5000, 10, 100, 100});
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)->Args({5000, 10, 0, 1})->Args({5000, 10, 10, 1})->Args({5000, 10, 50, 1})->Args({5000, 10, 100, 1})->Args({5000, 10, 0, 10})->Args({5000, 10, 10, 10})->Args({5000, 10, 50, 10})->Args({5000, 10, 100, 10})->Args({5000, 10, 0, 100})->Args({5000, 10, 10, 100})->Args({5000, 10, 50, 100})->Args({5000, 10, 100, 100});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)->Args({5000, 10, 0, 1})->Args({5000, 10, 10, 1})->Args({5000, 10, 50, 1})->Args({5000, 10, 100, 1})->Args({5000, 10, 0, 10})->Args({5000, 10, 10, 10})->Args({5000, 10, 50, 10})->Args({5000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
 
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({50000, 10, 0, 100})->Args({50000, 10, 10, 100})->Args({50000, 10, 50, 100})->Args({50000, 10, 100, 100});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({50000, 10, 0, 100})->Args({50000, 10, 10, 100})->Args({50000, 10, 50, 100})->Args({50000, 10, 100, 100});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
 } // namespace tests
 } // namespace DM
 } // namespace DB
