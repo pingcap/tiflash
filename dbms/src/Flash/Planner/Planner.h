@@ -18,6 +18,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/QueryExecutor.h>
 
 namespace DB
 {
@@ -34,6 +35,8 @@ public:
     ~Planner() = default;
 
     BlockIO execute() override;
+
+    QueryExecutorPtr pipelineExecute();
 
 private:
     DAGContext & dagContext() const;

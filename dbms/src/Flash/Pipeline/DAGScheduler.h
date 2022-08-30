@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
+#include <Common/ThreadManager.h>
 #include <Flash/Pipeline/Event.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineStatusMachine.h>

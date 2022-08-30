@@ -40,6 +40,20 @@ BlockIO Planner::execute()
     return res;
 }
 
+QueryExecutorPtr Planner::pipelineExecute()
+{
+    PhysicalPlan physical_plan{context, log->identifier()};
+
+    physical_plan.build(&plan_source.getDAGRequest());
+    physical_plan.outputAndOptimize();
+
+    return std::make_shared<PipelineExecutor>(
+        context, 
+        physical_plan.rootNode(), 
+        max_streams, 
+        log->identifier());
+}
+
 DAGContext & Planner::dagContext() const
 {
     return *context.getDAGContext();

@@ -17,6 +17,7 @@
 #include <Core/Block.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Pipeline/DAGScheduler.h>
 
 #include <functional>
 #include <memory>
@@ -59,5 +60,26 @@ public:
 
 private:
     BlockInputStreamPtr data_stream;
+};
+
+class PipelineExecutor : public QueryExecutor
+{
+public:
+    explicit PipelineExecutor(
+        Context & context,
+        const PhysicalPlanNodePtr & plan_node_,
+        size_t max_streams,
+        const String & req_id)
+        : QueryExecutor()
+        , dag_scheduler(context, max_streams, req_id)
+        , plan_node(plan_node_)
+    {}
+
+    std::pair<bool, String> execute(ResultHandler) override;
+
+private:
+    DAGScheduler dag_scheduler;
+
+    PhysicalPlanNodePtr plan_node;
 };
 }

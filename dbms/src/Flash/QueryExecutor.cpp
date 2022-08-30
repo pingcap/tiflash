@@ -28,6 +28,7 @@ std::pair<bool, String> DataStreamExecutor::execute(ResultHandler result_handler
             result_handler(block);
         }
         data_stream->readSuffix();
+        data_stream = nullptr;
         return {true, ""};
     }
     catch (...)
@@ -39,5 +40,12 @@ std::pair<bool, String> DataStreamExecutor::execute(ResultHandler result_handler
 BlockInputStreamPtr DataStreamExecutor::dataStream() const
 {
     return data_stream;
+}
+
+std::pair<bool, String> PipelineExecutor::execute(ResultHandler)
+{
+    auto res = dag_scheduler.run(plan_node);
+    plan_node = nullptr;
+    return res;
 }
 }
