@@ -93,7 +93,7 @@
 #if Poco_NetSSL_FOUND
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
-#include <grpcpp/grpcpp.h>
+#include <common/grpcpp.h>
 #endif
 
 #if USE_JEMALLOC

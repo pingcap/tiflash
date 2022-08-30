@@ -65,7 +65,7 @@ class TunnelSender : private boost::noncopyable
 {
 public:
     virtual ~TunnelSender() = default;
-    TunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_)
+    TunnelSender(size_t queue_size, const LoggerPtr & log_, const String & tunnel_id_)
         : send_queue(MPMCQueue<MPPDataPacketPtr>(queue_size))
         , log(log_)
         , tunnel_id(tunnel_id_)
@@ -151,29 +151,36 @@ private:
 
 /// AsyncTunnelSender is mainly triggered by the Async PacketWriter which handles GRPC request/response in async mode, send one element one time
 class AsyncTunnelSender : public TunnelSender
-    , public GRPCSendQueue<MPPDataPacketPtr>
 {
 public:
-    AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, grpc_call * call_)
+    AsyncTunnelSender(size_t queue_size, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_)
         : TunnelSender(0, log_, tunnel_id_)
-        , GRPCSendQueue<MPPDataPacketPtr>(queue_size, call_, log_)
+        , queue(queue_size, call_, log_)
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(size_t queue_size, const LoggerPtr log_, const String & tunnel_id_, GRPCKickFunc func)
+    AsyncTunnelSender(size_t queue_size, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func)
         : TunnelSender(0, log_, tunnel_id_)
-        , GRPCSendQueue<MPPDataPacketPtr>(queue_size, func)
+        , queue(queue_size, func)
     {}
 
     bool push(MPPDataPacketPtr && data) override
     {
-        return GRPCSendQueue<MPPDataPacketPtr>::push(data);
+        return queue.push(data);
     }
 
     bool finish() override
     {
-        return GRPCSendQueue<MPPDataPacketPtr>::finish();
+        return queue.finish();
     }
+
+    GRPCSendQueueRes pop(MPPDataPacketPtr & data, void * new_tag)
+    {
+        return queue.pop(data, new_tag);
+    }
+
+private:
+    GRPCSendQueue<MPPDataPacketPtr> queue;
 };
 
 /// LocalTunnelSender just provide readForLocal method to return one element one time

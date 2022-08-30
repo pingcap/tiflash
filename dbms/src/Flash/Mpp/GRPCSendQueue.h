@@ -17,15 +17,8 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
+#include <common/grpcpp.h>
 #include <common/logger_useful.h>
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <grpcpp/grpcpp.h>
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 #include <functional>
 
@@ -52,7 +45,7 @@ public:
         QUEUING,
     };
 
-    KickTag(std::mutex * m, const LoggerPtr l)
+    KickTag(std::mutex * m, const LoggerPtr & l)
         : mu(m)
         , log(l)
     {}
@@ -83,6 +76,11 @@ public:
         return status;
     }
 
+private:
+    friend class tests::TestGRPCSendQueue;
+    template <typename T>
+    friend class GRPCSendQueue;
+
     /// Should acquire lock.
     bool toWaiting(void * new_tag)
     {
@@ -109,9 +107,7 @@ public:
         return true;
     }
 
-private:
-    friend class tests::TestGRPCSendQueue;
-
+    // Protect `status` and `tag` and more(see the comments above GRPCSendQueue::mu).
     std::mutex * mu;
 
     const LoggerPtr log;
@@ -145,7 +141,7 @@ template <typename T>
 class GRPCSendQueue
 {
 public:
-    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr log)
+    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr & log)
         : send_queue(queue_size)
         , log(log)
         , kick_tag(&mu, log)
@@ -220,9 +216,12 @@ public:
         case MPMCQueueResult::FINISHED:
             return GRPCSendQueueRes::FINISHED;
         case MPMCQueueResult::EMPTY:
+        {
             // If empty, change status to WAITING.
-            RUNTIME_ASSERT(kick_tag.toWaiting(new_tag), log, "status {} is not none", kick_tag.getStatus());
+            bool success = kick_tag.toWaiting(new_tag);
+            RUNTIME_ASSERT(success, log, "status {} is not none", kick_tag.getStatus());
             return GRPCSendQueueRes::EMPTY;
+        }
         default:
             RUNTIME_ASSERT(false, log, "Result {} is invalid", res);
         }
@@ -265,7 +264,8 @@ private:
     const LoggerPtr log;
 
     /// The mutex is used to synchronize the concurrent calls between push/finish and pop.
-    /// The concurrency problem we want to prevent here is LOST NOTIFICATION.
+    /// The concurrency problem we want to prevent here is LOST NOTIFICATION which is
+    /// similar to `condition_variable`.
     /// Note that this mutex is necessary. It's useless to just change the `tag` to atomic.
     ///
     /// Imagine this case:
