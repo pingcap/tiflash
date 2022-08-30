@@ -29,11 +29,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
-namespace ProfileEvents
-{
-extern const Event DMWriteBytes;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -83,9 +78,6 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         // Add the DTFile to StoragePathPool so that we can restore it later
         const auto bytes_written = dt_file->getBytesOnDisk();
         storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
-
-        // Report DMWriteBytes for calculating write amplification
-        ProfileEvents::increment(ProfileEvents::DMWriteBytes, bytes_written);
 
         dt_stream.reset();
     }
