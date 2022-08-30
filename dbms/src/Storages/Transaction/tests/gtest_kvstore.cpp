@@ -1352,8 +1352,8 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
             const KVStore & kvs = reloadKVSFromDisk();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
-            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
-            ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
         }
     }
