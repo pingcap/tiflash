@@ -51,7 +51,7 @@ public:
 
     void cancelQuery(size_t start_ts);
 
-    String queryInfo();
+    static String queryInfo();
 
 private:
     void addServer(size_t partition_id, std::unique_ptr<FlashGrpcServerHolder> server);
