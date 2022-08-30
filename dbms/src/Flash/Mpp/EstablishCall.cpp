@@ -166,15 +166,14 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
             LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
         }
 
-        if (!async_tunnel_sender->isConsumerFinished())
+        RUNTIME_ASSERT(!async_tunnel_sender->isConsumerFinished(), async_tunnel_sender->getLogger(), "tunnel {} consumer finished in advance", async_tunnel_sender->getTunnelId());
+
+        if (!msg.empty())
         {
-            if (!msg.empty())
-            {
-                msg = fmt::format("{}: {}", async_tunnel_sender->getTunnelId(), msg);
-            }
-            // Trigger mpp tunnel finish work
-            async_tunnel_sender->consumerFinish(msg);
+            msg = fmt::format("{}: {}", async_tunnel_sender->getTunnelId(), msg);
         }
+        // Trigger mpp tunnel finish work
+        async_tunnel_sender->consumerFinish(msg);
     }
 
     responder.Finish(status, this);

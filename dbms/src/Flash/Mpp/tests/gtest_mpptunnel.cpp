@@ -143,8 +143,11 @@ public:
 
     std::optional<GRPCKickFunc> getKickFuncForTest() override
     {
-        return [&](void *) {
+        return [&](KickTag * tag) {
             {
+                void * t;
+                bool s;
+                tag->FinalizeResult(&t, &s);
                 std::unique_lock<std::mutex> lock(mu);
                 has_msg = true;
             }
@@ -167,7 +170,7 @@ public:
                     return;
                 }
                 write_packet_vec.push_back(res->data());
-                return;
+                break;
             case GRPCSendQueueRes::FINISHED:
                 async_tunnel_sender->consumerFinish("");
                 return;
@@ -177,7 +180,7 @@ public:
                     return has_msg;
                 });
                 has_msg = false;
-                continue;
+                break;
             }
         }
     }
