@@ -44,7 +44,7 @@ class KickTag : public ::grpc::internal::CompletionQueueTag
 public:
     enum class Status
     {
-        // No valid tag.
+        // No tag.
         NONE,
         // Waiting for kicking.
         WAITING,
