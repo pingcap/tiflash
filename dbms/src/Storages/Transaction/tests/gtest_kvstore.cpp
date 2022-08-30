@@ -1349,12 +1349,17 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
             kvs.tryPersist(region_id);
         }
         {
+            MockRaftStoreProxy::FailCond cond;
             const KVStore & kvs = reloadKVSFromDisk();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
+            auto term = r1->getLatestCommitTerm();
+
+            proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default}, applied_index, term);
+            proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {36}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
         }
     }
 }

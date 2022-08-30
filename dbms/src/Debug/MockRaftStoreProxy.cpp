@@ -344,6 +344,7 @@ void MockRaftStoreProxy::bootstrap(
     }
 }
 
+
 void MockRaftStoreProxy::normalWrite(
     KVStore & kvs,
     TMTContext & tmt,
@@ -352,15 +353,35 @@ void MockRaftStoreProxy::normalWrite(
     std::vector<HandleID> keys,
     std::vector<std::string> vals,
     std::vector<WriteCmdType> cmd_types,
-    std::vector<ColumnFamilyType> cmd_cf)
+    std::vector<ColumnFamilyType> cmd_cf){
+    uint64_t index = 0;
+    uint64_t term = 0;
+    {
+        auto region = getRegion(region_id);
+        assert(region != nullptr);
+        // We have a new entry.
+        index = region->getLatestCommitIndex() + 1;
+        term = region->getLatestCommitTerm();
+        // The new entry is committed on Proxy's side.
+        region->updateCommitIndex(index);
+    }
+    normalWrite(kvs, tmt, cond, region_id, keys, vals, cmd_types, cmd_cf, index, term);
+}
+
+void MockRaftStoreProxy::normalWrite(
+    KVStore & kvs,
+    TMTContext & tmt,
+    const FailCond & cond,
+    UInt64 region_id,
+    std::vector<HandleID> keys,
+    std::vector<std::string> vals,
+    std::vector<WriteCmdType> cmd_types,
+    std::vector<ColumnFamilyType> cmd_cf,
+    uint64_t index,
+    uint64_t term)
 {
     auto region = getRegion(region_id);
     assert(region != nullptr);
-    // We have a new entry.
-    auto index = region->getLatestCommitIndex() + 1;
-    auto term = region->getLatestCommitTerm();
-    // The new entry is committed on Proxy's side.
-    region->updateCommitIndex(index);
     // We apply this committed entry.
     raft_cmdpb::RaftCmdRequest request;
     size_t n = keys.size();
