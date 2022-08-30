@@ -1326,6 +1326,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
         applied_index = r1->getLatestAppliedIndex();
+        LOG_FMT_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
         proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
         ASSERT_NE(r1, nullptr);
         ASSERT_NE(kvr1, nullptr);
