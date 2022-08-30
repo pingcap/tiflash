@@ -380,14 +380,13 @@ void MockRaftStoreProxy::normalWrite(
         }
     }
 
-    if (cond.fail_before_kvstore) return;
+    if (cond.fail_before_kvstore_write) return;
 
     // TiFlash write
     kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
 
-    if (cond.fail_before_proxy) return;
-
     // Proxy advance
+    if (cond.fail_before_proxy_advance) return;
     region->updateAppliedIndex(index);
 }
 

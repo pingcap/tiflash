@@ -1278,7 +1278,6 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         KVStore & kvs = getKVS();
         proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
         MockRaftStoreProxy::FailCond cond;
-        cond.fail_before_proxy = false;
 
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
@@ -1300,7 +1299,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         KVStore & kvs = getKVS();
         proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
         MockRaftStoreProxy::FailCond cond;
-        cond.fail_before_proxy = true;
+        cond.fail_before_kvstore_write = true;
 
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
@@ -1322,7 +1321,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         KVStore & kvs = getKVS();
         proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
         MockRaftStoreProxy::FailCond cond;
-        cond.fail_before_kvstore = true;
+        cond.fail_before_proxy_advance = true;
 
         auto kvr1 = kvs.getRegion(region_id);
         auto r1 = proxy_instance->getRegion(region_id);
@@ -1331,13 +1330,13 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
         ASSERT_NE(r1, nullptr);
         ASSERT_NE(kvr1, nullptr);
         ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
-        ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+        ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
         kvs.tryPersist(region_id);
     }
     {
         const KVStore & kvs = reloadKVSFromDisk();
         ASSERT_EQ(proxy_instance->getRegion(region_id)->getLatestAppliedIndex(), applied_index);
-        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index);
+        ASSERT_EQ(kvs.getRegion(region_id)->appliedIndex(), applied_index + 1);
     }
 }
 
