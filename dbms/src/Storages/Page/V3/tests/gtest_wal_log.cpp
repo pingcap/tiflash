@@ -276,6 +276,17 @@ TEST_P(LogFileRWTest, BlockBoundary)
     ASSERT_EQ("EOF", read());
 }
 
+TEST_P(LogFileRWTest, BlockBoundaryEmpty)
+{
+    const auto big_str = repeatedString("A", PS::V3::Format::BLOCK_SIZE - Format::HEADER_SIZE - 4);
+    write(big_str);
+    write("");
+    resetReader();
+    ASSERT_EQ(big_str, read());
+    ASSERT_EQ("", read());
+    ASSERT_EQ("EOF", read());
+}
+
 TEST_P(LogFileRWTest, ManyBlocks)
 {
     const size_t num_blocks_test = 100000;

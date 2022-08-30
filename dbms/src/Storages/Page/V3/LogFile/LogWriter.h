@@ -87,7 +87,7 @@ public:
 
     void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr);
 
-    void flush(const WriteLimiterPtr & write_limiter = nullptr, const bool background = false);
+    void flush(const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
 
     void close();
 
@@ -119,7 +119,7 @@ private:
     size_t written_bytes = 0;
 
     char * buffer;
-    size_t buffer_size = Format::BLOCK_SIZE;
+    const size_t buffer_size = Format::BLOCK_SIZE;
     WriteBuffer write_buffer;
 };
 } // namespace PS::V3
