@@ -51,6 +51,7 @@ void MPPReceiverSet::setUpConnection()
     {
         it.second->setUpConnection();
     }
+}
 
 void MPPReceiverSet::close()
 {
@@ -58,6 +59,5 @@ void MPPReceiverSet::close()
         it.second->close();
     for (auto & cop_reader : coprocessor_readers)
         cop_reader->close();
-
 }
 } // namespace DB
