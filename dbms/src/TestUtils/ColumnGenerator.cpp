@@ -17,6 +17,7 @@ namespace DB::tests
 {
 ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts)
 {
+    int_rand_gen = std::uniform_int_distribution<Int64>(0, opts.string_max_size);
     DataTypePtr type;
     if (opts.type_name == "Decimal")
         type = createDecimalType();
@@ -59,8 +60,7 @@ DataTypePtr ColumnGenerator::createDecimalType()
 
 String ColumnGenerator::randomString()
 {
-    constexpr int size = 128;
-    String str(size, 0);
+    String str(int_rand_gen(rand_gen), 0);
     std::generate_n(str.begin(), str.size(), [this]() { return charset[rand_gen() % charset.size()]; });
     return str;
 }

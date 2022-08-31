@@ -34,6 +34,7 @@ struct ColumnGeneratorOpts
     size_t size;
     String type_name;
     DataDistribution distribution;
+    size_t string_max_size = 128;
 };
 
 class ColumnGenerator : public ext::Singleton<ColumnGenerator>
@@ -43,8 +44,9 @@ public:
 
 private:
     std::mt19937_64 rand_gen;
+    std::uniform_int_distribution<Int64> int_rand_gen = std::uniform_int_distribution<Int64>(0, 128);
     std::uniform_real_distribution<double> real_rand_gen;
-    const std::string charset{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"};
+    const std::string charset{"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()、｜【】[]{}「」；：:;'‘,<《.>》。？·～`~"};
 
     String randomString();
     int randomTimeOffset();
