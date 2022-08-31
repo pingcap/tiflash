@@ -361,6 +361,7 @@ private:
 
     bool sendPackets(std::string & err_info)
     {
+        // note: no exception should be thrown rudely, since it's called by a GRPC poller.
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];

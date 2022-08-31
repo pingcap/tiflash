@@ -55,21 +55,32 @@ struct MemTrackerWrapper
         alloc(_size);
     }
 
+    explicit MemTrackerWrapper(MemoryTracker * memory_tracker)
+        : memory_tracker(memory_tracker)
+        , size(0)
+    {}
+
     void alloc(size_t delta)
     {
-        if (memory_tracker)
+        if (delta)
         {
-            memory_tracker->alloc(delta);
-            size += delta;
+            if (memory_tracker)
+            {
+                memory_tracker->alloc(delta);
+                size += delta;
+            }
         }
     }
 
     void free(size_t delta)
     {
-        if (memory_tracker)
+        if (delta)
         {
-            memory_tracker->free(delta);
-            size -= delta;
+            if (memory_tracker)
+            {
+                memory_tracker->free(delta);
+                size -= delta;
+            }
         }
     }
 
@@ -102,11 +113,11 @@ struct TrackedMppDataPacket
     }
 
     explicit TrackedMppDataPacket()
-        : mem_tracker_wrapper(0, current_memory_tracker)
+        : mem_tracker_wrapper(current_memory_tracker)
     {}
 
     explicit TrackedMppDataPacket(MemoryTracker * memory_tracker)
-        : mem_tracker_wrapper(0, memory_tracker)
+        : mem_tracker_wrapper(memory_tracker)
     {}
 
     void addChunk(std::string && value)
@@ -179,7 +190,7 @@ struct TrackedMppDataPacket
 struct TrackedSelectResp
 {
     explicit TrackedSelectResp()
-        : memory_tracker(0, current_memory_tracker)
+        : memory_tracker(current_memory_tracker)
     {}
 
     void addChunk(std::string && value)
