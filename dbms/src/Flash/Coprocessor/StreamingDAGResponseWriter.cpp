@@ -21,6 +21,7 @@
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Interpreters/AggregationCommon.h>
 
 #include <iostream>
@@ -135,62 +136,61 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::encodeThenWriteBlocks(
     const std::vector<Block> & input_blocks,
-    tipb::SelectResponse & response) const
+    TrackedSelectResp & response) const
 {
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         if (dag_context.isMPPTask()) /// broadcast data among TiFlash nodes in MPP
         {
-            mpp::MPPDataPacket packet;
+            TrackedMppDataPacket tracked_packet(current_memory_tracker);
             if constexpr (send_exec_summary_at_last)
             {
-                serializeToPacket(packet, response);
+                tracked_packet.serializeByResponse(response.getResponse());
             }
             if (input_blocks.empty())
             {
                 if constexpr (send_exec_summary_at_last)
                 {
-                    writer->write(packet);
+                    writer->write(tracked_packet.getPacket());
                 }
                 return;
             }
             for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
-                packet.add_chunks(chunk_codec_stream->getString());
+                tracked_packet.addChunk(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
-            writer->write(packet);
+            writer->write(tracked_packet.getPacket());
         }
         else /// passthrough data to a non-TiFlash node, like sending data to TiSpark
         {
-            response.set_encode_type(dag_context.encode_type);
+            response.setEncodeType(dag_context.encode_type);
             if (input_blocks.empty())
             {
                 if constexpr (send_exec_summary_at_last)
                 {
-                    writer->write(response);
+                    writer->write(response.getResponse());
                 }
                 return;
             }
             for (const auto & block : input_blocks)
             {
                 chunk_codec_stream->encode(block, 0, block.rows());
-                auto * dag_chunk = response.add_chunks();
-                dag_chunk->set_rows_data(chunk_codec_stream->getString());
+                response.addChunk(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
-            writer->write(response);
+            writer->write(response.getResponse());
         }
     }
     else /// passthrough data to a TiDB node
     {
-        response.set_encode_type(dag_context.encode_type);
+        response.setEncodeType(dag_context.encode_type);
         if (input_blocks.empty())
         {
             if constexpr (send_exec_summary_at_last)
             {
-                writer->write(response);
+                writer->write(response.getResponse());
             }
             return;
         }
@@ -203,8 +203,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
             {
                 if (current_records_num >= records_per_chunk)
                 {
-                    auto * dag_chunk = response.add_chunks();
-                    dag_chunk->set_rows_data(chunk_codec_stream->getString());
+                    response.addChunk(chunk_codec_stream->getString());
                     chunk_codec_stream->clear();
                     current_records_num = 0;
                 }
@@ -217,11 +216,10 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::e
 
         if (current_records_num > 0)
         {
-            auto * dag_chunk = response.add_chunks();
-            dag_chunk->set_rows_data(chunk_codec_stream->getString());
+            response.addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(response);
+        writer->write(response.getResponse());
     }
 }
 
@@ -230,9 +228,9 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::batchWrite()
 {
-    tipb::SelectResponse response;
+    TrackedSelectResp response;
     if constexpr (send_exec_summary_at_last)
-        addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
+        addExecuteSummaries(response.getResponse(), !dag_context.isMPPTask() || dag_context.isRootMPPTask());
     if (exchange_type == tipb::ExchangeType::Hash)
     {
         partitionAndEncodeThenWriteBlocks<send_exec_summary_at_last>(blocks, response);
@@ -249,13 +247,13 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::handleExecSummary(
     const std::vector<Block> & input_blocks,
-    std::vector<mpp::MPPDataPacket> & packet,
+    std::vector<TrackedMppDataPacket> & packets,
     tipb::SelectResponse & response) const
 {
     if constexpr (send_exec_summary_at_last)
     {
         /// Sending the response to only one node, default the first one.
-        serializeToPacket(packet[0], response);
+        packets[0].serializeByResponse(response);
 
         // No need to send data when blocks are not empty,
         // because exec_summary will be sent together with blocks.
@@ -263,7 +261,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::h
         {
             for (auto part_id = 0; part_id < partition_num; ++part_id)
             {
-                writer->write(packet[part_id], part_id);
+                writer->write(packets[part_id].getPacket(), part_id);
             }
         }
     }
@@ -273,18 +271,18 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::writePackets(
     const std::vector<size_t> & responses_row_count,
-    std::vector<mpp::MPPDataPacket> & packets) const
+    std::vector<TrackedMppDataPacket> & packets) const
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
         if constexpr (send_exec_summary_at_last)
         {
-            writer->write(packets[part_id], part_id);
+            writer->write(packets[part_id].getPacket(), part_id);
         }
         else
         {
             if (responses_row_count[part_id] > 0)
-                writer->write(packets[part_id], part_id);
+                writer->write(packets[part_id].getPacket(), part_id);
         }
     }
 }
@@ -354,12 +352,12 @@ template <class StreamWriterPtr, bool enable_fine_grained_shuffle>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::partitionAndEncodeThenWriteBlocks(
     std::vector<Block> & input_blocks,
-    tipb::SelectResponse & response) const
+    TrackedSelectResp & response) const
 {
     static_assert(!enable_fine_grained_shuffle);
-    std::vector<mpp::MPPDataPacket> packet(partition_num);
+    std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
     std::vector<size_t> responses_row_count(partition_num);
-    handleExecSummary<send_exec_summary_at_last>(input_blocks, packet, response);
+    handleExecSummary<send_exec_summary_at_last>(input_blocks, tracked_packets, response.getResponse());
     if (input_blocks.empty())
         return;
 
@@ -378,12 +376,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::p
             dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_block.rows();
             chunk_codec_stream->encode(dest_block, 0, dest_block.rows());
-            packet[part_id].add_chunks(chunk_codec_stream->getString());
+            tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
     }
 
-    writePackets<send_exec_summary_at_last>(responses_row_count, packet);
+    writePackets<send_exec_summary_at_last>(responses_row_count, tracked_packets);
 }
 
 /// Hash exchanging data among only TiFlash nodes. Only be called when enable_fine_grained_shuffle is true.
@@ -399,12 +397,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
     if constexpr (send_exec_summary_at_last)
         addExecuteSummaries(response, !dag_context.isMPPTask() || dag_context.isRootMPPTask());
 
-    std::vector<mpp::MPPDataPacket> packet(partition_num);
+    std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
     std::vector<size_t> responses_row_count(partition_num, 0);
 
     // fine_grained_shuffle_stream_count is in [0, 1024], and partition_num is uint16_t, so will not overflow.
     uint32_t bucket_num = partition_num * fine_grained_shuffle_stream_count;
-    handleExecSummary<send_exec_summary_at_last>(blocks, packet, response);
+    handleExecSummary<send_exec_summary_at_last>(blocks, tracked_packets, response);
     if (!blocks.empty())
     {
         std::vector<MutableColumns> final_dest_tbl_columns(bucket_num);
@@ -441,15 +439,15 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::b
                 row_count_per_part += dest_block.rows();
 
                 chunk_codec_stream->encode(dest_block, 0, dest_block.rows());
-                packet[part_id].add_chunks(chunk_codec_stream->getString());
-                packet[part_id].add_stream_ids(stream_idx);
+                tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
+                tracked_packets[part_id].packet.add_stream_ids(stream_idx);
                 chunk_codec_stream->clear();
             }
             responses_row_count[part_id] = row_count_per_part;
         }
     }
 
-    writePackets<send_exec_summary_at_last>(responses_row_count, packet);
+    writePackets<send_exec_summary_at_last>(responses_row_count, tracked_packets);
 
     blocks.clear();
     rows_in_blocks = 0;
