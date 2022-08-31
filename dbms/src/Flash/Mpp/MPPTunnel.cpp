@@ -110,10 +110,6 @@ void MPPTunnel::finishSendQueue()
 /// exit abnormally, such as being cancelled.
 void MPPTunnel::close(const String & reason)
 {
-    SCOPE_EXIT({
-        // ensure the tracked memory is released and udpated before memotry tracker(in ProcListEntry) is released
-        send_queue->finishAndDrain(); // drain the send_queue when close
-    });
     {
         std::unique_lock lk(*mu);
         switch (status)
