@@ -907,7 +907,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
                 (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value"),
                 info());
 #ifdef FIU_ENABLE
-            RUNTIME_CHECK(!force_logical_split, Exception, "Can not perform logical split while failpoint `force_segment_logical_split` is true");
+            RUNTIME_CHECK_MSG(!force_logical_split, "Can not perform logical split while failpoint `force_segment_logical_split` is true");
 #endif
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
         }
