@@ -335,6 +335,7 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
         if (!path_pool)
             return;
 
+        SYNC_FOR("before_DeltaMergeStore::callbacks_remover_remove");
         auto delegate = path_pool->getStableDiskDelegator();
         for (const auto & [path, ids] : path_and_ids_vec)
         {
@@ -345,13 +346,28 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
                 // Note that page_id is useless here.
                 auto dmfile = DMFile::restore(file_provider, id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
-                if (dmfile->canGC())
+                if (unlikely(!dmfile))
                 {
+                    try
+                    {
+                        delegate.removeDTFile(id);
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        // just ignore
+                    }
+                    LOG_FMT_INFO(logger,
+                                 "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
+                                 DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
+                }
+                else if (dmfile->canGC())
+                {
+                    // scanner should only return dtfiles that can GC,
+                    // just another check here.
                     delegate.removeDTFile(dmfile->fileId());
                     dmfile->remove(file_provider);
+                    LOG_FMT_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
                 }
-
-                LOG_FMT_INFO(logger, "GC removed useless dmfile: {}", dmfile->path());
             }
         }
     };
@@ -484,6 +500,8 @@ void DeltaMergeStore::drop()
     LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
     dropAllSegments(false);
     storage_pool->drop();
+
+    SYNC_FOR("before");
 
     // Drop data in storage path pool
     path_pool->drop(/*recursive=*/true, /*must_success=*/false);

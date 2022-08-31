@@ -33,6 +33,8 @@
 #include <future>
 #include <iterator>
 
+#include "Storages/DeltaMerge/RowKeyRange.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -124,6 +126,38 @@ try
 }
 CATCH
 
+TEST_F(DeltaMergeStoreTest, DroppedInMiddleDTFileRemoveCallback)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before removing dtfiles
+    auto sp_gc = SyncPointCtl::enableInScope("before_DeltaMergeStore::callbacks_remover_remove");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    {
+        // check column structure of store
+        const auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3);
+    }
+
+    // drop table and files in the middle of page storage gc
+    store->drop();
+    store = nullptr;
+
+    sp_gc.next(); // continue removing dtfiles
+    th_gc.wait();
+}
+CATCH
+
 TEST_F(DeltaMergeStoreTest, CreateInMiddleDTFileGC)
 try
 {
@@ -155,6 +189,9 @@ try
                                                       false,
                                                       1,
                                                       DeltaMergeStore::Settings());
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 100, false);
+        new_store->write(*db_context, db_context->getSettingsRef(), block);
+        new_store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     }
 
     sp_gc.next(); // continue the page storage gc
@@ -171,7 +208,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_mode= */ false,
                                              /* expected_block_size= */ 1024)[0];
-    ASSERT_INPUTSTREAM_NROWS(in, 0);
+    ASSERT_INPUTSTREAM_NROWS(in, 100);
 }
 CATCH
 

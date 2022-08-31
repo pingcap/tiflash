@@ -151,7 +151,12 @@ DMFilePtr DMFile::restore(
     const ReadMetaMode & read_meta_mode)
 {
     String path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
-    bool single_file_mode = Poco::File(path).isFile();
+    // The path may be dropped by another thread in some cases
+    auto poco_file = Poco::File(path);
+    if (!poco_file.exists())
+        return nullptr;
+
+    bool single_file_mode = poco_file.isFile();
     DMFilePtr dmfile(new DMFile(
         file_id,
         page_id,
