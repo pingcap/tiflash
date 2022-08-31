@@ -357,18 +357,12 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 
 void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_database_name, String new_table_name)
 {
-    if (clean_rename)
-    {
-        path_pool.rename(new_database_name, new_table_name, clean_rename);
-    }
-    else
-    {
-        LOG_FMT_WARNING(log, "Applying heavy renaming for table {}.{} to {}.{}", db_name, table_name, new_database_name, new_table_name);
-
-        // Remove all background task first
-        shutdown();
-        path_pool.rename(new_database_name, new_table_name, clean_rename); // rename for multi-disk
-    }
+    RUNTIME_ASSERT(clean_rename,
+                   log,
+                   "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
+                   new_database_name,
+                   new_table_name);
+    path_pool->rename(new_database_name, new_table_name, clean_rename);
 
     // TODO: replacing these two variables is not atomic, but could be good enough?
     table_name.swap(new_table_name);
