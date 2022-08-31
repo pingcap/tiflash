@@ -148,7 +148,7 @@ void PageDirectoryFactory::applyRecord(
             if (holder)
             {
                 *holder = r.page_id;
-                dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+                dir->external_ids_by_ns.addExternalIdUnlock(holder);
             }
             break;
         }
@@ -161,7 +161,7 @@ void PageDirectoryFactory::applyRecord(
             if (holder)
             {
                 *holder = r.page_id;
-                dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+                dir->external_ids_by_ns.addExternalIdUnlock(holder);
             }
             break;
         }
