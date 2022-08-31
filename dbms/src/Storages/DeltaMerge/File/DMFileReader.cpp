@@ -210,7 +210,7 @@ DMFileReader::DMFileReader(
     // clean read
     bool enable_handle_clean_read_,
     bool enable_del_clean_read_,
-    bool is_fast_mode_,
+    bool is_fast_scan_,
     UInt64 max_read_version_,
     // filters
     DMFilePackFilter && pack_filter_,
@@ -233,7 +233,7 @@ DMFileReader::DMFileReader(
     , single_file_mode(dmfile_->isSingleFileMode())
     , enable_handle_clean_read(enable_handle_clean_read_)
     , enable_del_clean_read(enable_del_clean_read_)
-    , is_fast_mode(is_fast_mode_)
+    , is_fast_scan(is_fast_scan_)
     , max_read_version(max_read_version_)
     , pack_filter(std::move(pack_filter_))
     , skip_packs_by_column(read_columns.size(), 0)
@@ -364,10 +364,11 @@ Block DMFileReader::read()
     }
 
     // TODO: this will need better algorithm: we should separate those packs which can and can not do clean read.
-    bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_mode);
+    bool do_clean_read_on_normal_mode = enable_handle_clean_read && expected_handle_res == All && not_clean_rows == 0 && (!is_fast_scan);
 
-    bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_mode && expected_handle_res == All;
-    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_mode && deleted_rows == 0;
+    bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_scan && expected_handle_res == All;
+    bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_scan && deleted_rows == 0;
+
 
     if (do_clean_read_on_normal_mode)
     {

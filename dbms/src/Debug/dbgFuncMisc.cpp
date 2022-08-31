@@ -25,13 +25,24 @@ namespace DB
 {
 inline size_t getReadTSOForLog(const String & line)
 {
-    auto sub_line = line.substr(line.find("read_tso="));
-    std::regex rx(R"((0|[1-9][0-9]*))");
-    std::smatch m;
-    if (regex_search(sub_line, m, rx))
-        return std::stoul(m[1]);
-    else
-        return 0;
+    try
+    {
+        std::regex rx(R"((0|[1-9][0-9]*))");
+        std::smatch m;
+        auto pos = line.find("read_tso=");
+        if (pos != std::string::npos && regex_search(line.cbegin() + pos, line.cend(), m, rx))
+        {
+            return std::stoul(m[1]);
+        }
+        else
+        {
+            return 0;
+        }
+    }
+    catch (std::exception & e)
+    {
+        throw Exception(fmt::format("Parse 'read tso' failed, exception: {}, line {}", e.what(), line));
+    }
 }
 
 // Usage example:
@@ -90,13 +101,24 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         }
     }
     // try parse the first number following the key
-    auto sub_line = target_line.substr(target_line.find(key));
-    std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
-    std::smatch m;
-    if (regex_search(sub_line, m, rx))
-        output(m[1]);
-    else
-        output("Invalid");
+    try
+    {
+        std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
+        std::smatch m;
+        auto pos = target_line.find(key);
+        if (pos != std::string::npos && regex_search(target_line.cbegin() + pos, target_line.cend(), m, rx))
+        {
+            output(m[1]);
+        }
+        else
+        {
+            output("Invalid");
+        }
+    }
+    catch (std::exception & e)
+    {
+        throw Exception(fmt::format("Parse 'RSFilter exclude rate' failed, exception: {}, target_line {}", e.what(), target_line));
+    }
 }
 
 void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)
