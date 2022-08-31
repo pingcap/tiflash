@@ -20,6 +20,6 @@ func> wait_table test t
 
 # This will throw error for now, but before https://github.com/pingcap/tics/issues/1433 fixed, it will cause segmentation fault
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t where FROM_UNIXTIME(1447430881, a)
-{#REGEXP}.*Argument at index 1 for function fromUnixTime must be constant.*
+ERROR 1105 (HY000) at line 1: Argument at index 1 for function fromUnixTime must be constant
 
 mysql> drop table if exists test.t
