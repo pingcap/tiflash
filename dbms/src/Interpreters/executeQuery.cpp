@@ -237,8 +237,10 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         // so that we can propagate current_memory_tracker into them.
         if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
         {
-            context.getDAGContext()->tunnel_set->updateMemTracker();
-            context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+            if (context.getDAGContext()->tunnel_set)
+                context.getDAGContext()->tunnel_set->updateMemTracker();
+            if (context.getDAGContext()->getMppReceiverSet())
+                context.getDAGContext()->getMppReceiverSet()->setUpConnection();
         }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
