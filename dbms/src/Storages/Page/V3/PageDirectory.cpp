@@ -1091,8 +1091,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 {
                     // put the new created holder into `external_ids`
                     *holder = r.page_id;
-                    std::lock_guard guard(external_ids_mutex);
-                    external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+                    external_ids_by_ns.addExternalId(holder);
                 }
                 break;
             }
@@ -1154,26 +1153,6 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     }
 
     LOG_FMT_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
-}
-
-std::set<PageId> PageDirectory::getAliveExternalIds(NamespaceId ns_id) const
-{
-    std::set<PageId> valid_external_ids;
-    {
-        std::lock_guard guard(external_ids_mutex);
-        for (auto iter = external_ids.begin(); iter != external_ids.end(); /*empty*/)
-        {
-            if (auto holder = iter->lock(); holder == nullptr)
-                iter = external_ids.erase(iter);
-            else
-            {
-                if (holder->high == ns_id)
-                    valid_external_ids.emplace(holder->low);
-                ++iter;
-            }
-        }
-    }
-    return valid_external_ids;
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>

@@ -14,12 +14,14 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -33,12 +35,54 @@
 #include <common/types.h>
 #include <fmt/format.h>
 
+<<<<<<< HEAD
+=======
+#include <future>
+#include <iterator>
+>>>>>>> 6262e0a34d (PageStorage: Log down the gc time for external pages (#5739))
 #include <memory>
 
 namespace DB
 {
 namespace PS::V3::tests
 {
+TEST(ExternalIdsByNamespace, Simple)
+{
+    NamespaceId ns_id = 100;
+    ExternalIdsByNamespace external_ids_by_ns;
+
+    std::atomic<Int32> who(0);
+
+    std::shared_ptr<PageIdV3Internal> holder = std::make_shared<PageIdV3Internal>(buildV3Id(ns_id, 50));
+
+    auto th_insert = std::async([&]() {
+        external_ids_by_ns.addExternalId(holder);
+
+        Int32 expect = 0;
+        who.compare_exchange_strong(expect, 1);
+    });
+    auto th_get_alive = std::async([&]() {
+        external_ids_by_ns.getAliveIds(ns_id);
+        Int32 expect = 0;
+        who.compare_exchange_strong(expect, 2);
+    });
+    th_get_alive.wait();
+    th_insert.wait();
+
+    {
+        auto ids = external_ids_by_ns.getAliveIds(ns_id);
+        LOG_DEBUG(&Poco::Logger::root(), "{} end first, size={}", who.load(), ids.size());
+        ASSERT_EQ(ids.size(), 1);
+        ASSERT_EQ(*ids.begin(), 50);
+    }
+
+    {
+        external_ids_by_ns.unregisterNamespace(ns_id);
+        auto ids = external_ids_by_ns.getAliveIds(ns_id);
+        ASSERT_EQ(ids.size(), 0);
+    }
+}
+
 class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
