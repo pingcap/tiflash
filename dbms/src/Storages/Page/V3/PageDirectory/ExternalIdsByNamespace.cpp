@@ -22,18 +22,16 @@ namespace DB::PS::V3
 void ExternalIdsByNamespace::addExternalIdUnlock(const std::shared_ptr<PageIdV3Internal> & external_id)
 {
     const NamespaceId & ns_id = external_id->high;
-    auto [ns_iter, new_inserted] = ids_by_ns.emplace(ns_id, ExternalIds{});
+    // create a new ExternalIds if the ns_id is not exists, else return
+    // the existing one.
+    auto [ns_iter, new_inserted] = ids_by_ns.try_emplace(ns_id, ExternalIds{});
     ns_iter->second.emplace_back(std::weak_ptr<PageIdV3Internal>(external_id));
 }
 
 void ExternalIdsByNamespace::addExternalId(const std::shared_ptr<PageIdV3Internal> & external_id)
 {
     std::unique_lock map_guard(mu);
-    const NamespaceId & ns_id = external_id->high;
-    // create a new ExternalIds if the ns_id is not exists, else return
-    // the existing one.
-    auto [ns_iter, new_inserted] = ids_by_ns.try_emplace(ns_id, ExternalIds{});
-    ns_iter->second.emplace_back(std::weak_ptr<PageIdV3Internal>(external_id));
+    addExternalIdUnlock(external_id);
 }
 
 std::set<PageId> ExternalIdsByNamespace::getAliveIds(NamespaceId ns_id) const
