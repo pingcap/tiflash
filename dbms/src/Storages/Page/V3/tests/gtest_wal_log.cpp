@@ -316,7 +316,7 @@ TEST_P(LogFileRWTest, Fragmentation)
 }
 
 // This test may take a lot of time
-TEST_P(LogFileRWTest, DifferentPayloadSize)
+TEST_P(LogFileRWTest, DISABLED__DifferentPayloadSize)
 {
     for (size_t i = 0; i < 40000; i += 1)
     {
