@@ -423,7 +423,8 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
-    uint64_t fine_grained_shuffle_stream_count_)
+    uint64_t fine_grained_shuffle_stream_count_,
+    bool setup_conn_manually)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -449,6 +450,11 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
             msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
         }
         rpc_context->fillSchema(schema);
+        if (!setup_conn_manually)
+        {
+            // In CH client case, we need setUpConn right now. However, MPPTask will setUpConnection manually after ProcEntry is created.
+            setUpConnection();
+        }
     }
     catch (...)
     {
@@ -496,6 +502,8 @@ void ExchangeReceiverBase<RPCContext>::close()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
+    if (thread_count)
+        return;
     std::vector<Request> async_requests;
 
     for (size_t index = 0; index < source_num; ++index)

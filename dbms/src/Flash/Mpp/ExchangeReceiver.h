@@ -129,7 +129,8 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count);
+        uint64_t fine_grained_shuffle_stream_count,
+        bool setup_conn_manually = false);
 
     ~ExchangeReceiverBase();
 
