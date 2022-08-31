@@ -46,8 +46,32 @@
  * 4. TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION: implement the function body
  */
 
+namespace DB 
+{
+ enum class TargetArch : UInt32
+{
+    Default  = 0,         /// Without any additional compiler options.
+    SSE4    = (1 << 0),  /// SSE4
+    AVX      = (1 << 1),
+    AVX2     = (1 << 2),
+    AVX512F  = (1 << 3),
+    AVX512BW    = (1 << 4),
+    AVX512VBMI  = (1 << 5),
+    AVX512VBMI2 = (1 << 6),
+};
+
+/// Runtime detection.
+bool isArchSupported(TargetArch arch);
+
+String toString(TargetArch arch);
+} // namespace DB
 // clang-format off
 #if defined(__clang__)
+
+#define AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f")))
+#define AVX_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2")))
+#define SSE4_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt")))
+
 #   define TIFLASH_BEGIN_AVX512_SPECIFIC_CODE \
         _Pragma("clang attribute push(__attribute__((target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,avx512cd\"))),apply_to=function)")
 #   define TIFLASH_BEGIN_AVX_SPECIFIC_CODE \
@@ -57,6 +81,11 @@
 #   define TIFLASH_END_TARGET_SPECIFIC_CODE \
         _Pragma("clang attribute pop")
 #else
+
+#define AVX512_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f",tune=native)))
+#define AVX_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2",tune=native)))
+#define SSE4_FUNCTION_SPECIFIC_ATTRIBUTE __attribute__((target("sse,sse2,sse3,ssse3,sse4,popcnt",tune=native)))
+
 #   define TIFLASH_BEGIN_AVX512_SPECIFIC_CODE \
         _Pragma("GCC push_options") \
         _Pragma("GCC target(\"sse,sse2,sse3,ssse3,sse4,popcnt,avx,avx2,avx512f,avx512bw,avx512vl,avx512cd,tune=native\")")
@@ -697,3 +726,83 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
 #undef DECLARE_TYPE
 #undef ENUM_TYPE
 #undef GET_TYPE
+
+/** Runtime Dispatch helpers for class members.
+  *
+  * Example of usage:
+  *
+  * class TestClass
+  * {
+  * public:
+  *     TIFLASH_MULTITARGET_FUNCTION(
+  *     TIFLASH_MULTITARGET_FUNCTION_HEADER(int), testFunctionImpl, TIFLASH_MULTITARGET_FUNCTION_BODY((int value)
+  *     {
+  *          return value;
+  *     })
+  *     )
+  *
+  *     void testFunction(int value) {
+  *         if (isArchSupported(Arch::AVX512))
+  *         {
+  *             testFunctionImplAVX512(value);
+  *         }
+  *         if (isArchSupported(TargetArch::AVX2))
+  *         {
+  *             testFunctionImplAVX2(value);
+  *         }
+  *         else if (isArchSupported(TargetArch::SSE4))
+  *         {
+  *             testFunctionImplSSE4(value);
+  *         }
+  *         else
+  *         {
+  *             testFunction(value);
+  *         }
+  *     }
+  *};
+  *
+  */
+
+/// Function header
+#define TIFLASH_MULTITARGET_FUNCTION_HEADER(...) __VA_ARGS__
+
+/// Function body
+#define TIFLASH_MULTITARGET_FUNCTION_BODY(...) __VA_ARGS__
+
+#if defined(__GNUC__) && defined(__x86_64__)
+
+/// NOLINTNEXTLINE
+#define TIFLASH_MULTITARGET_FUNCTION(FUNCTION_HEADER, name, FUNCTION_BODY) \
+    FUNCTION_HEADER \
+    \
+    AVX512_FUNCTION_SPECIFIC_ATTRIBUTE \
+    name##AVX512 \
+    FUNCTION_BODY \
+    \
+    FUNCTION_HEADER \
+    \
+    AVX_FUNCTION_SPECIFIC_ATTRIBUTE \
+    name##AVX2 \
+    FUNCTION_BODY \
+    \
+    FUNCTION_HEADER \
+    \
+    SSE4_FUNCTION_SPECIFIC_ATTRIBUTE \
+    name##SSE4 \
+    FUNCTION_BODY \
+    \
+    FUNCTION_HEADER \
+    \
+    name \
+    FUNCTION_BODY \
+
+#else
+
+/// NOLINTNEXTLINE
+#define TIFLASH_MULTITARGET_FUNCTION(FUNCTION_HEADER, name, FUNCTION_BODY) \
+    FUNCTION_HEADER \
+    \
+    name \
+    FUNCTION_BODY \
+
+#endif
