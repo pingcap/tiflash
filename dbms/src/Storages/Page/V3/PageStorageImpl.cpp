@@ -292,11 +292,11 @@ String PageStorageImpl::GCTimeStatistics::toLogging() const
         if (clean_external_page_ms == 0)
             return String("");
         static constexpr double SCALE_NS_TO_MS = 1'000'000.0;
-        return fmt::format(" [external callbacks={}] [external gc={}ms] [get alive={:.2f}ms] [scanner={:.2f}ms] [remover={:.2f}ms]",
+        return fmt::format(" [external callbacks={}] [external gc={}ms] [scanner={:.2f}ms] [get alive={:.2f}ms] [remover={:.2f}ms]",
                            num_external_callbacks,
                            clean_external_page_ms,
-                           external_page_get_alive_ns / SCALE_NS_TO_MS,
                            external_page_scan_ns / SCALE_NS_TO_MS,
+                           external_page_get_alive_ns / SCALE_NS_TO_MS,
                            external_page_remove_ns / SCALE_NS_TO_MS);
     };
     return fmt::format("GC finished{}."
