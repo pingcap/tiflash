@@ -759,7 +759,7 @@ BlockInputStreams StorageDeltaMerge::read(
         rs_operator,
         req_id,
         query_info.keep_order,
-        /* is_fast_mode */ tidb_table_info.tiflash_mode == TiDB::TiFlashMode::Fast, // read in normal mode or read in fast mode
+        /* is_fast_scan */ query_info.is_fast_scan,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
