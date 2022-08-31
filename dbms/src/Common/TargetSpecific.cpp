@@ -1,6 +1,5 @@
-#include <Common/TargetSpecific.h>
-
 #include <Common/CpuId.h>
+#include <Common/TargetSpecific.h>
 
 namespace DB
 {
@@ -35,17 +34,25 @@ String toString(TargetArch arch)
 {
     switch (arch)
     {
-        case TargetArch::Default: return "default";
-        case TargetArch::SSE4:   return "sse4";
-        case TargetArch::AVX:     return "avx";
-        case TargetArch::AVX2:    return "avx2";
-        case TargetArch::AVX512F: return "avx512f";
-        case TargetArch::AVX512BW:    return "avx512bw";
-        case TargetArch::AVX512VBMI:  return "avx512vbmi";
-        case TargetArch::AVX512VBMI2: return "avx512vbmi";
+    case TargetArch::Default:
+        return "default";
+    case TargetArch::SSE4:
+        return "sse4";
+    case TargetArch::AVX:
+        return "avx";
+    case TargetArch::AVX2:
+        return "avx2";
+    case TargetArch::AVX512F:
+        return "avx512f";
+    case TargetArch::AVX512BW:
+        return "avx512bw";
+    case TargetArch::AVX512VBMI:
+        return "avx512vbmi";
+    case TargetArch::AVX512VBMI2:
+        return "avx512vbmi";
     }
 
     __builtin_unreachable();
 }
 
-}
+} // namespace DB

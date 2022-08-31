@@ -46,17 +46,17 @@
  * 4. TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION: implement the function body
  */
 
-namespace DB 
+namespace DB
 {
- enum class TargetArch : UInt32
+enum class TargetArch : UInt32
 {
-    Default  = 0,         /// Without any additional compiler options.
-    SSE4    = (1 << 0),  /// SSE4
-    AVX      = (1 << 1),
-    AVX2     = (1 << 2),
-    AVX512F  = (1 << 3),
-    AVX512BW    = (1 << 4),
-    AVX512VBMI  = (1 << 5),
+    Default = 0, /// Without any additional compiler options.
+    SSE4 = (1 << 0), /// SSE4
+    AVX = (1 << 1),
+    AVX2 = (1 << 2),
+    AVX512F = (1 << 3),
+    AVX512BW = (1 << 4),
+    AVX512VBMI = (1 << 5),
     AVX512VBMI2 = (1 << 6),
 };
 
@@ -727,6 +727,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
 #undef ENUM_TYPE
 #undef GET_TYPE
 
+// clang-format off
 /** Runtime Dispatch helpers for class members.
   *
   * Example of usage:
@@ -806,3 +807,4 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
     FUNCTION_BODY \
 
 #endif
+// clang-format on

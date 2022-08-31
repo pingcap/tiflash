@@ -111,7 +111,7 @@ union CpuInfo
 };
 
 #define DEF_NAME(X) inline bool have##X() noexcept;
-    CPU_ID_ENUMERATE(DEF_NAME)
+CPU_ID_ENUMERATE(DEF_NAME)
 #undef DEF_NAME
 
 bool haveRDTSCP() noexcept
@@ -184,9 +184,9 @@ bool haveAVX() noexcept
 #if defined(__x86_64__) || defined(__i386__)
     // http://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-optimization-manual.pdf
     // https://bugs.chromium.org/p/chromium/issues/detail?id=375968
-    return haveOSXSAVE()                           // implies haveXSAVE()
-           && (our_xgetbv(0) & 6u) == 6u              // XMM state and YMM state are enabled by OS
-           && ((CpuInfo(0x1).registers.ecx >> 28) & 1u); // AVX bit
+    return haveOSXSAVE() // implies haveXSAVE()
+        && (our_xgetbv(0) & 6u) == 6u // XMM state and YMM state are enabled by OS
+        && ((CpuInfo(0x1).registers.ecx >> 28) & 1u); // AVX bit
 #else
     return false;
 #endif
@@ -216,11 +216,11 @@ bool haveAVX512F() noexcept
 {
 #if defined(__x86_64__) || defined(__i386__)
     // https://software.intel.com/en-us/articles/how-to-detect-knl-instruction-support
-    return haveOSXSAVE()                           // implies haveXSAVE()
-           && (our_xgetbv(0) & 6u) == 6u              // XMM state and YMM state are enabled by OS
-           && ((our_xgetbv(0) >> 5) & 7u) == 7u       // ZMM state is enabled by OS
-           && CpuInfo(0x0).registers.eax >= 0x7          // leaf 7 is present
-           && ((CpuInfo(0x7, 0).registers.ebx >> 16) & 1u); // AVX512F bit
+    return haveOSXSAVE() // implies haveXSAVE()
+        && (our_xgetbv(0) & 6u) == 6u // XMM state and YMM state are enabled by OS
+        && ((our_xgetbv(0) >> 5) & 7u) == 7u // ZMM state is enabled by OS
+        && CpuInfo(0x0).registers.eax >= 0x7 // leaf 7 is present
+        && ((CpuInfo(0x7, 0).registers.ebx >> 16) & 1u); // AVX512F bit
 #else
     return false;
 #endif

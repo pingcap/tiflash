@@ -16,8 +16,8 @@
 
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnVector.h>
-#include <Common/assert_cast.h>
 #include <Common/TargetSpecific.h>
+#include <Common/assert_cast.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -60,6 +60,8 @@ struct AggregateFunctionSumData
         Impl::add(sum, value);
     }
 
+    // clang-format off
+    /// Vectorized version
     TIFLASH_MULTITARGET_FUNCTION(
     TIFLASH_MULTITARGET_FUNCTION_HEADER(
     template <typename Value>
@@ -100,8 +102,8 @@ struct AggregateFunctionSumData
         Impl::add(sum, local_sum);
     })
     )
+    // clang-format on
 
-    /// Vectorized version
     template <typename Value>
     void NO_SANITIZE_UNDEFINED NO_INLINE addMany(const Value * __restrict ptr, size_t count)
     {
