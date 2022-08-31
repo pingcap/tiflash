@@ -65,6 +65,7 @@ void PhysicalWindow::transformImpl(DAGPipeline & pipeline, Context & context, si
 {
     child->transform(pipeline, context, max_streams);
 
+    window_description.fillArgColumnNumbers();
     executeExpression(pipeline, window_description.before_window, log, "before window");
 
     if (fine_grained_shuffle.enable())
@@ -92,8 +93,6 @@ void PhysicalWindow::finalize(const Names & parent_require)
 
     child->finalize(window_description.before_window->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(window_description.before_window, child->getSampleBlock().columns());
-
-    window_description.fillArgColumnNumbers();
 }
 
 const Block & PhysicalWindow::getSampleBlock() const

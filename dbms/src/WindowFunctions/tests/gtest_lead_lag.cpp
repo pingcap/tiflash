@@ -271,6 +271,26 @@ try
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
+
+    // test arg column type
+    executeFunctionAndAssert(
+        toNullableVec<String>({"2", "3", "4", "4", "6", "7", "8", "8"}),
+        Lead3(value_col, lit(Field(static_cast<UInt64>(1))), value_col),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
+    executeFunctionAndAssert(
+        toNullableVec<String>({"0", "0", "0", {}, "0", "0", "0", "8"}),
+        Lead3(lit(Field(String("0"))), lit(Field(static_cast<UInt64>(1))), value_col),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {"1", "2", "3", {}, "5", "6", "7", "8"})});
+    executeFunctionAndAssert(
+        toVec<String>({"0", "0", "1", "1", "0", "0", "1", "1"}),
+        Lead3(lit(Field(String("0"))), lit(Field(static_cast<UInt64>(2))), lit(Field(String("1")))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {"1", "2", "3", "4", "5", "6", "7", "8"})});
 }
 CATCH
 

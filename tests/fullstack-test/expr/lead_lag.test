@@ -57,6 +57,58 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; sele
 | 8                                    | 8                              | 8                                     | 8                               | NULL                                | NULL                          | NULL                                 | NULL                           |
 | default                              | 123                            | default                               | 123                             | 7                                   | 7                             | 7                                    | 7                              |
 +--------------------------------------+--------------------------------+---------------------------------------+---------------------------------+-------------------------------------+-------------------------------+--------------------------------------+--------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_str, 1, value_str) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------------------+
+| lead(value_str, 1, value_str) over w |
++--------------------------------------+
+|                                      |
+| 3                                    |
+| 4                                    |
+| 4                                    |
+| NULL                                 |
+| 7                                    |
+| 8                                    |
+| 8                                    |
++--------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('5', 1) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---------------------+
+| lead('5', 1) over w |
++---------------------+
+| 5                   |
+| 5                   |
+| 5                   |
+| NULL                |
+| 5                   |
+| 5                   |
+| 5                   |
+| NULL                |
++---------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('5', 1, value_str) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------------+
+| lead('5', 2, value_str) over w |
++--------------------------------+
+| 5                              |
+| 5                              |
+| 3                              |
+| 4                              |
+| 5                              |
+| 5                              |
+| 7                              |
+| 8                              |
++--------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('5', 1, '5') over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++--------------------------+
+| lead('5', 2, '6') over w |
++--------------------------+
+| 5                        |
+| 5                        |
+| 6                        |
+| 6                        |
+| 5                        |
+| 5                        |
+| 6                        |
+| 6                        |
++--------------------------+
 
 ## test_int
 mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(value_tinyint) over w,lead(value_smallint, 1, 'default') over w,lag(value_mediumint, 1, NULL) over w,lag(value_int, 1, 88888) over w,lag(value_bigint, 1, '100') over w from test.test_int window w as(PARTITION BY part ORDER BY orde) order by orde;

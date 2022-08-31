@@ -540,6 +540,7 @@ void WindowBlockInputStream::tryCalculate()
             assert(frame_start <= frame_end);
 
             // Write out the results.
+            // TODO execute the window function by block instead of row.
             writeOutCurrentRow();
 
             prev_frame_start = frame_start;
@@ -626,6 +627,10 @@ void WindowBlockInputStream::advanceRowNumber(RowNumber & x) const
 
 bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
 {
+    assert(frame_started);
+    assert(frame_ended);
+    assert(frame_start <= frame_end);
+
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
 
@@ -635,7 +640,6 @@ bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
     x.row += offset;
     if (x.row < block_rows)
     {
-        assert(frame_ended);
         return x < frame_end;
     }
 
@@ -649,13 +653,16 @@ bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
 
 bool WindowBlockInputStream::lag(RowNumber & x, size_t offset) const
 {
+    assert(frame_started);
+    assert(frame_ended);
+    assert(frame_start <= frame_end);
+
     assert(x.block >= first_block_number);
     assert(x.block - first_block_number < window_blocks.size());
 
     if (x.row >= offset)
     {
         x.row -= offset;
-        assert(frame_started);
         return frame_start <= x;
     }
 
