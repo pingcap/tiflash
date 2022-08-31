@@ -16,7 +16,6 @@
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 
 #include <mutex>
-#include <optional>
 
 namespace DB::PS::V3
 {

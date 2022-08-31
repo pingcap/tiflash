@@ -162,7 +162,7 @@ void PageDirectoryFactory::applyRecord(
             if (holder)
             {
                 *holder = r.page_id;
-                dir->external_ids_by_ns.addExternalId(holder);
+                dir->external_ids_by_ns.addExternalIdUnlock(holder);
             }
             break;
         }
