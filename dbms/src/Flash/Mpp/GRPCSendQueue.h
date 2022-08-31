@@ -35,85 +35,19 @@ class TestGRPCSendQueue;
 class KickTag : public ::grpc::internal::CompletionQueueTag
 {
 public:
-    enum class Status
-    {
-        // No tag.
-        NONE,
-        // Waiting for kicking.
-        WAITING,
-        // Queuing in the grpc completion queue.
-        QUEUING,
-    };
-
-    KickTag(std::mutex * m, const LoggerPtr & l)
-        : mu(m)
-        , log(l)
+    explicit KickTag(std::function<void *()> a)
+        : action(a)
     {}
-
-    ~KickTag() override
-    {
-        std::unique_lock lock(*mu);
-
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", status);
-    }
 
     bool FinalizeResult(void ** tag_, bool * /*status*/) override
     {
-        std::unique_lock lock(*mu);
-
-        RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", status);
-        status = Status::NONE;
-
-        *tag_ = tag;
-        tag = nullptr;
-
+        *tag_ = action();
         return true;
-    }
-
-    Status getStatus()
-    {
-        std::unique_lock lock(*mu);
-        return status;
     }
 
 private:
-    friend class tests::TestGRPCSendQueue;
-    template <typename T>
-    friend class GRPCSendQueue;
-
-    /// Should acquire lock.
-    bool toWaiting(void * new_tag)
-    {
-        RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
-
-        if (status != Status::NONE)
-        {
-            return false;
-        }
-        status = KickTag::Status::WAITING;
-        tag = new_tag;
-        return true;
-    }
-
-    /// Should acquire lock.
-    bool toQueuing()
-    {
-        if (status != Status::WAITING)
-        {
-            return false;
-        }
-        RUNTIME_ASSERT(tag != nullptr, log, "status is waiting but tag is nullptr");
-        status = Status::QUEUING;
-        return true;
-    }
-
-    // Protect `status` and `tag` and more(see the comments above GRPCSendQueue::mu).
-    std::mutex * mu;
-
-    const LoggerPtr log;
-
-    Status status = Status::NONE;
-    void * tag = nullptr;
+    /// `action` is called before the `tag` is popped from completion queue.
+    std::function<void *()> action;
 };
 
 using GRPCKickFunc = std::function<grpc_call_error(KickTag *)>;
@@ -141,17 +75,17 @@ template <typename T>
 class GRPCSendQueue
 {
 public:
-    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr & log)
+    GRPCSendQueue(size_t queue_size, grpc_call * call, const LoggerPtr & l)
         : send_queue(queue_size)
-        , log(log)
-        , kick_tag(&mu, log)
+        , log(l)
+        , kick_tag([this]() { return kickTagAction(); })
     {
         RUNTIME_ASSERT(call != nullptr, log, "call is null");
         // If a call to `grpc_call_start_batch` with an empty batch returns
         // `GRPC_CALL_OK`, the tag is pushed into the completion queue immediately.
         // This behavior is well-defined. See https://github.com/grpc/grpc/issues/16357.
-        kick_func = [call](void * tag) {
-            return grpc_call_start_batch(call, nullptr, 0, tag, nullptr);
+        kick_func = [call](void * t) {
+            return grpc_call_start_batch(call, nullptr, 0, t, nullptr);
         };
     }
 
@@ -159,9 +93,16 @@ public:
     GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
         : send_queue(queue_size)
         , log(Logger::get("GRPCSendQueue", "test"))
-        , kick_tag(&mu, log)
         , kick_func(func)
+        , kick_tag([this]() { return kickTagAction(); })
     {}
+
+    ~GRPCSendQueue()
+    {
+        std::unique_lock lock(mu);
+
+        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", status);
+    }
 
     /// Push the data from queue and kick the grpc completion queue.
     ///
@@ -191,6 +132,8 @@ public:
     /// tied to one grpc thread, this data race will not happen.
     GRPCSendQueueRes pop(T & data, void * new_tag)
     {
+        RUNTIME_ASSERT(new_tag != nullptr, log, "new_tag is nullptr");
+
         auto res = send_queue.tryPop(data);
         switch (res)
         {
@@ -207,6 +150,8 @@ public:
 
         std::unique_lock lock(mu);
 
+        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", status);
+
         // Double check if this queue is empty.
         res = send_queue.tryPop(data);
         switch (res)
@@ -218,8 +163,8 @@ public:
         case MPMCQueueResult::EMPTY:
         {
             // If empty, change status to WAITING.
-            bool success = kick_tag.toWaiting(new_tag);
-            RUNTIME_ASSERT(success, log, "status {} is not none", kick_tag.getStatus());
+            status = Status::WAITING;
+            tag = new_tag;
             return GRPCSendQueueRes::EMPTY;
         }
         default:
@@ -243,15 +188,27 @@ public:
 private:
     friend class tests::TestGRPCSendQueue;
 
+    void * kickTagAction()
+    {
+        std::unique_lock lock(mu);
+
+        RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", status);
+        status = Status::NONE;
+
+        return std::exchange(tag, nullptr);
+    }
+
     /// Wake up its completion queue.
     void kickCompletionQueue()
     {
         {
             std::unique_lock lock(mu);
-            if (!kick_tag.toQueuing())
+            if (status != Status::WAITING)
             {
                 return;
             }
+            RUNTIME_ASSERT(tag != nullptr, log, "status is waiting but tag is nullptr");
+            status = Status::QUEUING;
         }
 
         grpc_call_error error = kick_func(&kick_tag);
@@ -264,6 +221,7 @@ private:
     const LoggerPtr log;
 
     /// The mutex is used to synchronize the concurrent calls between push/finish and pop.
+    /// It protects `status` and `tag`.
     /// The concurrency problem we want to prevent here is LOST NOTIFICATION which is
     /// similar to `condition_variable`.
     /// Note that this mutex is necessary. It's useless to just change the `tag` to atomic.
@@ -277,9 +235,22 @@ private:
     /// If there is no more data, this connection will get stuck forever.
     std::mutex mu;
 
-    KickTag kick_tag;
+    enum class Status
+    {
+        /// No tag.
+        NONE,
+        /// Waiting for kicking.
+        WAITING,
+        /// Queuing in the grpc completion queue.
+        QUEUING,
+    };
+
+    Status status = Status::NONE;
+    void * tag = nullptr;
 
     GRPCKickFunc kick_func;
+
+    KickTag kick_tag;
 };
 
 } // namespace DB

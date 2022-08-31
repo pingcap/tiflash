@@ -214,10 +214,10 @@ grpc::Status FlashService::Coprocessor(
     return ::grpc::Status::OK;
 }
 
-std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
-                                                                                       const ::mpp::EstablishMPPConnectionRequest * request,
-                                                                                       ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
-                                                                                       IAsyncCallData * call_data)
+std::variant<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
+                                                                                          const ::mpp::EstablishMPPConnectionRequest * request,
+                                                                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
+                                                                                          IAsyncCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
@@ -227,7 +227,7 @@ std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncO
     // For MPP test, we don't care about security config.
     if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
     {
-        return {grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg), {}};
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -250,7 +250,7 @@ std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncO
     auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        return {status, {}};
+        return status;
     }
 
     auto & tmt_context = db_context->getTMTContext();
@@ -259,22 +259,21 @@ std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncO
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
     if (tunnel == nullptr)
     {
+        LOG_ERROR(log, err_msg);
         if (call_data)
         {
-            LOG_ERROR(log, err_msg);
-            return {grpc::Status::OK, err_msg};
+            return err_msg;
         }
         else
         {
-            LOG_ERROR(log, err_msg);
             if (sync_writer->Write(getPacketWithError(err_msg)))
             {
-                return {grpc::Status::OK, {}};
+                return grpc::Status::OK;
             }
             else
             {
                 LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
-                return {grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason."), {}};
+                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
             }
         }
     }
@@ -294,7 +293,7 @@ std::pair<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncO
 
     // TODO: Check if there are errors in task.
 
-    return {grpc::Status::OK, {}};
+    return grpc::Status::OK;
 }
 
 ::grpc::Status FlashService::CancelMPPTask(

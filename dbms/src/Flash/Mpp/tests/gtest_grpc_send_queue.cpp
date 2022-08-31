@@ -38,8 +38,6 @@ protected:
     GRPCSendQueue<int> queue;
 
 public:
-    using Status = KickTag::Status;
-
     void checkTag(void * t)
     {
         GTEST_ASSERT_EQ(t, tag);
@@ -48,7 +46,7 @@ public:
 
     void checkTagInQueue(void * t)
     {
-        GTEST_ASSERT_EQ(t, queue.kick_tag.tag);
+        GTEST_ASSERT_EQ(t, queue.tag);
     }
 };
 

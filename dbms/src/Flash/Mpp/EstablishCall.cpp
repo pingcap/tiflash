@@ -19,6 +19,7 @@
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
+#include <Storages/Transaction/Utils.h>
 
 namespace DB
 {
@@ -113,14 +114,19 @@ void EstablishCallData::initRpc()
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
 
-        auto [status, err_msg] = service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
-        if (!status.ok())
+        auto res = service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
+
+        if (auto * status = std::get_if<grpc::Status>(&res))
         {
-            writeDone("initRpc called with no-ok status", status);
-            return;
+            if (!status->ok())
+            {
+                writeDone("initRpc called with no-ok status", *status);
+                return;
+            }
         }
-        if (!err_msg.empty())
+        else
         {
+            auto err_msg = std::get<std::string>(res);
             writeErr(getPacketWithError(err_msg));
             return;
         }

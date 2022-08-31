@@ -72,11 +72,18 @@ public:
         const ::mpp::IsAliveRequest * request,
         ::mpp::IsAliveResponse * response) override;
 
-    std::pair<::grpc::Status, std::string> establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, IAsyncCallData * call_data);
+    std::variant<::grpc::Status, std::string> establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, IAsyncCallData * call_data);
 
     ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * grpc_context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer) override
     {
-        return establishMPPConnectionSyncOrAsync(grpc_context, request, sync_writer, nullptr).first;
+        auto res = establishMPPConnectionSyncOrAsync(grpc_context, request, sync_writer, nullptr);
+        auto * status = std::get_if<::grpc::Status>(&res);
+        if (status == nullptr)
+        {
+            // Should not happen at the time of writing.
+            return ::grpc::Status::OK;
+        }
+        return *status;
     }
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * grpc_context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
