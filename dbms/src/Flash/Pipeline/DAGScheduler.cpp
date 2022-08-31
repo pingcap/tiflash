@@ -16,15 +16,18 @@
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/DAGScheduler.h>
+#include <Flash/Pipeline/ResultHandlerPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
 
 namespace DB
 {
-std::pair<bool, String> DAGScheduler::run(const PhysicalPlanNodePtr & plan_node)
+std::pair<bool, String> DAGScheduler::run(
+    const PhysicalPlanNodePtr & plan_node, 
+    ResultHandler result_handler)
 {
     assert(plan_node);
-    auto final_pipeline = genPipeline(plan_node);
+    auto final_pipeline = genPipeline(handleResultHandler(plan_node, result_handler));
     final_pipeline_id = final_pipeline->getId();
     submitPipeline(final_pipeline);
 
@@ -85,6 +88,15 @@ void DAGScheduler::handlePipelineFail(const PipelineEventPtr & event, String & e
     event_queue.cancel();
     cancelRunningPipelines(false);
     status_machine.finish();
+}
+
+PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
+    const PhysicalPlanNodePtr & plan_node, 
+    ResultHandler result_handler)
+{
+    return result_handler.isDefault()
+        ? plan_node
+        : PhysicalResultHandler::build(result_handler, log->identifier(), plan_node);
 }
 
 void DAGScheduler::handlePipelineFinish(const PipelineEventPtr & event)

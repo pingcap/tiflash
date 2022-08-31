@@ -40,6 +40,7 @@ String PlanType::toString() const
         M(Join)
         M(JoinProbe)
         M(JoinBuild)
+        M(ResultHandler)
 #undef M
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);

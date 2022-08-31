@@ -14,25 +14,19 @@
 
 #pragma once
 
-#include <Core/Block.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/ResultHandler.h>
 #include <Flash/Pipeline/DAGScheduler.h>
 
-#include <functional>
 #include <memory>
 #include <utility>
 
 namespace DB
 {
-using ResultHandler = std::function<void(const Block &)>;
-
 class QueryExecutor
 {
 public:
-    const static ResultHandler default_result_handler;
-
-    QueryExecutor() = default;
     virtual ~QueryExecutor() = default;
 
     // is_success, err_msg
@@ -40,8 +34,10 @@ public:
 
     std::pair<bool, String> execute()
     {
-        return execute(default_result_handler);
+        return execute(ResultHandler::default_instance);
     }
+
+    virtual String dump() const = 0;
 };
 
 using QueryExecutorPtr = std::shared_ptr<QueryExecutor>;
@@ -50,13 +46,14 @@ class DataStreamExecutor : public QueryExecutor
 {
 public:
     explicit DataStreamExecutor(const BlockIO & block_io)
-        : QueryExecutor()
-        , data_stream(block_io.in)
+        : data_stream(block_io.in)
     {}
 
     std::pair<bool, String> execute(ResultHandler result_handler) override;
 
     BlockInputStreamPtr dataStream() const;
+
+    String dump() const override;
 
 private:
     BlockInputStreamPtr data_stream;
@@ -65,17 +62,18 @@ private:
 class PipelineExecutor : public QueryExecutor
 {
 public:
-    explicit PipelineExecutor(
+    PipelineExecutor(
         Context & context,
         const PhysicalPlanNodePtr & plan_node_,
         size_t max_streams,
         const String & req_id)
-        : QueryExecutor()
-        , dag_scheduler(context, max_streams, req_id)
+        : dag_scheduler(context, max_streams, req_id)
         , plan_node(plan_node_)
     {}
 
-    std::pair<bool, String> execute(ResultHandler) override;
+    std::pair<bool, String> execute(ResultHandler result_handler) override;
+
+    String dump() const override;
 
 private:
     DAGScheduler dag_scheduler;

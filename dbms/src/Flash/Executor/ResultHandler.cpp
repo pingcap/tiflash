@@ -12,17 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/QueryProcessingStage.h>
-#include <DataStreams/BlockIO.h>
-#include <Flash/Executor/QueryExecutor.h>
-#include <Interpreters/Context.h>
+#include <Flash/Executor/ResultHandler.h>
 
 namespace DB
 {
-QueryExecutorPtr executeQuery(
-    Context & context,
-    bool internal = false,
-    QueryProcessingStage::Enum stage = QueryProcessingStage::Complete);
+const ResultHandler ResultHandler::default_instance{};
 }

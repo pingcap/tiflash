@@ -38,6 +38,7 @@ struct PlanType
         Join = 13,
         JoinProbe = 14,
         JoinBuild = 15,
+        ResultHandler = 16,
     };
     PlanTypeEnum enum_value;
 

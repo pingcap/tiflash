@@ -90,6 +90,8 @@ try
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
 
+    // disable pipeline model in batchCop/cop.
+    context.setSetting("enable_pipeline", "false");
     auto executor = executeQuery(context, internal, QueryProcessingStage::Complete);
     auto data_input_stream = (std::static_pointer_cast<DataStreamExecutor>(executor))->dataStream();
 

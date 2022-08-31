@@ -19,7 +19,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/QueryExecutor.h>
+#include <Flash/Executor/QueryExecutor.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>

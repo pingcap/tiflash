@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
+#include <Flash/Executor/ResultHandler.h>
 #include <Flash/Pipeline/Event.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineStatusMachine.h>
@@ -48,7 +49,9 @@ public:
     {}
 
     // return <is_success, err_msg>
-    std::pair<bool, String> run(const PhysicalPlanNodePtr & plan_node);
+    std::pair<bool, String> run(
+        const PhysicalPlanNodePtr & plan_node, 
+        ResultHandler result_handler);
 
     void cancel();
 
@@ -72,6 +75,10 @@ private:
     void handlePipelineCancel(const PipelineEventPtr & event);
 
     void cancelRunningPipelines(bool is_kill);
+
+    PhysicalPlanNodePtr handleResultHandler(
+        const PhysicalPlanNodePtr & plan_node, 
+        ResultHandler result_handler);
 
 private:
     UInt32 final_pipeline_id;

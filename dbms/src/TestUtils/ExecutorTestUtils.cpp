@@ -71,11 +71,7 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
     auto executor = executeQuery(context.context);
-    assert(std::dynamic_pointer_cast<DataStreamExecutor>(executor));
-    auto data_stream = (std::static_pointer_cast<DataStreamExecutor>(executor))->dataStream();
-    FmtBuffer fb;
-    data_stream->dumpTree(fb);
-    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(executor->dump()));
 }
 
 namespace
@@ -135,9 +131,10 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     // Currently, don't care about regions information in tests.
     auto executor = executeQuery(context.context);
     Blocks actual_blocks;
-    auto [success, err_msg] = executor->execute([&](const Block & block) {
+    ResultHandler::Handler handler = [&](const Block & block) {
         actual_blocks.push_back(block);
-    });
+    };
+    auto [success, err_msg] = executor->execute(handler);
     if (!success)
         throw Exception(err_msg);
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();

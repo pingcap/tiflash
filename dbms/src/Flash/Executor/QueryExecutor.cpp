@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/QueryExecutor.h>
+#include <Common/FmtUtils.h>
+#include <Flash/Executor/QueryExecutor.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
 
 namespace DB
 {
-const ResultHandler QueryExecutor::default_result_handler = [](const Block &) {};
-
 std::pair<bool, String> DataStreamExecutor::execute(ResultHandler result_handler)
 {
     try
@@ -42,10 +42,24 @@ BlockInputStreamPtr DataStreamExecutor::dataStream() const
     return data_stream;
 }
 
-std::pair<bool, String> PipelineExecutor::execute(ResultHandler)
+String DataStreamExecutor::dump() const
 {
-    auto res = dag_scheduler.run(plan_node);
+    assert(data_stream);
+    FmtBuffer fb;
+    data_stream->dumpTree(fb);
+    return fb.toString();
+}
+
+std::pair<bool, String> PipelineExecutor::execute(ResultHandler result_handler)
+{
+    auto res = dag_scheduler.run(plan_node, result_handler);
     plan_node = nullptr;
     return res;
+}
+
+String PipelineExecutor::dump() const
+{
+    assert(plan_node);
+    return PhysicalPlanVisitor::visitToString(plan_node);;
 }
 }

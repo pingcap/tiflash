@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/Planner/Planner.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/executeQuery.h>
 
@@ -24,18 +25,28 @@ QueryExecutorPtr executeQuery(
     bool internal,
     QueryProcessingStage::Enum stage)
 {
-    auto prepare_io = [&]() {
-        if (context.getSettingsRef().enable_planner)
-        {
-            PlanQuerySource plan(context);
-            return executeQuery(plan, context, internal, stage);
-        }
-        else
-        {
-            DAGQuerySource dag(context);
-            return executeQuery(dag, context, internal, stage);
-        }
-    };
-    return std::make_shared<DataStreamExecutor>(prepare_io());
+    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
+    {
+        PlanQuerySource plan(context);
+        auto interpreter = plan.interpreter(context, stage);
+        auto planner = static_cast<Planner*>(interpreter.get());
+        return planner->pipelineExecute();
+    }
+    else
+    {
+        auto prepare_io = [&]() {
+            if (context.getSettingsRef().enable_planner)
+            {
+                PlanQuerySource plan(context);
+                return executeQuery(plan, context, internal, stage);
+            }
+            else
+            {
+                DAGQuerySource dag(context);
+                return executeQuery(dag, context, internal, stage);
+            }
+        };
+        return std::make_shared<DataStreamExecutor>(prepare_io());
+    }
 }
 } // namespace DB

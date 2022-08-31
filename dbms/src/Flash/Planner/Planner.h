@@ -18,7 +18,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Planner/PlanQuerySource.h>
-#include <Flash/QueryExecutor.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
