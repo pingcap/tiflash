@@ -47,7 +47,7 @@ LogWriter::LogWriter(
         /*create_new_encryption_info_*/ true);
 
     buffer = static_cast<char *>(alloc(buffer_size));
-    RUNTIME_CHECK_MSG(buffer != nullptr, "LogWriter cannot reallocate buffer of size {}", buffer_size);
+    RUNTIME_CHECK_MSG(buffer != nullptr, "LogWriter cannot allocate buffer, size={}", buffer_size);
     write_buffer = WriteBuffer(buffer, buffer_size);
 }
 
