@@ -58,6 +58,7 @@ void LogWriter::resetBuffer()
 
 LogWriter::~LogWriter()
 {
+    // In case of forgetting flush when `manual_flush` is true, should do nothing when `LogWriter` is used correctly
     flush(/* write_limiter */ nullptr, /* background */ false);
     close();
 
