@@ -390,6 +390,7 @@ private:
 
     bool persisted_files_done = false;
     size_t read_rows = 0;
+
 public:
     DeltaValueInputStream(const DMContext & context_,
                           const DeltaSnapshotPtr & delta_snap_,

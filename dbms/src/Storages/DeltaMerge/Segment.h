@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -27,7 +28,6 @@
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
-#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 
 namespace DB::DM
 {
@@ -403,18 +403,19 @@ private:
         bool relevant_place) const;
 
     ArrayBitmapFilterPtr buildArrayBitmapFilter(const DMContext & dm_context,
-                                           const SegmentSnapshotPtr & segment_snap,
-                                           const RowKeyRanges & read_ranges,
-                                           const RSOperatorPtr & filter,
-                                           UInt64 max_version,
-                                           size_t expected_block_size);
+                                                const SegmentSnapshotPtr & segment_snap,
+                                                const RowKeyRanges & read_ranges,
+                                                const RSOperatorPtr & filter,
+                                                UInt64 max_version,
+                                                size_t expected_block_size);
     BlockInputStreamPtr getBitmapFilterInputStream(const DMContext & dm_context,
-                                               const ColumnDefines & columns_to_read,
-                                               const SegmentSnapshotPtr & segment_snap,
-                                               const RowKeyRanges & data_ranges,
-                                               const RSOperatorPtr & filter,
-                                               UInt64 max_version,
-                                               size_t expected_block_size);
+                                                   const ColumnDefines & columns_to_read,
+                                                   const SegmentSnapshotPtr & segment_snap,
+                                                   const RowKeyRanges & data_ranges,
+                                                   const RSOperatorPtr & filter,
+                                                   UInt64 max_version,
+                                                   size_t expected_block_size);
+
 private:
     /// The version of this segment. After split / merge / merge delta, epoch got increased by 1.
     const UInt64 epoch;

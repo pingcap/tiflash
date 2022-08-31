@@ -92,9 +92,10 @@ private:
     size_t last_handle_read_num = 0;
 
     // Use for calculating MVCC-bitmap-filter when `for_bitmap` is true.
-    inline static DataTypeUInt32 seg_row_id_col_type{};  // `UInt32` is enough from segment row id.
+    inline static DataTypeUInt32 seg_row_id_col_type{}; // `UInt32` is enough from segment row id.
     MutableColumnPtr seg_row_id_col;
     UInt64 stable_rows;
+
 public:
     DeltaMergeBlockInputStream(const SkippableBlockInputStreamPtr & stable_input_stream_,
                                const DeltaValueReaderPtr & delta_value_reader_,
@@ -276,7 +277,7 @@ private:
 
 private:
     inline bool finished() { return stable_done && delta_done; }
-    
+
     inline void fillSegmentRowId(UInt64 start, UInt64 limit)
     {
         for (UInt64 i = 0; i < limit; i++)

@@ -160,6 +160,7 @@ public:
         {
             column_caches.clear();
         }
+
     private:
         Poco::Logger * log;
     };

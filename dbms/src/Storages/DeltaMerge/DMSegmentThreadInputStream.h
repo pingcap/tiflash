@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+
 #include "Common/Stopwatch.h"
 #include "common/types.h"
 
@@ -165,8 +166,7 @@ protected:
     void readSuffixImpl() override
     {
         auto elapsed_ms = total_sw.elapsedMilliseconds();
-        LOG_FMT_DEBUG(log, "finish read {} rows from storage, read time {} ms, read segment count {}, read time per segment {} ms, get input stream time {} ms, get input stream time per segment {} ms",
-            total_rows, elapsed_ms, read_segment_count, elapsed_ms / read_segment_count, get_input_stream_ms, get_input_stream_ms / read_segment_count);
+        LOG_FMT_DEBUG(log, "finish read {} rows from storage, read time {} ms, read segment count {}, read time per segment {} ms, get input stream time {} ms, get input stream time per segment {} ms", total_rows, elapsed_ms, read_segment_count, elapsed_ms / read_segment_count, get_input_stream_ms, get_input_stream_ms / read_segment_count);
     }
 
 private:

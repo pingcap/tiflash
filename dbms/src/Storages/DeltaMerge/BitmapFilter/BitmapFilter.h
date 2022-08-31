@@ -38,6 +38,7 @@ public:
     SegmentSnapshotPtr snapshot() const;
     void runOptimize();
     RoaringBitmapFilterPtr toRoaringBitmapFilter() const;
+
 private:
     void set(const UInt32 * data, UInt32 size);
     std::vector<UInt32> toUInt32Array() const;

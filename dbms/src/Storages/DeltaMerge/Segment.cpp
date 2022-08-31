@@ -209,7 +209,8 @@ Segment::Segment(UInt64 epoch_, //
     , next_segment_id(next_segment_id_)
     , delta(delta_)
     , stable(stable_)
-    , log(&Poco::Logger::get("Segment")) {}
+    , log(&Poco::Logger::get("Segment"))
+{}
 
 SegmentPtr Segment::newSegment(DMContext & context,
                                const ColumnDefinesPtr & schema,
@@ -1812,11 +1813,11 @@ bool Segment::placeDelete(const DMContext & dm_context,
 }
 
 ArrayBitmapFilterPtr Segment::buildArrayBitmapFilter(const DMContext & dm_context,
-                                           const SegmentSnapshotPtr & segment_snap,
-                                           const RowKeyRanges & read_ranges,
-                                           const RSOperatorPtr & filter,
-                                           UInt64 max_version,
-                                           size_t expected_block_size)
+                                                     const SegmentSnapshotPtr & segment_snap,
+                                                     const RowKeyRanges & read_ranges,
+                                                     const RSOperatorPtr & filter,
+                                                     UInt64 max_version,
+                                                     size_t expected_block_size)
 {
     Stopwatch sw_total;
     static ColumnDefines columns_to_read{getExtraHandleColumnDefine(is_common_handle), getVersionColumnDefine(), getTagColumnDefine()};
@@ -1842,8 +1843,7 @@ ArrayBitmapFilterPtr Segment::buildArrayBitmapFilter(const DMContext & dm_contex
     bitmap_filter = rr_bitmap->toArrayBitmapFilter();
     auto to_arr_bitmap_ms = sw.elapsedMilliseconds();
 
-    LOG_FMT_DEBUG(log, "buildArrayBitmapFilter rows {} use {} ms, run optimize use {} ms, to rrbitmap use {} ms, to array bitmap use {} ms",
-        segment_snap->getRows(), sw_total.elapsedMilliseconds(), run_opt_ms, to_rr_bitmap_ms, to_arr_bitmap_ms);
+    LOG_FMT_DEBUG(log, "buildArrayBitmapFilter rows {} use {} ms, run optimize use {} ms, to rrbitmap use {} ms, to array bitmap use {} ms", segment_snap->getRows(), sw_total.elapsedMilliseconds(), run_opt_ms, to_rr_bitmap_ms, to_arr_bitmap_ms);
     return bitmap_filter;
 }
 

@@ -56,7 +56,8 @@ class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
     ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, std::vector<size_t> && rows_)
-        : rows(std::move(rows_)), precede_stream_rows(0)
+        : rows(std::move(rows_))
+        , precede_stream_rows(0)
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();
