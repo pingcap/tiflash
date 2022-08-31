@@ -96,7 +96,7 @@ void LogWriter::close()
     log_file->close();
 }
 
-void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter)
+void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter, bool background)
 {
     // Header size varies depending on whether we are recycling or not.
     const UInt32 header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
@@ -115,7 +115,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
         static constexpr char MAX_ZERO_HEADER[Format::RECYCLABLE_HEADER_SIZE]{'\x00'};
         if (unlikely(buffer_size - write_buffer.offset() < leftover))
         {
-            flush(write_limiter, /* background */ false);
+            flush(write_limiter, background);
         }
         writeString(MAX_ZERO_HEADER, leftover, write_buffer);
         block_offset = 0;
@@ -141,7 +141,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
         // Check available space in write_buffer before writing
         if (buffer_size - write_buffer.offset() < fragment_length + header_size)
         {
-            flush(write_limiter, /* background */ false);
+            flush(write_limiter, background);
         }
         try
         {
@@ -149,7 +149,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
         }
         catch (...)
         {
-            auto message = getCurrentExceptionMessage(false);
+            auto message = getCurrentExceptionMessage(true);
             LOG_FMT_FATAL(&Poco::Logger::get("LogWriter"), "Write physical record failed with message: {}", message);
             std::terminate();
         }
@@ -160,7 +160,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
 
     if (!manual_flush)
     {
-        flush(write_limiter, /* background */ false);
+        flush(write_limiter, background);
     }
 }
 
