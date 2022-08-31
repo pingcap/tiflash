@@ -313,12 +313,6 @@ public:
     bool hasSubquery() const { return !subqueries.empty(); }
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
 
-private:
-    /// Hold io for correcting the destruction order.
-    /// We should put it in front of all members, in order to ensure that ProcEntry in BlockIO is destructed in the last order.
-    BlockIO io;
-
-public:
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
@@ -358,6 +352,8 @@ private:
     void initOutputInfo();
 
 private:
+    /// Hold io for correcting the destruction order.
+    BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
     std::unordered_map<String, BlockInputStreams> profile_streams_map;
     /// executor_id_to_join_id_map is a map that maps executor id to all the join executor id of itself and all its children.
