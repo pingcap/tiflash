@@ -17,6 +17,8 @@
 #include <Common/nocopyable.h>
 #include <Storages/Page/PageDefines.h>
 
+#include <unordered_map>
+
 namespace DB::PS::V3
 {
 
@@ -45,8 +47,10 @@ public:
 
 private:
     mutable std::mutex mu;
+    // Only store weak_ptrs. The weak_ptrs will be invalid after the external id
+    // in PageDirectory get removed.
     using ExternalIds = std::list<std::weak_ptr<PageIdV3Internal>>;
-    using StableMap = std::map<NamespaceId, ExternalIds>;
-    mutable StableMap ids_by_ns;
+    using NamespaceMap = std::unordered_map<NamespaceId, ExternalIds>;
+    mutable NamespaceMap ids_by_ns;
 };
 } // namespace DB::PS::V3
