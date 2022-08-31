@@ -32,7 +32,7 @@ void MPPTaskTestUtils::SetUpTestCase()
     server_num = 1;
 }
 
-void MPPTaskTestUtils::TearDownTestCase() // NOLINT(readability-identifier-naming))
+void MPPTaskTestUtils::TearDown()
 {
     MockComputeServerManager::instance().reset();
 }

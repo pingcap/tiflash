@@ -72,7 +72,7 @@ class MPPTaskTestUtils : public ExecutorTest
 public:
     static void SetUpTestCase();
 
-    static void TearDownTestCase(); // NOLINT(readability-identifier-naming))
+    void TearDown() override;
 
     static void startServers();
 
