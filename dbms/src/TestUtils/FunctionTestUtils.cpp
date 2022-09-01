@@ -448,20 +448,20 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
     if (col_num <= 0)
         return "";
 
-    const size_t col_size = cols[0].column->size();
-    assert(begin <= end);
-    assert(col_size >= end);
-    assert(col_size > begin);
+    // const size_t col_size = cols[0].column->size();
+    // assert(begin <= end);
+    // assert(col_size >= end);
+    // assert(col_size > begin);
 
-    bool is_same = true;
+    // bool is_same = true;
 
-    for (size_t i = 1; i < col_num; ++i)
-    {
-        if (cols[i].column->size() != col_size)
-            is_same = false;
-    }
+    // for (size_t i = 1; i < col_num; ++i)
+    // {
+    //     if (cols[i].column->size() != col_size)
+    //         is_same = false;
+    // }
 
-    assert(is_same); /// Ensure the sizes of columns in cols are the same
+    // assert(is_same); /// Ensure the sizes of columns in cols are the same
 
     std::vector<std::pair<size_t, String>> col_content;
     FmtBuffer fmt_buf;

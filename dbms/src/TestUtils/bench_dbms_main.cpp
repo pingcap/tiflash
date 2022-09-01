@@ -19,9 +19,9 @@
 int main(int argc, char * argv[])
 {
     benchmark::Initialize(&argc, argv);
-    DB::tests::TiFlashTestEnv::setupLogger("debug");
+    DB::tests::TiFlashTestEnv::setupLogger();
     // Each time TiFlashTestEnv::getContext() is called, some log will print, it's annoying.
-    Poco::Logger::root().setLevel("debug");
+    Poco::Logger::root().setLevel("error");
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     if (::benchmark::ReportUnrecognizedArguments(argc, argv))
         return 1;

@@ -32,6 +32,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char non_del_optimization[];
+extern const char skip_check_segment_update[];
 } // namespace FailPoints
 namespace DM
 {
@@ -46,7 +47,7 @@ public:
         // dropDataOnDisk
         try
         {
-            const auto * path = "/Users/hongyunyan/Desktop/origin_tiflash/tiflash/build_release/dbms/bench_hyy/";
+            const auto * path = "/data2/hongyunyan/tiflash/build_release/dbms/bench_hyy/";
             if (Poco::File file(path); file.exists())
             {
                 file.remove(true);
@@ -88,38 +89,11 @@ public:
 
     void tiFlashStorageTestBasicReload(DB::Settings && db_settings = DB::Settings())
     {
-        String path = "/Users/hongyunyan/Desktop/origin_tiflash/tiflash/build_release/dbms/bench_hyy/";
+        String path = "/data2/hongyunyan/tiflash/build_release/dbms/bench_hyy/";
         Strings test_paths;
         test_paths.emplace_back(path);
         // test_paths.push_back(base::TiFlashStorageTestBasic::getTemporaryPath());
         db_context = std::make_unique<Context>(TiFlashTestEnv::getContext(db_settings, test_paths));
-    }
-
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
-    {
-        auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        auto [store_path, file_id] = store->preAllocateIngestFile();
-
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
-        auto dmfile = writeIntoNewDMFile(
-            context,
-            std::make_shared<ColumnDefines>(store->getTableColumns()),
-            input_stream,
-            file_id,
-            store_path,
-            flags);
-
-
-        store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
-
-        const auto & pk_column = block.getByPosition(0).column;
-        auto min_pk = pk_column->getInt(0);
-        auto max_pk = pk_column->getInt(block.rows() - 1);
-        HandleRange range(min_pk, max_pk + 1);
-
-        return {RowKeyRange::fromHandleRange(range), {file_id}};
     }
 
 protected:
@@ -199,6 +173,10 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
     auto delete_rows_num = state.range(2);
     auto file_num = state.range(3);
 
+    (void)fiu_init(0);
+    FailPointHelper::enableFailPoint(FailPoints::non_del_optimization);
+    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
+
     auto begin_value = 0;
     Block block = createBlock(block_rows, columns_num, delete_rows_num, begin_value);
     begin_value += block_rows;
@@ -230,9 +208,6 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
     Block block2 = createBlock(block_rows, columns_num, delete_rows_num, block_rows);
     store->write(*db_context, db_context->getSettingsRef(), block2);
 
-    (void)fiu_init(0);
-    FailPointHelper::enableFailPoint(FailPoints::non_del_optimization);
-
     for (auto _ : state)
     {
         BlockInputStreamPtr in = store->read(*db_context,
@@ -251,6 +226,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
         while (in->read()) {};
     }
     FailPointHelper::disableFailPoint(FailPoints::non_del_optimization);
+    FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
 }
 
 BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
@@ -260,6 +236,9 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
     auto columns_num = state.range(1);
     auto delete_rows_num = state.range(2);
     auto file_num = state.range(3);
+
+    (void)fiu_init(0);
+    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
 
     auto begin_value = 0;
     Block block = createBlock(block_rows, columns_num, delete_rows_num, begin_value);
@@ -311,6 +290,8 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
 
         while (in->read()) {};
     }
+
+    FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
 }
 
 BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)
@@ -323,25 +304,21 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)
     Block block = createBlock(block_rows, columns_num, delete_rows_num);
     ColumnDefines columns = getColumnDefinesFromBlock(block);
 
-    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
-    for (auto col : columns)
-    {
-        read_columns->emplace_back(std::move(col));
-    }
+    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>(columns);
 
     store = reload(read_columns);
-    store->write(*db_context, db_context->getSettingsRef(), block);
 
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto [store_path, file_id] = store->preAllocateIngestFile();
 
     DMFileBlockOutputStream::Flags flags;
-    flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+    flags.setSingleFile(false);
 
     auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+
     auto dmfile = writeIntoNewDMFile(
         *dm_context,
-        std::make_shared<ColumnDefines>(store->getTableColumns()),
+        std::make_shared<ColumnDefines>(columns),
         input_stream,
         file_id,
         store_path,
@@ -372,22 +349,18 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization
     Block block = createBlock(block_rows, columns_num, delete_rows_num);
     ColumnDefines columns = getColumnDefinesFromBlock(block);
 
-    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>();
-    for (auto col : columns)
-    {
-        read_columns->emplace_back(std::move(col));
-    }
+    ColumnDefinesPtr read_columns = std::make_shared<ColumnDefines>(columns);
 
     auto input_stream = std::make_shared<OneBlockInputStream>(block);
     auto [store_path, file_id] = store->preAllocateIngestFile();
 
     DMFileBlockOutputStream::Flags flags;
-    flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
+    flags.setSingleFile(false);
 
     auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
     auto dmfile = writeIntoNewDMFile(
         *dm_context,
-        std::make_shared<ColumnDefines>(store->getTableColumns()),
+        std::make_shared<ColumnDefines>(columns),
         input_stream,
         file_id,
         store_path,
@@ -408,14 +381,16 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization
     }
 }
 
-constexpr size_t num_iterations_test = 1;
+constexpr size_t num_iterations_test = 1000;
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
+// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
+// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10});
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10})->Args({5000, 20, 0, 20})->Args({5000, 15, 0, 20})->Args({5000, 10, 0, 20})->Args({5000, 8, 0, 20})->Args({5000, 5, 0, 20})->Args({5000, 20, 0, 30})->Args({5000, 15, 0, 30})->Args({5000, 10, 0, 30})->Args({5000, 8, 0, 30})->Args({5000, 5, 0, 30})->Args({5000, 20, 0, 50})->Args({5000, 15, 0, 50})->Args({5000, 10, 0, 50})->Args({5000, 8, 0, 50})->Args({5000, 5, 0, 50});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10})->Args({5000, 20, 0, 20})->Args({5000, 15, 0, 20})->Args({5000, 10, 0, 20})->Args({5000, 8, 0, 20})->Args({5000, 5, 0, 20})->Args({5000, 20, 0, 30})->Args({5000, 15, 0, 30})->Args({5000, 10, 0, 30})->Args({5000, 8, 0, 30})->Args({5000, 5, 0, 30})->Args({5000, 20, 0, 50})->Args({5000, 15, 0, 50})->Args({5000, 10, 0, 50})->Args({5000, 8, 0, 50})->Args({5000, 5, 0, 50});
 
+// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({50000, 5, 0});
+//BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({50000, 5, 0});
 
 } // namespace tests
 } // namespace DM

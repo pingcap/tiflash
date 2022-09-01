@@ -414,6 +414,7 @@ Block DMFileReader::read()
             }
             else if (do_clean_read_on_normal_mode && isExtraColumn(cd))
             {
+                //std::cout << " line 417 " << std::endl;
                 ColumnPtr column;
                 if (cd.id == EXTRA_HANDLE_COLUMN_ID)
                 {
@@ -444,7 +445,6 @@ Block DMFileReader::read()
             }
             else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_normal_mode)
             { // do_clean_read_on_normal_mode = false but do_clean_read_on_del_on_normal_mode = true
-                //std::cout << " into do_clean_read_on_del_on_normal_mode " << std::endl;
                 ColumnPtr column;
                 column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)))->convertToFullColumnIfConst();
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
@@ -453,6 +453,7 @@ Block DMFileReader::read()
             }
             else
             {
+                //std::cout << " into common read " << std::endl;
                 const auto stream_name = DMFile::getFileNameBase(cd.id);
                 if (auto iter = column_streams.find(stream_name); iter != column_streams.end())
                 {
