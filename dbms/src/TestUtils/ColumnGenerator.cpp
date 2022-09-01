@@ -27,7 +27,6 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
     auto col = type->createColumn();
     col->reserve(opts.size);
 
-    ColumnWithTypeAndName res({}, type, "", 0);
     auto type_id = type->getTypeId();
 
     switch (type_id)
@@ -74,8 +73,7 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         throw std::invalid_argument("RandomColumnGenerator invalid type");
     }
 
-    res.column = std::move(col);
-    return res;
+    return {std::move(col), type};
 }
 
 DataTypePtr ColumnGenerator::createDecimalType()
