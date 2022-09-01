@@ -98,6 +98,15 @@ public:
         case EncryptionMethod::Aes256Ctr:
             cipher = EVP_aes_256_ctr();
             break;
+        case EncryptionMethod::SM4Ctr:
+#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+            throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
+                                       Errors::Encryption::Internal);
+#else
+            // Openssl support SM4 after 1.1.1 release version.
+            cipher = EVP_sm4_ctr();
+            break;
+#endif
         default:
             DBMS_ASSERT(false);
         }
@@ -191,7 +200,12 @@ TEST_P(EncryptionTest, EncryptionTest)
     EXPECT_TRUE(testEncryption(16, 16 * 2, test::IV_OVERFLOW_FULL));
 }
 
-INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
+#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+    INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
+#else
+    // Openssl support SM4 after 1.1.1 release version.
+    INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr, EncryptionMethod::SM4Ctr)));
+#endif
 
 
 TEST(PosixWritableFileTest, test)
@@ -467,9 +481,9 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_file");
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path, true, -1, 0600, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::SM4Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
-    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::SM4Ctr, key_str, iv_str);
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
     BlockAccessCipherStreamPtr cipher_stream
         = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
