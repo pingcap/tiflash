@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/HashTable/HashMap.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Common/HashTable/HashMap.h>
 
 namespace DB
 {
@@ -84,21 +84,21 @@ public:
 
     /// Different types of keys for maps.
 #define APPLY_FOR_HASH_ORDER_VARIANTS(M) \
-    M(key8)                        \
-    M(key16)                       \
-    M(key32)                       \
-    M(key64)                       \
-    M(key_string)                  \
-    M(key_fixed_string)            \
-    M(keys128)                     \
-    M(keys256)                     \
+    M(key8)                              \
+    M(key16)                             \
+    M(key32)                             \
+    M(key64)                             \
+    M(key_string)                        \
+    M(key_fixed_string)                  \
+    M(keys128)                           \
+    M(keys256)                           \
     M(serialized)
 
     enum class Type
     {
         EMPTY,
 #define M(NAME) NAME,
-    APPLY_FOR_HASH_ORDER_VARIANTS(M)
+        APPLY_FOR_HASH_ORDER_VARIANTS(M)
 #undef M
     };
 

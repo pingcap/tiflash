@@ -14,9 +14,9 @@
 
 #include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/HashOrderBlockInputStream.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
-#include <DataStreams/HashOrderBlockInputStream.h>
 #include <DataStreams/SharedQueryBlockInputStream.h>
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>

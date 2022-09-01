@@ -12,20 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/FmtUtils.h>
-#include <DataStreams/HashOrderBlockInputStream.h>
-#include <Interpreters/sortBlock.h>
-#include <Columns/ColumnNullable.h>
-#include <Common/ColumnsHashing.h>
-#include <Common/typeid_cast.h>
-#include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
+#include <Common/ColumnsHashing.h>
+#include <Common/FmtUtils.h>
+#include <Common/typeid_cast.h>
+#include <DataStreams/HashOrderBlockInputStream.h>
+#include <Interpreters/sortBlock.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
 extern const int UNKNOWN_SET_DATA_VARIANT;
@@ -54,8 +53,8 @@ void HashOrderBlockInputStream::initMapImpl(Type type)
     case Type::EMPTY:
         break;
 
-#define M(TYPE)                                                                                      \
-    case Type::TYPE:                                                                           \
+#define M(TYPE)                                                                     \
+    case Type::TYPE:                                                                \
         maps.TYPE = std::make_unique<typename decltype(maps.TYPE)::element_type>(); \
         break;
         APPLY_FOR_HASH_ORDER_VARIANTS(M)
@@ -216,7 +215,8 @@ Block HashOrderBlockInputStream::readImpl()
         {
             blocks.push_back(block);
 
-            if (!inited) {
+            if (!inited)
+            {
                 type = chooseMethod(getKeyColumns(description, block), key_sizes);
                 initMapImpl(type);
                 inited = true;
@@ -228,10 +228,10 @@ Block HashOrderBlockInputStream::readImpl()
             {
             case Type::EMPTY:
                 break;
-#define M(TYPE)                                                                                                                                \
-                case Type::TYPE: \
-    insert(*maps.TYPE, rows, typename KeyGetterForType<Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type(getKeyColumns(description, block), key_sizes, collators), &block); \
-    break;
+#define M(TYPE)                                                                                                                                                                                \
+    case Type::TYPE:                                                                                                                                                                           \
+        insert(*maps.TYPE, rows, typename KeyGetterForType<Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type(getKeyColumns(description, block), key_sizes, collators), &block); \
+        break;
                 APPLY_FOR_HASH_ORDER_VARIANTS(M)
 #undef M
 
@@ -239,13 +239,9 @@ Block HashOrderBlockInputStream::readImpl()
                 throw Exception("");
             }
         }
-
-
     }
 
     assert(description.size() >= 1);
-
-
 
 
     // HashTable.pop();
