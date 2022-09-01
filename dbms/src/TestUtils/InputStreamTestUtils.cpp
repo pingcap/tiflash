@@ -441,7 +441,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
             expect_col.column = std::move(column_data);
 
             const auto & actual_col = read_block.getByName(col_name);
-            if (auto res = DB::tests::columnEqual(expect_col, actual_col); !res)
+            if (auto res = columnEqual(expect_col, actual_col); !res)
             {
                 auto expect_expr = fmt::format("expect block: {}", getColumnsContent(expect_block.getColumnsWithTypeAndName(), start_offset, start_offset + read_block.rows()));
                 Block actual_block_to_cmp;
