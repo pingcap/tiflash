@@ -17,7 +17,6 @@
 
 => DBGInvoke __drop_tidb_table(default, test)
 => drop table if exists default.test
-=> drop table if exists default.test1
 => drop table if exists default.test_9997
 => drop table if exists default.test_9998
 => drop table if exists default.test_9999
@@ -92,7 +91,7 @@
 │            0 │
 └──────────────┘
 
-=> DBGInvoke __drop_tidb_table(default, test1)
+=> DBGInvoke __drop_tidb_table(default, test)
 => DBGInvoke __refresh_schemas()
 => DBGInvoke is_tombstone(default, test_9999)
 ┌─is_tombstone(default, test_9999)─┐
@@ -100,7 +99,6 @@
 └──────────────────────────────────┘
 
 => drop table if exists default.test
-=> drop table if exists default.test1
 => drop table if exists default.test_9997
 => drop table if exists default.test_9998
 => drop table if exists default.test_9999
