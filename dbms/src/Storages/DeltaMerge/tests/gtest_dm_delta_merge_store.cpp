@@ -264,7 +264,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
             createColumns({
@@ -278,7 +278,7 @@ try
         // test readRaw
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
             createColumns({
@@ -442,7 +442,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
             createColumns({
@@ -491,7 +491,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -518,7 +518,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -593,7 +593,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -668,7 +668,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -689,7 +689,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -734,7 +734,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -764,7 +764,7 @@ try
                                              /* keep_order= */ false,
                                              /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -923,7 +923,7 @@ try
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -949,7 +949,7 @@ try
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -1072,7 +1072,7 @@ try
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -1098,7 +1098,7 @@ try
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -1176,7 +1176,7 @@ try
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -1286,7 +1286,7 @@ try
             BlockInputStreamPtr in = ins[0];
 
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({
@@ -1381,7 +1381,7 @@ try
             ASSERT_EQ(col.column_id, col_id_ddl);
             ASSERT_TRUE(col.type->equals(*col_type_after_ddl));
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_ddl}),
             createColumns({
@@ -1466,7 +1466,7 @@ try
             const Block head = in->getHeader();
             ASSERT_FALSE(head.has(col_name_to_drop));
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -1554,7 +1554,7 @@ try
                 ASSERT_TRUE(col.type->equals(*col_type_to_add));
             }
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_c1, col_name_to_add}),
             createColumns({
@@ -1621,7 +1621,7 @@ try
                               /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1687,7 +1687,7 @@ try
                               /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1752,7 +1752,7 @@ try
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1817,7 +1817,7 @@ try
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1883,7 +1883,7 @@ try
                               /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1951,7 +1951,7 @@ try
             num_rows_write,
             MyDateTime(1999, 9, 9, 12, 34, 56, 0).toPackedUInt());
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2016,7 +2016,7 @@ try
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2109,7 +2109,7 @@ try
             ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
         }
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_after_ddl}),
             createColumns({
@@ -2225,7 +2225,7 @@ try
             // check old col name is not exist
             ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({col_name_after_ddl}),
             createColumns({
@@ -2273,7 +2273,7 @@ try
                 // check old col name is not exist
                 ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
             }
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({col_name_after_ddl}),
                 createColumns({
@@ -2347,7 +2347,7 @@ try
                               /* keep_order= */ false,
                               /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2391,7 +2391,7 @@ try
                               /* expected_block_size= */ 1024)[0];
 
         // FIXME!!!
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2508,7 +2508,7 @@ try
             std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
             createColumns({
@@ -2529,7 +2529,7 @@ try
             std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
             createColumns({
@@ -2610,7 +2610,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2682,7 +2682,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2711,7 +2711,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 2 * num_write_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2767,7 +2767,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2804,7 +2804,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), num_rows_write - num_deleted_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2868,7 +2868,7 @@ try
 
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({
