@@ -984,5 +984,57 @@ CreatingSets
 }
 CATCH
 
+TEST_F(PlannerInterpreterExecuteTest, ListBase)
+try
+{
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .filter(eq(col("s2"), lit(Field("1", 1))))
+                           .limit(10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Expression: <final projection>
+ Limit, limit = 10
+  Filter
+   Expression: <expr after aggregation>
+    Aggregating
+     Concat
+      Expression: <before aggregation>
+       Filter
+        MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .filter(eq(col("s2"), lit(Field("1", 1))))
+                           .topN("s2", false, 10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Union: <for test>
+ Expression x 20: <final projection>
+  SharedQuery: <restore concurrency>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 20: limit = 10
+      Expression: <before TopN>
+       Filter
+        Expression: <expr after aggregation>
+         SharedQuery: <restore concurrency>
+          ParallelAggregating, max_threads: 20, final: true
+           Expression x 20: <before aggregation>
+            Filter
+             MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
