@@ -14,27 +14,26 @@
 
 #pragma once
 
-#include <Common/FmtUtils.h>
-#include <Flash/Statistics/traverseExecutors.h>
-#include <Interpreters/Context.h>
-#include <TestUtils/TiFlashTestException.h>
+#include <Common/ThreadFactory.h>
 namespace DB
 {
-namespace tests
-{
-class ExecutorSerializer
+class CollectProcInfoBackgroundTask
 {
 public:
-    String serialize(const tipb::DAGRequest * dag_request);
+    CollectProcInfoBackgroundTask() = default;
+    ~CollectProcInfoBackgroundTask()
+    {
+        end();
+    }
+    void begin();
+
+    void end();
 
 private:
-    void serializeListStruct(const tipb::DAGRequest * dag_request);
-    void serializeTreeStruct(const tipb::Executor & root_executor, size_t level);
-    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
+    void memCheckJob();
 
-private:
-    FmtBuffer buf;
+    std::mutex mu;
+    bool is_already_begin = false;
+    std::atomic<bool> end_syn{false}, end_fin{false};
 };
-} // namespace tests
-
 } // namespace DB
