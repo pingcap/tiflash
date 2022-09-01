@@ -18,6 +18,7 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
@@ -61,8 +62,7 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     config.gc_min_bytes = settings.dt_storage_pool_##NAME##_gc_min_bytes;           \
     config.gc_min_legacy_num = settings.dt_storage_pool_##NAME##_gc_min_legacy_num; \
     config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate; \
-    config.blob_heavy_gc_valid_rate = settings.dt_storage_blob_heavy_gc_valid_rate; \
-    config.blob_block_alignment_bytes = settings.dt_storage_blob_block_alignment_bytes;
+    config.blob_heavy_gc_valid_rate = settings.dt_page_gc_threshold;
 
     PageStorage::Config config = getConfigFromSettings(settings);
 
@@ -126,6 +126,11 @@ void GlobalStoragePool::restore()
             return this->gc(global_context.getSettingsRef());
         },
         false);
+}
+
+FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
+{
+    return log_storage->getFileUsageStatistics();
 }
 
 bool GlobalStoragePool::gc()
@@ -539,10 +544,6 @@ void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks
         break;
     }
     case PageStorageRunMode::ONLY_V3:
-    {
-        data_storage_v3->registerExternalPagesCallbacks(callbacks);
-        break;
-    }
     case PageStorageRunMode::MIX_MODE:
     {
         // We have transformed all pages from V2 to V3 in `restore`, so
@@ -565,13 +566,10 @@ void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
         break;
     }
     case PageStorageRunMode::ONLY_V3:
-    {
-        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
-        break;
-    }
     case PageStorageRunMode::MIX_MODE:
     {
-        // no need unregister callback in V2.
+        // We have transformed all pages from V2 to V3 in `restore`, so
+        // only need to unregister callbacks for V3.
         data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
         break;
     }

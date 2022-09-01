@@ -33,6 +33,8 @@
 #include <kvproto/tikvpb.grpc.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Flash/Mpp/TrackedMppDataPacket.h>
+
 #include <boost/noncopyable.hpp>
 #include <chrono>
 #include <condition_variable>
@@ -61,8 +63,8 @@ enum class TunnelSenderMode
 class TunnelSender : private boost::noncopyable
 {
 public:
-    using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
+    using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
+    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<TrackedMppDataPacketPtr>>;
     virtual ~TunnelSender() = default;
     TunnelSender(TunnelSenderMode mode_, DataPacketMPMCQueuePtr send_queue_, PacketWriter * writer_, const LoggerPtr log_, const String & tunnel_id_)
         : mode(mode_)
@@ -150,10 +152,24 @@ class AsyncTunnelSender : public TunnelSender
 {
 public:
     using Base = TunnelSender;
-    using Base::Base;
+    AsyncTunnelSender(
+        TunnelSenderMode mode_,
+        DataPacketMPMCQueuePtr send_queue_,
+        PacketWriter * writer_,
+        const LoggerPtr log_,
+        const String & tunnel_id_,
+        std::shared_ptr<std::mutex> mu_)
+        : Base(mode_, send_queue_, writer_, log_, tunnel_id_)
+        , mu(mu_)
+    {}
     void tryFlushOne();
-    void sendOne();
+    /// use_lock should be true if it's invoked from async GRPC thread
+    void sendOne(bool use_lock = false);
     bool isSendQueueNextPopNonBlocking() { return send_queue->isNextPopNonBlocking(); }
+    void consumerFinishWithLock(const String & err_msg);
+
+private:
+    std::shared_ptr<std::mutex> mu;
 };
 
 /// LocalTunnelSender just provide readForLocal method to return one element one time
@@ -163,7 +179,7 @@ class LocalTunnelSender : public TunnelSender
 public:
     using Base = TunnelSender;
     using Base::Base;
-    MPPDataPacketPtr readForLocal();
+    TrackedMppDataPacketPtr readForLocal();
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -188,7 +204,7 @@ using LocalTunnelSenderPtr = std::shared_ptr<LocalTunnelSender>;
  * To be short: before connect, only close can finish a MPPTunnel; after connect, only Sender Finish can.
  *
  * Each MPPTunnel has a Sender to consume data. There're three kinds of senders: sync_remote, local and async_remote.
- * 
+ *
  * The protocol between MPPTunnel and Sender:
  * - All data will be pushed into the `send_queue`, including errors.
  * - MPPTunnel may finish `send_queue` to notify Sender normally finish.
@@ -245,6 +261,8 @@ public:
 
     const LoggerPtr & getLogger() const { return log; }
 
+    void updateMemTracker();
+
     TunnelSenderPtr getTunnelSender() { return tunnel_sender; }
     SyncTunnelSenderPtr getSyncTunnelSender() { return sync_tunnel_sender; }
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
@@ -268,7 +286,7 @@ private:
 
     void waitForSenderFinish(bool allow_throw);
 
-    std::mutex mu;
+    std::shared_ptr<std::mutex> mu;
     std::condition_variable cv_for_status_changed;
 
     TunnelStatus status;
@@ -278,11 +296,12 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
-    using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
-    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<MPPDataPacketPtr>>;
+    using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
+    using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<TrackedMppDataPacketPtr>>;
     DataPacketMPMCQueuePtr send_queue;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
+    MemoryTracker * mem_tracker;
     TunnelSenderMode mode; // Tunnel transfer data mode
     TunnelSenderPtr tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience
     // According to mode value, among the sync/async/local_tunnel_senders, only the responding sender is not null and do actual work

@@ -70,6 +70,7 @@ class ReadIndexWorkerManager;
 using BatchReadIndexRes = std::vector<std::pair<kvrpcpb::ReadIndexResponse, uint64_t>>;
 class ReadIndexStressTest;
 struct FileUsageStatistics;
+class PathPool;
 class RegionPersister;
 
 /// TODO: brief design document.
@@ -77,7 +78,7 @@ class KVStore final : private boost::noncopyable
 {
 public:
     KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_method_);
-    void restore(const TiFlashRaftProxyHelper *);
+    void restore(PathPool & path_pool, const TiFlashRaftProxyHelper *);
 
     RegionPtr getRegion(RegionID region_id) const;
 
@@ -109,7 +110,7 @@ public:
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
-    bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt);
+    bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
 
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
@@ -162,7 +163,9 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
@@ -225,13 +228,15 @@ private:
     /// Notice that if flush_if_possible is set to false, we only check if a flush is allowed by rowsize/size/interval.
     /// It will not check if a flush will eventually succeed.
     /// In other words, `canFlushRegionDataImpl(flush_if_possible=true)` can return false.
-    bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock);
+    bool canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term);
 
     void persistRegion(const Region & region, const RegionTaskLock & region_task_lock, const char * caller);
     void releaseReadIndexWorkers();
     void handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTaskLock &);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     RegionManager region_manager;
 
     std::unique_ptr<RegionPersister> region_persister;
@@ -275,7 +280,7 @@ class KVStoreTaskLock : private boost::noncopyable
     std::lock_guard<std::mutex> lock;
 };
 
-void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t & terminate_signals_counter);
-void WaitCheckRegionReady(const TMTContext &, const std::atomic_size_t &, double, double, double);
+void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
+void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t &, double, double, double);
 
 } // namespace DB

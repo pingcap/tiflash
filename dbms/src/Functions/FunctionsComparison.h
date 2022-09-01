@@ -33,7 +33,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Functions/CollationOperatorOptimized.h>
+#include <Functions/CollationStringComparision.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsLogical.h>
 #include <Functions/IFunction.h>
@@ -302,7 +302,7 @@ struct StringComparisonWithCollatorImpl
         const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<ResultType> & c)
     {
-        bool optimized_path = StringVectorStringVector<Op>(a_data, a_offsets, b_data, b_offsets, collator, c);
+        bool optimized_path = CompareStringVectorStringVector<Op>(a_data, a_offsets, b_data, b_offsets, collator, c);
         if (optimized_path)
         {
             return;
@@ -328,7 +328,7 @@ struct StringComparisonWithCollatorImpl
         const TiDB::TiDBCollatorPtr & collator,
         PaddedPODArray<ResultType> & c)
     {
-        bool optimized_path = StringVectorConstant<Op>(a_data, a_offsets, b, collator, c);
+        bool optimized_path = CompareStringVectorConstant<Op>(a_data, a_offsets, b, collator, c);
 
         if (optimized_path)
         {
@@ -558,7 +558,8 @@ struct NameStrcmp
 template <
     template <typename, typename>
     class Op,
-    typename Name>
+    typename Name,
+    typename StrCmpRetColType = ColumnUInt8>
 class FunctionComparison : public IFunction
 {
 public:
@@ -803,7 +804,6 @@ private:
 
     friend class FunctionStrcmp;
 
-    template <typename ReturnColumnType = ColumnUInt8>
     bool executeString(Block & block, size_t result, const IColumn * c0, const IColumn * c1) const
     {
         const auto * c0_string = checkAndGetColumn<ColumnString>(c0);
@@ -815,9 +815,9 @@ private:
             return false;
 
         if (collator != nullptr)
-            return executeStringWithCollator<ReturnColumnType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
+            return executeStringWithCollator<StrCmpRetColType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
         else
-            return executeStringWithoutCollator<ReturnColumnType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
+            return executeStringWithoutCollator<StrCmpRetColType>(block, result, c0, c1, c0_string, c1_string, c0_const, c1_const);
     }
 
     void executeDateOrDateTimeOrEnumWithConstString(
@@ -1299,7 +1299,8 @@ public:
     }
 };
 
-class FunctionStrcmp : public FunctionComparison<CmpOp, NameStrcmp>
+using StrcmpReturnColumnType = ColumnInt8;
+class FunctionStrcmp : public FunctionComparison<CmpOp, NameStrcmp, StrcmpReturnColumnType>
 {
 public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrcmp>(); };
@@ -1309,7 +1310,7 @@ public:
         const IColumn * col_left_untyped = block.getByPosition(arguments[0]).column.get();
         const IColumn * col_right_untyped = block.getByPosition(arguments[1]).column.get();
 
-        bool success = executeString<ColumnInt8>(block, result, col_left_untyped, col_right_untyped);
+        bool success = executeString(block, result, col_left_untyped, col_right_untyped);
         if (!success)
         {
             throw Exception(

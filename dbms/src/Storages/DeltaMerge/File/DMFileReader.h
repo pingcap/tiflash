@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
 
@@ -75,8 +76,9 @@ public:
         // 1. There is no delta.
         // 2. You don't need pk, version and delete_tag columns
         // If you have no idea what it means, then simply set it to false.
-        bool enable_clean_read_,
-        bool is_fast_mode_,
+        bool enable_handle_clean_read_,
+        bool enable_del_clean_read_,
+        bool is_fast_scan_,
         // The the MVCC filter version. Used by clean read check.
         UInt64 max_read_version_,
         // filters
@@ -91,7 +93,8 @@ public:
         const ReadLimiterPtr & read_limiter,
         size_t rows_threshold_per_read_,
         bool read_one_pack_every_time_,
-        const String & tracing_id_);
+        const String & tracing_id_,
+        bool enable_col_sharing_cache);
 
     Block getHeader() const { return toEmptyBlock(read_columns); }
 
@@ -99,6 +102,15 @@ public:
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
     Block read();
+    UInt64 fileId() const
+    {
+        return dmfile->fileId();
+    }
+    std::string path() const
+    {
+        return dmfile->path();
+    }
+    void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
 
 private:
     bool shouldSeek(size_t pack_id);
@@ -109,6 +121,14 @@ private:
                       size_t read_rows,
                       size_t skip_packs,
                       bool force_seek);
+    void readColumn(ColumnDefine & column_define,
+                    ColumnPtr & column,
+                    size_t start_pack_id,
+                    size_t pack_count,
+                    size_t read_rows,
+                    size_t skip_packs,
+                    bool force_seek);
+    bool getCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, size_t read_rows, ColumnPtr & col);
 
 private:
     DMFilePtr dmfile;
@@ -123,10 +143,13 @@ private:
     const bool single_file_mode;
 
     /// Clean read optimize
-    // In normal mode, if there is no delta for some packs in stable, we can try to do clean read.
-    // In fast mode, we always try to do clean read.
-    const bool enable_clean_read;
-    const bool is_fast_mode;
+    // In normal mode, if there is no delta for some packs in stable, we can try to do clean read (enable_handle_clean_read is true).
+    // In fast mode, if we don't need handle column, we will try to do clean read on handle_column(enable_handle_clean_read is true).
+    //               if we don't need del column, we will try to do clean read on del_column(enable_del_clean_read is true).
+    const bool enable_handle_clean_read;
+    const bool enable_del_clean_read;
+    const bool is_fast_scan;
+
     const UInt64 max_read_version;
 
     /// Filters
@@ -146,6 +169,9 @@ private:
     FileProviderPtr file_provider;
 
     LoggerPtr log;
+
+    std::unique_ptr<ColumnSharingCacheMap> col_data_cache;
+    std::unordered_map<ColId, bool> last_read_from_cache;
 };
 
 } // namespace DM

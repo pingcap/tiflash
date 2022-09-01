@@ -36,6 +36,10 @@ namespace DB
 class IServer;
 class CallExecPool;
 class EstablishCallData;
+
+using MockStorage = tests::MockStorage;
+using MockMPPServerInfo = tests::MockMPPServerInfo;
+
 namespace Management
 {
 class ManualCompactManager;
@@ -46,7 +50,7 @@ class FlashService : public tikvpb::Tikv::Service
     , private boost::noncopyable
 {
 public:
-    explicit FlashService(IServer & server_);
+    FlashService(const TiFlashSecurityConfig & security_config_, Context & context_);
 
     ~FlashService() override;
 
@@ -80,17 +84,25 @@ public:
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
+    void setMockStorage(MockStorage & mock_storage_);
+    void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
+
 protected:
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
-    IServer & server;
     const TiFlashSecurityConfig & security_config;
+    Context & context;
     Poco::Logger * log;
     bool is_async = false;
     bool enable_local_tunnel = false;
     bool enable_async_grpc_client = false;
 
     std::unique_ptr<Management::ManualCompactManager> manual_compact_manager;
+
+
+    /// for mpp unit test.
+    MockStorage mock_storage;
+    MockMPPServerInfo mpp_test_info{};
 
     // Put thread pool member(s) at the end so that ensure it will be destroyed firstly.
     std::unique_ptr<ThreadPool> cop_pool, batch_cop_pool;
@@ -103,8 +115,8 @@ public:
     // 48 is EstablishMPPConnection API ID of GRPC
     // note: if the kvrpc protocal is updated, please keep consistent with the generated code.
     static constexpr int EstablishMPPConnectionApiID = 48;
-    explicit AsyncFlashService(IServer & server)
-        : FlashService(server)
+    AsyncFlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
+        : FlashService(security_config_, context_)
     {
         is_async = true;
         ::grpc::Service::MarkMethodAsync(EstablishMPPConnectionApiID);

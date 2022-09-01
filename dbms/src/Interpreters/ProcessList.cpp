@@ -162,6 +162,7 @@ ProcessList::EntryPtr ProcessList::insert(
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
             total_memory_tracker.setOrRaiseLimit(settings.max_memory_usage_for_all_queries);
+            total_memory_tracker.setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
             total_memory_tracker.setDescription("(total)");
             user_process_list.user_memory_tracker.setNext(&total_memory_tracker);
         }

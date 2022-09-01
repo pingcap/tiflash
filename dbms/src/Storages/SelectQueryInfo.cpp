@@ -29,6 +29,8 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     , mvcc_query_info(rhs.mvcc_query_info != nullptr ? std::make_unique<MvccQueryInfo>(*rhs.mvcc_query_info) : nullptr)
     , dag_query(rhs.dag_query != nullptr ? std::make_unique<DAGQueryInfo>(*rhs.dag_query) : nullptr)
     , req_id(rhs.req_id)
+    , keep_order(rhs.keep_order)
+    , is_fast_scan(rhs.is_fast_scan)
 {}
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
@@ -37,6 +39,8 @@ SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     , mvcc_query_info(std::move(rhs.mvcc_query_info))
     , dag_query(std::move(rhs.dag_query))
     , req_id(std::move(rhs.req_id))
+    , keep_order(rhs.keep_order)
+    , is_fast_scan(rhs.is_fast_scan)
 {}
 
 } // namespace DB

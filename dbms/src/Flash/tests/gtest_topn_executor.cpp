@@ -44,7 +44,7 @@ public:
                              {toNullableVec<Int32>(col_name[0], col_age),
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
-                              toNullableVec<Int32>(col_name[3], c0l_salary)});
+                              toNullableVec<Int32>(col_name[3], col_salary)});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
@@ -72,12 +72,13 @@ public:
     ColumnWithInt32 col_age{{}, 27, 32, 36, {}, 34};
     ColumnWithString col_gender{"female", "female", "male", "female", "male", "male"};
     ColumnWithString col_country{"korea", "usa", "usa", "china", "china", "china"};
-    ColumnWithInt32 c0l_salary{1300, 0, {}, 900, {}, -300};
+    ColumnWithInt32 col_salary{1300, 0, {}, 900, {}, -300};
 };
 
 TEST_F(ExecutorTopNTestRunner, TopN)
 try
 {
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     std::shared_ptr<tipb::DAGRequest> request;
     std::vector<ColumnsWithTypeAndName> expect_cols;
 
@@ -142,6 +143,7 @@ try
             ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[i]);
         }
     }
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
@@ -159,6 +161,7 @@ try
     ASTPtr col3_ast = col(col_name[3]);
     ASTPtr func_ast;
 
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     {
         /// "and" function
         expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, {}, 32, 27, 36, 34}),
@@ -214,6 +217,7 @@ try
     }
 
     /// TODO more functions...
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 

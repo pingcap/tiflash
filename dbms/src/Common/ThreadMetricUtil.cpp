@@ -12,22 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
 #include <common/types.h>
 
-std::atomic<UInt64> last_max_thds_metric_reset_ts{0};
-const UInt64 max_thds_metric_reset_interval = 60; //60s
+using Clock = std::chrono::steady_clock;
+using TimePoint = Clock::time_point;
+std::atomic<TimePoint> last_max_thds_metric_reset_ts{};
+const std::chrono::seconds max_thds_metric_reset_interval{60}; // 60s
 
 namespace DB
 {
 bool tryToResetMaxThreadsMetrics()
 {
-    UInt64 now_ts = StopWatchDetail::seconds(CLOCK_MONOTONIC);
-    if (now_ts > last_max_thds_metric_reset_ts + max_thds_metric_reset_interval)
+    auto last_max_thds_metric_reset_ts_tmp = last_max_thds_metric_reset_ts.load(std::memory_order_relaxed);
+    auto now = std::max(Clock::now(), last_max_thds_metric_reset_ts_tmp);
+    if (now > last_max_thds_metric_reset_ts_tmp + max_thds_metric_reset_interval)
     {
-        last_max_thds_metric_reset_ts = now_ts;
+        last_max_thds_metric_reset_ts.store(now, std::memory_order_relaxed);
         GET_METRIC(tiflash_thread_count, type_max_threads_of_dispatch_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_dispatch_mpp).Value());
         GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value());
         GET_METRIC(tiflash_thread_count, type_max_threads_of_raw).Set(GET_METRIC(tiflash_thread_count, type_total_threads_of_raw).Value());

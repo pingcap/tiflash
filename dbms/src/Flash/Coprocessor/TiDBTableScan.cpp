@@ -24,6 +24,10 @@ TiDBTableScan::TiDBTableScan(
     , executor_id(executor_id_)
     , is_partition_table_scan(table_scan->tp() == tipb::TypePartitionTableScan)
     , columns(is_partition_table_scan ? table_scan->partition_table_scan().columns() : table_scan->tbl_scan().columns())
+    // Only No-partition table need keep order when tablescan executor required keep order.
+    // If keep_order is not set, keep order for safety.
+    , keep_order(!is_partition_table_scan && (table_scan->tbl_scan().keep_order() || !table_scan->tbl_scan().has_keep_order()))
+    , is_fast_scan(table_scan->tbl_scan().is_fast_scan())
 {
     if (is_partition_table_scan)
     {
@@ -70,6 +74,7 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
         tipb_table_scan->set_next_read_engine(tipb::EngineType::Local);
         for (auto id : partition_table_scan.primary_prefix_column_ids())
             tipb_table_scan->add_primary_prefix_column_ids(id);
+        tipb_table_scan->set_is_fast_scan(partition_table_scan.is_fast_scan());
     }
     else
     {

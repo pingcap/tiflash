@@ -17,12 +17,14 @@
 #include <Common/Volnitsky.h>
 #include <Common/config.h>
 #include <DataTypes/DataTypeFixedString.h>
+#include <Functions/CollationStringSearch.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
 
@@ -504,14 +506,14 @@ struct MatchImpl
         /// fully supported.(Only case sensitive/insensitive is supported)
         if (like && collator != nullptr)
         {
-            auto matcher = collator->pattern();
-            matcher->compile(orig_pattern, escape_char);
-            size_t size = offsets.size();
-            size_t prev_offset = 0;
-            for (size_t i = 0; i < size; ++i)
+            bool use_optimized_path = StringPatternMatch<revert>(data, offsets, orig_pattern, escape_char, collator, res);
+            if (!use_optimized_path)
             {
-                res[i] = revert ^ matcher->match(reinterpret_cast<const char *>(&data[prev_offset]), offsets[i] - prev_offset - 1);
-                prev_offset = offsets[i];
+                auto matcher = collator->pattern();
+                matcher->compile(orig_pattern, escape_char);
+                LoopOneColumn(data, offsets, offsets.size(), [&](const std::string_view & view, size_t i) {
+                    res[i] = revert ^ matcher->match(view.data(), view.size());
+                });
             }
             return;
         }
@@ -1930,18 +1932,18 @@ private:
         const String & match_type,
         ColumnWithTypeAndName & column_result) const
     {
-        const ColumnConst * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
-        const ColumnConst * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
-        String needle = c1_const->getValue<String>();
-        String replacement = c2_const->getValue<String>();
+        const auto * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
+        const auto * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
+        auto needle = c1_const->getValue<String>();
+        auto replacement = c2_const->getValue<String>();
 
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
             Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
             column_result.column = std::move(col_res);
         }
-        else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
         {
             auto col_res = ColumnString::create();
             Impl::vectorFixed(col->getChars(), col->getN(), needle, replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
@@ -1964,17 +1966,17 @@ private:
     {
         if constexpr (Impl::support_non_const_needle)
         {
-            const ColumnString * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
-            const ColumnConst * col_replacement_const = typeid_cast<const ColumnConst *>(column_replacement.get());
-            String replacement = col_replacement_const->getValue<String>();
+            const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
+            const auto * col_replacement_const = typeid_cast<const ColumnConst *>(column_replacement.get());
+            auto replacement = col_replacement_const->getValue<String>();
 
-            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstNeedle(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
-            else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+            else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorFixedNonConstNeedle(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
@@ -2002,17 +2004,17 @@ private:
     {
         if constexpr (Impl::support_non_const_replacement)
         {
-            const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(column_needle.get());
-            String needle = col_needle_const->getValue<String>();
-            const ColumnString * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
+            const auto * col_needle_const = typeid_cast<const ColumnConst *>(column_needle.get());
+            auto needle = col_needle_const->getValue<String>();
+            const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
 
-            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstReplacement(col->getChars(), col->getOffsets(), needle, col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
-            else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+            else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorFixedNonConstReplacement(col->getChars(), col->getN(), needle, col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
@@ -2040,16 +2042,16 @@ private:
     {
         if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
         {
-            const ColumnString * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
-            const ColumnString * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
+            const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
+            const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
 
-            if (const ColumnString * col = checkAndGetColumn<ColumnString>(column_src.get()))
+            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorNonConstNeedleReplacement(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
                 column_result.column = std::move(col_res);
             }
-            else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
+            else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
             {
                 auto col_res = ColumnString::create();
                 Impl::vectorFixedNonConstNeedleReplacement(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
@@ -2065,7 +2067,8 @@ private:
             throw Exception("Argument at index 2 and 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
         }
     }
-    TiDB::TiDBCollatorPtr collator;
+
+    TiDB::TiDBCollatorPtr collator{};
 };
 
 struct NamePosition

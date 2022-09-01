@@ -16,6 +16,7 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockServerInfo.h>
 #include <Debug/MockTiDB.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
@@ -27,6 +28,7 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
 #include <optional>
@@ -49,7 +51,17 @@ extern String LOCAL_HOST;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
 
-std::pair<String, String> splitQualifiedName(const String & s);
+// We use qualified format like "db_name.table_name.column_name"
+// to identify one column of a table.
+// We can split the qualified format into the ColumnName struct.
+struct ColumnName
+{
+    String db_name;
+    String table_name;
+    String column_name;
+};
+
+ColumnName splitQualifiedName(const String & s);
 
 struct MPPCtx
 {
@@ -113,7 +125,7 @@ struct Executor
     {
         index_++;
     }
-    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+    virtual bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
         = 0;
     virtual void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map)
     {
@@ -133,7 +145,7 @@ struct ExchangeSender : Executor
         , partition_keys(partition_keys_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 
 struct ExchangeReceiver : Executor
@@ -146,7 +158,7 @@ struct ExchangeReceiver : Executor
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
 };
 
 struct TableScan : public Executor
@@ -158,17 +170,17 @@ struct TableScan : public Executor
         , table_info(table_info_)
     {}
     void columnPrune(std::unordered_set<String> & used_columns) override;
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &) override;
     void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> &) override
     {}
 
     void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
     {
-        auto column_name = splitQualifiedName(dag_column_info.first).second;
-        if (column_name == MutableSupport::tidb_pk_column_name)
+        auto names = splitQualifiedName(dag_column_info.first);
+        if (names.column_name == MutableSupport::tidb_pk_column_name)
             ci->set_column_id(-1);
         else
-            ci->set_column_id(table_info.getColumnID(column_name));
+            ci->set_column_id(table_info.getColumnID(names.column_name));
         ci->set_tp(dag_column_info.second.tp);
         ci->set_flag(dag_column_info.second.flag);
         ci->set_columnlen(dag_column_info.second.flen);
@@ -190,7 +202,7 @@ struct Selection : public Executor
         : Executor(index_, "selection_" + std::to_string(index_), output_schema_)
         , conditions(std::move(conditions_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -203,7 +215,7 @@ struct TopN : public Executor
         , order_columns(std::move(order_columns_))
         , limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -214,7 +226,7 @@ struct Limit : public Executor
         : Executor(index_, "limit_" + std::to_string(index_), output_schema_)
         , limit(limit_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
@@ -234,7 +246,7 @@ struct Aggregation : public Executor
         , gby_exprs(std::move(gby_exprs_))
         , is_final_mode(is_final_mode_)
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
@@ -246,23 +258,31 @@ struct Project : public Executor
         : Executor(index_, "project_" + std::to_string(index_), output_schema_)
         , exprs(std::move(exprs_))
     {}
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
     void columnPrune(std::unordered_set<String> & used_columns) override;
 };
 
 struct Join : Executor
 {
-    ASTPtr params;
-    const ASTTableJoin & join_params;
-    Join(size_t & index_, const DAGSchema & output_schema_, ASTPtr params_)
+    tipb::JoinType tp;
+
+    const ASTs join_cols{};
+    const ASTs left_conds{};
+    const ASTs right_conds{};
+    const ASTs other_conds{};
+    const ASTs other_eq_conds_from_in{};
+
+    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds)
         : Executor(index_, "Join_" + std::to_string(index_), output_schema_)
-        , params(params_)
-        , join_params(static_cast<const ASTTableJoin &>(*params))
+        , tp(tp_)
+        , join_cols(join_cols_)
+        , left_conds(l_conds)
+        , right_conds(r_conds)
+        , other_conds(o_conds)
+        , other_eq_conds_from_in(o_eq_conds)
     {
-        if (join_params.using_expression_list == nullptr)
+        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
             throw Exception("No join condition found.");
-        if (join_params.strictness != ASTTableJoin::Strictness::All)
-            throw Exception("Only support join with strictness ALL");
     }
 
     void columnPrune(std::unordered_set<String> & used_columns) override;
@@ -272,9 +292,9 @@ struct Join : Executor
         const DAGSchema & schema,
         tipb::Expr * tipb_key,
         tipb::FieldType * tipb_field_type,
-        uint32_t collator_id);
+        int32_t collator_id);
 
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map) override;
 };
@@ -309,7 +329,7 @@ struct Window : Executor
     // Currently only use Window Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 
 struct Sort : Executor
@@ -328,13 +348,13 @@ struct Sort : Executor
     // Currently only use Sort Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 };
 } // namespace mock
 
 using ExecutorPtr = std::shared_ptr<mock::Executor>;
 
-ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column);
+ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column);
 
 ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter);
 
@@ -346,7 +366,16 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
 
 ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr select_list);
 
+/// Note: this api is only used by legacy test framework for compatibility purpose, which will be depracated soon,
+/// so please avoid using it.
+/// Old executor test framework bases on ch's parser to translate sql string to ast tree, then manually to DAGRequest.
+/// However, as for join executor, this translation, from ASTTableJoin to tipb::Join, is not a one-to-one mapping
+/// because of the different join classification model used by these two structures. Therefore, under old test framework,
+/// it is hard to fully test join executor. New framework aims to directly construct DAGRequest, so new framework APIs for join should
+/// avoid using ASTTableJoin.
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
+
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {});
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 

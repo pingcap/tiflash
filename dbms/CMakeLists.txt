@@ -57,6 +57,7 @@ include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
 add_headers_and_sources(clickhouse_common_io src/Common)
 add_headers_and_sources(clickhouse_common_io src/Common/HashTable)
+add_headers_and_sources(clickhouse_common_io src/Common/SyncPoint)
 add_headers_and_sources(clickhouse_common_io src/IO)
 
 add_headers_and_sources(dbms src/Analyzers)
@@ -80,6 +81,7 @@ add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/File)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/ColumnFile)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Delta)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/ReadThread)
 add_headers_and_sources(dbms src/Storages/Distributed)
 add_headers_and_sources(dbms src/Storages/Transaction)
 add_headers_and_sources(dbms src/Storages/Page/V1)
@@ -95,6 +97,7 @@ add_headers_and_sources(dbms src/Storages/Page/V3)
 add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
 add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
 add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
+add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
@@ -271,6 +274,7 @@ if (ENABLE_TESTS)
     include (${TiFlash_SOURCE_DIR}/cmake/find_gtest.cmake)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
+        set(INSTALL_GTEST OFF)
         # Google Test from sources
         add_subdirectory(${TiFlash_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
@@ -359,7 +363,11 @@ endif ()
 
 # dbms
 add_target_pch("pch-dbms.h" dbms flash_service)
-add_target_pch("pch-common.h" clickhouse_common_io clickhouse_functions clickhouse_aggregate_functions)
+add_target_pch("pch-common.h" clickhouse_common_io clickhouse_aggregate_functions)
+
+# disable PCH for `clickhouse_functions` temporarily because some source files need to use specific cxx flags
+# add_target_pch("pch-common.h" clickhouse_functions)
+
 add_target_pch("pch-common.h" clickhouse_parsers clickhouse_storages_system dt-workload-lib clickhouse-server-lib)
 
 # common
