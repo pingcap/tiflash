@@ -16,6 +16,9 @@
 #include <Common/TiFlashMetrics.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Interpreters/InterpreterDropQuery.h>
+#include <Parsers/ASTDropQuery.h>
+#include <Parsers/IAST.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/RegionBlockReader.h>
@@ -26,10 +29,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/defines.h>
-
-#include "Interpreters/InterpreterDropQuery.h"
-#include "Parsers/ASTDropQuery.h"
-#include "Parsers/IAST.h"
 
 namespace DB
 {
