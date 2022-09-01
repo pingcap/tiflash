@@ -20,7 +20,6 @@
 #include <ext/singleton.h>
 #include <random>
 
-
 namespace DB::tests
 {
 enum DataDistribution

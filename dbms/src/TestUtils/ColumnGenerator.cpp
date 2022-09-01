@@ -28,21 +28,40 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
     ColumnWithTypeAndName res({}, type, "", 0);
     String family_name = type->getFamilyName();
 
-    for (size_t i = 0; i < opts.size; ++i)
+
+    if (family_name == "Int8" || family_name == "Int16" || family_name == "Int32" || family_name == "Int64")
     {
-        if (family_name == "Int8" || family_name == "Int16" || family_name == "Int32" || family_name == "Int64")
+        for (size_t i = 0; i < opts.size; ++i)
             genInt(col);
-        else if (family_name == "UInt8" || family_name == "UInt16" || family_name == "UInt32" || family_name == "UInt64")
+    }
+    else if (family_name == "UInt8" || family_name == "UInt16" || family_name == "UInt32" || family_name == "UInt64")
+    {
+        for (size_t i = 0; i < opts.size; ++i)
             genUInt(col);
-        else if (family_name == "Float32" || family_name == "Float64")
+    }
+    else if (family_name == "Float32" || family_name == "Float64")
+    {
+        for (size_t i = 0; i < opts.size; ++i)
             genFloat(col);
-        else if (family_name == "String")
+    }
+    else if (family_name == "String")
+    {
+        for (size_t i = 0; i < opts.size; ++i)
             genString(col);
-        else if (family_name == "MyDateTime")
+    }
+    else if (family_name == "MyDateTime")
+    {
+        for (size_t i = 0; i < opts.size; ++i)
             genDateTime(col);
-        else if (family_name == "MyDate")
+    }
+    else if (family_name == "MyDate")
+    {
+        for (size_t i = 0; i < opts.size; ++i)
             genDate(col);
-        else if (family_name == "Decimal")
+    }
+    else if (family_name == "Decimal")
+    {
+        for (size_t i = 0; i < opts.size; ++i)
             genDecimal(col, type);
     }
 
@@ -108,9 +127,7 @@ String ColumnGenerator::randomDecimal(uint64_t prec, uint64_t scale)
     if (s.size() < prec)
         s += String(prec - s.size(), '0');
     else if (s.size() > prec)
-    {
         s = s.substr(0, prec);
-    }
     return s.substr(0, prec - scale) + "." + s.substr(prec - scale);
 }
 
