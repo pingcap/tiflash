@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
 
@@ -26,13 +27,6 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 } // namespace FailPoints
 namespace
 {
-inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & response)
-{
-    mpp::MPPDataPacket packet;
-    if (!response.SerializeToString(packet.mutable_data()))
-        throw Exception(fmt::format("Fail to serialize response, response size: {}", response.ByteSizeLong()));
-    return packet;
-}
 
 void checkPacketSize(size_t size)
 {
@@ -58,10 +52,18 @@ void MPPTunnelSetBase<Tunnel>::clearExecutionSummaries(tipb::SelectResponse & re
 }
 
 template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::updateMemTracker()
+{
+    for (size_t i = 0; i < tunnels.size(); ++i)
+        tunnels[i]->updateMemTracker();
+}
+
+template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
-    auto packet = serializeToPacket(response);
-    tunnels[0]->write(packet);
+    TrackedMppDataPacket tracked_packet;
+    tracked_packet.serializeByResponse(response);
+    tunnels[0]->write(tracked_packet.getPacket());
 
     if (tunnels.size() > 1)
     {
@@ -69,10 +71,11 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
         if (response.execution_summaries_size() > 0)
         {
             clearExecutionSummaries(response);
-            packet = serializeToPacket(response);
+            tracked_packet = TrackedMppDataPacket();
+            tracked_packet.serializeByResponse(response);
         }
         for (size_t i = 1; i < tunnels.size(); ++i)
-            tunnels[i]->write(packet);
+            tunnels[i]->write(tracked_packet.getPacket());
     }
 }
 
@@ -98,10 +101,11 @@ void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
 template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
 {
+    TrackedMppDataPacket tracked_packet;
     if (partition_id != 0 && response.execution_summaries_size() > 0)
         clearExecutionSummaries(response);
-
-    tunnels[partition_id]->write(serializeToPacket(response));
+    tracked_packet.serializeByResponse(response);
+    tunnels[partition_id]->write(tracked_packet.getPacket());
 }
 
 template <typename Tunnel>
