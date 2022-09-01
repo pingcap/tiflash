@@ -682,8 +682,6 @@ TEST_F(TestMPPTunnel, AsyncWriteError)
         auto data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
         data_packet_ptr->set_data("First");
         mpp_tunnel_ptr->write(*data_packet_ptr);
-        data_packet_ptr->set_data("Second");
-        mpp_tunnel_ptr->write(*data_packet_ptr);
         t.join();
         mpp_tunnel_ptr->waitForFinish();
         GTEST_FAIL();
