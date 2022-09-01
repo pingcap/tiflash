@@ -1157,16 +1157,37 @@ try
 
     size_t times_remover_called = 0;
 
+    enum
+    {
+        STAGE_SNAP_KEEP = 1,
+        STAGE_SNAP_RELEASED = 2,
+    } test_stage;
+    test_stage = STAGE_SNAP_KEEP;
+
     ExternalPageCallbacks callbacks;
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called, &test_stage](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
         times_remover_called += 1;
-        // 0, 1024 are still alive
-        EXPECT_EQ(living_page_ids.size(), 2);
-        EXPECT_GT(living_page_ids.count(0), 0);
-        EXPECT_GT(living_page_ids.count(1024), 0);
+        switch (test_stage)
+        {
+        case STAGE_SNAP_KEEP:
+        {
+            // 0, 1024 are still alive
+            EXPECT_EQ(living_page_ids.size(), 2);
+            EXPECT_GT(living_page_ids.count(0), 0);
+            EXPECT_GT(living_page_ids.count(1024), 0);
+            break;
+        }
+        case STAGE_SNAP_RELEASED:
+        {
+            /// After `snapshot` released, 1024 should be removed from `living`
+            EXPECT_EQ(living_page_ids.size(), 1);
+            EXPECT_GT(living_page_ids.count(0), 0);
+            break;
+        }
+        }
     };
     callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
@@ -1208,13 +1229,7 @@ try
 
     /// After `snapshot` released, 1024 should be removed from `living`
     snapshot.reset();
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
-        times_remover_called += 1;
-        EXPECT_EQ(living_page_ids.size(), 1);
-        EXPECT_GT(living_page_ids.count(0), 0);
-    };
-    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
-    page_storage->registerExternalPagesCallbacks(callbacks);
+    test_stage = STAGE_SNAP_RELEASED;
     {
         SCOPED_TRACE("gc with snapshot released");
         page_storage->gc();
