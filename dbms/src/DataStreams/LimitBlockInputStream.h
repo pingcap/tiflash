@@ -43,6 +43,7 @@ public:
 
 protected:
     Block readImpl() override;
+    void appendInfo(FmtBuffer & buffer) const override;
 
 private:
     size_t limit;

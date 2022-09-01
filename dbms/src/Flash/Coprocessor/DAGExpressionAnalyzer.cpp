@@ -16,10 +16,12 @@
 #include <AggregateFunctions/AggregateFunctionGroupConcat.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
+#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
@@ -34,7 +36,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -49,6 +50,7 @@ DAGExpressionAnalyzer::DAGExpressionAnalyzer(std::vector<NameAndTypePair> source
 {}
 
 extern const String count_second_stage;
+extern const String sum_on_partial_result;
 
 namespace
 {
@@ -84,22 +86,41 @@ String getAggFuncName(
         return count_second_stage;
     }
 
+    // sum functions in mpp are multistage and we need to distinguish them with function name.
+    // "sum" represents the first stage.
+    // "sum_on_partial_result" represents other stages whose input is partial result.
+    // Return type of sum function in different stages is calculated in different ways which is determined
+    // by function name, so we need to distinguish them with function names.
+    if (AggregationInterpreterHelper::isSumOnPartialResults(expr))
+        return sum_on_partial_result;
+
     return agg_func_name;
 }
 
-/// return `duplicated agg function`->getReturnType if duplicated.
+/// return `duplicated Agg/Window function`->getReturnType if duplicated.
 /// or not return nullptr.
-DataTypePtr findDuplicateAggFunc(
+template <typename Descriptions>
+DataTypePtr findDuplicateAggWindowFunc(
     const String & func_string,
-    const AggregateDescriptions & aggregate_descriptions)
+    const Descriptions & descriptions)
 {
-    for (const auto & aggregated : aggregate_descriptions)
+    for (const auto & description : descriptions)
     {
-        if (aggregated.column_name == func_string)
+        if (description.column_name == func_string)
         {
-            auto return_type = aggregated.function->getReturnType();
-            assert(return_type);
-            return return_type;
+            if constexpr (std::is_same_v<Descriptions, AggregateDescriptions>)
+            {
+                auto return_type = description.function->getReturnType();
+                assert(return_type);
+                return return_type;
+            }
+            else
+            {
+                static_assert(std::is_same_v<Descriptions, WindowFunctionDescriptions>);
+                auto return_type = description.window_function->getReturnType();
+                assert(return_type);
+                return return_type;
+            }
         }
     }
     return nullptr;
@@ -121,7 +142,7 @@ void appendAggDescription(
     AggregateDescription aggregate;
     aggregate.argument_names = arg_names;
     String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
-    if (auto duplicated_return_type = findDuplicateAggFunc(func_string, aggregate_descriptions))
+    if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
         // agg function duplicate, don't need to build again.
         aggregated_columns.emplace_back(func_string, duplicated_return_type);
@@ -133,7 +154,6 @@ void appendAggDescription(
     aggregate.function = AggregateFunctionFactory::instance().get(agg_func_name, arg_types, {}, 0, empty_input_as_null);
     aggregate.function->setCollators(arg_collators);
 
-    DataTypePtr result_type = aggregate.function->getReturnType();
     aggregated_columns.emplace_back(func_string, aggregate.function->getReturnType());
 
     aggregate_descriptions.push_back(std::move(aggregate));
@@ -210,7 +230,7 @@ void DAGExpressionAnalyzer::buildGroupConcat(
 
     String func_string = genFuncString(agg_func_name, aggregate.argument_names, arg_collators);
     /// return directly if the agg is duplicated
-    if (auto duplicated_return_type = findDuplicateAggFunc(func_string, aggregate_descriptions))
+    if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, aggregate_descriptions))
     {
         aggregated_columns.emplace_back(func_string, duplicated_return_type);
         return;
@@ -448,9 +468,8 @@ void DAGExpressionAnalyzer::appendSourceColumnsToRequireOutput(ExpressionActions
 }
 
 // This function will add new window function culumns to source_column
-std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindowColumns(const tipb::Window & window, ExpressionActionsChain::Step & step)
+void DAGExpressionAnalyzer::appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, ExpressionActionsChain::Step & step)
 {
-    WindowDescription window_description;
     NamesAndTypes window_columns;
 
     if (window.func_desc_size() == 0)
@@ -472,10 +491,8 @@ std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindow
         }
         else if (isWindowFunctionExpr(expr))
         {
-            WindowFunctionDescription window_function_description;
             String window_func_name = getWindowFunctionName(expr);
             auto child_size = expr.children_size();
-
             Names arg_names;
             DataTypes arg_types;
             TiDB::TiDBCollators arg_collators;
@@ -484,11 +501,19 @@ std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindow
                 fillArgumentDetail(step.actions, expr.children(i), arg_names, arg_types, arg_collators);
             }
 
+            String func_string = genFuncString(window_func_name, arg_names, arg_collators);
+            if (auto duplicated_return_type = findDuplicateAggWindowFunc(func_string, window_description.window_functions_descriptions))
+            {
+                // window function duplicate, don't need to build again.
+                source_columns.emplace_back(func_string, duplicated_return_type);
+                continue;
+            }
+
+            WindowFunctionDescription window_function_description;
             window_function_description.argument_names.resize(child_size);
             window_function_description.argument_names = arg_names;
             step.required_output.insert(step.required_output.end(), arg_names.begin(), arg_names.end());
 
-            String func_string = genFuncString(window_func_name, window_function_description.argument_names, arg_collators);
             window_function_description.column_name = func_string;
             window_function_description.window_function = WindowFunctionFactory::instance().get(window_func_name, arg_types);
             DataTypePtr result_type = window_function_description.window_function->getReturnType();
@@ -502,7 +527,7 @@ std::tuple<WindowDescription, NamesAndTypes> DAGExpressionAnalyzer::appendWindow
         }
     }
 
-    return {window_description, window_columns};
+    window_description.add_columns = window_columns;
 }
 
 WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Window & window)
@@ -512,18 +537,17 @@ WindowDescription DAGExpressionAnalyzer::buildWindowDescription(const tipb::Wind
     appendSourceColumnsToRequireOutput(step);
     size_t source_size = getCurrentInputColumns().size();
 
-    auto [window_description, window_columns] = appendWindowColumns(window, step);
-
-    window_description.add_columns = window_columns;
-
+    WindowDescription window_description;
+    window_description.partition_by = getWindowSortDescription(window.partition_by());
+    window_description.order_by = getWindowSortDescription(window.order_by());
     if (window.has_frame())
     {
         window_description.setWindowFrame(window.frame());
     }
 
+    appendWindowColumns(window_description, window, step);
+
     window_description.before_window = chain.getLastActions();
-    window_description.partition_by = getWindowSortDescription(window.partition_by());
-    window_description.order_by = getWindowSortDescription(window.order_by());
     chain.finalize();
     chain.clear();
 
@@ -1131,29 +1155,39 @@ NamesWithAliases DAGExpressionAnalyzer::appendFinalProjectForRootQueryBlock(
     const String & column_prefix,
     bool keep_session_timezone_info)
 {
-    if (unlikely(output_offsets.empty()))
-        throw Exception("Root Query block without output_offsets", ErrorCodes::LOGICAL_ERROR);
-
-    bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
-    auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
-    assert(need_append_type_cast_vec.size() == output_offsets.size());
-
     auto & step = initAndGetLastStep(chain);
 
-    if (need_append_timezone_cast || need_append_type_cast)
-    {
-        // after appendCastForRootFinalProjection, source_columns has been modified.
-        appendCastForRootFinalProjection(step.actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
-    }
-
-    // generate project aliases from source_columns.
-    NamesWithAliases final_project = genRootFinalProjectAliases(column_prefix, output_offsets);
+    NamesWithAliases final_project = buildFinalProjection(step.actions, schema, output_offsets, column_prefix, keep_session_timezone_info);
 
     for (const auto & name : final_project)
     {
         step.required_output.push_back(name.first);
     }
     return final_project;
+}
+
+NamesWithAliases DAGExpressionAnalyzer::buildFinalProjection(
+    const ExpressionActionsPtr & actions,
+    const std::vector<tipb::FieldType> & schema,
+    const std::vector<Int32> & output_offsets,
+    const String & column_prefix,
+    bool keep_session_timezone_info)
+{
+    if (unlikely(output_offsets.empty()))
+        throw Exception("DAGRequest without output_offsets", ErrorCodes::LOGICAL_ERROR);
+
+    bool need_append_timezone_cast = !keep_session_timezone_info && !context.getTimezoneInfo().is_utc_timezone;
+    auto [need_append_type_cast, need_append_type_cast_vec] = isCastRequiredForRootFinalProjection(schema, output_offsets);
+    assert(need_append_type_cast_vec.size() == output_offsets.size());
+
+    if (need_append_timezone_cast || need_append_type_cast)
+    {
+        // after appendCastForRootFinalProjection, source_columns has been modified.
+        appendCastForRootFinalProjection(actions, schema, output_offsets, need_append_timezone_cast, need_append_type_cast_vec);
+    }
+
+    // generate project aliases from source_columns.
+    return genRootFinalProjectAliases(column_prefix, output_offsets);
 }
 
 String DAGExpressionAnalyzer::alignReturnType(
@@ -1279,15 +1313,7 @@ String DAGExpressionAnalyzer::getActions(const tipb::Expr & expr, const Expressi
     }
     else if (isScalarFunctionExpr(expr))
     {
-        const String & func_name = getFunctionName(expr);
-        if (DAGExpressionAnalyzerHelper::function_builder_map.count(func_name) != 0)
-        {
-            ret = DAGExpressionAnalyzerHelper::function_builder_map[func_name](this, expr, actions);
-        }
-        else
-        {
-            ret = buildFunction(expr, actions);
-        }
+        ret = DAGExpressionAnalyzerHelper::buildFunction(this, expr, actions);
     }
     else
     {
@@ -1339,20 +1365,6 @@ String DAGExpressionAnalyzer::buildTupleFunctionForGroupConcat(
     sort_desc = getSortDescription(order_columns, expr.order_by());
 
     return applyFunction(func_name, argument_names, actions, nullptr);
-}
-
-String DAGExpressionAnalyzer::buildFunction(
-    const tipb::Expr & expr,
-    const ExpressionActionsPtr & actions)
-{
-    const String & func_name = getFunctionName(expr);
-    Names argument_names;
-    for (const auto & child : expr.children())
-    {
-        String name = getActions(child, actions);
-        argument_names.push_back(name);
-    }
-    return applyFunction(func_name, argument_names, actions, getCollatorFromExpr(expr));
 }
 
 } // namespace DB

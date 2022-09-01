@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -51,8 +52,7 @@ public:
         Format::LogNumberType log_num_,
         WALRecoveryMode recovery_mode_);
 
-    LogReader(const LogReader &) = delete;
-    LogReader & operator=(const LogReader &) = delete;
+    DISALLOW_COPY(LogReader);
 
     virtual ~LogReader();
 

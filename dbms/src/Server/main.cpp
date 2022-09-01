@@ -25,10 +25,6 @@
 #include <utility> /// pair
 #include <vector>
 
-#if USE_TCMALLOC
-#include <gperftools/malloc_extension.h>
-#endif
-
 #if ENABLE_CLICKHOUSE_SERVER
 #include "Server.h"
 #endif
@@ -36,7 +32,13 @@
 #include <Server/DTTool/DTTool.h>
 #endif
 #if ENABLE_TIFLASH_DTWORKLOAD
-#include <Storages/DeltaMerge/tools/workload/DTWorkload.h>
+#include <Storages/DeltaMerge/workload/DTWorkload.h>
+#endif
+#if ENABLE_TIFLASH_PAGEWORKLOAD
+#include <Storages/Page/workload/PSWorkload.h>
+#endif
+#if ENABLE_TIFLASH_PAGECTL
+#include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 #endif
 #include <Common/StringUtils/StringUtils.h>
 #include <Server/DTTool/DTTool.h>
@@ -104,6 +106,12 @@ std::pair<const char *, MainFunc> clickhouse_applications[] = {
 #if ENABLE_TIFLASH_DTWORKLOAD
     {"dtworkload", DB::DM::tests::DTWorkload::mainEntry},
 #endif
+#if ENABLE_TIFLASH_PAGEWORKLOAD
+    {"pageworkload", DB::PS::tests::StressWorkload::mainEntry},
+#endif
+#if ENABLE_TIFLASH_PAGECTL
+    {"pagectl", DB::PageStorageCtl::mainEntry},
+#endif
     {"version", mainEntryVersion},
     {"errgen", mainExportError}};
 
@@ -142,14 +150,6 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
 
 int main(int argc_, char ** argv_)
 {
-#if USE_TCMALLOC
-    /** Without this option, tcmalloc returns memory to OS too frequently for medium-sized memory allocations
-      *  (like IO buffers, column vectors, hash tables, etc.),
-      *  that lead to page faults and significantly hurts performance.
-      */
-    MallocExtension::instance()->SetNumericProperty("tcmalloc.aggressive_memory_decommit", false);
-#endif
-
     std::vector<char *> argv(argv_, argv_ + argc_);
 
     /// Print a basic help if nothing was matched

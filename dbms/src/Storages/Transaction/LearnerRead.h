@@ -30,7 +30,7 @@ struct RegionLearnerReadSnapshot : RegionPtr
     UInt64 snapshot_event_flag{0};
 
     RegionLearnerReadSnapshot() = default;
-    RegionLearnerReadSnapshot(const RegionPtr & region)
+    explicit RegionLearnerReadSnapshot(const RegionPtr & region)
         : RegionPtr(region)
         , snapshot_event_flag(region->getSnapshotEventFlag())
     {}

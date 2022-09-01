@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V1/Page.h>
@@ -198,8 +199,7 @@ private:
 
 public:
     // no copying allowed
-    PageEntriesMixin(const PageEntriesMixin &) = delete;
-    PageEntriesMixin & operator=(const PageEntriesMixin &) = delete;
+    DISALLOW_COPY(PageEntriesMixin);
     // only move allowed
     PageEntriesMixin(PageEntriesMixin && rhs) noexcept
         : PageEntriesMixin(true)

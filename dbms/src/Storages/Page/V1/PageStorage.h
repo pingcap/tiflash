@@ -105,8 +105,8 @@ public:
 
     PageEntry getEntry(PageId page_id, SnapshotPtr snapshot);
     Page read(PageId page_id, SnapshotPtr snapshot);
-    PageMap read(const std::vector<PageId> & page_ids, SnapshotPtr snapshot);
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, SnapshotPtr snapshot);
+    PageMap read(const PageIds & page_ids, SnapshotPtr snapshot);
+    void read(const PageIds & page_ids, const PageHandler & handler, SnapshotPtr snapshot);
     void traverse(const std::function<void(const Page & page)> & acceptor, SnapshotPtr snapshot);
     bool gc();
 
@@ -197,8 +197,8 @@ public:
     {}
 
     Page read(PageId page_id) const { return storage.read(page_id, snap); }
-    PageMap read(const std::vector<PageId> & page_ids) const { return storage.read(page_ids, snap); }
-    void read(const std::vector<PageId> & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
+    PageMap read(const PageIds & page_ids) const { return storage.read(page_ids, snap); }
+    void read(const PageIds & page_ids, PageHandler & handler) const { storage.read(page_ids, handler, snap); };
 
     PageId getNormalPageId(PageId page_id) const { return storage.getNormalPageId(page_id, snap); }
     UInt64 getPageChecksum(PageId page_id) const { return storage.getEntry(page_id, snap).checksum; }

@@ -14,25 +14,30 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
-#include <fmt/format.h>
+#include <common/defines.h>
+#include <common/logger_useful.h>
 
+#include <boost/preprocessor/comparison/equal.hpp>
+#include <boost/preprocessor/control/if.hpp>
+#include <boost/preprocessor/facilities/expand.hpp>
+#include <boost/preprocessor/seq/for_each.hpp>
+#include <boost/preprocessor/stringize.hpp>
+#include <boost/preprocessor/tuple/size.hpp>
+#include <boost/preprocessor/variadic/to_seq.hpp>
 #include <cerrno>
 #include <memory>
 #include <vector>
 
-
-namespace Poco
-{
-class Logger;
-}
-
-
 namespace DB
 {
-class Logger;
-using LoggerPtr = std::shared_ptr<Logger>;
+
+namespace ErrorCodes
+{
+extern const int LOGICAL_ERROR;
+} // namespace ErrorCodes
 
 class Exception : public Poco::Exception
 {
@@ -73,8 +78,8 @@ private:
     StackTrace trace;
 };
 
-
-/// Contains an additional member `saved_errno`. See the throwFromErrno function.
+/// Contains an additional member `saved_errno`. See the throwFromErrno
+/// function.
 class ErrnoException : public Exception
 {
 public:
@@ -97,33 +102,33 @@ private:
     int saved_errno;
 };
 
-
 using Exceptions = std::vector<std::exception_ptr>;
-
 
 [[noreturn]] void throwFromErrno(const std::string & s, int code = 0, int e = errno);
 
-
 /** Try to write an exception to the log (and forget about it).
-  * Can be used in destructors in the catch-all block.
-  */
-void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
-void tryLogCurrentException(const LoggerPtr & logger, const std::string & start_of_message = "");
-void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
-
+ * Can be used in destructors in the catch-all block.
+ */
+void tryLogCurrentException(const char * log_name,
+                            const std::string & start_of_message = "");
+void tryLogCurrentException(const LoggerPtr & logger,
+                            const std::string & start_of_message = "");
+void tryLogCurrentException(Poco::Logger * logger,
+                            const std::string & start_of_message = "");
 
 /** Prints current exception in canonical format.
-  * with_stacktrace - prints stack trace for DB::Exception.
-  * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
-  *  only this stack trace will be printed.
-  */
-std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded_stacktrace = false);
+ * with_stacktrace - prints stack trace for DB::Exception.
+ * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
+ *  only this stack trace will be printed.
+ */
+std::string getCurrentExceptionMessage(bool with_stacktrace,
+                                       bool check_embedded_stacktrace = false);
 
 /// Returns error code from ErrorCodes
 int getCurrentExceptionCode();
 
-
-/// An execution status of any piece of code, contains return code and optional error
+/// An execution status of any piece of code, contains return code and optional
+/// error
 struct ExecutionStatus
 {
     int code = 0;
@@ -131,12 +136,14 @@ struct ExecutionStatus
 
     ExecutionStatus() = default;
 
-    explicit ExecutionStatus(int return_code, const std::string & exception_message = "")
+    explicit ExecutionStatus(int return_code,
+                             const std::string & exception_message = "")
         : code(return_code)
         , message(exception_message)
     {}
 
-    static ExecutionStatus fromCurrentException(const std::string & start_of_message = "");
+    static ExecutionStatus
+    fromCurrentException(const std::string & start_of_message = "");
 
     std::string serializeText() const;
 
@@ -145,13 +152,10 @@ struct ExecutionStatus
     bool tryDeserializeText(const std::string & data);
 };
 
-
 std::string getExceptionMessage(const Exception & e, bool with_stacktrace, bool check_embedded_stacktrace = false);
 std::string getExceptionMessage(std::exception_ptr e, bool with_stacktrace);
 
-
 void rethrowFirstException(const Exceptions & exceptions);
-
 
 template <typename T>
 std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
@@ -172,28 +176,146 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
 
 namespace exception_details
 {
-template <typename T, typename... Args>
-inline std::string generateLogMessage(const char * condition, T && fmt_str, Args &&... args)
+inline std::string generateFormattedMessage(const char * condition)
 {
-    return fmt::format(std::forward<T>(fmt_str), condition, std::forward<Args>(args)...);
+    return fmt::format("Assert {} fail!", condition);
+}
+
+template <typename... Args>
+inline std::string generateFormattedMessage(const char * condition, const char * fmt_str, Args &&... args)
+{
+    return FmtBuffer().fmtAppend("Assert {} fail! ", condition).fmtAppend(fmt_str, std::forward<Args>(args)...).toString();
+}
+
+template <typename... Args>
+inline Poco::Message generateLogMessage(const std::string & logger_name, const char * filename, int lineno, const char * condition, Args &&... args)
+{
+    return Poco::Message(
+        logger_name,
+        generateFormattedMessage(condition, std::forward<Args>(args)...),
+        Poco::Message::PRIO_FATAL,
+        filename,
+        lineno);
+}
+
+const LoggerPtr & getDefaultFatalLogger();
+
+template <typename... Args>
+inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, Args &&... args)
+{
+    if (logger->fatal())
+    {
+        auto message = generateLogMessage(
+            logger->name(),
+            filename,
+            lineno,
+            condition,
+            std::forward<Args>(args)...);
+        logger->log(message);
+    }
+}
+
+inline void log(const char * filename, int lineno, const char * condition)
+{
+    log(filename, lineno, condition, getDefaultFatalLogger());
+}
+
+template <typename... Args>
+inline void log(const char * filename, int lineno, const char * condition, const char * fmt_str, Args &&... args)
+{
+    log(filename, lineno, condition, getDefaultFatalLogger(), fmt_str, std::forward<Args>(args)...);
 }
 } // namespace exception_details
 
-#define RUNTIME_CHECK(condition, ExceptionType, ...) \
-    do                                               \
-    {                                                \
-        if (unlikely(!(condition)))                  \
-            throw ExceptionType(__VA_ARGS__);        \
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARG(r, data, elem) \
+    .fmtAppend(", " BOOST_PP_STRINGIZE(elem) " = {}", elem)
+
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARGS(...) \
+    BOOST_PP_SEQ_FOR_EACH(INTERNAL_RUNTIME_CHECK_APPEND_ARG, _, BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))
+
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARGS_OR_NONE(...)            \
+    BOOST_PP_IF(                                                   \
+        BOOST_PP_EQUAL(BOOST_PP_TUPLE_SIZE((, ##__VA_ARGS__)), 1), \
+        BOOST_PP_EXPAND,                                           \
+        INTERNAL_RUNTIME_CHECK_APPEND_ARGS)                        \
+    (__VA_ARGS__)
+
+/**
+ * RUNTIME_CHECK checks the condition, and throws a `DB::Exception` with `LOGICAL_ERROR` error code
+ * when the condition does not meet. It is a good practice to check expected conditions in your
+ * program frequently to detect errors as early as possible.
+ *
+ * Unlike RUNTIME_ASSERT, this function is softer that it does not terminate the application.
+ *
+ * Usually you use this function to verify your code logic, instead of verifying external inputs, as
+ * this function exposes internal variables and the conditions you are checking with, while external
+ * callers are expecting some non-internal descriptions for their invalid inputs.
+ *
+ * Examples:
+ *
+ * ```
+ * RUNTIME_CHECK(a != b);         // DB::Exception("Check a != b failed")
+ * RUNTIME_CHECK(a != b, a, b);   // DB::Exception("Check a != b failed, a = .., b = ..")
+ * ```
+ */
+#define RUNTIME_CHECK(condition, ...)                                       \
+    do                                                                      \
+    {                                                                       \
+        if (unlikely(!(condition)))                                         \
+        {                                                                   \
+            throw ::DB::Exception(                                          \
+                FmtBuffer().append("Check " #condition " failed")           \
+                    INTERNAL_RUNTIME_CHECK_APPEND_ARGS_OR_NONE(__VA_ARGS__) \
+                        .toString(),                                        \
+                ::DB::ErrorCodes::LOGICAL_ERROR);                           \
+        }                                                                   \
     } while (false)
 
-#define RUNTIME_ASSERT(condition, logger, ...)                                                                      \
-    do                                                                                                              \
-    {                                                                                                               \
-        if (unlikely(!(condition)))                                                                                 \
-        {                                                                                                           \
-            LOG_FATAL((logger), exception_details::generateLogMessage(#condition, "Assert {} fail! " __VA_ARGS__)); \
-            std::terminate();                                                                                       \
-        }                                                                                                           \
+/**
+ * Examples:
+ *
+ * ```
+ * RUNTIME_CHECK_MSG(a != b, "invariant not meet");
+ * RUNTIME_CHECK_MSG(a != b, "invariant not meet, a = {}, b = {}", a, b);
+ * ```
+ */
+#define RUNTIME_CHECK_MSG(condition, fmt, ...)                                                                \
+    do                                                                                                        \
+    {                                                                                                         \
+        if (unlikely(!(condition)))                                                                           \
+        {                                                                                                     \
+            throw ::DB::Exception(                                                                            \
+                FmtBuffer().append("Check " #condition " failed: ").fmtAppend(fmt, ##__VA_ARGS__).toString(), \
+                ::DB::ErrorCodes::LOGICAL_ERROR);                                                             \
+        }                                                                                                     \
+    } while (false)
+
+/**
+ * RUNTIME_ASSERT checks the condition, and triggers a std::terminate to stop the application
+ * immediately when the condition does not meet.
+ *
+ * Examples:
+ *
+ * ```
+ * RUNTIME_ASSERT(a != b);
+ * RUNTIME_ASSERT(a != b, "fail");
+ * RUNTIME_ASSERT(a != b, "{} does not equal to {}", a, b);
+ * RUNTIME_ASSERT(a != b, logger);
+ * RUNTIME_ASSERT(a != b, logger, "{} does not equal to {}", a, b);
+ * ```
+ */
+#define RUNTIME_ASSERT(condition, ...)                                 \
+    do                                                                 \
+    {                                                                  \
+        if (unlikely(!(condition)))                                    \
+        {                                                              \
+            exception_details::log(                                    \
+                &__FILE__[LogFmtDetails::getFileNameOffset(__FILE__)], \
+                __LINE__,                                              \
+                #condition,                                            \
+                ##__VA_ARGS__);                                        \
+            std::terminate();                                          \
+        }                                                              \
     } while (false)
 
 } // namespace DB

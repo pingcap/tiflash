@@ -52,6 +52,21 @@ inline void writeHexByteLowercase(UInt8 byte, void * out)
     memcpy(out, &hex_byte_to_char_lowercase_table[static_cast<size_t>(byte) * 2], 2);
 }
 
+extern const char * const bin_byte_to_char_table;
+extern const size_t bin_byte_no_zero_prefix_len[];
+
+inline void writeBinByte(UInt8 byte, void * out)
+{
+    memcpy(out, &bin_byte_to_char_table[static_cast<size_t>(byte) * 8], 8);
+}
+
+inline size_t writeNoZeroPrefixBinByte(UInt8 byte, void * out)
+{
+    size_t len = bin_byte_no_zero_prefix_len[static_cast<size_t>(byte)];
+    memcpy(out, &bin_byte_to_char_table[byte * 8 + (8 - len)], len);
+    return len;
+}
+
 /// Produces hex representation of an unsigned int with leading zeros (for checksums)
 template <typename TUInt>
 inline void writeHexUIntImpl(TUInt uint_, char * out, const char * const table)

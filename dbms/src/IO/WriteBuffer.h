@@ -96,6 +96,24 @@ public:
         }
     }
 
+    template <class T>
+    __attribute__((always_inline)) void writeFixed(const T * __restrict from)
+    {
+        if (likely(working_buffer.end() - pos >= static_cast<ptrdiff_t>(sizeof(T))))
+        {
+            tiflash_compiler_builtin_memcpy(pos, from, sizeof(T));
+            pos += sizeof(T);
+        }
+        else
+        {
+            [&]() __attribute__((noinline))
+            {
+                write(reinterpret_cast<const char *>(from), sizeof(T));
+            }
+            ();
+        }
+    }
+
 
     inline void write(char x)
     {

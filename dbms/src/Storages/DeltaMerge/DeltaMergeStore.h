@@ -51,7 +51,7 @@ inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
 struct SegmentStat
 {
-    UInt64 segment_id;
+    UInt64 segment_id = 0;
     RowKeyRange range;
 
     UInt64 rows = 0;
@@ -145,9 +145,6 @@ struct DeltaMergeStoreStat
     UInt64 background_tasks_length = 0;
 };
 
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
-
 class DeltaMergeStore : private boost::noncopyable
 {
 public:
@@ -183,10 +180,12 @@ public:
         PlaceIndex,
     };
 
+    // TODO: Rename to MergeDeltaThreadType
     enum TaskRunThread
     {
         BackgroundThreadPool,
         Foreground,
+        ForegroundRPC,
         BackgroundGCThread,
     };
 
@@ -306,10 +305,18 @@ public:
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const { return db_name; }
-    const String & getTableName() const { return table_name; }
+    const String & getDatabaseName() const
+    {
+        return db_name;
+    }
+    const String & getTableName() const
+    {
+        return table_name;
+    }
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
+
+    void clearData();
 
     void drop();
 
@@ -328,13 +335,13 @@ public:
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const std::vector<PageId> & file_ids,
+                     const PageIds & file_ids,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
@@ -346,11 +353,15 @@ public:
                               const DB::Settings & db_settings,
                               const ColumnDefines & columns_to_read,
                               size_t num_streams,
+                              bool keep_order,
                               const SegmentIdSet & read_segments = {},
                               size_t extra_table_id_index = InvalidColumnID);
 
-    /// Read rows with MVCC filtering
-    /// `sorted_ranges` should be already sorted and merged
+
+    /// Read rows in two modes:
+    ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.
+    ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
+    /// `sorted_ranges` should be already sorted and merged.
     BlockInputStreams read(const Context & db_context,
                            const DB::Settings & db_settings,
                            const ColumnDefines & columns_to_read,
@@ -359,23 +370,35 @@ public:
                            UInt64 max_version,
                            const RSOperatorPtr & filter,
                            const String & tracing_id,
+                           bool keep_order,
+                           bool is_fast_scan = false,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
 
-    /// Force flush all data to disk.
-    void flushCache(const Context & context, const RowKeyRange & range)
+    /// Try flush all data in `range` to disk and return whether the task succeed.
+    bool flushCache(const Context & context, const RowKeyRange & range, bool try_until_succeed = true)
     {
         auto dm_context = newDMContext(context, context.getSettingsRef());
-        flushCache(dm_context, range);
+        return flushCache(dm_context, range, try_until_succeed);
     }
 
-    void flushCache(const DMContextPtr & dm_context, const RowKeyRange & range);
+    bool flushCache(const DMContextPtr & dm_context, const RowKeyRange & range, bool try_until_succeed = true);
 
-    /// Do merge delta for all segments. Only used for debug.
+    /// Merge delta into the stable layer for all segments.
+    ///
+    /// This function is called when using `MANAGE TABLE [TABLE] MERGE DELTA` from TiFlash Client.
     void mergeDeltaAll(const Context & context);
 
-    /// Compact fragment column files into bigger one.
+    /// Merge delta into the stable layer for one segment located by the specified start key.
+    /// Returns the range of the merged segment, which can be used to merge the remaining segments incrementally (new_start_key = old_end_key).
+    /// If there is no segment found by the start key, nullopt is returned.
+    ///
+    /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, TaskRunThread run_thread);
+
+    /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
+    /// This is a minor compaction as it does not merge the delta into stable layer.
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
@@ -392,18 +415,36 @@ public:
         std::shared_lock lock(read_write_mutex);
         return store_columns;
     }
-    const ColumnDefines & getTableColumns() const { return original_table_columns; }
-    const ColumnDefine & getHandle() const { return original_table_handle_define; }
+    const ColumnDefines & getTableColumns() const
+    {
+        return original_table_columns;
+    }
+    const ColumnDefine & getHandle() const
+    {
+        return original_table_handle_define;
+    }
     BlockPtr getHeader() const;
-    const Settings & getSettings() const { return settings; }
-    DataTypePtr getPKDataType() const { return original_table_handle_define.type; }
+    const Settings & getSettings() const
+    {
+        return settings;
+    }
+    DataTypePtr getPKDataType() const
+    {
+        return original_table_handle_define.type;
+    }
     SortDescription getPrimarySortDescription() const;
 
     void check(const Context & db_context);
     DeltaMergeStoreStat getStat();
     SegmentStats getSegmentStats();
-    bool isCommonHandle() const { return is_common_handle; }
-    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
+    bool isCommonHandle() const
+    {
+        return is_common_handle;
+    }
+    size_t getRowKeyColumnSize() const
+    {
+        return rowkey_column_size;
+    }
 
 public:
     /// Methods mainly used by region split.
@@ -417,15 +458,38 @@ private:
 
     DMContextPtr newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id = "");
 
-    static bool pkIsHandle(const ColumnDefine & handle_define) { return handle_define.id != EXTRA_HANDLE_COLUMN_ID; }
+    static bool pkIsHandle(const ColumnDefine & handle_define)
+    {
+        return handle_define.id != EXTRA_HANDLE_COLUMN_ID;
+    }
 
+    /// Try to stall the writing. It will suspend the current thread if flow control is necessary.
+    /// There are roughly two flow control mechanisms:
+    /// - Force Merge (1 GB by default, see force_merge_delta_rows|size): Wait for a small amount of time at most.
+    /// - Stop Write (2 GB by default, see stop_write_delta_rows|size): Wait until delta is merged.
     void waitForWrite(const DMContextPtr & context, const SegmentPtr & segment);
+
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
+    /// Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
+    /// If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
+    /// See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
+    ///
+    /// This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
+    /// A `thread_type` should be specified indicating the type of the thread calling this function.
+    /// Depend on the thread type, the "update" to do may be varied.
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
+    /// Split the segment into two.
+    /// After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+
+    /// Merge two segments into one.
+    /// After merging, both segments will be abandoned (with `segment->hasAbandoned() == true`).
     void segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
+
+    /// Merge the delta (major compaction) in the segment.
+    /// After delta-merging, the segment will be abandoned (with `segment->hasAbandoned() == true`) and a new segment will be returned.
     SegmentPtr segmentMergeDelta(
         DMContext & dm_context,
         const SegmentPtr & segment,
@@ -437,8 +501,14 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
-    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment) { return doIsSegmentValid(segment); }
+    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
+    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    {
+        return doIsSegmentValid(segment);
+    }
     bool doIsSegmentValid(const SegmentPtr & segment);
 
     void restoreStableFiles();
@@ -446,10 +516,16 @@ private:
     SegmentReadTasks getReadTasksByRanges(DMContext & dm_context,
                                           const RowKeyRanges & sorted_ranges,
                                           size_t expected_tasks_count = 1,
-                                          const SegmentIdSet & read_segments = {});
+                                          const SegmentIdSet & read_segments = {},
+                                          bool try_split_task = true);
+
+private:
+    void dropAllSegments(bool keep_first_segment);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
 
     Context & global_context;
@@ -474,6 +550,7 @@ private:
     ColumnDefinesPtr store_columns;
 
     std::atomic<bool> shutdown_called{false};
+    std::atomic<bool> replica_exist{true};
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle background_task_handle;
@@ -494,8 +571,6 @@ private:
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
-
-    UInt64 hash_salt;
 
     LoggerPtr log;
 }; // namespace DM

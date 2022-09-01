@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Common/escapeForFileName.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
@@ -24,7 +25,6 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <common/likely.h>
-#include <common/logger_useful.h>
 #include <fmt/core.h>
 
 #include <random>
@@ -64,7 +64,7 @@ PathPool::PathPool(
     , enable_raft_compatible_mode(enable_raft_compatible_mode_)
     , global_capacity(global_capacity_)
     , file_provider(file_provider_)
-    , log(&Poco::Logger::get("PathPool"))
+    , log(Logger::get("PathPool"))
 {
     if (kvstore_paths.empty())
     {
@@ -134,7 +134,7 @@ StoragePathPool::StoragePathPool( //
     , path_need_database_name(path_need_database_name_)
     , global_capacity(std::move(global_capacity_))
     , file_provider(std::move(file_provider_))
-    , log(&Poco::Logger::get("StoragePathPool"))
+    , log(Logger::get("StoragePathPool"))
 {
     if (unlikely(database.empty() || table.empty()))
         throw Exception(fmt::format("Can NOT create StoragePathPool [database={}] [table={}]", database, table), ErrorCodes::LOGICAL_ERROR);
@@ -180,6 +180,52 @@ StoragePathPool & StoragePathPool::operator=(const StoragePathPool & rhs)
         log = rhs.log;
     }
     return *this;
+}
+
+bool StoragePathPool::createPSV2DeleteMarkFile()
+{
+    try
+    {
+        return Poco::File(getPSV2DeleteMarkFilePath()).createFile();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log);
+        return false;
+    }
+}
+
+bool StoragePathPool::isPSV2Deleted() const
+{
+    return Poco::File(getPSV2DeleteMarkFilePath()).exists();
+}
+
+void StoragePathPool::clearPSV2ObsoleteData()
+{
+    std::lock_guard lock{mutex};
+    auto drop_instance_data = [&](const String & prefix) {
+        for (auto & path_info : latest_path_infos)
+        {
+            try
+            {
+                auto path = fmt::format("{}/{}", path_info.path, prefix);
+                if (Poco::File dir(path); dir.exists())
+                {
+                    // This function is used to clean obsolete data in ps v2 instance at restart,
+                    // so no need to update global_capacity here.
+                    LOG_FMT_INFO(log, "Begin to drop obsolete data[dir={}]", path);
+                    file_provider->deleteDirectory(dir.path(), false, true);
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log);
+            }
+        }
+    };
+    drop_instance_data("meta");
+    drop_instance_data("log");
+    drop_instance_data("data");
 }
 
 void StoragePathPool::rename(const String & new_database, const String & new_table, bool clean_rename)
@@ -240,6 +286,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
         {
             if (Poco::File dir(path_info.path); dir.exists())
             {
+                LOG_FMT_INFO(log, "Begin to drop [dir={}] from main_path_infos", path_info.path);
                 file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // update global used size
@@ -269,6 +316,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
         {
             if (Poco::File dir(path_info.path); dir.exists())
             {
+                LOG_FMT_INFO(log, "Begin to drop [dir={}] from latest_path_infos", path_info.path);
                 file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // When PageStorage is dropped, it will update the size in global_capacity.
@@ -309,6 +357,11 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
         LOG_FMT_WARNING(log, "Path \"{}\" is missed.", old_path);
 }
 
+String StoragePathPool::getPSV2DeleteMarkFilePath() const
+{
+    return fmt::format("{}/{}", latest_path_infos[0].path, "PS_V2_DELETED");
+}
+
 //==========================================================================================
 // Generic functions
 //==========================================================================================
@@ -318,7 +371,7 @@ String genericChoosePath(const std::vector<T> & paths, //
                          const PathCapacityMetricsPtr & global_capacity, //
                          std::function<String(const std::vector<T> & paths, size_t idx)> path_generator, //
                          std::function<String(const T & path_info)> path_getter, //
-                         Poco::Logger * log, //
+                         LoggerPtr log, //
                          const String & log_msg)
 {
     if (paths.size() == 1)

@@ -86,16 +86,16 @@ try
         executeFunction(func_name_dec, createConstColumn<MyDateTime>(std::make_tuple(6), 10, date_time_with_fsp_data[0])));
     /// case 2, func(nullable(not null const))
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<UInt64>>(10, date_result[0]),
+        createConstColumn<UInt64>(10, date_result[0]),
         executeFunction(func_name_int, createConstColumn<Nullable<MyDate>>(10, date_data[0])));
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<UInt64>>(10, date_time_int_result[0]),
+        createConstColumn<UInt64>(10, date_time_int_result[0]),
         executeFunction(func_name_int, createConstColumn<Nullable<MyDateTime>>(std::make_tuple(0), 10, date_time_data[0])));
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<Decimal64>>(std::make_tuple(12, 0), 10, date_time_decimal_result[0]),
+        createConstColumn<Decimal64>(std::make_tuple(12, 0), 10, date_time_decimal_result[0]),
         executeFunction(func_name_dec, createConstColumn<Nullable<MyDateTime>>(std::make_tuple(0), 10, date_time_data[0])));
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<Decimal64>>(std::make_tuple(18, 6), 10, date_time_with_fsp_result[0]),
+        createConstColumn<Decimal64>(std::make_tuple(18, 6), 10, date_time_with_fsp_result[0]),
         executeFunction(func_name_dec, createConstColumn<Nullable<MyDateTime>>(std::make_tuple(6), 10, date_time_with_fsp_data[0])));
     /// case 3, func(nullable(null const))
     ASSERT_COLUMN_EQ(

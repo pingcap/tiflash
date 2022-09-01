@@ -27,12 +27,6 @@
 #include <optional>
 #include <set>
 
-
-namespace ProfileEvents
-{
-extern const Event FunctionExecute;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -225,7 +219,7 @@ void ExpressionAction::prepare(Block & sample_block)
         for (const auto & name : array_joined_columns)
         {
             ColumnWithTypeAndName & current = sample_block.getByName(name);
-            const DataTypeArray * array_type = typeid_cast<const DataTypeArray *>(&*current.type);
+            const auto * array_type = typeid_cast<const DataTypeArray *>(&*current.type);
             if (!array_type)
                 throw Exception("ARRAY JOIN requires array argument", ErrorCodes::TYPE_MISMATCH);
             current.type = array_type->getNestedType();
@@ -339,7 +333,6 @@ void ExpressionAction::execute(Block & block) const
         size_t num_columns_without_result = block.columns();
         block.insert({nullptr, result_type, result_name});
 
-        ProfileEvents::increment(ProfileEvents::FunctionExecute);
         function->execute(block, arguments, num_columns_without_result);
 
         break;
@@ -354,7 +347,7 @@ void ExpressionAction::execute(Block & block) const
         if (ColumnPtr converted = any_array_ptr->convertToFullColumnIfConst())
             any_array_ptr = converted;
 
-        const ColumnArray * any_array = typeid_cast<const ColumnArray *>(&*any_array_ptr);
+        const auto * any_array = typeid_cast<const ColumnArray *>(&*any_array_ptr);
         if (!any_array)
             throw Exception("ARRAY JOIN of not array: " + *array_joined_columns.begin(), ErrorCodes::TYPE_MISMATCH);
 
@@ -461,8 +454,7 @@ void ExpressionAction::executeOnTotals(Block & block) const
         join->joinTotals(block);
 }
 
-
-std::string ExpressionAction::toString() const
+String ExpressionAction::toString() const
 {
     std::stringstream ss;
     switch (type)
@@ -496,7 +488,7 @@ std::string ExpressionAction::toString() const
 
     case ARRAY_JOIN:
         ss << (array_join_is_left ? "LEFT " : "") << "ARRAY JOIN ";
-        for (NameSet::const_iterator it = array_joined_columns.begin(); it != array_joined_columns.end(); ++it)
+        for (auto it = array_joined_columns.begin(); it != array_joined_columns.end(); ++it)
         {
             if (it != array_joined_columns.begin())
                 ss << ", ";
@@ -506,7 +498,7 @@ std::string ExpressionAction::toString() const
 
     case JOIN:
         ss << "JOIN ";
-        for (NamesAndTypesList::const_iterator it = columns_added_by_join.begin(); it != columns_added_by_join.end(); ++it)
+        for (auto it = columns_added_by_join.begin(); it != columns_added_by_join.end(); ++it)
         {
             if (it != columns_added_by_join.begin())
                 ss << ", ";
@@ -529,7 +521,6 @@ std::string ExpressionAction::toString() const
     default:
         throw Exception("Unexpected Action type", ErrorCodes::LOGICAL_ERROR);
     }
-
     return ss.str();
 }
 
@@ -842,9 +833,9 @@ void ExpressionActions::finalize(const Names & output_columns)
     if (final_columns.empty() && !input_columns.empty())
         final_columns.insert(getSmallestColumn(input_columns));
 
-    for (NamesAndTypesList::iterator it = input_columns.begin(); it != input_columns.end();)
+    for (auto it = input_columns.begin(); it != input_columns.end();)
     {
-        NamesAndTypesList::iterator it0 = it;
+        auto it0 = it;
         ++it;
         if (!needed_columns.count(it0->name))
         {
@@ -931,8 +922,8 @@ std::string ExpressionActions::dumpActions() const
 
     ss << "\noutput:\n";
     NamesAndTypesList output_columns = sample_block.getNamesAndTypesList();
-    for (NamesAndTypesList::const_iterator it = output_columns.begin(); it != output_columns.end(); ++it)
-        ss << it->name << " " << it->type->getName() << "\n";
+    for (const auto & output_column : output_columns)
+        ss << output_column.name << " " << output_column.type->getName() << "\n";
 
     return ss.str();
 }

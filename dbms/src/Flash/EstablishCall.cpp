@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
@@ -19,6 +20,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_tunnel_init_rpc_failure_failpoint[];
+} // namespace FailPoints
+
 EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
     : service(service)
     , cq(cq)
@@ -31,7 +37,7 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "this" acts are
     // the tag uniquely identifying the request.
-    service->RequestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
+    service->requestEstablishMPPConnection(&ctx, &request, &responder, cq, notify_cq, this);
 }
 
 EstablishCallData::~EstablishCallData()
@@ -49,13 +55,13 @@ void EstablishCallData::tryFlushOne()
     // check whether there is a valid msg to write
     {
         std::unique_lock lk(mu);
-        if (ready && mpp_tunnel->isSendQueueNextPopNonBlocking()) //not ready or no packet
+        if (ready && async_tunnel_sender->isSendQueueNextPopNonBlocking()) //not ready or no packet
             ready = false;
         else
             return;
     }
     // there is a valid msg, do single write operation
-    mpp_tunnel->sendJob(false);
+    async_tunnel_sender->sendOne();
 }
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
@@ -71,7 +77,8 @@ void EstablishCallData::initRpc()
     std::exception_ptr eptr = nullptr;
     try
     {
-        service->EstablishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
+        service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
     }
     catch (...)
     {
@@ -79,7 +86,7 @@ void EstablishCallData::initRpc()
     }
     if (eptr)
     {
-        state = FINISH;
+        setFinishState("initRpc called");
         grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
         responderFinish(status);
     }
@@ -99,10 +106,20 @@ bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
     state = ERR_HANDLE;
-    if (write(packet))
-        err_status = grpc::Status::OK;
-    else
-        err_status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+    err_status = grpc::Status::OK;
+    write(packet);
+}
+
+void EstablishCallData::setFinishState(const String & msg)
+{
+    state = FINISH;
+    if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
+    {
+        String complete_msg = fmt::format("{}: {}",
+                                          async_tunnel_sender->getTunnelId(),
+                                          msg);
+        async_tunnel_sender->consumerFinishWithLock(complete_msg);
+    }
 }
 
 void EstablishCallData::writeDone(const ::grpc::Status & status)
@@ -110,7 +127,7 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
     state = FINISH;
     if (stopwatch)
     {
-        LOG_FMT_INFO(mpp_tunnel->getLogger(), "connection for {} cost {} ms.", mpp_tunnel->id(), stopwatch->elapsedMilliseconds());
+        LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
     }
     responderFinish(status);
 }
@@ -133,11 +150,7 @@ void EstablishCallData::cancel()
 
 void EstablishCallData::finishTunnelAndResponder()
 {
-    state = FINISH;
-    if (mpp_tunnel)
-    {
-        mpp_tunnel->consumerFinish("grpc writes failed.", true); //trigger mpp tunnel finish work
-    }
+    setFinishState("finishTunnelAndResponder called");
     grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
     responder.Finish(status, this);
 }
@@ -155,18 +168,24 @@ void EstablishCallData::proceed()
     else if (state == PROCESSING)
     {
         std::unique_lock lk(mu);
-        if (mpp_tunnel->isSendQueueNextPopNonBlocking())
+        if (async_tunnel_sender->isSendQueueNextPopNonBlocking())
         {
             ready = false;
             lk.unlock();
-            mpp_tunnel->sendJob(true);
+            async_tunnel_sender->sendOne(true);
         }
         else
             ready = true;
     }
     else if (state == ERR_HANDLE)
     {
-        state = FINISH;
+        if (async_tunnel_sender && !async_tunnel_sender->isConsumerFinished())
+        {
+            String complete_msg = fmt::format("{}: {}",
+                                              async_tunnel_sender->getTunnelId(),
+                                              "state is ERR_HANDLE");
+            async_tunnel_sender->consumerFinishWithLock(complete_msg);
+        }
         writeDone(err_status);
     }
     else
@@ -179,9 +198,9 @@ void EstablishCallData::proceed()
     }
 }
 
-void EstablishCallData::attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_)
+void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
 {
     stopwatch = std::make_shared<Stopwatch>();
-    this->mpp_tunnel = mpp_tunnel_;
+    this->async_tunnel_sender = async_tunnel_sender_;
 }
 } // namespace DB

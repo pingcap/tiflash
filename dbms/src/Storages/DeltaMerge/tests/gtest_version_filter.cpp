@@ -15,7 +15,9 @@
 #include <Core/Block.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
-#include <Storages/DeltaMerge/tests/dm_basic_include.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/InputStreamTestUtils.h>
 
 namespace DB
 {
@@ -77,7 +79,7 @@ BlockInputStreamPtr genInputStream(const BlocksList & blocks, const ColumnDefine
 
 } // namespace
 
-TEST(VersionFilter_test, MVCC)
+TEST(VersionFilterTest, MVCC)
 {
     BlocksList blocks;
 
@@ -93,48 +95,27 @@ TEST(VersionFilter_test, MVCC)
 
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 40, false);
-        in->readPrefix();
-        Block block = in->read();
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "Flash");
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 30, false);
-        in->readPrefix();
-        Block block = in->read();
-        ASSERT_EQ(block.rows(), 0UL);
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 20, false);
-        in->readPrefix();
-        Block block = in->read();
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "world");
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"world"})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 10, false);
-        in->readPrefix();
-        Block block = in->read();
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "hello");
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"hello"})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 9, false);
-        in->readPrefix();
-        Block block = in->read();
-        ASSERT_EQ(block.rows(), 0UL);
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
 }
 
-TEST(VersionFilter_test, MVCCCommonHandle)
+TEST(VersionFilterTest, MVCCCommonHandle)
 {
     BlocksList blocks;
 
@@ -150,48 +131,27 @@ TEST(VersionFilter_test, MVCCCommonHandle)
 
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 40, true);
-        in->readPrefix();
-        Block block = in->read();
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "Flash");
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"Flash"})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 30, true);
-        in->readPrefix();
-        Block block = in->read();
-        ASSERT_EQ(block.rows(), 0UL);
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 20, true);
-        in->readPrefix();
-        Block block = in->read();
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "world");
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"world"})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 10, true);
-        in->readPrefix();
-        Block block = in->read();
-        auto col = block.getByName(str_col_name);
-        auto val = col.column->getDataAt(0);
-        ASSERT_EQ(val, "hello");
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({"hello"})}));
     }
     {
         auto in = genInputStream<DM_VERSION_FILTER_MODE_MVCC>(blocks, columns, 9, true);
-        in->readPrefix();
-        Block block = in->read();
-        ASSERT_EQ(block.rows(), 0UL);
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(in, Strings({str_col_name}), createColumns({createColumn<String>({})}));
     }
 }
 
-TEST(VersionFilter_test, Compact)
+TEST(VersionFilterTest, Compact)
 {
     // TODO: currently it just test data statistics, add test for data correctness
     BlocksList blocks;
@@ -294,7 +254,7 @@ TEST(VersionFilter_test, Compact)
     }
 }
 
-TEST(VersionFilter_test, CompactCommonHandle)
+TEST(VersionFilterTest, CompactCommonHandle)
 {
     // TODO: currently it just test data statistics, add test for data correctness
     BlocksList blocks;

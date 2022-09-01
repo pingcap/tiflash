@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Parsers/IAST.h>
 
 #include <map>
@@ -46,8 +47,7 @@ public:
       */
     void perform();
 
-    LogicalExpressionsOptimizer(const LogicalExpressionsOptimizer &) = delete;
-    LogicalExpressionsOptimizer & operator=(const LogicalExpressionsOptimizer &) = delete;
+    DISALLOW_COPY(LogicalExpressionsOptimizer);
 
 private:
     /** The OR function with the expression.

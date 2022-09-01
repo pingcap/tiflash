@@ -96,6 +96,23 @@ namespace DB
             "This error usually occurs when the TiFlash server is busy or the TiFlash node is down.\n",                              \
             "");                                                                                                                     \
         )                                                                                                                            \
+    C(Planner,                                                                                                                       \
+        E(BadRequest, "Bad TiDB DAGRequest.",                                                                                        \
+            "This error is usually caused by incorrect TiDB DAGRequest. \n"                                                          \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        E(Unimplemented, "Some features are unimplemented.",                                                                         \
+            "This error may caused by unmatched TiDB and TiFlash versions, \n"                                                       \
+            "and should not occur in common case. \n"                                                                                \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        E(Internal, "TiFlash Planner internal error.",                                                                               \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        )                                                                                                                            \
     C(Table,                                                                                                                         \
         E(SchemaVersionError, "Schema version of target table in TiFlash is different from that in query.",                          \
             "TiFlash will sync the newest schema from TiDB before processing every query. \n"                                        \
@@ -194,56 +211,19 @@ class TiFlashErrorRegistry : public ext::Singleton<TiFlashErrorRegistry>
 public:
     friend ext::Singleton<TiFlashErrorRegistry>;
 
-    static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code)
-    {
-        auto & m_instance = instance();
-        auto error = m_instance.get(error_class, error_code);
-        if (error.has_value())
-        {
-            return error.value();
-        }
-        else
-        {
-            throw Exception("Unregistered TiFlashError: FLASH:" + error_class + ":" + error_code);
-        }
-    }
+    static TiFlashError simpleGet(const std::string & error_class, const std::string & error_code);
 
-    static TiFlashError simpleGet(const std::string & error_class, int error_code)
-    {
-        return simpleGet(error_class, std::to_string(error_code));
-    }
+    static TiFlashError simpleGet(const std::string & error_class, int error_code);
 
-    std::optional<TiFlashError> get(const std::string & error_class, const std::string & error_code) const
-    {
-        auto error = all_errors.find({error_class, error_code});
-        if (error != all_errors.end())
-        {
-            return error->second;
-        }
-        else
-        {
-            return {};
-        }
-    }
+    std::optional<TiFlashError> get(const std::string & error_class, const std::string & error_code) const;
 
-    std::optional<TiFlashError> get(const std::string & error_class, int error_code) const
-    {
-        return get(error_class, std::to_string(error_code));
-    }
+    std::optional<TiFlashError> get(const std::string & error_class, int error_code) const;
 
-    std::vector<TiFlashError> allErrors() const
-    {
-        std::vector<TiFlashError> res;
-        res.reserve(all_errors.size());
-        for (const auto & error : all_errors)
-        {
-            res.push_back(error.second);
-        }
-        return res;
-    }
+    std::vector<TiFlashError> allErrors() const;
 
 protected:
-    TiFlashErrorRegistry() { initialize(); }
+    TiFlashErrorRegistry();
+    ~TiFlashErrorRegistry();
 
 private:
     void registerError(const std::string & error_class, const std::string & error_code, const std::string & description, const std::string & workaround, const std::string & message_template = "");
@@ -252,8 +232,13 @@ private:
 
     void initialize();
 
+    struct Errors;
+
+    Errors & errors();
+    Errors & errors() const;
+
 private:
-    std::map<std::pair<std::string, std::string>, TiFlashError> all_errors;
+    Errors * inner_data; // PImpl
 };
 
 /// TiFlashException implements TiDB's standardized error.

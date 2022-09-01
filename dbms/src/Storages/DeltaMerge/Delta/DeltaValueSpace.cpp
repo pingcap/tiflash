@@ -97,6 +97,8 @@ size_t DeltaValueSpace::getValidCacheRows() const
 void DeltaValueSpace::recordRemoveColumnFilesPages(WriteBatches & wbs) const
 {
     persisted_file_set->recordRemoveColumnFilesPages(wbs);
+    // there could be some persisted column files in the `mem_table_set` which should be removed.
+    mem_table_set->recordRemoveColumnFilesPages(wbs);
 }
 
 bool DeltaValueSpace::appendColumnFile(DMContext & /*context*/, const ColumnFilePtr & column_file)
@@ -141,6 +143,19 @@ bool DeltaValueSpace::ingestColumnFiles(DMContext & /*context*/, const RowKeyRan
 
 bool DeltaValueSpace::flush(DMContext & context)
 {
+    bool v = false;
+    if (!is_flushing.compare_exchange_strong(v, true))
+    {
+        // other thread is flushing, just return.
+        LOG_FMT_DEBUG(log, "{}, Flush stop because other thread is flushing", simpleInfo());
+        return false;
+    }
+    SCOPE_EXIT({
+        bool v = true;
+        if (!is_flushing.compare_exchange_strong(v, false))
+            throw Exception(simpleInfo() + " is expected to be flushing", ErrorCodes::LOGICAL_ERROR);
+    });
+
     LOG_FMT_DEBUG(log, "{}, Flush start", info());
 
     /// We have two types of data needed to flush to disk:
@@ -236,12 +251,12 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_FMT_DEBUG(log, "{} Nothing to compact", simpleInfo());
             return true;
         }
-        log_storage_snap = context.storage_pool.log()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
+        log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
     // do compaction task
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
-    PageReader reader(context.storage_pool.getNamespaceId(), context.storage_pool.log(), std::move(log_storage_snap), context.getReadLimiter());
+    const auto & reader = context.storage_pool.newLogReader(context.getReadLimiter(), log_storage_snap);
     compaction_task->prepare(context, wbs, reader);
 
     {

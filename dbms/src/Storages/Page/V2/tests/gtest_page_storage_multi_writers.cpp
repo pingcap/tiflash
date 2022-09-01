@@ -224,7 +224,7 @@ public:
                 LOG_TRACE(&Poco::Logger::get("root"), e.displayText());
             }
 #else
-            std::vector<PageId> pageIds;
+            PageIds pageIds;
             for (size_t i = 0; i < 5; ++i)
             {
                 pageIds.emplace_back(random() % ctx.MAX_PAGE_ID);

@@ -36,7 +36,7 @@ public:
       */
     ParallelAggregatingBlockInputStream(
         const BlockInputStreams & inputs,
-        const BlockInputStreamPtr & additional_input_at_end,
+        const BlockInputStreams & additional_inputs_at_end,
         const Aggregator::Params & params_,
         const FileProviderPtr & file_provider_,
         bool final_,
@@ -50,7 +50,7 @@ public:
 
     Block getHeader() const override;
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         cnt += processor.getMaxThreads();
     }
@@ -62,6 +62,8 @@ protected:
     }
 
     Block readImpl() override;
+    void appendInfo(FmtBuffer & buffer) const override;
+
 
 private:
     const LoggerPtr log;

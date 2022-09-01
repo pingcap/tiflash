@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
@@ -20,6 +21,9 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/InputStreamFromASTInsertQuery.h>
 #include <DataStreams/copyData.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPReceiverSet.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <IO/ConcatReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Interpreters/IQuerySource.h>
@@ -53,7 +57,10 @@ extern const int LOGICAL_ERROR;
 extern const int QUERY_IS_TOO_LARGE;
 extern const int INTO_OUTFILE_NOT_ALLOWED;
 } // namespace ErrorCodes
-
+namespace FailPoints
+{
+extern const char random_interpreter_failpoint[];
+} // namespace FailPoints
 namespace
 {
 void checkASTSizeLimits(const IAST & ast, const Settings & settings)
@@ -226,6 +233,17 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             context.setProcessListElement(&process_list_entry->get());
         }
 
+        // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
+        // so that we can propagate current_memory_tracker into them.
+        if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
+        {
+            if (context.getDAGContext()->tunnel_set)
+                context.getDAGContext()->tunnel_set->updateMemTracker();
+            if (context.getDAGContext()->getMppReceiverSet())
+                context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+        }
+
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
         auto interpreter = query_src.interpreter(context, stage);
         res = interpreter->execute();
 
@@ -422,7 +440,7 @@ BlockIO executeQuery(
 }
 
 
-BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage)
+BlockIO executeQuery(IQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage)
 {
     BlockIO streams;
     std::tie(std::ignore, streams) = executeQueryImpl(dag, context, internal, stage);
@@ -480,7 +498,7 @@ void executeQuery(
 
         if (streams.in)
         {
-            const ASTQueryWithOutput * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
+            const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
             WriteBuffer * out_buf = &ostr;
             std::optional<WriteBufferFromFile> out_file_buf;

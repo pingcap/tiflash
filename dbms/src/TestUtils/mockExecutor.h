@@ -14,26 +14,40 @@
 
 #pragma once
 
+#include <Core/ColumnsWithTypeAndName.h>
+#include <Debug/MockStorage.h>
 #include <Debug/astToExecutor.h>
+#include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
+#include <Storages/Transaction/Collator.h>
 #include <tipb/executor.pb.h>
-
-#include <initializer_list>
-#include <unordered_map>
 
 namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
-using MockColumnInfos = std::vector<MockColumnInfo>;
-using MockColumnInfoList = std::initializer_list<MockColumnInfo>;
+using MockColumnInfoVec = std::vector<MockColumnInfo>;
 using MockTableName = std::pair<String, String>;
 using MockOrderByItem = std::pair<String, bool>;
-using MockOrderByItems = std::initializer_list<MockOrderByItem>;
-using MockColumnNames = std::initializer_list<String>;
-using MockAsts = std::initializer_list<ASTPtr>;
+using MockOrderByItemVec = std::vector<MockOrderByItem>;
+using MockPartitionByItem = std::pair<String, bool>;
+using MockPartitionByItemVec = std::vector<MockPartitionByItem>;
+using MockColumnNameVec = std::vector<String>;
+using MockAstVec = std::vector<ASTPtr>;
+using MockWindowFrame = mock::MockWindowFrame;
 
 class MockDAGRequestContext;
+
+inline int32_t convertToTiDBCollation(int32_t collation)
+{
+    return -(abs(collation));
+}
+
+enum class DAGRequestType
+{
+    tree,
+    list,
+};
 
 /** Responsible for Hand write tipb::DAGRequest
   * Use this class to mock DAGRequest, then feed the DAGRequest into 
@@ -51,9 +65,10 @@ public:
         return executor_index;
     }
 
-    explicit DAGRequestBuilder(size_t & index)
+    explicit DAGRequestBuilder(size_t & index, Int32 collator = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : executor_index(index)
     {
+        properties.collator = -abs(collator);
     }
 
     ExecutorPtr getRoot()
@@ -61,14 +76,14 @@ public:
         return root;
     }
 
-    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context);
+    std::shared_ptr<tipb::DAGRequest> build(MockDAGRequestContext & mock_context, DAGRequestType type = DAGRequestType::tree);
+    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context);
+    QueryTasks buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties);
 
-    DAGRequestBuilder & mockTable(const String & db, const String & table, const MockColumnInfos & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfos & columns);
-    DAGRequestBuilder & mockTable(const MockTableName & name, const MockColumnInfoList & columns);
+    DAGRequestBuilder & mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns);
+    DAGRequestBuilder & mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns);
 
-    DAGRequestBuilder & exchangeReceiver(const MockColumnInfos & columns);
-    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoList & columns);
+    DAGRequestBuilder & exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     DAGRequestBuilder & filter(ASTPtr filter_expr);
 
@@ -77,28 +92,60 @@ public:
 
     DAGRequestBuilder & topN(ASTPtr order_exprs, ASTPtr limit_expr);
     DAGRequestBuilder & topN(const String & col_name, bool desc, int limit);
-    DAGRequestBuilder & topN(MockOrderByItems order_by_items, int limit);
-    DAGRequestBuilder & topN(MockOrderByItems order_by_items, ASTPtr limit_expr);
+    DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, int limit);
+    DAGRequestBuilder & topN(MockOrderByItemVec order_by_items, ASTPtr limit_expr);
 
-    DAGRequestBuilder & project(const String & col_name);
-    DAGRequestBuilder & project(MockAsts expr);
-    DAGRequestBuilder & project(MockColumnNames col_names);
+    DAGRequestBuilder & project(std::initializer_list<ASTPtr> exprs)
+    {
+        return project(MockAstVec{exprs});
+    }
+    DAGRequestBuilder & project(MockAstVec exprs);
+
+    DAGRequestBuilder & project(std::initializer_list<String> exprs)
+    {
+        return project(MockColumnNameVec{exprs});
+    }
+    DAGRequestBuilder & project(MockColumnNameVec col_names);
+
 
     DAGRequestBuilder & exchangeSender(tipb::ExchangeType exchange_type);
 
-    // Currentlt only support inner join, left join and right join.
-    // TODO support more types of join.
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list);
-    DAGRequestBuilder & join(const DAGRequestBuilder & right, ASTPtr using_expr_list, ASTTableJoin::Kind kind);
+    /// User should prefer using other simplified join buidler API instead of this one unless he/she have to test
+    /// join conditional expressions and knows how TiDB translates sql's `join on` clause to conditional expressions.
+    /// Note that since our framework does not support qualified column name yet, while building column reference
+    /// the first column with the matching name in correspoding table(s) will be used.
+    /// todo: support qualified name column reference in expression
+    ///
+    /// @param join_col_exprs matching columns for the joined table, which must have the same name
+    /// @param left_conds conditional expressions which only reference left table and the join type is left kind
+    /// @param right_conds conditional expressions which only reference right table and the join type is right kind
+    /// @param other_conds other conditional expressions
+    /// @param other_eq_conds_from_in equality expressions within in subquery whose join type should be AntiSemiJoin, AntiLeftOuterSemiJoin or LeftOuterSemiJoin
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs, MockAstVec left_conds, MockAstVec right_conds, MockAstVec other_conds, MockAstVec other_eq_conds_from_in);
+    DAGRequestBuilder & join(const DAGRequestBuilder & right, tipb::JoinType tp, MockAstVec join_col_exprs)
+    {
+        return join(right, tp, join_col_exprs, {}, {}, {}, {});
+    }
+
 
     // aggregation
     DAGRequestBuilder & aggregation(ASTPtr agg_func, ASTPtr group_by_expr);
-    DAGRequestBuilder & aggregation(MockAsts agg_funcs, MockAsts group_by_exprs);
+    DAGRequestBuilder & aggregation(MockAstVec agg_funcs, MockAstVec group_by_exprs);
+
+    // window
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItem order_by, MockPartitionByItem partition_by, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(MockAstVec window_funcs, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & window(ASTPtr window_func, MockOrderByItemVec order_by_vec, MockPartitionByItemVec partition_by_vec, MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
+    DAGRequestBuilder & sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count = 0);
+
+    void setCollation(Int32 collator_) { properties.collator = convertToTiDBCollation(collator_); }
+    Int32 getCollation() const { return abs(properties.collator); }
 
 private:
     void initDAGRequest(tipb::DAGRequest & dag_request);
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
-    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfos & columns);
+    DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
     ExecutorPtr root;
     DAGProperties properties;
@@ -111,8 +158,9 @@ private:
 class MockDAGRequestContext
 {
 public:
-    explicit MockDAGRequestContext(Context context_)
+    explicit MockDAGRequestContext(Context context_, Int32 collation_ = TiDB::ITiDBCollator::UTF8MB4_BIN)
         : context(context_)
+        , collation(-abs(collation_))
     {
         index = 0;
     }
@@ -122,18 +170,27 @@ public:
         return DAGRequestBuilder(index);
     }
 
-    void addMockTable(const MockTableName & name, const MockColumnInfoList & columns);
-    void addMockTable(const String & db, const String & table, const MockColumnInfos & columns);
-    void addMockTable(const MockTableName & name, const MockColumnInfos & columns);
-    void addExchangeRelationSchema(String name, const MockColumnInfos & columns);
-    void addExchangeRelationSchema(String name, const MockColumnInfoList & columns);
-    DAGRequestBuilder scan(String db_name, String table_name);
-    DAGRequestBuilder receive(String exchange_name);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos);
+    void addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos);
+    void addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns);
+    void addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns);
+    void addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns);
+    void addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns);
+    void addExchangeReceiver(const String & name, MockColumnInfoVec columnInfos, ColumnsWithTypeAndName columns);
+
+    DAGRequestBuilder scan(const String & db_name, const String & table_name);
+    DAGRequestBuilder receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count = 0);
+
+    void setCollation(Int32 collation_) { collation = convertToTiDBCollation(collation_); }
+    Int32 getCollation() const { return abs(collation); }
+
+    MockStorage & mockStorage() { return mock_storage; }
 
 private:
     size_t index;
-    std::unordered_map<String, MockColumnInfos> mock_tables;
-    std::unordered_map<String, MockColumnInfos> exchange_schemas;
+    MockStorage mock_storage;
 
 public:
     // Currently don't support task_id, so the following to structure is useless,
@@ -141,22 +198,36 @@ public:
     // In TiFlash, we use task_id to identify an Mpp Task.
     std::unordered_map<String, std::vector<Int64>> receiver_source_task_ids_map;
     Context context;
+    Int32 collation;
 };
 
 ASTPtr buildColumn(const String & column_name);
 ASTPtr buildLiteral(const Field & field);
-ASTPtr buildFunction(MockAsts exprs, const String & name);
-ASTPtr buildOrderByItemList(MockOrderByItems order_by_items);
+ASTPtr buildFunction(MockAstVec exprs, const String & name);
+ASTPtr buildOrderByItemVec(MockOrderByItemVec order_by_items);
+
+MockWindowFrame buildDefaultRowsFrame();
 
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
+#define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))
 #define gt(expr1, expr2) makeASTFunction("greater", (expr1), (expr2))
 #define And(expr1, expr2) makeASTFunction("and", (expr1), (expr2))
 #define Or(expr1, expr2) makeASTFunction("or", (expr1), (expr2))
-#define NOT(expr) makeASTFunction("not", (expr1), (expr2))
-#define Max(expr) makeASTFunction("max", expr)
+#define NOT(expr) makeASTFunction("not", (expr))
+
+// Aggregation functions
+#define Max(expr) makeASTFunction("max", (expr))
+#define Min(expr) makeASTFunction("min", (expr))
+#define Count(expr) makeASTFunction("count", (expr))
+#define Sum(expr) makeASTFunction("sum", (expr))
+
+/// Window functions
+#define RowNumber() makeASTFunction("RowNumber")
+#define Rank() makeASTFunction("Rank")
+#define DenseRank() makeASTFunction("DenseRank")
 
 } // namespace DB::tests

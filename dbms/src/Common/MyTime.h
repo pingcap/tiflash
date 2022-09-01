@@ -24,6 +24,9 @@ namespace DB
 struct MyTimeBase
 {
     static constexpr Int64 SECOND_IN_ONE_DAY = 86400;
+    static constexpr Int64 SECOND_IN_ONE_HOUR = 3600;
+    static constexpr Int64 SECOND_IN_ONE_MINUTE = 60;
+
 
     // copied from https://github.com/pingcap/tidb/blob/master/types/time.go
     // Core time bit fields.
@@ -110,8 +113,8 @@ struct MyTimeBase
     std::tuple<int, int> calcWeek(UInt32 mode) const;
 
     // Check validity of time under specified SQL_MODE.
-    // May throw exception.
-    void check(bool allow_zero_in_date, bool allow_invalid_date) const;
+    // return false if time is invalid
+    bool isValid(bool allow_zero_in_date, bool allow_invalid_date) const;
 };
 
 struct MyDateTime : public MyTimeBase
@@ -178,8 +181,11 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
-Field parseMyDateTime(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
+static int8_t default_fsp = 6;
+static bool default_needCheckTimeValid = false;
+
+Field parseMyDateTime(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
@@ -192,6 +198,10 @@ MyDateTime convertUTC2TimeZoneByOffset(time_t utc_ts, UInt32 micro_second, Int64
 std::pair<time_t, UInt32> roundTimeByFsp(time_t second, UInt64 nano_second, UInt8 fsp);
 
 int calcDayNum(int year, int month, int day);
+void fromDayNum(MyDateTime & t, int day_num);
+
+// returns seconds since '0000-00-00'
+UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second);
 
 size_t maxFormattedDateTimeStringLength(const String & format);
 

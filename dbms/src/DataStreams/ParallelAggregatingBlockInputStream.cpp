@@ -13,22 +13,18 @@
 // limitations under the License.
 
 #include <Common/ClickHouseRevision.h>
+#include <Common/FmtUtils.h>
+#include <DataStreams/IBlockOutputStream.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
-
-
-namespace ProfileEvents
-{
-extern const Event ExternalAggregationMerge;
-}
-
 
 namespace DB
 {
 ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     const BlockInputStreams & inputs,
-    const BlockInputStreamPtr & additional_input_at_end,
+    const BlockInputStreams & additional_inputs_at_end,
     const Aggregator::Params & params_,
     const FileProviderPtr & file_provider_,
     bool final_,
@@ -45,11 +41,10 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     , keys_size(params.keys_size)
     , aggregates_size(params.aggregates_size)
     , handler(*this)
-    , processor(inputs, additional_input_at_end, max_threads, handler, log)
+    , processor(inputs, additional_inputs_at_end, max_threads, handler, log)
 {
     children = inputs;
-    if (additional_input_at_end)
-        children.push_back(additional_input_at_end);
+    children.insert(children.end(), additional_inputs_at_end.begin(), additional_inputs_at_end.end());
 }
 
 
@@ -97,8 +92,6 @@ Block ParallelAggregatingBlockInputStream::readImpl()
             /** If there are temporary files with partially-aggregated data on the disk,
                 *  then read and merge them, spending the minimum amount of memory.
                 */
-
-            ProfileEvents::increment(ProfileEvents::ExternalAggregationMerge);
 
             const auto & files = aggregator.getTemporaryFiles();
             BlockInputStreams input_streams;
@@ -202,10 +195,9 @@ void ParallelAggregatingBlockInputStream::Handler::onException(std::exception_pt
     Int32 old_value = -1;
     parent.first_exception_index.compare_exchange_strong(old_value, static_cast<Int32>(thread_num), std::memory_order_seq_cst, std::memory_order_relaxed);
 
-    /// can not cancel parent inputStream or the exception might be lost
     if (!parent.executed)
-        /// kill the processor so ExchangeReceiver will be closed
-        parent.processor.cancel(true);
+        /// use cancel instead of kill to avoid too many useless error message
+        parent.cancel(false);
 }
 
 
@@ -273,6 +265,11 @@ void ParallelAggregatingBlockInputStream::execute()
             threads_data[0].aggregate_columns,
             threads_data[0].local_delta_memory,
             no_more_keys);
+}
+
+void ParallelAggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.fmtAppend(", max_threads: {}, final: {}", max_threads, final ? "true" : "false");
 }
 
 } // namespace DB

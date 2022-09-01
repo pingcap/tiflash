@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MPMCQueue.h>
+#include <Common/nocopyable.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <chrono>
@@ -82,27 +83,63 @@ protected:
     }
 
     template <typename T>
+    void ensureOpFail(MPMCQueueResult op_ret, const MPMCQueue<T> & queue, size_t old_size, bool push, bool try_op, bool timed_op)
+    {
+        auto op = push ? "push" : "pop";
+        auto throw_exp = [op] {
+            throw TiFlashTestException(fmt::format("Should {} fail", op));
+        };
+        auto queue_status = queue.getStatus();
+        auto new_size = queue.size();
+        if (queue_status == MPMCQueueStatus::NORMAL)
+        {
+            if (timed_op && op_ret != MPMCQueueResult::TIMEOUT)
+                throw_exp();
+            if (try_op && ((push && op_ret != MPMCQueueResult::FULL) || (!push && op_ret != MPMCQueueResult::EMPTY)))
+                throw_exp();
+            if (!try_op && !timed_op && op_ret != MPMCQueueResult::OK)
+                throw_exp();
+        }
+        else
+        {
+            if (static_cast<int>(op_ret) != static_cast<int>(queue_status))
+                throw_exp();
+        }
+        if (old_size != new_size)
+            throw TiFlashTestException(fmt::format("Size changed from {} to {} without {}", old_size, new_size, op));
+    }
+
+    template <typename T>
     void testCannotPush(MPMCQueue<T> & queue)
     {
         auto old_size = queue.size();
-        auto res = queue.push(ValueHelper<T>::make(-1));
-        auto new_size = queue.size();
-        if (res)
-            throw TiFlashTestException("Should push fail");
-        if (old_size != new_size)
-            throw TiFlashTestException(fmt::format("Size changed from {} to {} without push", old_size, new_size));
+        ensureOpFail(
+            queue.push(ValueHelper<T>::make(-1)),
+            queue,
+            old_size,
+            true,
+            false,
+            false);
     }
 
     template <typename T>
     void testCannotTryPush(MPMCQueue<T> & queue)
     {
         auto old_size = queue.size();
-        auto res = queue.tryPush(ValueHelper<T>::make(-1), std::chrono::microseconds(1));
-        auto new_size = queue.size();
-        if (res)
-            throw TiFlashTestException("Should push fail");
-        if (old_size != new_size)
-            throw TiFlashTestException(fmt::format("Size changed from {} to {} without push", old_size, new_size));
+        ensureOpFail(
+            queue.tryPush(ValueHelper<T>::make(-1)),
+            queue,
+            old_size,
+            true,
+            true,
+            false);
+        ensureOpFail(
+            queue.pushTimeout(ValueHelper<T>::make(-1), std::chrono::microseconds(1)),
+            queue,
+            old_size,
+            true,
+            false,
+            true);
     }
 
     template <typename T>
@@ -110,12 +147,13 @@ protected:
     {
         auto old_size = queue.size();
         T res;
-        bool ok = queue.pop(res);
-        auto new_size = queue.size();
-        if (ok)
-            throw TiFlashTestException("Should pop fail");
-        if (old_size != new_size)
-            throw TiFlashTestException(fmt::format("Size changed from {} to {} without pop", old_size, new_size));
+        ensureOpFail(
+            queue.pop(res),
+            queue,
+            old_size,
+            false,
+            false,
+            false);
     }
 
     template <typename T>
@@ -123,12 +161,20 @@ protected:
     {
         auto old_size = queue.size();
         T res;
-        bool ok = queue.tryPop(res, std::chrono::microseconds(1));
-        auto new_size = queue.size();
-        if (ok)
-            throw TiFlashTestException("Should pop fail");
-        if (old_size != new_size)
-            throw TiFlashTestException(fmt::format("Size changed from {} to {} without pop", old_size, new_size));
+        ensureOpFail(
+            queue.tryPop(res),
+            queue,
+            old_size,
+            false,
+            true,
+            false);
+        ensureOpFail(
+            queue.popTimeout(res, std::chrono::microseconds(1)),
+            queue,
+            old_size,
+            false,
+            false,
+            true);
     }
 
     template <typename T>
@@ -152,8 +198,7 @@ protected:
         for (int i = 0; i < n; ++i)
         {
             T res;
-            bool ok = queue.pop(res);
-            if (!ok)
+            if (queue.pop(res) != MPMCQueueResult::OK)
                 throw TiFlashTestException("Should pop a value");
             int expect = start++;
             int actual = ValueHelper<T>::extract(res);
@@ -191,7 +236,7 @@ protected:
     {
         MPMCQueue<T> queue(capacity);
         std::vector<std::thread> readers;
-        std::vector<UInt8> reader_results(reader_cnt, -1);
+        std::vector<MPMCQueueResult> reader_results(reader_cnt, MPMCQueueResult::EMPTY);
 
         auto read_func = [&](int i) {
             T res;
@@ -207,7 +252,7 @@ protected:
         for (int i = 0; i < reader_cnt; ++i)
         {
             readers[i].join();
-            ASSERT_EQ(reader_results[i], 0);
+            ASSERT_EQ(reader_results[i], MPMCQueueResult::FINISHED);
         }
 
         ASSERT_EQ(queue.size(), 0);
@@ -215,13 +260,13 @@ protected:
         for (int i = 0; i < 10; ++i)
         {
             T res;
-            ASSERT_TRUE(!queue.pop(res));
+            ASSERT_TRUE(queue.pop(res) == MPMCQueueResult::FINISHED);
         }
 
         for (int i = 0; i < 10; ++i)
         {
             auto res = queue.push(ValueHelper<T>::make(i));
-            ASSERT_TRUE(!res);
+            ASSERT_TRUE(res == MPMCQueueResult::FINISHED);
         }
     }
 
@@ -230,7 +275,7 @@ protected:
     {
         MPMCQueue<T> queue(capacity);
         std::vector<std::thread> readers;
-        std::vector<UInt8> reader_results(reader_cnt, -1);
+        std::vector<MPMCQueueResult> reader_results(reader_cnt, MPMCQueueResult::EMPTY);
 
         auto read_func = [&](int i) {
             T res;
@@ -246,19 +291,19 @@ protected:
         for (int i = 0; i < reader_cnt; ++i)
         {
             readers[i].join();
-            ASSERT_EQ(reader_results[i], 0);
+            ASSERT_EQ(reader_results[i], MPMCQueueResult::CANCELLED);
         }
 
         for (int i = 0; i < 10; ++i)
         {
             T res;
-            ASSERT_TRUE(!queue.pop(res));
+            ASSERT_TRUE(queue.pop(res) == MPMCQueueResult::CANCELLED);
         }
 
         for (int i = 0; i < 10; ++i)
         {
             auto res = queue.push(ValueHelper<T>::make(i));
-            ASSERT_TRUE(!res);
+            ASSERT_TRUE(res == MPMCQueueResult::CANCELLED);
         }
     }
 
@@ -271,7 +316,7 @@ protected:
 
         auto read_func = [&](int i) {
             T res;
-            reader_results[i] += queue.pop(res);
+            reader_results[i] += queue.pop(res) == MPMCQueueResult::OK;
         };
 
         for (int i = 0; i < reader_cnt; ++i)
@@ -301,7 +346,7 @@ protected:
 
         auto write_func = [&](int i) {
             auto res = queue.push(ValueHelper<T>::make(i));
-            writer_results[i] += res;
+            writer_results[i] += res == MPMCQueueResult::OK;
         };
 
         for (int i = 0; i < writer_cnt; ++i)
@@ -346,7 +391,7 @@ protected:
             while (true)
             {
                 T res;
-                if (queue.pop(res))
+                if (queue.pop(res) == MPMCQueueResult::OK)
                     reader_results.push_back(ValueHelper<T>::extract(res));
                 else
                     break;
@@ -357,7 +402,7 @@ protected:
             for (int x = i;; x += writer_cnt)
             {
                 auto res = queue.push(ValueHelper<T>::make(x));
-                if (res)
+                if (res == MPMCQueueResult::OK)
                     writer_results[i].push_back(x);
                 else
                     break;
@@ -394,7 +439,7 @@ protected:
             while (true)
             {
                 T res;
-                if (queue.pop(res))
+                if (queue.pop(res) == MPMCQueueResult::OK)
                     reader_results[i].push_back(ValueHelper<T>::extract(res));
                 else
                     break;
@@ -405,7 +450,7 @@ protected:
             for (int x = i;; x += reader_writer_cnt)
             {
                 auto res = queue.push(ValueHelper<T>::make(x));
-                if (res)
+                if (res == MPMCQueueResult::OK)
                     writer_results[i].push_back(x);
                 else
                     break;
@@ -465,13 +510,14 @@ protected:
     struct ThrowInjectable
     {
         ThrowInjectable() = default;
-        ThrowInjectable(const ThrowInjectable &) = delete;
+
+        DISALLOW_COPY(ThrowInjectable);
+
         ThrowInjectable(ThrowInjectable && rhs)
         {
             throwOrMove(std::move(rhs));
         }
 
-        ThrowInjectable & operator=(const ThrowInjectable &) = delete;
         ThrowInjectable & operator=(ThrowInjectable && rhs)
         {
             if (this != &rhs)
@@ -584,8 +630,7 @@ try
 
     throw_when_move.store(false);
     ThrowInjectable res;
-    bool ok = queue.pop(res);
-    ASSERT_TRUE(ok);
+    ASSERT_EQ(queue.pop(res), MPMCQueueResult::OK);
     ASSERT_EQ(res.throw_when_move, &throw_when_move);
     ASSERT_EQ(queue.size(), 0);
 
@@ -610,17 +655,17 @@ try
     MPMCQueue<int> q(2);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_FALSE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
+    ASSERT_TRUE(q.push(1) == MPMCQueueResult::OK);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
     int val;
-    ASSERT_TRUE(q.pop(val));
+    ASSERT_TRUE(q.pop(val) == MPMCQueueResult::OK);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_FALSE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
+    ASSERT_TRUE(q.push(1) == MPMCQueueResult::OK);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.push(1));
+    ASSERT_TRUE(q.push(1) == MPMCQueueResult::OK);
     ASSERT_FALSE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
 
@@ -628,10 +673,10 @@ try
     ASSERT_FALSE(q.finish());
 
     //check isNextPush/PopNonBlocking after finish
-    ASSERT_TRUE(q.pop(val));
+    ASSERT_TRUE(q.pop(val) == MPMCQueueResult::OK);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
-    ASSERT_TRUE(q.pop(val));
+    ASSERT_TRUE(q.pop(val) == MPMCQueueResult::OK);
     ASSERT_TRUE(q.isNextPushNonBlocking());
     ASSERT_TRUE(q.isNextPopNonBlocking());
 }

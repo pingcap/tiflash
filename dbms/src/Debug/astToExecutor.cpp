@@ -15,6 +15,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <DataTypes/FieldToDataType.h>
+#include <Debug/MockComputeServerManager.h>
 #include <Debug/astToExecutor.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
@@ -24,13 +25,101 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Poco/StringTokenizer.h>
 #include <common/logger_useful.h>
 
 namespace DB
 {
+using ASTPartitionByElement = ASTOrderByElement;
+using MockComputeServerManager = tests::MockComputeServerManager;
+void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
+{
+    *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
+    expr->mutable_field_type()->set_collate(collator_id);
+    if (!val_field.isNull())
+    {
+        WriteBufferFromOwnString ss;
+        switch (ci.tp)
+        {
+        case TiDB::TypeLongLong:
+        case TiDB::TypeLong:
+        case TiDB::TypeShort:
+        case TiDB::TypeTiny:
+        case TiDB::TypeInt24:
+            if (ci.hasUnsignedFlag())
+            {
+                expr->set_tp(tipb::ExprType::Uint64);
+                UInt64 val = val_field.safeGet<UInt64>();
+                encodeDAGUInt64(val, ss);
+            }
+            else
+            {
+                expr->set_tp(tipb::ExprType::Int64);
+                Int64 val = val_field.safeGet<Int64>();
+                encodeDAGInt64(val, ss);
+            }
+            break;
+        case TiDB::TypeFloat:
+        {
+            expr->set_tp(tipb::ExprType::Float32);
+            auto val = static_cast<Float32>(val_field.safeGet<Float64>());
+            encodeDAGFloat32(val, ss);
+            break;
+        }
+        case TiDB::TypeDouble:
+        {
+            expr->set_tp(tipb::ExprType::Float64);
+            Float64 val = val_field.safeGet<Float64>();
+            encodeDAGFloat64(val, ss);
+            break;
+        }
+        case TiDB::TypeString:
+        {
+            expr->set_tp(tipb::ExprType::String);
+            const auto & val = val_field.safeGet<String>();
+            encodeDAGString(val, ss);
+            break;
+        }
+        case TiDB::TypeNewDecimal:
+        {
+            expr->set_tp(tipb::ExprType::MysqlDecimal);
+            encodeDAGDecimal(val_field, ss);
+            break;
+        }
+        case TiDB::TypeDate:
+        {
+            expr->set_tp(tipb::ExprType::MysqlTime);
+            UInt64 val = val_field.safeGet<UInt64>();
+            encodeDAGUInt64(MyDate(val).toPackedUInt(), ss);
+            break;
+        }
+        case TiDB::TypeDatetime:
+        case TiDB::TypeTimestamp:
+        {
+            expr->set_tp(tipb::ExprType::MysqlTime);
+            UInt64 val = val_field.safeGet<UInt64>();
+            encodeDAGUInt64(MyDateTime(val).toPackedUInt(), ss);
+            break;
+        }
+        case TiDB::TypeTime:
+        {
+            expr->set_tp(tipb::ExprType::MysqlDuration);
+            Int64 val = val_field.safeGet<Int64>();
+            encodeDAGInt64(val, ss);
+            break;
+        }
+        default:
+            throw Exception(fmt::format("Type {} does not support literal in function unit test", getDataTypeByColumnInfo(ci)->getName()));
+        }
+        expr->set_val(ss.releaseStr());
+    }
+    else
+    {
+        expr->set_tp(tipb::ExprType::Null);
+    }
+}
+
 namespace
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
@@ -83,6 +172,7 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"cast_decimal_datetime", tipb::ScalarFuncSig::CastDecimalAsTime},
     {"cast_time_datetime", tipb::ScalarFuncSig::CastTimeAsTime},
     {"cast_string_datetime", tipb::ScalarFuncSig::CastStringAsTime},
+    {"concat", tipb::ScalarFuncSig::Concat},
     {"round_int", tipb::ScalarFuncSig::RoundInt},
     {"round_uint", tipb::ScalarFuncSig::RoundInt},
     {"round_dec", tipb::ScalarFuncSig::RoundDec},
@@ -103,6 +193,12 @@ std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
     {"group_concat", tipb::ExprType::GroupConcat},
 });
 
+std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
+    {"RowNumber", tipb::ExprType::RowNumber},
+    {"Rank", tipb::ExprType::Rank},
+    {"DenseRank", tipb::ExprType::DenseRank},
+});
+
 DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
 {
     DAGColumnInfo output = input;
@@ -110,78 +206,11 @@ DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
     return output;
 }
 
-void literalToPB(tipb::Expr * expr, const Field & value, uint32_t collator_id)
+void literalToPB(tipb::Expr * expr, const Field & value, int32_t collator_id)
 {
-    WriteBufferFromOwnString ss;
-    switch (value.getType())
-    {
-    case Field::Types::Which::Null:
-    {
-        expr->set_tp(tipb::Null);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeNull);
-        ft->set_collate(collator_id);
-        // Null literal expr doesn't need value.
-        break;
-    }
-    case Field::Types::Which::UInt64:
-    {
-        expr->set_tp(tipb::Uint64);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGUInt64(value.get<UInt64>(), ss);
-        break;
-    }
-    case Field::Types::Which::Int64:
-    {
-        expr->set_tp(tipb::Int64);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGInt64(value.get<Int64>(), ss);
-        break;
-    }
-    case Field::Types::Which::Float64:
-    {
-        expr->set_tp(tipb::Float64);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeFloat);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGFloat64(value.get<Float64>(), ss);
-        break;
-    }
-    case Field::Types::Which::Decimal32:
-    case Field::Types::Which::Decimal64:
-    case Field::Types::Which::Decimal128:
-    case Field::Types::Which::Decimal256:
-    {
-        expr->set_tp(tipb::MysqlDecimal);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeNewDecimal);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        encodeDAGDecimal(value, ss);
-        break;
-    }
-    case Field::Types::Which::String:
-    {
-        expr->set_tp(tipb::String);
-        auto * ft = expr->mutable_field_type();
-        ft->set_tp(TiDB::TypeString);
-        ft->set_flag(TiDB::ColumnFlagNotNull);
-        ft->set_collate(collator_id);
-        // TODO: Align with TiDB.
-        encodeDAGBytes(value.get<String>(), ss);
-        break;
-    }
-    default:
-        throw Exception(String("Unsupported literal type: ") + value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
-    }
-    expr->set_val(ss.releaseStr());
+    DataTypePtr type = applyVisitor(FieldToDataType(), value);
+    ColumnInfo ci = reverseGetColumnInfo({"", type}, 0, Field(), true);
+    literalFieldToTiPBExpr(ci, value, expr, collator_id);
 }
 
 String getFunctionNameForConstantFolding(tipb::Expr * expr)
@@ -196,8 +225,7 @@ String getFunctionNameForConstantFolding(tipb::Expr * expr)
     }
 }
 
-
-void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & context)
+void foldConstant(tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     if (expr->tp() == tipb::ScalarFunc)
     {
@@ -255,22 +283,21 @@ void foldConstant(tipb::Expr * expr, uint32_t collator_id, const Context & conte
     }
 }
 
-void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, uint32_t collator_id, const Context & context);
+void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context);
 
-void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, uint32_t collator_id);
+void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id);
 
-
-void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t collator_id, const Context & context)
+void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
-    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         identifierToPB(input, id, expr, collator_id);
     }
-    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
         functionToPB(input, func, expr, collator_id, context);
     }
-    else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
+    else if (auto * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
         literalToPB(expr, lit->value, collator_id);
     }
@@ -280,17 +307,23 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, uint32_t co
     }
 }
 
-void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, uint32_t collator_id, const Context & context)
+auto checkSchema(const DAGSchema & input, String checked_column)
+{
+    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+        auto [checked_db_name, checked_table_name, checked_column_name] = splitQualifiedName(checked_column);
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        if (checked_table_name.empty())
+            return column_name == checked_column_name;
+        else
+            return table_name == checked_table_name && column_name == checked_column_name;
+    });
+    return ft;
+}
+
+void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     /// aggregation function is handled in Aggregation, so just treated as a column
-    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-        auto column_name = splitQualifiedName(func->getColumnName());
-        auto field_name = splitQualifiedName(field.first);
-        if (column_name.first.empty())
-            return field_name.second == column_name.second;
-        else
-            return field_name.first == column_name.first && field_name.second == column_name.second;
-    });
+    auto ft = checkSchema(input, func->getColumnName());
     if (ft != input.end())
     {
         expr->set_tp(tipb::ColumnRef);
@@ -435,6 +468,14 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
         ft->set_collate(collator_id);
         break;
     }
+    case tipb::ScalarFuncSig::Concat:
+    {
+        expr->set_sig(it_sig->second);
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(TiDB::TypeString);
+        ft->set_collate(collator_id);
+        break;
+    }
     case tipb::ScalarFuncSig::RoundInt:
     case tipb::ScalarFuncSig::RoundWithFracInt:
     {
@@ -483,16 +524,9 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
     foldConstant(expr, collator_id, context);
 }
 
-void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, uint32_t collator_id)
+void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * expr, int32_t collator_id)
 {
-    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-        auto column_name = splitQualifiedName(id->getColumnName());
-        auto field_name = splitQualifiedName(field.first);
-        if (column_name.first.empty())
-            return field_name.second == column_name.second;
-        else
-            return field_name.first == column_name.first && field_name.second == column_name.second;
-    });
+    auto ft = checkSchema(input, id->getColumnName());
     if (ft == input.end())
         throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
     expr->set_tp(tipb::ColumnRef);
@@ -505,28 +539,27 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
 
 void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unordered_set<String> & used_columns)
 {
-    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
-        auto column_name = splitQualifiedName(id->getColumnName());
-        if (!column_name.first.empty())
+        auto [db_name, table_name, column_name] = splitQualifiedName(id->getColumnName());
+        if (!table_name.empty())
             used_columns.emplace(id->getColumnName());
         else
         {
             bool found = false;
             for (const auto & field : input)
             {
-                auto field_name = splitQualifiedName(field.first);
-                if (field_name.second == column_name.second)
+                if (splitQualifiedName(field.first).column_name == column_name)
                 {
                     if (found)
-                        throw Exception("ambiguous column for " + column_name.second);
+                        throw Exception("ambiguous column for " + column_name);
                     found = true;
                     used_columns.emplace(field.first);
                 }
             }
         }
     }
-    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
         if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
         {
@@ -535,14 +568,7 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
         else
         {
             /// check function
-            auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-                auto column_name = splitQualifiedName(func->getColumnName());
-                auto field_name = splitQualifiedName(field.first);
-                if (column_name.first.empty())
-                    return field_name.second == column_name.second;
-                else
-                    return field_name.first == column_name.first && field_name.second == column_name.second;
-            });
+            auto ft = checkSchema(input, func->getColumnName());
             if (ft != input.end())
             {
                 used_columns.emplace(func->getColumnName());
@@ -559,22 +585,15 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
 TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
 {
     TiDB::ColumnInfo ci;
-    if (ASTIdentifier * id = typeid_cast<ASTIdentifier *>(ast.get()))
+    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
     {
         /// check column
-        auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-            auto column_name = splitQualifiedName(id->getColumnName());
-            auto field_name = splitQualifiedName(field.first);
-            if (column_name.first.empty())
-                return field_name.second == column_name.second;
-            else
-                return field_name.first == column_name.first && field_name.second == column_name.second;
-        });
+        auto ft = checkSchema(input, id->getColumnName());
         if (ft == input.end())
             throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
         ci = ft->second;
     }
-    else if (ASTFunction * func = typeid_cast<ASTFunction *>(ast.get()))
+    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
     {
         /// check function
         String func_name_lowercase = Poco::toLower(func->name);
@@ -692,7 +711,7 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
             compileExpr(input, child_ast);
         }
     }
-    else if (ASTLiteral * lit = typeid_cast<ASTLiteral *>(ast.get()))
+    else if (auto * lit = typeid_cast<ASTLiteral *>(ast.get()))
     {
         switch (lit->value.getType())
         {
@@ -752,35 +771,41 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
 namespace Debug
 {
 String LOCAL_HOST = "127.0.0.1:3930";
+
 void setServiceAddr(const std::string & addr)
 {
     LOCAL_HOST = addr;
 }
 } // namespace Debug
 
-std::pair<String, String> splitQualifiedName(const String & s)
+ColumnName splitQualifiedName(const String & s)
 {
-    std::pair<String, String> ret;
+    ColumnName ret;
     Poco::StringTokenizer string_tokens(s, ".");
-    if (string_tokens.count() == 1)
+
+    switch (string_tokens.count())
     {
-        ret.second = s;
-    }
-    else if (string_tokens.count() == 2)
-    {
-        ret.first = string_tokens[0];
-        ret.second = string_tokens[1];
-    }
-    else
-    {
-        throw Exception("Invalid identifier name");
+    case 1:
+        ret.column_name = s;
+        break;
+    case 2:
+        ret.table_name = string_tokens[0];
+        ret.column_name = string_tokens[1];
+        break;
+    case 3:
+        ret.db_name = string_tokens[0];
+        ret.table_name = string_tokens[1];
+        ret.column_name = string_tokens[2];
+        break;
+    default:
+        throw Exception("Invalid identifier name " + s);
     }
     return ret;
 }
 
 namespace mock
 {
-bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeSender);
     tipb_executor->set_executor_id(name);
@@ -798,24 +823,37 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t col
         tipb_type.set_collate(collator_id);
         *exchange_sender->add_types() = tipb_type;
     }
+
     for (auto task_id : mpp_info.sender_target_task_ids)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
         meta.set_partition_id(mpp_info.partition_id);
-        meta.set_address(Debug::LOCAL_HOST);
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        meta.set_address(addr);
+
         auto * meta_string = exchange_sender->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
+
+    for (auto & field : output_schema)
+    {
+        auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+        tipb_type.set_collate(collator_id);
+        auto * field_type = exchange_sender->add_all_field_types();
+        *field_type = tipb_type;
+    }
+
     auto * child_executor = exchange_sender->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
-bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context &)
+bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
     tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
     for (auto & field : output_schema)
     {
@@ -828,13 +866,16 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t c
     auto it = mpp_info.receiver_source_task_ids_map.find(name);
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
-    for (size_t i = 0; i < it->second.size(); i++)
+
+    auto size = it->second.size();
+    for (size_t i = 0; i < size; ++i)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        meta.set_address(Debug::LOCAL_HOST);
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
     }
@@ -843,10 +884,22 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t c
 
 void TableScan::columnPrune(std::unordered_set<String> & used_columns)
 {
-    output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
-                        output_schema.end());
+    DAGSchema new_schema;
+    for (const auto & col : output_schema)
+    {
+        for (const auto & used_col : used_columns)
+        {
+            if (splitQualifiedName(used_col).column_name == splitQualifiedName(col.first).column_name && splitQualifiedName(used_col).table_name == splitQualifiedName(col.first).table_name)
+            {
+                new_schema.push_back({used_col, col.second});
+            }
+        }
+    }
+
+    output_schema = new_schema;
 }
-bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const MPPInfo &, const Context &)
+
+bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &)
 {
     if (table_info.is_partition_table)
     {
@@ -871,7 +924,7 @@ bool TableScan::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t, const M
     return true;
 }
 
-bool Selection::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Selection::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeSelection);
     tipb_executor->set_executor_id(name);
@@ -884,6 +937,7 @@ bool Selection::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator
     auto * child_executor = sel->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
+
 void Selection::columnPrune(std::unordered_set<String> & used_columns)
 {
     for (auto & expr : conditions)
@@ -893,14 +947,14 @@ void Selection::columnPrune(std::unordered_set<String> & used_columns)
     output_schema = children[0]->output_schema;
 }
 
-bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeTopN);
     tipb_executor->set_executor_id(name);
     tipb::TopN * topn = tipb_executor->mutable_topn();
     for (const auto & child : order_columns)
     {
-        ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
         if (!elem)
             throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
         tipb::ByItem * by = topn->add_order_by();
@@ -912,6 +966,7 @@ bool TopN::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, 
     auto * child_executor = topn->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
+
 void TopN::columnPrune(std::unordered_set<String> & used_columns)
 {
     for (auto & expr : order_columns)
@@ -921,7 +976,7 @@ void TopN::columnPrune(std::unordered_set<String> & used_columns)
     output_schema = children[0]->output_schema;
 }
 
-bool Limit::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Limit::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeLimit);
     tipb_executor->set_executor_id(name);
@@ -930,6 +985,7 @@ bool Limit::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id,
     auto * child_executor = lt->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
+
 void Limit::columnPrune(std::unordered_set<String> & used_columns)
 {
     children[0]->columnPrune(used_columns);
@@ -937,7 +993,7 @@ void Limit::columnPrune(std::unordered_set<String> & used_columns)
     output_schema = children[0]->output_schema;
 }
 
-bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeAggregation);
     tipb_executor->set_executor_id(name);
@@ -945,7 +1001,7 @@ bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collat
     auto & input_schema = children[0]->output_schema;
     for (const auto & expr : agg_exprs)
     {
-        const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+        const auto * func = typeid_cast<const ASTFunction *>(expr.get());
         if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
 
@@ -1004,6 +1060,7 @@ bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collat
     auto * child_executor = agg->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
+
 void Aggregation::columnPrune(std::unordered_set<String> & used_columns)
 {
     /// output schema for partial agg is the original agg's output schema
@@ -1015,7 +1072,7 @@ void Aggregation::columnPrune(std::unordered_set<String> & used_columns)
     {
         if (used_columns.find(func->getColumnName()) != used_columns.end())
         {
-            const ASTFunction * agg_func = typeid_cast<const ASTFunction *>(func.get());
+            const auto * agg_func = typeid_cast<const ASTFunction *>(func.get());
             if (agg_func != nullptr)
             {
                 /// agg_func should not be nullptr, just double check
@@ -1030,6 +1087,7 @@ void Aggregation::columnPrune(std::unordered_set<String> & used_columns)
     }
     children[0]->columnPrune(used_input_columns);
 }
+
 void Aggregation::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map)
 {
     if (!is_final_mode)
@@ -1066,7 +1124,7 @@ void Aggregation::toMPPSubPlan(size_t & executor_index, const DAGProperties & pr
     /// re-construct agg_exprs and gby_exprs in final_agg
     for (size_t i = 0; i < partial_agg->agg_exprs.size(); i++)
     {
-        const ASTFunction * agg_func = typeid_cast<const ASTFunction *>(partial_agg->agg_exprs[i].get());
+        const auto * agg_func = typeid_cast<const ASTFunction *>(partial_agg->agg_exprs[i].get());
         ASTPtr update_agg_expr = agg_func->clone();
         auto * update_agg_func = typeid_cast<ASTFunction *>(update_agg_expr.get());
         if (agg_func->name == "count")
@@ -1082,7 +1140,7 @@ void Aggregation::toMPPSubPlan(size_t & executor_index, const DAGProperties & pr
     children[0] = exchange_receiver;
 }
 
-bool Project::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+bool Project::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeProjection);
     tipb_executor->set_executor_id(name);
@@ -1110,6 +1168,7 @@ bool Project::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_i
     auto * children_executor = proj->mutable_child();
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
+
 void Project::columnPrune(std::unordered_set<String> & used_columns)
 {
     output_schema.erase(std::remove_if(output_schema.begin(), output_schema.end(), [&](const auto & field) { return used_columns.count(field.first) == 0; }),
@@ -1140,38 +1199,52 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
 {
     std::unordered_set<String> left_columns;
     std::unordered_set<String> right_columns;
-    for (auto & field : children[0]->output_schema)
-        left_columns.emplace(field.first);
-    for (auto & field : children[1]->output_schema)
-        right_columns.emplace(field.first);
 
+    for (auto & field : children[0]->output_schema)
+    {
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        left_columns.emplace(table_name + "." + column_name);
+    }
+
+    for (auto & field : children[1]->output_schema)
+    {
+        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+        right_columns.emplace(table_name + "." + column_name);
+    }
     std::unordered_set<String> left_used_columns;
     std::unordered_set<String> right_used_columns;
+
     for (const auto & s : used_columns)
     {
-        if (left_columns.find(s) != left_columns.end())
-            left_used_columns.emplace(s);
-        else
-            right_used_columns.emplace(s);
+        auto [db_name, table_name, col_name] = splitQualifiedName(s);
+        auto t = table_name + "." + col_name;
+        if (left_columns.find(t) != left_columns.end())
+            left_used_columns.emplace(t);
+
+        if (right_columns.find(t) != right_columns.end())
+            right_used_columns.emplace(t);
     }
-    for (const auto & child : join_params.using_expression_list->children)
+
+    for (const auto & child : join_cols)
     {
         if (auto * identifier = typeid_cast<ASTIdentifier *>(child.get()))
         {
             auto col_name = identifier->getColumnName();
             for (auto & field : children[0]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).second)
+                auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+                if (col_name == column_name)
                 {
-                    left_used_columns.emplace(field.first);
+                    left_used_columns.emplace(table_name + "." + column_name);
                     break;
                 }
             }
             for (auto & field : children[1]->output_schema)
             {
-                if (col_name == splitQualifiedName(field.first).second)
+                auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
+                if (col_name == column_name)
                 {
-                    right_used_columns.emplace(field.first);
+                    right_used_columns.emplace(table_name + "." + column_name);
                     break;
                 }
             }
@@ -1181,20 +1254,24 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
             throw Exception("Only support Join on columns");
         }
     }
+
     children[0]->columnPrune(left_used_columns);
     children[1]->columnPrune(right_used_columns);
-    output_schema.clear();
+
     /// update output schema
+    output_schema.clear();
+
     for (auto & field : children[0]->output_schema)
     {
-        if (join_params.kind == ASTTableJoin::Kind::Right && field.second.hasNotNullFlag())
+        if (tp == tipb::TypeRightOuterJoin && field.second.hasNotNullFlag())
             output_schema.push_back(toNullableDAGColumnInfo(field));
         else
             output_schema.push_back(field);
     }
+
     for (auto & field : children[1]->output_schema)
     {
-        if (join_params.kind == ASTTableJoin::Kind::Left && field.second.hasNotNullFlag())
+        if (tp == tipb::TypeLeftOuterJoin && field.second.hasNotNullFlag())
             output_schema.push_back(toNullableDAGColumnInfo(field));
         else
             output_schema.push_back(field);
@@ -1203,18 +1280,19 @@ void Join::columnPrune(std::unordered_set<String> & used_columns)
 
 void Join::fillJoinKeyAndFieldType(
     ASTPtr key,
-    const DAGSchema & schema,
+    const DAGSchema & child_schema,
     tipb::Expr * tipb_key,
     tipb::FieldType * tipb_field_type,
-    uint32_t collator_id)
+    int32_t collator_id)
 {
     auto * identifier = typeid_cast<ASTIdentifier *>(key.get());
-    for (size_t index = 0; index < schema.size(); index++)
+    for (size_t index = 0; index < child_schema.size(); ++index)
     {
-        const auto & field = schema[index];
-        if (splitQualifiedName(field.first).second == identifier->getColumnName())
+        const auto & [col_name, col_info] = child_schema[index];
+
+        if (splitQualifiedName(col_name).column_name == identifier->getColumnName())
         {
-            auto tipb_type = TiDB::columnInfoToFieldType(field.second);
+            auto tipb_type = TiDB::columnInfoToFieldType(col_info);
             tipb_type.set_collate(collator_id);
 
             tipb_key->set_tp(tipb::ColumnRef);
@@ -1228,37 +1306,57 @@ void Join::fillJoinKeyAndFieldType(
         }
     }
 }
-bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, uint32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+
+bool Join::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeJoin);
     tipb_executor->set_executor_id(name);
+
     tipb::Join * join = tipb_executor->mutable_join();
-    switch (join_params.kind) // todo support more type...
-    {
-    case ASTTableJoin::Kind::Inner:
-        join->set_join_type(tipb::JoinType::TypeInnerJoin);
-        break;
-    case ASTTableJoin::Kind::Left:
-        join->set_join_type(tipb::JoinType::TypeLeftOuterJoin);
-        break;
-    case ASTTableJoin::Kind::Right:
-        join->set_join_type(tipb::JoinType::TypeRightOuterJoin);
-        break;
-    default:
-        throw Exception("Unsupported join type");
-    }
+
+    join->set_join_type(tp);
     join->set_join_exec_type(tipb::JoinExecType::TypeHashJoin);
     join->set_inner_idx(1);
-    for (auto & key : join_params.using_expression_list->children)
+
+    for (const auto & key : join_cols)
     {
         fillJoinKeyAndFieldType(key, children[0]->output_schema, join->add_left_join_keys(), join->add_probe_types(), collator_id);
         fillJoinKeyAndFieldType(key, children[1]->output_schema, join->add_right_join_keys(), join->add_build_types(), collator_id);
     }
+
+    for (const auto & expr : left_conds)
+    {
+        tipb::Expr * cond = join->add_left_conditions();
+        astToPB(children[0]->output_schema, expr, cond, collator_id, context);
+    }
+
+    for (const auto & expr : right_conds)
+    {
+        tipb::Expr * cond = join->add_right_conditions();
+        astToPB(children[1]->output_schema, expr, cond, collator_id, context);
+    }
+
+    DAGSchema merged_children_schema{children[0]->output_schema};
+    merged_children_schema.insert(merged_children_schema.end(), children[1]->output_schema.begin(), children[1]->output_schema.end());
+
+    for (const auto & expr : other_conds)
+    {
+        tipb::Expr * cond = join->add_other_conditions();
+        astToPB(merged_children_schema, expr, cond, collator_id, context);
+    }
+
+    for (const auto & expr : other_eq_conds_from_in)
+    {
+        tipb::Expr * cond = join->add_other_eq_conditions_from_in();
+        astToPB(merged_children_schema, expr, cond, collator_id, context);
+    }
+
     auto * left_child_executor = join->add_children();
     children[0]->toTiPBExecutor(left_child_executor, collator_id, mpp_info, context);
     auto * right_child_executor = join->add_children();
     return children[1]->toTiPBExecutor(right_child_executor, collator_id, mpp_info, context);
 }
+
 void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiver>, std::shared_ptr<ExchangeSender>>> & exchange_map)
 {
     if (properties.use_broadcast_join)
@@ -1274,29 +1372,27 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
         exchange_map[right_exchange_receiver->name] = std::make_pair(right_exchange_receiver, right_exchange_sender);
         return;
     }
+
     std::vector<size_t> left_partition_keys;
     std::vector<size_t> right_partition_keys;
-    for (auto & key : join_params.using_expression_list->children)
+
+    auto push_back_partition_key = [](auto & partition_keys, const auto & child_schema, const auto & key) {
+        for (size_t index = 0; index < child_schema.size(); ++index)
+        {
+            if (splitQualifiedName(child_schema[index].first).column_name == key->getColumnName())
+            {
+                partition_keys.push_back(index);
+                break;
+            }
+        }
+    };
+
+    for (const auto & key : join_cols)
     {
-        size_t index = 0;
-        for (; index < children[0]->output_schema.size(); index++)
-        {
-            if (splitQualifiedName(children[0]->output_schema[index].first).second == key->getColumnName())
-            {
-                left_partition_keys.push_back(index);
-                break;
-            }
-        }
-        index = 0;
-        for (; index < children[1]->output_schema.size(); index++)
-        {
-            if (splitQualifiedName(children[1]->output_schema[index].first).second == key->getColumnName())
-            {
-                right_partition_keys.push_back(index);
-                break;
-            }
-        }
+        push_back_partition_key(left_partition_keys, children[0]->output_schema, key);
+        push_back_partition_key(right_partition_keys, children[1]->output_schema, key);
     }
+
     std::shared_ptr<ExchangeSender> left_exchange_sender
         = std::make_shared<ExchangeSender>(executor_index, children[0]->output_schema, tipb::Hash, left_partition_keys);
     left_exchange_sender->children.push_back(children[0]);
@@ -1314,9 +1410,110 @@ void Join::toMPPSubPlan(size_t & executor_index, const DAGProperties & propertie
     exchange_map[left_exchange_receiver->name] = std::make_pair(left_exchange_receiver, left_exchange_sender);
     exchange_map[right_exchange_receiver->name] = std::make_pair(right_exchange_receiver, right_exchange_sender);
 }
+
+bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+{
+    tipb_executor->set_tp(tipb::ExecType::TypeWindow);
+    tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
+    tipb::Window * window = tipb_executor->mutable_window();
+    auto & input_schema = children[0]->output_schema;
+    for (const auto & expr : func_descs)
+    {
+        tipb::Expr * window_expr = window->add_func_desc();
+        const auto * window_func = typeid_cast<const ASTFunction *>(expr.get());
+        for (const auto & arg : window_func->arguments->children)
+        {
+            tipb::Expr * func = window_expr->add_children();
+            astToPB(input_schema, arg, func, collator_id, context);
+        }
+        auto window_sig_it = window_func_name_to_sig.find(window_func->name);
+        if (window_sig_it == window_func_name_to_sig.end())
+            throw Exception(fmt::format("Unsupported window function {}", window_func->name), ErrorCodes::LOGICAL_ERROR);
+        auto window_sig = window_sig_it->second;
+        window_expr->set_tp(window_sig);
+        auto * ft = window_expr->mutable_field_type();
+        // TODO: Maybe more window functions with different field type.
+        ft->set_tp(TiDB::TypeLongLong);
+        ft->set_flag(TiDB::ColumnFlagBinary);
+        ft->set_collate(collator_id);
+        ft->set_flen(21);
+        ft->set_decimal(-1);
+    }
+
+    for (const auto & child : order_by_exprs)
+    {
+        auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        if (!elem)
+            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+        tipb::ByItem * by = window->add_order_by();
+        by->set_desc(elem->direction < 0);
+        tipb::Expr * expr = by->mutable_expr();
+        astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
+    }
+
+    for (const auto & child : partition_by_exprs)
+    {
+        auto * elem = typeid_cast<ASTPartitionByElement *>(child.get());
+        if (!elem)
+            throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
+        tipb::ByItem * by = window->add_partition_by();
+        by->set_desc(elem->direction < 0);
+        tipb::Expr * expr = by->mutable_expr();
+        astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
+    }
+
+    if (frame.type.has_value())
+    {
+        tipb::WindowFrame * mut_frame = window->mutable_frame();
+        mut_frame->set_type(frame.type.value());
+        if (frame.start.has_value())
+        {
+            auto * start = mut_frame->mutable_start();
+            start->set_offset(std::get<2>(frame.start.value()));
+            start->set_unbounded(std::get<1>(frame.start.value()));
+            start->set_type(std::get<0>(frame.start.value()));
+        }
+
+        if (frame.end.has_value())
+        {
+            auto * end = mut_frame->mutable_end();
+            end->set_offset(std::get<2>(frame.end.value()));
+            end->set_unbounded(std::get<1>(frame.end.value()));
+            end->set_type(std::get<0>(frame.end.value()));
+        }
+    }
+
+    auto * children_executor = window->mutable_child();
+    return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
+}
+
+bool Sort::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
+{
+    tipb_executor->set_tp(tipb::ExecType::TypeSort);
+    tipb_executor->set_executor_id(name);
+    tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
+    tipb::Sort * sort = tipb_executor->mutable_sort();
+    sort->set_ispartialsort(is_partial_sort);
+
+    for (const auto & child : by_exprs)
+    {
+        auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        if (!elem)
+            throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+        tipb::ByItem * by = sort->add_byitems();
+        by->set_desc(elem->direction < 0);
+        tipb::Expr * expr = by->mutable_expr();
+        astToPB(children[0]->output_schema, elem->children[0], expr, collator_id, context);
+    }
+
+    auto * children_executor = sort->mutable_child();
+    return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
+}
+
 } // namespace mock
 
-ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column)
+ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column)
 {
     DAGSchema ts_output;
     for (const auto & column_info : table_info.columns)
@@ -1331,7 +1528,7 @@ ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, St
         ci.origin_default_value = column_info.origin_default_value;
         /// use qualified name as the column name to handle multiple table queries, not very
         /// efficient but functionally enough for mock test
-        ts_output.emplace_back(std::make_pair(table_alias + "." + column_info.name, std::move(ci)));
+        ts_output.emplace_back(std::make_pair(db + "." + table_name + "." + column_info.name, std::move(ci)));
     }
     if (append_pk_column)
     {
@@ -1359,7 +1556,7 @@ ExecutorPtr compileTopN(ExecutorPtr input, size_t & executor_index, ASTPtr order
     std::vector<ASTPtr> order_columns;
     for (const auto & child : order_exprs->children)
     {
-        ASTOrderByElement * elem = typeid_cast<ASTOrderByElement *>(child.get());
+        auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
         if (!elem)
             throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
         order_columns.push_back(child);
@@ -1390,7 +1587,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
     {
         for (const auto & expr : agg_funcs->children)
         {
-            const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+            const auto * func = typeid_cast<const ASTFunction *>(expr.get());
             if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             {
                 need_append_project = true;
@@ -1411,7 +1608,7 @@ ExecutorPtr compileAggregation(ExecutorPtr input, size_t & executor_index, ASTPt
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
             }
-            else if (func->name == "max" || func->name == "min" || func->name == "first_row")
+            else if (func->name == "max" || func->name == "min" || func->name == "first_row" || func->name == "sum")
             {
                 ci = children_ci[0];
                 ci.flag &= ~TiDB::ColumnFlagNotNull;
@@ -1481,7 +1678,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
                 output_schema.emplace_back(ft->first, ft->second);
                 continue;
             }
-            const ASTFunction * func = typeid_cast<const ASTFunction *>(expr.get());
+            const auto * func = typeid_cast<const ASTFunction *>(expr.get());
             if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
             {
                 throw Exception("No such agg " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
@@ -1495,35 +1692,104 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
             }
         }
     }
-
     auto project = std::make_shared<mock::Project>(executor_index, output_schema, std::move(exprs));
     project->children.push_back(input);
     return project;
 }
 
-ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params)
+static void buildLeftSideJoinSchema(DAGSchema & schema, const DAGSchema & left_schema, tipb::JoinType tp)
+{
+    for (const auto & field : left_schema)
+    {
+        if (tp == tipb::JoinType::TypeRightOuterJoin && field.second.hasNotNullFlag())
+            schema.push_back(toNullableDAGColumnInfo(field));
+        else
+            schema.push_back(field);
+    }
+}
+
+static void buildRightSideJoinSchema(DAGSchema & schema, const DAGSchema & right_schema, tipb::JoinType tp)
+{
+    /// Note: for semi join, the right table column is ignored
+    /// but for (anti) left outer semi join, a 1/0 (uint8) field is pushed back
+    /// indicating whether right table has matching row(s), see comment in ASTTableJoin::Kind for details.
+    if (tp == tipb::JoinType::TypeLeftOuterSemiJoin || tp == tipb::JoinType::TypeAntiLeftOuterSemiJoin)
+    {
+        tipb::FieldType field_type{};
+        field_type.set_tp(TiDB::TypeTiny);
+        field_type.set_charset("binary");
+        field_type.set_collate(TiDB::ITiDBCollator::BINARY);
+        field_type.set_flag(0);
+        field_type.set_flen(-1);
+        field_type.set_decimal(-1);
+        schema.push_back(std::make_pair("", TiDB::fieldTypeToColumnInfo(field_type)));
+    }
+    else if (tp != tipb::JoinType::TypeSemiJoin && tp != tipb::JoinType::TypeAntiSemiJoin)
+    {
+        for (const auto & field : right_schema)
+        {
+            if (tp == tipb::JoinType::TypeLeftOuterJoin && field.second.hasNotNullFlag())
+                schema.push_back(toNullableDAGColumnInfo(field));
+            else
+                schema.push_back(field);
+        }
+    }
+}
+
+// compileJoin constructs a mocked Join executor node, note that all conditional expression params can be default
+ExecutorPtr compileJoin(size_t & executor_index,
+                        ExecutorPtr left,
+                        ExecutorPtr right,
+                        tipb::JoinType tp,
+                        const ASTs & join_cols,
+                        const ASTs & left_conds,
+                        const ASTs & right_conds,
+                        const ASTs & other_conds,
+                        const ASTs & other_eq_conds_from_in)
 {
     DAGSchema output_schema;
-    const auto & join_params = (static_cast<const ASTTableJoin &>(*params));
-    for (auto & field : left->output_schema)
-    {
-        if (join_params.kind == ASTTableJoin::Kind::Right && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
-    }
-    for (auto & field : right->output_schema)
-    {
-        if (join_params.kind == ASTTableJoin::Kind::Left && field.second.hasNotNullFlag())
-            output_schema.push_back(toNullableDAGColumnInfo(field));
-        else
-            output_schema.push_back(field);
-    }
-    auto join = std::make_shared<mock::Join>(executor_index, output_schema, params);
+
+    buildLeftSideJoinSchema(output_schema, left->output_schema, tp);
+    buildRightSideJoinSchema(output_schema, right->output_schema, tp);
+
+    auto join = std::make_shared<mock::Join>(executor_index, output_schema, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
     join->children.push_back(left);
     join->children.push_back(right);
+
     return join;
 }
+
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params)
+{
+    tipb::JoinType tp;
+    const auto & ast_join = (static_cast<const ASTTableJoin &>(*params));
+    switch (ast_join.kind)
+    {
+    case ASTTableJoin::Kind::Inner:
+        tp = tipb::JoinType::TypeInnerJoin;
+        break;
+    case ASTTableJoin::Kind::Left:
+        tp = tipb::JoinType::TypeLeftOuterJoin;
+        break;
+    case ASTTableJoin::Kind::Right:
+        tp = tipb::JoinType::TypeRightOuterJoin;
+        break;
+    default:
+        throw Exception("Unsupported join type");
+    }
+
+    // in legacy test framework, we only support using_expr of join
+    ASTs join_cols;
+    if (ast_join.using_expression_list)
+    {
+        for (const auto & key : ast_join.using_expression_list->children)
+        {
+            join_cols.push_back(key);
+        }
+    }
+    return compileJoin(executor_index, left, right, tp, join_cols);
+}
+
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type)
 {
@@ -1532,11 +1798,102 @@ ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, ti
     return exchange_sender;
 }
 
-
-ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema)
+ExecutorPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count)
 {
-    ExecutorPtr exchange_receiver = std::make_shared<mock::ExchangeReceiver>(executor_index, schema);
+    ExecutorPtr exchange_receiver = std::make_shared<mock::ExchangeReceiver>(executor_index, schema, fine_grained_shuffle_stream_count);
     return exchange_receiver;
 }
 
+ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr func_desc_list, ASTPtr partition_by_expr_list, ASTPtr order_by_expr_list, mock::MockWindowFrame frame, uint64_t fine_grained_shuffle_stream_count)
+{
+    std::vector<ASTPtr> partition_columns;
+    if (partition_by_expr_list != nullptr)
+    {
+        for (const auto & child : partition_by_expr_list->children)
+        {
+            auto * elem = typeid_cast<ASTPartitionByElement *>(child.get());
+            if (!elem)
+                throw Exception("Invalid partition by element", ErrorCodes::LOGICAL_ERROR);
+            partition_columns.push_back(child);
+            compileExpr(input->output_schema, elem->children[0]);
+        }
+    }
+
+    std::vector<ASTPtr> order_columns;
+    if (order_by_expr_list != nullptr)
+    {
+        for (const auto & child : order_by_expr_list->children)
+        {
+            auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
+            if (!elem)
+                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+            order_columns.push_back(child);
+            compileExpr(input->output_schema, elem->children[0]);
+        }
+    }
+
+    DAGSchema output_schema;
+    output_schema.insert(output_schema.end(), input->output_schema.begin(), input->output_schema.end());
+
+    std::vector<ASTPtr> window_exprs;
+    if (func_desc_list != nullptr)
+    {
+        for (const auto & expr : func_desc_list->children)
+        {
+            const auto * func = typeid_cast<const ASTFunction *>(expr.get());
+            window_exprs.push_back(expr);
+            std::vector<TiDB::ColumnInfo> children_ci;
+            for (const auto & arg : func->arguments->children)
+            {
+                children_ci.push_back(compileExpr(input->output_schema, arg));
+            }
+            // TODO: add more window functions
+            TiDB::ColumnInfo ci;
+            switch (window_func_name_to_sig[func->name])
+            {
+            case tipb::ExprType::RowNumber:
+            case tipb::ExprType::Rank:
+            case tipb::ExprType::DenseRank:
+            {
+                ci.tp = TiDB::TypeLongLong;
+                ci.flag = TiDB::ColumnFlagBinary;
+                break;
+            }
+            default:
+                throw Exception(fmt::format("Unsupported window function {}", func->name), ErrorCodes::LOGICAL_ERROR);
+            }
+            output_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
+        }
+    }
+
+    ExecutorPtr window = std::make_shared<mock::Window>(
+        executor_index,
+        output_schema,
+        window_exprs,
+        std::move(partition_columns),
+        std::move(order_columns),
+        frame,
+        fine_grained_shuffle_stream_count);
+    window->children.push_back(input);
+    return window;
+}
+
+ExecutorPtr compileSort(ExecutorPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
+{
+    std::vector<ASTPtr> order_columns;
+    if (order_by_expr_list != nullptr)
+    {
+        for (const auto & child : order_by_expr_list->children)
+        {
+            auto * elem = typeid_cast<ASTOrderByElement *>(child.get());
+            if (!elem)
+                throw Exception("Invalid order by element", ErrorCodes::LOGICAL_ERROR);
+            order_columns.push_back(child);
+            compileExpr(input->output_schema, elem->children[0]);
+        }
+    }
+    ExecutorPtr sort = std::make_shared<mock::Sort>(executor_index, input->output_schema, std::move(order_columns), is_partial_sort, fine_grained_shuffle_stream_count);
+    sort->children.push_back(input);
+    return sort;
+}
 } // namespace DB

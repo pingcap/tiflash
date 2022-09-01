@@ -15,8 +15,10 @@
 #include <Common/Exception.h>
 #include <Poco/String.h>
 #include <Storages/Transaction/Collator.h>
+#include <Storages/Transaction/CollatorUtils.h>
 
-#include <array>
+#include <cassert>
+#include <unordered_map>
 
 namespace DB::ErrorCodes
 {
@@ -29,17 +31,10 @@ TiDBCollators dummy_collators;
 std::vector<std::string> dummy_sort_key_contaners;
 std::string dummy_sort_key_contaner;
 
-std::string_view rtrim(const char * s, size_t length)
+ALWAYS_INLINE std::string_view rtrim(const char * s, size_t length)
 {
     auto v = std::string_view(s, length);
-    size_t end = v.find_last_not_of(' ');
-    return end == std::string_view::npos ? "" : v.substr(0, end + 1);
-}
-
-template <typename T>
-int signum(T val)
-{
-    return (0 < val) - (val < 0);
+    return DB::RightTrim(v);
 }
 
 using Rune = int32_t;
@@ -98,15 +93,12 @@ public:
                 tp = MatchType::Match;
                 if (offset < pattern.length())
                 {
-                    auto old_offset = offset;
-                    c = Collator::decodeChar(pattern.data(), old_offset);
-                    if (c == escape || c == '_' || c == '%')
-                        offset = old_offset;
-                    else
-                    {
-                        assert(escape >= 0);
-                        c = static_cast<decltype(c)>(escape); // NOLINT(bugprone-signed-char-misuse)
-                    }
+                    // use next char to match
+                    c = Collator::decodeChar(pattern.data(), offset);
+                }
+                else
+                {
+                    // use `escape` to match
                 }
             }
             else if (c == '_')
@@ -183,31 +175,21 @@ private:
 };
 
 template <typename T, bool padding = false>
-class BinCollator : public ITiDBCollator
+class BinCollator final : public ITiDBCollator
 {
 public:
     explicit BinCollator(int32_t id)
         : ITiDBCollator(id)
     {}
+
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
     {
-        if constexpr (padding)
-            return signum(rtrim(s1, length1).compare(rtrim(s2, length2)));
-        else
-            return signum(std::string_view(s1, length1).compare(std::string_view(s2, length2)));
+        return DB::BinCollatorCompare<padding>(s1, length1, s2, length2);
     }
 
     StringRef sortKey(const char * s, size_t length, std::string &) const override
     {
-        if constexpr (padding)
-        {
-            auto v = rtrim(s, length);
-            return StringRef(v.data(), v.length());
-        }
-        else
-        {
-            return StringRef(s, length);
-        }
+        return DB::BinCollatorSortKey<padding>(s, length);
     }
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
@@ -249,7 +231,7 @@ using WeightType = uint16_t;
 extern const std::array<WeightType, 256 * 256> weight_lut;
 } // namespace GeneralCI
 
-class GeneralCICollator : public ITiDBCollator
+class GeneralCICollator final : public ITiDBCollator
 {
 public:
     explicit GeneralCICollator(int32_t id)
@@ -270,7 +252,7 @@ public:
             auto sk2 = weight(c2);
             auto cmp = sk1 - sk2;
             if (cmp != 0)
-                return signum(cmp);
+                return DB::signum(cmp);
         }
 
         return (offset1 < v1.length()) - (offset2 < v2.length());
@@ -365,7 +347,7 @@ const std::array<long_weight, 23> weight_lut_long = {
 
 } // namespace UnicodeCI
 
-class UnicodeCICollator : public ITiDBCollator
+class UnicodeCICollator final : public ITiDBCollator
 {
 public:
     explicit UnicodeCICollator(int32_t id)
@@ -420,7 +402,7 @@ public:
                 }
                 else
                 {
-                    return signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
+                    return DB::signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
                 }
             }
         }
@@ -593,63 +575,130 @@ private:
     friend class Pattern<UnicodeCICollator>;
 };
 
+struct TiDBCollatorTypeIDMap
+{
+    TiDBCollatorTypeIDMap()
+    {
+        id_to_type[ITiDBCollator::UTF8_GENERAL_CI] = ITiDBCollator::CollatorType::UTF8_GENERAL_CI;
+        id_to_type[ITiDBCollator::UTF8MB4_GENERAL_CI] = ITiDBCollator::CollatorType::UTF8MB4_GENERAL_CI;
+        id_to_type[ITiDBCollator::UTF8_UNICODE_CI] = ITiDBCollator::CollatorType::UTF8_UNICODE_CI;
+        id_to_type[ITiDBCollator::UTF8MB4_UNICODE_CI] = ITiDBCollator::CollatorType::UTF8MB4_UNICODE_CI;
+        id_to_type[ITiDBCollator::UTF8MB4_BIN] = ITiDBCollator::CollatorType::UTF8MB4_BIN;
+        id_to_type[ITiDBCollator::LATIN1_BIN] = ITiDBCollator::CollatorType::LATIN1_BIN;
+        id_to_type[ITiDBCollator::BINARY] = ITiDBCollator::CollatorType::BINARY;
+        id_to_type[ITiDBCollator::ASCII_BIN] = ITiDBCollator::CollatorType::ASCII_BIN;
+        id_to_type[ITiDBCollator::UTF8_BIN] = ITiDBCollator::CollatorType::UTF8_BIN;
+    }
+
+    const ITiDBCollator::CollatorType & operator[](int32_t n) const
+    {
+        return id_to_type.at(n);
+    }
+
+private:
+    std::unordered_map<int32_t, ITiDBCollator::CollatorType> id_to_type;
+};
+
+static const TiDBCollatorTypeIDMap tidb_collator_type_id_map;
+
+ITiDBCollator::ITiDBCollator(int32_t collator_id_)
+    : collator_id(collator_id_)
+    , collator_type(tidb_collator_type_id_map[collator_id_])
+{
+}
+
+using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
+
+struct TiDBCollatorPtrMap
+{
+    // static constexpr auto MAX_TYPE_CNT = static_cast<uint32_t>(ITiDBCollator::CollatorType::MAX_);
+
+    std::unordered_map<int32_t, TiDBCollatorPtr> id_map{};
+    // std::array<TiDBCollatorPtr, MAX_TYPE_CNT> type_map{};
+    std::unordered_map<std::string, TiDBCollatorPtr> name_map;
+    std::unordered_map<const void *, ITiDBCollator::CollatorType> addr_to_type;
+
+    TiDBCollatorPtrMap()
+    {
+        static const auto c_utf8_general_ci = GeneralCICollator(ITiDBCollator::UTF8_GENERAL_CI);
+        static const auto c_utf8mb4_general_ci = GeneralCICollator(ITiDBCollator::UTF8MB4_GENERAL_CI);
+        static const auto c_utf8_unicode_ci = UnicodeCICollator(ITiDBCollator::UTF8_UNICODE_CI);
+        static const auto c_utf8mb4_unicode_ci = UnicodeCICollator(ITiDBCollator::UTF8MB4_UNICODE_CI);
+        static const auto c_utf8mb4_bin = UTF8MB4_BIN_TYPE(ITiDBCollator::UTF8MB4_BIN);
+        static const auto c_latin1_bin = BinCollator<char, true>(ITiDBCollator::LATIN1_BIN);
+        static const auto c_binary = BinCollator<char, false>(ITiDBCollator::BINARY);
+        static const auto c_ascii_bin = BinCollator<char, true>(ITiDBCollator::ASCII_BIN);
+        static const auto c_utf8_bin = UTF8MB4_BIN_TYPE(ITiDBCollator::UTF8_BIN);
+
+#ifdef M
+        static_assert(false, "`M` is defined");
+#endif
+#define M(name)                                               \
+    do                                                        \
+    {                                                         \
+        auto & collator = (c_##name);                         \
+        id_map[collator.getCollatorId()] = &collator;         \
+        addr_to_type[&collator] = collator.getCollatorType(); \
+        name_map[#name] = &collator;                          \
+    } while (false)
+
+        M(utf8_general_ci);
+        M(utf8mb4_general_ci);
+        M(utf8_unicode_ci);
+        M(utf8mb4_unicode_ci);
+        M(utf8mb4_bin);
+        M(latin1_bin);
+        M(binary);
+        M(ascii_bin);
+        M(utf8_bin);
+#undef M
+    }
+};
+
+static const TiDBCollatorPtrMap tidb_collator_map;
+
 TiDBCollatorPtr ITiDBCollator::getCollator(int32_t id)
 {
-    switch (id)
-    {
-    case ITiDBCollator::BINARY:
-        static const auto binary_collator = BinCollator<char, false>(BINARY);
-        return &binary_collator;
-    case ITiDBCollator::ASCII_BIN:
-        static const auto ascii_collator = BinCollator<char, true>(ASCII_BIN);
-        return &ascii_collator;
-    case ITiDBCollator::LATIN1_BIN:
-        static const auto latin1_collator = BinCollator<char, true>(LATIN1_BIN);
-        return &latin1_collator;
-    case ITiDBCollator::UTF8MB4_BIN:
-        static const auto utf8mb4_collator = BinCollator<Rune, true>(UTF8MB4_BIN);
-        return &utf8mb4_collator;
-    case ITiDBCollator::UTF8_BIN:
-        static const auto utf8_collator = BinCollator<Rune, true>(UTF8_BIN);
-        return &utf8_collator;
-    case ITiDBCollator::UTF8_GENERAL_CI:
-        static const auto utf8_general_ci_collator = GeneralCICollator(UTF8_GENERAL_CI);
-        return &utf8_general_ci_collator;
-    case ITiDBCollator::UTF8MB4_GENERAL_CI:
-        static const auto utf8mb4_general_ci_collator = GeneralCICollator(UTF8MB4_GENERAL_CI);
-        return &utf8mb4_general_ci_collator;
-    case ITiDBCollator::UTF8_UNICODE_CI:
-        static const auto utf8_unicode_ci_collator = UnicodeCICollator(UTF8_UNICODE_CI);
-        return &utf8_unicode_ci_collator;
-    case ITiDBCollator::UTF8MB4_UNICODE_CI:
-        static const auto utf8mb4_unicode_ci_collator = UnicodeCICollator(UTF8MB4_UNICODE_CI);
-        return &utf8mb4_unicode_ci_collator;
-    default:
-        throw DB::Exception(
-            std::string(__PRETTY_FUNCTION__) + ": invalid collation ID: " + std::to_string(id),
-            DB::ErrorCodes::LOGICAL_ERROR);
-    }
+    const auto & id_map = tidb_collator_map.id_map;
+    if (auto it = id_map.find(id); it != id_map.end())
+        return it->second;
+    throw DB::Exception(
+        fmt::format("{}: invalid collation ID: {}", __PRETTY_FUNCTION__, id),
+        DB::ErrorCodes::LOGICAL_ERROR);
 }
 
 TiDBCollatorPtr ITiDBCollator::getCollator(const std::string & name)
 {
-    const static std::unordered_map<std::string, int32_t> collator_name_map({
-        {"binary", ITiDBCollator::BINARY},
-        {"ascii_bin", ITiDBCollator::ASCII_BIN},
-        {"latin1_bin", ITiDBCollator::LATIN1_BIN},
-        {"utf8mb4_bin", ITiDBCollator::UTF8MB4_BIN},
-        {"utf8_bin", ITiDBCollator::UTF8_BIN},
-        {"utf8_general_ci", ITiDBCollator::UTF8_GENERAL_CI},
-        {"utf8mb4_general_ci", ITiDBCollator::UTF8MB4_GENERAL_CI},
-        {"utf8_unicode_ci", ITiDBCollator::UTF8_UNICODE_CI},
-        {"utf8mb4_unicode_ci", ITiDBCollator::UTF8MB4_UNICODE_CI},
-    });
-    auto it = collator_name_map.find(Poco::toLower(name));
-    if (it == collator_name_map.end())
+    const auto & name_map = tidb_collator_map.name_map;
+    if (auto it = name_map.find(Poco::toLower(name)); it != name_map.end())
+        return it->second;
+    return {};
+}
+
+bool ITiDBCollator::isBinary() const
+{
+    return collator_type == CollatorType::BINARY;
+}
+bool ITiDBCollator::isCI() const
+{
+    switch (collator_type)
     {
-        return nullptr;
+    case CollatorType::UTF8_UNICODE_CI:
+    case CollatorType::UTF8_GENERAL_CI:
+    case CollatorType::UTF8MB4_UNICODE_CI:
+    case CollatorType::UTF8MB4_GENERAL_CI:
+        return true;
+    default:
+        return false;
     }
-    return ITiDBCollator::getCollator(it->second);
+}
+
+ITiDBCollator::CollatorType GetTiDBCollatorType(const void * collator)
+{
+    const auto & addr_to_type = TiDB::tidb_collator_map.addr_to_type;
+    if (auto it = addr_to_type.find(collator); it != addr_to_type.end())
+        return it->second;
+    return ITiDBCollator::CollatorType::MAX_;
 }
 
 } // namespace TiDB

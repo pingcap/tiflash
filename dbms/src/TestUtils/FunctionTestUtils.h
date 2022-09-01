@@ -398,7 +398,7 @@ typename TypeTraits<T>::FieldType parseDecimal(
     const String & literal = [&] {
         if constexpr (Traits::is_nullable)
         {
-            assert(literal_.has_value());
+            RUNTIME_ASSERT(literal_.has_value());
             return literal_.value();
         }
         else
@@ -514,34 +514,55 @@ ColumnWithTypeAndName createConstColumn(
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
+String getColumnsContent(const ColumnsWithTypeAndName & cols);
+
+/// We can designate the range of columns printed with begin and end. range: [begin, end)
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
+
+// This wrapper function only serves to construct columns input for function-like macros,
+// since preprocessor recognizes `{col1, col2, col3}` as three arguments instead of one.
+// E.g. preprocessor does not allow us to write `ASSERT_COLUMNS_EQ_R({col1, col2, col3}, actual_cols)`,
+//  but with this func we can write `ASSERT_COLUMNS_EQ_R(createColumns{col1, col2, col3}, actual_cols)` instead.
+ColumnsWithTypeAndName createColumns(const ColumnsWithTypeAndName & cols);
+
 ::testing::AssertionResult dataTypeEqual(
     const DataTypePtr & expected,
     const DataTypePtr & actual);
 
 ::testing::AssertionResult columnEqual(
     const ColumnPtr & expected,
-    const ColumnPtr & actual);
+    const ColumnPtr & actual,
+    bool is_floating_point = false);
 
 // ignore name
 ::testing::AssertionResult columnEqual(
     const ColumnWithTypeAndName & expected,
     const ColumnWithTypeAndName & actual);
 
-void blockEqual(
+::testing::AssertionResult blockEqual(
     const Block & expected,
     const Block & actual);
 
+::testing::AssertionResult columnsEqual(
+    const ColumnsWithTypeAndName & expected,
+    const ColumnsWithTypeAndName & actual,
+    bool _restrict);
+
+/// Note that during execution, the offsets of each column might be reordered.
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator = nullptr);
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 ColumnWithTypeAndName executeFunction(
     Context & context,
     const String & func_name,
     const ColumnNumbers & argument_column_numbers,
-    const ColumnsWithTypeAndName & columns);
+    const ColumnsWithTypeAndName & columns,
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 template <typename... Args>
 ColumnWithTypeAndName executeFunction(
@@ -558,10 +579,15 @@ DataTypePtr getReturnTypeForFunction(
     Context & context,
     const String & func_name,
     const ColumnsWithTypeAndName & columns,
-    const TiDB::TiDBCollatorPtr & collator = nullptr);
+    const TiDB::TiDBCollatorPtr & collator = nullptr,
+    bool raw_function_test = false);
 
 template <typename T>
-ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const std::vector<Int32> & null_map, const String name = "")
+ColumnWithTypeAndName createNullableColumn(
+    InferredDataVector<T> init_vec,
+    const std::vector<Int32> & null_map,
+    const String name = "",
+    Int64 column_id = 0)
 {
     static_assert(TypeTraits<T>::is_nullable == false);
     auto updated_vec = InferredDataVector<Nullable<T>>();
@@ -573,15 +599,19 @@ ColumnWithTypeAndName createNullableColumn(InferredDataVector<T> init_vec, const
         else
             updated_vec.push_back(init_vec[i]);
     }
-    return createColumn<Nullable<T>>(updated_vec, name);
+    return createColumn<Nullable<T>>(updated_vec, name, column_id);
 }
 
 template <typename T>
-ColumnWithTypeAndName createNullableColumn(InferredDataInitializerList<T> init, const std::vector<Int32> & null_map, const String name = "")
+ColumnWithTypeAndName createNullableColumn(
+    InferredDataInitializerList<T> init,
+    const std::vector<Int32> & null_map,
+    const String name = "",
+    Int64 column_id = 0)
 {
     static_assert(TypeTraits<T>::is_nullable == false);
     auto vec = InferredDataVector<T>(init);
-    return createNullableColumn<T>(vec, null_map, name);
+    return createNullableColumn<T>(vec, null_map, name, column_id);
 }
 
 template <typename T, typename... Args>
@@ -650,6 +680,33 @@ ColumnWithTypeAndName createNullableColumn(
     return createNullableColumn<T>(data_type_args, vec, null_map, name, 0);
 }
 
+template <typename T>
+ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v);
+}
+
+template <typename T>
+ColumnWithTypeAndName toNullableVec(String name, const std::vector<std::optional<typename TypeTraits<T>::FieldType>> & v)
+{
+    return createColumn<Nullable<T>>(v, name);
+}
+
+template <typename T>
+ColumnWithTypeAndName toVec(String name, const std::vector<typename TypeTraits<T>::FieldType> & v)
+{
+    return createColumn<T>(v, name);
+}
+
+ColumnWithTypeAndName toDatetimeVec(String name, const std::vector<String> & v, int fsp);
+
+ColumnWithTypeAndName toNullableDatetimeVec(String name, const std::vector<String> & v, int fsp);
 class FunctionTest : public ::testing::Test
 {
 protected:
@@ -679,9 +736,13 @@ public:
         context.setDAGContext(dag_context_ptr.get());
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnsWithTypeAndName & columns, const TiDB::TiDBCollatorPtr & collator = nullptr)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnsWithTypeAndName & columns,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        bool raw_function_test = false)
     {
-        return DB::tests::executeFunction(context, func_name, columns, collator);
+        return DB::tests::executeFunction(context, func_name, columns, collator, raw_function_test);
     }
 
     template <typename... Args>
@@ -691,9 +752,14 @@ public:
         return executeFunction(func_name, vec);
     }
 
-    ColumnWithTypeAndName executeFunction(const String & func_name, const ColumnNumbers & argument_column_numbers, const ColumnsWithTypeAndName & columns)
+    ColumnWithTypeAndName executeFunction(
+        const String & func_name,
+        const ColumnNumbers & argument_column_numbers,
+        const ColumnsWithTypeAndName & columns,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        bool raw_function_test = false)
     {
-        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns);
+        return DB::tests::executeFunction(context, func_name, argument_column_numbers, columns, collator, raw_function_test);
     }
 
     template <typename... Args>
@@ -705,7 +771,7 @@ public:
 
     DAGContext & getDAGContext()
     {
-        assert(dag_context_ptr != nullptr);
+        RUNTIME_ASSERT(dag_context_ptr != nullptr);
         return *dag_context_ptr;
     }
 
@@ -716,5 +782,10 @@ protected:
 
 #define ASSERT_COLUMN_EQ(expected, actual) ASSERT_TRUE(DB::tests::columnEqual((expected), (actual)))
 #define ASSERT_BLOCK_EQ(expected, actual) DB::tests::blockEqual((expected), (actual))
+
+/// restrictly checking columns equality, both data set and each row's offset should be the same
+#define ASSERT_COLUMNS_EQ_R(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), true))
+/// unrestrictly checking columns equality, only checking data set equality
+#define ASSERT_COLUMNS_EQ_UR(expected, actual) ASSERT_TRUE(DB::tests::columnsEqual((expected), (actual), false))
 } // namespace tests
 } // namespace DB

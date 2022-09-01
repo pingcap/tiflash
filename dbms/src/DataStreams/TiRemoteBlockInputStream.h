@@ -14,14 +14,15 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -58,13 +59,18 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     uint64_t total_rows;
 
+    // For fine grained shuffle, sender will partition data into muiltiple streams by hashing.
+    // ExchangeReceiverBlockInputStream only need to read its own stream, i.e., streams[stream_id].
+    // CoprocessorBlockInputStream doesn't take care of this.
+    size_t stream_id;
+
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
-        for (auto & execution_summary : resp.execution_summaries())
+        for (const auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                auto & executor_id = execution_summary.executor_id();
+                const auto & executor_id = execution_summary.executor_id();
                 execution_summaries[index][executor_id].time_processed_ns = execution_summary.time_processed_ns();
                 execution_summaries[index][executor_id].num_produced_rows = execution_summary.num_produced_rows();
                 execution_summaries[index][executor_id].num_iterations = execution_summary.num_iterations();
@@ -84,11 +90,11 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             return;
         }
         auto & execution_summaries_map = execution_summaries[index];
-        for (auto & execution_summary : resp.execution_summaries())
+        for (const auto & execution_summary : resp.execution_summaries())
         {
             if (execution_summary.has_executor_id())
             {
-                auto & executor_id = execution_summary.executor_id();
+                const auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
                     LOG_FMT_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
@@ -120,7 +126,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult(block_queue, sample_block);
+        auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
         if (result.meet_error)
         {
             LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
@@ -168,29 +174,22 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     }
 
 public:
-    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id)
+    TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, size_t stream_id_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
-        , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
+        , name(fmt::format("TiRemote({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
         , log(Logger::get(name, req_id, executor_id))
         , total_rows(0)
+        , stream_id(stream_id_)
     {
-        // generate sample block
-        ColumnsWithTypeAndName columns;
-        for (auto & dag_col : remote_reader->getOutputSchema())
-        {
-            auto tp = getDataTypeByColumnInfoForComputingLayer(dag_col.second);
-            ColumnWithTypeAndName col(tp, dag_col.first);
-            columns.emplace_back(col);
-        }
-        for (size_t i = 0; i < source_num; i++)
+        for (size_t i = 0; i < source_num; ++i)
         {
             execution_summaries_inited[i].store(false);
         }
         execution_summaries.resize(source_num);
         connection_profile_infos.resize(source_num);
-        sample_block = Block(columns);
+        sample_block = Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema())));
     }
 
     Block getHeader() const override { return sample_block; }
@@ -224,12 +223,12 @@ public:
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
 
-    virtual void collectNewThreadCountOfThisLevel(int & cnt) override
+    void collectNewThreadCountOfThisLevel(int & cnt) override
     {
         remote_reader->collectNewThreadCount(cnt);
     }
 
-    virtual void resetNewThreadCountCompute() override
+    void resetNewThreadCountCompute() override
     {
         if (collected)
         {
@@ -239,10 +238,22 @@ public:
     }
 
 protected:
-    virtual void readSuffixImpl() override
+    void readSuffixImpl() override
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
-        remote_reader->close();
+    }
+
+    void appendInfo(FmtBuffer & buffer) const override
+    {
+        buffer.append(": schema: {");
+        buffer.joinStr(
+            sample_block.begin(),
+            sample_block.end(),
+            [](const auto & arg, FmtBuffer & fb) {
+                fb.fmtAppend("<{}, {}>", arg.name, arg.type->getName());
+            },
+            ", ");
+        buffer.append("}");
     }
 };
 

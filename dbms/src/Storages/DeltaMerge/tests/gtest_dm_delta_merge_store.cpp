@@ -14,28 +14,21 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/Logger.h>
-#include <DataStreams/BlocksListBlockInputStream.h>
-#include <DataStreams/OneBlockInputStream.h>
-#include <DataTypes/DataTypeString.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
-#include <Poco/File.h>
-#include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Common/MyTime.h>
+#include <Common/SyncPoint/SyncPoint.h>
+#include <DataTypes/DataTypeMyDateTime.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
-#include <Storages/DeltaMerge/Segment.h>
-#include <Storages/tests/TiFlashStorageTestBasic.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <fmt/format.h>
+#include <TestUtils/InputStreamTestUtils.h>
+#include <common/types.h>
 
-#include <memory>
-#include <vector>
-
-#include "dm_basic_include.h"
+#include <algorithm>
+#include <future>
+#include <iterator>
 
 namespace DB
 {
@@ -48,65 +41,13 @@ extern const char force_triggle_foreground_flush[];
 extern const char force_set_segment_ingest_packs_fail[];
 extern const char segment_merge_after_ingest_packs[];
 extern const char force_set_segment_physical_split[];
+extern const char force_set_page_file_write_errno[];
 } // namespace FailPoints
 
 namespace DM
 {
-extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    UInt64 file_id,
-                                    const String & parent_path,
-                                    DMFileBlockOutputStream::Flags flags);
 namespace tests
 {
-// Simple test suit for DeltaMergeStore.
-class DeltaMergeStoreTest : public DB::base::TiFlashStorageTestBasic
-{
-public:
-    void SetUp() override
-    {
-        TiFlashStorageTestBasic::SetUp();
-        store = reload();
-    }
-
-    DeltaMergeStorePtr
-    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
-    {
-        TiFlashStorageTestBasic::reload();
-        ColumnDefinesPtr cols;
-        if (!pre_define_columns)
-            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        else
-            cols = pre_define_columns;
-
-        ColumnDefine handle_column_define = (*cols)[0];
-
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
-                                                                 false,
-                                                                 "test",
-                                                                 "DeltaMergeStoreTest",
-                                                                 100,
-                                                                 *cols,
-                                                                 handle_column_define,
-                                                                 is_common_handle,
-                                                                 rowkey_column_size,
-                                                                 DeltaMergeStore::Settings());
-        return s;
-    }
-
-protected:
-    DeltaMergeStorePtr store;
-};
-
-enum TestMode
-{
-    V1_BlockOnly,
-    V2_BlockOnly,
-    V2_FileOnly,
-    V2_Mix,
-};
-
 String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
 {
     const auto mode = info.param;
@@ -125,92 +66,6 @@ String testModeToString(const ::testing::TestParamInfo<TestMode> & info)
     }
 }
 
-// Read write test suit for DeltaMergeStore.
-// We will instantiate test cases for different `TestMode`
-// to test with different pack types.
-class DeltaMergeStoreRWTest
-    : public DB::base::TiFlashStorageTestBasic
-    , public testing::WithParamInterface<TestMode>
-{
-public:
-    void SetUp() override
-    {
-        mode = GetParam();
-
-        switch (mode)
-        {
-        case TestMode::V1_BlockOnly:
-            setStorageFormat(1);
-            break;
-        case TestMode::V2_BlockOnly:
-        case TestMode::V2_FileOnly:
-        case TestMode::V2_Mix:
-            setStorageFormat(2);
-            break;
-        }
-
-        TiFlashStorageTestBasic::SetUp();
-        store = reload();
-    }
-
-    DeltaMergeStorePtr
-    reload(const ColumnDefinesPtr & pre_define_columns = {}, bool is_common_handle = false, size_t rowkey_column_size = 1)
-    {
-        TiFlashStorageTestBasic::reload();
-        ColumnDefinesPtr cols;
-        if (!pre_define_columns)
-            cols = DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        else
-            cols = pre_define_columns;
-
-        ColumnDefine handle_column_define = (*cols)[0];
-
-        DeltaMergeStorePtr s = std::make_shared<DeltaMergeStore>(*db_context,
-                                                                 false,
-                                                                 "test",
-                                                                 "DeltaMergeStoreRWTest",
-                                                                 101,
-                                                                 *cols,
-                                                                 handle_column_define,
-                                                                 is_common_handle,
-                                                                 rowkey_column_size,
-                                                                 DeltaMergeStore::Settings());
-        return s;
-    }
-
-    std::pair<RowKeyRange, std::vector<PageId>> genDMFile(DMContext & context, const Block & block)
-    {
-        auto input_stream = std::make_shared<OneBlockInputStream>(block);
-        auto [store_path, file_id] = store->preAllocateIngestFile();
-
-        DMFileBlockOutputStream::Flags flags;
-        flags.setSingleFile(DMTestEnv::getPseudoRandomNumber() % 2);
-
-        auto dmfile = writeIntoNewDMFile(
-            context,
-            std::make_shared<ColumnDefines>(store->getTableColumns()),
-            input_stream,
-            file_id,
-            store_path,
-            flags);
-
-
-        store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
-
-        auto & pk_column = block.getByPosition(0).column;
-        auto min_pk = pk_column->getInt(0);
-        auto max_pk = pk_column->getInt(block.rows() - 1);
-        HandleRange range(min_pk, max_pk + 1);
-
-        return {RowKeyRange::fromHandleRange(range), {file_id}};
-    }
-
-protected:
-    TestMode mode;
-    DeltaMergeStorePtr store;
-
-    constexpr static const char * TRACING_NAME = "DeltaMergeStoreRWTest";
-};
 
 TEST_F(DeltaMergeStoreTest, Create)
 try
@@ -273,6 +128,7 @@ try
              DMTestEnv::PkType::PkIsHandleInt32,
          })
     {
+        SCOPED_TRACE(fmt::format("Test case for {}", DMTestEnv::PkTypeToString(pk_type)));
         LOG_FMT_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
 
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
@@ -297,8 +153,7 @@ try
         block1 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block1));
         ASSERT_EQ(block1.rows(), nrows);
         ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
-        for (const auto & c : block1)
-            ASSERT_EQ(c.column->size(), nrows);
+        ASSERT_NO_THROW({ block1.checkNumberOfRows(); });
 
         // Make a block that is overlapped with `block1` and it should be squashed by `PKSquashingBlockInputStream`
         size_t nrows_2 = 2;
@@ -314,33 +169,17 @@ try
         block2 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block2));
         ASSERT_EQ(block2.rows(), nrows_2);
         ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
-        for (const auto & c : block2)
-            ASSERT_EQ(c.column->size(), nrows_2);
+        ASSERT_NO_THROW({ block2.checkNumberOfRows(); });
 
 
         BlockInputStreamPtr stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{block1, block2});
         stream = std::make_shared<PKSquashingBlockInputStream<false>>(stream, EXTRA_HANDLE_COLUMN_ID, store->isCommonHandle());
-
-        size_t num_rows_read = 0;
-        stream->readPrefix();
-        while (Block block = stream->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                ASSERT_EQ(c->size(), block.rows())
-                    << "unexpected num of rows for column [name=" << iter.name << "] " << DMTestEnv::PkTypeToString(pk_type);
-            }
-        }
-        stream->readSuffix();
-        ASSERT_EQ(num_rows_read, nrows + nrows_2);
+        ASSERT_INPUTSTREAM_NROWS(stream, nrows + nrows_2);
 
         LOG_FMT_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
     }
 }
 CATCH
-
 
 TEST_P(DeltaMergeStoreRWTest, SimpleWriteRead)
 try
@@ -419,74 +258,195 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        //printf("pk:%lld\n", c->getInt(i));
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        //printf("%s:%s\n", col_str_define.name.c_str(), c->getDataAt(i).data);
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        //printf("%s:%lld\n", col_i8_define.name.c_str(), c->getInt(i));
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<String>(createNumberStrings(0, num_rows_write)),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+            }));
     }
 
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1)[0];
+        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<String>(createNumberStrings(0, num_rows_write)),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+            }));
+    }
+}
+CATCH
 
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
+TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithoutCache)
+try
+{
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
+
+        store = reload(table_column_defines);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 5UL);
+        const auto & str_col = cols[3];
+        ASSERT_EQ(str_col.name, col_str_define.name);
+        ASSERT_EQ(str_col.id, col_str_define.id);
+        ASSERT_TRUE(str_col.type->equals(*col_str_define.type));
+        const auto & i8_col = cols[4];
+        ASSERT_EQ(i8_col.name, col_i8_define.name);
+        ASSERT_EQ(i8_col.id, col_i8_define.id);
+        ASSERT_TRUE(i8_col.type->equals(*col_i8_define.type));
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
         {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col2:String for test
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
+            // Add a column of i8:Int8 for test
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
         }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        db_context->getSettingsRef().dt_segment_delta_cache_limit_rows = 8;
+        FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        ASSERT_THROW(store->write(*db_context, db_context->getSettingsRef(), block), DB::Exception);
+        try
+        {
+            store->write(*db_context, db_context->getSettingsRef(), block);
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() != ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR)
+                throw;
+        }
+    }
+    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
+
+    {
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
+                                             /* expected_block_size= */ 1024)[0];
+        ASSERT_INPUTSTREAM_NROWS(in, 0);
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, WriteCrashBeforeWalWithCache)
+try
+{
+    const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
+    const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
+    {
+        auto table_column_defines = DMTestEnv::getDefaultColumns();
+        table_column_defines->emplace_back(col_str_define);
+        table_column_defines->emplace_back(col_i8_define);
+
+        store = reload(table_column_defines);
+    }
+
+    {
+        // check column structure
+        const auto & cols = store->getTableColumns();
+        ASSERT_EQ(cols.size(), 5UL);
+        const auto & str_col = cols[3];
+        ASSERT_EQ(str_col.name, col_str_define.name);
+        ASSERT_EQ(str_col.id, col_str_define.id);
+        ASSERT_TRUE(str_col.type->equals(*col_str_define.type));
+        const auto & i8_col = cols[4];
+        ASSERT_EQ(i8_col.name, col_i8_define.name);
+        ASSERT_EQ(i8_col.id, col_i8_define.id);
+        ASSERT_TRUE(i8_col.type->equals(*col_i8_define.type));
+    }
+
+    const size_t num_rows_write = 128;
+    {
+        // write to store
+        Block block;
+        {
+            block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+            // Add a column of col2:String for test
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(0, num_rows_write),
+                col_str_define.name,
+                col_str_define.id));
+            // Add a column of i8:Int8 for test
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(0, num_rows_write),
+                col_i8_define.name,
+                col_i8_define.id));
+        }
+
+        FailPointHelper::enableFailPoint(FailPoints::force_set_page_file_write_errno);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        ASSERT_THROW(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())), DB::Exception);
+        try
+        {
+            store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+        }
+        catch (DB::Exception & e)
+        {
+            if (e.code() != ErrorCodes::CANNOT_WRITE_TO_FILE_DESCRIPTOR)
+                throw;
+        }
+    }
+    FailPointHelper::disableFailPoint(FailPoints::force_set_page_file_write_errno);
+
+    {
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             columns,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
+                                             /* expected_block_size= */ 1024)[0];
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<String>(createNumberStrings(0, num_rows_write)),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+            }));
     }
 }
 CATCH
@@ -525,25 +485,15 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        ASSERT_EQ(c->getInt(i), i);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+            }));
     }
     // Delete range [0, 64)
     const size_t num_deleted_rows = 64;
@@ -562,26 +512,16 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        // Range after deletion is [64, 128)
-                        ASSERT_EQ(c->getInt(i), i + Int64(num_deleted_rows));
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                // Range after deletion is [64, 128)
+                createColumn<Int64>(createNumbers<Int64>(num_deleted_rows, num_rows_write)),
+            }));
     }
 }
 CATCH
@@ -647,25 +587,15 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        ASSERT_EQ(c->getInt(i), i);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 3 * num_write_rows)),
+            }));
     }
 
     store = reload();
@@ -732,25 +662,15 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        ASSERT_EQ(c->getInt(i), i);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 3 * num_write_rows)),
+            }));
     }
     // Read with version
     {
@@ -760,28 +680,18 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        ASSERT_EQ(c->getInt(i), i);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 2 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 2 * num_write_rows)),
+            }));
     }
 }
 CATCH
@@ -818,24 +728,15 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); i++)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                }
-            }
-        }
-        ASSERT_EQ(num_rows_read, 8UL);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 8)),
+            }));
     }
 
     {
@@ -857,31 +758,15 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        // block_num represents index of current segment
-        int block_num = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); i++)
-                {
-                    if (iter.name == DMTestEnv::pk_name && block_num == 0)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                    else if (iter.name == DMTestEnv::pk_name && block_num == 1)
-                    {
-                        EXPECT_EQ(c->getInt(i), i + 4);
-                    }
-                }
-            }
-            block_num++;
-        }
-        ASSERT_EQ(num_rows_read, 9UL);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 9)),
+            }));
     }
 }
 CATCH
@@ -916,16 +801,12 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, num_rows_tso1 + num_rows_tso2);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_tso1 + num_rows_tso2);
     }
 
     {
@@ -939,16 +820,12 @@ try
                                             /* max_version= */ tso2,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, num_rows_tso1 + num_rows_tso2);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_tso1 + num_rows_tso2);
     }
 
     {
@@ -962,16 +839,12 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, num_rows_tso1);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_tso1);
     }
 
     {
@@ -985,16 +858,12 @@ try
                                             /* max_version= */ tso1 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 0UL);
+        ASSERT_INPUTSTREAM_NROWS(in, 0);
     }
 }
 CATCH
@@ -1046,30 +915,19 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        Int64 expect_pk = 0;
-        UInt64 expect_tso = tso1;
-        while (Block block = in->read())
-        {
-            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
-            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
-            auto pk_c = block.getByName(DMTestEnv::pk_name);
-            auto v_c = block.getByName(VERSION_COLUMN_NAME);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
-                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
-                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
-            }
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 32)),
+                createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
+            }))
+            << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
     }
 
     {
@@ -1083,31 +941,19 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        Int64 expect_pk = 0;
-        UInt64 expect_tso = tso1;
-        while (Block block = in->read())
-        {
-            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
-            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
-            auto pk_c = block.getByName(DMTestEnv::pk_name);
-            auto v_c = block.getByName(VERSION_COLUMN_NAME);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
-                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
-                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
-            }
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL) << "Data [32, 128) after ingest with tso less than: " << tso2
-                                       << " are erased, should only get [0, 32)";
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 32)),
+                createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
+            }))
+            << fmt::format("Data [32, 128) after ingest with tso less than: {} are erased, should only get [0, 32)", tso2);
     }
 
     {
@@ -1121,18 +967,12 @@ try
                                             /* max_version= */ tso3 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL + 16) << "The rows number after ingest with tso less than " << tso3 << " is not match";
+        ASSERT_INPUTSTREAM_NROWS(in, 32 + 16) << fmt::format("The rows number after ingest with tso less than {} is not match", tso3);
     }
 
     {
@@ -1146,16 +986,12 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32UL + (48 - 32) + (256UL - 80)) << "The rows number after ingest is not match";
+        ASSERT_INPUTSTREAM_NROWS(in, 32 + (48 - 32) + (256 - 80)) << "The rows number after ingest is not match";
     }
 
     {
@@ -1171,16 +1007,12 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 2UL) << "The rows number of two point get is not match";
+        ASSERT_INPUTSTREAM_NROWS(in, 2) << "The rows number of two point get is not match";
     }
 }
 CATCH
@@ -1232,30 +1064,19 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        Int64 expect_pk = 0;
-        UInt64 expect_tso = tso1;
-        while (Block block = in->read())
-        {
-            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
-            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
-            auto pk_c = block.getByName(DMTestEnv::pk_name);
-            auto v_c = block.getByName(VERSION_COLUMN_NAME);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
-                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
-                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
-            }
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 32)),
+                createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
+            }))
+            << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
     }
 
     {
@@ -1269,31 +1090,19 @@ try
                                             /* max_version= */ tso2 - 1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        Int64 expect_pk = 0;
-        UInt64 expect_tso = tso1;
-        while (Block block = in->read())
-        {
-            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
-            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
-            auto pk_c = block.getByName(DMTestEnv::pk_name);
-            auto v_c = block.getByName(VERSION_COLUMN_NAME);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
-                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
-                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
-            }
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) after ingest with tso less than: " << tso2
-                                     << " are erased, should only get [0, 32)";
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 32)),
+                createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
+            }))
+            << fmt::format("Data [32, 128) after ingest with tso less than: {} are erased, should only get [0, 32)", tso2);
     }
 
     {
@@ -1307,16 +1116,12 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32 + 128 - 32) << "The rows number after ingest is not match";
+        ASSERT_INPUTSTREAM_NROWS(in, 32 + 128 - 32) << "The rows number after ingest is not match";
     }
 }
 CATCH
@@ -1344,7 +1149,7 @@ try
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
 
-        std::vector<PageId> file_ids;
+        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
         store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
     }
@@ -1363,30 +1168,19 @@ try
                                             /* max_version= */ tso1,
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        Int64 expect_pk = 0;
-        UInt64 expect_tso = tso1;
-        while (Block block = in->read())
-        {
-            ASSERT_TRUE(block.has(DMTestEnv::pk_name));
-            ASSERT_TRUE(block.has(VERSION_COLUMN_NAME));
-            auto pk_c = block.getByName(DMTestEnv::pk_name);
-            auto v_c = block.getByName(VERSION_COLUMN_NAME);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                // std::cerr << "pk:" << pk_c.column->getInt(i) << ", ver:" << v_c.column->getInt(i) << std::endl;
-                ASSERT_EQ(pk_c.column->getInt(i), expect_pk++);
-                ASSERT_EQ(v_c.column->getUInt(i), expect_tso);
-            }
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32) << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, 32)),
+                createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
+            }))
+            << "Data [32, 128) before ingest should be erased, should only get [0, 32)";
     }
 
     {
@@ -1400,16 +1194,12 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-            num_rows_read += block.rows();
-        in->readSuffix();
-        EXPECT_EQ(num_rows_read, 32) << "The rows number after ingest is not match";
+        ASSERT_INPUTSTREAM_NROWS(in, 32) << "The rows number after ingest is not match";
     }
 }
 CATCH
@@ -1486,38 +1276,19 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
-
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            Int64 expected_row_pk = 1;
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-                for (auto && iter : block)
-                {
-                    auto c = iter.column;
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        for (size_t i = 0; i < c->size(); ++i)
-                        {
-                            auto expected = expected_row_pk++;
-                            auto value = c->getInt(i);
-                            if (value != expected)
-                            {
-                                // Convenient for debug.
-                                EXPECT_EQ(expected, value);
-                            }
-                        }
-                    }
-                }
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write_in_total);
+            ASSERT_INPUTSTREAM_COLS_UR(
+                in,
+                Strings({DMTestEnv::pk_name}),
+                createColumns({
+                    createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
+                }));
 
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
@@ -1594,6 +1365,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1605,33 +1378,13 @@ try
             ASSERT_EQ(col.column_id, col_id_ddl);
             ASSERT_TRUE(col.type->equals(*col_type_after_ddl));
         }
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                for (auto && iter : block)
-                {
-                    auto c = iter.column;
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        // printf("pk:%lld\n", c->getInt(i));
-                        EXPECT_EQ(c->getInt(i), Int64(i));
-                    }
-                    else if (iter.name == col_name_ddl)
-                    {
-                        // printf("%s:%lld\n", col_name_ddl.c_str(), c->getInt(i));
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_ddl}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<Int32>(createSignedNumbers(0, num_rows_write)),
+            }));
     }
 }
 CATCH
@@ -1701,6 +1454,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1708,26 +1463,12 @@ try
             const Block head = in->getHeader();
             ASSERT_FALSE(head.has(col_name_to_drop));
         }
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+            }));
     }
 }
 CATCH
@@ -1789,6 +1530,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1808,35 +1551,14 @@ try
                 ASSERT_TRUE(col.type->equals(*col_type_to_add));
             }
         }
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                    else if (iter.name == col_name_c1)
-                    {
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                    else if (iter.name == col_name_to_add)
-                    {
-                        EXPECT_EQ(c->getInt(i), 0);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_c1, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+                createColumn<Int32>(std::vector<Int64>(num_rows_write, 0)),
+            }));
     }
 }
 CATCH
@@ -1892,27 +1614,17 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                Field tmp;
-                col.column->get(i, tmp);
-                // There is some loss of precision during the convertion, so we just do a rough comparison
-                EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.123456);
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<Float64>(std::vector<Float64>(num_rows_write, 1.123456)),
+            }));
     }
 }
 CATCH
@@ -1968,27 +1680,17 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                Field tmp;
-                col.column->get(i, tmp);
-                // There is some loss of precision during the convertion, so we just do a rough comparison
-                EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.123456);
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<Float64>(std::vector<Float64>(num_rows_write, 1.123456)),
+            }));
     }
 }
 CATCH
@@ -2044,27 +1746,16 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                Field tmp;
-                col.column->get(i, tmp);
-                // There is some loss of precision during the convertion, so we just do a rough comparison
-                EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.125);
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<Float32>(std::vector<Float64>(num_rows_write, 1.125)),
+            }));
     }
 }
 CATCH
@@ -2120,27 +1811,16 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                Field tmp;
-                col.column->get(i, tmp);
-                // There is some loss of precision during the convertion, so we just do a rough comparison
-                EXPECT_FLOAT_EQ(tmp.get<Int8>(), 1);
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<Int8>(std::vector<Int64>(num_rows_write, 1)),
+            }));
     }
 }
 CATCH
@@ -2196,27 +1876,17 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                Field tmp;
-                col.column->get(i, tmp);
-                // There is some loss of precision during the convertion, so we just do a rough comparison
-                EXPECT_FLOAT_EQ(tmp.get<UInt64>(), 1);
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<UInt8>(std::vector<UInt64>(num_rows_write, 1)),
+            }));
     }
 }
 CATCH
@@ -2270,24 +1940,21 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); i++)
-            {
-                EXPECT_EQ((*col.column)[i].get<UInt64>(), mydatetime_uint); // Timestamp for '1999-09-09 12:34:56'
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        std::vector<DataTypeMyDateTime::FieldType> datetime_data(
+            num_rows_write,
+            MyDateTime(1999, 9, 9, 12, 34, 56, 0).toPackedUInt());
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<MyDateTime>(/*data_type_args=*/std::make_tuple(0), datetime_data),
+            }));
     }
 }
 CATCH
@@ -2343,26 +2010,16 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                Field tmp;
-                col.column->get(i, tmp);
-                EXPECT_EQ(tmp.get<String>(), String("test_add_string_col"));
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<String>(Strings(num_rows_write, "test_add_string_col")),
+            }));
     }
 }
 CATCH
@@ -2433,6 +2090,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2447,32 +2106,13 @@ try
             ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
         }
 
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        //printf("pk:%lld\n", c->getInt(i));
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                    else if (iter.name == col_name_after_ddl)
-                    {
-                        //printf("col2:%s\n", c->getDataAt(i).data);
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_after_ddl}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                createColumn<Int32>(createSignedNumbers(0, num_rows_write)),
+            }));
     }
 }
 CATCH
@@ -2567,6 +2207,8 @@ try
                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
                                             EMPTY_FILTER,
                                             TRACING_NAME,
+                                            /* keep_order= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2580,27 +2222,12 @@ try
             // check old col name is not exist
             ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
         }
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == col_name_after_ddl)
-                    {
-                        //printf("col2:%s\n", c->getDataAt(i).data);
-                        EXPECT_EQ(c->getInt(i), Int64(i));
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({col_name_after_ddl}),
+            createColumns({
+                createColumn<Int32>(createNumbers<Int64>(0, num_rows_write)),
+            }));
     }
 
     {
@@ -2628,6 +2255,8 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
@@ -2641,27 +2270,12 @@ try
                 // check old col name is not exist
                 ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
             }
-
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-                for (auto && iter : block)
-                {
-                    auto c = iter.column;
-                    for (Int64 i = 0; i < Int64(c->size()); ++i)
-                    {
-                        if (iter.name == col_name_after_ddl)
-                        {
-                            //printf("col2:%s\n", c->getDataAt(i).data);
-                            EXPECT_EQ(c->getInt(i), Int64(i));
-                        }
-                    }
-                }
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write * 2);
+            ASSERT_INPUTSTREAM_COLS_UR(
+                in,
+                Strings({col_name_after_ddl}),
+                createColumns({
+                    createColumn<Int32>(createNumbers<Int64>(0, num_rows_write * 2)),
+                }));
         }
     }
 }
@@ -2727,27 +2341,16 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-
-        in->readPrefix();
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                Field tmp;
-                col.column->get(i, tmp);
-                // There is some loss of precision during the convertion, so we just do a rough comparison
-                EXPECT_FLOAT_EQ(std::abs(tmp.get<Float64>()), 1.125);
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(std::vector<Int64>{0}),
+                createColumn<Float32>(std::vector<Float64>{1.125}),
+            }));
     }
 
     {
@@ -2780,23 +2383,18 @@ try
                               /* max_version= */ std::numeric_limits<UInt64>::max(),
                               EMPTY_FILTER,
                               TRACING_NAME,
+                              /* keep_order= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), num_rows_write * 2);
-            ASSERT_TRUE(block.has(col_name_to_add));
-            const auto & col = block.getByName(col_name_to_add);
-            ASSERT_DATATYPE_EQ(col.type, col_type_to_add);
-            ASSERT_EQ(col.name, col_name_to_add);
-            Field tmp;
-            tmp = (*col.column)[0];
-            EXPECT_FLOAT_EQ(tmp.get<Float64>(), 1.125); // fill with default value
-            tmp = (*col.column)[1];
-            EXPECT_FLOAT_EQ(tmp.get<Float64>(), 3.1415); // keep the value we inserted
-        }
-        in->readSuffix();
+        // FIXME!!!
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_name_to_add}),
+            createColumns({
+                createColumn<Int64>(std::vector<Int64>{0, 1}),
+                createColumn<Float32>(std::vector<Float64>{1.125, 3.1415}),
+            }));
     }
 }
 CATCH
@@ -2809,14 +2407,14 @@ try
     store = reload(table_column_defines, true, 2);
     {
         // check handle column of store
-        auto & h = store->getHandle();
+        const auto & h = store->getHandle();
         ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
         ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
         ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_STRING_TYPE));
     }
     {
         // check column structure of store
-        auto & cols = store->getTableColumns();
+        const auto & cols = store->getTableColumns();
         // version & tag column added
         ASSERT_EQ(cols.size(), 3UL);
     }
@@ -2828,7 +2426,7 @@ try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
     const ColumnDefine col_i8_define(3, "i8", std::make_shared<DataTypeInt8>());
-    size_t rowkey_column_size = 2;
+    const size_t rowkey_column_size = 2;
     {
         auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
         table_column_defines->emplace_back(col_str_define);
@@ -2896,73 +2494,46 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        //printf("%s:%s\n", col_str_define.name.c_str(), c->getDataAt(i).data);
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        //printf("%s:%lld\n", col_i8_define.name.c_str(), c->getInt(i));
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+                createColumn<String>(createNumberStrings(0, num_rows_write)),
+            }));
     }
 
     {
         // test readRaw
         const auto & columns = store->getTableColumns();
-        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1)[0];
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                    else if (iter.name == col_str_define.name)
-                    {
-                        EXPECT_EQ(c->getDataAt(i), DB::toString(i));
-                    }
-                    else if (iter.name == col_i8_define.name)
-                    {
-                        Int64 num = i * (i % 2 == 0 ? -1 : 1);
-                        EXPECT_EQ(c->getInt(i), num);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+                createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+                createColumn<String>(createNumberStrings(0, num_rows_write)),
+            }));
     }
 }
 CATCH
@@ -3025,25 +2596,23 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, 3 * num_write_rows);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
 
     store = reload(table_column_defines, true, rowkey_column_size);
@@ -3099,25 +2668,23 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 3 * num_write_rows);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, 3 * num_write_rows);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
     // Read with version
     {
@@ -3127,28 +2694,26 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, 2 * num_write_rows);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, 2 * num_write_rows);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), 2 * num_write_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
 }
 CATCH
@@ -3157,7 +2722,7 @@ TEST_P(DeltaMergeStoreRWTest, DeleteReadWithCommonHandle)
 try
 {
     const size_t num_rows_write = 128;
-    size_t rowkey_column_size = 2;
+    const size_t rowkey_column_size = 2;
     {
         // Create a block with sequential Int64 handle in range [0, 128)
         auto table_column_difines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
@@ -3188,43 +2753,30 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        DMTestEnv::verifyClusteredIndexValue(c->operator[](i).get<String>(), i, rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        // mock common handle
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(0, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
     // Delete range [0, 64)
     const size_t num_deleted_rows = 64;
     {
-        WriteBufferFromOwnString ss;
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(0), ss);
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(0), ss);
-        RowKeyValue start(true, std::make_shared<String>(ss.releaseStr()));
-
-        ss.restart();
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(num_deleted_rows), ss);
-        DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
-        DB::EncodeInt64(Int64(num_deleted_rows), ss);
-        RowKeyValue end(true, std::make_shared<String>(ss.str()));
-        RowKeyRange range(start, end, true, 2);
+        RowKeyValue start(true, std::make_shared<String>(genMockCommonHandle(0, rowkey_column_size)));
+        RowKeyValue end(true, std::make_shared<String>(genMockCommonHandle(num_deleted_rows, rowkey_column_size)));
+        RowKeyRange range(start, end, true, rowkey_column_size);
         store->deleteRange(*db_context, db_context->getSettingsRef(), range);
     }
     // Read after deletion
@@ -3238,29 +2790,23 @@ try
                                              /* max_version= */ std::numeric_limits<UInt64>::max(),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
+                                             /* keep_order= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        size_t num_rows_read = 0;
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            for (auto && iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); ++i)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        // Range after deletion is [64, 128)
-                        DMTestEnv::verifyClusteredIndexValue(
-                            c->operator[](i).get<String>(),
-                            i + Int64(num_deleted_rows),
-                            rowkey_column_size);
-                    }
-                }
-            }
-        }
-
-        ASSERT_EQ(num_rows_read, num_rows_write - num_deleted_rows);
+        // mock common handle, data range after deletion is [64, 128)
+        auto common_handle_coldata = []() {
+            auto tmp = createNumbers<Int64>(num_deleted_rows, num_rows_write);
+            Strings res;
+            std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
+            return res;
+        }();
+        ASSERT_EQ(common_handle_coldata.size(), num_rows_write - num_deleted_rows);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<String>(common_handle_coldata),
+            }));
     }
 }
 CATCH
@@ -3311,39 +2857,20 @@ try
                                                 /* max_version= */ std::numeric_limits<UInt64>::max(),
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
+                                                /* keep_order= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            Int64 expected_row_pk = 1;
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-                for (auto && iter : block)
-                {
-                    auto c = iter.column;
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        for (size_t i = 0; i < c->size(); ++i)
-                        {
-                            auto expected = expected_row_pk++;
-                            auto value = c->getInt(i);
-                            if (value != expected)
-                            {
-                                // Convenient for debug.
-                                EXPECT_EQ(expected, value);
-                            }
-                        }
-                    }
-                }
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write_in_total);
-
+            ASSERT_INPUTSTREAM_COLS_UR(
+                in,
+                Strings({DMTestEnv::pk_name}),
+                createColumns({
+                    createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
+                }));
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
@@ -3359,6 +2886,378 @@ INSTANTIATE_TEST_CASE_P(
     DeltaMergeStoreRWTest,
     testing::Values(TestMode::V1_BlockOnly, TestMode::V2_BlockOnly, TestMode::V2_FileOnly, TestMode::V2_Mix),
     testModeToString);
+
+
+class DeltaMergeStoreMergeDeltaBySegmentTest
+    : public DB::base::TiFlashStorageTestBasic
+    , public testing::WithParamInterface<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>>
+{
+public:
+    DeltaMergeStoreMergeDeltaBySegmentTest()
+    {
+        std::tie(ps_ver, pk_type) = GetParam();
+    }
+
+    void SetUp() override
+    {
+        try
+        {
+            setStorageFormat(ps_ver);
+            TiFlashStorageTestBasic::SetUp();
+
+            setupDMStore();
+
+            // Split into 4 segments.
+            helper = std::make_unique<MultiSegmentTestUtil>(*db_context);
+            helper->prepareSegments(store, 50, pk_type);
+        }
+        CATCH
+    }
+
+    void setupDMStore()
+    {
+        auto cols = DMTestEnv::getDefaultColumns(pk_type);
+        store = std::make_shared<DeltaMergeStore>(*db_context,
+                                                  false,
+                                                  "test",
+                                                  DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                                  101,
+                                                  *cols,
+                                                  (*cols)[0],
+                                                  pk_type == DMTestEnv::PkType::CommonHandle,
+                                                  1,
+                                                  DeltaMergeStore::Settings());
+        dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+    }
+
+protected:
+    std::unique_ptr<MultiSegmentTestUtil> helper{};
+    DeltaMergeStorePtr store;
+    DMContextPtr dm_context;
+
+    UInt64 ps_ver{};
+    DMTestEnv::PkType pk_type;
+};
+
+INSTANTIATE_TEST_CASE_P(
+    ByPsVerAndPkType,
+    DeltaMergeStoreMergeDeltaBySegmentTest,
+    ::testing::Combine(
+        ::testing::Values(2, 3),
+        ::testing::Values(DMTestEnv::PkType::HiddenTiDBRowID, DMTestEnv::PkType::CommonHandle, DMTestEnv::PkType::PkIsHandleInt64)),
+    [](const testing::TestParamInfo<std::tuple<UInt64 /* PageStorage version */, DMTestEnv::PkType>> & info) {
+        const auto [ps_ver, pk_type] = info.param;
+        return fmt::format("PsV{}_{}", ps_ver, DMTestEnv::PkTypeToString(pk_type));
+    });
+
+
+// The given key is the boundary of the segment.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, BoundaryKey)
+try
+{
+    {
+        // Write data to first 3 segments.
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    if (store->isCommonHandle())
+    {
+        // Specifies MAX_KEY. nullopt should be returned.
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(result, std::nullopt);
+    }
+    else
+    {
+        // Specifies MAX_KEY. nullopt should be returned.
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(result, std::nullopt);
+    }
+    std::optional<RowKeyRange> result_1;
+    {
+        // Specifies MIN_KEY. In this case, the first segment should be processed.
+        if (store->isCommonHandle())
+        {
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+        else
+        {
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+        // The returned range is the same as first segment's range.
+        ASSERT_NE(result_1, std::nullopt);
+        ASSERT_EQ(*result_1, store->segments.begin()->second->getRowKeyRange());
+
+        helper->expected_stable_rows[0] += helper->expected_delta_rows[0];
+        helper->expected_delta_rows[0] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    {
+        // Compact the first segment again, nothing should change.
+        auto result = store->mergeDeltaBySegment(*db_context, result_1->start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(*result, *result_1);
+
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    std::optional<RowKeyRange> result_2;
+    {
+        // Compact again using the end key just returned. The second segment should be processed.
+        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result_2, std::nullopt);
+        ASSERT_EQ(*result_2, std::next(store->segments.begin())->second->getRowKeyRange());
+
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, InvalidKey)
+{
+    // Expect exceptions when invalid key is given.
+    EXPECT_ANY_THROW({
+        if (store->isCommonHandle())
+        {
+            // For common handle, give int handle key and have a try
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+        else
+        {
+            // For int handle, give common handle key and have a try
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        }
+    });
+}
+
+
+// Give the last segment key.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, LastSegment)
+try
+{
+    std::optional<RowKeyRange> result;
+    {
+        auto it = std::next(store->segments.begin(), 3);
+        ASSERT_NE(it, store->segments.end());
+        auto seg = it->second;
+
+        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    {
+        // As we are the last segment, compact "next segment" should result in failure. A nullopt is returned.
+        auto result2 = store->mergeDeltaBySegment(*db_context, result->end, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_EQ(result2, std::nullopt);
+        helper->verifyExpectedRowsForAllSegments();
+    }
+}
+CATCH
+
+
+// The given key is not the boundary of the segment.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, NonBoundaryKey)
+try
+{
+    {
+        // Write data to first 3 segments.
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+    {
+        // Compact segment[1] by giving a prefix-next key.
+        auto range = std::next(store->segments.begin())->second->getRowKeyRange();
+        auto compact_key = range.start.toPrefixNext();
+
+        auto result = store->mergeDeltaBySegment(*db_context, compact_key, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    }
+}
+CATCH
+
+
+// Verify that unflushed data will also be compacted.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, Flush)
+try
+{
+    {
+        // Write data to first 3 segments and flush.
+        auto newly_written_rows = helper->rows_by_segments[0] + helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, newly_written_rows, false, pk_type, 5 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        store->flushCache(dm_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+
+        helper->expected_delta_rows[0] += helper->rows_by_segments[0];
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+
+        auto segment1 = std::next(store->segments.begin())->second;
+        ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
+    }
+    {
+        // Write new data to segment[1] without flush.
+        auto newly_written_rows = helper->rows_by_segments[1];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->verifyExpectedRowsForAllSegments();
+
+        auto segment1 = std::next(store->segments.begin())->second;
+        ASSERT_GT(segment1->getDelta()->getUnsavedRows(), 0);
+    }
+    {
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+
+        segment1 = std::next(store->segments.begin())->second;
+        ASSERT_EQ(*result, segment1->getRowKeyRange());
+
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+
+        ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
+    }
+}
+CATCH
+
+
+// There is another flush cache executing for the same segment.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryByFlushCache)
+try
+{
+    {
+        // Write new data to segment[1] without flush.
+        auto newly_written_rows = helper->rows_by_segments[1];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+
+    auto sp_flush_commit = SyncPointCtl::enableInScope("before_ColumnFileFlushTask::commit");
+    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+
+    // Start a flush and suspend it before flushCommit.
+    auto th_flush = std::async([&]() {
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = segment1->flushCache(*dm_context);
+        ASSERT_TRUE(result);
+        ASSERT_EQ(segment1->getDelta()->getUnsavedRows(), 0);
+        // There should be still rows in the delta layer.
+        ASSERT_GT(segment1->getDelta()->getRows(), 0);
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_flush_commit.waitAndPause();
+
+    // Start a mergeDelta. It should hit retry immediately due to a flush is in progress.
+    auto th_merge_delta = std::async([&]() {
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+        // All rows in the delta layer should be merged into the stable layer.
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_merge_delta_retry.waitAndPause();
+
+    // Let's finish the flush.
+    sp_flush_commit.next();
+    th_flush.wait();
+
+    // Proceed the mergeDelta retry. Retry should succeed without triggering any new flush.
+    sp_merge_delta_retry.next();
+    th_merge_delta.wait();
+}
+CATCH
+
+
+// The segment is splitted during the execution.
+TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, RetryBySplit)
+try
+{
+    auto sp_split_prepare = SyncPointCtl::enableInScope("before_Segment::prepareSplit");
+    auto sp_merge_delta_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::mergeDeltaBySegment|retry_segment");
+
+    // Start a split and suspend it during prepareSplit to simulate a long-running split.
+    auto th_split = std::async([&] {
+        auto old_rows_by_segments = helper->rows_by_segments;
+        ASSERT_EQ(4, old_rows_by_segments.size());
+
+        // Split segment1 into 2.
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->segmentSplit(*dm_context, segment1, /*is_foreground*/ true);
+        ASSERT_NE(result.second, nullptr);
+
+        helper->resetExpectedRows();
+        ASSERT_EQ(5, helper->rows_by_segments.size());
+        ASSERT_EQ(old_rows_by_segments[0], helper->rows_by_segments[0]);
+        ASSERT_EQ(old_rows_by_segments[1], helper->rows_by_segments[1] + helper->rows_by_segments[2]);
+        ASSERT_EQ(old_rows_by_segments[2], helper->rows_by_segments[3]);
+        ASSERT_EQ(old_rows_by_segments[3], helper->rows_by_segments[4]);
+    });
+    sp_split_prepare.waitAndPause();
+
+    // Start a mergeDelta. As there is a split in progress, we would expect several retries.
+    auto th_merge_delta = std::async([&] {
+        // mergeDeltaBySegment for segment1
+        auto segment1 = std::next(store->segments.begin())->second;
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        ASSERT_NE(result, std::nullopt);
+
+        // Although original segment1 has been split into 2, we still expect only segment1's delta
+        // was merged.
+        ASSERT_EQ(5, helper->rows_by_segments.size());
+        helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
+        helper->expected_delta_rows[1] = 0;
+        helper->verifyExpectedRowsForAllSegments();
+    });
+    sp_merge_delta_retry.waitAndNext();
+    sp_merge_delta_retry.waitAndNext();
+    sp_merge_delta_retry.waitAndPause();
+
+    // Proceed and finish the split.
+    sp_split_prepare.next();
+    th_split.wait();
+    {
+        // Write to the new segment1 + segment2 after split.
+        auto newly_written_rows = helper->rows_by_segments[1] + helper->rows_by_segments[2];
+        Block block = DMTestEnv::prepareSimpleWriteBlock(helper->rows_by_segments[0], helper->rows_by_segments[0] + newly_written_rows, false, pk_type, 10 /* new tso */);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+        helper->expected_delta_rows[1] += helper->rows_by_segments[1];
+        helper->expected_delta_rows[2] += helper->rows_by_segments[2];
+        helper->verifyExpectedRowsForAllSegments();
+    }
+
+    // This time the retry should succeed without any future retries.
+    sp_merge_delta_retry.next();
+    th_merge_delta.wait();
+}
+CATCH
+
 
 } // namespace tests
 } // namespace DM

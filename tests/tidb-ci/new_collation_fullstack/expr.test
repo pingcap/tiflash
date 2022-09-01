@@ -35,6 +35,13 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 |    2 | abc   |
 +------+-------+
 
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value1 from test.t where value1 = 'abc       ';
++------+-------+
+| id   | value1|
++------+-------+
+|    1 | abc   |
+|    2 | abc   |
++------+-------+
 
 mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value from test.t where value like 'aB%';
 +------+-------+
@@ -62,6 +69,13 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 |    3 | def   |
 +------+-------+
 
+mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value1 from test.t where value1 = 'def       ';
++------+-------+
+| id   | value1|
++------+-------+
+|    3 | def   |
++------+-------+
+
 mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_storage(tiflash[t]) */ id, value1 from test.t where value1 in ('Abc','def');
 +------+-------+
 | id   | value1|
@@ -75,3 +89,19 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select /*+ read_from_s
 +------------+------------+-------------+-------------+
 | abc        | def        | abc         | def         |
 +------------+------------+-------------+-------------+
+
+mysql> insert into test.t values (4, '', 'def\n'), (5, '', 'def    ');
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ hex(max(value1)) from test.t;
++------------------+
+| hex(max(value1)) |
++------------------+
+| 6465660A         |
++------------------+
+
+mysql> select /*+ read_from_storage(tiflash[t]) */ hex(min(value1)) from test.t;
++------------------+
+| hex(min(value1)) |
++------------------+
+| 61626320         |
++------------------+

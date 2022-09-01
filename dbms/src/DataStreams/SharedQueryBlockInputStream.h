@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FailPoint.h>
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -24,6 +25,11 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char random_sharedquery_failpoint[];
+} // namespace FailPoints
+
 /** This block input stream is used by SharedQuery.
   * It enable multiple threads read from one stream.
  */
@@ -106,7 +112,10 @@ public:
     }
 
 protected:
-    Block readImpl() override
+    /// The BlockStreamProfileInfo of SharedQuery is useless,
+    /// and it will trigger tsan UT fail because of data race.
+    /// So overriding method `read` here.
+    Block read(FilterPtr &, bool) override
     {
         std::unique_lock lock(mutex);
 
@@ -116,7 +125,7 @@ protected:
             throw Exception("read operation called after readSuffix");
 
         Block block;
-        if (!queue.pop(block))
+        if (queue.pop(block) != MPMCQueueResult::OK)
         {
             if (!isCancelled())
             {
@@ -128,6 +137,10 @@ protected:
 
         return block;
     }
+    Block readImpl() override
+    {
+        throw Exception("Unsupport");
+    }
 
     void fetchBlocks()
     {
@@ -136,9 +149,10 @@ protected:
             in->readPrefix();
             while (true)
             {
+                FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_sharedquery_failpoint);
                 Block block = in->read();
                 // in is finished or queue is canceled
-                if (!block || !queue.push(block))
+                if (!block || queue.push(block) != MPMCQueueResult::OK)
                     break;
             }
             in->readSuffix();

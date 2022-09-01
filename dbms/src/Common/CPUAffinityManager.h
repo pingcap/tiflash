@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <common/defines.h>
 
 #include <string>
@@ -32,6 +33,10 @@ class LayeredConfiguration;
 
 namespace DB
 {
+namespace tests
+{
+class CPUAffinityManagerTest_CPUAffinityManager_Test;
+}
 struct CPUAffinityConfig
 {
     CPUAffinityConfig()
@@ -85,13 +90,19 @@ public:
     void bindSelfOtherThread() const {}
     void bindSelfGrpcThread() const {}
 
-    std::string toString() const { return "Not Support"; }
+    static std::string toString()
+    {
+        return "Not Support";
+    }
 
     void bindThreadCPUAffinity() const {}
 #endif
 
 private:
 #ifdef __linux__
+    // for unittest
+    friend class DB::tests::CPUAffinityManagerTest_CPUAffinityManager_Test;
+
     void initCPUSet();
     int getCPUCores() const;
     int getQueryCPUCores() const;
@@ -126,9 +137,6 @@ private:
     CPUAffinityManager();
     // Disable copy and move
 public:
-    CPUAffinityManager(const CPUAffinityManager &) = delete;
-    CPUAffinityManager & operator=(const CPUAffinityManager &) = delete;
-    CPUAffinityManager(CPUAffinityManager &&) = delete;
-    CPUAffinityManager & operator=(CPUAffinityManager &&) = delete;
+    DISALLOW_COPY_AND_MOVE(CPUAffinityManager);
 };
 } // namespace DB

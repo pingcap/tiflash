@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQueryBlockInterpreter.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
@@ -24,16 +23,8 @@ namespace DB
 InterpreterDAG::InterpreterDAG(Context & context_, const DAGQuerySource & dag_)
     : context(context_)
     , dag(dag_)
+    , max_streams(context.getMaxStreams())
 {
-    const Settings & settings = context.getSettingsRef();
-    if (dagContext().isBatchCop() || dagContext().isMPPTask())
-        max_streams = settings.max_threads;
-    else
-        max_streams = 1;
-    if (max_streams > 1)
-    {
-        max_streams *= settings.max_streams_to_max_threads_ratio;
-    }
 }
 
 void setRestorePipelineConcurrency(DAGQueryBlock & query_block)
@@ -72,30 +63,10 @@ BlockInputStreams InterpreterDAG::executeQueryBlock(DAGQueryBlock & query_block)
 
 BlockIO InterpreterDAG::execute()
 {
-    /// Due to learner read, DAGQueryBlockInterpreter may take a long time to build
-    /// the query plan, so we init mpp exchange receiver before executeQueryBlock
-    dagContext().initExchangeReceiverIfMPP(context, max_streams);
-
     BlockInputStreams streams = executeQueryBlock(*dag.getRootQueryBlock());
     DAGPipeline pipeline;
     pipeline.streams = streams;
-
-    /// add union to run in parallel if needed
-    if (dagContext().isMPPTask())
-        /// MPPTask do not need the returned blocks.
-        executeUnion(pipeline, max_streams, dagContext().log, /*ignore_block=*/true);
-    else
-        executeUnion(pipeline, max_streams, dagContext().log);
-    if (dagContext().hasSubquery())
-    {
-        const Settings & settings = context.getSettingsRef();
-        pipeline.firstStream() = std::make_shared<CreatingSetsBlockInputStream>(
-            pipeline.firstStream(),
-            std::move(dagContext().moveSubqueries()),
-            SizeLimits(settings.max_rows_to_transfer, settings.max_bytes_to_transfer, settings.transfer_overflow_mode),
-            dagContext().log->identifier());
-    }
-
+    executeCreatingSets(pipeline, context, max_streams, dagContext().log);
     BlockIO res;
     res.in = pipeline.firstStream();
     return res;

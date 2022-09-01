@@ -98,6 +98,7 @@ public:
         };
         using FieldReadInfos = std::vector<FieldReadInfo>;
         PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
+        Page read(FieldReadInfo & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
         bool isIdle(const Seconds & max_idle_time);
 

@@ -75,29 +75,34 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getProfileStreamsMap
     return profile_streams_map;
 }
 
+void DAGContext::updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit)
+{
+    final_concurrency = std::min(std::max(final_concurrency, cur_streams_size), streams_upper_limit);
+}
+
 void DAGContext::initExecutorIdToJoinIdMap()
 {
     // only mpp task has join executor
     // for mpp, all executor has executor id.
-    if (isMPPTask())
-    {
-        executor_id_to_join_id_map.clear();
-        traverseExecutorsReverse(dag_request, [&](const tipb::Executor & executor) {
-            std::vector<String> all_join_id;
-            // for mpp, dag_request.has_root_executor() == true, can call `getChildren` directly.
-            getChildren(executor).forEach([&](const tipb::Executor & child) {
-                assert(child.has_executor_id());
-                auto child_it = executor_id_to_join_id_map.find(child.executor_id());
-                if (child_it != executor_id_to_join_id_map.end())
-                    all_join_id.insert(all_join_id.end(), child_it->second.begin(), child_it->second.end());
-            });
-            assert(executor.has_executor_id());
-            if (executor.tp() == tipb::ExecType::TypeJoin)
-                all_join_id.push_back(executor.executor_id());
-            if (!all_join_id.empty())
-                executor_id_to_join_id_map[executor.executor_id()] = all_join_id;
+    if (!isMPPTask())
+        return;
+
+    executor_id_to_join_id_map.clear();
+    traverseExecutorsReverse(dag_request, [&](const tipb::Executor & executor) {
+        std::vector<String> all_join_id;
+        // for mpp, dag_request.has_root_executor() == true, can call `getChildren` directly.
+        getChildren(executor).forEach([&](const tipb::Executor & child) {
+            assert(child.has_executor_id());
+            auto child_it = executor_id_to_join_id_map.find(child.executor_id());
+            if (child_it != executor_id_to_join_id_map.end())
+                all_join_id.insert(all_join_id.end(), child_it->second.begin(), child_it->second.end());
         });
-    }
+        assert(executor.has_executor_id());
+        if (executor.tp() == tipb::ExecType::TypeJoin)
+            all_join_id.push_back(executor.executor_id());
+        if (!all_join_id.empty())
+            executor_id_to_join_id_map[executor.executor_id()] = all_join_id;
+    });
 }
 
 std::unordered_map<String, std::vector<String>> & DAGContext::getExecutorIdToJoinIdMap()
@@ -205,60 +210,25 @@ void DAGContext::attachBlockIO(const BlockIO & io_)
 {
     io = io_;
 }
-void DAGContext::initExchangeReceiverIfMPP(Context & context, size_t max_streams)
-{
-    if (isMPPTask())
-    {
-        if (mpp_exchange_receiver_map_inited)
-            throw TiFlashException("Repeatedly initialize mpp_exchange_receiver_map", Errors::Coprocessor::Internal);
-        traverseExecutors(dag_request, [&](const tipb::Executor & executor) {
-            if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
-            {
-                assert(executor.has_executor_id());
-                const auto & executor_id = executor.executor_id();
-                // In order to distinguish different exchange receivers.
-                auto exchange_receiver = std::make_shared<ExchangeReceiver>(
-                    std::make_shared<GRPCReceiverContext>(
-                        executor.exchange_receiver(),
-                        getMPPTaskMeta(),
-                        context.getTMTContext().getKVCluster(),
-                        context.getTMTContext().getMPPTaskManager(),
-                        context.getSettingsRef().enable_local_tunnel,
-                        context.getSettingsRef().enable_async_grpc_client),
-                    executor.exchange_receiver().encoded_task_meta_size(),
-                    max_streams,
-                    log->identifier(),
-                    executor_id);
-                mpp_exchange_receiver_map[executor_id] = exchange_receiver;
-                new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
-            }
-            return true;
-        });
-        mpp_exchange_receiver_map_inited = true;
-    }
-}
 
-
-const std::unordered_map<String, std::shared_ptr<ExchangeReceiver>> & DAGContext::getMPPExchangeReceiverMap() const
+ExchangeReceiverPtr DAGContext::getMPPExchangeReceiver(const String & executor_id) const
 {
     if (!isMPPTask())
         throw TiFlashException("mpp_exchange_receiver_map is used in mpp only", Errors::Coprocessor::Internal);
-    if (!mpp_exchange_receiver_map_inited)
-        throw TiFlashException("mpp_exchange_receiver_map has not been initialized", Errors::Coprocessor::Internal);
-    return mpp_exchange_receiver_map;
+    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
+    return mpp_receiver_set->getExchangeReceiver(executor_id);
 }
 
-void DAGContext::cancelAllExchangeReceiver()
+void DAGContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader)
 {
-    for (auto & it : mpp_exchange_receiver_map)
-    {
-        it.second->cancel();
-    }
+    if (!isMPPTask())
+        return;
+    coprocessor_readers.push_back(coprocessor_reader);
 }
 
-int DAGContext::getNewThreadCountOfExchangeReceiver() const
+std::vector<CoprocessorReaderPtr> & DAGContext::getCoprocessorReaders()
 {
-    return new_thread_count_of_exchange_receiver;
+    return coprocessor_readers;
 }
 
 bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
@@ -270,5 +240,8 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
-
+const MPPReceiverSetPtr & DAGContext::getMppReceiverSet() const
+{
+    return mpp_receiver_set;
+}
 } // namespace DB

@@ -67,6 +67,7 @@ public:
 
     // If dir_path_as_encryption_path is true, use dir_path_ as EncryptionPath
     // If false, use every file's path inside dir_path_ as EncryptionPath
+    // Note this method is not atomic, and after calling it, the files in dir_path_ cannot be read again.
     void deleteDirectory(
         const String & dir_path_,
         bool dir_path_as_encryption_path = false,

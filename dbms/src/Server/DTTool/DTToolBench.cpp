@@ -336,14 +336,13 @@ int benchEntry(const std::vector<std::string> & opts)
         auto settings = DB::Settings();
         auto db_context = env.getContext();
         auto path_pool = std::make_unique<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
-        auto storage_pool = std::make_unique<DB::DM::StoragePool>("test.t1", /*table_id*/ 1, *path_pool, *db_context, db_context->getSettingsRef());
+        auto storage_pool = std::make_unique<DB::DM::StoragePool>(*db_context, /*ns_id*/ 1, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = std::make_unique<DB::DM::DMContext>( //
             *db_context,
             *path_pool,
             *storage_pool,
-            /*hash_salt*/ 0,
-            0,
+            /*min_version_*/ 0,
             dm_settings.not_compress_columns,
             false,
             1,

@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <double-conversion/double-conversion.h>
-
 
 namespace DB
 {
@@ -53,8 +53,7 @@ public:
         return instance;
     }
 
-    DoubleConverter(const DoubleConverter &) = delete;
-    DoubleConverter & operator=(const DoubleConverter &) = delete;
+    DISALLOW_COPY(DoubleConverter);
 };
 
 } // namespace DB

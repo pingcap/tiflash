@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -35,6 +36,7 @@ class ColumnFileInMemory;
 class ColumnFileTiny;
 class ColumnFileDeleteRange;
 class ColumnFileBig;
+class ColumnFilePersisted;
 class ColumnFileReader;
 using ColumnFileReaderPtr = std::shared_ptr<ColumnFileReader>;
 
@@ -96,24 +98,29 @@ public:
 
     virtual Type getType() const = 0;
 
-    /// Is a ColumnInMemoryFile or not.
+    /// Is a ColumnFileInMemory or not.
     bool isInMemoryFile() const { return getType() == Type::INMEMORY_FILE; }
-    /// Is a ColumnTinyFile or not.
+    /// Is a ColumnFileTiny or not.
     bool isTinyFile() const { return getType() == Type::TINY_FILE; }
-    /// Is a ColumnDeleteRangeFile or not.
+    /// Is a ColumnFileDeleteRange or not.
     bool isDeleteRange() const { return getType() == Type::DELETE_RANGE; };
-    /// Is a ColumnBigFile or not.
+    /// Is a ColumnFileBig or not.
     bool isBigFile() const { return getType() == Type::BIG_FILE; };
+    /// Is a ColumnFilePersisted or not
+    bool isPersisted() const { return getType() != Type::INMEMORY_FILE; };
 
     ColumnFileInMemory * tryToInMemoryFile();
     ColumnFileTiny * tryToTinyFile();
     ColumnFileDeleteRange * tryToDeleteRange();
     ColumnFileBig * tryToBigFile();
 
+    ColumnFilePersisted * tryToColumnFilePersisted();
+
     virtual ColumnFileReaderPtr
     getReader(const DMContext & context, const StorageSnapshotPtr & storage_snap, const ColumnDefinesPtr & col_defs) const = 0;
 
-    /// only ColumnInMemoryFile can be appendable
+    /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
+    /// been persisted in the disk and their data will be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
     virtual bool append(DMContext & /*dm_context*/, const Block & /*data*/, size_t /*offset*/, size_t /*limit*/, size_t /*data_bytes*/)
@@ -130,7 +137,7 @@ class ColumnFileReader
 public:
     virtual ~ColumnFileReader() = default;
     ColumnFileReader() = default;
-    ColumnFileReader(const ColumnFileReader & o) = delete;
+    DISALLOW_COPY(ColumnFileReader);
 
     /// Read data from this reader and store the result into output_cols.
     /// Note that if "range" is specified, then the caller must guarantee that the rows between [rows_offset, rows_offset + rows_limit) are sorted.

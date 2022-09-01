@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <Storages/Transaction/ProxyFFI.h>
 
 namespace DB
@@ -26,8 +27,7 @@ struct SSTReader
     BaseBuffView value() const;
     void next();
 
-    SSTReader(const SSTReader &) = delete;
-    SSTReader(SSTReader &&) = delete;
+    DISALLOW_COPY_AND_MOVE(SSTReader);
     SSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view);
     ~SSTReader();
 

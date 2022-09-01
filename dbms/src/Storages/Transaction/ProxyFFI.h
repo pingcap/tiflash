@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/nocopyable.h>
 #include <RaftStoreProxyFFI/EncryptionFFI.h>
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <RaftStoreProxyFFI/VersionCheck.h>
@@ -55,7 +56,6 @@ enum class RawCppPtrTypeImpl : RawCppPtrType
 {
     None = 0,
     String,
-    PreHandledSnapshotWithBlock,
     PreHandledSnapshotWithFiles,
     WakerNotifier,
 };
@@ -67,8 +67,7 @@ struct RawRustPtrWrap;
 
 struct RawRustPtrWrap : RawRustPtr
 {
-    RawRustPtrWrap(const RawRustPtrWrap &) = delete;
-    RawRustPtrWrap & operator=(const RawRustPtrWrap &) = delete;
+    DISALLOW_COPY(RawRustPtrWrap);
 
     explicit RawRustPtrWrap(RawRustPtr inner);
     ~RawRustPtrWrap();
@@ -126,6 +125,8 @@ EngineStoreApplyRes HandleAdminRaftCmd(
 EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server,
                                        WriteCmdsView cmds,
                                        RaftCmdHeader header);
+uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
+uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t until_succeed, uint64_t index, uint64_t term);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
 EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec snaps, RaftCmdHeader header);
@@ -159,6 +160,8 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_gen_cpp_string = GenCppRawString,
         .fn_handle_write_raft_cmd = HandleWriteRaftCmd,
         .fn_handle_admin_raft_cmd = HandleAdminRaftCmd,
+        .fn_need_flush_data = NeedFlushData,
+        .fn_try_flush_data = TryFlushData,
         .fn_atomic_update_proxy = AtomicUpdateProxy,
         .fn_handle_destroy = HandleDestroy,
         .fn_handle_ingest_sst = HandleIngestSST,

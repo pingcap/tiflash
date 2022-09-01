@@ -16,15 +16,16 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 
-#include <vector>
-
 namespace DB
 {
 /// TiDBTableScan is a wrap to hide the difference of `TableScan` and `PartitionTableScan`
 class TiDBTableScan
 {
 public:
-    TiDBTableScan(const tipb::Executor * table_scan_, const DAGContext & dag_context);
+    TiDBTableScan(
+        const tipb::Executor * table_scan_,
+        const String & executor_id_,
+        const DAGContext & dag_context);
     bool isPartitionTableScan() const
     {
         return is_partition_table_scan;
@@ -46,13 +47,23 @@ public:
     {
         return physical_table_ids;
     }
-    String getTableScanExecutorID() const
+    const String & getTableScanExecutorID() const
     {
-        return table_scan->executor_id();
+        return executor_id;
+    }
+    bool keepOrder() const
+    {
+        return keep_order;
+    }
+
+    bool isFastScan() const
+    {
+        return is_fast_scan;
     }
 
 private:
     const tipb::Executor * table_scan;
+    String executor_id;
     bool is_partition_table_scan;
     const google::protobuf::RepeatedPtrField<tipb::ColumnInfo> & columns;
     /// logical_table_id is the table id for a TiDB' table, while if the
@@ -64,6 +75,8 @@ private:
     /// physical_table_ids contains the table ids of its partitions
     std::vector<Int64> physical_table_ids;
     Int64 logical_table_id;
+    bool keep_order;
+    bool is_fast_scan;
 };
 
 } // namespace DB

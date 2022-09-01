@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Statistics/ExchangeSenderImpl.h>
 
@@ -30,31 +31,13 @@ String MPPTunnelDetail::toJson() const
         bytes);
 }
 
-namespace
-{
-String exchangeTypeToString(const tipb::ExchangeType & exchange_type)
-{
-    switch (exchange_type)
-    {
-    case tipb::ExchangeType::PassThrough:
-        return "PassThrough";
-    case tipb::ExchangeType::Broadcast:
-        return "Broadcast";
-    case tipb::ExchangeType::Hash:
-        return "Hash";
-    default:
-        throw TiFlashException("unknown ExchangeType", Errors::Coprocessor::Internal);
-    }
-}
-} // namespace
-
 void ExchangeSenderStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     fmt_buffer.fmtAppend(
         R"("partition_num":{},"sender_target_task_ids":[{}],"exchange_type":"{}","connection_details":[)",
         partition_num,
         fmt::join(sender_target_task_ids, ","),
-        exchangeTypeToString(exchange_type));
+        getExchangeTypeName(exchange_type));
     fmt_buffer.joinStr(
         mpp_tunnel_details.cbegin(),
         mpp_tunnel_details.cend(),

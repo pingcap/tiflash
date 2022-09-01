@@ -16,6 +16,7 @@
 #include <Common/Arena.h>
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/WindowDescription.h>
 #include <Interpreters/convertFieldToType.h>
 
 namespace DB
@@ -109,11 +110,11 @@ bool WindowBlockInputStream::isDifferentFromPrevPartition(UInt64 current_partiti
         const auto * compared_column = compared_columns[partition_column_indices[i]].get();
         if (window_description.partition_by[i].collator)
         {
-            if (compared_column->compareAtWithCollation(current_partition_row,
-                                                        prev_frame_start.row,
-                                                        *reference_column,
-                                                        1 /* nan_direction_hint */,
-                                                        *window_description.partition_by[i].collator)
+            if (compared_column->compareAt(current_partition_row,
+                                           prev_frame_start.row,
+                                           *reference_column,
+                                           1 /* nan_direction_hint */,
+                                           *window_description.partition_by[i].collator)
                 != 0)
             {
                 return true;
@@ -278,7 +279,7 @@ bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) 
             const auto * column_y = inputAt(y)[order_column_indices[i]].get();
             if (window_description.order_by[i].collator)
             {
-                if (column_x->compareAtWithCollation(x.row, y.row, *column_y, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
+                if (column_x->compareAt(x.row, y.row, *column_y, 1 /* nan_direction_hint */, *window_description.order_by[i].collator) != 0)
                 {
                     return false;
                 }
@@ -573,5 +574,22 @@ void WindowBlockInputStream::tryCalculate()
         peer_group_start_row_number = 1;
         peer_group_number = 1;
     }
+}
+
+void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.append(", function: {");
+    buffer.joinStr(
+        window_description.window_functions_descriptions.begin(),
+        window_description.window_functions_descriptions.end(),
+        [&](const auto & func, FmtBuffer & b) {
+            b.append(func.window_function->getName());
+        },
+        ", ");
+    buffer.fmtAppend(
+        "}}, frame: {{type: {}, boundary_begin: {}, boundary_end: {}}}",
+        frameTypeToString(window_description.frame.type),
+        boundaryTypeToString(window_description.frame.begin_type),
+        boundaryTypeToString(window_description.frame.end_type));
 }
 } // namespace DB

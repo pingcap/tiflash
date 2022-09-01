@@ -48,6 +48,14 @@ endif ()
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 
 option (USE_CCACHE "Set to OFF to disable ccache" ON)
+if (USE_CCACHE)
+    set(NOT_USE_CCACHE 0)
+else()
+    set(NOT_USE_CCACHE 1)
+endif()
+
+option(ENABLE_PCH "Enable `Precompiled header`" OFF)
+
 include (cmake/find_ccache.cmake)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
@@ -102,6 +110,70 @@ if (COMPILER_CLANG)
     # Clang doesn't have int128 predefined macros, workaround by manually defining them
     # Reference: https://stackoverflow.com/questions/41198673/uint128-t-not-working-with-clang-and-libstdc
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__GLIBCXX_BITSIZE_INT_N_0=128 -D__GLIBCXX_TYPE_INT_N_0=__int128")
+
+    option(ENABLE_TIME_TRACES "Enable clang feature time traces" OFF)
+    if (ENABLE_TIME_TRACES)
+        set (CLANG_TIME_TRACES_FLAGS "-ftime-trace")
+        message (STATUS "Using clang time traces flag `${CLANG_TIME_TRACES_FLAGS}`. Generates JSON file based on output filename. Results can be analyzed with chrome://tracing or https://www.speedscope.app for flamegraph visualization.")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLANG_TIME_TRACES_FLAGS}")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLANG_TIME_TRACES_FLAGS}")
+    endif ()
+
+    # https://clang.llvm.org/docs/ThinLTO.html
+    # Applies to clang only.
+    option(ENABLE_THINLTO "Clang-specific link time optimization" OFF)
+
+    if (ENABLE_THINLTO AND NOT ENABLE_TESTS)
+        # Link time optimization
+        set (THINLTO_JOBS "0" CACHE STRING "ThinLTO compilation parallelism")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -flto=thin -fvisibility=hidden -fvisibility-inlines-hidden -fsplit-lto-unit")
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -flto=thin -fvisibility=hidden -fvisibility-inlines-hidden -fwhole-program-vtables -fsplit-lto-unit")
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -flto=thin -flto-jobs=${THINLTO_JOBS} -fvisibility=hidden -fvisibility-inlines-hidden -fwhole-program-vtables -fsplit-lto-unit")
+    elseif (ENABLE_THINLTO)
+        message (WARNING "Cannot enable ThinLTO")
+    endif ()
+endif ()
+
+option (ENABLE_LLVM_PROFILE_INSTR "Generate instrumented code to collect execution counts" OFF)
+option (ENABLE_LLVM_PGO "Enables flags for Profile Guided Optimization (PGO)" OFF)
+option (ENABLE_LLVM_PGO_USE_SAMPLE "Enables flags for Profile Guided Optimization (PGO) and use sampling profilers" OFF)
+set (USE_LLVM_FDO OFF CACHE BOOL "" FORCE)
+
+if (ENABLE_LLVM_PGO)
+    if (ENABLE_LLVM_PROFILE_INSTR)
+        message (FATAL_ERROR "`ENABLE_LLVM_PROFILE_INSTR` can not be used with `ENABLE_LLVM_PGO`")
+    endif ()
+    if (ENABLE_LLVM_PGO_USE_SAMPLE)
+
+        # Follow https://clang.llvm.org/docs/UsersManual.html#using-sampling-profilers
+        # Use https://github.com/google/autofdo
+
+        set (_LLVM_PGO_USE_SAMPLE_FLAGS "-gline-tables-only -fdebug-info-for-profiling -funique-internal-linkage-names")
+
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${_LLVM_PGO_USE_SAMPLE_FLAGS}")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${_LLVM_PGO_USE_SAMPLE_FLAGS}")
+        set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-rosegment")
+        message (STATUS "Add flags `${_LLVM_PGO_USE_SAMPLE_FLAGS}` for profiling")
+
+        if (NOT "$ENV{TIFLASH_LLVM_PROFDATA}" STREQUAL "")
+            set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-sample-use=$ENV{TIFLASH_LLVM_PROFDATA}")
+            set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-sample-use=$ENV{TIFLASH_LLVM_PROFDATA}")
+            message (STATUS "Use sample profile data `$ENV{TIFLASH_LLVM_PROFDATA}` for profile-guided optimization")
+            set (USE_LLVM_FDO ON CACHE BOOL "" FORCE)
+        else ()
+            message (STATUS "NOT use sample profile data")
+        endif ()
+
+        unset (_LLVM_PGO_USE_SAMPLE_FLAGS)
+    else ()
+        if ("$ENV{TIFLASH_LLVM_PROFDATA}" STREQUAL "")
+            message (FATAL_ERROR "Please set env var `TIFLASH_LLVM_PROFDATA`")
+        endif ()
+
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-use=$ENV{TIFLASH_LLVM_PROFDATA} -Wno-profile-instr-unprofiled")
+        set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-instr-use=$ENV{TIFLASH_LLVM_PROFDATA} -Wno-profile-instr-unprofiled")
+        message (STATUS "Use instrumentation data `$ENV{TIFLASH_LLVM_PROFDATA}` for profile-guided optimization")
+    endif ()
 endif ()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -171,7 +243,7 @@ endif()
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
 
-if (NOT LINKER_NAME)
+if (NOT LINKER_NAME AND NOT APPLE)
     if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
         set (LINKER_NAME "lld")
     elseif (GOLD_PATH)
@@ -209,10 +281,8 @@ else ()
     set (CMAKE_CXX_STANDARD_REQUIRED ON)
 endif ()
 
-if (NOT ARCH_ARM)
-    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3")
-    set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3")
-endif ()
+set (CMAKE_CXX_FLAGS_RELWITHDEBINFO      "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O3")
+set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3")
 
 option (DEBUG_WITHOUT_DEBUG_INFO "Set to ON to build dev target without debug info (remove flag `-g` in order to accelerate compiling speed and reduce target binary size)" OFF)
 if (DEBUG_WITHOUT_DEBUG_INFO)
@@ -369,7 +439,6 @@ option (ENABLE_UNWIND "Enable libunwind (better stacktraces)" ON)
 include (libs/libdaemon/cmake/find_unwind.cmake)
 
 # Need to process before "contrib" dir:
-include (libs/libcommon/cmake/find_gperftools.cmake)
 include (libs/libcommon/cmake/find_jemalloc.cmake)
 include (libs/libcommon/cmake/find_mimalloc.cmake)
 include (libs/libcommon/cmake/find_cctz.cmake)
@@ -398,12 +467,18 @@ endif()
 option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEFAULT})
 if (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are enabled")
-else (ENABLE_FAILPOINTS)
+else ()
     message (STATUS "Failpoints are disabled")
-endif (ENABLE_FAILPOINTS)
+endif ()
 
-# Enable PageStorage V3 test.
-option (ENABLE_V3_PAGESTORAGE "Enables V3 PageStorage" ON)
+# Since JEMALLOC_NARENAS_COUNT is introduced for very limited usage, default to -1
+set (JEMALLOC_NARENAS_DEFAULT -1)
+option (JEMALLOC_NARENAS "Set Jemalloc narenas " ${JEMALLOC_NARENAS_DEFAULT})
+if (JEMALLOC_NARENAS LESS_EQUAL 0)
+    message (STATUS "No jemalloc narenas settings")
+else ()
+    message (STATUS "Set jemalloc narenas ${JEMALLOC_NARENAS}")
+endif ()
 
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
@@ -416,6 +491,16 @@ endif ()
 option (TEST_LLVM_COVERAGE "Enables flags for test coverage" OFF)
 if (TEST_LLVM_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-instr-generate -fcoverage-mapping -DTIFLASH_LLVM_COVERAGE=1")
+endif ()
+
+# `ENABLE_LLVM_PROFILE_INSTR` will make executable binary generate profile data automatically. Make it only work at modules dbms and libs.
+if (ENABLE_LLVM_PROFILE_INSTR)
+    if (ENABLE_LLVM_PGO)
+        message (FATAL_ERROR "`ENABLE_LLVM_PROFILE_INSTR` can not be used with `ENABLE_LLVM_PGO`")
+    endif ()
+    message (STATUS "Using flag `-fprofile-instr-generate`. Generate instrumented code to collect execution counts into default.profraw file(overridden by '=' form of option or `LLVM_PROFILE_FILE` env var). Follow https://clang.llvm.org/docs/UsersManual.html#profile-guided-optimization.")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fprofile-instr-generate")
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fprofile-instr-generate")
 endif ()
 
 if (ARCH_AMD64)

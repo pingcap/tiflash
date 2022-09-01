@@ -20,6 +20,7 @@
 #include <fmt/chrono.h>
 
 #include <memory>
+#include <queue>
 
 namespace DB
 {
@@ -174,7 +175,7 @@ public:
         return waker.waitFor(tm);
     }
 
-    virtual ~BlockedReadIndexHelper() = default;
+    ~BlockedReadIndexHelper() override = default;
 
 private:
     AsyncWaker & waker;
@@ -193,7 +194,7 @@ struct BlockedReadIndexHelperV3 : BlockedReadIndexHelperTrait
         return notifier.blockedWaitFor(tm);
     }
 
-    virtual ~BlockedReadIndexHelperV3() = default;
+    ~BlockedReadIndexHelperV3() override = default;
 
 private:
     AsyncWaker::Notifier & notifier;
@@ -342,7 +343,7 @@ struct RegionReadIndexNotifier : AsyncNotifier
         notify->wake();
     }
 
-    virtual ~RegionReadIndexNotifier() = default;
+    ~RegionReadIndexNotifier() override = default;
 
     RegionReadIndexNotifier(
         RegionID region_id_,
@@ -879,7 +880,7 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
         }
     }
     { // if meet timeout, which means part of regions can not get response from leader, try to poll rest tasks
-        TEST_LOG_FMT("rest {}, poll rest tasks onece", tasks.size());
+        TEST_LOG_FMT("rest {}, poll rest tasks once", tasks.size());
 
         while (!tasks.empty())
         {

@@ -34,14 +34,13 @@ BlobFile::BlobFile(String parent_path_,
     , delegator(std::move(delegator_))
     , parent_path(std::move(parent_path_))
 {
-    // TODO: support encryption file
+    Poco::File file_in_disk(getPath());
     wrfile = file_provider->newWriteReadableFile(
         getPath(),
         getEncryptionPath(),
         false,
-        /*create_new_encryption_info_*/ false);
+        /*create_new_encryption_info_*/ !file_in_disk.exists());
 
-    Poco::File file_in_disk(getPath());
     file_size = file_in_disk.getSize();
     {
         std::lock_guard lock(file_size_lock);
@@ -92,9 +91,9 @@ void BlobFile::write(char * buffer, size_t offset, size_t size, const WriteLimit
               });
 
 #ifndef NDEBUG
-    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, true);
+    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, /*truncate_if_failed=*/false, /*enable_failpoint=*/true);
 #else
-    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, false);
+    PageUtil::writeFile(wrfile, offset, buffer, size, write_limiter, background, /*truncate_if_failed=*/false, /*enable_failpoint=*/false);
 #endif
     PageUtil::syncFile(wrfile);
 

@@ -43,12 +43,12 @@ SpaceMapPtr SpaceMap::createSpaceMap(SpaceMapType type, UInt64 start, UInt64 end
         smap = STDMapSpaceMap::create(start, end);
         break;
     default:
-        throw Exception("Invalid type to create spaceMap", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Invalid [type={}] to create spaceMap", static_cast<UInt8>(type)), ErrorCodes::LOGICAL_ERROR);
     }
 
     if (!smap)
     {
-        throw Exception("Failed create SpaceMap [type=" + typeToString(type) + "]", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(fmt::format("Failed create SpaceMap [type={}]", typeToString(type)), ErrorCodes::LOGICAL_ERROR);
     }
 
     return smap;
@@ -64,13 +64,11 @@ void SpaceMap::logDebugString()
     LOG_DEBUG(log, toDebugString());
 }
 
-
 bool SpaceMap::markFree(UInt64 offset, size_t length)
 {
     if (checkSpace(offset, length))
     {
-        throw Exception("Unmark space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
+        throw Exception(fmt::format("Unmark space out of the limit space.[type={}] [block={}], [size={}]", typeToString(getType()), offset, length),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -81,8 +79,7 @@ bool SpaceMap::markUsed(UInt64 offset, size_t length)
 {
     if (checkSpace(offset, length))
     {
-        throw Exception("Mark space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
+        throw Exception(fmt::format("Mark space out of the limit space.[type={}] [block={}], [size={}]", typeToString(getType()), offset, length),
                         ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -93,8 +90,7 @@ bool SpaceMap::isMarkUsed(UInt64 offset, size_t length)
 {
     if (checkSpace(offset, length))
     {
-        throw Exception("Test space out of the limit space.[type=" + typeToString(getType())
-                            + "] [block=" + DB::toString(offset) + "], [size=" + DB::toString(length) + "]",
+        throw Exception(fmt::format("Test space out of the limit space.[type={}] [block={}], [size={}]", typeToString(getType()), offset, length),
                         ErrorCodes::LOGICAL_ERROR);
     }
 

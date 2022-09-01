@@ -19,7 +19,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Settings.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <common/logger_useful.h>
@@ -42,11 +41,6 @@ static bool isUnlimitedQuery(const IAST * ast)
 {
     if (!ast)
         return false;
-
-    /// It is KILL QUERY
-    if (typeid_cast<const ASTKillQueryQuery *>(ast))
-        return true;
-
     /// It is SELECT FROM system.processes
     /// NOTE: This is very rough check.
     /// False negative: USE system; SELECT * FROM processes;
@@ -168,6 +162,7 @@ ProcessList::EntryPtr ProcessList::insert(
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
             total_memory_tracker.setOrRaiseLimit(settings.max_memory_usage_for_all_queries);
+            total_memory_tracker.setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
             total_memory_tracker.setDescription("(total)");
             user_process_list.user_memory_tracker.setNext(&total_memory_tracker);
         }

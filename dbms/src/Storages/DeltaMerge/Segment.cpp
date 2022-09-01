@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
@@ -36,9 +38,11 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 #include <fmt/core.h>
 
 #include <ext/scope_guard.h>
+#include <memory>
 #include <numeric>
 
 namespace ProfileEvents
@@ -91,6 +95,12 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
 
+namespace FailPoints
+{
+extern const char try_segment_logical_split[];
+extern const char force_segment_logical_split[];
+} // namespace FailPoints
+
 namespace DM
 {
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
@@ -112,12 +122,13 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
     {
         size_t last_effective_num_rows = 0;
         size_t last_not_clean_rows = 0;
+        size_t last_deleted_rows = 0;
         if (mvcc_stream)
         {
             last_effective_num_rows = mvcc_stream->getEffectiveNumRows();
             last_not_clean_rows = mvcc_stream->getNotCleanRows();
+            last_deleted_rows = mvcc_stream->getDeletedRows();
         }
-
         Block block = input_stream->read();
         if (!block)
             break;
@@ -127,17 +138,22 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
         // When the input_stream is not mvcc, we assume the rows in this input_stream is most valid and make it not tend to be gc.
         size_t cur_effective_num_rows = block.rows();
         size_t cur_not_clean_rows = 1;
+        // If the stream is not mvcc_stream, it will not calculate the deleted_rows.
+        // Thus we set it to 1 to ensure when read this block will not use related optimization.
+        size_t cur_deleted_rows = 1;
         size_t gc_hint_version = std::numeric_limits<UInt64>::max();
         if (mvcc_stream)
         {
             cur_effective_num_rows = mvcc_stream->getEffectiveNumRows();
             cur_not_clean_rows = mvcc_stream->getNotCleanRows();
+            cur_deleted_rows = mvcc_stream->getDeletedRows();
             gc_hint_version = mvcc_stream->getGCHintVersion();
         }
 
         DMFileBlockOutputStream::BlockProperty block_property;
         block_property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
         block_property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
+        block_property.deleted_rows = cur_deleted_rows - last_deleted_rows;
         block_property.gc_hint_version = gc_hint_version;
         output_stream->write(block, block_property);
     }
@@ -162,6 +178,7 @@ StableValueSpacePtr createNewStable(DMContext & context,
 
     PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path, flags);
+
     auto stable = std::make_shared<StableValueSpace>(stable_id);
     stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
@@ -236,7 +253,7 @@ SegmentPtr Segment::newSegment(
 
 SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 {
-    Page page = context.storage_pool.metaReader().read(segment_id); // not limit restore
+    Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
 
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     SegmentFormat::Version version;
@@ -306,7 +323,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
     return delta->appendToCache(dm_context, block, offset, limit);
 }
 
-bool Segment::write(DMContext & dm_context, const Block & block)
+bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
     LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
@@ -316,7 +333,14 @@ bool Segment::write(DMContext & dm_context, const Block & block)
 
     if (delta->appendColumnFile(dm_context, column_file))
     {
-        flushCache(dm_context);
+        if (flush_cache)
+        {
+            while (!flushCache(dm_context))
+            {
+                if (hasAbandoned())
+                    return false;
+            }
+        }
         return true;
     }
     else
@@ -490,53 +514,91 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
     return data_stream;
 }
 
+/// we will call getInputStreamRaw in two condition:
+///     1. Using 'selraw xxxx' statement, which is always in test for debug. (when filter_delete_mark = false)
+///        In this case, we will read all the data without mvcc filtering,
+///        del_mark != 0 filtering and sorted merge.
+///        We will just read all the data and return.
+///     2. We read in fast mode. (when filter_delete_mark = true)
+///        In this case, we will read all the data without mvcc filtering and sorted merge,
+///        but we will do del_mark != 0 filtering.
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                const ColumnDefines & columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
-                                               bool do_range_filter,
+                                               const RowKeyRanges & data_ranges,
+                                               const RSOperatorPtr & filter,
+                                               bool filter_delete_mark,
                                                size_t expected_block_size)
 {
+    /// Now, we use filter_delete_mark to determine whether it is in fast mode or just from `selraw * xxxx`
+    /// But this way seems not to be robustness enough, maybe we need another flag?
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
-    if (!do_range_filter)
-    {
-        (*new_columns_to_read) = columns_to_read;
-    }
-    else
-    {
-        new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    // new_columns_to_read need at most columns_to_read.size() + 2, due to may extra insert into the handle column and del_mark column.
+    new_columns_to_read->reserve(columns_to_read.size() + 2);
 
-        for (const auto & c : columns_to_read)
+    new_columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    if (filter_delete_mark)
+    {
+        new_columns_to_read->push_back(getTagColumnDefine());
+    }
+
+    bool enable_handle_clean_read = filter_delete_mark;
+    bool enable_del_clean_read = filter_delete_mark;
+
+    for (const auto & c : columns_to_read)
+    {
+        if (c.id != EXTRA_HANDLE_COLUMN_ID)
         {
-            if (c.id != EXTRA_HANDLE_COLUMN_ID)
+            if (filter_delete_mark && c.id == TAG_COLUMN_ID)
+            {
+                enable_del_clean_read = false;
+            }
+            else
+            {
                 new_columns_to_read->push_back(c);
+            }
+        }
+        else
+        {
+            enable_handle_clean_read = false;
         }
     }
 
-
-    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, //
-                                                                               segment_snap->delta,
-                                                                               new_columns_to_read,
-                                                                               this->rowkey_range);
-
-    RowKeyRanges rowkey_ranges{rowkey_range};
+    /// when we read in fast mode, if columns_to_read does not include EXTRA_HANDLE_COLUMN_ID,
+    /// we can try to use clean read to make optimization in stable part.
+    /// when the pack is under totally data_ranges and has no rows whose del_mark = 1 --> we don't need read handle_column/tag_column/version_column
+    /// when the pack is under totally data_ranges and has rows whose del_mark = 1 --> we don't need read handle_column/version_column
+    /// others --> we don't need read version_column
+    /// Thus, in fast mode, if we don't need read handle_column, we set enable_handle_clean_read as true.
+    /// If we don't need read del_column, we set enable_del_clean_read as true
     BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream(
         dm_context,
         *new_columns_to_read,
-        rowkey_ranges,
-        EMPTY_FILTER,
+        data_ranges,
+        filter,
         std::numeric_limits<UInt64>::max(),
         expected_block_size,
-        false);
+        /* enable_handle_clean_read */ enable_handle_clean_read,
+        /* is_fast_scan */ filter_delete_mark,
+        /* enable_del_clean_read */ enable_del_clean_read);
 
-    if (do_range_filter)
+    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, new_columns_to_read, this->rowkey_range);
+
+    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, data_ranges, 0);
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, data_ranges, 0);
+
+    if (filter_delete_mark)
     {
-        delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, rowkey_ranges, 0);
-        delta_stream = std::make_shared<DMColumnFilterBlockInputStream>(delta_stream, columns_to_read);
-
-        stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, rowkey_ranges, 0);
-        stable_stream = std::make_shared<DMColumnFilterBlockInputStream>(stable_stream, columns_to_read);
+        delta_stream = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, columns_to_read, dm_context.tracing_id);
+        stable_stream = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, columns_to_read, dm_context.tracing_id);
     }
+    else
+    {
+        delta_stream = std::make_shared<DMColumnProjectionBlockInputStream>(delta_stream, columns_to_read);
+        stable_stream = std::make_shared<DMColumnProjectionBlockInputStream>(stable_stream, columns_to_read);
+    }
+
 
     BlockInputStreams streams;
 
@@ -553,15 +615,15 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
         streams.push_back(delta_stream);
         streams.push_back(stable_stream);
     }
-    return std::make_shared<ConcatBlockInputStream>(streams, /*req_id=*/"");
+    return std::make_shared<ConcatBlockInputStream>(streams, dm_context.tracing_id);
 }
 
-BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
+BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read, bool filter_delete_mark)
 {
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
     if (!segment_snap)
         return {};
-    return getInputStreamRaw(dm_context, columns_to_read, segment_snap, true);
+    return getInputStreamRaw(dm_context, columns_to_read, segment_snap, {rowkey_range}, EMPTY_FILTER, filter_delete_mark);
 }
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
@@ -575,6 +637,8 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
 
     wbs.writeLogAndData();
     new_stable->enableDMFilesGC();
+
+    SYNC_FOR("before_Segment::applyMergeDelta"); // pause without holding the lock on the segment
 
     auto lock = mustGetUpdateLock();
     auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
@@ -665,6 +729,8 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     wbs.writeLogAndData();
     split_info.my_stable->enableDMFilesGC();
     split_info.other_stable->enableDMFilesGC();
+
+    SYNC_FOR("before_Segment::applySplit"); // pause without holding the lock on the segment
 
     auto lock = mustGetUpdateLock();
     auto segment_pair = applySplit(dm_context, segment_snap, wbs, split_info);
@@ -858,9 +924,18 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
                                                         const SegmentSnapshotPtr & segment_snap,
                                                         WriteBatches & wbs) const
 {
-    if (!dm_context.enable_logical_split //
-        || segment_snap->stable->getPacks() <= 3 //
-        || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+    SYNC_FOR("before_Segment::prepareSplit");
+
+    bool try_logical_split = dm_context.enable_logical_split //
+        && segment_snap->stable->getPacks() > 3 //
+        && segment_snap->delta->getRows() <= segment_snap->stable->getRows();
+#ifdef FIU_ENABLE
+    bool force_logical_split = false;
+    fiu_do_on(FailPoints::try_segment_logical_split, { try_logical_split = true; });
+    fiu_do_on(FailPoints::force_segment_logical_split, { try_logical_split = true; force_logical_split = true; });
+#endif
+
+    if (!try_logical_split)
     {
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
     }
@@ -877,6 +952,9 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
                 "Got bad split point [{}] for segment {}, fall back to split physical.",
                 (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value"),
                 info());
+#ifdef FIU_ENABLE
+            RUNTIME_CHECK_MSG(!force_logical_split, "Can not perform logical split while failpoint `force_segment_logical_split` is true");
+#endif
             return prepareSplitPhysical(dm_context, schema_snap, segment_snap, wbs);
         }
         else
@@ -919,27 +997,30 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
     for (const auto & dmfile : segment_snap->stable->getDMFiles())
     {
-        auto ori_ref_id = dmfile->refId();
+        auto ori_page_id = dmfile->pageId();
         auto file_id = dmfile->fileId();
         auto file_parent_path = delegate.getDTFilePath(file_id);
 
-        auto my_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-        auto other_dmfile_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto my_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+        auto other_dmfile_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
 
-        wbs.data.putRefPage(my_dmfile_id, file_id);
-        wbs.data.putRefPage(other_dmfile_id, file_id);
-        wbs.removed_data.delPage(ori_ref_id);
+        // Note that the file id may has already been mark as deleted. We must
+        // create a reference to the page id itself instead of create a reference
+        // to the file id.
+        wbs.data.putRefPage(my_dmfile_page_id, ori_page_id);
+        wbs.data.putRefPage(other_dmfile_page_id, ori_page_id);
+        wbs.removed_data.delPage(ori_page_id);
 
         auto my_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),
             file_id,
-            /* ref_id= */ my_dmfile_id,
+            /* page_id= */ my_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
         auto other_dmfile = DMFile::restore(
             dm_context.db_context.getFileProvider(),
             file_id,
-            /* ref_id= */ other_dmfile_id,
+            /* page_id= */ other_dmfile_page_id,
             file_parent_path,
             DMFile::ReadMetaMode::all());
 
@@ -1059,7 +1140,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     {
         // Here we should remove the ref id instead of file_id.
         // Because a dmfile could be used by several segments, and only after all ref_ids are removed, then the file_id removed.
-        wbs.removed_data.delPage(file->refId());
+        wbs.removed_data.delPage(file->pageId());
     }
 
     LOG_FMT_INFO(log, "Segment [{}] prepare split physical done", segment_id);
@@ -1126,6 +1207,29 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
+    /// And only saved data in this segment will be filtered by the segment range in the merge process,
+    /// unsaved data will be directly copied to the new segment.
+    /// So we flush here to make sure that all potential data left by previous split operation is saved.
+    while (!left->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (left->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(left->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return {};
+        }
+    }
+    while (!right->flushCache(dm_context))
+    {
+        // keep flush until success if not abandoned
+        if (right->hasAbandoned())
+        {
+            LOG_FMT_DEBUG(right->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            return {};
+        }
+    }
+
 
     auto left_snap = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
     auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
@@ -1137,6 +1241,8 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
+    SYNC_FOR("before_Segment::applyMerge"); // pause without holding the lock on segments to be merged
+
     auto left_lock = left->mustGetUpdateLock();
     auto right_lock = right->mustGetUpdateLock();
 
@@ -1146,6 +1252,10 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     return merged;
 }
 
+/// Segments may contain some rows that not belong to its range which is left by previous split operation.
+/// And only saved data in the segment will be filtered by the segment range in the merge process,
+/// unsaved data will be directly copied to the new segment.
+/// So remember to do a flush for the segments before merge.
 StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
                                           const ColumnDefinesPtr & schema_snap,
                                           const SegmentPtr & left,
@@ -1262,10 +1372,13 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     return merged;
 }
 
-SegmentPtr Segment::dropNextSegment(WriteBatches & wbs)
+SegmentPtr Segment::dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range)
 {
+    assert(rowkey_range.end == next_segment_range.start);
+    // merge the rowkey range of the next segment to this segment
+    auto new_rowkey_range = RowKeyRange(rowkey_range.start, next_segment_range.end, rowkey_range.is_common_handle, rowkey_range.rowkey_column_size);
     auto new_segment = std::make_shared<Segment>(epoch + 1, //
-                                                 rowkey_range,
+                                                 new_rowkey_range,
                                                  segment_id,
                                                  0,
                                                  delta,

@@ -56,7 +56,7 @@ static constexpr UInt32 PAYLOAD_FIELD_SIZE = sizeof(UInt16);
 // The checksum count begin at the `type` field in Header/RecyclableHeader
 static constexpr size_t CHECKSUM_START_OFFSET = Format::CHECKSUM_FIELD_SIZE + Format::PAYLOAD_FIELD_SIZE;
 
-using LogNumberType = UInt32;
+using LogNumberType = UInt64;
 
 // Header is
 // - checksum (`CHECKSUM_FIELD_SIZE` bytes

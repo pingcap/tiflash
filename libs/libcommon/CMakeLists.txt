@@ -52,6 +52,7 @@ add_library (common ${SPLIT_SHARED}
     src/crc64.cpp
     src/simd.cpp
     src/detect_features.cpp
+    src/avx2_mem_utils_impl.cpp
 
     include/common/types.h
     include/common/DateLUT.h
@@ -100,19 +101,6 @@ add_library (common ${SPLIT_SHARED}
 if (USE_JEMALLOC)
     message (STATUS "Link jemalloc: ${JEMALLOC_LIBRARIES}")
     set (MALLOC_LIBRARIES ${JEMALLOC_LIBRARIES})
-elseif (USE_TCMALLOC)
-
-    if (DEBUG_TCMALLOC AND NOT GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG)
-        message (WARNING "Requested DEBUG_TCMALLOC but debug lib not found. try install libgoogle-perftools-dev")
-    endif ()
-
-    if (DEBUG_TCMALLOC AND GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG)
-        message (STATUS "Link libtcmalloc_minimal_debug for testing: ${GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG}")
-        set (MALLOC_LIBRARIES ${GPERFTOOLS_TCMALLOC_MINIMAL_DEBUG})
-    else ()
-        message (STATUS "Link libtcmalloc_minimal: ${GPERFTOOLS_TCMALLOC_MINIMAL}")
-        set (MALLOC_LIBRARIES ${GPERFTOOLS_TCMALLOC_MINIMAL})
-    endif ()
 elseif(USE_MIMALLOC)
     message (STATUS "Link mimalloc: ${MIMALLOC_LIBRARIES}")
     set (MALLOC_LIBRARIES ${MIMALLOC_LIBRARIES})
@@ -136,6 +124,12 @@ target_include_directories (common PUBLIC ${COMMON_INCLUDE_DIR})
 
 target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
+if(APPLE AND ARCH_AARCH64)
+    set(CPU_FEATURES_LIBRARY)
+else()
+    set(CPU_FEATURES_LIBRARY cpu_features)
+endif()
+
 # `libcommon` provides a bridge for many other libs.
 # We expose the linkage to public because we want headers to be inherited.
 target_link_libraries (
@@ -151,7 +145,7 @@ target_link_libraries (
     ${GLIBC_COMPATIBILITY_LIBRARIES}
     ${MEMCPY_LIBRARIES}
     fmt
-    cpu_features
+    ${CPU_FEATURES_LIBRARY}
 )
 
 if (RT_LIBRARY)
@@ -166,6 +160,7 @@ endif ()
 if (TIFLASH_ENABLE_AVX_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     set_source_files_properties(src/mem_utils_avx2.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
+    set_source_files_properties(src/avx2_mem_utils_impl.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
     if (TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
         set_source_files_properties(src/crc64_avx2.cpp
                 APPEND COMPILE_FLAGS "-mavx2 -mpclmul -mvpclmulqdq -Wno-ignored-attributes")
@@ -197,4 +192,8 @@ if (ARCH_AMD64)
     set_source_files_properties(
             src/crc64_sse2_asimd.cpp
             APPEND COMPILE_FLAGS "-mpclmul")
+endif()
+
+if (ARCH_AARCH64 AND ARCH_LINUX)
+    target_link_libraries (common PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
 endif()

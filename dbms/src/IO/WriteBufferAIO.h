@@ -18,6 +18,7 @@
 
 #include <Common/AIO.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/nocopyable.h>
 #include <Core/Defines.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <IO/WriteBuffer.h>
@@ -48,8 +49,7 @@ public:
         char * existing_memory_ = nullptr);
     ~WriteBufferAIO() override;
 
-    WriteBufferAIO(const WriteBufferAIO &) = delete;
-    WriteBufferAIO & operator=(const WriteBufferAIO &) = delete;
+    DISALLOW_COPY(WriteBufferAIO);
 
     off_t getPositionInFile() override;
     void sync() override;

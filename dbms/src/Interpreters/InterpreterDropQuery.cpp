@@ -159,6 +159,10 @@ BlockIO InterpreterDropQuery::execute()
         }
         else
         {
+            /// Clear storage data first, and if tiflash crash in the middle of `clearData`,
+            /// this table can still be restored, and can call `clearData` again.
+            table.first->clearData();
+
             /// Delete table metdata and table itself from memory
             database->removeTable(context, current_table_name);
 

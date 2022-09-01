@@ -64,7 +64,7 @@ public:
     class CommittedScanner : private boost::noncopyable
     {
     public:
-        CommittedScanner(const RegionPtr & store_, bool use_lock = true)
+        explicit CommittedScanner(const RegionPtr & store_, bool use_lock = true)
             : store(store_)
         {
             if (use_lock)
@@ -97,7 +97,7 @@ public:
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_, bool use_lock = true)
+        explicit CommittedRemover(const RegionPtr & store_, bool use_lock = true)
             : store(store_)
         {
             if (use_lock)
@@ -191,7 +191,6 @@ public:
 
     TableID getMappedTableID() const;
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 index, UInt64 term, TMTContext & tmt);
-    void handleIngestSSTInMemory(const SSTViewVec snaps, UInt64 index, UInt64 term);
     void finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term);
 
     UInt64 getSnapshotEventFlag() const { return snapshot_event_flag; }
@@ -246,10 +245,10 @@ public:
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 
+    RegionRaftCommandDelegate() = delete;
+
 private:
     friend class tests::RegionKVStoreTest;
-
-    RegionRaftCommandDelegate() = delete;
 
     Regions execBatchSplit(
         const raft_cmdpb::AdminRequest & request,

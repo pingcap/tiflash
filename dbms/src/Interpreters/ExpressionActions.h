@@ -251,7 +251,7 @@ struct ExpressionActionsChain
         ExpressionActionsPtr actions;
         Names required_output;
 
-        Step(const ExpressionActionsPtr & actions_ = nullptr, const Names & required_output_ = Names())
+        explicit Step(const ExpressionActionsPtr & actions_ = nullptr, const Names & required_output_ = Names())
             : actions(actions_)
             , required_output(required_output_)
         {}

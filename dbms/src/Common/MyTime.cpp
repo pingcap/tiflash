@@ -56,14 +56,23 @@ int32_t adjustYear(int32_t year)
     return year;
 }
 
-void scanTimeArgs(const std::vector<String> & seps, std::initializer_list<int *> && list)
+bool scanTimeArgs(const std::vector<String> & seps, std::initializer_list<int *> && list)
 {
     int i = 0;
-    for (auto * ptr : list)
+    try
     {
-        *ptr = std::stoi(seps[i]);
-        i++;
+        for (auto * ptr : list)
+        {
+            *ptr = std::stoi(seps[i]);
+            i++;
+        }
     }
+    catch (std::exception & e)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 // find index of fractional point.
@@ -429,7 +438,7 @@ std::tuple<int, int> MyTimeBase::calcWeek(UInt32 mode) const
 
     if (week_year && days >= 52 * 7)
     {
-        week_day = (week_day + calcDaysInYear(year)) % 7;
+        week_day = (week_day + calcDaysInYear(ret_year)) % 7;
         if ((!first_week_day && week_day < 4) || (first_week_day && week_day == 0))
         {
             ret_year++;
@@ -669,7 +678,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         default:
         {
-            throw TiFlashException("Wrong datetime format: " + str, Errors::Types::WrongValue);
+            return {Field(), is_date};
         }
         }
         if (l == 5 || l == 6 || l == 8)
@@ -719,40 +728,44 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         if (truncated_or_incorrect)
         {
-            throw TiFlashException("Datetime truncated: " + str, Errors::Types::Truncated);
+            return {Field(), is_date};
         }
         break;
     }
     case 3:
     {
         // YYYY-MM-DD
-        scanTimeArgs(seps, {&year, &month, &day});
+        if (!scanTimeArgs(seps, {&year, &month, &day}))
+            return {Field(), is_date};
         is_date = true;
         break;
     }
     case 4:
     {
         // YYYY-MM-DD HH
-        scanTimeArgs(seps, {&year, &month, &day, &hour});
+        if (!scanTimeArgs(seps, {&year, &month, &day, &hour}))
+            return {Field(), is_date};
         break;
     }
     case 5:
     {
         // YYYY-MM-DD HH-MM
-        scanTimeArgs(seps, {&year, &month, &day, &hour, &minute});
+        if (!scanTimeArgs(seps, {&year, &month, &day, &hour, &minute}))
+            return {Field(), is_date};
         break;
     }
     case 6:
     {
         // We don't have fractional seconds part.
         // YYYY-MM-DD HH-MM-SS
-        scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second});
+        if (!scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second}))
+            return {Field(), is_date};
         hhmmss = true;
         break;
     }
     default:
     {
-        throw Exception("Wrong datetime format");
+        return {Field(), is_date};
     }
     }
 
@@ -809,7 +822,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 
     if (needCheckTimeValid && !checkTimeValid(year, month, day, hour, minute, second))
     {
-        throw Exception("Wrong datetime format");
+        return {Field(), is_date};
     }
 
     MyDateTime result(year, month, day, hour, minute, second, micro_second);
@@ -818,7 +831,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     {
         if (!hhmmss)
         {
-            throw TiFlashException("Invalid datetime value: " + str, Errors::Types::WrongValue);
+            return {Field(), is_date};
         }
         if (!tz_hour.empty())
         {
@@ -832,7 +845,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         if (delta_hour > 14 || delta_minute > 59 || (delta_hour == 14 && delta_minute != 0)
             || (tz_sign == "-" && delta_hour == 0 && delta_minute == 0))
         {
-            throw TiFlashException("Invalid datetime value: " + str, Errors::Types::WrongValue);
+            return {Field(), is_date};
         }
         // by default, if the temporal string literal does not contain timezone information, it will be in the timezone
         // specified by the time_zone system variable. However, if the timezone is specified in the string literal, we
@@ -876,7 +889,7 @@ String MyDateTime::toString(int fsp) const
 //TODO: we can use modern c++ api instead.
 MyDateTime MyDateTime::getSystemDateTimeByTimezone(const TimezoneInfo & timezoneInfo, UInt8 fsp)
 {
-    struct timespec ts;
+    struct timespec ts; // NOLINT(cppcoreguidelines-pro-type-member-init)
     clock_gettime(CLOCK_REALTIME, &ts);
 
     time_t second = ts.tv_sec;
@@ -992,6 +1005,15 @@ int calcDayNum(int year, int month, int day)
     return delsum + year / 4 - temp;
 }
 
+UInt64 calcSeconds(int year, int month, int day, int hour, int minute, int second)
+{
+    if (year == 0 && month == 0)
+        return 0;
+    Int32 current_days = calcDayNum(year, month, day);
+    return current_days * MyTimeBase::SECOND_IN_ONE_DAY + hour * MyTimeBase::SECOND_IN_ONE_HOUR
+        + minute * MyTimeBase::SECOND_IN_ONE_MINUTE + second;
+}
+
 size_t maxFormattedDateTimeStringLength(const String & format)
 {
     size_t result = 0;
@@ -1065,21 +1087,19 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
-void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
+bool MyTimeBase::isValid(bool allow_zero_in_date, bool allow_invalid_date) const
 {
     if (!(year == 0 && month == 0 && day == 0))
     {
         if (!allow_zero_in_date && (month == 0 || day == 0))
         {
-            throw TiFlashException(
-                fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day),
-                Errors::Types::WrongValue);
+            return false;
         }
     }
 
     if (year >= 9999 || month > 12)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return false;
     }
 
     UInt8 max_day = 31;
@@ -1087,7 +1107,7 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     {
         if (month < 1)
         {
-            throw TiFlashException(fmt::format("Incorrect time value: month {}", month), Errors::Types::WrongValue);
+            return false;
         }
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         static auto is_leap_year = [](UInt16 _year) {
@@ -1101,23 +1121,22 @@ void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
     }
     if (day > max_day)
     {
-        throw TiFlashException(
-            fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day),
-            Errors::Types::WrongValue);
+        return false;
     }
 
     if (hour < 0 || hour >= 24)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
     if (minute >= 60)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
     if (second >= 60)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
+    return true;
 }
 
 bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result)
@@ -1142,7 +1161,7 @@ UInt64 addSeconds(UInt64 t, Int64 delta)
         return t;
     }
     MyDateTime my_time(t);
-    Int64 current_second = my_time.hour * 3600 + my_time.minute * 60 + my_time.second;
+    Int64 current_second = my_time.hour * MyTimeBase::SECOND_IN_ONE_HOUR + my_time.minute * MyTimeBase::SECOND_IN_ONE_MINUTE + my_time.second;
     current_second += delta;
     if (current_second >= 0)
     {
@@ -1161,9 +1180,9 @@ UInt64 addSeconds(UInt64 t, Int64 delta)
         current_second += days * MyTimeBase::SECOND_IN_ONE_DAY;
         addDays(my_time, -days);
     }
-    my_time.hour = current_second / 3600;
-    my_time.minute = (current_second % 3600) / 60;
-    my_time.second = current_second % 60;
+    my_time.hour = current_second / MyTimeBase::SECOND_IN_ONE_HOUR;
+    my_time.minute = (current_second % MyTimeBase::SECOND_IN_ONE_HOUR) / MyTimeBase::SECOND_IN_ONE_MINUTE;
+    my_time.second = current_second % MyTimeBase::SECOND_IN_ONE_MINUTE;
     return my_time.toPackedUInt();
 }
 
@@ -1193,6 +1212,11 @@ void fromDayNum(MyDateTime & t, int day_num)
         // the day number of the last 100 years should be DAY_NUM_PER_100_YEARS + 1
         // so can not use day_num % DAY_NUM_PER_100_YEARS
         day_num = day_num - (num_of_100_years * DAY_NUM_PER_100_YEARS);
+        if (num_of_100_years == 4)
+        {
+            num_of_100_years = 3;
+            day_num = DAY_NUM_PER_100_YEARS;
+        }
 
         int num_of_4_years = day_num / DAY_NUM_PER_4_YEARS;
         // can not use day_num % DAY_NUM_PER_4_YEARS
@@ -1201,6 +1225,12 @@ void fromDayNum(MyDateTime & t, int day_num)
         int num_of_years = day_num / DAY_NUM_PER_YEARS;
         // can not use day_num % DAY_NUM_PER_YEARS
         day_num = day_num - (num_of_years * DAY_NUM_PER_YEARS);
+
+        if (num_of_years == 4)
+        {
+            num_of_years = 3;
+            day_num = DAY_NUM_PER_YEARS;
+        }
 
         year = 1 + num_of_400_years * 400 + num_of_100_years * 100 + num_of_4_years * 4 + num_of_years;
     }
@@ -1237,7 +1267,7 @@ void addMonths(MyDateTime & t, Int64 months)
     Int64 current_month = t.month - 1;
     current_month += months;
     Int64 current_year = 0;
-    Int64 year = static_cast<Int64>(t.year);
+    auto year = static_cast<Int64>(t.year);
     if (current_month >= 0)
     {
         current_year = current_month / 12;

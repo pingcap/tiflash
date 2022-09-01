@@ -23,8 +23,11 @@
 #include <Poco/StringTokenizer.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/SchemaNameMapper.h>
 #include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/SchemaNameMapper.h>
+#include <common/logger_useful.h>
+
+#include <cmath>
 
 namespace DB
 {
@@ -59,19 +62,19 @@ Field GenDefaultField(const TiDB::ColumnInfo & col_info)
     case TiDB::CodecFlagCompactBytes:
         return Field(String());
     case TiDB::CodecFlagFloat:
-        return Field(Float64(0));
+        return Field(static_cast<Float64>(0));
     case TiDB::CodecFlagUInt:
-        return Field(UInt64(0));
+        return Field(static_cast<UInt64>(0));
     case TiDB::CodecFlagInt:
-        return Field(Int64(0));
+        return Field(static_cast<Int64>(0));
     case TiDB::CodecFlagVarInt:
-        return Field(Int64(0));
+        return Field(static_cast<Int64>(0));
     case TiDB::CodecFlagVarUInt:
-        return Field(UInt64(0));
+        return Field(static_cast<UInt64>(0));
     case TiDB::CodecFlagJson:
         return TiDB::genJsonNull();
     case TiDB::CodecFlagDuration:
-        return Field(Int64(0));
+        return Field(static_cast<Int64>(0));
     default:
         throw Exception("Not implemented codec flag: " + std::to_string(col_info.getCodecFlag()), ErrorCodes::LOGICAL_ERROR);
     }
@@ -110,14 +113,28 @@ Field ColumnInfo::defaultValueToField() const
     }
     switch (tp)
     {
-    // TODO: Consider unsigned?
     // Integer Type.
     case TypeTiny:
     case TypeShort:
     case TypeLong:
     case TypeLongLong:
     case TypeInt24:
-        return value.convert<Int64>();
+    {
+        // In c++, cast a unsigned integer to signed integer will not change the value.
+        // like 9223372036854775808 which is larger than the maximum value of Int64,
+        // static_cast<UInt64>(static_cast<Int64>(9223372036854775808)) == 9223372036854775808
+        // so we don't need consider unsigned here.
+        try
+        {
+            return value.convert<Int64>();
+        }
+        catch (...)
+        {
+            // due to https://github.com/pingcap/tidb/issues/34881
+            // we do this to avoid exception in older version of TiDB.
+            return static_cast<Int64>(std::llround(value.convert<double>()));
+        }
+    }
     case TypeBit:
     {
         // TODO: We shall use something like `orig_default_bit`, which will never change once created,
@@ -390,7 +407,7 @@ try
         size_t elems_size = elems_arr->size();
         for (size_t i = 1; i <= elems_size; i++)
         {
-            elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), Int16(i)));
+            elems.push_back(std::make_pair(elems_arr->getElement<String>(i - 1), static_cast<Int16>(i)));
         }
     }
     /// need to do this check for forward compatibility
@@ -615,6 +632,8 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json)
+    : length(0)
+    , offset(0)
 {
     deserialize(json);
 }
@@ -664,6 +683,13 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexInfo::IndexInfo(Poco::JSON::Object::Ptr json)
+    : id(0)
+    , state(TiDB::SchemaState::StateNone)
+    , index_type(0)
+    , is_unique(true)
+    , is_primary(true)
+    , is_invisible(true)
+    , is_global(true)
 {
     deserialize(json);
 }
@@ -1071,7 +1097,7 @@ TableInfoPtr TableInfo::producePartitionTableInfo(TableID table_or_partition_id,
 String genJsonNull()
 {
     // null
-    const static String null({char(DB::TYPE_CODE_LITERAL), char(DB::LITERAL_NIL)});
+    const static String null({static_cast<char>(DB::TYPE_CODE_LITERAL), static_cast<char>(DB::LITERAL_NIL)});
     return null;
 }
 
@@ -1101,6 +1127,19 @@ ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type)
         ret.elems.emplace_back(field_type.elems(i), i + 1);
     }
     return ret;
+}
+
+ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info)
+{
+    ColumnInfo tidb_column_info;
+    tidb_column_info.tp = static_cast<TiDB::TP>(tipb_column_info.tp());
+    tidb_column_info.id = tipb_column_info.column_id();
+    tidb_column_info.flag = tipb_column_info.flag();
+    tidb_column_info.flen = tipb_column_info.columnlen();
+    tidb_column_info.decimal = tipb_column_info.decimal();
+    for (int i = 0; i < tipb_column_info.elems_size(); ++i)
+        tidb_column_info.elems.emplace_back(tipb_column_info.elems(i), i + 1);
+    return tidb_column_info;
 }
 
 } // namespace TiDB

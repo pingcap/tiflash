@@ -19,6 +19,7 @@
 #include <Common/MemoryTracker.h>
 #include <DataStreams/BlockIO.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
@@ -37,6 +38,15 @@
 namespace DB
 {
 class MPPTaskManager;
+
+enum class AbortType
+{
+    /// todo add ONKILL to distinguish between silent cancellation and kill
+    ONCANCELLATION,
+    ONERROR,
+};
+String abortTypeToString(AbortType abort_type);
+
 class MPPTask : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
@@ -56,13 +66,11 @@ public:
 
     TaskStatus getStatus() const { return status.load(); }
 
-    void cancel(const String & reason);
+    void handleError(const String & error_msg);
 
     void prepare(const mpp::DispatchTaskRequest & task_request);
 
     void run();
-
-    void registerTunnel(const MPPTaskId & id, MPPTunnelPtr tunnel);
 
     int getNeededThreads();
 
@@ -75,9 +83,7 @@ public:
         COMPLETED
     };
 
-    void scheduleThisTask(ScheduleState state);
-
-    bool isScheduled();
+    bool scheduleThisTask(ScheduleState state);
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -91,11 +97,15 @@ private:
 
     void unregisterTask();
 
-    void writeErrToAllTunnels(const String & e);
-
     /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
     /// without waiting the tunnel to be connected
     void closeAllTunnels(const String & reason);
+
+    void abort(const String & message, AbortType abort_type);
+
+    void abortTunnels(const String & message, AbortType abort_type);
+    void abortReceivers();
+    void abortDataStreams(AbortType abort_type);
 
     void finishWrite();
 
@@ -107,6 +117,10 @@ private:
 
     int estimateCountOfNewThreads();
 
+    void registerTunnels(const mpp::DispatchTaskRequest & task_request);
+
+    void initExchangeReceivers();
+
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
@@ -116,25 +130,28 @@ private:
     MemoryTracker * memory_tracker = nullptr;
 
     std::atomic<TaskStatus> status{INITIALIZING};
+    String err_string;
 
     mpp::TaskMeta meta;
 
     MPPTaskId id;
 
+    std::mutex tunnel_and_receiver_mu;
+
     MPPTunnelSetPtr tunnel_set;
 
-    // which targeted task we should send data by which tunnel.
-    std::unordered_map<MPPTaskId, MPPTunnelPtr> tunnel_map;
+    MPPReceiverSetPtr receiver_set;
 
-    MPPTaskManager * manager = nullptr;
+    int new_thread_count_of_exchange_receiver = 0;
+
+    std::atomic<MPPTaskManager *> manager = nullptr;
 
     const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
-    Exception err;
-
     friend class MPPTaskManager;
+    friend class MPPTaskCancelHelper;
 
     int needed_threads;
 

@@ -61,7 +61,7 @@ static String getNormalizedPath(const String & s)
     return getCanonicalPath(Poco::Path{s}.toString());
 }
 
-void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger * log)
+void TiFlashStorageConfig::parseStoragePath(const String & storage, const LoggerPtr & log)
 {
     std::istringstream ss(storage);
     cpptoml::parser p(ss);
@@ -181,7 +181,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, Poco::Logger
     }
 }
 
-void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logger * log)
+void TiFlashStorageConfig::parseMisc(const String & storage_section, const LoggerPtr & log)
 {
     std::istringstream ss(storage_section);
     cpptoml::parser p(ss);
@@ -197,27 +197,24 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, Poco::Logge
         format_version = *version;
     }
 
-    if (auto lazily_init = table->get_qualified_as<Int32>("lazily_init_store"); lazily_init)
-    {
-        lazily_init_store = (*lazily_init != 0);
-    }
-
-
-    if (table->contains("enable_ps_v3"))
-    {
-        if (auto enable_v3 = table->get_qualified_as<Int32>("enable_ps_v3"); enable_v3)
+    auto get_bool_config_or_default = [&](const String & name, bool default_value) {
+        if (auto value = table->get_qualified_as<Int32>(name); value)
         {
-            enable_ps_v3 = (*enable_v3 != 0);
+            return (*value != 0);
         }
-    }
-    else
-    {
-        // default open enable_ps_v3
-        enable_ps_v3 = true;
-    }
+        else if (auto value_b = table->get_qualified_as<bool>(name); value_b)
+        {
+            return *value_b;
+        }
+        else
+        {
+            return default_value;
+        }
+    };
 
+    lazily_init_store = get_bool_config_or_default("lazily_init_store", lazily_init_store);
 
-    LOG_FMT_INFO(log, "format_version {} lazily_init_store {} enable_ps_v3 {}", format_version, lazily_init_store, enable_ps_v3);
+    LOG_FMT_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const
@@ -236,7 +233,7 @@ Strings TiFlashStorageConfig::getAllNormalPaths() const
     return all_normal_path;
 }
 
-bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
 {
     if (!config.has("path"))
         return false;
@@ -305,7 +302,7 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     return true;
 }
 
-std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log)
+std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
 {
     size_t global_capacity_quota = 0; // "0" by default, means no quota, use the whole disk capacity.
     TiFlashStorageConfig storage_config;
@@ -382,7 +379,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 
-void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, Poco::Logger * log)
+void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, const LoggerPtr & log)
 {
     std::istringstream ss(storage_io_rate_limit);
     cpptoml::parser p(ss);
@@ -458,42 +455,42 @@ UInt64 StorageIORateLimitConfig::totalWeight() const
 
 UInt64 StorageIORateLimitConfig::getFgWriteMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || writeWeight() <= 0)
+    if (writeWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_write_weight
-                                 : max_write_bytes_per_sec / writeWeight() * fg_write_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * fg_write_weight)
+                                 : static_cast<UInt64>(1.0 * max_write_bytes_per_sec / writeWeight() * fg_write_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getBgWriteMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || writeWeight() <= 0)
+    if (writeWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_write_weight
-                                 : max_write_bytes_per_sec / writeWeight() * bg_write_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * bg_write_weight)
+                                 : static_cast<UInt64>(1.0 * max_write_bytes_per_sec / writeWeight() * bg_write_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getFgReadMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || readWeight() <= 0)
+    if (readWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * fg_read_weight
-                                 : max_read_bytes_per_sec / readWeight() * fg_read_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * fg_read_weight)
+                                 : static_cast<UInt64>(1.0 * max_read_bytes_per_sec / readWeight() * fg_read_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getBgReadMaxBytesPerSec() const
 {
-    if (totalWeight() <= 0 || readWeight() <= 0)
+    if (readWeight() <= 0 || totalWeight() <= 0)
     {
         return 0;
     }
-    return use_max_bytes_per_sec ? max_bytes_per_sec / totalWeight() * bg_read_weight
-                                 : max_read_bytes_per_sec / readWeight() * bg_read_weight;
+    return use_max_bytes_per_sec ? static_cast<UInt64>(1.0 * max_bytes_per_sec / totalWeight() * bg_read_weight)
+                                 : static_cast<UInt64>(1.0 * max_read_bytes_per_sec / readWeight() * bg_read_weight);
 }
 
 UInt64 StorageIORateLimitConfig::getWriteMaxBytesPerSec() const

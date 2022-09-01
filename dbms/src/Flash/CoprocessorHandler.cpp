@@ -18,11 +18,12 @@
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/CoprocessorHandler.h>
+#include <Flash/ServiceUtils.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <Storages/Transaction/SchemaSyncer.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TiDB/Schema/SchemaSyncer.h>
 
 #include <ext/scope_guard.h>
 
@@ -52,7 +53,7 @@ CoprocessorHandler::CoprocessorHandler(
     , log(&Poco::Logger::get("CoprocessorHandler"))
 {}
 
-std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> CoprocessorHandler::GenCopKeyRange(
+std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> CoprocessorHandler::genCopKeyRange(
     const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges)
 {
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
@@ -99,7 +100,7 @@ grpc::Status CoprocessorHandler::execute()
                     cop_context.kv_context.region_id(),
                     cop_context.kv_context.region_epoch().version(),
                     cop_context.kv_context.region_epoch().conf_ver(),
-                    GenCopKeyRange(cop_request->ranges()),
+                    genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
             DAGContext dag_context(dag_request);

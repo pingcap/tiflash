@@ -57,6 +57,7 @@ include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
 
 add_headers_and_sources(clickhouse_common_io src/Common)
 add_headers_and_sources(clickhouse_common_io src/Common/HashTable)
+add_headers_and_sources(clickhouse_common_io src/Common/SyncPoint)
 add_headers_and_sources(clickhouse_common_io src/IO)
 
 add_headers_and_sources(dbms src/Analyzers)
@@ -80,6 +81,7 @@ add_headers_and_sources(dbms src/Storages/DeltaMerge/FilterParser)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/File)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/ColumnFile)
 add_headers_and_sources(dbms src/Storages/DeltaMerge/Delta)
+add_headers_and_sources(dbms src/Storages/DeltaMerge/ReadThread)
 add_headers_and_sources(dbms src/Storages/Distributed)
 add_headers_and_sources(dbms src/Storages/Transaction)
 add_headers_and_sources(dbms src/Storages/Page/V1)
@@ -90,12 +92,12 @@ add_headers_and_sources(dbms src/Storages/Page/V2/mvcc)
 add_headers_and_sources(dbms src/Storages/Page/V2/VersionSet)
 add_headers_and_sources(dbms src/Storages/Page/V2/gc)
 add_headers_and_sources(dbms src/WindowFunctions)
-if (ENABLE_V3_PAGESTORAGE)
-    add_headers_and_sources(dbms src/Storages/Page/V3)
-    add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
-    add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
-    add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
-endif()
+add_headers_and_sources(dbms src/TiDB/Schema)
+add_headers_and_sources(dbms src/Storages/Page/V3)
+add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
+add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
+add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
+add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
@@ -258,10 +260,21 @@ target_include_directories (clickhouse_common_io BEFORE PRIVATE ${COMMON_INCLUDE
 # https://cmake.org/pipermail/cmake/2016-May/063400.html
 target_link_libraries (clickhouse_common_io PUBLIC ${TIFLASH_XXHASH_LIBRARY})
 
+function(add_target_pch context target)
+    if (ENABLE_PCH)
+        message(STATUS "Add PCH `${context}` for target `${target}`")
+        target_precompile_headers(${target} PRIVATE ${context})
+    endif ()
+    if(${ARGC} GREATER 2)
+        add_target_pch(${context} ${ARGN})
+    endif()
+endfunction()
+
 if (ENABLE_TESTS)
     include (${TiFlash_SOURCE_DIR}/cmake/find_gtest.cmake)
 
     if (USE_INTERNAL_GTEST_LIBRARY)
+        set(INSTALL_GTEST OFF)
         # Google Test from sources
         add_subdirectory(${TiFlash_SOURCE_DIR}/contrib/googletest/googletest ${CMAKE_CURRENT_BINARY_DIR}/googletest)
         # avoid problems with <regexp.h>
@@ -296,6 +309,8 @@ if (ENABLE_TESTS)
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 
+    add_target_pch("pch-dbms.h" gtests_dbms)
+
     grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
     add_executable(bench_dbms EXCLUDE_FROM_ALL
         ${dbms_bench_sources}
@@ -305,10 +320,14 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
         )
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
+    target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
 
     target_link_libraries(bench_dbms gtest dbms test_util_bench_main benchmark clickhouse_functions)
     if (ENABLE_TIFLASH_DTWORKLOAD)
         target_link_libraries(bench_dbms dt-workload-lib)
+    endif ()
+    if (ENABLE_TIFLASH_PAGEWORKLOAD)
+        target_link_libraries(bench_dbms page-workload-lib)
     endif ()
 
     add_check(bench_dbms)
@@ -341,3 +360,27 @@ if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
         )
     endif ()
 endif ()
+
+# dbms
+add_target_pch("pch-dbms.h" dbms flash_service)
+add_target_pch("pch-common.h" clickhouse_common_io clickhouse_aggregate_functions)
+
+# disable PCH for `clickhouse_functions` temporarily because some source files need to use specific cxx flags
+# add_target_pch("pch-common.h" clickhouse_functions)
+
+add_target_pch("pch-common.h" clickhouse_parsers clickhouse_storages_system dt-workload-lib clickhouse-server-lib)
+
+# common
+add_target_pch("pch-kvpb.h" kv_client)
+
+add_target_pch("pch-stl.h" ${Boost_SYSTEM_LIBRARY} cctz ${RE2_LIBRARY} ${RE2_ST_LIBRARY})
+
+# grpc
+add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" grpc grpc++)
+
+# pb
+add_target_pch("pch-stl.h" libprotobuf kvproto tipb libprotoc)
+
+# poco
+add_target_pch("pch-stl.h" Net Crypto Util Data NetSSL)
+add_target_pch("$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_CURRENT_SOURCE_DIR}/pch-stl.h>" XML Foundation JSON)

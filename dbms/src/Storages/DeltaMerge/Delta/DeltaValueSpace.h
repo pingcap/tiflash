@@ -77,6 +77,11 @@ private:
     /// Note that those things can not be done at the same time.
     std::atomic_bool is_updating = false;
 
+    /// Note that it's safe to do multiple flush concurrently but only one of them can succeed,
+    /// and other thread's work is just a waste of resource.
+    /// So we only allow one flush task running at any time to aviod waste resource.
+    std::atomic_bool is_flushing = false;
+
     std::atomic<size_t> last_try_flush_rows = 0;
     std::atomic<size_t> last_try_flush_bytes = 0;
     std::atomic<size_t> last_try_compact_column_files = 0;
@@ -159,6 +164,8 @@ public:
     size_t getTotalCacheBytes() const;
     size_t getValidCacheRows() const;
 
+    bool isFlushing() const { return is_flushing; }
+
     bool isUpdating() const { return is_updating; }
 
     bool tryLockUpdating()
@@ -234,7 +241,9 @@ public:
     /// Flush the data of column files which haven't write to disk yet, and also save the metadata of column files.
     bool flush(DMContext & context);
 
-    /// Compacts fragment column files into bigger one, to save some IOPS during reading.
+    /// Compact fragment column files in the delta layer into bigger column files, to save some IOPS during reading.
+    /// It does not merge the delta into stable layer.
+    /// a.k.a. minor compaction.
     bool compact(DMContext & context);
 
     /// Create a constant snapshot for read.

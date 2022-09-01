@@ -20,7 +20,6 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -29,6 +28,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <kvproto/mpp.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Rpc.h>
@@ -139,7 +139,8 @@ public:
         return detail;
     }
 
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header)
+    // stream_id is only meaningful for ExchagneReceiver.
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/)
     {
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())

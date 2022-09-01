@@ -29,15 +29,6 @@
 #include <unordered_map>
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int NOT_IMPLEMENTED;
-extern const int UNKNOWN_USER;
-extern const int WRONG_PASSWORD;
-extern const int REQUIRED_PASSWORD;
-extern const int IP_ADDRESS_NOT_ALLOWED;
-} // namespace ErrorCodes
-
 const Int8 VAR_SIZE = 0;
 
 extern const String uniq_raw_res_name;
@@ -116,7 +107,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
+    {tipb::ScalarFuncSig::CastTimeAsDuration, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
 
     //{tipb::ScalarFuncSig::CastDurationAsInt, "cast"},
@@ -340,8 +331,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::DecimalIsFalse, "isFalse"},
     {tipb::ScalarFuncSig::DecimalIsFalseWithNull, "isFalseWithNull"},
 
-    //{tipb::ScalarFuncSig::LeftShift, "cast"},
-    //{tipb::ScalarFuncSig::RightShift, "cast"},
+    {tipb::ScalarFuncSig::LeftShift, "bitShiftLeft"},
+    {tipb::ScalarFuncSig::RightShift, "bitShiftRight"},
 
     //{tipb::ScalarFuncSig::BitCount, "cast"},
     //{tipb::ScalarFuncSig::GetParamString, "cast"},
@@ -516,13 +507,13 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::WeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::WeekWithoutMode, "cast"},
     //{tipb::ScalarFuncSig::WeekDay, "cast"},
-    //{tipb::ScalarFuncSig::WeekOfYear, "cast"},
+    {tipb::ScalarFuncSig::WeekOfYear, "tidbWeekOfYear"},
 
     {tipb::ScalarFuncSig::Year, "toYear"},
     //{tipb::ScalarFuncSig::YearWeekWithMode, "cast"},
     //{tipb::ScalarFuncSig::YearWeekWithoutMode, "cast"},
 
-    //{tipb::ScalarFuncSig::GetFormat, "cast"},
+    {tipb::ScalarFuncSig::GetFormat, "getFormat"},
     {tipb::ScalarFuncSig::SysDateWithFsp, "sysDateWithFsp"},
     {tipb::ScalarFuncSig::SysDateWithoutFsp, "sysDateWithoutFsp"},
     //{tipb::ScalarFuncSig::CurrentDate, "cast"},
@@ -570,10 +561,10 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Quarter, "toQuarter"},
 
     //{tipb::ScalarFuncSig::SecToTime, "cast"},
-    //{tipb::ScalarFuncSig::TimeToSec, "cast"},
+    {tipb::ScalarFuncSig::TimeToSec, "tidbTimeToSec"},
     //{tipb::ScalarFuncSig::TimestampAdd, "cast"},
-    //{tipb::ScalarFuncSig::ToDays, "cast"},
-    //{tipb::ScalarFuncSig::ToSeconds, "cast"},
+    {tipb::ScalarFuncSig::ToDays, "tidbToDays"},
+    {tipb::ScalarFuncSig::ToSeconds, "tidbToSeconds"},
     //{tipb::ScalarFuncSig::UTCTimeWithArg, "cast"},
     //{tipb::ScalarFuncSig::UTCTimestampWithoutArg, "cast"},
     //{tipb::ScalarFuncSig::Timestamp1Arg, "cast"},
@@ -607,19 +598,19 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::SubDateDatetimeString, "cast"},
     {tipb::ScalarFuncSig::SubDateDatetimeInt, "date_sub"},
 
-    //{tipb::ScalarFuncSig::FromDays, "cast"},
+    {tipb::ScalarFuncSig::FromDays, "tidbFromDays"},
     //{tipb::ScalarFuncSig::TimeFormat, "cast"},
     {tipb::ScalarFuncSig::TimestampDiff, "tidbTimestampDiff"},
 
     //{tipb::ScalarFuncSig::BitLength, "cast"},
-    //{tipb::ScalarFuncSig::Bin, "cast"},
+    {tipb::ScalarFuncSig::Bin, "bin"},
     {tipb::ScalarFuncSig::ASCII, "ascii"},
     //{tipb::ScalarFuncSig::Char, "cast"},
     {tipb::ScalarFuncSig::CharLengthUTF8, "lengthUTF8"},
     {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
-    //{tipb::ScalarFuncSig::Elt, "cast"},
+    {tipb::ScalarFuncSig::Elt, "elt"},
     //{tipb::ScalarFuncSig::ExportSet3Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet4Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet5Arg, "cast"},
@@ -631,8 +622,8 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::Format, "cast"},
     //{tipb::ScalarFuncSig::FormatWithLocale, "cast"},
     //{tipb::ScalarFuncSig::FromBase64, "cast"},
-    //{tipb::ScalarFuncSig::HexIntArg, "cast"},
-    //{tipb::ScalarFuncSig::HexStrArg, "cast"},
+    {tipb::ScalarFuncSig::HexIntArg, "hexInt"},
+    {tipb::ScalarFuncSig::HexStrArg, "hexStr"},
     //{tipb::ScalarFuncSig::InsertUTF8, "cast"},
     //{tipb::ScalarFuncSig::Insert, "cast"},
     //{tipb::ScalarFuncSig::InstrUTF8, "cast"},
@@ -655,10 +646,10 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     //{tipb::ScalarFuncSig::OctString, "cast"},
     //{tipb::ScalarFuncSig::Ord, "cast"},
     //{tipb::ScalarFuncSig::Quote, "cast"},
-    //{tipb::ScalarFuncSig::Repeat, "cast"},
+    {tipb::ScalarFuncSig::Repeat, "repeat"},
     {tipb::ScalarFuncSig::Replace, "replaceAll"},
-    //{tipb::ScalarFuncSig::ReverseUTF8, "cast"},
-    //{tipb::ScalarFuncSig::Reverse, "cast"},
+    {tipb::ScalarFuncSig::ReverseUTF8, "reverseUTF8"},
+    {tipb::ScalarFuncSig::Reverse, "reverse"},
     {tipb::ScalarFuncSig::RightUTF8, "rightUTF8"},
     //{tipb::ScalarFuncSig::Right, "cast"},
     {tipb::ScalarFuncSig::RpadUTF8, "rpadUTF8"},
@@ -715,7 +706,16 @@ void assertBlockSchema(
                     actual->getName()));
     }
 }
-
+/// used by test
+std::unordered_map<String, tipb::ScalarFuncSig> getFuncNameToSigMap()
+{
+    std::unordered_map<String, tipb::ScalarFuncSig> ret;
+    for (const auto & element : scalar_func_map)
+    {
+        ret[element.second] = element.first;
+    }
+    return ret;
+}
 } // namespace
 
 bool isScalarFunctionExpr(const tipb::Expr & expr)
@@ -769,12 +769,108 @@ const String & getFunctionName(const tipb::Expr & expr)
     {
         return getAggFunctionName(expr);
     }
+    else if (isWindowFunctionExpr(expr))
+    {
+        return getWindowFunctionName(expr);
+    }
     else
     {
         auto it = scalar_func_map.find(expr.sig());
         if (it == scalar_func_map.end())
             throw TiFlashException(tipb::ScalarFuncSig_Name(expr.sig()) + " is not supported.", Errors::Coprocessor::Unimplemented);
         return it->second;
+    }
+}
+
+String getExchangeTypeName(const tipb::ExchangeType & tp)
+{
+    switch (tp)
+    {
+    case tipb::ExchangeType::Broadcast:
+        return "Broadcast";
+    case tipb::ExchangeType::PassThrough:
+        return "PassThrough";
+    case tipb::ExchangeType::Hash:
+        return "Hash";
+    default:
+        throw TiFlashException(fmt::format("Not supported Exchange type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinTypeName(const tipb::JoinType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinType::TypeAntiLeftOuterSemiJoin:
+        return "AntiLeftOuterSemiJoin";
+    case tipb::JoinType::TypeLeftOuterJoin:
+        return "LeftOuterJoin";
+    case tipb::JoinType::TypeRightOuterJoin:
+        return "RightOuterJoin";
+    case tipb::JoinType::TypeLeftOuterSemiJoin:
+        return "LeftOuterSemiJoin";
+    case tipb::JoinType::TypeAntiSemiJoin:
+        return "AntiSemiJoin";
+    case tipb::JoinType::TypeInnerJoin:
+        return "InnerJoin";
+    case tipb::JoinType::TypeSemiJoin:
+        return "SemiJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getJoinExecTypeName(const tipb::JoinExecType & tp)
+{
+    switch (tp)
+    {
+    case tipb::JoinExecType::TypeHashJoin:
+        return "HashJoin";
+    default:
+        throw TiFlashException(fmt::format("Not supported Join exectution type: {}", tp), Errors::Coprocessor::Internal);
+    }
+}
+
+String getFieldTypeName(Int32 tp)
+{
+    switch (tp)
+    {
+    case TiDB::TypeTiny:
+        return "Tiny";
+    case TiDB::TypeShort:
+        return "Short";
+    case TiDB::TypeInt24:
+        return "Int24";
+    case TiDB::TypeLong:
+        return "Long";
+    case TiDB::TypeLongLong:
+        return "Longlong";
+    case TiDB::TypeYear:
+        return "Year";
+    case TiDB::TypeDouble:
+        return "Double";
+    case TiDB::TypeTime:
+        return "Time";
+    case TiDB::TypeDate:
+        return "Date";
+    case TiDB::TypeDatetime:
+        return "Datetime";
+    case TiDB::TypeNewDate:
+        return "NewDate";
+    case TiDB::TypeTimestamp:
+        return "Timestamp";
+    case TiDB::TypeFloat:
+        return "Float";
+    case TiDB::TypeDecimal:
+        return "Decimal";
+    case TiDB::TypeNewDecimal:
+        return "NewDecimal";
+    case TiDB::TypeVarchar:
+        return "Varchar";
+    case TiDB::TypeString:
+        return "String";
+    default:
+        throw TiFlashException(fmt::format("Not supported field type: {}", tp), Errors::Coprocessor::Internal);
     }
 }
 
@@ -1268,17 +1364,6 @@ bool hasUnsignedFlag(const tipb::FieldType & tp)
     return tp.flag() & TiDB::ColumnFlagUnsigned;
 }
 
-grpc::StatusCode tiflashErrorCodeToGrpcStatusCode(int error_code)
-{
-    /// do not use switch statement because ErrorCodes::XXXX is not a compile time constant
-    if (error_code == ErrorCodes::NOT_IMPLEMENTED)
-        return grpc::StatusCode::UNIMPLEMENTED;
-    if (error_code == ErrorCodes::UNKNOWN_USER || error_code == ErrorCodes::WRONG_PASSWORD || error_code == ErrorCodes::REQUIRED_PASSWORD
-        || error_code == ErrorCodes::IP_ADDRESS_NOT_ALLOWED)
-        return grpc::StatusCode::UNAUTHENTICATED;
-    return grpc::StatusCode::INTERNAL;
-}
-
 void assertBlockSchema(
     const DataTypes & expected_types,
     const Block & block,
@@ -1346,6 +1431,14 @@ tipb::EncodeType analyzeDAGEncodeType(DAGContext & dag_context)
         // todo support BigEndian encode for chunk encode type
         return tipb::EncodeType::TypeDefault;
     return encode_type;
+}
+
+tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
+{
+    static std::unordered_map<String, tipb::ScalarFuncSig> func_name_sig_map = getFuncNameToSigMap();
+    if (func_name_sig_map.find(name) == func_name_sig_map.end())
+        throw Exception(fmt::format("Unsupported function {}", name));
+    return func_name_sig_map[name];
 }
 
 } // namespace DB

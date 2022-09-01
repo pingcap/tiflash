@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import os
+import re
 import sys
 import time
 import urllib2
@@ -29,6 +30,8 @@ COMMENT_PREFIX = '#'
 UNFINISHED_1_PREFIX = '\t'
 UNFINISHED_2_PREFIX = '   '
 WORD_PH = '{#WORD}'
+LINE_PH = '{#LINE}'
+REGEXP_MATCH = '{#REGEXP}'
 CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 
 verbose = False
@@ -40,12 +43,18 @@ def exec_func(cmd):
     err = p.close()
     return output, err
 
+# translate string to avoid being escaped in shell environment
+# we only need to consider '$', '`' and '\'
+# ref: https://www.gnu.org/software/bash/manual/html_node/Double-Quotes.html
+def to_unescaped_str(cmd):
+    return cmd.replace('\\', '\\\\').replace('$', '\\$').replace('`', '\\`')
+
 class Executor:
     def __init__(self, dbc):
         self.dbc = dbc
 
     def exe(self, cmd):
-        return exec_func(self.dbc + ' "' + cmd + '" 2>&1')
+        return exec_func(self.dbc + ' "' + to_unescaped_str(cmd) + '" 2>&1')
 
 
 class ShellFuncExecutor:
@@ -138,18 +147,24 @@ def match_ph_word(line):
 
 # TODO: Support more place holders, eg: {#NUMBER}
 def compare_line(line, template):
-    while True:
-        i = template.find(WORD_PH)
-        if i < 0:
-            return line == template
-        else:
-            if line[:i] != template[:i]:
-                return False
-            j = match_ph_word(line[i:])
-            if j == 0:
-                return False
-            template = template[i + len(WORD_PH):]
-            line = line[i + j:]
+    if template.startswith(REGEXP_MATCH):
+        return re.match(template[len(REGEXP_MATCH):], line) != None
+    l = template.find(LINE_PH)
+    if l >= 0:
+        return True
+    else:
+        while True:
+            i = template.find(WORD_PH)
+            if i < 0:
+                return line == template
+            else:
+                if line[:i] != template[:i]:
+                    return False
+                j = match_ph_word(line[i:])
+                if j == 0:
+                    return False
+                template = template[i + len(WORD_PH):]
+                line = line[i + j:]
 
 
 class MySQLCompare:
@@ -194,10 +209,13 @@ class MySQLCompare:
             b = MySQLCompare.parse_excepted_outputs(matches)
             return a == b
         else:
-            if len(outputs) != len(matches):
+            if len(outputs) > len(matches):
                 return False
             for i in range(0, len(outputs)):
                 if not compare_line(outputs[i], matches[i]):
+                    return False
+            for i in range(len(outputs), len(matches)):
+                if not compare_line("", matches[i]):
                     return False
             return True
 
@@ -212,10 +230,13 @@ def matched(outputs, matches, fuzz):
         b = parse_table_parts(matches, fuzz)
         return a == b
     else:
-        if len(outputs) != len(matches):
+        if len(outputs) > len(matches):
             return False
         for i in range(0, len(outputs)):
             if not compare_line(outputs[i], matches[i]):
+                return False
+        for i in range(len(outputs), len(matches)):
+            if not compare_line("", matches[i]):
                 return False
         return True
 

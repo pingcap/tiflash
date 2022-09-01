@@ -154,7 +154,7 @@ try
 
     // const-const least
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<Int64>>(1, -3),
+        createConstColumn<Int64>(1, -3),
         executeFunction(
             func_name,
             createConstColumn<Nullable<Int64>>(1, 5),
@@ -323,7 +323,7 @@ try
 
     // const-const greatest
     ASSERT_COLUMN_EQ(
-        createConstColumn<Nullable<Int64>>(1, 5),
+        createConstColumn<Int64>(1, 5),
         executeFunction(
             func_name,
             createConstColumn<Nullable<Int64>>(1, 5),

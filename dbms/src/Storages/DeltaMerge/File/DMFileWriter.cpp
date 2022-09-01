@@ -72,10 +72,9 @@ DMFileWriter::DMFileWriter(const DMFilePtr & dmfile_,
     for (auto & cd : write_columns)
     {
         // TODO: currently we only generate index for Integers, Date, DateTime types, and this should be configurable by user.
-        // TODO: If column type is nullable, we won't generate index for it
         /// for handle column always generate index
-        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || cd.type->isInteger() || cd.type->isDateOrDateTime();
-
+        auto type = removeNullable(cd.type);
+        bool do_index = cd.id == EXTRA_HANDLE_COLUMN_ID || type->isInteger() || type->isDateOrDateTime();
         if (options.flags.isSingleFile())
         {
             if (do_index)
@@ -122,7 +121,7 @@ void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 void DMFileWriter::write(const Block & block, const BlockProperty & block_property)
 {
     is_empty_file = false;
-    DMFile::PackStat stat;
+    DMFile::PackStat stat{};
     stat.rows = block.rows();
     stat.not_clean = block_property.not_clean_rows;
     stat.bytes = block.bytes(); // This is bytes of pack data in memory.
@@ -153,6 +152,7 @@ void DMFileWriter::write(const Block & block, const BlockProperty & block_proper
     auto * property = properties.add_property();
     property->set_num_rows(block_property.effective_num_rows);
     property->set_gc_hint_version(block_property.gc_hint_version);
+    property->set_deleted_rows(block_property.deleted_rows);
 }
 
 void DMFileWriter::finalize()
@@ -193,7 +193,10 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
             auto & minmax_indexs = single_file_stream->minmax_indexs;
             if (auto iter = minmax_indexs.find(stream_name); iter != minmax_indexs.end())
             {
-                iter->second->addPack(column, del_mark);
+                // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
+                // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
+                // For TAG Column, we also ignore del_mark when add minmax index.
+                iter->second->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
             }
 
             auto offset_in_compressed_block = single_file_stream->original_layer.offset();
@@ -217,7 +220,7 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                         "Type shouldn be nullable when substream_path's type is NullMap.",
                         Errors::DeltaTree::Internal);
 
-                const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+                const auto & col = static_cast<const ColumnNullable &>(column);
                 col.checkConsistency();
                 DataTypeUInt8().serializeBinaryBulk(col.getNullMapColumn(), single_file_stream->original_layer, 0, rows);
             }
@@ -228,8 +231,8 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                         "Type shouldn be nullable when substream_path's type is NullableElements.",
                         Errors::DeltaTree::Internal);
 
-                const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(type);
-                const ColumnNullable & col = static_cast<const ColumnNullable &>(column);
+                const auto & nullable_type = static_cast<const DataTypeNullable &>(type);
+                const auto & col = static_cast<const ColumnNullable &>(column);
                 nullable_type.getNestedType()->serializeBinaryBulk(col.getNestedColumn(), single_file_stream->original_layer, 0, rows);
             }
             else
@@ -255,7 +258,12 @@ void DMFileWriter::writeColumn(ColId col_id, const IDataType & type, const IColu
                 const auto name = DMFile::getFileNameBase(col_id, substream);
                 auto & stream = column_streams.at(name);
                 if (stream->minmaxes)
-                    stream->minmaxes->addPack(column, del_mark);
+                {
+                    // For EXTRA_HANDLE_COLUMN_ID, we ignore del_mark when add minmax index.
+                    // Because we need all rows which satisfy a certain range when place delta index no matter whether the row is a delete row.
+                    // For TAG Column, we also ignore del_mark when add minmax index.
+                    stream->minmaxes->addPack(column, (col_id == EXTRA_HANDLE_COLUMN_ID || col_id == TAG_COLUMN_ID) ? nullptr : del_mark);
+                }
 
                 /// There could already be enough data to compress into the new block.
                 if (stream->compressed_buf->offset() >= options.min_compress_block_size)

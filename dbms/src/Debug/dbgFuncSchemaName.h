@@ -40,4 +40,14 @@ void dbgFuncMappedTable(Context & context, const ASTs & args, DBGInvoker::Printe
 //   ./storage-client.sh "DBGInvoke query_mapped('select * from $d.$t', database_name[, table_name])"
 BlockInputStreamPtr dbgFuncQueryMapped(Context & context, const ASTs & args);
 
+// Get table's tiflash replica counts with mapped table name
+// Usage:
+//   ./storage-client.sh "DBGInvoke get_tiflash_replica_count(db_name, table_name)"
+void dbgFuncGetTiflashReplicaCount(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
+// Get the logical table's partition tables' tiflash replica counts with mapped table name
+// Usage:
+//   ./storage-client.sh "DBGInvoke get_partition_tables_tiflash_replica_count(db_name, table_name)"
+void dbgFuncGetPartitionTablesTiflashReplicaCount(Context & context, const ASTs & args, DBGInvoker::Printer output);
+
 } // namespace DB

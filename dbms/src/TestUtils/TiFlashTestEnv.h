@@ -18,6 +18,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/SortedDirectoryIterator.h>
+#include <Storages/Page/PageStorage.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 
@@ -35,13 +36,21 @@ public:
         return Poco::Path(path).absolute().toString();
     }
 
-    static void tryRemovePath(const std::string & path)
+    static void tryRemovePath(const std::string & path, bool recreate = false)
     {
         try
         {
-            if (Poco::File p(path); p.exists())
+            // drop the data on disk
+            Poco::File p(path);
+            if (p.exists())
             {
                 p.remove(true);
+            }
+
+            // re-create empty directory for testing
+            if (recreate)
+            {
+                p.createDirectories();
             }
         }
         catch (...)
@@ -88,7 +97,7 @@ public:
 
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
-    static void initializeGlobalContext(Strings testdata_path = {}, bool enable_ps_v3 = false);
+    static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 0);
     static Context & getGlobalContext() { return *global_context; }
     static void shutdown();
 

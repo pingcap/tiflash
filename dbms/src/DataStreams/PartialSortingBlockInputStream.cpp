@@ -12,15 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/sortBlock.h>
-
+#include <Common/FmtUtils.h>
 #include <DataStreams/PartialSortingBlockInputStream.h>
+#include <Interpreters/sortBlock.h>
 
 
 namespace DB
 {
-
-
 Block PartialSortingBlockInputStream::readImpl()
 {
     Block res = children.back()->read();
@@ -28,5 +26,8 @@ Block PartialSortingBlockInputStream::readImpl()
     return res;
 }
 
-
+void PartialSortingBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.fmtAppend(": limit = {}", limit);
 }
+} // namespace DB

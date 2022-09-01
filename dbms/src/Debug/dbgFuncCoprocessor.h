@@ -16,6 +16,7 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/astToExecutor.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
 #include <Storages/Transaction/Types.h>
@@ -23,6 +24,7 @@
 namespace DB
 {
 class Context;
+using MockServerConfig = tests::MockServerConfig;
 
 // Coprocessor debug tools
 
@@ -75,6 +77,17 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     const String & query,
     SchemaFetcher schema_fetcher,
     const DAGProperties & properties);
+
+QueryTasks queryPlanToQueryTasks(
+    const DAGProperties & properties,
+    ExecutorPtr root_executor,
+    size_t & executor_index,
+    const Context & context);
+
+BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
+BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
+BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+
 namespace Debug
 {
 void setServiceAddr(const std::string & addr);

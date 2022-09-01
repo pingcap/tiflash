@@ -42,12 +42,13 @@ struct WriteBatches : private boost::noncopyable
     WriteLimiterPtr write_limiter;
 
     WriteBatches(StoragePool & storage_pool_, const WriteLimiterPtr & write_limiter_ = nullptr)
-        : log(storage_pool_.getNamespaceId())
-        , data(storage_pool_.getNamespaceId())
-        , meta(storage_pool_.getNamespaceId())
-        , removed_log(storage_pool_.getNamespaceId())
-        , removed_data(storage_pool_.getNamespaceId())
-        , removed_meta(storage_pool_.getNamespaceId())
+        : ns_id(storage_pool_.getNamespaceId())
+        , log(ns_id)
+        , data(ns_id)
+        , meta(ns_id)
+        , removed_log(ns_id)
+        , removed_data(ns_id)
+        , removed_meta(ns_id)
         , storage_pool(storage_pool_)
         , write_limiter(write_limiter_)
     {
@@ -111,8 +112,8 @@ struct WriteBatches : private boost::noncopyable
         for (auto & w : data.getWrites())
             data_write_pages.push_back(w.page_id);
 
-        storage_pool.log()->write(std::move(log), write_limiter);
-        storage_pool.data()->write(std::move(data), write_limiter);
+        storage_pool.logWriter()->write(std::move(log), write_limiter);
+        storage_pool.dataWriter()->write(std::move(data), write_limiter);
 
         for (auto page_id : log_write_pages)
             written_log.push_back(page_id);
@@ -151,8 +152,8 @@ struct WriteBatches : private boost::noncopyable
             check(data_wb, "data_wb", logger);
         }
 
-        storage_pool.log()->write(std::move(log_wb), write_limiter);
-        storage_pool.data()->write(std::move(data_wb), write_limiter);
+        storage_pool.logWriter()->write(std::move(log_wb), write_limiter);
+        storage_pool.dataWriter()->write(std::move(data_wb), write_limiter);
 
         written_log.clear();
         written_data.clear();
@@ -178,7 +179,7 @@ struct WriteBatches : private boost::noncopyable
             check(meta, "meta", logger);
         }
 
-        storage_pool.meta()->write(std::move(meta), write_limiter);
+        storage_pool.metaWriter()->write(std::move(meta), write_limiter);
         meta.clear();
     }
 
@@ -204,9 +205,9 @@ struct WriteBatches : private boost::noncopyable
             check(removed_meta, "removed_meta", logger);
         }
 
-        storage_pool.log()->write(std::move(removed_log), write_limiter);
-        storage_pool.data()->write(std::move(removed_data), write_limiter);
-        storage_pool.meta()->write(std::move(removed_meta), write_limiter);
+        storage_pool.logWriter()->write(std::move(removed_log), write_limiter);
+        storage_pool.dataWriter()->write(std::move(removed_data), write_limiter);
+        storage_pool.metaWriter()->write(std::move(removed_meta), write_limiter);
 
         removed_log.clear();
         removed_data.clear();

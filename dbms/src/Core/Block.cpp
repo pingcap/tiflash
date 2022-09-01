@@ -49,6 +49,15 @@ Block::Block(const ColumnsWithTypeAndName & data_)
 }
 
 
+Block::Block(const NamesAndTypes & names_and_types)
+{
+    data.reserve(names_and_types.size());
+    for (const auto & name_and_type : names_and_types)
+        data.emplace_back(name_and_type.type, name_and_type.name);
+    initializeIndexByName();
+}
+
+
 void Block::initializeIndexByName()
 {
     for (size_t i = 0, size = data.size(); i < size; ++i)
@@ -238,10 +247,18 @@ void Block::checkNumberOfRows() const
         if (rows == -1)
             rows = size;
         else if (rows != size)
-            throw Exception("Sizes of columns doesn't match: "
-                                + data.front().name + ": " + toString(rows)
-                                + ", " + elem.name + ": " + toString(size),
+        {
+            auto first_col = data.front();
+            throw Exception(fmt::format(
+                                "Sizes of columns doesn't match: {}(id={}): {}, {}(id={}): {}",
+                                first_col.name,
+                                first_col.column_id,
+                                rows,
+                                elem.name,
+                                elem.column_id,
+                                size),
                             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+        }
     }
 }
 
@@ -292,7 +309,7 @@ std::string Block::dumpNames() const
             out << ", ";
         out << it->name;
     }
-    return out.str();
+    return out.releaseStr();
 }
 
 
@@ -305,7 +322,21 @@ std::string Block::dumpStructure() const
             out << ", ";
         it->dumpStructure(out);
     }
-    return out.str();
+    return out.releaseStr();
+}
+
+std::string Block::dumpJsonStructure() const
+{
+    WriteBufferFromOwnString out;
+    out << "[";
+    for (auto it = data.begin(); it != data.end(); ++it)
+    {
+        if (it != data.begin())
+            out << ",";
+        it->dumpJsonStructure(out);
+    }
+    out << "]";
+    return out.releaseStr();
 }
 
 
