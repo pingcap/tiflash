@@ -43,6 +43,9 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
+#include "Common/Exception.h"
+#include "Poco/Exception.h"
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -348,6 +351,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                 auto dmfile = DMFile::restore(file_provider, id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
                 if (unlikely(!dmfile))
                 {
+                    // If the dtfile directory is not exist, it means `StoragePathPool::drop` have been
+                    // called in another thread. Just try to clean if any id is left.
                     try
                     {
                         delegate.removeDTFile(id);
@@ -362,11 +367,27 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                 }
                 else if (dmfile->canGC())
                 {
-                    // scanner should only return dtfiles that can GC,
-                    // just another check here.
-                    delegate.removeDTFile(dmfile->fileId());
-                    dmfile->remove(file_provider);
-                    LOG_FMT_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
+                    // StoragePathPool::drop may be called concurrently, ignore and continue next file if any exception thrown
+                    String err_msg;
+                    try
+                    {
+                        // scanner should only return dtfiles that can GC,
+                        // just another check here.
+                        delegate.removeDTFile(dmfile->fileId());
+                        dmfile->remove(file_provider);
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        err_msg = e.message();
+                    }
+                    catch (Poco::Exception & e)
+                    {
+                        err_msg = e.message();
+                    }
+                    if (err_msg.empty())
+                        LOG_FMT_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
+                    else
+                        LOG_FMT_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={}, err_msg={}", dmfile->path(), err_msg);
                 }
             }
         }

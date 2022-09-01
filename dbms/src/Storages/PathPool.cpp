@@ -259,6 +259,8 @@ void StoragePathPool::drop(bool recursive, bool must_success)
                     total_bytes += file_size;
                 }
                 global_capacity->freeUsedSize(path_info.path, total_bytes);
+                // clear in case delegator->removeDTFile is called after `drop`
+                dt_file_path_map.clear();
             }
         }
         catch (Poco::DirectoryNotEmptyException & e)
