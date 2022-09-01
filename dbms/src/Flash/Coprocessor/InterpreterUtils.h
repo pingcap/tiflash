@@ -61,6 +61,15 @@ void orderStreams(
     const Context & context,
     const LoggerPtr & log);
 
+void hashOrderStreams(
+    DAGPipeline & pipeline,
+    size_t max_streams,
+    SortDescription order_descr,
+    Int64 limit,
+    bool enable_fine_grained_shuffle,
+    const Context & context,
+    const LoggerPtr & log);
+
 void executeCreatingSets(
     DAGPipeline & pipeline,
     const Context & context,
