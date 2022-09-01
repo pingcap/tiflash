@@ -25,44 +25,53 @@ ColumnWithTypeAndName ColumnGenerator::generate(const ColumnGeneratorOpts & opts
         type = DataTypeFactory::instance().get(opts.type_name);
 
     auto col = type->createColumn();
+    col->reserve(opts.size);
+
     ColumnWithTypeAndName res({}, type, "", 0);
-    String family_name = type->getFamilyName();
+    auto type_id = type->getTypeId();
 
-
-    if (family_name == "Int8" || family_name == "Int16" || family_name == "Int32" || family_name == "Int64")
+    switch (type_id)
     {
-        for (size_t i = 0; i < opts.size; ++i)
-            genInt(col);
-    }
-    else if (family_name == "UInt8" || family_name == "UInt16" || family_name == "UInt32" || family_name == "UInt64")
-    {
+    case TypeIndex::UInt8:
+    case TypeIndex::UInt16:
+    case TypeIndex::UInt32:
+    case TypeIndex::UInt64:
         for (size_t i = 0; i < opts.size; ++i)
             genUInt(col);
-    }
-    else if (family_name == "Float32" || family_name == "Float64")
-    {
+        break;
+    case TypeIndex::Int8:
+    case TypeIndex::Int16:
+    case TypeIndex::Int32:
+    case TypeIndex::Int64:
+        for (size_t i = 0; i < opts.size; ++i)
+            genInt(col);
+        break;
+    case TypeIndex::Float32:
+    case TypeIndex::Float64:
         for (size_t i = 0; i < opts.size; ++i)
             genFloat(col);
-    }
-    else if (family_name == "String")
-    {
+        break;
+    case TypeIndex::String:
         for (size_t i = 0; i < opts.size; ++i)
             genString(col);
-    }
-    else if (family_name == "MyDateTime")
-    {
-        for (size_t i = 0; i < opts.size; ++i)
-            genDateTime(col);
-    }
-    else if (family_name == "MyDate")
-    {
-        for (size_t i = 0; i < opts.size; ++i)
-            genDate(col);
-    }
-    else if (family_name == "Decimal")
-    {
+        break;
+    case TypeIndex::Decimal32:
+    case TypeIndex::Decimal64:
+    case TypeIndex::Decimal128:
+    case TypeIndex::Decimal256:
         for (size_t i = 0; i < opts.size; ++i)
             genDecimal(col, type);
+        break;
+    case TypeIndex::MyDate:
+        for (size_t i = 0; i < opts.size; ++i)
+            genDate(col);
+        break;
+    case TypeIndex::MyDateTime:
+        for (size_t i = 0; i < opts.size; ++i)
+            genDateTime(col);
+        break;
+    default:
+        throw std::invalid_argument("RandomColumnGenerator invalid type");
     }
 
     res.column = std::move(col);
