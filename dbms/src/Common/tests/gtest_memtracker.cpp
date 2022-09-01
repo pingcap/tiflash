@@ -26,7 +26,7 @@ class MemTrackerTest : public ::testing::Test
 TEST_F(MemTrackerTest, testBasic)
 try
 {
-    auto  mem_tracker = MemoryTracker::create();
+    auto mem_tracker = MemoryTracker::create();
     mem_tracker->alloc(1024);
     ASSERT_EQ(1024, mem_tracker->get());
     mem_tracker->free(1024);
