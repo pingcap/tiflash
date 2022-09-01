@@ -18,7 +18,7 @@
 #include <grpc++/grpc++.h>
 #include <kvproto/tikvpb.grpc.pb.h>
 using grpc::Status;
-using grpc_impl::Channel;
+using grpc::Channel;
 
 namespace DB
 {

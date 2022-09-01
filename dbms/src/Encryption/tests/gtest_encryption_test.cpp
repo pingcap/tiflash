@@ -467,9 +467,9 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_file");
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path, true, -1, 0600, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::SM4Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
-    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
+    KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::SM4Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
     BlockAccessCipherStreamPtr cipher_stream
         = AESCTRCipherStream::createCipherStream(encryption_info, EncryptionPath("encryption", ""));
