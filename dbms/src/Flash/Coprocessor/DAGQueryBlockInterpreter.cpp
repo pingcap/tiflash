@@ -274,6 +274,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
     executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
     auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
+    join_ptr->setBuilderCount(build_pipeline.streams.size() + build_pipeline.streams_with_non_joined_data.size());
     build_pipeline.transform([&](auto & stream) {
         stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
         stream->setExtraInfo(

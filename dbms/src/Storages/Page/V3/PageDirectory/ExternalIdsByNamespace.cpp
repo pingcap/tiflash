@@ -15,8 +15,6 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 
-#include <mutex>
-
 namespace DB::PS::V3
 {
 void ExternalIdsByNamespace::addExternalIdUnlock(const std::shared_ptr<PageIdV3Internal> & external_id)

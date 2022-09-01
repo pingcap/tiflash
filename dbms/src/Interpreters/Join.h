@@ -117,6 +117,13 @@ public:
 
     void insertFromBlock(const Block & block, size_t stream_index);
 
+    void insertFromBlocks(std::vector<Block> && blocks, size_t stream_index);
+
+    void setBuilderCount(size_t builder_cnt)
+    {
+        builder_count = builder_cnt;
+    }
+
     /** Join data from the map (that was previously built by calls to insertFromBlock) to the block with data from "left" table.
       * Could be called from different threads in parallel.
       */
@@ -288,6 +295,12 @@ private:
     std::atomic_bool build_set_exceeded;
     /// collators for the join key
     const TiDB::TiDBCollators collators;
+
+    std::mutex builder_mu;
+    std::condition_variable builder_cv;
+    size_t builder_count = 1;
+    size_t demo_total_rows = 0;
+    bool all_builders_done = false;
 
     String left_filter_column;
     String right_filter_column;

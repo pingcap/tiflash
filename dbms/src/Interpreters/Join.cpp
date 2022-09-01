@@ -227,6 +227,33 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
     return Type::serialized;
 }
 
+template <typename Maps>
+static void reserveImpl(Maps & maps, Join::Type type, size_t rows)
+{
+    switch (type)
+    {
+    case Join::Type::EMPTY:
+        break;
+    case Join::Type::CROSS:
+        break;
+
+#define M(TYPE)                                                            \
+    case Join::Type::TYPE:                                                 \
+    {                                                                      \
+        auto segments = maps.TYPE->getSegmentSize();                       \
+        auto estimateRowsPerSegment = rows * 1.5 / segments;               \
+        for (size_t i = 0; i < segments; ++i)                              \
+            maps.TYPE->getSegmentTable(i).reserve(estimateRowsPerSegment); \
+        break;                                                             \
+    }
+        APPLY_FOR_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception("Unknown JOIN keys variant.", ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
+} // namespace DB
+
 
 template <typename Maps>
 static void initImpl(Maps & maps, Join::Type type, size_t build_concurrency)
@@ -2206,6 +2233,46 @@ private:
     }
 };
 
+void Join::insertFromBlocks(std::vector<Block> && blocks, size_t stream_index)
+{
+    {
+        std::unique_lock lock(builder_mu);
+        for (auto & b : blocks)
+            demo_total_rows += b.rows();
+        auto remain_builders = --builder_count;
+        if (remain_builders == 0)
+        {
+            if (isCrossJoin(kind))
+            {
+                // do nothing
+            }
+            else if (!getFullness(kind))
+            {
+                if (strictness == ASTTableJoin::Strictness::Any)
+                    reserveImpl(maps_any, type, demo_total_rows);
+                else
+                    reserveImpl(maps_all, type, demo_total_rows);
+            }
+            else
+            {
+                if (strictness == ASTTableJoin::Strictness::Any)
+                    reserveImpl(maps_any_full, type, demo_total_rows);
+                else
+                    reserveImpl(maps_all_full, type, demo_total_rows);
+            }
+            all_builders_done = true;
+            builder_cv.notify_all();
+        }
+        else
+        {
+            builder_cv.wait(lock, [&] { return all_builders_done; });
+        }
+    }
+    for (auto & b : blocks)
+    {
+        insertFromBlock(b, stream_index);
+    }
+}
 
 BlockInputStreamPtr Join::createStreamWithNonJoinedRows(const Block & left_sample_block, size_t index, size_t step, size_t max_block_size) const
 {

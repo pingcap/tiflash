@@ -47,6 +47,7 @@ private:
     JoinPtr join;
     size_t concurrency_build_index;
     const LoggerPtr log;
+    std::vector<Block> blocks;
 };
 
 } // namespace DB

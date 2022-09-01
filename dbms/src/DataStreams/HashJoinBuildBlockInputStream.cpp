@@ -21,8 +21,11 @@ Block HashJoinBuildBlockInputStream::readImpl()
 {
     Block block = children.back()->read();
     if (!block)
+    {
+        join->insertFromBlocks(std::move(blocks), concurrency_build_index);
         return block;
-    join->insertFromBlock(block, concurrency_build_index);
+    }
+    blocks.push_back(block);
     return block;
 }
 

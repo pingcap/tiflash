@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Storages/Page/PageDefines.h>
 
+#include <mutex>
 #include <unordered_map>
 
 namespace DB::PS::V3
