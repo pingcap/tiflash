@@ -166,6 +166,73 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; sele
 | NULL                    | NULL                       | 9999-01-01 23:59:59                 | 2038-01-19 03:14:07                   |
 +-------------------------+----------------------------+-------------------------------------+---------------------------------------+
 
+## test_null
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(NULL) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++-------------------+
+| lead(NULL) over w |
++-------------------+
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
+|              NULL |
++-------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(NULL, 2) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++----------------------+
+| lead(NULL, 2) over w |
++----------------------+
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
+|                 NULL |
++----------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead(NULL, 2, '6') over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---------------------------+
+| lead(NULL, 2, '6') over w |
++---------------------------+
+| NULL                      |
+| NULL                      |
+| 6                         |
+| 6                         |
+| NULL                      |
+| NULL                      |
+| 6                         |
+| 6                         |
++---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lead('6', 2, NULL) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---------------------------+
+| lead('6', 2, NULL) over w |
++---------------------------+
+| 6                         |
+| 6                         |
+| NULL                      |
+| NULL                      |
+| 6                         |
+| 6                         |
+| NULL                      |
+| NULL                      |
++---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select lag(NULL, 2, NULL) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++------------------------------------------------------+
+| lag(NULL, 2, NULL) over w                            |
++------------------------------------------------------+
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
+| NULL                                                 |
++------------------------------------------------------+
+
 mysql> drop table if exists test.test_str
 mysql> drop table if exists test.test_int
 mysql> drop table if exists test.test_float
