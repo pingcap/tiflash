@@ -386,7 +386,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     Block expect_block(columns);
     expect_block.checkNumberOfRows(); // check the input
 
-    // Blocks are unordered when read-thread-pool enabled.
+    // Blocks can be unordered when read-thread-pool enabled.
     // So read all blocks and sort them by handle column or column at position 0.
     size_t num_rows_expect = expect_block.rows();
     size_t num_rows_read = 0;
