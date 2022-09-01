@@ -78,11 +78,11 @@ struct MockLocalReader
     {
         while (true)
         {
-            MPPDataPacketPtr tmp_packet = local_sender->readForLocal();
+            TrackedMppDataPacketPtr tmp_packet = local_sender->readForLocal();
             bool success = tmp_packet != nullptr;
             if (success)
             {
-                write_packet_vec.push_back(tmp_packet->data());
+                write_packet_vec.push_back(tmp_packet->packet.data());
             }
             else
             {
@@ -119,7 +119,7 @@ struct MockTerminateLocalReader
 
     void read() const
     {
-        MPPDataPacketPtr tmp_packet = local_sender->readForLocal();
+        TrackedMppDataPacketPtr tmp_packet = local_sender->readForLocal();
         local_sender->consumerFinish("Receiver closed");
     }
 };

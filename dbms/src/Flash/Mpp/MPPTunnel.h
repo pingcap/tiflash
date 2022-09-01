@@ -20,6 +20,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/PacketWriter.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -57,7 +58,7 @@ enum class TunnelSenderMode
     ASYNC_GRPC // Using async grpc writer
 };
 
-using MPPDataPacketPtr = std::shared_ptr<mpp::MPPDataPacket>;
+using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 
 /// TunnelSender is responsible for consuming data from Tunnel's internal send_queue and do the actual sending work
 /// After TunnelSend finished its work, either normally or abnormally, set ConsumerState to inform Tunnel
@@ -66,13 +67,13 @@ class TunnelSender : private boost::noncopyable
 public:
     virtual ~TunnelSender() = default;
     TunnelSender(size_t queue_size, const LoggerPtr & log_, const String & tunnel_id_)
-        : send_queue(MPMCQueue<MPPDataPacketPtr>(queue_size))
+        : send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
         , log(log_)
         , tunnel_id(tunnel_id_)
     {
     }
 
-    virtual bool push(MPPDataPacketPtr && data)
+    virtual bool push(TrackedMppDataPacketPtr && data)
     {
         return send_queue.push(data) == MPMCQueueResult::OK;
     }
@@ -80,6 +81,11 @@ public:
     virtual bool finish()
     {
         return send_queue.finish();
+    }
+
+    virtual void finishAndDrain()
+    {
+        send_queue.finishAndDrain();
     }
 
     void consumerFinish(const String & err_msg);
@@ -128,7 +134,7 @@ protected:
         std::shared_future<String> future;
         std::atomic<bool> msg_has_set{false};
     };
-    MPMCQueue<MPPDataPacketPtr> send_queue;
+    MPMCQueue<TrackedMppDataPacketPtr> send_queue;
     ConsumerState consumer_state;
     const LoggerPtr log;
     const String tunnel_id;
@@ -164,7 +170,7 @@ public:
         , queue(queue_size, func)
     {}
 
-    bool push(MPPDataPacketPtr && data) override
+    bool push(TrackedMppDataPacketPtr && data) override
     {
         return queue.push(data);
     }
@@ -174,13 +180,18 @@ public:
         return queue.finish();
     }
 
-    GRPCSendQueueRes pop(MPPDataPacketPtr & data, void * new_tag)
+    void finishAndDrain() override
+    {
+        queue.finishAndDrain();
+    }
+
+    GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
     {
         return queue.pop(data, new_tag);
     }
 
 private:
-    GRPCSendQueue<MPPDataPacketPtr> queue;
+    GRPCSendQueue<TrackedMppDataPacketPtr> queue;
 };
 
 /// LocalTunnelSender just provide readForLocal method to return one element one time
@@ -190,7 +201,7 @@ class LocalTunnelSender : public TunnelSender
 public:
     using Base = TunnelSender;
     using Base::Base;
-    MPPDataPacketPtr readForLocal();
+    TrackedMppDataPacketPtr readForLocal();
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -275,6 +286,8 @@ public:
 
     const LoggerPtr & getLogger() const { return log; }
 
+    void updateMemTracker();
+
     TunnelSenderPtr getTunnelSender() { return tunnel_sender; }
     SyncTunnelSenderPtr getSyncTunnelSender() { return sync_tunnel_sender; }
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
@@ -292,7 +305,7 @@ private:
     };
 
     StringRef statusToString();
-    void finishSendQueue();
+    void finishSendQueue(bool drain = false);
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
@@ -311,6 +324,7 @@ private:
     const size_t queue_size;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
+    MemoryTracker * mem_tracker;
     TunnelSenderMode mode; // Tunnel transfer data mode
     TunnelSenderPtr tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience
     // According to mode value, among the sync/async/local_tunnel_senders, only the responding sender is not null and do actual work

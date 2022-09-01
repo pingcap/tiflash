@@ -201,11 +201,11 @@ void EstablishCallData::unexpectedWriteDone()
 
 void EstablishCallData::trySendOneMsg()
 {
-    MPPDataPacketPtr res;
+    TrackedMppDataPacketPtr res;
     switch (async_tunnel_sender->pop(res, this))
     {
     case GRPCSendQueueRes::OK:
-        write(*res);
+        write(res->packet);
         return;
     case GRPCSendQueueRes::FINISHED:
         writeDone("", grpc::Status::OK);

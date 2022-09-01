@@ -185,6 +185,13 @@ public:
         return ret;
     }
 
+    /// Finish and drain the queue.
+    void finishAndDrain()
+    {
+        send_queue.finishAndDrain();
+        kickCompletionQueue();
+    }
+
 private:
     friend class tests::TestGRPCSendQueue;
 

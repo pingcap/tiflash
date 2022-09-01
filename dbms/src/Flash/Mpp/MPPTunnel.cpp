@@ -69,6 +69,7 @@ MPPTunnel::MPPTunnel(
     , tunnel_id(tunnel_id_)
     , queue_size(std::max(5, input_steams_num_ * 5))
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+    , mem_tracker(current_memory_tracker)
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -96,17 +97,24 @@ MPPTunnel::~MPPTunnel()
     LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
-void MPPTunnel::finishSendQueue()
+void MPPTunnel::finishSendQueue(bool drain)
 {
     if (tunnel_sender)
     {
-        tunnel_sender->finish();
+        if (drain)
+            tunnel_sender->finishAndDrain();
+        else
+            tunnel_sender->finish();
     }
 }
 
 /// exit abnormally, such as being cancelled.
 void MPPTunnel::close(const String & reason)
 {
+    SCOPE_EXIT({
+        // ensure the tracked memory is released and updated before memory tracker(in ProcListEntry) is released
+        finishSendQueue(true); // drain the send_queue when close
+    });
     {
         std::unique_lock lk(mu);
         switch (status)
@@ -122,7 +130,7 @@ void MPPTunnel::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    tunnel_sender->push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+                    tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), mem_tracker));
                 }
                 catch (...)
                 {
@@ -155,7 +163,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
                 throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         }
 
-        if (tunnel_sender->push(std::make_shared<mpp::MPPDataPacket>(data)))
+        if (tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker)))
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -326,6 +334,11 @@ StringRef MPPTunnel::statusToString()
     }
 }
 
+void MPPTunnel::updateMemTracker()
+{
+    mem_tracker = current_memory_tracker;
+}
+
 void TunnelSender::consumerFinish(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
@@ -346,10 +359,10 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
     String err_msg;
     try
     {
-        MPPDataPacketPtr res;
+        TrackedMppDataPacketPtr res;
         while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
-            if (!writer->write(*res))
+            if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -378,11 +391,15 @@ void SyncTunnelSender::startSendThread(PacketWriter * writer)
     });
 }
 
-MPPDataPacketPtr LocalTunnelSender::readForLocal()
+std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
 {
-    MPPDataPacketPtr res;
+    TrackedMppDataPacketPtr res;
     if (send_queue.pop(res) == MPMCQueueResult::OK)
+    {
+        // switch tunnel's memory tracker into receiver's
+        res->switchMemTracker(current_memory_tracker);
         return res;
+    }
     consumerFinish("");
     return nullptr;
 }
