@@ -230,8 +230,8 @@ void StoragePathPool::clearPSV2ObsoleteData()
 
 void StoragePathPool::rename(const String & new_database, const String & new_table)
 {
-    RUNTIME_CHECK(!new_database.empty() && !new_table.empty(), new_database, new_table);
-    RUNTIME_CHECK(!path_need_database_name);
+    RUNTIME_CHECK(!new_database.empty() && !new_table.empty(), database, table, new_database, new_table);
+    RUNTIME_CHECK(!path_need_database_name, database, table, new_database, new_table);
 
     // The directories for storing table data is not changed, just rename related names.
     std::lock_guard lock{mutex};
