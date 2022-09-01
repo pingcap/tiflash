@@ -160,7 +160,7 @@ public:
     {
         while (true)
         {
-            MPPDataPacketPtr res;
+            TrackedMppDataPacketPtr res;
             switch (async_tunnel_sender->pop(res, this))
             {
             case GRPCSendQueueRes::OK:
@@ -169,7 +169,7 @@ public:
                     async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
                     return;
                 }
-                write_packet_vec.push_back(res->data());
+                write_packet_vec.push_back(res->packet.data());
                 break;
             case GRPCSendQueueRes::FINISHED:
                 async_tunnel_sender->consumerFinish("");
