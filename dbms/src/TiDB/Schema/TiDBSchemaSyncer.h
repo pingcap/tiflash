@@ -27,21 +27,22 @@
 
 namespace DB
 {
+using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
 namespace ErrorCodes
 {
 extern const int FAIL_POINT_ERROR;
 };
 
-template <bool mock_getter>
+template <bool mock_getter, bool mock_mapper>
 struct TiDBSchemaSyncer : public SchemaSyncer
 {
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
-    using NameMapper = std::conditional_t<mock_getter, MockSchemaNameMapper, SchemaNameMapper>;
+    using NameMapper = std::conditional_t<mock_mapper, MockSchemaNameMapper, SchemaNameMapper>;
 
     KVClusterPtr cluster;
 
-    const Int64 maxNumberOfDiffs = 100;
+    static constexpr Int64 maxNumberOfDiffs = 100;
 
     Int64 cur_version;
 
@@ -51,8 +52,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Poco::Logger * log;
 
-    TiDBSchemaSyncer(KVClusterPtr cluster_)
-        : cluster(cluster_)
+    explicit TiDBSchemaSyncer(KVClusterPtr cluster_)
+        : cluster(std::move(cluster_))
         , cur_version(0)
         , log(&Poco::Logger::get("SchemaSyncer"))
     {}
