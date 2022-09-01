@@ -62,6 +62,7 @@ public:
     DAGContext & getDAGContext();
 
     void enablePlanner(bool is_enable);
+    void enablePipeline(bool is_enable);
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 

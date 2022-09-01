@@ -12,29 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Executor/ResultHandler.h>
-
-#include <memory>
-#include <utility>
+#include <Flash/Executor/PipelineExecutor.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
 
 namespace DB
 {
-class QueryExecutor
+std::pair<bool, String> PipelineExecutor::execute(ResultHandler result_handler)
 {
-public:
-    QueryExecutor() = default;
+    auto res = dag_scheduler.run(plan_node, result_handler);
+    plan_node = nullptr;
+    return res;
+}
 
-    virtual ~QueryExecutor() = default;
-
-    // is_success, err_msg
-    virtual std::pair<bool, String> execute(ResultHandler) = 0;
-
-    std::pair<bool, String> execute();
-
-    virtual String dump() const = 0;
-};
-
-using QueryExecutorPtr = std::shared_ptr<QueryExecutor>;
+String PipelineExecutor::dump() const
+{
+    assert(plan_node);
+    return PhysicalPlanVisitor::visitToString(plan_node);;
+}
 }

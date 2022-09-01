@@ -12,9 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/ResultHandler.h>
+#pragma once
+
+#include <Flash/Executor/QueryExecutor.h>
+#include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB
 {
-const ResultHandler ResultHandler::default_instance{};
+class DataStreamExecutor : public QueryExecutor
+{
+public:
+    explicit DataStreamExecutor(const BlockIO & block_io)
+        : QueryExecutor()
+        , data_stream(block_io.in)
+    {
+        assert(data_stream);
+    }
+
+    std::pair<bool, String> execute(ResultHandler result_handler) override;
+
+    BlockInputStreamPtr dataStream() const;
+
+    String dump() const override;
+
+private:
+    BlockInputStreamPtr data_stream;
+};
 }

@@ -12,12 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <Flash/Executor/QueryExecutor.h>
+#include <Flash/Pipeline/DAGScheduler.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 
 namespace DB
 {
-std::pair<bool, String> QueryExecutor::execute()
+class PipelineExecutor : public QueryExecutor
 {
-    return execute(ResultHandler{});
-}
+public:
+    PipelineExecutor(
+        Context & context,
+        const PhysicalPlanNodePtr & plan_node_,
+        size_t max_streams,
+        const String & req_id)
+        : QueryExecutor()
+        , dag_scheduler(context, max_streams, req_id)
+        , plan_node(plan_node_)
+    {}
+
+    std::pair<bool, String> execute(ResultHandler result_handler) override;
+
+    String dump() const override;
+
+private:
+    DAGScheduler dag_scheduler;
+
+    PhysicalPlanNodePtr plan_node;
+};
 }

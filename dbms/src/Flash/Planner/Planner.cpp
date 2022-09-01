@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/Planner.h>
 #include <Flash/Statistics/traverseExecutors.h>

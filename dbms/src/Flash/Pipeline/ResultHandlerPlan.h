@@ -66,6 +66,7 @@ public:
         const String & req_id,
         const PhysicalPlanNodePtr & child)
     {
+        assert(!result_handler.isDefault());
         return std::make_shared<PhysicalResultHandler>(
             "ResultHandler",
             child->getSchema(),

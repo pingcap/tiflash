@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Executor/DataStreamExecutor.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Planner/Planner.h>
 #include <Flash/executeQuery.h>

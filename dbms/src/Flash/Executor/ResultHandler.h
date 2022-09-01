@@ -25,10 +25,7 @@ class ResultHandler
 public:
     using Handler = std::function<void(const Block &)>;
     ResultHandler(Handler handler_): handler(handler_) {}
-    ResultHandler()
-        : handler([](const Block &) {})
-        , is_default(true)
-    {}
+    ResultHandler(): is_default(true) {}
 
     bool isDefault() const { return is_default; }
 
@@ -36,8 +33,6 @@ public:
     {
         handler(block);
     }
-
-    static const ResultHandler default_instance;
 
 private:
     Handler handler;
