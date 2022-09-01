@@ -417,7 +417,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
     auto cmp_blk = [](const Block & a, const Block & b) {
         const auto & col_a = a.has(EXTRA_HANDLE_COLUMN_NAME) ? a.getByName(EXTRA_HANDLE_COLUMN_NAME) : a.getByPosition(0);
         const auto & col_b = b.has(EXTRA_HANDLE_COLUMN_NAME) ? b.getByName(EXTRA_HANDLE_COLUMN_NAME) : b.getByPosition(0);
-        if (col_a.column->size() == 0 || col_b.column->size() == 0)
+        if (col_a.column->empty() || col_b.column->empty())
         {
             return false;
         }
