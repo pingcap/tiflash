@@ -32,7 +32,7 @@ class TestGRPCSendQueue;
 
 /// In grpc cpp framework, the tag that is pushed into grpc completion
 /// queue must be inherited from `CompletionQueueTag`.
-class KickTag : public ::grpc::internal::CompletionQueueTag
+class KickTag : public grpc::internal::CompletionQueueTag
 {
 public:
     explicit KickTag(std::function<void *()> a)
@@ -46,7 +46,8 @@ public:
     }
 
 private:
-    /// `action` is called before the `tag` is popped from completion queue.
+    /// `action` is called before the `tag` is popped from completion queue
+    /// in `FinalizeResult`.
     std::function<void *()> action;
 };
 
