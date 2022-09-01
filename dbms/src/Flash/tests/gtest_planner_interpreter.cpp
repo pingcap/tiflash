@@ -446,7 +446,7 @@ MockExchangeSender
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = limit_2>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = limit_2>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      SharedQuery: <restore concurrency>
@@ -762,12 +762,12 @@ try
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -804,12 +804,12 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -847,12 +847,12 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -888,7 +888,7 @@ try
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
@@ -919,7 +919,7 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
@@ -956,7 +956,7 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+  HashJoinBuild x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
