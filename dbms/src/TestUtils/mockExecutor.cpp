@@ -15,6 +15,7 @@
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/astToExecutor.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -84,8 +85,9 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 }
 
 // traval the AST tree to build tipb::Executor recursively.
-std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context)
+std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context, DAGRequestType type)
 {
+    // build tree struct base executor
     MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
@@ -93,6 +95,20 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
     root.reset();
     executor_index = 0;
+
+    // convert to list struct base executor
+    if (type == DAGRequestType::list)
+    {
+        auto & mutable_executors = *dag_request_ptr->mutable_executors();
+        traverseExecutorsReverse(dag_request_ptr.get(), [&](const tipb::Executor & executor) -> bool {
+            auto * mutable_executor = mutable_executors.Add();
+            (*mutable_executor) = executor;
+            mutable_executor->clear_executor_id();
+            return true;
+        });
+        dag_request_ptr->release_root_executor();
+    }
+
     return dag_request_ptr;
 }
 
