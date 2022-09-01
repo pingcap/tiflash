@@ -1446,7 +1446,11 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id,
             const auto first_arg_type = window_expr->children(0).field_type();
             ft->set_tp(first_arg_type.tp());
             if (window_expr->children_size() < 3)
-                ft->set_flag(first_arg_type.flag());
+            {
+                auto field_type = TiDB::fieldTypeToColumnInfo(first_arg_type);
+                field_type.clearNotNullFlag();
+                ft->set_flag(field_type.flag);
+            }
             else
             {
                 const auto third_arg_type = window_expr->children(2).field_type();
@@ -1894,7 +1898,10 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
                 // like lead(col, offset, NULL), lead(data_type1, offset, data_type2)
                 assert(children_ci.size() >= 1 && children_ci.size() <= 3);
                 if (children_ci.size() < 3)
+                {
                     ci = children_ci[0];
+                    ci.clearNotNullFlag();
+                }
                 else
                 {
                     assert(children_ci[0].tp == children_ci[2].tp);

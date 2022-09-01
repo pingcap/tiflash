@@ -213,7 +213,7 @@ private:
                 third_argument->getName(),
                 name);
         }
-        return argument_types[0];
+        return argument_num < 3 ? makeNullable(argument_types[0]) : argument_types[0];
     }
 
     using DefaultValueSetter = std::function<void(const Columns &, const ColumnNumbers &, size_t, IColumn &)>;
