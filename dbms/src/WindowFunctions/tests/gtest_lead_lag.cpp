@@ -335,6 +335,19 @@ try
         {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
          toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
          toNullableVec<String>(/*value*/ {{}, {}, {}, {}, {}, {}, {}, {}})});
+
+    executeFunctionAndAssert(
+        toNullableVec<String>({"aaaaaa", "aaaaaa", {}, {}, "aaaaaa", "aaaaaa", {}, {}}),
+        Lead2(lit(Field(String("aaaaaa"))), lit(Field(static_cast<UInt64>(2)))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {{}, {}, {}, {}, {}, {}, {}, {}})});
+    executeFunctionAndAssert(
+        toNullableVec<String>({"aaaaaa", "aaaaaa", "aaaaaa", {}, "aaaaaa", "aaaaaa", "aaaaaa", {}}),
+        Lead1(lit(Field(String("aaaaaa")))),
+        {toNullableVec<Int64>(/*partition*/ {1, 1, 1, 1, 2, 2, 2, 2}),
+         toNullableVec<Int64>(/*order*/ {1, 2, 3, 4, 5, 6, 7, 8}),
+         toNullableVec<String>(/*value*/ {{}, {}, {}, {}, {}, {}, {}, {}})});
 }
 CATCH
 
