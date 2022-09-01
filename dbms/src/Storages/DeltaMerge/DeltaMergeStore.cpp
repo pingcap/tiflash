@@ -398,7 +398,7 @@ void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_
                    "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
                    new_database_name,
                    new_table_name);
-    path_pool->rename(new_database_name, new_table_name, clean_rename);
+    path_pool->rename(new_database_name, new_table_name);
 
     // TODO: replacing these two variables is not atomic, but could be good enough?
     table_name.swap(new_table_name);
