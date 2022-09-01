@@ -98,7 +98,7 @@ grpc_call * EstablishCallData::grpcCall()
 
 void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
 {
-    stopwatch = std::make_shared<Stopwatch>();
+    stopwatch = std::make_unique<Stopwatch>();
     async_tunnel_sender = async_tunnel_sender_;
 }
 

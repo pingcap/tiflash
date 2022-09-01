@@ -118,6 +118,6 @@ private:
     CallStatus state;
 
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
-    std::shared_ptr<Stopwatch> stopwatch;
+    std::unique_ptr<Stopwatch> stopwatch;
 };
 } // namespace DB

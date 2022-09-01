@@ -67,7 +67,7 @@ MPPTunnel::MPPTunnel(
     : status(TunnelStatus::Unconnected)
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
-    , queue_size(std::max(5, input_steams_num_ * 5))
+    , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
     , mem_tracker(current_memory_tracker)
 {
@@ -239,10 +239,10 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         if (mode == TunnelSenderMode::ASYNC_GRPC)
         {
             RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
-            auto kick_fun_for_test = call_data->getKickFuncForTest();
-            if (unlikely(kick_fun_for_test.has_value()))
+            auto kick_func_for_test = call_data->getKickFuncForTest();
+            if (unlikely(kick_func_for_test.has_value()))
             {
-                async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, kick_fun_for_test.value());
+                async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, kick_func_for_test.value());
             }
             else
             {
