@@ -14,12 +14,14 @@
 
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
+#include <Common/SyncPoint/Ctl.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
@@ -30,15 +32,58 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 #include <fmt/format.h>
 
+#include <future>
+#include <iterator>
 #include <memory>
+#include <random>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace DB
 {
 namespace PS::V3::tests
 {
+TEST(ExternalIdsByNamespace, Simple)
+{
+    NamespaceId ns_id = 100;
+    ExternalIdsByNamespace external_ids_by_ns;
+
+    std::atomic<Int32> who(0);
+
+    std::shared_ptr<PageIdV3Internal> holder = std::make_shared<PageIdV3Internal>(buildV3Id(ns_id, 50));
+
+    auto th_insert = std::async([&]() {
+        external_ids_by_ns.addExternalId(holder);
+
+        Int32 expect = 0;
+        who.compare_exchange_strong(expect, 1);
+    });
+    auto th_get_alive = std::async([&]() {
+        external_ids_by_ns.getAliveIds(ns_id);
+        Int32 expect = 0;
+        who.compare_exchange_strong(expect, 2);
+    });
+    th_get_alive.wait();
+    th_insert.wait();
+
+    {
+        auto ids = external_ids_by_ns.getAliveIds(ns_id);
+        LOG_DEBUG(&Poco::Logger::root(), "{} end first, size={}", who.load(), ids.size());
+        ASSERT_EQ(ids.size(), 1);
+        ASSERT_EQ(*ids.begin(), 50);
+    }
+
+    {
+        external_ids_by_ns.unregisterNamespace(ns_id);
+        auto ids = external_ids_by_ns.getAliveIds(ns_id);
+        ASSERT_EQ(ids.size(), 0);
+    }
+}
+
 class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
@@ -444,30 +489,7 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryTest, ApplyRefToNotExistEntry)
-try
-{
-    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-    {
-        PageEntriesEdit edit;
-        edit.put(1, entry1);
-        edit.put(2, entry2);
-        dir->apply(std::move(edit));
-    }
-
-    // Applying ref to not exist entry is not allowed
-    { // Ref 4-> 999
-        PageEntriesEdit edit;
-        edit.put(3, entry3);
-        edit.ref(4, 999);
-        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
-    }
-}
-CATCH
-
-TEST_F(PageDirectoryTest, TestRefWontDeadLock)
+TEST_F(PageDirectoryTest, RefWontDeadLock)
 {
     PageEntriesEdit edit;
     {
@@ -493,8 +515,10 @@ TEST_F(PageDirectoryTest, TestRefWontDeadLock)
     dir->apply(std::move(edit2));
 }
 
-TEST_F(PageDirectoryTest, NewRefAfterDel)
+TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
 {
+    // Make sure creating ext page after itself and all its reference are clean
+    // is idempotent
     {
         PageEntriesEdit edit;
         edit.putExternal(10);
@@ -534,32 +558,342 @@ TEST_F(PageDirectoryTest, NewRefAfterDel)
     }
 }
 
-TEST_F(PageDirectoryTest, RefToExt)
+TEST_F(PageDirectoryTest, RefToDeletedPage)
+try
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry1);
+        edit.put(2, entry2);
+        dir->apply(std::move(edit));
+    }
+
+    // Applying ref to not exist entry is not allowed
+    { // Ref 4-> 999
+        PageEntriesEdit edit;
+        edit.put(3, entry3);
+        edit.ref(4, 999);
+        ASSERT_ANY_THROW(dir->apply(std::move(edit)));
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, RefToDeletedPageTwoHops)
+try
+{
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(1, entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(2, 1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.del(1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(3, 1);
+        ASSERT_ANY_THROW({ dir->apply(std::move(edit)); });
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, RefToDeletedExtPageTwoHops)
 try
 {
     {
         PageEntriesEdit edit;
-        edit.putExternal(83);
+        edit.putExternal(1);
         dir->apply(std::move(edit));
     }
     {
         PageEntriesEdit edit;
-        edit.ref(85, 83);
+        edit.ref(2, 1);
         dir->apply(std::move(edit));
     }
     {
         PageEntriesEdit edit;
-        edit.del(83);
+        edit.del(1);
         dir->apply(std::move(edit));
     }
-    // The external id "83" is not changed,
-    // we may add ref to external "83" even
-    // if it is logical delete but have other
-    // alive reference page.
     {
         PageEntriesEdit edit;
-        edit.ref(86, 83);
+        edit.ref(3, 1);
+        ASSERT_ANY_THROW({ dir->apply(std::move(edit)); });
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, NewRefAfterDelThreeHops)
+try
+{
+    // Fix issue: https://github.com/pingcap/tiflash/issues/5570
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(951, entry1);
         dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(954, 951);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(951);
+        edit.del(951);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(972, 954);
+        edit.ref(985, 954);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.del(954);
+        dir->apply(std::move(edit));
+    }
+
+    {
+        PageEntriesEdit edit;
+        edit.ref(998, 985);
+        edit.ref(1011, 985);
+        dir->apply(std::move(edit));
+    }
+
+    auto snap = dir->createSnapshot();
+    ASSERT_ENTRY_EQ(entry1, dir, 998, snap);
+}
+CATCH
+
+TEST_F(PageDirectoryTest, NewRefAfterDelRandom)
+try
+{
+    PageId id = 50;
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(id, entry1);
+        dir->apply(std::move(edit));
+    }
+
+    std::unordered_set<PageId> visible_page_ids{
+        id,
+    };
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(0, 5);
+
+    constexpr static size_t NUM_TEST = 10000;
+    for (size_t test_round = 0; test_round < NUM_TEST; ++test_round)
+    {
+        SCOPED_TRACE(fmt::format("test idx={}", test_round));
+        const bool del_in_same_wb = distrib(gen) % 2 == 0;
+        const bool gc_or_not = distrib(gen) < 1;
+        LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
+
+        // Generate new ref operations to the visible pages
+        const size_t num_ref_page = distrib(gen) + 1;
+        std::unordered_map<PageId, PageId> new_ref_page_ids;
+        std::uniform_int_distribution<> rand_visible_ids(0, visible_page_ids.size() - 1);
+        for (size_t j = 0; j < num_ref_page; ++j)
+        {
+            // random choose a id from all visible id
+            auto r = rand_visible_ids(gen);
+            auto rand_it = std::next(std::begin(visible_page_ids), r);
+            new_ref_page_ids.emplace(++id, *rand_it);
+        }
+
+        // Generate new delete operations among the visible pages and new-generated ref page
+        // Delete 1 page at least, delete until 1 page left at most
+        std::uniform_int_distribution<> rand_delete_ids(0, visible_page_ids.size() + num_ref_page - 1);
+        const size_t num_del_page = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
+        std::unordered_set<PageId> delete_ref_page_ids;
+        for (size_t j = 0; j < num_del_page; ++j)
+        {
+            // Random choose a id from all visible id and new-generated ref pages.
+            auto r = rand_delete_ids(gen);
+            PageId id_to_del = 0;
+            if (static_cast<size_t>(r) < visible_page_ids.size())
+            {
+                auto rand_it = std::next(std::begin(visible_page_ids), r);
+                id_to_del = *rand_it;
+            }
+            else
+            {
+                auto rand_it = std::next(std::begin(new_ref_page_ids), r - visible_page_ids.size());
+                id_to_del = rand_it->first;
+            }
+            delete_ref_page_ids.emplace(id_to_del);
+        }
+
+        // LOG_DEBUG(log, "round={}, create ids: {}", test_round, new_ref_page_ids);
+        // LOG_DEBUG(log, "round={}, delete ids: {}", test_round, delete_ref_page_ids);
+
+        if (del_in_same_wb)
+        {
+            // create ref and del in the same write batch
+            PageEntriesEdit edit;
+            for (const auto & x : new_ref_page_ids)
+                edit.ref(x.first, x.second);
+            for (const auto x : delete_ref_page_ids)
+                edit.del(x);
+            dir->apply(std::move(edit));
+        }
+        else
+        {
+            // first create all ref, then del in another write batch
+            {
+                PageEntriesEdit edit;
+                for (const auto & x : new_ref_page_ids)
+                    edit.ref(x.first, x.second);
+                dir->apply(std::move(edit));
+            }
+            {
+                PageEntriesEdit edit;
+                for (const auto x : delete_ref_page_ids)
+                    edit.del(x);
+                dir->apply(std::move(edit));
+            }
+        }
+
+        for (const auto & x : new_ref_page_ids)
+            visible_page_ids.insert(x.first);
+        for (const auto & x : delete_ref_page_ids)
+            visible_page_ids.erase(x);
+
+        if (gc_or_not)
+            dir->gcInMemEntries(/*return_removed_entries=*/false);
+        auto snap = dir->createSnapshot();
+        for (const auto & id : visible_page_ids)
+        {
+            ASSERT_ENTRY_EQ(entry1, dir, id, snap);
+        }
+    }
+}
+CATCH
+
+TEST_F(PageDirectoryTest, NewRefToExtAfterDelRandom)
+try
+{
+    PageId id = 50;
+    {
+        PageEntriesEdit edit;
+        edit.putExternal(id);
+        dir->apply(std::move(edit));
+    }
+
+    std::unordered_set<PageId> visible_page_ids{
+        id,
+    };
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(0, 5);
+
+    constexpr static size_t NUM_TEST = 10000;
+    for (size_t test_round = 0; test_round < NUM_TEST; ++test_round)
+    {
+        SCOPED_TRACE(fmt::format("test idx={}", test_round));
+        const bool del_in_same_wb = distrib(gen) % 2 == 0;
+        const bool gc_or_not = distrib(gen) < 1;
+        LOG_DEBUG(log, "round={}, del_in_same_wb={}, gc_or_not={}, visible_ids_num={}", test_round, del_in_same_wb, gc_or_not, visible_page_ids.size());
+
+        const size_t num_ref_page = distrib(gen) + 1;
+        std::unordered_map<PageId, PageId> new_ref_page_ids;
+        std::uniform_int_distribution<> rand_visible_ids(0, visible_page_ids.size() - 1);
+        for (size_t j = 0; j < num_ref_page; ++j)
+        {
+            // random choose a id from all visible id
+            auto r = rand_visible_ids(gen);
+            auto rand_it = std::next(std::begin(visible_page_ids), r);
+            new_ref_page_ids.emplace(++id, *rand_it);
+        }
+
+        // Delete 1 page at least, delete until 1 page left at most
+        std::uniform_int_distribution<> rand_delete_ids(0, visible_page_ids.size() + num_ref_page - 1);
+        const size_t num_del_page = std::min(std::max(rand_delete_ids(gen), 1), visible_page_ids.size() + num_ref_page - 1);
+        std::unordered_set<PageId> delete_ref_page_ids;
+        for (size_t j = 0; j < num_del_page; ++j)
+        {
+            auto r = rand_delete_ids(gen);
+            // random choose a id from all visible id
+            if (static_cast<size_t>(r) < visible_page_ids.size())
+            {
+                auto rand_it = std::next(std::begin(visible_page_ids), r);
+                delete_ref_page_ids.emplace(*rand_it);
+            }
+            else
+            {
+                auto rand_it = std::next(std::begin(new_ref_page_ids), r - visible_page_ids.size());
+                delete_ref_page_ids.emplace(rand_it->first);
+            }
+        }
+
+        // LOG_DEBUG(log, "round={}, create ids: {}", test_round, new_ref_page_ids);
+        // LOG_DEBUG(log, "round={}, delete ids: {}", test_round, delete_ref_page_ids);
+
+        if (del_in_same_wb)
+        {
+            PageEntriesEdit edit;
+            for (const auto & x : new_ref_page_ids)
+                edit.ref(x.first, x.second);
+            for (const auto x : delete_ref_page_ids)
+                edit.del(x);
+            dir->apply(std::move(edit));
+        }
+        else
+        {
+            {
+                PageEntriesEdit edit;
+                for (const auto & x : new_ref_page_ids)
+                    edit.ref(x.first, x.second);
+                dir->apply(std::move(edit));
+            }
+            {
+                PageEntriesEdit edit;
+                for (const auto x : delete_ref_page_ids)
+                    edit.del(x);
+                dir->apply(std::move(edit));
+            }
+        }
+
+        for (const auto & x : new_ref_page_ids)
+            visible_page_ids.insert(x.first);
+        for (const auto & x : delete_ref_page_ids)
+            visible_page_ids.erase(x);
+
+        if (gc_or_not)
+        {
+            dir->gcInMemEntries(/*return_removed_entries=*/false);
+            const auto all_ids = dir->getAllPageIds();
+            for (const auto & id : visible_page_ids)
+            {
+                EXPECT_GT(all_ids.count(buildV3Id(TEST_NAMESPACE_ID, id)), 0) << fmt::format("cur_id:{}, all_id:{}, visible_ids:{}", id, all_ids, visible_page_ids);
+            }
+        }
+        auto snap = dir->createSnapshot();
+        auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
+        EXPECT_EQ(alive_ids.size(), 1);
+        EXPECT_GT(alive_ids.count(50), 0);
     }
 }
 CATCH
@@ -847,9 +1181,11 @@ try
 }
 CATCH
 
-TEST_F(VersionedEntriesTest, GC)
+TEST_F(VersionedEntriesTest, CleanOutdateVersions)
 try
 {
+    // Test running gc on a single page, it should clean all
+    // outdated versions.
     INSERT_ENTRY(2);
     INSERT_GC_ENTRY(2, 1);
     INSERT_ENTRY(5);
@@ -1961,8 +2297,8 @@ try
     }
     {
         PageEntriesEdit edit; // split
-        edit.ref(357, 352);
-        edit.ref(359, 352);
+        edit.ref(357, 353);
+        edit.ref(359, 353);
         dir->apply(std::move(edit));
     }
     {
@@ -2253,8 +2589,8 @@ try
         BlobStore::BlobStats stats(log, delegator, config);
         {
             const auto & lock = stats.lock();
-            stats.createStatNotChecking(file_id1, lock);
-            stats.createStatNotChecking(file_id2, lock);
+            stats.createStatNotChecking(file_id1, BLOBFILE_LIMIT_SIZE, lock);
+            stats.createStatNotChecking(file_id2, BLOBFILE_LIMIT_SIZE, lock);
         }
         auto restored_dir = restore_from_edit(edit, stats);
         auto temp_snap = restored_dir->createSnapshot();

@@ -106,10 +106,8 @@ bool EstablishCallData::write(const mpp::MPPDataPacket & packet)
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
     state = ERR_HANDLE;
-    if (write(packet))
-        err_status = grpc::Status::OK;
-    else
-        err_status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+    err_status = grpc::Status::OK;
+    write(packet);
 }
 
 void EstablishCallData::setFinishState(const String & msg)

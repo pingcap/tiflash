@@ -17,12 +17,11 @@
 #include <fmt/core.h>
 #include <grpc++/grpc++.h>
 #include <kvproto/tikvpb.grpc.pb.h>
-using grpc::Status;
 using grpc::Channel;
+using grpc::Status;
 
 namespace DB
 {
-
 /// Send RPC Requests to FlashService
 /// TODO: Support more methods that FlashService serve.
 /// TODO: Support more config of RPC client.

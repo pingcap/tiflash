@@ -38,7 +38,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     size_t max_streams = dag_context.initialize_concurrency;
     assert(max_streams > 0);
 
-    if (context.columnsForTestEmpty() || context.columnsForTest(executor_id).empty())
+    if (!context.mockStorage().tableExists(table_scan.getLogicalTableID()))
     {
         /// build with default blocks.
         schema = genNamesAndTypes(table_scan, "mock_table_scan");
@@ -49,7 +49,7 @@ std::pair<NamesAndTypes, BlockInputStreams> mockSchemaAndStreams(
     else
     {
         /// build from user input blocks.
-        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id);
+        auto [names_and_types, mock_table_scan_streams] = mockSourceStream<MockTableScanBlockInputStream>(context, max_streams, log, executor_id, table_scan.getLogicalTableID());
         schema = std::move(names_and_types);
         mock_streams.insert(mock_streams.end(), mock_table_scan_streams.begin(), mock_table_scan_streams.end());
     }
@@ -93,6 +93,7 @@ PhysicalPlanNodePtr PhysicalMockTableScan::build(
 
 void PhysicalMockTableScan::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)
 {
+    assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 

@@ -614,7 +614,7 @@ try
 Union: <for test>
  Expression x 10: <final projection>
   SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+   Expression: <expr after window>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      MergeSorting, limit = 0
       Union: <for partial order>
@@ -634,7 +634,7 @@ Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    SharedQuery: <restore concurrency>
-    Expression: <cast after window>
+    Expression: <expr after window>
      Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
       MergeSorting, limit = 0
        Union: <for partial order>
@@ -655,7 +655,7 @@ Union: <for test>
  Expression x 10: <final projection>
   Expression: <projection>
    SharedQuery: <restore concurrency>
-    Expression: <cast after window>
+    Expression: <expr after window>
      Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
       Union: <merge into one for window input>
        Expression x 10: <projection>
@@ -684,7 +684,7 @@ try
         String expected = R"(
 Union: <for test>
  Expression x 10: <final projection>
-  Expression: <cast after window>
+  Expression: <expr after window>
    Window: <enable fine grained shuffle>, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
     MergeSorting: <enable fine grained shuffle>, limit = 0
      PartialSorting: <enable fine grained shuffle>: limit = 0
@@ -719,7 +719,7 @@ Union: <for test>
 Union: <for test>
  Expression x 10: <final projection>
   SharedQuery: <restore concurrency>
-   Expression: <cast after window>
+   Expression: <expr after window>
     Window, function: {row_number}, frame: {type: Rows, boundary_begin: Current, boundary_end: Current}
      MergeSorting, limit = 0
       Union: <for partial order>
@@ -979,6 +979,58 @@ CreatingSets
            Expression x 20: <before aggregation>
             Expression: <remove useless column after join>
              NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
+    }
+}
+CATCH
+
+TEST_F(PlannerInterpreterExecuteTest, ListBase)
+try
+{
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .filter(eq(col("s2"), lit(Field("1", 1))))
+                           .limit(10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Expression: <final projection>
+ Limit, limit = 10
+  Filter
+   Expression: <expr after aggregation>
+    Aggregating
+     Concat
+      Expression: <before aggregation>
+       Filter
+        MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .filter(eq(col("s2"), lit(Field("1", 1))))
+                           .topN("s2", false, 10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Union: <for test>
+ Expression x 20: <final projection>
+  SharedQuery: <restore concurrency>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 20: limit = 10
+      Expression: <before TopN>
+       Filter
+        Expression: <expr after aggregation>
+         SharedQuery: <restore concurrency>
+          ParallelAggregating, max_threads: 20, final: true
+           Expression x 20: <before aggregation>
+            Filter
+             MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }

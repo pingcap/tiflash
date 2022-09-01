@@ -15,6 +15,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
@@ -27,6 +28,13 @@ namespace DB
 {
 namespace DM
 {
+extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
+                                    const ColumnDefinesPtr & schema_snap,
+                                    const BlockInputStreamPtr & input_stream,
+                                    UInt64 file_id,
+                                    const String & parent_path,
+                                    DMFileBlockOutputStream::Flags flags);
+
 namespace tests
 {
 void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
@@ -35,7 +43,7 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
     options = config;
     table_columns = std::make_shared<ColumnDefines>();
 
-    root_segment = reload(config.is_common_handle);
+    root_segment = reload(config.is_common_handle, nullptr, std::move(config.db_settings));
     ASSERT_EQ(root_segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     segments.clear();
     segments[DELTA_MERGE_FIRST_SEGMENT_ID] = root_segment;
@@ -82,7 +90,7 @@ void SegmentTestBasic::checkSegmentRow(PageId segment_id, size_t expected_row_nu
     ASSERT_INPUTSTREAM_NROWS(in, expected_row_num);
 }
 
-std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id)
+std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, bool check_rows)
 {
     auto origin_segment = segments[segment_id];
     size_t origin_segment_row_num = getSegmentRowNum(segment_id);
@@ -93,13 +101,16 @@ std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id)
         segments[new_segment->segmentId()] = new_segment;
         segments[segment_id] = segment;
 
-        EXPECT_EQ(origin_segment_row_num, getSegmentRowNum(segment_id) + getSegmentRowNum(new_segment->segmentId()));
+        if (check_rows)
+        {
+            EXPECT_EQ(origin_segment_row_num, getSegmentRowNum(segment_id) + getSegmentRowNum(new_segment->segmentId()));
+        }
         return new_segment->segmentId();
     }
     return std::nullopt;
 }
 
-void SegmentTestBasic::mergeSegment(PageId left_segment_id, PageId right_segment_id)
+void SegmentTestBasic::mergeSegment(PageId left_segment_id, PageId right_segment_id, bool check_rows)
 {
     auto left_segment = segments[left_segment_id];
     auto right_segment = segments[right_segment_id];
@@ -115,16 +126,22 @@ void SegmentTestBasic::mergeSegment(PageId left_segment_id, PageId right_segment
     {
         segments.erase(it);
     }
-    EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), left_segment_row_num + right_segment_row_num);
+    if (check_rows)
+    {
+        EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), left_segment_row_num + right_segment_row_num);
+    }
 }
 
-void SegmentTestBasic::mergeSegmentDelta(PageId segment_id)
+void SegmentTestBasic::mergeSegmentDelta(PageId segment_id, bool check_rows)
 {
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNum(segment_id);
     SegmentPtr merged_segment = segment->mergeDelta(dmContext(), tableColumns());
     segments[merged_segment->segmentId()] = merged_segment;
-    EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), segment_row_num);
+    if (check_rows)
+    {
+        EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), segment_row_num);
+    }
 }
 
 void SegmentTestBasic::flushSegmentCache(PageId segment_id)
@@ -168,6 +185,11 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows)
     std::pair<Int64, Int64> keys = getSegmentKeyRange(segment);
     Int64 start_key = keys.first;
     Int64 end_key = keys.second;
+
+    // If the length of segment key range is larger than `write_rows`, then
+    // write the new data with the same tso in one block.
+    // Otherwise create multiple block with increasing tso until the `remain_row_num`
+    // down to 0.
     UInt64 remain_row_num = 0;
     if (static_cast<UInt64>(end_key - start_key) > write_rows)
     {
@@ -196,6 +218,82 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows)
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
 }
 
+void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows)
+{
+    if (write_rows == 0)
+    {
+        return;
+    }
+
+    auto write_data = [&](SegmentPtr segment, const Block & block) {
+        WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+        auto delegator = storage_path_pool->getStableDiskDelegator();
+        auto parent_path = delegator.choosePath();
+        auto file_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        DMFileBlockOutputStream::Flags flags;
+        auto dm_file = writeIntoNewDMFile(
+            *dm_context,
+            table_columns,
+            input_stream,
+            file_id,
+            parent_path,
+            flags);
+        ingest_wbs.data.putExternal(file_id, /* tag */ 0);
+        ingest_wbs.writeLogAndData();
+        delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
+        {
+            WriteBatches wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
+            auto ref_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            wbs.data.putRefPage(ref_id, dm_file->pageId());
+            auto ref_file = DMFile::restore(dm_context->db_context.getFileProvider(), file_id, ref_id, parent_path, DMFile::ReadMetaMode::all());
+            wbs.writeLogAndData();
+            auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment->getRowKeyRange());
+            ColumnFiles column_files;
+            column_files.push_back(column_file);
+            ASSERT_TRUE(segment->ingestColumnFiles(*dm_context, segment->getRowKeyRange(), column_files, /* clear_data_in_range */ true));
+        }
+        ingest_wbs.rollbackWrittenLogAndData();
+    };
+
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
+    std::pair<Int64, Int64> keys = getSegmentKeyRange(segment);
+    Int64 start_key = keys.first;
+    Int64 end_key = keys.second;
+
+    // If the length of segment key range is larger than `write_rows`, then
+    // write the new data with the same tso in one block.
+    // Otherwise create multiple block with increasing tso until the `remain_row_num`
+    // down to 0.
+    UInt64 remain_row_num = 0;
+    if (static_cast<UInt64>(end_key - start_key) > write_rows)
+    {
+        end_key = start_key + write_rows;
+    }
+    else
+    {
+        remain_row_num = write_rows - static_cast<UInt64>(end_key - start_key);
+    }
+    {
+        // write to segment and not flush
+        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, end_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
+        write_data(segment, block);
+        LOG_FMT_TRACE(&Poco::Logger::root(), "ingest key range [{}, {})", start_key, end_key);
+        version++;
+    }
+    while (remain_row_num > 0)
+    {
+        UInt64 write_num = std::min(remain_row_num, static_cast<UInt64>(end_key - start_key));
+        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, write_num + start_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
+        write_data(segment, block);
+        remain_row_num -= write_num;
+        LOG_FMT_TRACE(&Poco::Logger::root(), "ingest key range [{}, {})", start_key, write_num + start_key);
+        version++;
+    }
+    EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
+}
+
 void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id)
 {
     UInt64 write_rows = DEFAULT_MERGE_BLOCK_SIZE;
@@ -204,6 +302,11 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id)
     std::pair<Int64, Int64> keys = getSegmentKeyRange(segment);
     Int64 start_key = keys.first;
     Int64 end_key = keys.second;
+
+    // If the length of segment key range is larger than `write_rows`, then
+    // write the new data with the same tso in one block.
+    // Otherwise create multiple block with increasing tso until the `remain_row_num`
+    // down to 0.
     UInt64 remain_row_num = 0;
     if (static_cast<UInt64>(end_key - start_key) > write_rows)
     {
@@ -320,7 +423,7 @@ void SegmentTestBasic::randomSegmentTest(size_t operator_count)
 {
     for (size_t i = 0; i < operator_count; i++)
     {
-        auto op = static_cast<SegmentOperaterType>(random() % SegmentOperaterMax);
+        auto op = static_cast<SegmentOperatorType>(random() % SegmentOperatorMax);
         segment_operator_entries[op]();
     }
 }
@@ -358,7 +461,7 @@ std::pair<PageId, PageId> SegmentTestBasic::getRandomMergeablePair()
     }
 }
 
-RowKeyRange SegmentTestBasic::commanHandleKeyRange()
+RowKeyRange SegmentTestBasic::commonHandleKeyRange()
 {
     String start_key, end_key;
     {
@@ -385,7 +488,7 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
 
-    return Segment::newSegment(*dm_context, table_columns, is_common_handle ? commanHandleKeyRange() : RowKeyRange::newAll(is_common_handle, 1), storage_pool->newMetaPageId(), 0);
+    return Segment::newSegment(*dm_context, table_columns, is_common_handle ? commonHandleKeyRange() : RowKeyRange::newAll(is_common_handle, 1), storage_pool->newMetaPageId(), 0);
 }
 
 void SegmentTestBasic::setColumns(const ColumnDefinesPtr & columns)
@@ -395,7 +498,6 @@ void SegmentTestBasic::setColumns(const ColumnDefinesPtr & columns)
     dm_context = std::make_unique<DMContext>(*db_context,
                                              *storage_path_pool,
                                              *storage_pool,
-                                             0,
                                              /*min_version_*/ 0,
                                              settings.not_compress_columns,
                                              options.is_common_handle,
