@@ -14,7 +14,6 @@
 
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
-#include <Common/Logger.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -47,7 +46,10 @@ LogWriter::LogWriter(
         /*create_new_encryption_info_*/ true);
 
     buffer = static_cast<char *>(alloc(buffer_size));
-    RUNTIME_CHECK_MSG(buffer != nullptr, "LogWriter cannot allocate buffer, size={}", buffer_size);
+    if (unlikely(buffer == nullptr))
+    {
+        throw Exception(fmt::format("LogWriter cannot allocate buffer, size={}", buffer_size), ErrorCodes::LOGICAL_ERROR);
+    }
     write_buffer = WriteBuffer(buffer, buffer_size);
 }
 
