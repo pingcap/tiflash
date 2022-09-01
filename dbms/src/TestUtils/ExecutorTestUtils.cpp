@@ -119,9 +119,7 @@ void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
 {
-    Blocks actual_blocks;
-    readStream(actual_blocks, stream);
-    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
+    return readBlocks({stream});
 }
 
 DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)

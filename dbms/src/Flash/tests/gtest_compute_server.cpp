@@ -14,6 +14,9 @@
 
 #include <TestUtils/MPPTaskTestUtils.h>
 
+#include <chrono>
+#include <thread>
+
 namespace DB
 {
 namespace tests
@@ -296,12 +299,13 @@ try
 {
     startServers(4);
     {
-        auto [start_ts, res] = injectCancel(context
-                                                .scan("test_db", "test_table_1")
-                                                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                                                .project({"max(s1)"}));
+        auto [start_ts, res] = prepareMPPStreams(context
+                                                     .scan("test_db", "test_table_1")
+                                                     .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                                     .project({"max(s1)"}));
+        EXPECT_TRUE(assertQueryActive(start_ts));
         MockComputeServerManager::instance().cancelQuery(start_ts);
-        assertQueryCancelled(start_ts);
+        EXPECT_TRUE(assertQueryCancelled(start_ts));
     }
 }
 CATCH
@@ -311,11 +315,12 @@ try
 {
     startServers(4);
     {
-        auto [start_ts, res] = injectCancel(context
-                                                .scan("test_db", "l_table")
-                                                .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        auto [start_ts, res] = prepareMPPStreams(context
+                                                     .scan("test_db", "l_table")
+                                                     .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        EXPECT_TRUE(assertQueryActive(start_ts));
         MockComputeServerManager::instance().cancelQuery(start_ts);
-        assertQueryCancelled(start_ts);
+        EXPECT_TRUE(assertQueryCancelled(start_ts));
     }
 }
 CATCH
@@ -325,16 +330,42 @@ try
 {
     startServers(4);
     {
-        auto [start_ts, res] = injectCancel(context
-                                                .scan("test_db", "l_table")
-                                                .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                                                .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
-                                                .project({col("max(l_table.s)"), col("l_table.s")}));
+        auto [start_ts, _] = prepareMPPStreams(context
+                                                   .scan("test_db", "l_table")
+                                                   .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                   .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                   .project({col("max(l_table.s)"), col("l_table.s")}));
+        EXPECT_TRUE(assertQueryActive(start_ts));
         MockComputeServerManager::instance().cancelQuery(start_ts);
-        assertQueryCancelled(start_ts);
+        EXPECT_TRUE(assertQueryCancelled(start_ts));
     }
 }
 CATCH
 
+TEST_F(ComputeServerRunner, multipleQuery)
+try
+{
+    startServers(4);
+    {
+        auto [start_ts1, res1] = prepareMPPStreams(context
+                                                       .scan("test_db", "l_table")
+                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        auto [start_ts2, res2] = prepareMPPStreams(context
+                                                       .scan("test_db", "l_table")
+                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                       .project({col("max(l_table.s)"), col("l_table.s")}));
+
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        EXPECT_TRUE(assertQueryActive(start_ts1));
+        MockComputeServerManager::instance().cancelQuery(start_ts1);
+        EXPECT_TRUE(assertQueryCancelled(start_ts1));
+
+        EXPECT_TRUE(assertQueryActive(start_ts2));
+        MockComputeServerManager::instance().cancelQuery(start_ts2);
+        EXPECT_TRUE(assertQueryCancelled(start_ts2));
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB

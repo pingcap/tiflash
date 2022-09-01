@@ -1838,12 +1838,22 @@ size_t Context::getMaxStreams() const
 
 bool Context::isMPPTest() const
 {
-    return test_mode == mpp_test;
+    return test_mode == mpp_test || test_mode == cancel_test;
 }
 
 void Context::setMPPTest()
 {
     test_mode = mpp_test;
+}
+
+bool Context::isCancelTest() const
+{
+    return test_mode == cancel_test;
+}
+
+void Context::setCancelTest()
+{
+    test_mode = cancel_test;
 }
 
 bool Context::isExecutorTest() const

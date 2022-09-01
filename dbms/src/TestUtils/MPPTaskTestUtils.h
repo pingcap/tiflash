@@ -80,10 +80,12 @@ public:
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
-    std::tuple<size_t, std::vector<BlockInputStreamPtr>> injectCancel(DAGRequestBuilder builder);
+    std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
     static ::testing::AssertionResult assertQueryCancelled(size_t start_ts);
+    static ::testing::AssertionResult assertQueryActive(size_t start_ts);
+    static String queryInfo(size_t server_id);
 
 protected:
     static LoggerPtr log_ptr;

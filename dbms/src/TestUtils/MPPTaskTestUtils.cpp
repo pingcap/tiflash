@@ -67,12 +67,12 @@ size_t MPPTaskTestUtils::serverNum()
     return server_num;
 }
 
-std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::injectCancel(DAGRequestBuilder builder)
+std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMPPStreams(DAGRequestBuilder builder)
 {
     auto properties = DB::tests::getDAGPropertiesForTest(serverNum());
     auto tasks = builder.buildMPPTasks(context, properties);
-    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
-        TiFlashTestEnv::getGlobalContext(i).setMPPTest();
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+        TiFlashTestEnv::getGlobalContext(i).setCancelTest();
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, MockComputeServerManager::instance().getServerConfigMap());
     return {properties.start_ts, res};
@@ -84,21 +84,43 @@ ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, con
     return readBlocks(res);
 }
 
+String MPPTaskTestUtils::queryInfo(size_t server_id)
+{
+    FmtBuffer buf;
+    buf.fmtAppend("server id: {}, tasks: ", server_id);
+    buf.fmtAppend(TiFlashTestEnv::getGlobalContext(server_id).getTMTContext().getMPPTaskManager()->toString());
+    return buf.toString();
+}
+
 ::testing::AssertionResult MPPTaskTestUtils::assertQueryCancelled(size_t start_ts)
 {
-    auto seconds = std::chrono::seconds(3);
+    auto seconds = std::chrono::seconds(1);
     auto retry_times = 0;
-    for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         // wait until the task is empty for <query:start_ts>
         while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) != nullptr)
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
-            if (retry_times >= 10)
+            // Currenly we wait for 10 times to ensure all tasks are cancelled.
+            if (retry_times > 10)
             {
-                return ::testing::AssertionFailure();
+                return ::testing::AssertionFailure() << "Query not cancelled, " << queryInfo(i) << std::endl;
             }
+        }
+    }
+    return ::testing::AssertionSuccess();
+}
+
+::testing::AssertionResult MPPTaskTestUtils::assertQueryActive(size_t start_ts)
+{
+    for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
+    {
+        // wait until the task is empty for <query:start_ts>
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) == nullptr)
+        {
+            return ::testing::AssertionFailure() << "Query " << start_ts << "not active" << std::endl;
         }
     }
     return ::testing::AssertionSuccess();
