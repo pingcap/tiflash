@@ -109,7 +109,7 @@ try
             context.getSettingsRef().dag_records_per_chunk,
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(data_input_stream->getHeader(), std::move(response_writer));
-        
+
         copyData(*data_input_stream, *dag_output_stream);
     }
     else

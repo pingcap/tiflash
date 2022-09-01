@@ -23,7 +23,7 @@
 namespace DB
 {
 std::pair<bool, String> DAGScheduler::run(
-    const PhysicalPlanNodePtr & plan_node, 
+    const PhysicalPlanNodePtr & plan_node,
     ResultHandler result_handler)
 {
     assert(plan_node);
@@ -91,7 +91,7 @@ void DAGScheduler::handlePipelineFail(const PipelineEventPtr & event, String & e
 }
 
 PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
-    const PhysicalPlanNodePtr & plan_node, 
+    const PhysicalPlanNodePtr & plan_node,
     ResultHandler result_handler)
 {
     return result_handler.isDefault()

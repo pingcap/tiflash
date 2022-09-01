@@ -20,4 +20,4 @@ std::pair<bool, String> QueryExecutor::execute()
 {
     return execute(ResultHandler{});
 }
-}
+} // namespace DB

@@ -24,8 +24,12 @@ class ResultHandler
 {
 public:
     using Handler = std::function<void(const Block &)>;
-    ResultHandler(Handler handler_): handler(handler_) {}
-    ResultHandler(): is_default(true) {}
+    ResultHandler(Handler handler_)
+        : handler(handler_)
+    {}
+    ResultHandler()
+        : is_default(true)
+    {}
 
     bool isDefault() const { return is_default; }
 
@@ -39,4 +43,4 @@ private:
 
     bool is_default = false;
 };
-}
+} // namespace DB

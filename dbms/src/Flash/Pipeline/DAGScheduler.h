@@ -50,7 +50,7 @@ public:
 
     // return <is_success, err_msg>
     std::pair<bool, String> run(
-        const PhysicalPlanNodePtr & plan_node, 
+        const PhysicalPlanNodePtr & plan_node,
         ResultHandler result_handler);
 
     void cancel();
@@ -77,7 +77,7 @@ private:
     void cancelRunningPipelines(bool is_kill);
 
     PhysicalPlanNodePtr handleResultHandler(
-        const PhysicalPlanNodePtr & plan_node, 
+        const PhysicalPlanNodePtr & plan_node,
         ResultHandler result_handler);
 
 private:

@@ -27,6 +27,7 @@ std::pair<bool, String> PipelineExecutor::execute(ResultHandler result_handler)
 String PipelineExecutor::dump() const
 {
     assert(plan_node);
-    return PhysicalPlanVisitor::visitToString(plan_node);;
+    return PhysicalPlanVisitor::visitToString(plan_node);
+    ;
 }
-}
+} // namespace DB

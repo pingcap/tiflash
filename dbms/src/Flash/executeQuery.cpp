@@ -30,7 +30,7 @@ QueryExecutorPtr executeQuery(
     {
         PlanQuerySource plan(context);
         auto interpreter = plan.interpreter(context, stage);
-        auto planner = static_cast<Planner*>(interpreter.get());
+        auto planner = static_cast<Planner *>(interpreter.get());
         return planner->pipelineExecute();
     }
     else

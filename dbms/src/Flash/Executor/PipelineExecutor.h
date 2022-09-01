@@ -42,4 +42,4 @@ private:
 
     PhysicalPlanNodePtr plan_node;
 };
-}
+} // namespace DB

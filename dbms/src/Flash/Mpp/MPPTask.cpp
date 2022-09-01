@@ -407,7 +407,7 @@ void MPPTask::runImpl()
         mpp_task_statistics.start();
         assert(executor);
         bool is_success;
-        std::tie(is_success, err_msg) = executor->execute();
+        std::tie(is_success, err_msg) = executor->execute(ResultHandler{});
         if (is_success)
         {
             // finish receiver

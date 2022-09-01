@@ -49,9 +49,9 @@ QueryExecutorPtr Planner::pipelineExecute()
     physical_plan.outputAndOptimize();
 
     return std::make_shared<PipelineExecutor>(
-        context, 
-        physical_plan.rootNode(), 
-        max_streams, 
+        context,
+        physical_plan.rootNode(),
+        max_streams,
         log->identifier());
 }
 

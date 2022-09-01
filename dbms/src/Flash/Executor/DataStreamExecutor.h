@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Flash/Executor/QueryExecutor.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/QueryExecutor.h>
 
 namespace DB
 {
@@ -39,4 +39,4 @@ public:
 private:
     BlockInputStreamPtr data_stream;
 };
-}
+} // namespace DB

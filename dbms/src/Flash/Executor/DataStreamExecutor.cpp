@@ -54,4 +54,4 @@ String DataStreamExecutor::dump() const
     data_stream->dumpTree(fb);
     return fb.toString();
 }
-}
+} // namespace DB
