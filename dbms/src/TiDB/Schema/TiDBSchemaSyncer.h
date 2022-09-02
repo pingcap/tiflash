@@ -74,6 +74,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     }
 
     // just for test
+    // It clear all synced database info and reset the `cur_version` to 0.
+    // All info will fetch from the `getter` again the next time
+    // `syncSchemas` is call.
     void reset() override
     {
         std::lock_guard lock(schema_mutex);

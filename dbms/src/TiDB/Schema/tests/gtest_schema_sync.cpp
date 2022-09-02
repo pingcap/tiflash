@@ -90,6 +90,7 @@ public:
             global_ctx.initializeSchemaSyncService();
     }
 
+    // Sync schema info from TiDB/MockTiDB to TiFlash
     void refreshSchema()
     {
         auto & flash_ctx = global_ctx.getTMTContext();
@@ -111,30 +112,38 @@ public:
         }
     }
 
+    // Reset the schema syncer to mock TiFlash shutdown
     void resetSchemas()
     {
         auto & flash_ctx = global_ctx.getTMTContext();
         flash_ctx.getSchemaSyncer()->reset();
     }
 
+    // Get the TiFlash synced table
     ManageableStoragePtr mustGetSyncedTable(TableID table_id)
     {
         auto & flash_ctx = global_ctx.getTMTContext();
         auto & flash_storages = flash_ctx.getStorages();
         auto tbl = flash_storages.get(table_id);
-        RUNTIME_CHECK(tbl, "Can not find table in TiFlash instance!", table_id);
+        RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! table_id={}", table_id);
         return tbl;
     }
 
+    // Get the TiFlash synced table
+    // `db_name`, `tbl_name` is the name from the TiDB-server side
     ManageableStoragePtr mustGetSyncedTableByName(const String & db_name, const String & tbl_name)
     {
         auto & flash_ctx = global_ctx.getTMTContext();
         auto & flash_storages = flash_ctx.getStorages();
         auto mock_tbl = MockTiDB::instance().getTableByName(db_name, tbl_name);
         auto tbl = flash_storages.get(mock_tbl->id());
-        RUNTIME_CHECK(tbl, "Can not find table in TiFlash instance!", db_name, tbl_name);
+        RUNTIME_CHECK_MSG(tbl, "Can not find table in TiFlash instance! db_name={}, tbl_name={}", db_name, tbl_name);
         return tbl;
     }
+
+    /*
+     * Helper methods work with `db_${database_id}`.`t_${table_id}` in the TiFlash side
+     */
 
     void mustDropSyncedTable(const String & db_idname, const String & tbl_idname)
     {
