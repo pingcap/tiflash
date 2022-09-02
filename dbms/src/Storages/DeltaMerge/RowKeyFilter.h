@@ -49,6 +49,10 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
             for (size_t i = 0; i < block.columns(); i++)
             {
                 auto & column = block.getByPosition(i);
+                if (column.column->isColumnConst())
+                {
+                    continue;
+                }
                 auto mutate_col = (*std::move(column.column)).mutate();
                 mutate_col->popBack(pop_size);
                 column.column = std::move(mutate_col);
@@ -59,6 +63,10 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
             for (size_t i = 0; i < block.columns(); i++)
             {
                 auto & column = block.getByPosition(i);
+                if (column.column->isColumnConst())
+                {
+                    continue;
+                }
                 auto new_column = column.column->cloneEmpty();
                 new_column->insertRangeFrom(*column.column, offset, limit);
                 column.column = std::move(new_column);
@@ -76,6 +84,14 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
 
             for (size_t i = 0; i < block.columns(); i++)
             {
+                if (block.getByPosition(i).column->isColumnConst())
+                {
+                    if (new_columns[i]->empty())
+                    {
+                        new_columns[i] = (*std::move(block.getByPosition(i).column)).mutate();
+                    }
+                    continue;
+                }
                 new_columns[i]->insertRangeFrom(*block.getByPosition(i).column, offset, limit);
             }
         }

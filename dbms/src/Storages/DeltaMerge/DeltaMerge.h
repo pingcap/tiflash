@@ -469,8 +469,19 @@ private:
                     output_columns[column_id]->reserve(max_block_size);
             }
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
-                output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], final_offset, final_limit);
-
+                if (cur_stable_block_columns[column_id]->isColumnConst())
+                {
+                    for (size_t index = 0; index < final_limit; ++index)
+                    {
+                        Field value;
+                        cur_stable_block_columns[column_id]->get(0, value);
+                        output_columns[column_id]->insert(value);
+                    }
+                }
+                else
+                {
+                    output_columns[column_id]->insertRangeFrom(*cur_stable_block_columns[column_id], final_offset, final_limit);
+                }
             output_write_limit -= std::min(final_limit, output_write_limit);
         }
 

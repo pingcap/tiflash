@@ -14,6 +14,8 @@
 
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 
+#include "common/types.h"
+
 namespace ProfileEvents
 {
 extern const Event DMCleanReadRows;
@@ -121,6 +123,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 }
             }
 
+            if (delete_col_data != nullptr)
             {
                 UInt8 * filter_pos = filter.data();
                 auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
@@ -133,7 +136,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 }
             }
         }
-        else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT)
+        else if constexpr (MODE == DM_VERSION_FILTER_MODE_COMPACT) // todo check whether here can use del optimization
         {
             /// filter[i] = cur_version >= version_limit || ((cur_handle != next_handle || next_version > version_limit) && !deleted);
 
@@ -319,7 +322,11 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             // Now let's handle the last row of current block.
             auto cur_handle = rowkey_column->getRowKeyValue(rows - 1);
             auto cur_version = (*version_col_data)[rows - 1];
-            auto deleted = (*delete_col_data)[rows - 1];
+            UInt8 deleted = 0;
+            if (delete_col_data != nullptr)
+            {
+                deleted = (*delete_col_data)[rows - 1];
+            }
             if (!initNextBlock())
             {
                 // No more block.
