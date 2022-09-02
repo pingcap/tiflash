@@ -214,68 +214,49 @@ Block HashOrderBlockInputStream::readImpl()
 
             size_t rows = block.rows();
 
-            auto key_columns = getKeyColumns(description, block);
-            std::vector<std::string> sort_key_container;
-            sort_key_container.resize(key_columns.size());
-            using KeyGetter = typename KeyGetterForType<Type::keys128, std::remove_reference_t<decltype(*maps.keys128)>>::Type;
-            insert(*maps.keys128, rows, KeyGetter(key_columns, key_sizes, collators), sort_key_container, &blocks.back());
-            iters.keys128 = maps.keys128->cbegin();
-
-//            switch (type)
-//            {
-//#define M(TYPE)                                                                                                                                                                                \
-//    case Type::TYPE:                                                                                                                                                                           \
-//            {           \
-//        auto key_columns = getKeyColumns(description, block);                                                                                                                                  \
-//        std::vector<std::string> sort_key_container;                                                                                                                                           \
-//        sort_key_container.resize(key_columns.size());                                                                                                                                         \
-//        using KeyGetter = typename KeyGetterForType<Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type;      \
-//        insert(*maps.TYPE, rows, KeyGetter(key_columns, key_sizes, collators), sort_key_container, &blocks.back()); \
-// iters.TYPE = maps.TYPE->cbegin();                                           \
-//        break; \
-//            }
-//                APPLY_FOR_HASH_ORDER_VARIANTS(M)
-//#undef M
-//            }
+            switch (type)
+            {
+#define M(TYPE)                                                                                                               \
+            case Type::TYPE:                                                                                                  \
+            {                                                                                                                 \
+                auto key_columns = getKeyColumns(description, block);                                                         \
+                std::vector<std::string> sort_key_container;                                                                  \
+                sort_key_container.resize(key_columns.size());                                                                \
+                using KeyGetter = typename KeyGetterForType<Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type; \
+                insert(*maps.TYPE, rows, KeyGetter(key_columns, key_sizes, collators), sort_key_container, &blocks.back());   \
+                iters.TYPE = maps.TYPE->cbegin();                                                                             \
+                break;                                                                                                        \
+            }
+            APPLY_FOR_HASH_ORDER_VARIANTS(M)
+#undef M
+            }
         }
-
     }
 
-    if (blocks.size() == 0) {
-        return Block();
-    }
-//    switch (type)
-//    {
-//#define M(TYPE)                                                                                          \
-//    case Type::TYPE:                                                                                     \
-//        if (iters.TYPE != maps.TYPE->cend())                                                             \
-//        {                                                                                                \
-//            auto columns = blocks[0].cloneEmptyColumns();                                                \
-//            for (const RowRefList * curr = &iters.TYPE->getMapped(); curr != nullptr; curr = curr->next) \
-//                for (size_t j = 0; j < columns.size(); j++)                                              \
-//                    columns[j]->insertFrom(*curr->block->getByPosition(j).column.get(), curr->row_num);  \
-//            ++iters.TYPE;                                                                                \
-//            return blocks[0].cloneWithColumns(std::move(columns));                                       \
-//        }                                                                                                \
-//        else                                                                                             \
-//        {                                                                                                \
-//            return Block();                                                                              \
-//        }                                                                                                \
-//        break;
-//        APPLY_FOR_HASH_ORDER_VARIANTS(M)
-//#undef M
-//    }
-    if (iters.keys128 != maps.keys128->cend())       {                                                                                                \
-        auto columns = blocks[0].cloneEmptyColumns();
-        for (const RowRefList * curr = &iters.keys128->getMapped(); curr != nullptr; curr = curr->next)
-            for (size_t j = 0; j < columns.size(); j++)
-                columns[j]->insertFrom(*curr->block->getByPosition(j).column.get(), curr->row_num);
-        ++iters.keys128;
-        return blocks[0].cloneWithColumns(std::move(columns));
-    }
-    else
+    if (blocks.size() == 0)
     {
         return Block();
+    }
+    switch (type)
+    {
+#define M(TYPE)                                                                                          \
+    case Type::TYPE:                                                                                     \
+        if (iters.TYPE != maps.TYPE->cend())                                                             \
+        {                                                                                                \
+            auto columns = blocks[0].cloneEmptyColumns();                                                \
+            for (const RowRefList * curr = &iters.TYPE->getMapped(); curr != nullptr; curr = curr->next) \
+                for (size_t j = 0; j < columns.size(); j++)                                              \
+                    columns[j]->insertFrom(*curr->block->getByPosition(j).column.get(), curr->row_num);  \
+            ++iters.TYPE;                                                                                \
+            return blocks[0].cloneWithColumns(std::move(columns));                                       \
+        }                                                                                                \
+        else                                                                                             \
+        {                                                                                                \
+            return Block();                                                                              \
+        }                                                                                                \
+        break;
+        APPLY_FOR_HASH_ORDER_VARIANTS(M)
+#undef M
     }
 }
 
