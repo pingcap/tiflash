@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
@@ -21,6 +22,7 @@
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
+#include <Poco/Exception.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -42,9 +44,6 @@
 #include <atomic>
 #include <ext/scope_guard.h>
 #include <memory>
-
-#include "Common/Exception.h"
-#include "Poco/Exception.h"
 
 namespace ProfileEvents
 {
@@ -412,13 +411,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     blockable_background_pool_handle->wake();
 }
 
-void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_database_name, String new_table_name)
+void DeltaMergeStore::rename(String /*new_path*/, String new_database_name, String new_table_name)
 {
-    RUNTIME_ASSERT(clean_rename,
-                   log,
-                   "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
-                   new_database_name,
-                   new_table_name);
     path_pool->rename(new_database_name, new_table_name);
 
     // TODO: replacing these two variables is not atomic, but could be good enough?

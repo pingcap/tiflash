@@ -314,7 +314,7 @@ public:
         return table_name;
     }
 
-    void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
+    void rename(String new_path, String new_database_name, String new_table_name);
 
     void clearData();
 

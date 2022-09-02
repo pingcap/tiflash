@@ -1195,23 +1195,25 @@ void StorageDeltaMerge::rename(
     const String & new_display_table_name)
 {
     tidb_table_info.name = new_display_table_name; // update name in table info
-    // For DatabaseTiFlash, simply update store's database is OK.
-    // `store->getTableName() == new_table_name` only keep for mock test.
-    bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
-    RUNTIME_ASSERT(clean_rename,
-                   log,
-                   "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
-                   new_database_name,
-                   new_table_name);
+    {
+        // For DatabaseTiFlash, simply update store's database is OK.
+        // `store->getTableName() == new_table_name` only keep for mock test.
+        bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
+        RUNTIME_ASSERT(clean_rename,
+                       log,
+                       "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
+                       new_database_name,
+                       new_table_name);
+    }
     if (storeInited())
     {
-        _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
         return;
     }
     std::lock_guard lock(store_mutex);
     if (storeInited())
     {
-        _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
     }
     else
     {
