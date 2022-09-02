@@ -145,9 +145,7 @@ void PhysicalProjection::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);
 
-    /// When `project_actions->getActions().empty()`,
-    /// it means that there is only column expr in the projection,
-    /// so we can add a project action to remove the useless column.
+    /// we can add a project action to remove the useless column for empty actions.
     if (project_actions->getActions().empty())
         PhysicalPlanHelper::addParentRequireProjectAction(project_actions, parent_require);
 
