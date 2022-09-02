@@ -355,13 +355,8 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     blockable_background_pool_handle->wake();
 }
 
-void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_database_name, String new_table_name)
+void DeltaMergeStore::rename(String /*new_path*/, String new_database_name, String new_table_name)
 {
-    RUNTIME_ASSERT(clean_rename,
-                   log,
-                   "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
-                   new_database_name,
-                   new_table_name);
     path_pool.rename(new_database_name, new_table_name);
 
     // TODO: replacing these two variables is not atomic, but could be good enough?
