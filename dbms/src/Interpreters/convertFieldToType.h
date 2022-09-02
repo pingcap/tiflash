@@ -29,9 +29,4 @@ class IDataType;
   * If the value does not fall into the range - returns Null.
   */
 Field convertFieldToType(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint = nullptr);
-
-/// Does the same, but throws ARGUMENT_OUT_OF_BOUND if value does not fall into the range.
-Field convertFieldToTypeOrThrow(const Field & from_value, const IDataType & to_type, const IDataType * from_type_hint = nullptr);
-
-
 } // namespace DB

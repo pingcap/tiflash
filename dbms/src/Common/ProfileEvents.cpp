@@ -67,7 +67,6 @@
     M(PSMVCCCompactOnDeltaRebaseRejected)      \
     M(PSMVCCCompactOnBase)                     \
                                                \
-    M(DMWriteBytes)                            \
     M(DMWriteBlock)                            \
     M(DMWriteBlockNS)                          \
     M(DMWriteFile)                             \

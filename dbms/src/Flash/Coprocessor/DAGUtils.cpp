@@ -39,6 +39,8 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::Rank, "rank"},
     {tipb::ExprType::DenseRank, "dense_rank"},
     {tipb::ExprType::RowNumber, "row_number"},
+    {tipb::ExprType::Lead, "lead"},
+    {tipb::ExprType::Lag, "lag"},
 });
 
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
