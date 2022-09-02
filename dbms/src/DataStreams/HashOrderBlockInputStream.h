@@ -96,7 +96,6 @@ public:
 
     enum class Type
     {
-        EMPTY,
 #define M(NAME) NAME,
         APPLY_FOR_HASH_ORDER_VARIANTS(M)
 #undef M
@@ -115,7 +114,21 @@ public:
         std::unique_ptr<HashMap<StringRef, RowRefList>> serialized;
     };
 
+    struct MapIterators
+    {
+        HashMap<UInt8, RowRefList, TrivialHash, HashTableFixedGrower<8>>::const_iterator key8;
+        HashMap<UInt16, RowRefList, TrivialHash, HashTableFixedGrower<16>>::const_iterator key16;
+        HashMap<UInt32, RowRefList, HashCRC32<UInt32>>::const_iterator key32;
+        HashMap<UInt64, RowRefList, HashCRC32<UInt64>>::const_iterator key64;
+        HashMapWithSavedHash<StringRef, RowRefList>::const_iterator key_string;
+        HashMapWithSavedHash<StringRef, RowRefList>::const_iterator key_fixed_string;
+        HashMap<UInt128, RowRefList, HashCRC32<UInt128>>::const_iterator keys128;
+        HashMap<UInt256, RowRefList, HashCRC32<UInt256>>::const_iterator keys256;
+        HashMap<StringRef, RowRefList>::const_iterator serialized;
+    };
+
     Maps maps;
+    MapIterators iters;
 
 
 protected:
@@ -128,6 +141,7 @@ private:
     SortDescription description;
     size_t limit;
     LoggerPtr log;
+    Type type;
 
     TiDB::TiDBCollators collators;
 
@@ -135,10 +149,10 @@ private:
 
     using Sizes = std::vector<size_t>;
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
-    void initMapImpl(Type type_);
+    void initMapImpl();
 
     template <typename Map, typename KeyGetter>
-    void insert(Map & map, size_t rows, KeyGetter key_getter, Block * block);
+    void insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block);
 
     Sizes key_sizes;
 
