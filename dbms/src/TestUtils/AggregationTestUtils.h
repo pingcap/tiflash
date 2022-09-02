@@ -19,12 +19,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
-#include <cstddef>
-
-#include "Core/ColumnsWithTypeAndName.h"
-#include "Debug/MockStorage.h"
-#include "TestUtils/FunctionTestUtils.h"
-
 namespace DB::tests
 {
 
