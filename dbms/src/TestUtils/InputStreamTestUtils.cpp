@@ -15,6 +15,7 @@
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 
@@ -346,6 +347,113 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
         prev_num_rows_read += read_block.rows();
     }
     stream->readSuffix();
+
+    if (num_rows_expect == num_rows_read)
+        return ::testing::AssertionSuccess();
+
+    // Less rows than expected
+    auto reason = fmt::format(R"r(  ({}).read() return num of rows
+    Which is: {}
+  the num rows of ({})
+    Which is: {})r",
+                              stream_expr,
+                              num_rows_read,
+                              columns_expr,
+                              num_rows_expect);
+    return ::testing::AssertionFailure() << reason;
+}
+
+::testing::AssertionResult UnorderedInputStreamVSBlockUnrestrictlyCompareColumns(
+    const char * stream_expr,
+    const char * colnames_expr,
+    const char * columns_expr,
+    const BlockInputStreamPtr & stream,
+    const Strings & colnames,
+    const ColumnsWithTypeAndName & columns)
+{
+    RUNTIME_CHECK_MSG(
+        stream != nullptr,
+        "ASSERT_UNORDERED_INPUTSTREAM_COLS_UR: `{}` should be not null",
+        stream_expr);
+    RUNTIME_CHECK_MSG(
+        colnames.size() == columns.size(),
+        "ASSERT_UNORDERED_INPUTSTREAM_COLS_UR: `{}` (len = {}) should have equal length as `{}` (len = {})",
+        colnames_expr,
+        colnames.size(),
+        columns_expr,
+        columns.size());
+
+    Block expect_block(columns);
+    expect_block.checkNumberOfRows(); // check the input
+
+    // Blocks can be unordered when read-thread-pool enabled.
+    // So read all blocks and sort them by handle column or column at position 0.
+    size_t num_rows_expect = expect_block.rows();
+    size_t num_rows_read = 0;
+    std::vector<Block> blocks;
+    stream->readPrefix();
+    while (Block read_block = stream->read())
+    {
+        num_rows_read += read_block.rows();
+
+        if (num_rows_read > num_rows_expect)
+        {
+            auto reason = fmt::format(R"r(
+  ({}).read() return more rows({}) than expected
+  ({}).rows()
+    Which is: {}
+  last block is: {})r",
+                                      stream_expr,
+                                      num_rows_read,
+                                      columns_expr,
+                                      num_rows_expect,
+                                      getColumnsContent(read_block.getColumnsWithTypeAndName()));
+            return ::testing::AssertionFailure() << reason;
+        }
+        blocks.emplace_back(std::move(read_block));
+    }
+    stream->readSuffix();
+
+    auto cmp_blk = [](const Block & a, const Block & b) {
+        const auto & col_a = a.has(EXTRA_HANDLE_COLUMN_NAME) ? a.getByName(EXTRA_HANDLE_COLUMN_NAME) : a.getByPosition(0);
+        const auto & col_b = b.has(EXTRA_HANDLE_COLUMN_NAME) ? b.getByName(EXTRA_HANDLE_COLUMN_NAME) : b.getByPosition(0);
+        if (col_a.column->empty() || col_b.column->empty())
+        {
+            return false;
+        }
+        const auto & field_a = (*col_a.column)[0];
+        const auto & field_b = (*col_b.column)[0];
+        return field_a < field_b;
+    };
+    std::sort(blocks.begin(), blocks.end(), cmp_blk);
+
+    size_t start_offset = 0;
+    for (const auto & read_block : blocks)
+    {
+        for (size_t col_idx = 0; col_idx < colnames.size(); ++col_idx)
+        {
+            const auto & col_name = colnames[col_idx];
+            // Copy the [start_offset, read_block.rows()) of `expect_block`
+            const auto & expect_full_col = expect_block.getByPosition(col_idx);
+            auto expect_col = expect_full_col.cloneEmpty();
+            auto column_data = expect_col.type->createColumn();
+            column_data->insertRangeFrom(*expect_full_col.column, start_offset, read_block.rows());
+            expect_col.column = std::move(column_data);
+
+            const auto & actual_col = read_block.getByName(col_name);
+            if (auto res = columnEqual(expect_col, actual_col); !res)
+            {
+                auto expect_expr = fmt::format("expect block: {}", getColumnsContent(expect_block.getColumnsWithTypeAndName(), start_offset, start_offset + read_block.rows()));
+                Block actual_block_to_cmp;
+                for (const auto & col_name : colnames)
+                    actual_block_to_cmp.insert(read_block.getByName(col_name));
+                auto actual_expr = fmt::format("actual block: {}", getColumnsContent(actual_block_to_cmp.getColumnsWithTypeAndName()));
+                return res << fmt::format("\n  details: [column={}] [prev_nrows={}] [cur_nrows={}]:\n    {}\n    {}", col_name, start_offset, start_offset + read_block.rows(), expect_expr, actual_expr);
+            }
+        }
+
+        start_offset += read_block.rows();
+    }
 
     if (num_rows_expect == num_rows_read)
         return ::testing::AssertionSuccess();

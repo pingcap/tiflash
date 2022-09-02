@@ -305,8 +305,14 @@ public:
 
     void setUpBackgroundTask(const DMContextPtr & dm_context);
 
-    const String & getDatabaseName() const { return db_name; }
-    const String & getTableName() const { return table_name; }
+    const String & getDatabaseName() const
+    {
+        return db_name;
+    }
+    const String & getTableName() const
+    {
+        return table_name;
+    }
 
     void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
 
@@ -353,9 +359,9 @@ public:
 
 
     /// Read rows in two modes:
-    ///     when is_fast_mode == false, we are in normal mode. Thus we will read rows with MVCC filtering, del mark !=0  filter and sorted merge
-    ///     when is_fast_mode == true, we are in fast mode. Thus we will read rows without MVCC and sorted merge
-    /// `sorted_ranges` should be already sorted and merged
+    ///     when is_fast_scan == false, we will read rows with MVCC filtering, del mark !=0  filter and sorted merge.
+    ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
+    /// `sorted_ranges` should be already sorted and merged.
     BlockInputStreams read(const Context & db_context,
                            const DB::Settings & db_settings,
                            const ColumnDefines & columns_to_read,
@@ -365,7 +371,7 @@ public:
                            const RSOperatorPtr & filter,
                            const String & tracing_id,
                            bool keep_order,
-                           bool is_fast_mode = false, // set true when read in fast mode
+                           bool is_fast_scan = false,
                            size_t expected_block_size = DEFAULT_BLOCK_SIZE,
                            const SegmentIdSet & read_segments = {},
                            size_t extra_table_id_index = InvalidColumnID);
@@ -409,18 +415,36 @@ public:
         std::shared_lock lock(read_write_mutex);
         return store_columns;
     }
-    const ColumnDefines & getTableColumns() const { return original_table_columns; }
-    const ColumnDefine & getHandle() const { return original_table_handle_define; }
+    const ColumnDefines & getTableColumns() const
+    {
+        return original_table_columns;
+    }
+    const ColumnDefine & getHandle() const
+    {
+        return original_table_handle_define;
+    }
     BlockPtr getHeader() const;
-    const Settings & getSettings() const { return settings; }
-    DataTypePtr getPKDataType() const { return original_table_handle_define.type; }
+    const Settings & getSettings() const
+    {
+        return settings;
+    }
+    DataTypePtr getPKDataType() const
+    {
+        return original_table_handle_define.type;
+    }
     SortDescription getPrimarySortDescription() const;
 
     void check(const Context & db_context);
     DeltaMergeStoreStat getStat();
     SegmentStats getSegmentStats();
-    bool isCommonHandle() const { return is_common_handle; }
-    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
+    bool isCommonHandle() const
+    {
+        return is_common_handle;
+    }
+    size_t getRowKeyColumnSize() const
+    {
+        return rowkey_column_size;
+    }
 
 public:
     /// Methods mainly used by region split.
@@ -526,6 +550,7 @@ public:
     ColumnDefinesPtr store_columns;
 
     std::atomic<bool> shutdown_called{false};
+    std::atomic<bool> replica_exist{true};
 
     BackgroundProcessingPool & background_pool;
     BackgroundProcessingPool::TaskHandle background_task_handle;
@@ -546,8 +571,6 @@ public:
 
     // Synchronize between write threads and read threads.
     mutable std::shared_mutex read_write_mutex;
-
-    UInt64 hash_salt;
 
     LoggerPtr log;
 }; // namespace DM

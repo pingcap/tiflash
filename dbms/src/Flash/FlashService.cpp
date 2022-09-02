@@ -186,6 +186,8 @@ grpc::Status FlashService::Coprocessor(
     {
         return status;
     }
+    context->setMockStorage(mock_storage);
+    context->setMockMPPServerInfo(mpp_test_info);
 
     MPPHandler mpp_handler(*request);
     return mpp_handler.execute(context, response);
@@ -231,7 +233,8 @@ grpc::Status FlashService::Coprocessor(
     // We need to find it out and bind the grpc stream with it.
     LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
+    // For MPP test, we don't care about security config.
+    if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
     {
         return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
     }
@@ -292,13 +295,11 @@ grpc::Status FlashService::Coprocessor(
     {
         // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
         tunnel->connect(calldata);
-        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
     }
     else
     {
         SyncPacketWriter writer(sync_writer);
         tunnel->connect(&writer);
-        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
         tunnel->waitForFinish();
         LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     }
@@ -340,7 +341,7 @@ grpc::Status FlashService::Coprocessor(
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
+    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -431,4 +432,13 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     return manual_compact_manager->handleRequest(request, response);
 }
 
+void FlashService::setMockStorage(MockStorage & mock_storage_)
+{
+    mock_storage = mock_storage_;
+}
+
+void FlashService::setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_)
+{
+    mpp_test_info = mpp_test_info_;
+}
 } // namespace DB

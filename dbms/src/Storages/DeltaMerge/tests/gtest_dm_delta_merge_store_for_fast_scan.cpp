@@ -18,7 +18,6 @@
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-
 /// This test file is mainly test on the correctness of read in fast mode.
 /// Because the basic functions are tested in gtest_dm_delta_merge_storage.cpp, we will not cover it here.
 
@@ -28,7 +27,7 @@ namespace DM
 {
 namespace tests
 {
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithoutRangeFilter)
 {
     /// test under only insert data (no update, no delete) with all range
 
@@ -88,7 +87,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -101,7 +100,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithoutRangeFilter)
     }
 }
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithRangeFilter)
 {
     /// test under only insert data (no update, no delete) with range filter
 
@@ -172,7 +171,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -185,7 +184,7 @@ TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithRangeFilter)
     }
 }
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithoutFlushCache)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithoutFlushCache)
 try
 {
     const size_t num_write_rows = 32;
@@ -247,7 +246,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -304,7 +303,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithoutCompact)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithoutCompact)
 try
 {
     const size_t num_write_rows = 32;
@@ -368,7 +367,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -409,7 +408,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithCompact)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithCompact)
 try
 {
     const size_t num_write_rows = 32;
@@ -474,7 +473,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         switch (mode)
         {
@@ -515,7 +514,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithOnlyInsertWithMultipleBlockWithCompactAndMergeDelta)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithOnlyInsertWithMultipleBlockWithCompactAndMergeDelta)
 try
 {
     const size_t num_write_rows = 32;
@@ -583,7 +582,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -594,7 +593,7 @@ try
 CATCH
 
 // Insert + Update
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithMultipleBlockWithOverlap)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithMultipleBlockWithOverlap)
 try
 {
     const size_t num_write_rows = 32;
@@ -662,7 +661,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
 
         switch (mode)
@@ -733,7 +732,7 @@ try
 CATCH
 
 // Insert + Delete row
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteRow)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithDeleteRow)
 try
 {
     const ColumnDefine col_str_define(2, "col2", std::make_shared<DataTypeString>());
@@ -809,7 +808,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -835,7 +834,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -846,7 +845,7 @@ try
 CATCH
 
 // Insert + Delete Range
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteRange)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithDeleteRange)
 try
 {
     const size_t num_rows_write = 128;
@@ -881,7 +880,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -906,7 +905,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order = */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         // filter del mark = 1， thus just read the insert data before delete
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -917,7 +916,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeWithDeleteWithMergeDelta)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanWithDeleteWithMergeDelta)
 try
 {
     const size_t num_rows_write = 128;
@@ -966,7 +965,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         auto pk_coldata = createNumbers<Int64>(num_deleted_rows, num_rows_write);
         ASSERT_EQ(pk_coldata.size(), num_rows_write - num_deleted_rows);
@@ -979,7 +978,7 @@ try
 CATCH
 
 // insert + update + delete and fast mode first and then normal mode, to check the mode conversion is ok
-TEST_P(DeltaMergeStoreRWTest, TestFastModeComplexWithModeConversion)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanComplexWithModeConversion)
 try
 {
     const size_t num_write_rows = 128;
@@ -1054,7 +1053,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
 
         switch (mode)
@@ -1130,11 +1129,11 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1144,7 +1143,7 @@ try
 }
 CATCH
 
-TEST_P(DeltaMergeStoreRWTest, TestFastModeForCleanRead)
+TEST_P(DeltaMergeStoreRWTest, TestFastScanForCleanRead)
 try
 {
     const size_t num_rows_write = 128;
@@ -1186,7 +1185,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1209,13 +1208,13 @@ try
 
     store->mergeDeltaAll(*db_context);
 
-    // could do clean read with handle optimization
+    // could do clean read with handle and del optimization
     {
         const auto & columns = store->getTableColumns();
         ColumnDefines real_columns;
         for (const auto & col : columns)
         {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME)
+            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
             {
                 real_columns.emplace_back(col);
             }
@@ -1230,7 +1229,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_raw_read= */ true,
+                                             /* is_fast_scan= */ true,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write - num_deleted_rows);
     }
