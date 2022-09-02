@@ -140,9 +140,12 @@ namespace DB
         F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
         F(type_split, {"type", "split"}),                                                                         /**/                    \
         F(type_merge, {"type", "merge"}))                                                                         /**/                    \
-    M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram, /**/                    \
-        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}),                                             /**/                    \
-        F(type_delete_range, {{"type", "delete_range"}}, ExpBuckets{0.001, 2, 20}))                               /**/                    \
+    M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram,                         \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_delta_merge_by_write, {{"type", "delta_merge_by_write"}}, ExpBuckets{0.001, 2, 20}),                                       \
+        F(type_delta_merge_by_delete_range, {{"type", "delta_merge_by_delete_range"}}, ExpBuckets{0.001, 2, 20}),                         \
+        F(type_flush, {{"type", "flush"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_split, {{"type", "split"}}, ExpBuckets{0.001, 2, 20}))                                                                     \
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter,                                                     \
         F(type_exec, {"type", "exec"}),                                                                                                   \
         F(type_low_write, {"type", "low_write"}),                                                                                         \
