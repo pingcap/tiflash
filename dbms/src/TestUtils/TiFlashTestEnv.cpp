@@ -28,6 +28,42 @@ namespace DB::tests
 {
 std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
 
+String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
+{
+    String path = "./tmp/";
+    if (!test_case.empty())
+        path += std::string(test_case);
+
+    Poco::Path poco_path(path);
+    if (get_abs)
+        return poco_path.absolute().toString();
+    else
+        return poco_path.toString();
+}
+
+void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
+{
+    try
+    {
+        // drop the data on disk
+        Poco::File p(path);
+        if (p.exists())
+        {
+            p.remove(true);
+        }
+
+        // re-create empty directory for testing
+        if (recreate)
+        {
+            p.createDirectories();
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
+}
+
 void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
     // set itself as global context
@@ -95,7 +131,12 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     Context context = *global_context;
     context.setGlobalContext(*global_context);
     // Load `testdata_path` as path if it is set.
-    const String root_path = testdata_path.empty() ? (DB::toString(getpid()) + "/" + getTemporaryPath()) : testdata_path[0];
+    const String root_path = [&]() {
+        const auto root_path = testdata_path.empty()
+            ? (DB::toString(getpid()) + "/" + getTemporaryPath("", /*get_abs*/ false))
+            : testdata_path[0];
+        return Poco::Path(root_path).absolute().toString();
+    }();
     if (testdata_path.empty())
         testdata_path.push_back(root_path);
     context.setPath(root_path);
