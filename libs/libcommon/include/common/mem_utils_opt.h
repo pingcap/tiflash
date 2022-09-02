@@ -102,7 +102,7 @@ FLATTEN_INLINE_PURE static inline int CompareStrView(const std::string_view & lh
 #endif
 }
 
-// same function like `std::string_view::find`
+// same function like `std::string_view::find(std::string_view)`
 FLATTEN_INLINE_PURE static inline size_t StrFind(std::string_view src, std::string_view needle)
 {
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
