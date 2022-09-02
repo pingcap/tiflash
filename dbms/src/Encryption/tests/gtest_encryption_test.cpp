@@ -201,10 +201,10 @@ TEST_P(EncryptionTest, EncryptionTest)
 }
 
 #if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-    INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
+INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
 #else
-    // Openssl support SM4 after 1.1.1 release version.
-    INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr, EncryptionMethod::SM4Ctr)));
+// Openssl support SM4 after 1.1.1 release version.
+INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr, EncryptionMethod::SM4Ctr)));
 #endif
 
 

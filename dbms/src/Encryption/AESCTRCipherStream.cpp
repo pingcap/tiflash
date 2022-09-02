@@ -41,7 +41,7 @@ size_t KeySize(EncryptionMethod method)
         return 32;
     case EncryptionMethod::SM4Ctr:
 #if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
+        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
                                    Errors::Encryption::Internal);
 #else
         // Openssl support SM4 after 1.1.1 release version.
@@ -242,7 +242,7 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
     {
         unsigned char md5_value[MD5_DIGEST_LENGTH];
         static_assert(MD5_DIGEST_LENGTH == sizeof(uint64_t) * 2);
-        MD5((unsigned char *)encryption_path_.file_name.c_str(), encryption_path_.file_name.size(), md5_value);
+        MD5(reinterpret_cast<const unsigned char *>(encryption_path_.file_name.c_str()), encryption_path_.file_name.size(), md5_value);
         auto md5_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(md5_value));
         auto md5_low = readBigEndian<uint64_t>(reinterpret_cast<const char *>(md5_value + sizeof(uint64_t)));
         iv_high ^= md5_high;
