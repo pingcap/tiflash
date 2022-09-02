@@ -15,24 +15,67 @@
 #pragma once
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
+#include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
+
+#include <cstddef>
+
+#include "Core/ColumnsWithTypeAndName.h"
+#include "Debug/MockStorage.h"
+#include "TestUtils/FunctionTestUtils.h"
 
 namespace DB::tests
 {
 
-class AggregationTest : public ::testing::Test
+class AggregationTest : public ExecutorTest
 {
 public:
-    ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
+    static ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
     {
         AggregateFunctionPtr agg_ptr = DB::AggregateFunctionFactory::instance().get(agg_name, data_types, {});
         const DataTypePtr & ret_type = agg_ptr->getReturnType();
         if (ret_type->equals(*expect_type))
             return ::testing::AssertionSuccess();
         return ::testing::AssertionFailure() << "Expect type: " << expect_type->getName() << " Actual type: " << ret_type->getName();
+    }
+
+    void executeAggFunctionAndAssert(ASTPtr func, String func_name, const ColumnsWithTypeAndName & column, const ColumnsWithTypeAndName & expected_cols)
+    {
+        context.addMockTableColumnData("test_db", "test_table", column);
+        auto request = context.scan("test_db", "test_table")
+                           .aggregation(func, {})
+                           .project({func_name})
+                           .build(context);
+
+        for (size_t i = 1; i <= 10; ++i)
+            ASSERT_COLUMNS_EQ_UR(expected_cols, executeStreams(request, i));
+    }
+
+    void executeGroupByAndAssert(const ColumnsWithTypeAndName & columns, const ColumnsWithTypeAndName & expected_cols)
+    {
+        String db_name = "test_group";
+        String table_name = "test_tablexx";
+        MockAstVec group_by_cols;
+        MockColumnNameVec proj_names;
+        MockColumnInfoVec column_infos;
+        for (const auto & column : columns)
+        {
+            group_by_cols.push_back(col(column.name));
+            proj_names.push_back(column.name);
+            column_infos.push_back({column.name, dataTypeToTP(column.type)});
+        }
+
+        context.addMockTable(db_name, table_name, column_infos, columns);
+
+        std::cout << "ywq test here..." << std::endl;
+        auto request = context.scan(db_name, table_name)
+                           .aggregation({}, group_by_cols)
+                           .project(proj_names)
+                           .build(context);
+
+        for (size_t i = 1; i <= 10; ++i)
+            ASSERT_COLUMNS_EQ_UR(expected_cols, executeStreams(request, i)) << "actual_cols: " << getColumnsContent(expected_cols) << ", expected_cols: " << getColumnsContent(executeStreams(request, i));
     }
 
     static void SetUpTestCase();

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 
 namespace DB
@@ -30,7 +30,7 @@ namespace tests
         types_col_name[a], types_col_name[b] \
     }
 
-class ExecutorAggTestRunner : public DB::tests::ExecutorTest
+class ExecutorAggTestRunner : public DB::tests::AggregationTest
 {
 public:
     using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -199,6 +199,8 @@ try
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
             executeWithConcurrency(request, expect_cols[i]);
         }
+        // ywq todo
+        executeGroupByAndAssert(expect_cols[0], {toNullableVec<Int8>(types_col_name[2], col_tinyint)});
     }
 
     {
