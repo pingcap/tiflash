@@ -96,10 +96,9 @@ public:
         // TODO support multi-streams.
         size_t max_streams = 1;
 
-        context.context.setColumnsForTest(context.executorIdColumnsMap());
-
         DAGContext dag_context(*request, "executor_test", max_streams);
         context.context.setDAGContext(&dag_context);
+        context.context.setMockStorage(context.mockStorage());
 
         PhysicalPlan physical_plan{context.context, log->identifier()};
         assert(request);
@@ -119,7 +118,7 @@ public:
             ASSERT_EQ(Poco::trim(expected_streams), Poco::trim(fb.toString()));
         }
 
-        ASSERT_COLUMNS_EQ_R(expect_columns, readBlock(final_stream));
+        ASSERT_COLUMNS_EQ_UR(expect_columns, readBlock(final_stream));
     }
 
     std::tuple<DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder, DAGRequestBuilder> multiTestScan()
@@ -400,7 +399,7 @@ try
    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
+ HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Inner
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
@@ -427,7 +426,7 @@ CreatingSets
    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
+ HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Left
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
@@ -454,7 +453,7 @@ CreatingSets
    <MockExchangeReceiver, exchange_receiver_1> | is_tidb_operator: true, schema: <s, Nullable(String)>, <join_c, Nullable(String)>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+ HashJoinBuild: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockExchangeReceiver
@@ -501,12 +500,12 @@ CreatingSets
      <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
+ HashJoinBuild x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockTableScan
  Union: <for join>
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -514,7 +513,7 @@ CreatingSets
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Inner
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -571,12 +570,12 @@ CreatingSets
      <MockTableScan, table_scan_3> | is_tidb_operator: true, schema: <a, Int32>, <b, Int32>)",
             /*expected_streams=*/R"(
 CreatingSets
- HashJoinBuildBlockInputStream x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
+ HashJoinBuild x 2: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Right
   Expression: <append join key and join filters for build side>
    Expression: <final projection>
     MockTableScan
  Union: <for join>
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -584,7 +583,7 @@ CreatingSets
        Expression: <append join key and join filters for probe side>
         Expression: <final projection>
          MockTableScan
-  HashJoinBuildBlockInputStream: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
+  HashJoinBuild: <join build, build_side_root_executor_id = Join_5>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>

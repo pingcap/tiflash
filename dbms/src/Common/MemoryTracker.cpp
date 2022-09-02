@@ -22,6 +22,7 @@
 
 #include <iomanip>
 
+std::atomic<Int64> real_rss{0};
 MemoryTracker::~MemoryTracker()
 {
     if (peak)
@@ -46,6 +47,7 @@ MemoryTracker::~MemoryTracker()
       *  then memory usage of 'next' memory trackers will be underestimated,
       *  because amount will be decreased twice (first - here, second - when real 'free' happens).
       */
+    // TODO In future, maybe we can find a better way to handle the "amount > 0" case.
     if (auto value = amount.load(std::memory_order_relaxed))
         free(value);
 }
@@ -80,7 +82,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         /// In this case, it doesn't matter.
         if (unlikely(fault_probability && drand48() < fault_probability))
         {
-            free(size);
+            amount.fetch_sub(size, std::memory_order_relaxed);
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker");
@@ -93,20 +95,33 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
-
-        if (unlikely(current_limit && will_be > current_limit))
+        bool is_rss_too_large = (!next.load(std::memory_order_relaxed) && current_limit
+                                 && real_rss > current_limit + bytes_rss_larger_than_limit
+                                 && will_be > current_limit - (real_rss - current_limit - bytes_rss_larger_than_limit));
+        if (is_rss_too_large
+            || unlikely(current_limit && will_be > current_limit))
         {
-            free(size);
+            amount.fetch_sub(size, std::memory_order_relaxed);
 
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory limit");
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
-            fmt_buf.fmtAppend(" exceeded: would use {} (attempt to allocate chunk of {} bytes), maximum: {}",
-                              formatReadableSizeWithBinarySuffix(will_be),
-                              size,
-                              formatReadableSizeWithBinarySuffix(current_limit));
+            if (!is_rss_too_large)
+            { // out of memory quota
+                fmt_buf.fmtAppend(" exceeded caused by 'out of memory quota for data computing' : would use {} for data computing (attempt to allocate chunk of {} bytes), limit of memory for data computing: {}",
+                                  formatReadableSizeWithBinarySuffix(will_be),
+                                  size,
+                                  formatReadableSizeWithBinarySuffix(current_limit));
+            }
+            else
+            { // RSS too large
+                fmt_buf.fmtAppend(" exceeded caused by 'RSS(Resident Set Size) much larger than limit' : process memory size would be {} for (attempt to allocate chunk of {} bytes), limit of memory for data computing : {}",
+                                  formatReadableSizeWithBinarySuffix(real_rss),
+                                  size,
+                                  formatReadableSizeWithBinarySuffix(current_limit));
+            }
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
@@ -116,7 +131,17 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         peak.store(will_be, std::memory_order_relaxed);
 
     if (auto * loaded_next = next.load(std::memory_order_relaxed))
-        loaded_next->alloc(size, check_memory_limit);
+    {
+        try
+        {
+            loaded_next->alloc(size, check_memory_limit);
+        }
+        catch (...)
+        {
+            amount.fetch_sub(size, std::memory_order_relaxed);
+            std::rethrow_exception(std::current_exception());
+        }
+    }
 }
 
 
@@ -130,7 +155,7 @@ void MemoryTracker::free(Int64 size)
       * Memory usage will be calculated with some error.
       * NOTE The code is not atomic. Not worth to fix.
       */
-    if (new_amount < 0)
+    if (new_amount < 0 && !next.load(std::memory_order_relaxed)) // handle it only for root memory_tracker
     {
         amount.fetch_sub(new_amount);
         size += new_amount;
@@ -170,7 +195,7 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 
 namespace CurrentMemoryTracker
 {
-static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 8 * 1024 * 1024; // 8 MiB
+static Int64 MEMORY_TRACER_SUBMIT_THRESHOLD = 1024 * 1024; // 1 MiB
 #if __APPLE__ && __clang__
 static __thread Int64 local_delta{};
 #else

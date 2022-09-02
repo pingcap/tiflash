@@ -28,7 +28,7 @@ public:
         context.addMockTable(
             {"test_db", "test_table_1"},
             {{"s1", TiDB::TP::TypeLong}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}},
-            {toNullableVec<Int32>("s1", {1, {}, 10000000}), toNullableVec<String>("s2", {"apple", {}, "banana"}), toNullableVec<String>("s3", {"apple", {}, "banana"})});
+            {toNullableVec<Int32>("s1", {1, {}, 10000000, 10000000}), toNullableVec<String>("s2", {"apple", {}, "banana", "test"}), toNullableVec<String>("s3", {"apple", {}, "banana", "test"})});
 
         /// for join
         context.addMockTable(
@@ -45,29 +45,79 @@ public:
 TEST_F(ComputeServerRunner, runAggTasks)
 try
 {
+    startServers(4);
     {
-        auto tasks = context.scan("test_db", "test_table_1")
-                         .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
-                         .project({"max(s1)"})
-                         .buildMPPTasks(context);
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_3 | type:PassThrough, {<0, Long>}
+ project_2 | {<0, Long>}
+  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_3 | type:PassThrough, {<0, Long>}
+ project_2 | {<0, Long>}
+  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(
+exchange_sender_3 | type:PassThrough, {<0, Long>}
+ project_2 | {<0, Long>}
+  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(exchange_sender_3 | type:PassThrough, {<0, Long>}
+ project_2 | {<0, Long>}
+  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)"};
+        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000, 10000000})};
+
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context
+                .scan("test_db", "test_table_1")
+                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                .project({"max(s1)"}),
+            expected_strings,
+            expected_cols);
+    }
+
+    {
+        auto properties = getDAGPropertiesForTest(1);
+        auto tasks = context
+                         .scan("test_db", "test_table_1")
+                         .aggregation({Count(col("s1"))}, {})
+                         .project({"count(s1)"})
+                         .buildMPPTasks(context, properties);
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_5 | type:PassThrough, {<0, Longlong>}
+ aggregation_4 | group_by: {}, agg_func: {count(<0, Long>)}
+  table_scan_0 | {<0, Long>}
+            )",
+            R"(exchange_sender_3 | type:PassThrough, {<0, Longlong>}
+ project_2 | {<0, Longlong>}
+  aggregation_1 | group_by: {}, agg_func: {sum(<0, Longlong>)}
+   exchange_receiver_6 | type:PassThrough, {<0, Longlong>})"};
 
         size_t task_size = tasks.size();
-
-        std::vector<String> expected_strings = {
-            "exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}\n"
-            " aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
-            "  table_scan_0 | {<0, Long>, <1, String>, <2, String>}\n",
-            "exchange_sender_3 | type:PassThrough, {<0, Long>}\n"
-            " project_2 | {<0, Long>}\n"
-            "  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}\n"
-            "   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}\n"};
         for (size_t i = 0; i < task_size; ++i)
         {
             ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
         }
-
-        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000})};
-        ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
     }
 }
 CATCH
@@ -75,34 +125,164 @@ CATCH
 TEST_F(ComputeServerRunner, runJoinTasks)
 try
 {
-    auto tasks = context
-                     .scan("test_db", "l_table")
-                     .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                     .topN("join_c", false, 2)
-                     .buildMPPTasks(context);
-
-    size_t task_size = tasks.size();
-    std::vector<String> expected_strings = {
-        "exchange_sender_6 | type:Hash, {<0, String>, <1, String>}\n"
-        " table_scan_1 | {<0, String>, <1, String>}",
-        "exchange_sender_5 | type:Hash, {<0, String>, <1, String>}\n"
-        " table_scan_0 | {<0, String>, <1, String>}",
-        "exchange_sender_4 | type:PassThrough, {<0, String>, <1, String>, <2, String>, <3, String>}\n"
-        " topn_3 | order_by: {(<1, String>, desc: false)}, limit: 2\n"
-        "  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}\n"
-        "   exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>}\n"
-        "   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>}"};
-    for (size_t i = 0; i < task_size; ++i)
+    startServers(3);
     {
-        ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
+        auto expected_cols = {
+            toNullableVec<String>({{}, "banana", "banana"}),
+            toNullableVec<String>({{}, "apple", "banana"}),
+            toNullableVec<String>({{}, "banana", "banana"}),
+            toNullableVec<String>({{}, "apple", "banana"})};
+
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_5 | type:Hash, {<0, String>, <1, String>}
+ table_scan_1 | {<0, String>, <1, String>})",
+            R"(exchange_sender_5 | type:Hash, {<0, String>, <1, String>}
+ table_scan_1 | {<0, String>, <1, String>})",
+            R"(exchange_sender_5 | type:Hash, {<0, String>, <1, String>}
+ table_scan_1 | {<0, String>, <1, String>})",
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_3 | type:PassThrough, {<0, String>, <1, String>, <2, String>, <3, String>}
+ Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+  exchange_receiver_6 | type:PassThrough, {<0, String>, <1, String>}
+  exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>})",
+            R"(exchange_sender_3 | type:PassThrough, {<0, String>, <1, String>, <2, String>, <3, String>}
+ Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+  exchange_receiver_6 | type:PassThrough, {<0, String>, <1, String>}
+  exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>})",
+            R"(exchange_sender_3 | type:PassThrough, {<0, String>, <1, String>, <2, String>, <3, String>}
+ Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+  exchange_receiver_6 | type:PassThrough, {<0, String>, <1, String>}
+  exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>})"};
+
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(context
+                                                 .scan("test_db", "l_table")
+                                                 .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}),
+                                             expected_strings,
+                                             expect_cols);
     }
 
-    auto expected_cols = {
-        toNullableVec<String>({{}, "banana"}),
-        toNullableVec<String>({{}, "apple"}),
-        toNullableVec<String>({{}, "banana"}),
-        toNullableVec<String>({{}, "apple"})};
-    ASSERT_MPPTASK_EQUAL(tasks, expected_cols);
+    {
+        auto properties = getDAGPropertiesForTest(1);
+        auto tasks = context
+                         .scan("test_db", "l_table")
+                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                         .buildMPPTasks(context, properties);
+
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_5 | type:Hash, {<0, String>, <1, String>}
+ table_scan_1 | {<0, String>, <1, String>})",
+            R"(exchange_sender_4 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_3 | type:PassThrough, {<0, String>, <1, String>, <2, String>, <3, String>}
+ Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+  exchange_receiver_6 | type:PassThrough, {<0, String>, <1, String>}
+  exchange_receiver_7 | type:PassThrough, {<0, String>, <1, String>})"};
+
+        size_t task_size = tasks.size();
+        for (size_t i = 0; i < task_size; ++i)
+        {
+            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
+        }
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, runJoinThenAggTasks)
+try
+{
+    startServers(3);
+    {
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_10 | type:Hash, {<0, String>}
+ table_scan_1 | {<0, String>})",
+            R"(exchange_sender_10 | type:Hash, {<0, String>}
+ table_scan_1 | {<0, String>})",
+            R"(exchange_sender_10 | type:Hash, {<0, String>}
+ table_scan_1 | {<0, String>})",
+            R"(exchange_sender_9 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_9 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_9 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_7 | type:Hash, {<0, String>, <1, String>}
+ aggregation_6 | group_by: {<0, String>}, agg_func: {max(<0, String>)}
+  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+   exchange_receiver_11 | type:PassThrough, {<0, String>, <1, String>}
+   exchange_receiver_12 | type:PassThrough, {<0, String>})",
+            R"(exchange_sender_7 | type:Hash, {<0, String>, <1, String>}
+ aggregation_6 | group_by: {<0, String>}, agg_func: {max(<0, String>)}
+  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+   exchange_receiver_11 | type:PassThrough, {<0, String>, <1, String>}
+   exchange_receiver_12 | type:PassThrough, {<0, String>})",
+            R"(exchange_sender_7 | type:Hash, {<0, String>, <1, String>}
+ aggregation_6 | group_by: {<0, String>}, agg_func: {max(<0, String>)}
+  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+   exchange_receiver_11 | type:PassThrough, {<0, String>, <1, String>}
+   exchange_receiver_12 | type:PassThrough, {<0, String>})",
+            R"(exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>}
+ project_4 | {<0, String>, <1, String>}
+  aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
+   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})",
+            R"(exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>}
+ project_4 | {<0, String>, <1, String>}
+  aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
+   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})",
+            R"(exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>}
+ project_4 | {<0, String>, <1, String>}
+  aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
+   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})"};
+
+        auto expected_cols = {
+            toNullableVec<String>({{}, "banana"}),
+            toNullableVec<String>({{}, "banana"})};
+
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context
+                .scan("test_db", "l_table")
+                .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                .project({col("max(l_table.s)"), col("l_table.s")}),
+            expected_strings,
+            expect_cols);
+    }
+
+    {
+        auto properties = getDAGPropertiesForTest(1);
+        auto tasks = context
+                         .scan("test_db", "l_table")
+                         .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                         .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                         .project({col("max(l_table.s)"), col("l_table.s")})
+                         .buildMPPTasks(context, properties);
+
+        std::vector<String> expected_strings = {
+            R"(exchange_sender_10 | type:Hash, {<0, String>}
+ table_scan_1 | {<0, String>})",
+            R"(exchange_sender_9 | type:Hash, {<0, String>, <1, String>}
+ table_scan_0 | {<0, String>, <1, String>})",
+            R"(exchange_sender_7 | type:Hash, {<0, String>, <1, String>}
+ aggregation_6 | group_by: {<0, String>}, agg_func: {max(<0, String>)}
+  Join_2 | LeftOuterJoin, HashJoin. left_join_keys: {<0, String>}, right_join_keys: {<0, String>}
+   exchange_receiver_11 | type:PassThrough, {<0, String>, <1, String>}
+   exchange_receiver_12 | type:PassThrough, {<0, String>})",
+            R"(exchange_sender_5 | type:PassThrough, {<0, String>, <1, String>}
+ project_4 | {<0, String>, <1, String>}
+  aggregation_3 | group_by: {<1, String>}, agg_func: {max(<0, String>)}
+   exchange_receiver_8 | type:PassThrough, {<0, String>, <1, String>})",
+        };
+
+        size_t task_size = tasks.size();
+        for (size_t i = 0; i < task_size; ++i)
+        {
+            ASSERT_DAGREQUEST_EQAUL(expected_strings[i], tasks[i].dag_request);
+        }
+    }
 }
 CATCH
 

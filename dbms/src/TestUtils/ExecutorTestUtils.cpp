@@ -14,6 +14,8 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
+#include <Debug/MockComputeServerManager.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
@@ -22,6 +24,34 @@
 
 namespace DB::tests
 {
+TiDB::TP dataTypeToTP(const DataTypePtr & type)
+{
+    // TODO support more types.
+    switch (removeNullable(type)->getTypeId())
+    {
+    case TypeIndex::UInt8:
+    case TypeIndex::Int8:
+        return TiDB::TP::TypeTiny;
+    case TypeIndex::UInt16:
+    case TypeIndex::Int16:
+        return TiDB::TP::TypeShort;
+    case TypeIndex::UInt32:
+    case TypeIndex::Int32:
+        return TiDB::TP::TypeLong;
+    case TypeIndex::UInt64:
+    case TypeIndex::Int64:
+        return TiDB::TP::TypeLongLong;
+    case TypeIndex::String:
+        return TiDB::TP::TypeString;
+    case TypeIndex::Float32:
+        return TiDB::TP::TypeFloat;
+    case TypeIndex::Float64:
+        return TiDB::TP::TypeDouble;
+    default:
+        throw Exception("Unsupport type");
+    }
+}
+
 DAGContext & ExecutorTest::getDAGContext()
 {
     assert(dag_context_ptr != nullptr);
@@ -122,35 +152,19 @@ void ExecutorTest::enablePlanner(bool is_enable)
     context.context.setSetting("enable_planner", is_enable ? "true" : "false");
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, std::unordered_map<String, ColumnsWithTypeAndName> & source_columns_map, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
 {
     DAGContext dag_context(*request, "executor_test", concurrency);
     context.context.setExecutorTest();
-    context.context.setColumnsForTest(source_columns_map);
+    context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     return readBlock(executeQuery(context.context).in);
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
-    return executeStreams(request, context.executorIdColumnsMap(), concurrency);
-}
-
-DB::ColumnsWithTypeAndName ExecutorTest::executeStreamsWithSingleSource(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & source_columns, SourceType type, size_t concurrency)
-{
-    std::unordered_map<String, ColumnsWithTypeAndName> source_columns_map;
-    source_columns_map[getSourceName(type)] = source_columns;
-    return executeStreams(request, source_columns_map, concurrency);
-}
-
-DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks)
-{
-    DAGProperties properties;
-    // enable mpp
-    properties.is_mpp_query = true;
-    context.context.setMPPTest();
-    auto res = executeMPPQuery(context.context, properties, tasks);
+    auto res = executeMPPQuery(context.context, properties, tasks, server_config_map);
     return readBlock(res);
 }
 

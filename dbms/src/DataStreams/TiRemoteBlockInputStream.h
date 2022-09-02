@@ -177,7 +177,7 @@ public:
     TiRemoteBlockInputStream(std::shared_ptr<RemoteReader> remote_reader_, const String & req_id, const String & executor_id, size_t stream_id_)
         : remote_reader(remote_reader_)
         , source_num(remote_reader->getSourceNum())
-        , name(fmt::format("TiRemoteBlockInputStream({})", RemoteReader::name))
+        , name(fmt::format("TiRemote({})", RemoteReader::name))
         , execution_summaries_inited(source_num)
         , log(Logger::get(name, req_id, executor_id))
         , total_rows(0)
@@ -241,7 +241,6 @@ protected:
     void readSuffixImpl() override
     {
         LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
-        remote_reader->close();
     }
 
     void appendInfo(FmtBuffer & buffer) const override
