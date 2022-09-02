@@ -235,14 +235,17 @@ constexpr auto maybeStringLiteralExpr(const std::string_view sv)
 }
 } // namespace exception_details
 
-#define INTERNAL_RUNTIME_CHECK_APPEND_ARG(r, data, elem)                                                                                                             \
-    .fmtAppend(                                                                                                                                                      \
-        [] {                                                                                                                                                         \
-            static_assert(                                                                                                                                           \
-                !::DB::exception_details::maybeStringLiteralExpr(BOOST_PP_STRINGIZE(elem)),                                                                          \
-                                                                 "Seems that you may be passing a string literal to RUNTIME_CHECK. Use RUNTIME_CHECK_MSG instead."); \
-            return ", " BOOST_PP_STRINGIZE(elem) " = {}";                                                                                                            \
-        }(),                                                                                                                                                         \
+#define INTERNAL_RUNTIME_CHECK_APPEND_ARG(r, data, elem)                                                       \
+    .fmtAppend(                                                                                                \
+        [] {                                                                                                   \
+            static_assert(                                                                                     \
+                !::DB::exception_details::maybeStringLiteralExpr(                                              \
+                    BOOST_PP_STRINGIZE(elem)),                                                                 \
+                    "Unexpected " BOOST_PP_STRINGIZE(elem) ": Seems that you may be passing a string literal " \
+                                                           "to RUNTIME_CHECK? Use RUNTIME_CHECK_MSG instead. " \
+                                                           "See tiflash/pull/5777 for details.");              \
+            return ", " BOOST_PP_STRINGIZE(elem) " = {}";                                                      \
+        }(),                                                                                                   \
         elem)
 
 #define INTERNAL_RUNTIME_CHECK_APPEND_ARGS(...) \
