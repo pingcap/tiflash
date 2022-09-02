@@ -41,7 +41,7 @@ BlockIO Planner::execute()
     return res;
 }
 
-QueryExecutorPtr Planner::pipelineExecute()
+QueryExecutorPtr Planner::pipelineExecute() const
 {
     PhysicalPlan physical_plan{context, log->identifier()};
 

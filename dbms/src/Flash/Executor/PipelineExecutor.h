@@ -37,7 +37,7 @@ public:
 
     String dump() const override;
 
-private:
+protected:
     DAGScheduler dag_scheduler;
 
     PhysicalPlanNodePtr plan_node;

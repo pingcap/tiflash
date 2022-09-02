@@ -91,10 +91,10 @@ try
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
 
-    // disable pipeline model in batchCop/cop.
-    context.setSetting("enable_pipeline", "false");
-    auto executor = executeQuery(context, internal, QueryProcessingStage::Complete);
-    auto data_input_stream = (std::static_pointer_cast<DataStreamExecutor>(executor))->dataStream();
+    BlockIO streams = executeQueryAsStream(context, internal, QueryProcessingStage::Complete);
+    if (!streams.in || streams.out)
+        // Only query is allowed, so streams.in must not be null and streams.out must be null
+        throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
 
     auto end_time = Clock::now();
     Int64 compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -108,9 +108,8 @@ try
             dag_response,
             context.getSettingsRef().dag_records_per_chunk,
             dag_context);
-        dag_output_stream = std::make_shared<DAGBlockOutputStream>(data_input_stream->getHeader(), std::move(response_writer));
-
-        copyData(*data_input_stream, *dag_output_stream);
+        dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
+        copyData(*streams.in, *dag_output_stream);
     }
     else
     {
@@ -141,8 +140,8 @@ try
             dag_context,
             /*fine_grained_shuffle_stream_count=*/0,
             /*fine_grained_shuffle_batch_size=*/0);
-        dag_output_stream = std::make_shared<DAGBlockOutputStream>(data_input_stream->getHeader(), std::move(response_writer));
-        copyData(*data_input_stream, *dag_output_stream);
+        dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
+        copyData(*streams.in, *dag_output_stream);
     }
 
     if (auto throughput = dag_context.getTableScanThroughput(); throughput.first)
@@ -162,7 +161,7 @@ try
         }
     }
 
-    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(data_input_stream.get()))
+    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(streams.in.get()))
     {
         LOG_FMT_DEBUG(
             log,

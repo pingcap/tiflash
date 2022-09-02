@@ -36,7 +36,7 @@ public:
 
     BlockIO execute() override;
 
-    QueryExecutorPtr pipelineExecute();
+    QueryExecutorPtr pipelineExecute() const;
 
 private:
     DAGContext & dagContext() const;

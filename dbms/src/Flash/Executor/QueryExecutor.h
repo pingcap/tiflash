@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/ResultHandler.h>
+#include <common/types.h>
 
 #include <memory>
 #include <utility>
@@ -37,4 +38,4 @@ public:
 };
 
 using QueryExecutorPtr = std::shared_ptr<QueryExecutor>;
-}
+} // namespace DB

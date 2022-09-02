@@ -21,6 +21,23 @@
 
 namespace DB
 {
+BlockIO executeQueryAsStream(
+    Context & context,
+    bool internal,
+    QueryProcessingStage::Enum stage)
+{
+    if (context.getSettingsRef().enable_planner)
+    {
+        PlanQuerySource plan(context);
+        return executeQuery(plan, context, internal, stage);
+    }
+    else
+    {
+        DAGQuerySource dag(context);
+        return executeQuery(dag, context, internal, stage);
+    }
+}
+
 QueryExecutorPtr executeQuery(
     Context & context,
     bool internal,
@@ -30,24 +47,12 @@ QueryExecutorPtr executeQuery(
     {
         PlanQuerySource plan(context);
         auto interpreter = plan.interpreter(context, stage);
-        auto planner = static_cast<Planner *>(interpreter.get());
+        const auto * planner = static_cast<Planner *>(interpreter.get());
         return planner->pipelineExecute();
     }
     else
     {
-        auto prepare_io = [&]() {
-            if (context.getSettingsRef().enable_planner)
-            {
-                PlanQuerySource plan(context);
-                return executeQuery(plan, context, internal, stage);
-            }
-            else
-            {
-                DAGQuerySource dag(context);
-                return executeQuery(dag, context, internal, stage);
-            }
-        };
-        return std::make_shared<DataStreamExecutor>(prepare_io());
+        return std::make_shared<DataStreamExecutor>(executeQueryAsStream(context, internal, stage));
     }
 }
 } // namespace DB

@@ -21,8 +21,13 @@
 
 namespace DB
 {
+BlockIO executeQueryAsStream(
+    Context & context,
+    bool internal = false,
+    QueryProcessingStage::Enum stage = QueryProcessingStage::Complete);
+
 QueryExecutorPtr executeQuery(
     Context & context,
     bool internal = false,
     QueryProcessingStage::Enum stage = QueryProcessingStage::Complete);
-}
+} // namespace DB

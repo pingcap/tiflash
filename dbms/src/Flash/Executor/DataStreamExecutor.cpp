@@ -42,11 +42,6 @@ std::pair<bool, String> DataStreamExecutor::execute(ResultHandler result_handler
     }
 }
 
-BlockInputStreamPtr DataStreamExecutor::dataStream() const
-{
-    return data_stream;
-}
-
 String DataStreamExecutor::dump() const
 {
     assert(data_stream);

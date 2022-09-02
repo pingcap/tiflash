@@ -32,11 +32,9 @@ public:
 
     std::pair<bool, String> execute(ResultHandler result_handler) override;
 
-    BlockInputStreamPtr dataStream() const;
-
     String dump() const override;
 
-private:
+protected:
     BlockInputStreamPtr data_stream;
 };
 } // namespace DB

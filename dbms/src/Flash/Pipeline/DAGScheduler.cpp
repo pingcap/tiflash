@@ -16,7 +16,7 @@
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/DAGScheduler.h>
-#include <Flash/Pipeline/ResultHandlerPlan.h>
+#include <Flash/Pipeline/PhysicalResultHandler.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
 
@@ -60,6 +60,13 @@ std::pair<bool, String> DAGScheduler::run(
     return {event_queue.getStatus() == MPMCQueueStatus::FINISHED, err_msg};
 }
 
+PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
+    const PhysicalPlanNodePtr & plan_node,
+    ResultHandler result_handler)
+{
+    return PhysicalResultHandler::build(result_handler, log->identifier(), plan_node);
+}
+
 void DAGScheduler::cancel()
 {
     event_queue.push(PipelineEvent::cancel());
@@ -88,15 +95,6 @@ void DAGScheduler::handlePipelineFail(const PipelineEventPtr & event, String & e
     event_queue.cancel();
     cancelRunningPipelines(false);
     status_machine.finish();
-}
-
-PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
-    const PhysicalPlanNodePtr & plan_node,
-    ResultHandler result_handler)
-{
-    return result_handler.isDefault()
-        ? plan_node
-        : PhysicalResultHandler::build(result_handler, log->identifier(), plan_node);
 }
 
 void DAGScheduler::handlePipelineFinish(const PipelineEventPtr & event)
