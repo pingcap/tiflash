@@ -83,7 +83,10 @@ public:
         const tipb::Aggregation & agg,
         bool group_by_collation_sensitive);
 
-    void appendWindowColumns(WindowDescription & window_description, const tipb::Window & window, ExpressionActionsChain::Step & step);
+    void appendWindowColumns(
+        WindowDescription & window_description,
+        const tipb::Window & window,
+        const ExpressionActionsPtr & actions);
 
     WindowDescription buildWindowDescription(const tipb::Window & window);
 
@@ -222,6 +225,22 @@ private:
         AggregateDescriptions & aggregate_descriptions,
         NamesAndTypes & aggregated_columns,
         bool empty_input_as_null);
+
+    void buildLeadLag(
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions,
+        const String & window_func_name,
+        WindowDescription & window_description,
+        NamesAndTypes & source_columns,
+        NamesAndTypes & window_columns);
+
+    void buildCommonWindowFunc(
+        const tipb::Expr & expr,
+        const ExpressionActionsPtr & actions,
+        const String & window_func_name,
+        WindowDescription & window_description,
+        NamesAndTypes & source_columns,
+        NamesAndTypes & window_columns);
 
     void fillArgumentDetail(
         const ExpressionActionsPtr & actions,
