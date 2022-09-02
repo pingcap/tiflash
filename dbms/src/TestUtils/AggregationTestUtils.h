@@ -49,7 +49,7 @@ public:
     void executeGroupByAndAssert(const ColumnsWithTypeAndName & cols, const ColumnsWithTypeAndName & expected_cols)
     {
         String db_name = "test_group";
-        String table_name = "test_tablexx"; // todo refine.
+        String table_name = "test_table_group";
         MockAstVec group_by_cols;
         MockColumnNameVec proj_names;
         MockColumnInfoVec column_infos;
@@ -62,6 +62,26 @@ public:
 
         context.addMockTable(db_name, table_name, column_infos, cols);
 
+        auto request = context.scan(db_name, table_name)
+                           .aggregation({}, group_by_cols)
+                           .project(proj_names)
+                           .build(context);
+
+        for (size_t i = 1; i <= 10; ++i)
+            ASSERT_COLUMNS_EQ_UR(expected_cols, executeStreams(request, i)) << "expected_cols: " << getColumnsContent(expected_cols) << ", actual_cols: " << getColumnsContent(executeStreams(request, i));
+    }
+     
+    // todo refine..
+    void executeGroupByAndAssertWithTable(const String & db_name, const String & table_name, const ColumnsWithTypeAndName & expected_cols)
+    {
+        MockAstVec group_by_cols;
+        MockColumnNameVec proj_names;
+        for (const auto & col : expected_cols)
+        {
+            group_by_cols.push_back(col(col.name));
+            proj_names.push_back(col.name);
+        }
+  
         auto request = context.scan(db_name, table_name)
                            .aggregation({}, group_by_cols)
                            .project(proj_names)

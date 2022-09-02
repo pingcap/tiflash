@@ -199,8 +199,6 @@ try
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
             executeWithConcurrency(request, expect_cols[i]);
         }
-
-        executeGroupByAndAssert({toNullableVec<Int8>("tinyint_", col_tinyint)}, expect_cols[0]);
     }
 
     {
@@ -354,6 +352,14 @@ try
     executeWithConcurrency(
         request,
         {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}, {toVec<UInt64>({6})}});
+}
+CATCH
+
+TEST_F(ExecutorAggTestRunner, TestFramwork)
+try
+{
+    executeGroupByAndAssert({toNullableVec<Int8>("tinyint_", col_tinyint)}, {toNullableVec<Int8>(ColumnWithNullableInt8{-1, 2, {}, 0, 1, 3, -2})});
+    executeGroupByAndAssertWithTable(db_name, table_types, {toNullableVec<Int8>(types_col_name[2], ColumnWithNullableInt8{-1, 2, {}, 0, 1, 3, -2})});
 }
 CATCH
 
