@@ -199,8 +199,8 @@ try
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
             executeWithConcurrency(request, expect_cols[i]);
         }
-        // ywq todo
-        executeGroupByAndAssert(expect_cols[0], {toNullableVec<Int8>(types_col_name[2], col_tinyint)});
+
+        executeGroupByAndAssert({toNullableVec<Int8>("tinyint_", col_tinyint)}, expect_cols[0]);
     }
 
     {
