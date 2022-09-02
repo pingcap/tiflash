@@ -216,18 +216,18 @@ Block HashOrderBlockInputStream::readImpl()
 
             switch (type)
             {
-#define M(TYPE)                                                                                                               \
-            case Type::TYPE:                                                                                                  \
-            {                                                                                                                 \
-                auto key_columns = getKeyColumns(description, block);                                                         \
-                std::vector<std::string> sort_key_container;                                                                  \
-                sort_key_container.resize(key_columns.size());                                                                \
-                using KeyGetter = typename KeyGetterForType<Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type; \
-                insert(*maps.TYPE, rows, KeyGetter(key_columns, key_sizes, collators), sort_key_container, &blocks.back());   \
-                iters.TYPE = maps.TYPE->cbegin();                                                                             \
-                break;                                                                                                        \
-            }
-            APPLY_FOR_HASH_ORDER_VARIANTS(M)
+#define M(TYPE)                                                                                                       \
+    case Type::TYPE:                                                                                                  \
+    {                                                                                                                 \
+        auto key_columns = getKeyColumns(description, block);                                                         \
+        std::vector<std::string> sort_key_container;                                                                  \
+        sort_key_container.resize(key_columns.size());                                                                \
+        using KeyGetter = typename KeyGetterForType<Type::TYPE, std::remove_reference_t<decltype(*maps.TYPE)>>::Type; \
+        insert(*maps.TYPE, rows, KeyGetter(key_columns, key_sizes, collators), sort_key_container, &blocks.back());   \
+        iters.TYPE = maps.TYPE->cbegin();                                                                             \
+        break;                                                                                                        \
+    }
+                APPLY_FOR_HASH_ORDER_VARIANTS(M)
 #undef M
             }
         }
