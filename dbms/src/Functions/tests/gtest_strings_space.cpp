@@ -55,10 +55,10 @@ TEST_F(StringSpace, spaceTest)
 try
 {
     ASSERT_COLUMN_EQ(
-        toNullableVec({"  ", "", "          ", ""}),
+        toNullableVec({"  ", "", "          ", "", "      "}),
         executeFunction(
             func_name,
-            toVecInt({2, 0, 10, -1})));
+            toVecInt({2, 0, 10, -1, 6})));
 }
 CATCH
 

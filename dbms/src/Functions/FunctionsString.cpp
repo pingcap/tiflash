@@ -4408,17 +4408,11 @@ public:
 
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
-    bool useDefaultImplementationForNulls() const override { return false; }
+
     bool useDefaultImplementationForConstants() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (arguments.size() != 1)
-            throw Exception(
-                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be 1.", getName(), arguments.size()),
-                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-
         return arguments[0]->onlyNull()
             ? makeNullable(std::make_shared<DataTypeNothing>())
             : makeNullable(std::make_shared<DataTypeString>());
@@ -4426,52 +4420,79 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        auto & c0_col = block.getByPosition(arguments[0]);
-        if (c0_col.type->onlyNull())
+        if (executeSpace<UInt8>(block, arguments, result)
+            || executeSpace<UInt16>(block, arguments, result)
+            || executeSpace<UInt32>(block, arguments, result)
+            || executeSpace<UInt64>(block, arguments, result)
+            || executeSpace<Int8>(block, arguments, result)
+            || executeSpace<Int16>(block, arguments, result)
+            || executeSpace<Int32>(block, arguments, result)
+            || executeSpace<Int64>(block, arguments, result))
         {
-            DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
-            block.getByPosition(result).column = data_type->createColumnConst(c0_col.column->size(), Null());
             return;
         }
-
-        Field res_field;
-        auto c0_col_column = c0_col.column;
-        size_t val_num = block.rows();
-        auto result_null_map = ColumnUInt8::create(val_num);
-        auto col_res = ColumnString::create();
-        col_res->reserve(val_num);
-
-        for (size_t row = 0; row < val_num; ++row)
+        else
         {
-            if (c0_col_column->isNullAt(row))
-            {
-                result_null_map->getData()[row] = true;
-            }
-            else
-            {
-                result_null_map->getData()[row] = false;
-
-                c0_col_column->get(row, res_field);
-                Int64 space_num = res_field.get<Int64>();
-                if (space_num < 0)
-                {
-                    space_num = 0;
-                }
-                if (space_num > MAX)
-                {
-                    result_null_map->getData()[row] = true;
-                    space_num = 0;
-                }
-
-                std::string res_string(space_num, ' ');
-                col_res->insert(res_string);
-            }
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
-
-        block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
     }
 
 private:
+    template <typename IntType>
+    bool executeSpace(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        auto & c0_col = block.getByPosition(arguments[0]);
+
+        Field res_field;
+        auto c0_col_column = c0_col.column;
+        const auto * col_vector_space_num = checkAndGetColumn<ColumnVector<IntType>>(c0_col_column.get());
+        if (col_vector_space_num == nullptr)
+        {
+            return false;
+        }
+        const auto & col_vector_space_num_value = col_vector_space_num->getData();
+        size_t val_num = block.rows();
+        auto result_null_map = ColumnUInt8::create(val_num);
+        auto col_res = ColumnString::create();
+
+        auto & col_res_data = col_res->getChars();
+        auto & col_res_offsets = col_res->getOffsets();
+
+        col_res_offsets.resize(c0_col_column->size());
+        ColumnString::Offset res_offset = 0;
+
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            result_null_map->getData()[row] = false;
+
+            Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT32_MAX : col_vector_space_num_value[row];
+            if (space_num < 0)
+            {
+                space_num = 0;
+            }
+            if (space_num > MAX)
+            {
+                result_null_map->getData()[row] = true;
+                space_num = 0;
+            }
+            col_res_data.resize(col_res_data.size() + space_num + 1);
+            for (auto i = 0; i < space_num; ++i)
+            {
+                col_res_data[res_offset + i] = ' ';
+            }
+
+            col_res_data[res_offset + space_num] = '\0';
+            res_offset += space_num + 1;
+            col_res_offsets[row] = res_offset;
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
+        return true;
+    }
 };
 
 class FunctionPosition : public IFunction
