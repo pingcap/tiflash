@@ -12,12 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Common/Arena.h>
 #include <DataStreams/WindowBlockInputStream.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
-#include <Interpreters/convertFieldToType.h>
 
 namespace DB
 {
@@ -70,6 +66,7 @@ void WindowBlockInputStream::initialWorkspaces()
     {
         WindowFunctionWorkspace workspace;
         workspace.window_function = window_function_description.window_function;
+        workspace.arguments = window_function_description.arguments;
         workspaces.push_back(std::move(workspace));
     }
     only_have_row_number = onlyHaveRowNumber();
@@ -239,15 +236,29 @@ void WindowBlockInputStream::advanceFrameStart()
         return;
     }
 
-    if (only_have_pure_window)
+    switch (window_description.frame.begin_type)
     {
+    case WindowFrame::BoundaryType::Unbounded:
+        // UNBOUNDED PRECEDING, just mark it valid. It is initialized when
+        // the new partition starts.
+        frame_started = true;
+        break;
+    case WindowFrame::BoundaryType::Current:
+    {
+        RUNTIME_CHECK_MSG(
+            only_have_pure_window,
+            "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
         frame_start = current_row;
         frame_started = true;
-        return;
+        break;
     }
-
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                    "window function only support pure window function now.");
+    case WindowFrame::BoundaryType::Offset:
+    default:
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "The frame begin type '{}' is not implemented",
+            window_description.frame.begin_type);
+    }
 }
 
 bool WindowBlockInputStream::arePeers(const RowNumber & x, const RowNumber & y) const
@@ -307,16 +318,12 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
            || frame_end.block + 1 == partition_end.block);
 
     // If window only have row_number or rank/dense_rank functions, set frame_end to the next row of current_row and frame_ended to true
-    if (only_have_pure_window)
-    {
-        frame_end = current_row;
-        advanceRowNumber(frame_end);
-        frame_ended = true;
-        return;
-    }
-
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                    "window function only support pure window function now.");
+    RUNTIME_CHECK(
+        only_have_pure_window,
+        "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
+    frame_end = current_row;
+    advanceRowNumber(frame_end);
+    frame_ended = true;
 }
 
 void WindowBlockInputStream::advanceFrameEnd()
@@ -339,6 +346,12 @@ void WindowBlockInputStream::advanceFrameEnd()
         advanceFrameEndCurrentRow();
         break;
     case WindowFrame::BoundaryType::Unbounded:
+    {
+        // The UNBOUNDED FOLLOWING frame ends when the partition ends.
+        frame_end = partition_end;
+        frame_ended = partition_ended;
+        break;
+    }
     case WindowFrame::BoundaryType::Offset:
     default:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
@@ -355,7 +368,7 @@ void WindowBlockInputStream::writeOutCurrentRow()
     for (size_t wi = 0; wi < workspaces.size(); ++wi)
     {
         auto & ws = workspaces[wi];
-        ws.window_function->windowInsertResultInto(this->shared_from_this(), wi);
+        ws.window_function->windowInsertResultInto(this->shared_from_this(), wi, ws.arguments);
     }
 }
 
@@ -527,6 +540,7 @@ void WindowBlockInputStream::tryCalculate()
             assert(frame_start <= frame_end);
 
             // Write out the results.
+            // TODO execute the window function by block instead of row.
             writeOutCurrentRow();
 
             prev_frame_start = frame_start;
@@ -591,5 +605,73 @@ void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
         frameTypeToString(window_description.frame.type),
         boundaryTypeToString(window_description.frame.begin_type),
         boundaryTypeToString(window_description.frame.end_type));
+}
+
+void WindowBlockInputStream::advanceRowNumber(RowNumber & x) const
+{
+    assert(x.block >= first_block_number);
+    assert(x.block - first_block_number < window_blocks.size());
+
+    const auto block_rows = blockAt(x).rows;
+    assert(x.row < block_rows);
+
+    ++x.row;
+    if (x.row < block_rows)
+    {
+        return;
+    }
+
+    x.row = 0;
+    ++x.block;
+}
+
+bool WindowBlockInputStream::lead(RowNumber & x, size_t offset) const
+{
+    assert(frame_started);
+    assert(frame_ended);
+    assert(frame_start <= frame_end);
+
+    assert(x.block >= first_block_number);
+    assert(x.block - first_block_number < window_blocks.size());
+
+    const auto block_rows = blockAt(x).rows;
+    assert(x.row < block_rows);
+
+    x.row += offset;
+    if (x.row < block_rows)
+    {
+        return x < frame_end;
+    }
+
+    ++x.block;
+    if (x.block - first_block_number == window_blocks.size())
+        return false;
+    size_t new_offset = x.row - block_rows;
+    x.row = 0;
+    return lead(x, new_offset);
+}
+
+bool WindowBlockInputStream::lag(RowNumber & x, size_t offset) const
+{
+    assert(frame_started);
+    assert(frame_ended);
+    assert(frame_start <= frame_end);
+
+    assert(x.block >= first_block_number);
+    assert(x.block - first_block_number < window_blocks.size());
+
+    if (x.row >= offset)
+    {
+        x.row -= offset;
+        return frame_start <= x;
+    }
+
+    if (x.block <= first_block_number)
+        return false;
+
+    --x.block;
+    size_t new_offset = offset - x.row - 1;
+    x.row = blockAt(x.block).rows - 1;
+    return lag(x, new_offset);
 }
 } // namespace DB

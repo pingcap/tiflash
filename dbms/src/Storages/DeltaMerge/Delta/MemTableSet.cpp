@@ -22,11 +22,6 @@
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
 
-namespace ProfileEvents
-{
-extern const Event DMWriteBytes;
-}
-
 namespace DB
 {
 namespace DM
@@ -264,7 +259,6 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
     if (unlikely(tasks.size() > column_files.size()))
         throw Exception("column_files num check failed", ErrorCodes::LOGICAL_ERROR);
 
-    size_t flush_bytes = 0;
     auto column_file_iter = column_files.begin();
     for (const auto & task : tasks)
     {
@@ -272,7 +266,6 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         {
             throw Exception("column_files check failed", ErrorCodes::LOGICAL_ERROR);
         }
-        flush_bytes += task.column_file->getBytes();
         column_file_iter++;
     }
     ColumnFiles new_column_files;
@@ -292,8 +285,6 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
     rows = new_rows;
     bytes = new_bytes;
     deletes = new_deletes;
-
-    ProfileEvents::increment(ProfileEvents::DMWriteBytes, flush_bytes);
 }
 
 
