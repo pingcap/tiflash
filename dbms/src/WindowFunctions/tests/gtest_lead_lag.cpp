@@ -36,10 +36,13 @@ public:
     void executeWithConcurrencyAndBlockSize(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
     {
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        std::vector<size_t> block_sizes{1, 2, 3, DEFAULT_BLOCK_SIZE};
+        auto to_field = [](size_t block_size) {
+            return Field(static_cast<UInt64>(block_size));
+        };
+        std::vector<size_t> block_sizes{1, 2, 3, 4, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
-            context.context.setSetting("max_block_size", block_size);
+            context.context.setSetting("max_block_size", to_field(block_size));
             ASSERT_COLUMNS_EQ_R(expect_columns, executeStreams(request));
             for (size_t i = 2; i <= max_concurrency_level; ++i)
             {
@@ -114,7 +117,7 @@ public:
     }
 };
 
-TEST_F(LeadLag, one_arg)
+TEST_F(LeadLag, oneArg)
 try
 {
     executeFunctionAndAssert(
@@ -132,7 +135,7 @@ try
 }
 CATCH
 
-TEST_F(LeadLag, two_arg)
+TEST_F(LeadLag, twoArgs)
 try
 {
     // arg2 == 0
@@ -215,7 +218,7 @@ try
 }
 CATCH
 
-TEST_F(LeadLag, three_arg)
+TEST_F(LeadLag, threeArgs)
 try
 {
     // arg2 == 0
@@ -294,7 +297,7 @@ try
 }
 CATCH
 
-TEST_F(LeadLag, test_null)
+TEST_F(LeadLag, testNull)
 try
 {
     executeFunctionAndAssert(
