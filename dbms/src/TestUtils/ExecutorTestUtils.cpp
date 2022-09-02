@@ -98,10 +98,8 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setDAGContext(&dag_context);
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
-    auto res = executeQueryAsStream(context.context);
-    FmtBuffer fb;
-    res.in->dumpTree(fb);
-    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+    auto executor = executeQuery(context.context);
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(executor->dump()));
 }
 
 namespace
@@ -164,7 +162,12 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
-    return readBlock(executeQueryAsStream(context.context).in);
+    auto executor = executeQuery(context.context);
+    Blocks actual_blocks;
+    executor->execute([&actual_blocks](const Block & block) {
+        actual_blocks.push_back(block);
+    });
+    return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)

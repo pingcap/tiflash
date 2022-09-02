@@ -30,9 +30,10 @@ public:
         assert(data_stream);
     }
 
-    std::pair<bool, String> execute(ResultHandler result_handler) override;
-
     String dump() const override;
+
+protected:
+    std::pair<bool, String> execute(ResultHandler result_handler) override;
 
 protected:
     BlockInputStreamPtr data_stream;

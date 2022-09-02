@@ -29,12 +29,14 @@ public:
 
     virtual ~QueryExecutor() = default;
 
-    // is_success, err_msg
-    virtual std::pair<bool, String> execute(ResultHandler) = 0;
-
     std::pair<bool, String> execute();
+    std::pair<bool, String> execute(ResultHandler::Handler handler);
 
     virtual String dump() const = 0;
+
+protected:
+    // is_success, err_msg
+    virtual std::pair<bool, String> execute(ResultHandler) = 0;
 };
 
 using QueryExecutorPtr = std::shared_ptr<QueryExecutor>;

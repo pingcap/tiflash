@@ -33,9 +33,10 @@ public:
         , plan_node(plan_node_)
     {}
 
-    std::pair<bool, String> execute(ResultHandler result_handler) override;
-
     String dump() const override;
+
+protected:
+    std::pair<bool, String> execute(ResultHandler result_handler) override;
 
 protected:
     DAGScheduler dag_scheduler;

@@ -24,7 +24,7 @@ class ResultHandler
 {
 public:
     using Handler = std::function<void(const Block &)>;
-    ResultHandler(Handler handler_)
+    explicit ResultHandler(Handler handler_)
         : handler(handler_)
     {}
     ResultHandler()
