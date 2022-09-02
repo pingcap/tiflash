@@ -52,7 +52,7 @@ NamesAndTypes addSchemaProjectAction(
     {
         const auto & before_column_name = before_schema[i].name;
         String after_column_name = column_prefix + before_column_name;
-        /// Duplicate columns don‘t need to project.
+        /// Duplicate columns don't need to project.
         if (column_name_set.find(before_column_name) == column_name_set.end())
         {
             project_aliases.emplace_back(before_column_name, after_column_name);

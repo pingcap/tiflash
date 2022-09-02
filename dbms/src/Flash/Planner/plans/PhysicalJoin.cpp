@@ -259,14 +259,18 @@ void PhysicalJoin::transformImpl(DAGPipeline & pipeline, Context & context, size
 
 void PhysicalJoin::doSchemaProject(DAGPipeline & pipeline, Context & context)
 {
-    auto actions = PhysicalPlanHelper::newActions(pipeline.firstStream()->getHeader(), context);
-    /// do not need to care about duplicated column names because
-    /// it is guaranteed by its children physical plan nodes
-    std::ignore = PhysicalPlanHelper::addSchemaProjectAction(actions, schema);
-    assert(actions && !actions->getActions().empty());
-    assert(actions->getSampleBlock().columns() == schema.size()
-           && FinalizeHelper::checkSampleBlockContainsSchema(actions->getSampleBlock(), schema));
-    executeExpression(pipeline, actions, log, "remove useless column after join");
+    /// add a project to remove all the useless column
+    NamesWithAliases schema_project_cols;
+    for (auto & c : schema)
+    {
+        /// do not need to care about duplicated column names because
+        /// it is guaranteed by its children physical plan nodes
+        schema_project_cols.emplace_back(c.name, c.name);
+    }
+    assert(!schema_project_cols.empty());
+    ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
+    assert(schema_project && !schema_project->getActions().empty());
+    executeExpression(pipeline, schema_project, log, "remove useless column after join");
 }
 
 void PhysicalJoin::finalize(const Names & parent_require)
