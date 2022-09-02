@@ -71,5 +71,17 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream);
 #define ASSERT_INPUTSTREAM_COLS_UR(stream, colnames, columns) \
     ASSERT_PRED_FORMAT3(::DB::tests::InputStreamVSBlockUnrestrictlyCompareColumns, stream, colnames, columns)
 
+// Similar to `InputStreamVSBlockUnrestrictlyCompareColumns` but assume inputstream's blocks are unordered.
+// It is only used for normal mode. (The blocks of fast mode have overlap.)
+// This function read all blocks first and sort them by handle column or column at position 0 if EXTRA_HANDLE_COLUMN_NAME not exist.
+::testing::AssertionResult UnorderedInputStreamVSBlockUnrestrictlyCompareColumns(
+    const char * stream_expr,
+    const char * colnames_expr,
+    const char * columns_expr,
+    const BlockInputStreamPtr & stream,
+    const Strings & colnames,
+    const ColumnsWithTypeAndName & columns);
+#define ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(stream, colnames, columns) \
+    ASSERT_PRED_FORMAT3(::DB::tests::UnorderedInputStreamVSBlockUnrestrictlyCompareColumns, stream, colnames, columns)
 } // namespace tests
 } // namespace DB

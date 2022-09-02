@@ -22,7 +22,7 @@ namespace DB
 {
 class HashJoinBuildBlockInputStream : public IProfilingBlockInputStream
 {
-    static constexpr auto NAME = "HashJoinBuildBlockInputStream";
+    static constexpr auto NAME = "HashJoinBuild";
 
 public:
     HashJoinBuildBlockInputStream(

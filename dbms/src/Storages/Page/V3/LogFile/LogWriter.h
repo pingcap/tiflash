@@ -64,11 +64,11 @@ namespace PS::V3
  * Recyclable record format:
  *
  * +--------------+-----------+-----------+----------------+--- ... ---+
- * |CheckSum (8B) | Size (2B) | Type (1B) | Log number (4B)| Payload   |
+ * |CheckSum (8B) | Size (2B) | Type (1B) | Log number (8B)| Payload   |
  * +--------------+-----------+-----------+----------------+--- ... ---+
  *
  * Same as above, with the addition of
- * Log number = 32bit log file number, so that we can distinguish between
+ * Log number = 64bit log file number, so that we can distinguish between
  * records written by the most recent log writer vs a previous one.
  */
 class LogWriter final : private Allocator<false>
@@ -85,9 +85,9 @@ public:
 
     ~LogWriter();
 
-    void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr);
+    void addRecord(ReadBuffer & payload, size_t payload_size, const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
 
-    void flush(const WriteLimiterPtr & write_limiter = nullptr, const bool background = false);
+    void flush(const WriteLimiterPtr & write_limiter = nullptr, bool background = false);
 
     void close();
 
@@ -119,7 +119,7 @@ private:
     size_t written_bytes = 0;
 
     char * buffer;
-    size_t buffer_size = Format::BLOCK_SIZE;
+    const size_t buffer_size = Format::BLOCK_SIZE;
     WriteBuffer write_buffer;
 };
 } // namespace PS::V3
