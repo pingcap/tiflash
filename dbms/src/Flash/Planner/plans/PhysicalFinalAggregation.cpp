@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <DataStreams/FinalAggregatingBlockInputStream.h>
-#include <Flash/Planner/plans/PhysicalFinalAggregation.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
-#include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Planner/plans/PhysicalFinalAggregation.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -24,6 +24,7 @@ namespace DB
 void PhysicalFinalAggregation::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+    expr_after_agg->finalize(DB::toNames(schema));
 }
 
 const Block & PhysicalFinalAggregation::getSampleBlock() const

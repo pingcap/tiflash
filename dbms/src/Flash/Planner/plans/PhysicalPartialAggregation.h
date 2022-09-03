@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Flash/Planner/plans/PhysicalUnary.h>
-#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/AggregateStore.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {

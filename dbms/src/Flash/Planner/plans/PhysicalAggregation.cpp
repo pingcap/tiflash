@@ -78,7 +78,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
 
     auto physical_partial_agg = std::make_shared<PhysicalPartialAggregation>(
         executor_id,
-        schema,
+        NamesAndTypes{},
         log->identifier(),
         child,
         before_agg_actions,
@@ -123,7 +123,8 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
 
 void PhysicalAggregation::finalize(const Names & parent_require)
 {
-    return final()->finalize(parent_require);
+    final()->finalize(parent_require);
+    partial()->finalize();
 }
 
 const Block & PhysicalAggregation::getSampleBlock() const
