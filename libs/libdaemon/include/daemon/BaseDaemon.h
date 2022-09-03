@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Config/ConfigProcessor.h>
+#include <Poco/AsyncChannel.h>
 #include <Poco/FileChannel.h>
 #include <Poco/Net/SocketAddress.h>
 #include <Poco/NumberFormatter.h>
@@ -62,7 +63,7 @@ public:
     static constexpr char DEFAULT_GRAPHITE_CONFIG_NAME[] = "graphite";
 
     BaseDaemon();
-    ~BaseDaemon();
+    ~BaseDaemon() override;
 
     /// Load configuration, prepare loggers, etc.
     void initialize(Poco::Util::Application &) override;
@@ -77,7 +78,7 @@ public:
     void defineOptions(Poco::Util::OptionSet & _options) override;
 
     /// Graceful shutdown
-    void terminate();
+    static void terminate();
 
     /// Forceful shutdown
     void kill();
@@ -208,6 +209,8 @@ protected:
     Poco::AutoPtr<Poco::FileChannel> error_log_file;
     Poco::AutoPtr<Poco::FileChannel> tracing_log_file;
     Poco::AutoPtr<Poco::SyslogChannel> syslog_channel;
+    Poco::AutoPtr<Poco::AsyncChannel> log_file_async;
+    Poco::AutoPtr<Poco::AsyncChannel> tracing_log_file_async;
 
     std::map<std::string, std::unique_ptr<GraphiteWriter>> graphite_writers;
 
