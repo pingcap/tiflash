@@ -51,8 +51,9 @@ void PhysicalPartialAggregation::transformImpl(DAGPipeline & pipeline, Context &
         stream = std::make_shared<PartialAggregatingBlockInputStream>(
             stream,
             aggregate_store,
-            index++ % max_threads,
+            index % max_threads,
             log->identifier()); 
+        ++index;
     });
 }
 } // namespace DB

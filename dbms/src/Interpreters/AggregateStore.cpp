@@ -34,9 +34,10 @@ void AggregateStore::init(size_t max_threads_, const Aggregator::Params & params
 {
     max_threads = max_threads_;
     assert(max_threads > 0);
+
     many_data.reserve(max_threads);
-    for (auto & elem : many_data)
-        elem = std::make_shared<AggregatedDataVariants>();
+    for (size_t i = 0; i < max_threads; ++i)
+        many_data.emplace_back(std::make_shared<AggregatedDataVariants>());
 
     threads_data.reserve(max_threads);
     for (size_t i = 0; i < max_threads; ++i)
