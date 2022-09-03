@@ -15,10 +15,25 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
+Pipeline::Pipeline(
+    const PhysicalPlanNodePtr & plan_node_,
+    UInt32 id_,
+    const std::unordered_set<UInt32> & parent_ids_,
+    const String & req_id)
+    : plan_node(plan_node_)
+    , id(id_)
+    , parent_ids(parent_ids_)
+    , log(Logger::get("Pipeline", req_id, fmt::format("<pipeline_id:{}>", id)))
+{
+    assert(plan_node);
+    LOG_FMT_DEBUG(log, "pipeline plan node:\n{}", PhysicalPlanVisitor::visitToString(plan_node));
+}
+
 void Pipeline::execute()
 {
     stream->readPrefix();

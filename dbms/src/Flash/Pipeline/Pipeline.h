@@ -29,12 +29,7 @@ public:
         const PhysicalPlanNodePtr & plan_node_,
         UInt32 id_,
         const std::unordered_set<UInt32> & parent_ids_,
-        const String & req_id)
-        : plan_node(plan_node_)
-        , id(id_)
-        , parent_ids(parent_ids_)
-        , log(Logger::get("Pipeline", req_id, fmt::format("<pipeline_id:{}>", id)))
-    {}
+        const String & req_id);
 
     void prepare(Context & context, size_t max_streams);
 

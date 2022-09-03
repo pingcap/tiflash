@@ -150,12 +150,15 @@ std::unordered_set<UInt32> DAGScheduler::createParentPipelines(const PhysicalPla
     for (size_t i = 0; i < plan_node->childrenSize(); ++i)
     {
         const auto & child = plan_node->children(i);
+        // PhysicalJoin cannot be the root node.
         if (child->tp() == PlanType::Join)
         {
             auto physical_join = std::static_pointer_cast<PhysicalJoin>(child);
             // pipeline breaker: PhysicalJoinBuild
             parent_ids.insert(genPipeline(physical_join->build())->getId());
 
+            // remove PhysicalJoin
+            plan_node->setChild(0, physical_join->probe());
             const auto & ids = createParentPipelines(physical_join->probe());
             parent_ids.insert(ids.cbegin(), ids.cend());
         }

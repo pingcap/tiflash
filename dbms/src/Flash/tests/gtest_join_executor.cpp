@@ -83,6 +83,26 @@ public:
     };
 };
 
+TEST_F(JoinExecutorTestRunner, Test)
+try
+{
+    context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "2", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
+    context.addMockTable("simple_test", "t2", {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}}, {toNullableVec<String>("a", {"1", "3", {}, "1", {}}), toNullableVec<String>("b", {"3", "4", "3", {}, {}})});
+
+    auto request = context.scan("simple_test", "t1")
+                       .join(context.scan("simple_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+    {
+        ColumnsWithTypeAndName expect_columns{
+            toNullableVec<String>({"1", "1", "1", "1"}),
+            toNullableVec<String>({{}, "3", {}, "3"}),
+            toNullableVec<String>({"1", "1", "1", "1"}),
+            toNullableVec<String>({"3", "3", {}, {}})};
+        ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request));
+    }
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, SimpleJoin)
 try
 {
