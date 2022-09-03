@@ -15,7 +15,10 @@ include_directories(
 set(libprotobuf_lite_files
   ${protobuf_source_dir}/src/google/protobuf/any_lite.cc
   ${protobuf_source_dir}/src/google/protobuf/arena.cc
+  ${protobuf_source_dir}/src/google/protobuf/arenastring.cc
   ${protobuf_source_dir}/src/google/protobuf/extension_set.cc
+  ${protobuf_source_dir}/src/google/protobuf/generated_enum_util.cc
+  ${protobuf_source_dir}/src/google/protobuf/generated_message_bases.cc
   ${protobuf_source_dir}/src/google/protobuf/generated_message_table_driven_lite.cc
   ${protobuf_source_dir}/src/google/protobuf/generated_message_util.cc
   ${protobuf_source_dir}/src/google/protobuf/implicit_weak_message.cc
@@ -23,10 +26,13 @@ set(libprotobuf_lite_files
   ${protobuf_source_dir}/src/google/protobuf/io/io_win32.cc
   ${protobuf_source_dir}/src/google/protobuf/io/strtod.cc
   ${protobuf_source_dir}/src/google/protobuf/io/zero_copy_stream.cc
+  ${protobuf_source_dir}/src/google/protobuf/io/zero_copy_stream_impl.cc
   ${protobuf_source_dir}/src/google/protobuf/io/zero_copy_stream_impl_lite.cc
+  ${protobuf_source_dir}/src/google/protobuf/map.cc
   ${protobuf_source_dir}/src/google/protobuf/message_lite.cc
   ${protobuf_source_dir}/src/google/protobuf/parse_context.cc
   ${protobuf_source_dir}/src/google/protobuf/repeated_field.cc
+  ${protobuf_source_dir}/src/google/protobuf/repeated_ptr_field.cc
   ${protobuf_source_dir}/src/google/protobuf/stubs/bytestream.cc
   ${protobuf_source_dir}/src/google/protobuf/stubs/common.cc
   ${protobuf_source_dir}/src/google/protobuf/stubs/int128.cc
@@ -68,14 +74,12 @@ set(libprotobuf_files
   ${protobuf_source_dir}/src/google/protobuf/io/gzip_stream.cc
   ${protobuf_source_dir}/src/google/protobuf/io/printer.cc
   ${protobuf_source_dir}/src/google/protobuf/io/tokenizer.cc
-  ${protobuf_source_dir}/src/google/protobuf/io/zero_copy_stream_impl.cc
   ${protobuf_source_dir}/src/google/protobuf/map_field.cc
   ${protobuf_source_dir}/src/google/protobuf/message.cc
   ${protobuf_source_dir}/src/google/protobuf/reflection_ops.cc
   ${protobuf_source_dir}/src/google/protobuf/service.cc
   ${protobuf_source_dir}/src/google/protobuf/source_context.pb.cc
   ${protobuf_source_dir}/src/google/protobuf/struct.pb.cc
-  ${protobuf_source_dir}/src/google/protobuf/stubs/mathlimits.cc
   ${protobuf_source_dir}/src/google/protobuf/stubs/substitute.cc
   ${protobuf_source_dir}/src/google/protobuf/text_format.cc
   ${protobuf_source_dir}/src/google/protobuf/timestamp.pb.cc
@@ -133,6 +137,7 @@ set(libprotoc_files
   ${protobuf_source_dir}/src/google/protobuf/compiler/cpp/cpp_message.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/cpp/cpp_message_field.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/cpp/cpp_padding_optimizer.cc
+  ${protobuf_source_dir}/src/google/protobuf/compiler/cpp/cpp_parse_function_generator.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/cpp/cpp_primitive_field.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/cpp/cpp_service.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/cpp/cpp_string_field.cc
@@ -165,6 +170,7 @@ set(libprotoc_files
   ${protobuf_source_dir}/src/google/protobuf/compiler/java/java_generator.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/java/java_generator_factory.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/java/java_helpers.cc
+  ${protobuf_source_dir}/src/google/protobuf/compiler/java/java_kotlin_generator.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/java/java_map_field.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/java/java_map_field_lite.cc
   ${protobuf_source_dir}/src/google/protobuf/compiler/java/java_message.cc

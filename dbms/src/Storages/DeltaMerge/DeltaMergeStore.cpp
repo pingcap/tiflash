@@ -1240,7 +1240,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
                                         bool keep_order,
-                                        bool is_fast_mode,
+                                        bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1275,8 +1275,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* is_raw = */ is_fast_mode,
-        /* do_delete_mark_filter_for_raw = */ is_fast_mode,
+        /* is_raw = */ is_fast_scan,
+        /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
         after_segment_read);
 
@@ -1306,8 +1306,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 filter,
                 max_version,
                 expected_block_size,
-                /* is_raw_ */ is_fast_mode,
-                /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
+                /* is_raw_= */ is_fast_scan,
+                /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
                 extra_table_id_index,
                 physical_table_id,
                 req_info);
@@ -1347,6 +1347,7 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     if (delta_rows < forceMergeDeltaRows(dm_context) && delta_bytes < forceMergeDeltaBytes(dm_context))
         return;
 
+    // FIXME: checkSegmentUpdate will also count write stalls at each call.
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
@@ -1493,6 +1494,17 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     {
         if (should_foreground_flush)
         {
+            Stopwatch watch;
+            SCOPE_EXIT({
+                // We may be flushing in BG threads. Do not count them as write stalls.
+                if (thread_type == ThreadType::Write)
+                {
+                    // FIXME: We'd better count write stall duration for per-write, instead of per-call,
+                    //   in order to produce a meaningful value.
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_flush).Observe(watch.elapsedSeconds());
+                }
+            });
+
             delta_last_try_flush_rows = delta_rows;
             delta_last_try_flush_bytes = delta_bytes;
             LOG_FMT_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
@@ -1559,10 +1571,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
             Stopwatch watch;
             SCOPE_EXIT({
+                // FIXME: We'd better count write stall duration for per-write, instead of per-call,
+                //   in order to produce a meaningful value.
                 if (should_foreground_merge_delta_by_rows_or_bytes)
-                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds());
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delta_merge_by_write).Observe(watch.elapsedSeconds());
                 if (should_foreground_merge_delta_by_deletes)
-                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delete_range).Observe(watch.elapsedSeconds());
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delta_merge_by_delete_range).Observe(watch.elapsedSeconds());
             });
 
             return segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
@@ -1593,6 +1607,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         auto my_should_split = my_segment_size >= dm_context->segment_force_split_bytes;
         if (my_should_split && !my_segment->isSplitForbidden())
         {
+            Stopwatch watch;
+            SCOPE_EXIT({
+                // FIXME: We'd better count write stall duration for per-write, instead of per-call,
+                //   in order to produce a meaningful value.
+                GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_split).Observe(watch.elapsedSeconds());
+            });
+
             return segmentSplit(*dm_context, my_segment, true).first != nullptr;
         }
         return false;
