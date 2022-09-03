@@ -191,7 +191,6 @@ ProcessListEntry::~ProcessListEntry()
 {
     /// Destroy all streams to avoid long lock of ProcessList
     it->releaseQueryStreams();
-
     std::lock_guard lock(parent.mutex);
 
     String user = it->getClientInfo().current_user;
