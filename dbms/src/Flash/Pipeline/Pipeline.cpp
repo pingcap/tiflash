@@ -41,6 +41,13 @@ void Pipeline::prepare(Context & context, size_t max_streams)
         p_stream->setProgressCallback(context.getProgressCallback());
         p_stream->setProcessListElement(context.getProcessListElement());
     }
+
+    auto stream_str = [&]() {
+        FmtBuffer fb;
+        stream->dumpTree(fb);
+        return fb.toString();
+    };
+    LOG_FMT_DEBUG(log, "pipeline stream:\n{}", stream_str());
 }
 
 void Pipeline::cancel(bool is_kill)

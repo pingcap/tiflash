@@ -41,7 +41,7 @@ BlockIO Planner::execute()
     return res;
 }
 
-QueryExecutorPtr Planner::pipelineExecute() const
+QueryExecutorPtr Planner::pipelineExecute(std::shared_ptr<ProcessListEntry> process_list_entry) const
 {
     PhysicalPlan physical_plan{context, log->identifier()};
 
@@ -52,7 +52,8 @@ QueryExecutorPtr Planner::pipelineExecute() const
         context,
         physical_plan.rootNode(),
         max_streams,
-        log->identifier());
+        log->identifier(),
+        process_list_entry);
 }
 
 DAGContext & Planner::dagContext() const

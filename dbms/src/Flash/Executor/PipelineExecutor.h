@@ -17,6 +17,7 @@
 #include <Flash/Executor/QueryExecutor.h>
 #include <Flash/Pipeline/DAGScheduler.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
+#include <Interpreters/ProcessList.h>
 
 namespace DB
 {
@@ -27,8 +28,10 @@ public:
         Context & context,
         const PhysicalPlanNodePtr & plan_node_,
         size_t max_streams,
-        const String & req_id)
+        const String & req_id,
+        std::shared_ptr<ProcessListEntry> process_list_entry_)
         : QueryExecutor()
+        , process_list_entry(process_list_entry_)
         , dag_scheduler(context, max_streams, req_id)
         , plan_node(plan_node_)
     {}
@@ -39,6 +42,13 @@ protected:
     std::pair<bool, String> execute(ResultHandler result_handler) override;
 
 protected:
+    /** process_list_entry should be destroyed after in and after out,
+      *  since in and out contain pointer to an object inside process_list_entry
+      *  (MemoryTracker * current_memory_tracker),
+      *  which could be used before destroying of in and out.
+      */
+    std::shared_ptr<ProcessListEntry> process_list_entry;
+
     DAGScheduler dag_scheduler;
 
     PhysicalPlanNodePtr plan_node;

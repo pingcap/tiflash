@@ -12,12 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/ProfileEvents.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>
+#include <Flash/Mpp/MPPReceiverSet.h>
+#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Planner/Planner.h>
 #include <Flash/executeQuery.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
+#include <Parsers/makeDummyQuery.h>
+
+namespace ProfileEvents
+{
+extern const Event Query;
+}
 
 namespace DB
 {
@@ -45,10 +57,35 @@ QueryExecutorPtr executeQuery(
 {
     if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
     {
+        assert(!internal && stage == QueryProcessingStage::Complete);
+
+        const Settings & settings = context.getSettingsRef();
+
         PlanQuerySource plan(context);
+        auto [query, ast] = plan.parse(settings.max_query_size);
+
+        ProfileEvents::increment(ProfileEvents::Query);
+        context.setQueryContext(context);
+        ProcessList::EntryPtr process_list_entry = context.getProcessList().insert(
+            query,
+            ast.get(),
+            context.getClientInfo(),
+            settings);
+        context.setProcessListElement(&process_list_entry->get());
+
+        // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
+        // so that we can propagate current_memory_tracker into them.
+        if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
+        {
+            if (context.getDAGContext()->tunnel_set)
+                context.getDAGContext()->tunnel_set->updateMemTracker();
+            if (context.getDAGContext()->getMppReceiverSet())
+                context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+        }
+
         auto interpreter = plan.interpreter(context, stage);
         const auto * planner = static_cast<Planner *>(interpreter.get());
-        return planner->pipelineExecute();
+        return planner->pipelineExecute(process_list_entry);
     }
     else
     {

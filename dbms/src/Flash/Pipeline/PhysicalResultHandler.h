@@ -36,13 +36,9 @@ public:
     }
 
     String getName() const override { return NAME; }
-    Block getTotals() override
-    {
-        return children.back()->getHeader();
-    }
     Block getHeader() const override
     {
-        return children.back()->read();
+        return children.back()->getHeader();
     }
 
 protected:
@@ -66,13 +62,14 @@ public:
         const String & req_id,
         const PhysicalPlanNodePtr & child)
     {
-        assert(!result_handler.isDefault());
-        return std::make_shared<PhysicalResultHandler>(
-            "ResultHandler",
-            child->getSchema(),
-            req_id,
-            child,
-            result_handler);
+        return result_handler.isDefault()
+            ? child
+            : std::make_shared<PhysicalResultHandler>(
+                "ResultHandler",
+                child->getSchema(),
+                req_id,
+                child,
+                result_handler);
     }
 
     PhysicalResultHandler(

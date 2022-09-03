@@ -36,7 +36,7 @@ public:
 
     BlockIO execute() override;
 
-    QueryExecutorPtr pipelineExecute() const;
+    QueryExecutorPtr pipelineExecute(std::shared_ptr<ProcessListEntry> process_list_entry) const;
 
 private:
     DAGContext & dagContext() const;

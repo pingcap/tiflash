@@ -33,7 +33,7 @@ public:
         : plan_node(plan_node_)
         , id(id_)
         , parent_ids(parent_ids_)
-        , log(Logger::get("Pipeline", req_id))
+        , log(Logger::get("Pipeline", req_id, fmt::format("<pipeline_id:{}>", id)))
     {}
 
     void prepare(Context & context, size_t max_streams);
