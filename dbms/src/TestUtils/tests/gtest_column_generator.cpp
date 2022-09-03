@@ -12,29 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <TestUtils/ColumnGenerator.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
-#include <Common/FmtUtils.h>
-#include <Flash/Statistics/traverseExecutors.h>
-#include <Interpreters/Context.h>
-#include <TestUtils/TiFlashTestException.h>
 namespace DB
 {
 namespace tests
 {
-class ExecutorSerializer
+
+TEST(TestColumnGenerator, run)
+try
 {
-public:
-    String serialize(const tipb::DAGRequest * dag_request);
+    std::vector<String> type_vec = {"Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64", "Float32", "Float64", "String", "MyDateTime", "MyDate", "Decimal"};
+    for (size_t i = 10; i <= 100000; i *= 10)
+    {
+        for (auto type : type_vec)
+            ASSERT_EQ(ColumnGenerator::instance().generate({i, type, RANDOM}).column->size(), i);
+    }
+}
+CATCH
 
-private:
-    void serializeListStruct(const tipb::DAGRequest * dag_request);
-    void serializeTreeStruct(const tipb::Executor & root_executor, size_t level);
-    void addPrefix(size_t level) { buf.append(String(level, ' ')); }
-
-private:
-    FmtBuffer buf;
-};
 } // namespace tests
 
 } // namespace DB
