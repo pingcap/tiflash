@@ -53,7 +53,7 @@ set (TIFLASH_VERSION "${TIFLASH_VERSION_MAJOR}.${TIFLASH_VERSION_MINOR}.${TIFLAS
 
 # Release version that follows PD/TiKV/TiDB convention.
 execute_process(
-  COMMAND echo "6.2.0-alpha"
+  COMMAND git describe --tags --dirty --always
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   OUTPUT_VARIABLE TIFLASH_RELEASE_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE
