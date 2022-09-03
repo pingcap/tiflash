@@ -124,6 +124,8 @@ void MPPTask::abortDataStreams(AbortType abort_type)
     /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
     bool is_kill = abort_type == AbortType::ONCANCELLATION;
     context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
+    if (executor)
+        executor->cancel(is_kill);
 }
 
 void MPPTask::closeAllTunnels(const String & reason)

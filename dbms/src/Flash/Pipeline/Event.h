@@ -28,47 +28,68 @@ enum PipelineEventType
     cancel,
 };
 
-struct PipelineEvent;
-using PipelineEventPtr = std::shared_ptr<PipelineEvent>;
-
 struct PipelineEvent
 {
-    static PipelineEventPtr submit(const PipelinePtr & pipeline)
+    static PipelineEvent submit(const PipelinePtr & pipeline)
     {
-        return std::make_shared<PipelineEvent>(pipeline, "", PipelineEventType::submit);
+        return {pipeline, "", false, PipelineEventType::submit};
     }
 
-    static PipelineEventPtr finish(const PipelinePtr & pipeline)
+    static PipelineEvent finish(const PipelinePtr & pipeline)
     {
-        return std::make_shared<PipelineEvent>(pipeline, "", PipelineEventType::finish);
+        return {pipeline, "", false, PipelineEventType::finish};
     }
 
-    static PipelineEventPtr fail(const PipelinePtr & pipeline, const String & err_msg)
+    static PipelineEvent fail(const PipelinePtr & pipeline, const String & err_msg)
     {
-        return std::make_shared<PipelineEvent>(pipeline, err_msg, PipelineEventType::fail);
+        return {pipeline, err_msg, false, PipelineEventType::fail};
     }
 
-    static PipelineEventPtr fail(const String & err_msg)
+    static PipelineEvent fail(const String & err_msg)
     {
         return fail(nullptr, err_msg);
     }
 
-    static PipelineEventPtr cancel()
+    static PipelineEvent cancel(bool is_kill)
     {
-        return std::make_shared<PipelineEvent>(nullptr, "", PipelineEventType::cancel);
+        return {nullptr, "", is_kill, PipelineEventType::cancel};
     }
+
+    PipelineEvent() = default;
 
     PipelineEvent(
         const PipelinePtr & pipeline_,
         const String & err_msg_,
+        bool is_kill_,
         PipelineEventType type_)
         : pipeline(pipeline_)
         , err_msg(err_msg_)
+        , is_kill(is_kill_)
         , type(type_)
     {}
 
-    const PipelinePtr pipeline;
+    PipelineEvent(PipelineEvent && event)
+        : pipeline(std::move(event.pipeline))
+        , err_msg(std::move(event.err_msg))
+        , is_kill(event.is_kill)
+        , type(std::move(event.type))
+    {}
+
+    PipelineEvent & operator=(PipelineEvent && event)
+    {
+        if (this != &event)
+        {
+            pipeline = std::move(event.pipeline);
+            err_msg = std::move(event.err_msg);
+            is_kill = event.is_kill;
+            type = std::move(event.type);
+        }
+        return *this;
+    }
+
+    PipelinePtr pipeline;
     String err_msg;
-    const PipelineEventType type;
+    bool is_kill;
+    PipelineEventType type;
 };
 } // namespace DB

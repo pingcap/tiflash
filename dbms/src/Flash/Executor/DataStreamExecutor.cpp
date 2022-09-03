@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Executor/DataStreamExecutor.h>
 
 namespace DB
@@ -39,6 +40,15 @@ std::pair<bool, String> DataStreamExecutor::execute(ResultHandler result_handler
     catch (...)
     {
         return {false, getCurrentExceptionMessage(true, true)};
+    }
+}
+
+void DataStreamExecutor::cancel(bool is_kill)
+{
+    if (data_stream)
+    {
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(data_stream.get()); p_stream)
+            p_stream->cancel(is_kill);
     }
 }
 

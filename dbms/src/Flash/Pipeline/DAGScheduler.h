@@ -53,7 +53,7 @@ public:
         const PhysicalPlanNodePtr & plan_node,
         ResultHandler result_handler);
 
-    void cancel();
+    void cancel(bool is_kill);
 
 private:
     PipelinePtr genPipeline(const PhysicalPlanNodePtr & plan_node);
@@ -65,14 +65,14 @@ private:
     void submitNext(const PipelinePtr & pipeline);
 
     void handlePipelineSubmit(
-        const PipelineEventPtr & event,
+        const PipelineEvent & event,
         std::shared_ptr<ThreadManager> & thread_manager);
 
-    void handlePipelineFinish(const PipelineEventPtr & event);
+    void handlePipelineFinish(const PipelineEvent & event);
 
-    void handlePipelineFail(const PipelineEventPtr & event, String & err_msg);
+    void handlePipelineFail(const PipelineEvent & event, String & err_msg);
 
-    void handlePipelineCancel(const PipelineEventPtr & event);
+    void handlePipelineCancel(const PipelineEvent & event);
 
     void cancelRunningPipelines(bool is_kill);
 
@@ -87,7 +87,7 @@ private:
 
     PipelineIDGenerator id_generator;
 
-    MPMCQueue<PipelineEventPtr> event_queue{100};
+    MPMCQueue<PipelineEvent> event_queue{100};
 
     Context & context;
 

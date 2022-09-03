@@ -28,6 +28,11 @@ String PipelineExecutor::dump() const
 {
     assert(plan_node);
     return PhysicalPlanVisitor::visitToString(plan_node);
-    ;
+}
+
+void PipelineExecutor::cancel(bool is_kill)
+{
+    plan_node = nullptr;
+    dag_scheduler.cancel(is_kill);
 }
 } // namespace DB

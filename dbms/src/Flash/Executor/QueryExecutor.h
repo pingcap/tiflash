@@ -32,6 +32,8 @@ public:
     std::pair<bool, String> execute();
     std::pair<bool, String> execute(ResultHandler::Handler handler);
 
+    virtual void cancel(bool is_kill) = 0;
+
     virtual String dump() const = 0;
 
 protected:

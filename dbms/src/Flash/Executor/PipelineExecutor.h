@@ -38,6 +38,8 @@ public:
 
     String dump() const override;
 
+    void cancel(bool is_kill) override;
+
 protected:
     std::pair<bool, String> execute(ResultHandler result_handler) override;
 

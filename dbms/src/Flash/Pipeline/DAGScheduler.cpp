@@ -33,12 +33,11 @@ std::pair<bool, String> DAGScheduler::run(
 
     auto thread_manager = newThreadManager();
 
-    PipelineEventPtr event;
+    PipelineEvent event;
     String err_msg;
     while (event_queue.pop(event) == MPMCQueueResult::OK)
     {
-        assert(event);
-        switch (event->type)
+        switch (event.type)
         {
         case PipelineEventType::submit:
             handlePipelineSubmit(event, thread_manager);
@@ -67,16 +66,16 @@ PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
     return PhysicalResultHandler::build(result_handler, log->identifier(), plan_node);
 }
 
-void DAGScheduler::cancel()
+void DAGScheduler::cancel(bool is_kill)
 {
-    event_queue.push(PipelineEvent::cancel());
+    event_queue.push(PipelineEvent::cancel(is_kill));
 }
 
-void DAGScheduler::handlePipelineCancel(const PipelineEventPtr & event)
+void DAGScheduler::handlePipelineCancel(const PipelineEvent & event)
 {
-    assert(event && event->type == PipelineEventType::cancel);
+    assert(event.type == PipelineEventType::cancel);
     event_queue.cancel();
-    cancelRunningPipelines(true);
+    cancelRunningPipelines(event.is_kill);
     status_machine.finish();
 }
 
@@ -86,21 +85,21 @@ void DAGScheduler::cancelRunningPipelines(bool is_kill)
         pipeline->cancel(is_kill);
 }
 
-void DAGScheduler::handlePipelineFail(const PipelineEventPtr & event, String & err_msg)
+void DAGScheduler::handlePipelineFail(const PipelineEvent & event, String & err_msg)
 {
-    assert(event && event->type == PipelineEventType::fail);
-    if (event->pipeline)
-        status_machine.stateToComplete(event->pipeline->getId());
-    err_msg = event->err_msg;
+    assert(event.type == PipelineEventType::fail);
+    if (event.pipeline)
+        status_machine.stateToComplete(event.pipeline->getId());
+    err_msg = event.err_msg;
     event_queue.cancel();
     cancelRunningPipelines(false);
     status_machine.finish();
 }
 
-void DAGScheduler::handlePipelineFinish(const PipelineEventPtr & event)
+void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)
 {
-    assert(event && event->type == PipelineEventType::finish && event->pipeline);
-    status_machine.stateToComplete(event->pipeline->getId());
+    assert(event.type == PipelineEventType::finish && event.pipeline);
+    status_machine.stateToComplete(event.pipeline->getId());
     if (status_machine.isCompleted(final_pipeline_id))
     {
         event_queue.finish();
@@ -108,17 +107,17 @@ void DAGScheduler::handlePipelineFinish(const PipelineEventPtr & event)
     }
     else
     {
-        const auto & finish_pipeline = event->pipeline;
+        const auto & finish_pipeline = event.pipeline;
         submitNext(finish_pipeline);
     }
 }
 
 void DAGScheduler::handlePipelineSubmit(
-    const PipelineEventPtr & event,
+    const PipelineEvent & event,
     std::shared_ptr<ThreadManager> & thread_manager)
 {
-    assert(event && event->type == PipelineEventType::submit && event->pipeline);
-    auto pipeline = event->pipeline;
+    assert(event.type == PipelineEventType::submit && event.pipeline);
+    auto pipeline = event.pipeline;
     pipeline->prepare(context, max_streams);
     thread_manager->schedule(true, "ExecutePipeline", [&, pipeline]() {
         CPUAffinityManager::getInstance().bindSelfQueryThread();
