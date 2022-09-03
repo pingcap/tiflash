@@ -18,6 +18,7 @@
 #include <Flash/Pipeline/DAGScheduler.h>
 #include <Flash/Pipeline/PhysicalResultHandler.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
+#include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
 
 namespace DB
@@ -149,9 +150,11 @@ std::unordered_set<UInt32> DAGScheduler::createParentPipelines(const PhysicalPla
     for (size_t i = 0; i < plan_node->childrenSize(); ++i)
     {
         const auto & child = plan_node->children(i);
-        // PhysicalJoin cannot be the root node.
-        if (child->tp() == PlanType::Join)
+        switch (child->tp())
         {
+        case PlanType::Join:
+        {
+            // PhysicalJoin cannot be the root node.
             auto physical_join = std::static_pointer_cast<PhysicalJoin>(child);
             // pipeline breaker: PhysicalJoinBuild
             parent_ids.insert(genPipeline(physical_join->build())->getId());
@@ -160,11 +163,26 @@ std::unordered_set<UInt32> DAGScheduler::createParentPipelines(const PhysicalPla
             plan_node->setChild(0, physical_join->probe());
             const auto & ids = createParentPipelines(physical_join->probe());
             parent_ids.insert(ids.cbegin(), ids.cend());
+            break;
         }
-        else
+        case PlanType::Aggregation:
+        {
+            // PhysicalAggregation cannot be the root node.
+            auto physical_agg = std::static_pointer_cast<PhysicalAggregation>(child);
+            // pipeline breaker: PhysicalPartialAggregation
+            parent_ids.insert(genPipeline(physical_agg->partial())->getId());
+
+            // remove PhysicalAggregation
+            plan_node->setChild(0, physical_agg->final());
+            const auto & ids = createParentPipelines(physical_agg->final());
+            parent_ids.insert(ids.cbegin(), ids.cend());
+            break;
+        }
+        default:
         {
             const auto & ids = createParentPipelines(child);
             parent_ids.insert(ids.cbegin(), ids.cend());
+        }
         }
     }
     return parent_ids;

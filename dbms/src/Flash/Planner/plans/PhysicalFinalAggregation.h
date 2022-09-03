@@ -14,39 +14,34 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalBinary.h>
-#include <tipb/executor.pb.h>
+#include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <Interpreters/AggregateStore.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
-class PhysicalAggregation : public PhysicalBinary
+class PhysicalFinalAggregation : public PhysicalLeaf
 {
 public:
-    static PhysicalPlanNodePtr build(
-        const Context & context,
-        const String & executor_id,
-        const LoggerPtr & log,
-        const tipb::Aggregation & aggregation,
-        const PhysicalPlanNodePtr & child);
-
-    PhysicalAggregation(
+    PhysicalFinalAggregation(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & partial_,
-        const PhysicalPlanNodePtr & final_)
-        : PhysicalBinary(executor_id_, PlanType::Aggregation, schema_, req_id, partial_, final_)
+        const AggregateStorePtr & aggregate_store_,
+        const ExpressionActionsPtr & expr_after_agg_)
+        : PhysicalLeaf(executor_id_, PlanType::FinalAggregation, schema_, req_id)
+        , aggregate_store(aggregate_store_)
+        , expr_after_agg(expr_after_agg_)
     {}
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
-    /// the right side is the final side.
-    const PhysicalPlanNodePtr & partial() const { return left; }
-    const PhysicalPlanNodePtr & final() const { return right; }
-
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t max_streams) override;
+
+    AggregateStorePtr aggregate_store;
+    ExpressionActionsPtr expr_after_agg;
 };
 } // namespace DB

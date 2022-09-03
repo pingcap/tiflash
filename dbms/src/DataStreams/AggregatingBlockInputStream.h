@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataStreams/TemporaryFileStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
@@ -67,17 +68,6 @@ protected:
 
     bool executed = false;
 
-    /// To read the data that was flushed into the temporary data file.
-    struct TemporaryFileStream
-    {
-        FileProviderPtr file_provider;
-        ReadBufferFromFileProvider file_in;
-        CompressedReadBuffer<> compressed_in;
-        BlockInputStreamPtr block_in;
-
-        TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);
-        ~TemporaryFileStream();
-    };
     std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
 
     /** From here we will get the completed blocks after the aggregation. */

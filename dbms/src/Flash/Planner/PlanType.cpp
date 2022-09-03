@@ -28,6 +28,8 @@ String PlanType::toString() const
         M(TopN)
         M(Filter)
         M(Aggregation)
+        M(FinalAggregation)
+        M(PartialAggregation)
         M(ExchangeSender)
         M(MockExchangeSender)
         M(ExchangeReceiver)

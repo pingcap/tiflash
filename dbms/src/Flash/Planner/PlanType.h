@@ -39,6 +39,8 @@ struct PlanType
         JoinProbe = 14,
         JoinBuild = 15,
         ResultHandler = 16,
+        FinalAggregation = 17,
+        PartialAggregation = 18,
     };
     PlanTypeEnum enum_value;
 
