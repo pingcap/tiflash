@@ -243,12 +243,12 @@ Block HashOrderBlockInputStream::readImpl()
     case Type::TYPE:                                                                                     \
         if (iters.TYPE != maps.TYPE->cend())                                                             \
         {                                                                                                \
-            auto columns = blocks[0].cloneEmptyColumns();                                                \
+            auto columns = blocks.front().cloneEmptyColumns();                                                \
             for (const RowRefList * curr = &iters.TYPE->getMapped(); curr != nullptr; curr = curr->next) \
                 for (size_t j = 0; j < columns.size(); j++)                                              \
                     columns[j]->insertFrom(*curr->block->getByPosition(j).column.get(), curr->row_num);  \
             ++iters.TYPE;                                                                                \
-            return blocks[0].cloneWithColumns(std::move(columns));                                       \
+            return blocks.front().cloneWithColumns(std::move(columns));                                       \
         }                                                                                                \
         else                                                                                             \
         {                                                                                                \

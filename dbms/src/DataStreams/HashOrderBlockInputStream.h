@@ -145,7 +145,7 @@ private:
 
     TiDB::TiDBCollators collators;
 
-    Blocks blocks;
+    BlocksList blocks;
 
     using Sizes = std::vector<size_t>;
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);

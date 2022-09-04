@@ -173,7 +173,8 @@ void hashOrderStreams(
     size_t,
     SortDescription order_descr,
     Int64 limit,
-    [[maybe_unused]] bool enable_fine_grained_shuffle,
+    [[maybe_unused]]
+    bool enable_fine_grained_shuffle,
     const Context & context,
     const LoggerPtr & log)
 {
