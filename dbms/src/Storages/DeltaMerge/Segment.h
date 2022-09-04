@@ -270,6 +270,7 @@ public:
     const DeltaValueSpacePtr & getDelta() const { return delta; }
     const StableValueSpacePtr & getStable() const { return stable; }
 
+    String logId() const;
     String simpleInfo() const;
     String info() const;
 
@@ -415,7 +416,7 @@ private:
 
     bool split_forbidden = false;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB::DM

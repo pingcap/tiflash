@@ -245,6 +245,8 @@ public:
             return "BackgroundThreadPool";
         case Foreground:
             return "Foreground";
+        case ForegroundRPC:
+            return "ForegroundRPC";
         case BackgroundGCThread:
             return "BackgroundGCThread";
         default:
@@ -527,11 +529,6 @@ private:
 #else
 public:
 #endif
-
-    std::string simpleInfo() const
-    {
-        return fmt::format("{{ table={}.{} table_id={} }}", db_name, table_name, physical_table_id);
-    };
 
     Context & global_context;
     StoragePathPool path_pool;
