@@ -111,7 +111,7 @@ public:
     MemTableSetPtr getMemTableSet() const { return mem_table_set; }
     ColumnFilePersistedSetPtr getPersistedFileSet() const { return persisted_file_set; }
 
-    String simpleInfo() const { return "{ delta_id=" + DB::toString(persisted_file_set->getId()) + " }"; }
+    String simpleInfo() const { return "<delta_id=" + DB::toString(persisted_file_set->getId()) + ">"; }
     String info() const
     {
         return fmt::format("{}. {}", mem_table_set->info(), persisted_file_set->info());

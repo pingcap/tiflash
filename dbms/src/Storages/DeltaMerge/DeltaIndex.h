@@ -145,7 +145,7 @@ public:
 
     String toString()
     {
-        return fmt::format("{{ placed_rows={} placed_deletes={} tree_entries={} tree_inserts={} tree_deletes={} }}",
+        return fmt::format("<placed_rows={} placed_deletes={} tree_entries={} tree_inserts={} tree_deletes={}>",
                            placed_rows,
                            placed_deletes,
                            delta_tree->numEntries(),
