@@ -21,7 +21,28 @@ PipelineTaskResult PipelineTask::execute(size_t)
 {
     try
     {
-        return stream->read() ? running() : finish();
+        switch (status)
+        {
+        case PipelineTaskStatus::running:
+        {
+            if (!stream->read())
+                status = PipelineTaskStatus::finish;
+            return running();
+        }
+        case PipelineTaskStatus::prepare:
+        {
+            stream->readPrefix();
+            status = PipelineTaskStatus::running;
+            return running();
+        }
+        case PipelineTaskStatus::finish:
+        {
+            stream->readSuffix();
+            return finish();
+        }
+        default:
+            return fail("unknown status");
+        }
     }
     catch (...)
     {
@@ -31,14 +52,14 @@ PipelineTaskResult PipelineTask::execute(size_t)
 
 PipelineTaskResult PipelineTask::finish()
 {
-    return PipelineTaskResult{task_id, pipeline_id, mpp_task_id, PipelineTaskStatus::finished, ""};
+    return PipelineTaskResult{PipelineTaskResultType::finished, ""};
 }
 PipelineTaskResult PipelineTask::fail(const String & err_msg)
 {
-    return PipelineTaskResult{task_id, pipeline_id, mpp_task_id, PipelineTaskStatus::error, err_msg};
+    return PipelineTaskResult{PipelineTaskResultType::error, err_msg};
 }
 PipelineTaskResult PipelineTask::running()
 {
-    return PipelineTaskResult{task_id, pipeline_id, mpp_task_id, PipelineTaskStatus::running, ""};
+    return PipelineTaskResult{PipelineTaskResultType::running, ""};
 }
 } // namespace DB

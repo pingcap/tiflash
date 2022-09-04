@@ -54,6 +54,8 @@ private:
 
     std::unordered_set<UInt32> parent_ids;
 
+    std::vector<BlockInputStreamPtr> task_streams;
+
     LoggerPtr log;
 };
 

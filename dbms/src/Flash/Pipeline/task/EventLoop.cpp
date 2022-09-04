@@ -24,10 +24,10 @@ EventLoop::EventLoop(size_t loop_id_, PipelineManager & pipeline_manager_)
     , pipeline_manager(pipeline_manager_)
 {}
 
-void EventLoop::submit(TaskEvent && event)
+void EventLoop::submit(PipelineTask && task)
 {
     RUNTIME_ASSERT(
-        event_queue.tryPush(std::move(event)) != MPMCQueueResult::FULL,
+        event_queue.tryPush(std::move(task)) != MPMCQueueResult::FULL,
         "EventLoop event queue full");
 }
 
@@ -36,28 +36,32 @@ void EventLoop::finish()
     event_queue.finish();
 }
 
-void EventLoop::handleSubmit(TaskEvent & event)
+void EventLoop::handleSubmit(PipelineTask & task)
 {
-    auto result = event.task.execute(loop_id);
-    switch (result.status)
+    auto result = task.execute(loop_id);
+    switch (result.type)
     {
-    case PipelineTaskStatus::running:
+    case PipelineTaskResultType::running:
     {
         RUNTIME_ASSERT(
-            event_queue.tryPush(std::move(event)) != MPMCQueueResult::FULL,
+            event_queue.tryPush(std::move(task)) != MPMCQueueResult::FULL,
             "EventLoop event queue full");
         break;
     }
-    case PipelineTaskStatus::finished:
+    case PipelineTaskResultType::finished:
     {
-        auto dag_scheduler = pipeline_manager.getDAGScheduler(event.task.mpp_task_id);
-        assert(dag_scheduler);
-        dag_scheduler->submit(PipelineEvent::finish(event.task.task_id, event.task.pipeline_id));
+        if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); dag_scheduler)
+        {
+            dag_scheduler->submit(PipelineEvent::finish(task.task_id, task.pipeline_id));
+        }
         break;
     }
-    case PipelineTaskStatus::error:
+    case PipelineTaskResultType::error:
     {
-        // todo
+        if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); dag_scheduler)
+        {
+            dag_scheduler->submit(PipelineEvent::fail(result.err_msg));
+        }
         break;
     }
     default:
@@ -67,22 +71,10 @@ void EventLoop::handleSubmit(TaskEvent & event)
 
 void EventLoop::loop()
 {
-    TaskEvent event;
-    while (event_queue.pop(event) == MPMCQueueResult::OK)
+    PipelineTask task;
+    while (event_queue.pop(task) == MPMCQueueResult::OK)
     {
-        switch (event.type)
-        {
-        case TaskEventType::submit:
-            handleSubmit(event);
-            break;
-        case TaskEventType::cancel:
-        {
-            // todo
-            break;
-        }
-        default:
-            break;
-        }
+        handleSubmit(task);
     }
 }
 } // namespace DB

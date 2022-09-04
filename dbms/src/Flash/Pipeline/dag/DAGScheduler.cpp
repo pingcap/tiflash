@@ -102,32 +102,28 @@ void DAGScheduler::cancel(bool is_kill)
     submit(PipelineEvent::cancel(is_kill));
 }
 
-void DAGScheduler::handlePipelineCancel(const PipelineEvent & /*event*/)
+void DAGScheduler::handlePipelineCancel(const PipelineEvent & event)
 {
-    // todo
-    // assert(event.type == PipelineEventType::cancel);
-    // event_queue.cancel();
-    // cancelRunningPipelines(event.is_kill);
-    // status_machine.finish();
+    assert(event.type == PipelineEventType::cancel);
+    event_queue.cancel();
+    cancelRunningPipelines(event.is_kill);
+    status_machine.finish();
 }
 
 void DAGScheduler::cancelRunningPipelines(bool is_kill)
 {
-    for (const auto & pipeline : status_machine.getRunningPipelines())
-        pipeline->cancel(is_kill);
+    auto running_pipelines = status_machine.getRunningPipelines();
+    for (auto & running_pipeline : running_pipelines)
+        running_pipeline->cancel(is_kill);
 }
 
-String DAGScheduler::handlePipelineFail(const PipelineEvent & /*event*/)
+String DAGScheduler::handlePipelineFail(const PipelineEvent & event)
 {
-    // todo
-    // assert(event.type == PipelineEventType::fail);
-    // if (event.pipeline)
-    //     status_machine.stateToComplete(event.pipeline->getId());
-    // event_queue.cancel();
-    // cancelRunningPipelines(false);
-    // status_machine.finish();
-    // return event.err_msg;
-    return "";
+    assert(event.type == PipelineEventType::fail);
+    event_queue.cancel();
+    cancelRunningPipelines(false);
+    status_machine.finish();
+    return event.err_msg;
 }
 
 void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)

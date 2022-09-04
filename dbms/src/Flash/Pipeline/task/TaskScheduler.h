@@ -34,6 +34,8 @@ public:
 
     void submit(std::vector<PipelineTask> & tasks);
 
+    void cancel(UInt32 pipeline_id);
+
 private:
     std::vector<EventLoopPtr> event_loops;
 

@@ -51,16 +51,20 @@ std::vector<PipelineTask> Pipeline::transform(Context & context, size_t max_stre
             p_stream->setProcessListElement(context.getProcessListElement());
         }
         task.emplace_back(active_task_num++, id, mpp_task_id, stream);
+        task_streams.push_back(stream);
     }
     return task;
 }
 
-void Pipeline::cancel(bool /*is_kill*/)
+void Pipeline::cancel(bool is_kill)
 {
-    // if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
-    // {
-    //     p_stream->cancel(is_kill);
-    // }
-    // todo
+    for (const auto & stream : task_streams)
+    {
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
+        {
+            p_stream->cancel(is_kill);
+        }
+    }
+    task_streams.clear();
 }
 } // namespace DB

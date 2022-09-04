@@ -106,8 +106,7 @@ private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override
     {
         child->transform(pipeline, context, max_streams);
-        executeUnion(pipeline, max_streams, log, /*ignore_block=*/false, "for result handler");
-        pipeline.firstStream() = std::make_shared<ResultHandlerBlockInputStream>(pipeline.firstStream(), result_handler);
+        pipeline.transform([&](auto & stream) { stream = std::make_shared<ResultHandlerBlockInputStream>(stream, result_handler); });
     }
 
 private:

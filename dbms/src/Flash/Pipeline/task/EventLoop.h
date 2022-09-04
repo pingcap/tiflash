@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/MPMCQueue.h>
-#include <Flash/Pipeline/task/Event.h>
+#include <Flash/Pipeline/task/PipelineTask.h>
 
 #include <memory>
 
@@ -32,14 +32,14 @@ public:
 
     void finish();
 
-    void submit(TaskEvent && event);
+    void submit(PipelineTask && task);
 
 private:
-    void handleSubmit(TaskEvent & event);
+    void handleSubmit(PipelineTask & task);
 
 private:
     size_t loop_id;
-    MPMCQueue<TaskEvent> event_queue{99999};
+    MPMCQueue<PipelineTask> event_queue{99999};
 
     PipelineManager & pipeline_manager;
 };

@@ -21,6 +21,13 @@ namespace DB
 {
 enum class PipelineTaskStatus
 {
+    prepare,
+    running,
+    finish,
+};
+
+enum class PipelineTaskResultType
+{
     running,
     finished,
     error,
@@ -28,12 +35,7 @@ enum class PipelineTaskStatus
 
 struct PipelineTaskResult
 {
-    UInt32 task_id;
-    UInt32 pipeline_id;
-    MPPTaskId mpp_task_id;
-
-    PipelineTaskStatus status;
-
+    PipelineTaskResultType type;
     String err_msg;
 };
 
@@ -58,16 +60,18 @@ public:
         , pipeline_id(std::move(task.pipeline_id))
         , mpp_task_id(std::move(task.mpp_task_id))
         , stream(std::move(task.stream))
+        , status(std::move(task.status))
     {}
 
     PipelineTask & operator=(PipelineTask && task)
     {
         if (this != &task)
         {
-            task_id = task.task_id;
-            pipeline_id = task.pipeline_id;
-            mpp_task_id = task.mpp_task_id;
+            task_id = std::move(task.task_id);
+            pipeline_id = std::move(task.pipeline_id);
+            mpp_task_id = std::move(task.mpp_task_id);
             stream = std::move(task.stream);
+            status = std::move(task.status);
         }
         return *this;
     }
@@ -79,6 +83,8 @@ public:
     UInt32 pipeline_id;
     MPPTaskId mpp_task_id;
     BlockInputStreamPtr stream;
+
+    PipelineTaskStatus status = PipelineTaskStatus::prepare;
 
 private:
     PipelineTaskResult finish();

@@ -55,7 +55,7 @@ void TaskScheduler::submit(std::vector<PipelineTask> & tasks)
     };
     for (auto & task : tasks)
     {
-        next_loop().submit(TaskEvent::submit(std::move(task)));
+        next_loop().submit(std::move(task));
     }
 }
 }
