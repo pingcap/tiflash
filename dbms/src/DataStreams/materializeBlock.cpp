@@ -38,4 +38,4 @@ Block materializeBlock(const Block & block)
     return res;
 }
 
-}
+} // namespace DB

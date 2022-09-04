@@ -14,20 +14,33 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Flash/Pipeline/task/Event.h>
 #include <Common/MPMCQueue.h>
+#include <Flash/Pipeline/task/Event.h>
+
+#include <memory>
 
 namespace DB
 {
 class EventLoop
 {
 public:
+    EventLoop(size_t loop_id_)
+        : loop_id(loop_id_)
+    {}
+
     void loop();
+
+    void finish();
 
     void submit(TaskEvent && event);
 
 private:
+    void handleSubmit(TaskEvent & event);
+
+private:
+    size_t loop_id;
     MPMCQueue<TaskEvent> event_queue{99999};
 };
-}
+
+using EventLoopPtr = std::shared_ptr<EventLoop>;
+} // namespace DB

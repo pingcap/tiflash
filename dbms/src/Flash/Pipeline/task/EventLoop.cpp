@@ -12,15 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
 #include <Flash/Pipeline/task/EventLoop.h>
 
 namespace DB
 {
 void EventLoop::submit(TaskEvent && event)
 {
-    event_queue.push(std::move(event));
+    RUNTIME_ASSERT(
+        event_queue.tryPush(std::move(event)) != MPMCQueueResult::FULL,
+        "EventLoop event queue full");
+}
+
+void EventLoop::finish()
+{
+    event_queue.finish();
+}
+
+void EventLoop::handleSubmit(TaskEvent & event)
+{
+    auto result = event.task.execute(loop_id);
+    switch (result.status)
+    {
+    case PipelineTaskStatus::running:
+    {
+        RUNTIME_ASSERT(
+            event_queue.tryPush(std::move(event)) != MPMCQueueResult::FULL,
+            "EventLoop event queue full");
+        break;
+    }
+    case PipelineTaskStatus::finished:
+    {
+        // todo
+        break;
+    }
+    case PipelineTaskStatus::error:
+    {
+        // todo
+        break;
+    }
+    default:
+        break;
+    }
 }
 
 void EventLoop::loop()
@@ -30,36 +62,17 @@ void EventLoop::loop()
     {
         switch (event.type)
         {
-        case TaskEvent::submit:
-        {
-            switch (event.task.execute())
-            {
-            case PipelineTaskResult::running:
-            {
-                event_queue.push(std::move(event));
-                break;
-            }
-            case PipelineTaskResult::finished
-            {
-                // todo
-                break;
-            }
-            case PipelineTaskResult::error
-            {
-                // todo
-                break;
-            }
-            default:
-            }
+        case TaskEventType::submit:
+            handleSubmit(event);
             break;
-        }   
-        case TaskEvent::cancel:
+        case TaskEventType::cancel:
         {
             // todo
             break;
         }
         default:
+            break;
         }
     }
 }
-}
+} // namespace DB

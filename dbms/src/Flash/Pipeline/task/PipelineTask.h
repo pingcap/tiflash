@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Flash/Mpp/MPPTaskId.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Mpp/MPPTaskId.h>
 
 namespace DB
 {
@@ -40,6 +40,15 @@ struct PipelineTaskResult
 class PipelineTask
 {
 public:
+    PipelineTask() = default;
+
+    PipelineTask(PipelineTask && task)
+        : task_id(std::move(task.task_id))
+        , pipeline_id(std::move(task.pipeline_id))
+        , mpp_task_id(std::move(task.mpp_task_id))
+        , stream(std::move(task.stream))
+    {}
+
     PipelineTask & operator=(PipelineTask && task)
     {
         if (this != &task)
@@ -52,7 +61,7 @@ public:
         return *this;
     }
 
-    PipelineTaskResult execute();
+    PipelineTaskResult execute(size_t);
 
 public:
     UInt32 task_id;
@@ -65,4 +74,4 @@ private:
     PipelineTaskResult fail(const String & err_msg);
     PipelineTaskResult running();
 };
-}
+} // namespace DB

@@ -12,20 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Pipeline/task/PipelineTask.h>
 #include <Common/Exception.h>
+#include <Flash/Pipeline/task/PipelineTask.h>
 
 namespace DB
 {
-PipelineTaskResult PipelineTask::execute()
+PipelineTaskResult PipelineTask::execute(size_t)
 {
     try
     {
-        return stream.read() ? running() : finish();
+        return stream->read() ? running() : finish();
     }
-    catch(...)
+    catch (...)
     {
         return fail(getCurrentExceptionMessage(true));
     }
@@ -33,7 +31,7 @@ PipelineTaskResult PipelineTask::execute()
 
 PipelineTaskResult PipelineTask::finish()
 {
-    return PipelineTaskResult{task_id, pipeline_id, mpp_task_id, PipelineTaskStatus::finished};
+    return PipelineTaskResult{task_id, pipeline_id, mpp_task_id, PipelineTaskStatus::finished, ""};
 }
 PipelineTaskResult PipelineTask::fail(const String & err_msg)
 {
@@ -41,6 +39,6 @@ PipelineTaskResult PipelineTask::fail(const String & err_msg)
 }
 PipelineTaskResult PipelineTask::running()
 {
-    return PipelineTaskResult{task_id, pipeline_id, mpp_task_id, PipelineTaskStatus::running};
+    return PipelineTaskResult{task_id, pipeline_id, mpp_task_id, PipelineTaskStatus::running, ""};
 }
-}
+} // namespace DB

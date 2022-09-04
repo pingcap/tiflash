@@ -271,6 +271,7 @@ public:
     const String match_helper_name;
 
     bool initialized = false;
+
 private:
     friend class NonJoinedBlockInputStream;
 

@@ -26,9 +26,9 @@ enum class TaskEventType
 
 struct TaskEvent
 {
-    static TaskEvent submit(UInt32 pipeline_id, const PipelineTask & task)
+    static TaskEvent submit(PipelineTask && task)
     {
-        return {pipeline_id, TaskEventType::submit, task};
+        return {task.pipeline_id, TaskEventType::submit, std::move(task)};
     }
 
     static TaskEvent cancel(UInt32 pipeline_id)
@@ -40,11 +40,24 @@ struct TaskEvent
 
     TaskEvent(
         UInt32 pipeline_id_,
-        const TaskEventType & type_,
-        const PipelineTask & task_)
+        const TaskEventType & type_)
         : pipeline_id(pipeline_id_)
         , type(type_)
-        , task(task_)
+    {}
+
+    TaskEvent(
+        UInt32 pipeline_id_,
+        const TaskEventType & type_,
+        PipelineTask && task_)
+        : pipeline_id(pipeline_id_)
+        , type(type_)
+        , task(std::move(task_))
+    {}
+
+    TaskEvent(TaskEvent && event)
+        : pipeline_id(std::move(event.pipeline_id))
+        , type(std::move(event.type))
+        , task(std::move(event.task))
     {}
 
     TaskEvent & operator=(TaskEvent && event)
@@ -52,7 +65,7 @@ struct TaskEvent
         if (this != &event)
         {
             pipeline_id = event.pipeline_id;
-            type = std::move(event.type);
+            type = event.type;
             task = std::move(event.task);
         }
         return *this;

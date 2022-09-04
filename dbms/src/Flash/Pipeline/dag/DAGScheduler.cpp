@@ -56,7 +56,7 @@ std::pair<bool, String> DAGScheduler::run(
             handlePipelineCancel(event);
             break;
         default:
-            event_queue.push(PipelineEvent::fail("Unknown event type"));
+            break;
         }
     }
     thread_manager->wait();
@@ -82,7 +82,9 @@ PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
 
 void DAGScheduler::cancel(bool is_kill)
 {
-    event_queue.push(PipelineEvent::cancel(is_kill));
+    RUNTIME_ASSERT(
+        event_queue.tryPush(PipelineEvent::cancel(is_kill)) != MPMCQueueResult::FULL,
+        "dag event queue full");
 }
 
 void DAGScheduler::handlePipelineCancel(const PipelineEvent & event)
@@ -138,12 +140,16 @@ void DAGScheduler::handlePipelineSubmit(
         try
         {
             pipeline->execute();
-            event_queue.push(PipelineEvent::finish(pipeline));
+            RUNTIME_ASSERT(
+                event_queue.tryPush(PipelineEvent::finish(pipeline)) != MPMCQueueResult::FULL,
+                "dag event queue full");
         }
         catch (...)
         {
             auto err_msg = getCurrentExceptionMessage(true, true);
-            event_queue.push(PipelineEvent::fail(pipeline, err_msg));
+            RUNTIME_ASSERT(
+                event_queue.tryPush(PipelineEvent::fail(pipeline, err_msg)) != MPMCQueueResult::FULL,
+                "dag event queue full");
         }
     });
 }
@@ -274,7 +280,9 @@ void DAGScheduler::submitPipeline(const PipelinePtr & pipeline)
     if (is_ready_for_run)
     {
         status_machine.stateToRunning(pipeline->getId());
-        event_queue.push(PipelineEvent::submit(pipeline));
+        RUNTIME_ASSERT(
+            event_queue.tryPush(PipelineEvent::submit(pipeline)) != MPMCQueueResult::FULL,
+            "dag event queue full");
     }
     else
     {

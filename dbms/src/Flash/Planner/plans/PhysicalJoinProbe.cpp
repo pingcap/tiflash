@@ -133,8 +133,8 @@ std::optional<PhysicalPlanNodePtr> PhysicalJoinProbe::splitNonJoinedPlanNode()
 
     has_non_joined = false;
     auto non_joined_plan = std::make_shared<PhysicalNonJoinProbe>(
-        executor_id, 
-        schema, 
+        executor_id,
+        schema,
         log->identifier(),
         join_ptr,
         probe_side_prepare_actions->getSampleBlock(),

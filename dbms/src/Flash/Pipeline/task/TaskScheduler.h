@@ -15,8 +15,25 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/ThreadManager.h>
+#include <Flash/Pipeline/task/EventLoop.h>
+
+#include <functional>
 
 namespace DB
 {
-        
-}
+class TaskScheduler
+{
+public:
+    TaskScheduler();
+
+    ~TaskScheduler();
+
+    void submit(std::vector<PipelineTask> tasks);
+
+private:
+    std::vector<EventLoopPtr> event_loops;
+
+    std::shared_ptr<ThreadPoolManager> thread_pool_manager;
+};
+} // namespace DB

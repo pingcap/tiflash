@@ -94,9 +94,9 @@ try
                        .build(context);
     {
         ColumnsWithTypeAndName expect_columns{
-            toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}), 
-            toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}), 
-            toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}), 
+            toNullableVec<String>({"1", "1", {}, {}, "1", "1", {}}),
+            toNullableVec<String>({{}, "3", {}, {}, {}, "3", {}}),
+            toNullableVec<String>({"1", "1", "3", {}, "1", "1", {}}),
             toNullableVec<String>({"3", "3", "4", "3", {}, {}, {}})};
         ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request));
     }
