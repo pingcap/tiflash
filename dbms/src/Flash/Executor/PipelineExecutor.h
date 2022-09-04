@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Flash/Executor/QueryExecutor.h>
-#include <Flash/Pipeline/DAGScheduler.h>
+#include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/ProcessList.h>
 

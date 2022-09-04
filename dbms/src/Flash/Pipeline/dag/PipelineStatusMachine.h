@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Pipeline/dag/Pipeline.h>
 
 #include <unordered_map>
 #include <unordered_set>

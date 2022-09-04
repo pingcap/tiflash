@@ -14,13 +14,13 @@
 
 #pragma once
 
-#include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Pipeline/dag/Pipeline.h>
 
 #include <memory>
 
 namespace DB
 {
-enum PipelineEventType
+enum class PipelineEventType
 {
     submit,
     finish,

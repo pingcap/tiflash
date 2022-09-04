@@ -15,8 +15,8 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
-#include <Flash/Pipeline/DAGScheduler.h>
-#include <Flash/Pipeline/PhysicalResultHandler.h>
+#include <Flash/Pipeline/dag/DAGScheduler.h>
+#include <Flash/Pipeline/dag/PhysicalResultHandler.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>

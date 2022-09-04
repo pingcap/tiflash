@@ -18,9 +18,9 @@
 #include <Common/MPMCQueue.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/ResultHandler.h>
-#include <Flash/Pipeline/Event.h>
-#include <Flash/Pipeline/Pipeline.h>
-#include <Flash/Pipeline/PipelineStatusMachine.h>
+#include <Flash/Pipeline/dag/Event.h>
+#include <Flash/Pipeline/dag/Pipeline.h>
+#include <Flash/Pipeline/dag/PipelineStatusMachine.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 
 namespace DB
@@ -91,7 +91,7 @@ private:
 
     PipelineIDGenerator id_generator;
 
-    MPMCQueue<PipelineEvent> event_queue{100};
+    MPMCQueue<PipelineEvent> event_queue{999};
 
     Context & context;
 

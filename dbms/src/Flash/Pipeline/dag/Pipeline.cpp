@@ -14,7 +14,7 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Flash/Pipeline/Pipeline.h>
+#include <Flash/Pipeline/dag/Pipeline.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Interpreters/Context.h>
 
