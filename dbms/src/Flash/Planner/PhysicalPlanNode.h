@@ -70,6 +70,8 @@ public:
 
     String toString();
 
+    virtual PhysicalPlanNodePtr cloneOne() const = 0;
+
 protected:
     virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};
 

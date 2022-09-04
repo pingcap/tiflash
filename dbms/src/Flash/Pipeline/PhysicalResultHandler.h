@@ -46,7 +46,11 @@ protected:
     {
         Block block = children.back()->read();
         if (block)
+        {
+            static std::mutex mu;
+            std::lock_guard lock(mu);
             result_handler(block);
+        }
         return block;
     }
 
@@ -90,6 +94,12 @@ public:
     const Block & getSampleBlock() const override
     {
         return child->getSampleBlock();
+    }
+
+    PhysicalPlanNodePtr cloneOne() const override
+    {
+        auto clone_one = std::make_shared<PhysicalResultHandler>(*this);
+        return clone_one;
     }
 
 private:

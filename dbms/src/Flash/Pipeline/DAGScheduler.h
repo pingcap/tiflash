@@ -60,6 +60,8 @@ private:
 
     std::unordered_set<UInt32> createParentPipelines(const PhysicalPlanNodePtr & plan_node);
 
+    PipelinePtr createNonJoinedPipelines(const PipelinePtr & pipeline);
+
     void submitPipeline(const PipelinePtr & pipeline);
 
     void submitNext(const PipelinePtr & pipeline);

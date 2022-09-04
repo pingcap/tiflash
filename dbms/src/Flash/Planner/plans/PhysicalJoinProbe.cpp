@@ -36,6 +36,7 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalJoinProbe.h>
+#include <Flash/Planner/plans/PhysicalNonJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -123,5 +124,23 @@ void PhysicalJoinProbe::finalize(const Names & parent_require)
 const Block & PhysicalJoinProbe::getSampleBlock() const
 {
     return sample_block;
+}
+
+std::optional<PhysicalPlanNodePtr> PhysicalJoinProbe::splitNonJoinedPlanNode()
+{
+    if (!has_non_joined)
+        return {};
+
+    has_non_joined = false;
+    auto non_joined_plan = std::make_shared<PhysicalNonJoinProbe>(
+        executor_id, 
+        schema, 
+        log->identifier(),
+        join_ptr,
+        probe_side_prepare_actions->getSampleBlock(),
+        sample_block);
+    non_joined_plan->notTiDBOperator();
+    non_joined_plan->disableRestoreConcurrency();
+    return {non_joined_plan};
 }
 } // namespace DB

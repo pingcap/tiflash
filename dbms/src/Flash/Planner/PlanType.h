@@ -41,6 +41,7 @@ struct PlanType
         ResultHandler = 16,
         FinalAggregation = 17,
         PartialAggregation = 18,
+        NonJoinProbe = 19,
     };
     PlanTypeEnum enum_value;
 

@@ -14,26 +14,26 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Flash/Planner/plans/PhysicalLeaf.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
-#include <tipb/executor.pb.h>
 
 namespace DB
 {
-class PhysicalJoinBuild : public PhysicalUnary
+class PhysicalNonJoinProbe : public PhysicalLeaf
 {
 public:
-    PhysicalJoinBuild(
+    PhysicalNonJoinProbe(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & child_,
         const JoinPtr & join_ptr_,
-        const ExpressionActionsPtr & build_side_prepare_actions_)
-        : PhysicalUnary(executor_id_, PlanType::JoinBuild, schema_, req_id, child_)
+        const Block & probe_side_prepare_header_,
+        const Block & sample_block_)
+        : PhysicalLeaf(executor_id_, PlanType::NonJoinProbe, schema_, req_id)
         , join_ptr(join_ptr_)
-        , build_side_prepare_actions(build_side_prepare_actions_)
+        , probe_side_prepare_header(probe_side_prepare_header_)
+        , sample_block(sample_block_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -42,18 +42,22 @@ public:
 
     PhysicalPlanNodePtr cloneOne() const override
     {
-        auto clone_one = std::make_shared<PhysicalJoinBuild>(*this);
+        auto clone_one = std::make_shared<PhysicalNonJoinProbe>(*this);
         return clone_one;
     }
 
 private:
-    void buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams);
+    void probeSideTransform(DAGPipeline & probe_pipeline, Context & context);
 
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
+    void doSchemaProject(DAGPipeline & pipeline, Context & context);
+
+    void transformImpl(DAGPipeline & pipeline, Context & context, size_t) override;
 
 private:
     JoinPtr join_ptr;
 
-    ExpressionActionsPtr build_side_prepare_actions;
+    Block probe_side_prepare_header;
+
+    Block sample_block;
 };
 } // namespace DB

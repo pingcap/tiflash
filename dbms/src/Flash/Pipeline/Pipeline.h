@@ -40,6 +40,8 @@ public:
 
     void cancel(bool is_kill);
 
+    PhysicalPlanNodePtr getPlanNode() const { return plan_node; }
+
 private:
     PhysicalPlanNodePtr plan_node;
 

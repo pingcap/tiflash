@@ -49,6 +49,12 @@ public:
 
     const Block & getSampleBlock() const override;
 
+    PhysicalPlanNodePtr cloneOne() const override
+    {
+        auto clone_one = std::make_shared<PhysicalTopN>(*this);
+        return clone_one;
+    }
+
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 

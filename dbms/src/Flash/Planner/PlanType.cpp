@@ -41,6 +41,7 @@ String PlanType::toString() const
         M(MockTableScan)
         M(Join)
         M(JoinProbe)
+        M(NonJoinProbe)
         M(JoinBuild)
         M(ResultHandler)
 #undef M

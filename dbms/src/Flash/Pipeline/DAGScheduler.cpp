@@ -20,6 +20,7 @@
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
+#include <Flash/Planner/plans/PhysicalJoinProbe.h>
 
 namespace DB
 {
@@ -141,7 +142,58 @@ PipelinePtr DAGScheduler::genPipeline(const PhysicalPlanNodePtr & plan_node)
     auto id = id_generator.nextID();
     auto pipeline = std::make_shared<Pipeline>(plan_node, id, parent_ids, log->identifier());
     status_machine.addPipeline(pipeline);
-    return pipeline;
+    return createNonJoinedPipelines(pipeline);
+}
+
+PipelinePtr DAGScheduler::createNonJoinedPipelines(const PipelinePtr & pipeline)
+{
+    std::vector<std::pair<size_t, PhysicalPlanNodePtr>> non_joined;
+    size_t index = 0;
+    PhysicalPlanVisitor::visit(pipeline->getPlanNode(), [&](const PhysicalPlanNodePtr & plan) {
+        assert(plan);
+        if (plan->tp() == PlanType::JoinProbe)
+        {
+            auto physical_join_probe = std::static_pointer_cast<PhysicalJoinProbe>(plan);
+            if (auto ret = physical_join_probe->splitNonJoinedPlanNode(); ret.has_value())
+                non_joined.emplace_back(index, *ret);
+        }
+        ++index;
+        return true;
+    });
+
+    auto gen_plan_tree = [&](PhysicalPlanNodePtr root, size_t index, const PhysicalPlanNodePtr & leaf) -> PhysicalPlanNodePtr {
+        assert(root && leaf);
+        if (index == 0)
+            return leaf;
+        root = root->cloneOne();
+        PhysicalPlanNodePtr parent = root;
+        assert(parent->childrenSize() == 1);
+        for (size_t i = 0; i < index; ++i)
+        {
+            auto pre = parent;
+            parent = pre->children(0);
+            assert(parent->childrenSize() == 1);
+            parent = parent->cloneOne();
+            pre->setChild(0, parent);
+        }
+        parent->setChild(0, leaf);
+        return root;
+    };
+
+    std::unordered_set<UInt32> parent_pipelines;
+    parent_pipelines.insert(pipeline->getId());
+    PipelinePtr return_pipeline = pipeline;
+    for (int i = non_joined.size() - 1; i >= 0; --i)
+    {
+        auto [index, non_joined_plan] = non_joined[i];
+        auto id = id_generator.nextID();
+        auto non_joined_root = gen_plan_tree(pipeline->getPlanNode(), index, non_joined_plan);
+        auto non_joined_pipeline = std::make_shared<Pipeline>(non_joined_root, id, parent_pipelines, log->identifier());
+        status_machine.addPipeline(non_joined_pipeline);
+        parent_pipelines.insert(id);
+        return_pipeline = non_joined_pipeline;
+    }
+    return return_pipeline;
 }
 
 std::unordered_set<UInt32> DAGScheduler::createParentPipelines(const PhysicalPlanNodePtr & plan_node)

@@ -17,7 +17,8 @@
 #include <Flash/Planner/plans/PhysicalUnary.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/Join.h>
-#include <tipb/executor.pb.h>
+
+#include <optional>
 
 namespace DB
 {
@@ -45,6 +46,14 @@ public:
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
+
+    std::optional<PhysicalPlanNodePtr> splitNonJoinedPlanNode();
+
+    PhysicalPlanNodePtr cloneOne() const override
+    {
+        auto clone_one = std::make_shared<PhysicalJoinProbe>(*this);
+        return clone_one;
+    }
 
 private:
     void probeSideTransform(DAGPipeline & probe_pipeline, Context & context, size_t max_streams);
