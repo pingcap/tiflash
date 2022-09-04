@@ -201,7 +201,7 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     const String serialized = ser::serializeTo(directory_snap);
     ReadBufferFromString payload(serialized);
 
-    compact_log->addRecord(payload, serialized.size());
+    compact_log->addRecord(payload, serialized.size(), write_limiter, /*background*/ true);
     compact_log->flush(write_limiter, /*background*/ true);
     compact_log.reset(); // close fd explicitly before renaming file.
 
