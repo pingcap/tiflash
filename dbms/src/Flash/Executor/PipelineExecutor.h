@@ -15,26 +15,25 @@
 #pragma once
 
 #include <Flash/Executor/QueryExecutor.h>
-#include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Interpreters/ProcessList.h>
 
 namespace DB
 {
+class DAGScheduler;
+using DAGSchedulerPtr = std::shared_ptr<DAGScheduler>;
+
 class PipelineExecutor : public QueryExecutor
 {
 public:
     PipelineExecutor(
-        Context & context,
+        Context & context_,
         const PhysicalPlanNodePtr & plan_node_,
         size_t max_streams,
         const String & req_id,
-        std::shared_ptr<ProcessListEntry> process_list_entry_)
-        : QueryExecutor()
-        , process_list_entry(process_list_entry_)
-        , dag_scheduler(context, max_streams, req_id)
-        , plan_node(plan_node_)
-    {}
+        std::shared_ptr<ProcessListEntry> process_list_entry_);
+
+    ~PipelineExecutor();
 
     String dump() const override;
 
@@ -51,8 +50,10 @@ protected:
       */
     std::shared_ptr<ProcessListEntry> process_list_entry;
 
-    DAGScheduler dag_scheduler;
+    DAGSchedulerPtr dag_scheduler;
 
     PhysicalPlanNodePtr plan_node;
+
+    Context & context;
 };
 } // namespace DB

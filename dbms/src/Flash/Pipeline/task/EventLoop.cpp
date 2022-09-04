@@ -13,9 +13,17 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/task/EventLoop.h>
+#include <Flash/Pipeline/PipelineManager.h>
+#include <Flash/Pipeline/dag/DAGScheduler.h>
+#include <Flash/Pipeline/dag/Event.h>
 
 namespace DB
 {
+EventLoop::EventLoop(size_t loop_id_, PipelineManager & pipeline_manager_)
+    : loop_id(loop_id_)
+    , pipeline_manager(pipeline_manager_)
+{}
+
 void EventLoop::submit(TaskEvent && event)
 {
     RUNTIME_ASSERT(
@@ -42,7 +50,9 @@ void EventLoop::handleSubmit(TaskEvent & event)
     }
     case PipelineTaskStatus::finished:
     {
-        // todo
+        auto dag_scheduler = pipeline_manager.getDAGScheduler(event.task.mpp_task_id);
+        assert(dag_scheduler);
+        dag_scheduler->submit(PipelineEvent::finish(event.task.task_id, event.task.pipeline_id));
         break;
     }
     case PipelineTaskStatus::error:

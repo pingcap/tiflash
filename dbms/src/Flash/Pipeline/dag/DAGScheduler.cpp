@@ -12,18 +12,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/CPUAffinityManager.h>
-#include <Common/ThreadFactory.h>
-#include <Common/ThreadManager.h>
 #include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Pipeline/dag/PhysicalResultHandler.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalJoin.h>
 #include <Flash/Planner/plans/PhysicalJoinProbe.h>
+#include <Interpreters/Context.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Pipeline/task/TaskScheduler.h>
 
 namespace DB
 {
+DAGScheduler::DAGScheduler(
+    Context & context_,
+    const MPPTaskId & mpp_task_id_,
+    size_t max_streams_,
+    const String & req_id)
+    : context(context_)
+    , mpp_task_id(mpp_task_id_)
+    , max_streams(max_streams_)
+    , log(Logger::get("DAGScheduler", req_id))
+    , task_scheduler(*context.getTMTContext().getMPPTaskManager()->getPipelineManager().task_scheduler)
+{}
+
+void DAGScheduler::submit(PipelineEvent && event)
+{
+    RUNTIME_ASSERT(
+        event_queue.tryPush(std::move(event)) != MPMCQueueResult::FULL,
+        "dag event queue full");
+}
+
 std::pair<bool, String> DAGScheduler::run(
     const PhysicalPlanNodePtr & plan_node,
     ResultHandler result_handler)
@@ -35,8 +55,6 @@ std::pair<bool, String> DAGScheduler::run(
 
     submitPipeline(final_pipeline);
 
-    auto thread_manager = newThreadManager();
-
     PipelineEvent event;
     String err_msg;
     while (event_queue.pop(event) == MPMCQueueResult::OK)
@@ -44,13 +62,13 @@ std::pair<bool, String> DAGScheduler::run(
         switch (event.type)
         {
         case PipelineEventType::submit:
-            handlePipelineSubmit(event, thread_manager);
+            handlePipelineSubmit(event);
             break;
         case PipelineEventType::finish:
             handlePipelineFinish(event);
             break;
         case PipelineEventType::fail:
-            handlePipelineFail(event, err_msg);
+            err_msg = handlePipelineFail(event);
             break;
         case PipelineEventType::cancel:
             handlePipelineCancel(event);
@@ -59,7 +77,6 @@ std::pair<bool, String> DAGScheduler::run(
             break;
         }
     }
-    thread_manager->wait();
     return {event_queue.getStatus() == MPMCQueueStatus::FINISHED, err_msg};
 }
 
@@ -82,17 +99,16 @@ PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
 
 void DAGScheduler::cancel(bool is_kill)
 {
-    RUNTIME_ASSERT(
-        event_queue.tryPush(PipelineEvent::cancel(is_kill)) != MPMCQueueResult::FULL,
-        "dag event queue full");
+    submit(PipelineEvent::cancel(is_kill));
 }
 
-void DAGScheduler::handlePipelineCancel(const PipelineEvent & event)
+void DAGScheduler::handlePipelineCancel(const PipelineEvent & /*event*/)
 {
-    assert(event.type == PipelineEventType::cancel);
-    event_queue.cancel();
-    cancelRunningPipelines(event.is_kill);
-    status_machine.finish();
+    // todo
+    // assert(event.type == PipelineEventType::cancel);
+    // event_queue.cancel();
+    // cancelRunningPipelines(event.is_kill);
+    // status_machine.finish();
 }
 
 void DAGScheduler::cancelRunningPipelines(bool is_kill)
@@ -101,64 +117,52 @@ void DAGScheduler::cancelRunningPipelines(bool is_kill)
         pipeline->cancel(is_kill);
 }
 
-void DAGScheduler::handlePipelineFail(const PipelineEvent & event, String & err_msg)
+String DAGScheduler::handlePipelineFail(const PipelineEvent & /*event*/)
 {
-    assert(event.type == PipelineEventType::fail);
-    if (event.pipeline)
-        status_machine.stateToComplete(event.pipeline->getId());
-    err_msg = event.err_msg;
-    event_queue.cancel();
-    cancelRunningPipelines(false);
-    status_machine.finish();
+    // todo
+    // assert(event.type == PipelineEventType::fail);
+    // if (event.pipeline)
+    //     status_machine.stateToComplete(event.pipeline->getId());
+    // event_queue.cancel();
+    // cancelRunningPipelines(false);
+    // status_machine.finish();
+    // return event.err_msg;
+    return "";
 }
 
 void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)
 {
-    assert(event.type == PipelineEventType::finish && event.pipeline);
-    status_machine.stateToComplete(event.pipeline->getId());
-    if (status_machine.isCompleted(final_pipeline_id))
+    assert(event.type == PipelineEventType::finish);
+    auto pipeline = status_machine.getPipeline(event.pipeline_id);
+    --pipeline->active_task_num;
+    if (pipeline->active_task_num == 0)
     {
-        event_queue.finish();
-        status_machine.finish();
-    }
-    else
-    {
-        const auto & finish_pipeline = event.pipeline;
-        submitNext(finish_pipeline);
+        status_machine.stateToComplete(event.pipeline_id);
+        if (status_machine.isCompleted(final_pipeline_id))
+        {
+            event_queue.finish();
+            status_machine.finish();
+        }
+        else
+        {
+            submitNext(pipeline);
+        }
     }
 }
 
-void DAGScheduler::handlePipelineSubmit(
-    const PipelineEvent & event,
-    std::shared_ptr<ThreadManager> & thread_manager)
+void DAGScheduler::handlePipelineSubmit(const PipelineEvent & event)
 {
     assert(event.type == PipelineEventType::submit && event.pipeline);
     auto pipeline = event.pipeline;
-    pipeline->prepare(context, max_streams);
-    thread_manager->schedule(true, "ExecutePipeline", [&, pipeline]() {
-        CPUAffinityManager::getInstance().bindSelfQueryThread();
-        try
-        {
-            pipeline->execute();
-            RUNTIME_ASSERT(
-                event_queue.tryPush(PipelineEvent::finish(pipeline)) != MPMCQueueResult::FULL,
-                "dag event queue full");
-        }
-        catch (...)
-        {
-            auto err_msg = getCurrentExceptionMessage(true, true);
-            RUNTIME_ASSERT(
-                event_queue.tryPush(PipelineEvent::fail(pipeline, err_msg)) != MPMCQueueResult::FULL,
-                "dag event queue full");
-        }
-    });
+    auto tasks = pipeline->transform(context, max_streams);
+    task_scheduler.submit(tasks);
 }
 
 PipelinePtr DAGScheduler::genPipeline(const PhysicalPlanNodePtr & plan_node)
 {
     const auto & parent_ids = createParentPipelines(plan_node);
     auto id = id_generator.nextID();
-    auto pipeline = std::make_shared<Pipeline>(plan_node, id, parent_ids, log->identifier());
+    auto pipeline = std::make_shared<Pipeline>(plan_node, mpp_task_id, id, parent_ids, log->identifier());
     status_machine.addPipeline(pipeline);
     return createNonJoinedPipelines(pipeline);
 }
@@ -208,7 +212,7 @@ PipelinePtr DAGScheduler::createNonJoinedPipelines(const PipelinePtr & pipeline)
         auto [index, non_joined_plan] = non_joined[i];
         auto id = id_generator.nextID();
         auto non_joined_root = gen_plan_tree(pipeline->getPlanNode(), index, non_joined_plan);
-        auto non_joined_pipeline = std::make_shared<Pipeline>(non_joined_root, id, parent_pipelines, log->identifier());
+        auto non_joined_pipeline = std::make_shared<Pipeline>(non_joined_root, mpp_task_id, id, parent_pipelines, log->identifier());
         status_machine.addPipeline(non_joined_pipeline);
         parent_pipelines.insert(id);
         return_pipeline = non_joined_pipeline;
@@ -280,9 +284,7 @@ void DAGScheduler::submitPipeline(const PipelinePtr & pipeline)
     if (is_ready_for_run)
     {
         status_machine.stateToRunning(pipeline->getId());
-        RUNTIME_ASSERT(
-            event_queue.tryPush(PipelineEvent::submit(pipeline)) != MPMCQueueResult::FULL,
-            "dag event queue full");
+        submit(PipelineEvent::submit(pipeline));
     }
     else
     {

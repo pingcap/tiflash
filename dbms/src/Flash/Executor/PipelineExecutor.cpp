@@ -14,12 +14,41 @@
 
 #include <Flash/Executor/PipelineExecutor.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
+#include <Interpreters/Context.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Storages/Transaction/TMTContext.h>
+#include <Flash/Mpp/MPPTaskManager.h>
+#include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Pipeline/PipelineManager.h>
+#include <Flash/Pipeline/dag/DAGScheduler.h>
 
 namespace DB
 {
+PipelineExecutor::PipelineExecutor(
+    Context & context_,
+    const PhysicalPlanNodePtr & plan_node_,
+    size_t max_streams,
+    const String & req_id,
+    std::shared_ptr<ProcessListEntry> process_list_entry_)
+    : QueryExecutor()
+    , process_list_entry(process_list_entry_)
+    , dag_scheduler(std::make_shared<DAGScheduler>(context_, context_.getDAGContext()->getMPPTaskId(), max_streams, req_id))
+    , plan_node(plan_node_)
+    , context(context_)
+{
+    auto & pipeline_manager = context.getTMTContext().getMPPTaskManager()->getPipelineManager();
+    pipeline_manager.registerDAGScheduler(dag_scheduler);
+}
+
+PipelineExecutor::~PipelineExecutor()
+{
+    auto & pipeline_manager = context.getTMTContext().getMPPTaskManager()->getPipelineManager();
+    pipeline_manager.unregisterDAGScheduler(dag_scheduler->getMPPTaskId());
+}
+
 std::pair<bool, String> PipelineExecutor::execute(ResultHandler result_handler)
 {
-    auto res = dag_scheduler.run(plan_node, result_handler);
+    auto res = dag_scheduler->run(plan_node, result_handler);
     plan_node = nullptr;
     return res;
 }
@@ -33,6 +62,6 @@ String PipelineExecutor::dump() const
 void PipelineExecutor::cancel(bool is_kill)
 {
     plan_node = nullptr;
-    dag_scheduler.cancel(is_kill);
+    dag_scheduler->cancel(is_kill);
 }
 } // namespace DB

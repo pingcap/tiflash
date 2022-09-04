@@ -42,6 +42,17 @@ class PipelineTask
 public:
     PipelineTask() = default;
 
+    PipelineTask(
+        UInt32 task_id_,
+        UInt32 pipeline_id_,
+        const MPPTaskId & mpp_task_id_,
+        const BlockInputStreamPtr & stream_)
+        : task_id(task_id_)
+        , pipeline_id(pipeline_id_)
+        , mpp_task_id(mpp_task_id_)
+        , stream(stream_)
+    {}
+
     PipelineTask(PipelineTask && task)
         : task_id(std::move(task.task_id))
         , pipeline_id(std::move(task.pipeline_id))

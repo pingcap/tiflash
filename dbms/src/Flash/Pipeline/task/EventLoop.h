@@ -21,12 +21,12 @@
 
 namespace DB
 {
+struct PipelineManager;
+
 class EventLoop
 {
 public:
-    EventLoop(size_t loop_id_)
-        : loop_id(loop_id_)
-    {}
+    EventLoop(size_t loop_id_, PipelineManager & pipeline_manager_);
 
     void loop();
 
@@ -40,6 +40,8 @@ private:
 private:
     size_t loop_id;
     MPMCQueue<TaskEvent> event_queue{99999};
+
+    PipelineManager & pipeline_manager;
 };
 
 using EventLoopPtr = std::shared_ptr<EventLoop>;

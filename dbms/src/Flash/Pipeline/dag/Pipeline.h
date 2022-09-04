@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
+#include <Flash/Pipeline/task/PipelineTask.h>
 
 #include <unordered_set>
 
@@ -27,13 +28,12 @@ class Pipeline
 public:
     Pipeline(
         const PhysicalPlanNodePtr & plan_node_,
+        const MPPTaskId & mpp_task_id_,
         UInt32 id_,
         const std::unordered_set<UInt32> & parent_ids_,
         const String & req_id);
 
-    void prepare(Context & context, size_t max_streams);
-
-    void execute();
+    std::vector<PipelineTask> transform(Context & context, size_t max_streams);
 
     UInt32 getId() const { return id; }
     const std::unordered_set<UInt32> & getParentIds() const { return parent_ids; }
@@ -42,14 +42,17 @@ public:
 
     PhysicalPlanNodePtr getPlanNode() const { return plan_node; }
 
+public:
+    size_t active_task_num = 0;
+
 private:
     PhysicalPlanNodePtr plan_node;
+
+    MPPTaskId mpp_task_id;
 
     UInt32 id;
 
     std::unordered_set<UInt32> parent_ids;
-
-    BlockInputStreamPtr stream;
 
     LoggerPtr log;
 };

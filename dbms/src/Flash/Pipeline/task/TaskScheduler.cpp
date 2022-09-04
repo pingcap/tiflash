@@ -13,18 +13,21 @@
 // limitations under the License.
 
 #include <Flash/Pipeline/task/TaskScheduler.h>
+#include <Interpreters/Context.h>
+#include <Flash/Coprocessor/DAGContext.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 
 namespace DB
 {
-TaskScheduler::TaskScheduler()
+TaskScheduler::TaskScheduler(PipelineManager & pipeline_manager)
 {
     auto cores = getNumberOfPhysicalCPUCores();
     thread_pool_manager = newThreadPoolManager(cores);
-    event_loops.reverse(cores);
+    event_loops.reserve(cores);
     for (size_t index = 0; index < cores; ++index)
     {
-        event_loops.emplace_back(std::make_shared<EventLoop>(index));
+        event_loops.emplace_back(std::make_shared<EventLoop>(index, pipeline_manager));
     }
     for (size_t index = 0; index < cores; ++index)
     {
@@ -42,7 +45,7 @@ TaskScheduler::~TaskScheduler()
     thread_pool_manager->wait();
 }
 
-void TaskScheduler::submit(std::vector<PipelineTask> tasks)
+void TaskScheduler::submit(std::vector<PipelineTask> & tasks)
 {
     size_t i = 0;
     auto next_loop = [&]() -> EventLoop & {

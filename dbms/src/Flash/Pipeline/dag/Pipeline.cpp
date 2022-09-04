@@ -22,10 +22,12 @@ namespace DB
 {
 Pipeline::Pipeline(
     const PhysicalPlanNodePtr & plan_node_,
+    const MPPTaskId & mpp_task_id_,
     UInt32 id_,
     const std::unordered_set<UInt32> & parent_ids_,
     const String & req_id)
     : plan_node(plan_node_)
+    , mpp_task_id(mpp_task_id_)
     , id(id_)
     , parent_ids(parent_ids_)
     , log(Logger::get("Pipeline", req_id, fmt::format("<pipeline_id:{}>", id)))
@@ -34,42 +36,31 @@ Pipeline::Pipeline(
     LOG_FMT_DEBUG(log, "pipeline plan node:\n{}", PhysicalPlanVisitor::visitToString(plan_node));
 }
 
-void Pipeline::execute()
-{
-    stream->readPrefix();
-    while (stream->read())
-    {
-    }
-    stream->readSuffix();
-}
-
-void Pipeline::prepare(Context & context, size_t max_streams)
+std::vector<PipelineTask> Pipeline::transform(Context & context, size_t max_streams)
 {
     assert(plan_node);
     DAGPipeline pipeline;
     plan_node->transform(pipeline, context, max_streams);
-    executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for pipeline");
-    stream = pipeline.firstStream();
-    assert(stream);
-    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
+    assert(pipeline.streams_with_non_joined_data.empty());
+    std::vector<PipelineTask> task;
+    for (const auto & stream : pipeline.streams)
     {
-        p_stream->setProgressCallback(context.getProgressCallback());
-        p_stream->setProcessListElement(context.getProcessListElement());
+        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
+        {
+            p_stream->setProgressCallback(context.getProgressCallback());
+            p_stream->setProcessListElement(context.getProcessListElement());
+        }
+        task.emplace_back(active_task_num++, id, mpp_task_id, stream);
     }
-
-    auto stream_str = [&]() {
-        FmtBuffer fb;
-        stream->dumpTree(fb);
-        return fb.toString();
-    };
-    LOG_FMT_DEBUG(log, "pipeline stream:\n{}", stream_str());
+    return task;
 }
 
-void Pipeline::cancel(bool is_kill)
+void Pipeline::cancel(bool /*is_kill*/)
 {
-    if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
-    {
-        p_stream->cancel(is_kill);
-    }
+    // if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
+    // {
+    //     p_stream->cancel(is_kill);
+    // }
+    // todo
 }
 } // namespace DB

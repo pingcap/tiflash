@@ -16,12 +16,14 @@
 
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
-#include <Common/ThreadManager.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Pipeline/dag/Event.h>
 #include <Flash/Pipeline/dag/Pipeline.h>
 #include <Flash/Pipeline/dag/PipelineStatusMachine.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
+#include <Flash/Mpp/MPPTaskId.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -36,17 +38,15 @@ public:
     }
 };
 
+class TaskScheduler;
 class DAGScheduler
 {
 public:
     DAGScheduler(
         Context & context_,
+        const MPPTaskId & mpp_task_id_,
         size_t max_streams_,
-        const String & req_id)
-        : context(context_)
-        , max_streams(max_streams_)
-        , log(Logger::get("DAGScheduler", req_id))
-    {}
+        const String & req_id);
 
     // return <is_success, err_msg>
     std::pair<bool, String> run(
@@ -54,6 +54,10 @@ public:
         ResultHandler result_handler);
 
     void cancel(bool is_kill);
+
+    const MPPTaskId & getMPPTaskId() const { return mpp_task_id; }
+
+    void submit(PipelineEvent && event);
 
 private:
     PipelinePtr genPipeline(const PhysicalPlanNodePtr & plan_node);
@@ -66,13 +70,11 @@ private:
 
     void submitNext(const PipelinePtr & pipeline);
 
-    void handlePipelineSubmit(
-        const PipelineEvent & event,
-        std::shared_ptr<ThreadManager> & thread_manager);
+    void handlePipelineSubmit(const PipelineEvent & event);
 
     void handlePipelineFinish(const PipelineEvent & event);
 
-    void handlePipelineFail(const PipelineEvent & event, String & err_msg);
+    String handlePipelineFail(const PipelineEvent & event);
 
     void handlePipelineCancel(const PipelineEvent & event);
 
@@ -95,8 +97,14 @@ private:
 
     Context & context;
 
+    MPPTaskId mpp_task_id;
+
     size_t max_streams;
 
     LoggerPtr log;
+
+    TaskScheduler & task_scheduler;
 };
+
+using DAGSchedulerPtr = std::shared_ptr<DAGScheduler>;
 } // namespace DB

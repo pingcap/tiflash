@@ -17,19 +17,22 @@
 #include <Common/Logger.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Pipeline/task/EventLoop.h>
+#include <Flash/Mpp/MPPTaskId.h>
 
 #include <functional>
 
 namespace DB
 {
+struct PipelineManager;
+
 class TaskScheduler
 {
 public:
-    TaskScheduler();
+    TaskScheduler(PipelineManager & pipeline_manager_);
 
     ~TaskScheduler();
 
-    void submit(std::vector<PipelineTask> tasks);
+    void submit(std::vector<PipelineTask> & tasks);
 
 private:
     std::vector<EventLoopPtr> event_loops;
