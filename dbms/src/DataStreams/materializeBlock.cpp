@@ -28,6 +28,8 @@ Block materializeBlock(const Block & block)
     for (size_t i = 0; i < columns; ++i)
     {
         auto & element = res.getByPosition(i);
+        if (!element.column)
+            element.column = element.type->createColumn();
         auto & src = element.column;
         if (ColumnPtr converted = src->convertToFullColumnIfConst())
             src = converted;

@@ -82,6 +82,8 @@ private:
         const PhysicalPlanNodePtr & plan_node,
         ResultHandler result_handler);
 
+    String pipelineDAGToString(UInt32 pipeline_id) const;
+
 private:
     UInt32 final_pipeline_id;
 

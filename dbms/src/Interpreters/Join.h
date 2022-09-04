@@ -270,6 +270,7 @@ public:
     // only use for left semi joins.
     const String match_helper_name;
 
+    bool initialized = false;
 private:
     friend class NonJoinedBlockInputStream;
 
@@ -346,8 +347,6 @@ private:
       * That's why another methods are not guarded.
       */
     mutable std::shared_mutex rwlock;
-
-    bool initialized = false;
 
     size_t getBuildConcurrencyInternal() const
     {

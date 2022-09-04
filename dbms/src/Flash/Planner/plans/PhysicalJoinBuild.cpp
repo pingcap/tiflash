@@ -63,11 +63,17 @@ void PhysicalJoinBuild::buildSideTransform(DAGPipeline & build_pipeline, Context
     // for test, join executor need the return blocks to output.
     executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
 
-    SubqueryForSet build_query;
-    build_query.source = build_pipeline.firstStream();
-    build_query.join = join_ptr;
-    join_ptr->init(build_query.source->getHeader(), join_build_concurrency);
-    dag_context.addSubquery(execId(), std::move(build_query));
+    if (!join_ptr->initialized)
+    {
+        join_ptr->init(build_pipeline.firstStream()->getHeader(), join_build_concurrency);
+        if (!settings.enable_pipeline)
+        {
+            SubqueryForSet build_query;
+            build_query.source = build_pipeline.firstStream();
+            build_query.join = join_ptr;
+            dag_context.addSubquery(execId(), std::move(build_query));
+        }
+    }
 }
 
 void PhysicalJoinBuild::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

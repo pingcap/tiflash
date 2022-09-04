@@ -83,6 +83,8 @@ public:
     size_t max_threads;
     const size_t temporary_data_merge_threads;
 
+    bool inited = false;
+
 private:
     const LoggerPtr log;
 

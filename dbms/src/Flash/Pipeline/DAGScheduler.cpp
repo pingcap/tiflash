@@ -31,6 +31,8 @@ std::pair<bool, String> DAGScheduler::run(
     assert(plan_node);
     auto final_pipeline = genPipeline(handleResultHandler(plan_node, result_handler));
     final_pipeline_id = final_pipeline->getId();
+    LOG_FMT_DEBUG(log, "pipeline dag:\n{}", pipelineDAGToString(final_pipeline_id));
+
     submitPipeline(final_pipeline);
 
     auto thread_manager = newThreadManager();
@@ -59,6 +61,16 @@ std::pair<bool, String> DAGScheduler::run(
     }
     thread_manager->wait();
     return {event_queue.getStatus() == MPMCQueueStatus::FINISHED, err_msg};
+}
+
+String DAGScheduler::pipelineDAGToString(UInt32 pipeline_id) const
+{
+    FmtBuffer fb;
+    auto pipeline = status_machine.getPipeline(pipeline_id);
+    fb.fmtAppend("id: {}, parents: [{}]\n", pipeline_id, fmt::join(pipeline->getParentIds(), ", "));
+    for (auto parent_id : pipeline->getParentIds())
+        fb.append(pipelineDAGToString(parent_id));
+    return fb.toString();
 }
 
 PhysicalPlanNodePtr DAGScheduler::handleResultHandler(
@@ -166,14 +178,16 @@ PipelinePtr DAGScheduler::createNonJoinedPipelines(const PipelinePtr & pipeline)
         if (index == 0)
             return leaf;
         root = root->cloneOne();
+        root->notTiDBOperator();
         PhysicalPlanNodePtr parent = root;
         assert(parent->childrenSize() == 1);
-        for (size_t i = 0; i < index; ++i)
+        for (size_t i = 0; i < index - 1; ++i)
         {
             auto pre = parent;
             parent = pre->children(0);
             assert(parent->childrenSize() == 1);
             parent = parent->cloneOne();
+            parent->notTiDBOperator();
             pre->setChild(0, parent);
         }
         parent->setChild(0, leaf);

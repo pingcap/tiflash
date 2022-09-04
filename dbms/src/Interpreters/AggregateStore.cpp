@@ -32,6 +32,9 @@ AggregateStore::AggregateStore(
 
 void AggregateStore::init(size_t max_threads_, const Aggregator::Params & params)
 {
+    assert(!inited);
+    inited = true;
+
     max_threads = max_threads_;
     assert(max_threads > 0);
 
