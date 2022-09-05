@@ -652,10 +652,10 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
                                                WriteBatches & wbs) const
 {
     LOG_FMT_DEBUG(log,
-                 "MergeDelta - Begin prepare, delta_column_files={} delta_rows={} delta_bytes={}",
-                 segment_snap->delta->getColumnFileCount(),
-                 segment_snap->delta->getRows(),
-                 segment_snap->delta->getBytes());
+                  "MergeDelta - Begin prepare, delta_column_files={} delta_rows={} delta_bytes={}",
+                  segment_snap->delta->getColumnFileCount(),
+                  segment_snap->delta->getRows(),
+                  segment_snap->delta->getBytes());
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
@@ -1192,9 +1192,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     // Remove old stable's files.
     stable->recordRemovePacksPages(wbs);
 
-    LOG_FMT_DEBUG(log, "Split - {} - Finish apply, old_me={} new_me={} new_other={}",
-                 split_info.is_logical ? "SplitLogical" : "SplitPhysical",
-                 info(), new_me->info(), other->info());
+    LOG_FMT_DEBUG(log, "Split - {} - Finish apply, old_me={} new_me={} new_other={}", split_info.is_logical ? "SplitLogical" : "SplitPhysical", info(), new_me->info(), other->info());
 
     return {new_me, other};
 }

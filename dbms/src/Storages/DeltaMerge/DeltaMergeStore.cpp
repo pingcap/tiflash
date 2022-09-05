@@ -2101,9 +2101,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         duplicated_bytes = new_left->getDelta()->getBytes();
         duplicated_rows = new_right->getDelta()->getBytes();
 
-        LOG_FMT_INFO(log, "Split - {} - Finish, segment is split into two, old_segment={} new_left={} new_right={}",
-                     split_info.is_logical ? "SplitLogical" : "SplitPhysical",
-                     segment->info(), new_left->info(), new_right->info());
+        LOG_FMT_INFO(log, "Split - {} - Finish, segment is split into two, old_segment={} new_left={} new_right={}", split_info.is_logical ? "SplitLogical" : "SplitPhysical", segment->info(), new_left->info(), new_right->info());
     }
 
     wbs.writeRemoves();
