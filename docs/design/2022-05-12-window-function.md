@@ -94,7 +94,7 @@ Children task's cost *= 0.05
 ### The Logic of Window Function in TiFlash
 #### Major additions
 - IWindowFunction
-  Defines execution functions of a window function(row_number, rank, dense_rank).
+  Defines execution functions of a window function(row_number, rank, dense_rank, lead, lag).
 - WindowDescription
   Define a window, including the name, frame, functions of a window.
 - WindowBlockInputStream
@@ -125,7 +125,7 @@ Children task's cost *= 0.05
 ##### Flow Chart
 ![tiflash-window-function-flow-chart](./images/tiflash-window-function-flow-chart.jpg)
 ### Support and Limit
-- Compared with TiDB, currently only  row_number, rank, dense_rank functions are supported.
+- Compared with TiDB, currently only row_number, rank, dense_rank, lead, lag functions are supported.
 
 |  Feature                                                                 |  support         |
 |  -----                                                                   |  -----           |
