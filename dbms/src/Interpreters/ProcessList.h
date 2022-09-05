@@ -80,7 +80,7 @@ private:
     /// Progress of output stream
     Progress progress_out;
 
-    std::shared_ptr<MemoryTracker> memory_tracker;
+    MemoryTrackerPtr memory_tracker;
 
     QueryPriorities::Handle priority_handle;
 
@@ -115,7 +115,7 @@ public:
         QueryPriorities::Handle && priority_handle_)
         : query(query_)
         , client_info(client_info_)
-        , memory_tracker(std::make_shared<MemoryTracker>(max_memory_usage))
+        , memory_tracker(MemoryTracker::create(max_memory_usage))
         , priority_handle(std::move(priority_handle_))
     {
         memory_tracker->setDescription("(for query)");
@@ -205,18 +205,21 @@ struct ProcessListForUser
     QueryToElement queries;
 
     /// Limit and counter for memory of all simultaneously running queries of single user.
-    MemoryTracker user_memory_tracker;
+    MemoryTrackerPtr user_memory_tracker;
 
     /// Count network usage for all simultaneously running queries of single user.
     ThrottlerPtr user_throttler;
 
+    ProcessListForUser()
+        : user_memory_tracker(MemoryTracker::create())
+    {}
     /// Clears MemoryTracker for the user.
     /// Sometimes it is important to reset the MemoryTracker, because it may accumulate skew
     ///  due to the fact that there are cases when memory can be allocated while processing the query, but released later.
     /// Clears network bandwidth Throttler, so it will not count periods of inactivity.
     void reset()
     {
-        user_memory_tracker.reset();
+        user_memory_tracker->reset();
         if (user_throttler)
             user_throttler.reset();
     }
@@ -281,7 +284,7 @@ private:
     QueryPriorities priorities;
 
     /// Limit and counter for memory of all simultaneously running queries.
-    MemoryTracker total_memory_tracker;
+    MemoryTrackerPtr total_memory_tracker;
 
     /// Limit network bandwidth for all users
     ThrottlerPtr total_network_throttler;
@@ -293,6 +296,7 @@ public:
     ProcessList(size_t max_size_ = 0)
         : cur_size(0)
         , max_size(max_size_)
+        , total_memory_tracker(MemoryTracker::create())
     {}
 
     using EntryPtr = std::shared_ptr<ProcessListEntry>;

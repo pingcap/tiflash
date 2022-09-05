@@ -139,7 +139,7 @@ public:
         , log(&Poco::Logger::get("SegmentReadTaskPool"))
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
-        , mem_tracker(current_memory_tracker)
+        , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     {}
 
     ~SegmentReadTaskPool()
@@ -223,7 +223,8 @@ private:
     std::atomic<bool> exception_happened;
     DB::Exception exception;
 
-    MemoryTracker * mem_tracker;
+    // The memory tracker of MPPTask.
+    MemoryTrackerPtr mem_tracker;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;
