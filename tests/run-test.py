@@ -17,7 +17,16 @@ import os
 import re
 import sys
 import time
-import urllib.request, urllib.error, urllib.parse
+
+if sys.version_info.major == 2:
+    print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
+    from urllib2 import HTTPError
+    from urllib2 import Request as UrlRequest
+    from urllib2 import urlopen
+else:
+    from urllib.request import Request as UrlRequest
+    from urllib.error import HTTPError
+    from urllib.request import urlopen
 
 CMD_PREFIX = '>> '
 CMD_PREFIX_ALTER = '=> '
@@ -82,14 +91,14 @@ class CurlTiDBExecutor:
         method = context[0].upper()
         uri = "http://{}/{}".format(self.tidb_status_addr, context[1])
         # print('uri is {} {} {}'.format(method, uri, context[2:]))
-        request = urllib.request.Request(uri)
+        request = UrlRequest(uri)
         request.get_method = lambda: method
         if request.get_method() == 'POST' or request.get_method() == 'PUT':
             request.data = context[2]
         try:
-            response = urllib.request.urlopen(request).read().strip()
+            response = urlopen(request).read().strip()
             return [response] if request.get_method() == 'GET' and response else None, None
-        except urllib.error.HTTPError as e:
+        except HTTPError as e:
             return ['Error: {}. Uri: {}'.format(e, uri)], e
 
 
