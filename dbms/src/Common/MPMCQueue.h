@@ -191,7 +191,7 @@ public:
     {
         return changeStatus([&] {
             status = Status::CANCELLED;
-            cancelReason = std::move(reason);
+            cancel_reason = std::move(reason);
         });
     }
 
@@ -223,7 +223,7 @@ public:
     {
         std::unique_lock lock(mu);
         RUNTIME_ASSERT(isCancelled());
-        return cancelReason;
+        return cancel_reason;
     }
 
 private:
@@ -442,7 +442,7 @@ private:
     Int64 read_pos = 0;
     Int64 write_pos = 0;
     Status status = Status::NORMAL;
-    String cancelReason;
+    String cancel_reason;
 
     std::vector<UInt8> data;
 };
