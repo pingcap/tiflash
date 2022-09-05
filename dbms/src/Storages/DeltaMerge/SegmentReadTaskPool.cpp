@@ -97,7 +97,7 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto seg = t->segment;
     BlockInputStreamPtr stream;
     if (is_raw)
@@ -179,7 +179,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto block = stream->read();
     if (block)
     {

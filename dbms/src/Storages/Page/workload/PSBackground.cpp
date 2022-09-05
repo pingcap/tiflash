@@ -51,9 +51,9 @@ void PSGc::doGcOnce()
     gc_stop_watch.start();
     try
     {
-        MemoryTracker tracker;
-        tracker.setDescription("(Stress Test GC)");
-        current_memory_tracker = &tracker;
+        auto tracker = MemoryTracker::create();
+        tracker->setDescription("(Stress Test GC)");
+        current_memory_tracker = tracker.get();
         ps->gc();
         current_memory_tracker = nullptr;
     }
