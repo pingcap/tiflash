@@ -136,7 +136,7 @@ Children task's cost *= 0.05
 |  INTERVAL syntax for DateTime RANGE OFFSET frame                         |  Not supported   |
 |  Calculating aggregate functions over a frame                            |  Not supported   |
 |  rank(), dense_rank(), row_number()                                      |  Supported       |
-|  lag/lead(value, offset, default)                                        |  Not supported  |
+|  lag/lead(value, offset, default)                                        |  Supported       |
 
 - Compared with TiDB or MySQL, the result may have some differences.
   For example, compare the calculation results of TiFlash and TiDB:
