@@ -195,7 +195,7 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 
 void EstablishCallData::unexpectedWriteDone()
 {
-    grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "Consumer exits unexpected, grpc writes failed.");
+    grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), "grpc writes failed");
     writeDone("unexpectedWriteDone called", status);
 }
 
