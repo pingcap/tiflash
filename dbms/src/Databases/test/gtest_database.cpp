@@ -273,18 +273,15 @@ try
         EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
     }
 
-    const String to_tbl_name = "t_112";
+    const String to_tbl_display_name = "tbl_test";
     {
         // Rename table
-        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db, to_tbl_name, db_name, to_tbl_name);
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db, tbl_name, db_name, to_tbl_display_name);
 
-        auto old_storage = db->tryGetTable(ctx, tbl_name);
-        ASSERT_EQ(old_storage, nullptr);
-
-        auto storage = db->tryGetTable(ctx, to_tbl_name);
+        auto storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
         EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
-        EXPECT_EQ(storage->getTableName(), to_tbl_name);
+        EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
@@ -294,13 +291,13 @@ try
         // Drop table
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = db_name;
-        drop_query->table = to_tbl_name;
+        drop_query->table = tbl_name;
         drop_query->if_exists = false;
         ASTPtr ast_drop_query = drop_query;
         InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
         drop_interpreter.execute();
 
-        auto storage = db->tryGetTable(ctx, to_tbl_name);
+        auto storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(storage, nullptr);
     }
 
@@ -391,18 +388,18 @@ try
         EXPECT_EQ(managed_storage->getDatabaseName(), db_name);
     }
 
-    const String to_tbl_name = "t_112";
+    const String to_tbl_display_name = "tbl_test";
     {
         // Rename table
-        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name);
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, tbl_name, db2_name, to_tbl_display_name);
 
         auto old_storage = db->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(old_storage, nullptr);
 
-        auto storage = db2->tryGetTable(ctx, to_tbl_name);
+        auto storage = db2->tryGetTable(ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
         EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
-        EXPECT_EQ(storage->getTableName(), to_tbl_name);
+        EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
         EXPECT_EQ(managed_storage->getDatabaseName(), db2_name);
@@ -412,13 +409,13 @@ try
         // Drop table
         auto drop_query = std::make_shared<ASTDropQuery>();
         drop_query->database = db2_name;
-        drop_query->table = to_tbl_name;
+        drop_query->table = tbl_name;
         drop_query->if_exists = false;
         ASTPtr ast_drop_query = drop_query;
         InterpreterDropQuery drop_interpreter(ast_drop_query, ctx);
         drop_interpreter.execute();
 
-        auto storage = db2->tryGetTable(ctx, to_tbl_name);
+        auto storage = db2->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(storage, nullptr);
     }
 
@@ -501,18 +498,17 @@ try
     EXPECT_FALSE(db->empty(ctx));
     EXPECT_TRUE(db->isTableExist(ctx, tbl_name));
 
-    const String to_tbl_name = "t_112";
     // Rename table to another database, and mock crash by failed point
     FailPointHelper::enableFailPoint(FailPoints::exception_before_rename_table_old_meta_removed);
     ASSERT_THROW(
-        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, to_tbl_name, db2_name, to_tbl_name),
+        typeid_cast<DatabaseTiFlash *>(db.get())->renameTable(ctx, tbl_name, *db2, tbl_name, db2_name, tbl_name),
         DB::Exception);
 
     {
         // After fail point triggled we should have both meta file in disk
         Poco::File old_meta_file{db->getTableMetadataPath(tbl_name)};
         ASSERT_TRUE(old_meta_file.exists());
-        Poco::File new_meta_file(db2->getTableMetadataPath(to_tbl_name));
+        Poco::File new_meta_file(db2->getTableMetadataPath(tbl_name));
         ASSERT_TRUE(new_meta_file.exists());
         // Old table should remain in db
         auto old_storage = db->tryGetTable(ctx, tbl_name);
@@ -527,10 +523,10 @@ try
         ThreadPool thread_pool(2);
         db2->loadTables(ctx, &thread_pool, true);
 
-        Poco::File new_meta_file(db2->getTableMetadataPath(to_tbl_name));
+        Poco::File new_meta_file(db2->getTableMetadataPath(tbl_name));
         ASSERT_FALSE(new_meta_file.exists());
 
-        auto storage = db2->tryGetTable(ctx, to_tbl_name);
+        auto storage = db2->tryGetTable(ctx, tbl_name);
         ASSERT_EQ(storage, nullptr);
     }
 
