@@ -318,7 +318,7 @@ void WindowBlockInputStream::advanceFrameEndCurrentRow()
            || frame_end.block + 1 == partition_end.block);
 
     // If window only have row_number or rank/dense_rank functions, set frame_end to the next row of current_row and frame_ended to true
-    RUNTIME_CHECK(
+    RUNTIME_CHECK_MSG(
         only_have_pure_window,
         "window function only support pure window function in WindowFrame::BoundaryType::Current now.");
     frame_end = current_row;
