@@ -504,6 +504,7 @@ void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
     if (thread_count)
         return;
+    mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
 
     for (size_t index = 0; index < source_num; ++index)

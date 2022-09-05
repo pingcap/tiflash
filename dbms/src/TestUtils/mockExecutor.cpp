@@ -106,7 +106,8 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
             mutable_executor->clear_executor_id();
             return true;
         });
-        dag_request_ptr->release_root_executor();
+        auto * root_executor = dag_request_ptr->release_root_executor();
+        delete root_executor;
     }
 
     return dag_request_ptr;
