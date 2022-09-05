@@ -182,53 +182,65 @@ StoragePathPool & StoragePathPool::operator=(const StoragePathPool & rhs)
     return *this;
 }
 
+<<<<<<< HEAD
 void StoragePathPool::rename(const String & new_database, const String & new_table, bool clean_rename)
+=======
+bool StoragePathPool::createPSV2DeleteMarkFile()
 {
-    if (unlikely(new_database.empty() || new_table.empty()))
-        throw Exception(fmt::format("Can not rename for PathPool to {}.{}", new_database, new_table));
-
-    if (likely(clean_rename))
+    try
     {
-        // caller ensure that no path need to be renamed.
-        if (unlikely(path_need_database_name))
-            throw Exception("Can not do clean rename with path_need_database_name is true!");
-
-        std::lock_guard lock{mutex};
-        database = new_database;
-        table = new_table;
+        return Poco::File(getPSV2DeleteMarkFilePath()).createFile();
     }
-    else
+    catch (...)
     {
-        if (unlikely(file_provider->isEncryptionEnabled()))
-            throw Exception("Encryption is only supported when using clean_rename");
-
-        // Note: changing these path is not atomic, we may lost data if process is crash here.
-        std::lock_guard lock{mutex};
-        // Get root path without database and table
-        for (auto & info : main_path_infos)
-        {
-            Poco::Path p(info.path);
-            p = p.parent().parent();
-            if (path_need_database_name)
-                p = p.parent();
-            auto new_path = getStorePath(p.toString() + "/data", new_database, new_table);
-            renamePath(info.path, new_path);
-            info.path = new_path;
-        }
-        for (auto & info : latest_path_infos)
-        {
-            Poco::Path p(info.path);
-            p = p.parent().parent();
-            if (path_need_database_name)
-                p = p.parent();
-            auto new_path = getStorePath(p.toString() + "/data", new_database, new_table);
-            renamePath(info.path, new_path);
-            info.path = new_path;
-        }
-
-        database = new_database;
-        table = new_table;
+        tryLogCurrentException(log);
+        return false;
     }
+}
+
+bool StoragePathPool::isPSV2Deleted() const
+{
+    return Poco::File(getPSV2DeleteMarkFilePath()).exists();
+}
+
+void StoragePathPool::clearPSV2ObsoleteData()
+{
+    std::lock_guard lock{mutex};
+    auto drop_instance_data = [&](const String & prefix) {
+        for (auto & path_info : latest_path_infos)
+        {
+            try
+            {
+                auto path = fmt::format("{}/{}", path_info.path, prefix);
+                if (Poco::File dir(path); dir.exists())
+                {
+                    // This function is used to clean obsolete data in ps v2 instance at restart,
+                    // so no need to update global_capacity here.
+                    LOG_FMT_INFO(log, "Begin to drop obsolete data[dir={}]", path);
+                    file_provider->deleteDirectory(dir.path(), false, true);
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log);
+            }
+        }
+    };
+    drop_instance_data("meta");
+    drop_instance_data("log");
+    drop_instance_data("data");
+}
+
+void StoragePathPool::rename(const String & new_database, const String & new_table)
+>>>>>>> 4752b4bc1e (PageStorage: Fine grained lock on external callbacks (#5699))
+{
+    RUNTIME_CHECK(!new_database.empty() && !new_table.empty(), new_database, new_table);
+    RUNTIME_CHECK(!path_need_database_name);
+
+    // The directories for storing table data is not changed, just rename related names.
+    std::lock_guard lock{mutex};
+    database = new_database;
+    table = new_table;
 }
 
 void StoragePathPool::drop(bool recursive, bool must_success)
@@ -251,6 +263,8 @@ void StoragePathPool::drop(bool recursive, bool must_success)
                     total_bytes += file_size;
                 }
                 global_capacity->freeUsedSize(path_info.path, total_bytes);
+                // clear in case delegator->removeDTFile is called after `drop`
+                dt_file_path_map.clear();
             }
         }
         catch (Poco::DirectoryNotEmptyException & e)

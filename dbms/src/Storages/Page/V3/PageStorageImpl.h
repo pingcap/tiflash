@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -132,7 +134,8 @@ private:
     const static String manifests_file_name;
 
     std::mutex callbacks_mutex;
-    using ExternalPageCallbacksContainer = std::unordered_map<NamespaceId, ExternalPageCallbacks>;
+    // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
+    using ExternalPageCallbacksContainer = std::map<NamespaceId, std::shared_ptr<ExternalPageCallbacks>>;
     ExternalPageCallbacksContainer callbacks_container;
 };
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
@@ -34,6 +35,9 @@
 #include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
+
+#include <ext/scope_guard.h>
+#include <future>
 
 namespace DB
 {
@@ -1220,6 +1224,104 @@ try
         page_storage->gc();
         EXPECT_EQ(times_remover_called, 3);
     }
+}
+CATCH
+
+TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
+try
+{
+    auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
+    ExternalPageCallbacks callbacks;
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return {};
+
+        (*ptr) += 1; // mock access the storage inside callback
+        return {};
+    };
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return;
+
+        (*ptr) += 1; // mock access the storage inside callback
+    };
+    page_storage->registerExternalPagesCallbacks(callbacks);
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr);
+    });
+    sp_gc.waitAndPause();
+
+    // mock table created while gc is running
+    {
+        ExternalPageCallbacks new_callbacks;
+        new_callbacks.ns_id = TEST_NAMESPACE_ID + 1;
+        new_callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+            auto ptr = ptr_weak_ref.lock();
+            if (!ptr)
+                return {};
+
+            (*ptr) += 1; // mock access the storage inside callback
+            return {};
+        };
+        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+            auto ptr = ptr_weak_ref.lock();
+            if (!ptr)
+                return;
+
+            (*ptr) += 1; // mock access the storage inside callback
+        };
+        page_storage->registerExternalPagesCallbacks(new_callbacks);
+    }
+
+    sp_gc.next(); // continue the gc
+    th_gc.wait();
+
+    ASSERT_EQ(*ptr, 100 + 4);
+}
+CATCH
+
+TEST_F(PageStorageTest, ConcurrencyRemoveExtCallbacks)
+try
+{
+    auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
+    ExternalPageCallbacks callbacks;
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return {};
+
+        (*ptr) += 1; // mock access the storage inside callback
+        return {};
+    };
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return;
+
+        (*ptr) += 1; // mock access the storage inside callback
+    };
+    page_storage->registerExternalPagesCallbacks(callbacks);
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr);
+    });
+    sp_gc.waitAndPause();
+
+    // mock table dropped while gc is running
+    page_storage->unregisterExternalPagesCallbacks(TEST_NAMESPACE_ID);
+    ptr = nullptr;
+
+    sp_gc.next(); // continue the gc
+    th_gc.wait();
 }
 CATCH
 

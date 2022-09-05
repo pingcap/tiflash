@@ -68,13 +68,13 @@ enum class PageStorageRunMode : UInt8
 
 struct ExternalPageCallbacks
 {
-    // `scanner` for scanning avaliable external page ids on disks.
+    // `scanner` for scanning available external page ids on disks.
     // `remover` will be called with living normal page ids after gc run a round, user should remove those
     //           external pages(files) in `pending_external_pages` but not in `valid_normal_pages`
     using PathAndIdsVec = std::vector<std::pair<String, std::set<PageId>>>;
     using ExternalPagesScanner = std::function<PathAndIdsVec()>;
     using ExternalPagesRemover
-        = std::function<void(const PathAndIdsVec & pengding_external_pages, const std::set<PageId> & valid_normal_pages)>;
+        = std::function<void(const PathAndIdsVec & pending_external_pages, const std::set<PageId> & valid_normal_pages)>;
     ExternalPagesScanner scanner = nullptr;
     ExternalPagesRemover remover = nullptr;
     NamespaceId ns_id = MAX_NAMESPACE_ID;
@@ -327,6 +327,7 @@ public:
     }
 
     // Register and unregister external pages GC callbacks
+    // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
     virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
     virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};
 

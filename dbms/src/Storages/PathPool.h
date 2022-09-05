@@ -406,7 +406,17 @@ public:
     // Those paths are generated from the first path of `latest_path_infos` and `prefix`
     PSDiskDelegatorPtr getPSDiskDelegatorSingle(const String & prefix) { return std::make_shared<PSDiskDelegatorSingle>(*this, prefix); }
 
+<<<<<<< HEAD
     void rename(const String & new_database, const String & new_table, bool clean_rename);
+=======
+    bool createPSV2DeleteMarkFile();
+
+    bool isPSV2Deleted() const;
+
+    void clearPSV2ObsoleteData();
+
+    void rename(const String & new_database, const String & new_table);
+>>>>>>> 4752b4bc1e (PageStorage: Fine grained lock on external callbacks (#5699))
 
     void drop(bool recursive, bool must_success = true);
 

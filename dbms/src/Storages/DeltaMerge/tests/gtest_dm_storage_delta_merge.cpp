@@ -222,10 +222,12 @@ try
 
     // Rename database name before store object is created.
     const String new_db_name = "new_" + storage->getDatabaseName();
-    storage->rename(path_name, new_db_name, table_name, table_name);
+    const String new_display_table_name = "new_" + storage->getTableName();
+    storage->rename(path_name, new_db_name, table_name, new_display_table_name);
     ASSERT_FALSE(storage->storeInited());
     ASSERT_EQ(storage->getTableName(), table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
+    ASSERT_EQ(storage->getTableInfo().name, new_display_table_name);
 
     // prepare block data
     Block sample;
@@ -246,9 +248,8 @@ try
     }
 
     // TiFlash always use t_{table_id} as table name
-    String new_table_name = storage->getTableName();
-    storage->rename(path_name, new_db_name, new_table_name, new_table_name);
-    ASSERT_EQ(storage->getTableName(), new_table_name);
+    storage->rename(path_name, new_db_name, table_name, table_name);
+    ASSERT_EQ(storage->getTableName(), table_name);
     ASSERT_EQ(storage->getDatabaseName(), new_db_name);
 
     storage->drop();
