@@ -129,7 +129,7 @@ void GlobalStoragePool::restore()
 
 bool GlobalStoragePool::gc()
 {
-    return gc(global_context.getSettingsRef(), true, DELTA_MERGE_GC_PERIOD);
+    return gc(global_context.getSettingsRef(), /*immediately=*/true, DELTA_MERGE_GC_PERIOD);
 }
 
 bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)
@@ -439,7 +439,7 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current pool.meta translate already done before restored [ns_id={}] ", ns_id);
+            LOG_FMT_INFO(logger, "Current pool.meta transform already done before restored [ns_id={}] ", ns_id);
         }
 
         if (const auto & data_remain_pages = data_storage_v2->getNumberOfPages(); data_remain_pages != 0)
@@ -455,7 +455,7 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current pool.data translate already done before restored [ns_id={}]", ns_id);
+            LOG_FMT_INFO(logger, "Current pool.data transform already done before restored [ns_id={}]", ns_id);
         }
 
         // Check number of valid pages in v2

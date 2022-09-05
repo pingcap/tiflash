@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
@@ -20,6 +21,7 @@
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
+#include <Poco/Exception.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -40,6 +42,7 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
+#include <memory>
 
 namespace ProfileEvents
 {
@@ -195,7 +198,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  size_t rowkey_column_size_,
                                  const Settings & settings_)
     : global_context(db_context.getGlobalContext())
-    , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
+    , path_pool(std::make_shared<StoragePathPool>(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
     , db_name(db_name_)
     , table_name(table_name_)
@@ -216,7 +219,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     storage_pool = std::make_shared<StoragePool>(global_context,
                                                  ns_id,
-                                                 path_pool,
+                                                 *path_pool,
                                                  db_name_ + "." + table_name_);
 
     // Restore existing dm files and set capacity for path_pool.
@@ -296,25 +299,46 @@ DeltaMergeStore::~DeltaMergeStore()
 
 void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
+    // Callbacks for cleaning outdated DTFiles. Note that there is a chance
+    // that callbacks is called after the `DeltaMergeStore` dropped, we must
+    // make the callbacks safe.
     ExternalPageCallbacks callbacks;
-    // V2 callbacks for cleaning DTFiles
-    callbacks.scanner = [this]() {
+    callbacks.ns_id = storage_pool->getNamespaceId();
+    callbacks.scanner = [path_pool_weak_ref = std::weak_ptr<StoragePathPool>(path_pool), file_provider = global_context.getFileProvider()]() {
         ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
-        auto delegate = path_pool.getStableDiskDelegator();
+
+        // If the StoragePathPool is invalid, meaning we call `scanner` after dropping the table,
+        // simply return an empty list is OK.
+        auto path_pool = path_pool_weak_ref.lock();
+        if (!path_pool)
+            return path_and_ids_vec;
+
+        // Return the DTFiles on disks.
+        auto delegate = path_pool->getStableDiskDelegator();
+        // Only return the DTFiles can be GC. The page id of not able to be GC files, which is being ingested or in the middle of
+        // SegmentSplit/Merge/MergeDelta, is not yet applied
+        // to PageStorage is marked as not able to be GC, so we don't return them and run the `remover`
         DMFile::ListOptions options;
         options.only_list_can_gc = true;
         for (auto & root_path : delegate.listPaths())
         {
-            auto & path_and_ids = path_and_ids_vec.emplace_back();
-            path_and_ids.first = root_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(global_context.getFileProvider(), root_path, options);
-            for (auto id : file_ids_in_current_path)
-                path_and_ids.second.insert(id);
+            std::set<PageId> ids_under_path;
+            auto file_ids_in_current_path = DMFile::listAllInPath(file_provider, root_path, options);
+            path_and_ids_vec.emplace_back(root_path, std::move(file_ids_in_current_path));
         }
         return path_and_ids_vec;
     };
-    callbacks.remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
-        auto delegate = path_pool.getStableDiskDelegator();
+    callbacks.remover = [path_pool_weak_ref = std::weak_ptr<StoragePathPool>(path_pool), //
+                         file_provider = global_context.getFileProvider(),
+                         logger = log](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+        // If the StoragePathPool is invalid, meaning we call `remover` after dropping the table,
+        // simply skip is OK.
+        auto path_pool = path_pool_weak_ref.lock();
+        if (!path_pool)
+            return;
+
+        SYNC_FOR("before_DeltaMergeStore::callbacks_remover_remove");
+        auto delegate = path_pool->getStableDiskDelegator();
         for (const auto & [path, ids] : path_and_ids_vec)
         {
             for (auto id : ids)
@@ -323,18 +347,50 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that page_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
-                if (dmfile->canGC())
+                auto dmfile = DMFile::restore(file_provider, id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
+                if (unlikely(!dmfile))
                 {
-                    delegate.removeDTFile(dmfile->fileId());
-                    dmfile->remove(global_context.getFileProvider());
+                    // If the dtfile directory is not exist, it means `StoragePathPool::drop` have been
+                    // called in another thread. Just try to clean if any id is left.
+                    try
+                    {
+                        delegate.removeDTFile(id);
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        // just ignore
+                    }
+                    LOG_FMT_INFO(logger,
+                                 "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
+                                 DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
                 }
-
-                LOG_FMT_INFO(log, "GC removed useless dmfile: {}", dmfile->path());
+                else if (dmfile->canGC())
+                {
+                    // StoragePathPool::drop may be called concurrently, ignore and continue next file if any exception thrown
+                    String err_msg;
+                    try
+                    {
+                        // scanner should only return dtfiles that can GC,
+                        // just another check here.
+                        delegate.removeDTFile(dmfile->fileId());
+                        dmfile->remove(file_provider);
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        err_msg = e.message();
+                    }
+                    catch (Poco::Exception & e)
+                    {
+                        err_msg = e.message();
+                    }
+                    if (err_msg.empty())
+                        LOG_FMT_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
+                    else
+                        LOG_FMT_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={}, err_msg={}", dmfile->path(), err_msg);
+                }
             }
         }
     };
-    callbacks.ns_id = storage_pool->getNamespaceId();
     // remember to unregister it when shutdown
     storage_pool->dataRegisterExternalPagesCallbacks(callbacks);
     storage_pool->enableGC();
@@ -355,20 +411,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     blockable_background_pool_handle->wake();
 }
 
-void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_database_name, String new_table_name)
+void DeltaMergeStore::rename(String /*new_path*/, String new_database_name, String new_table_name)
 {
-    if (clean_rename)
-    {
-        path_pool.rename(new_database_name, new_table_name, clean_rename);
-    }
-    else
-    {
-        LOG_FMT_WARNING(log, "Applying heavy renaming for table {}.{} to {}.{}", db_name, table_name, new_database_name, new_table_name);
-
-        // Remove all background task first
-        shutdown();
-        path_pool.rename(new_database_name, new_table_name, clean_rename); // rename for multi-disk
-    }
+    path_pool->rename(new_database_name, new_table_name);
 
     // TODO: replacing these two variables is not atomic, but could be good enough?
     table_name.swap(new_table_name);
@@ -465,7 +510,7 @@ void DeltaMergeStore::drop()
     storage_pool->drop();
 
     // Drop data in storage path pool
-    path_pool.drop(/*recursive=*/true, /*must_success=*/false);
+    path_pool->drop(/*recursive=*/true, /*must_success=*/false);
     LOG_FMT_INFO(log, "Drop DeltaMerge done [{}.{}]", db_name, table_name);
 }
 
@@ -496,7 +541,7 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
     auto * ctx = new DMContext(db_context.getGlobalContext(),
-                               path_pool,
+                               *path_pool,
                                *storage_pool,
                                hash_salt,
                                latest_gc_safe_point.load(std::memory_order_acquire),
@@ -705,7 +750,7 @@ std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
     if (shutdown_called.load(std::memory_order_relaxed))
         return {};
 
-    auto delegator = path_pool.getStableDiskDelegator();
+    auto delegator = path_pool->getStableDiskDelegator();
     auto parent_path = delegator.choosePath();
     auto new_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     return {parent_path, new_id};
@@ -716,7 +761,7 @@ void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId fil
     if (shutdown_called.load(std::memory_order_relaxed))
         return;
 
-    auto delegator = path_pool.getStableDiskDelegator();
+    auto delegator = path_pool->getStableDiskDelegator();
     delegator.addDTFile(file_id, file_size, parent_path);
 }
 
@@ -2483,7 +2528,7 @@ void DeltaMergeStore::restoreStableFiles()
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
     options.clean_up = true;
     auto file_provider = global_context.getFileProvider();
-    auto path_delegate = path_pool.getStableDiskDelegator();
+    auto path_delegate = path_pool->getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
