@@ -233,6 +233,51 @@ mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; sele
 | NULL                                                 |
 +------------------------------------------------------+
 
+## test offset
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, -1) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
+{#REGEXP}.*You have an error in your SQL syntax.*
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, 0) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---+---------------------------+
+| a | lead(value_str, 0) over w |
++---+---------------------------+
+| a | 1                         |
+| a |                           |
+| a | 3                         |
+| a | 4                         |
+| a | 5                         |
+| a | NULL                      |
+| a | 7                         |
+| a | 8                         |
++---+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, 1) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---+---------------------------+
+| a | lead(value_str, 1) over w |
++---+---------------------------+
+| a |                           |
+| a | 3                         |
+| a | 4                         |
+| a | NULL                      |
+| a | NULL                      |
+| a | 7                         |
+| a | 8                         |
+| a | NULL                      |
++---+---------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, 18446744073709551615) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
++---+----------------------------------------------+
+| a | lead(value_str, 18446744073709551615) over w |
++---+----------------------------------------------+
+| a | NULL                                         |
+| a | 1                                            |
+| a |                                              |
+| a | 3                                            |
+| a | NULL                                         |
+| a | 5                                            |
+| a | NULL                                         |
+| a | 7                                            |
++---+----------------------------------------------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; set tidb_enforce_mpp=1; select 'a', lead(value_str, 18446744073709551616) over w from test.test_str window w as(PARTITION BY part ORDER BY orde) order by orde;
+{#REGEXP}.*Incorrect arguments.*
+
 mysql> drop table if exists test.test_str
 mysql> drop table if exists test.test_int
 mysql> drop table if exists test.test_float
