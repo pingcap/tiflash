@@ -141,7 +141,7 @@ ProcessList::EntryPtr ProcessList::insert(
 
         ++cur_size;
 
-        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage, settings.memory_tracker_fault_probability, priorities.insert(settings.priority)));
+        res = std::make_shared<Entry>(*this, cont.emplace(cont.end(), query_, client_info, settings.max_memory_usage, settings.memory_tracker_fault_probability, settings.memory_tracker_accuracy_diff_for_test, priorities.insert(settings.priority)));
 
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
         user_process_list.queries.emplace(client_info.current_query_id, &res->get());

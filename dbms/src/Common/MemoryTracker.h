@@ -44,6 +44,9 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     /// To test exception safety of calling code, memory tracker throws an exception on each memory allocation with specified probability.
     double fault_probability = 0;
 
+    /// To test the accuracy of memory track, it throws an exception when the part exceeding the tracked amount is greater than accuracy_diff_for_test.
+    Int64 accuracy_diff_for_test = 0;
+
     /// Singly-linked list. All information will be passed to subsequent memory trackers also (it allows to implement trackers hierarchy).
     /// In terms of tree nodes it is the list of parents. Lifetime of these trackers should "include" lifetime of current tracker.
     std::atomic<MemoryTracker *> next{};
@@ -102,6 +105,8 @@ public:
     void setBytesThatRssLargerThanLimit(Int64 value) { bytes_rss_larger_than_limit = value; }
 
     void setFaultProbability(double value) { fault_probability = value; }
+
+    void setAccuracyDiff(double value) { accuracy_diff_for_test = value; }
 
     /// next should be changed only once: from nullptr to some value.
     void setNext(MemoryTracker * elem) { next.store(elem, std::memory_order_relaxed); }

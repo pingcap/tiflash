@@ -69,6 +69,20 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
       *  we allow exception about memory limit exceeded to be thrown only on next allocation.
       * So, we allow over-allocations.
       */
+    Int64 current_amount = amount.load(std::memory_order_relaxed);
+    if (unlikely(!next.load(std::memory_order_relaxed) && accuracy_diff_for_test && real_rss > accuracy_diff_for_test + current_amount))
+    {
+        DB::FmtBuffer fmt_buf;
+        fmt_buf.append("Memory tracker accuracy ");
+        if (description)
+            fmt_buf.fmtAppend(" {}", description);
+
+        fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than tracked amount ({})",
+                          formatReadableSizeWithBinarySuffix(real_rss),
+                          formatReadableSizeWithBinarySuffix(current_amount));
+        throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+    }
+
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
 
     if (!next.load(std::memory_order_relaxed))
