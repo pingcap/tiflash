@@ -57,39 +57,39 @@ QueryExecutorPtr executeQuery(
 {
     if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
     {
-        assert(!internal && stage == QueryProcessingStage::Complete);
-
-        const Settings & settings = context.getSettingsRef();
-
         PlanQuerySource plan(context);
-        auto [query, ast] = plan.parse(settings.max_query_size);
-
-        ProfileEvents::increment(ProfileEvents::Query);
-        context.setQueryContext(context);
-        ProcessList::EntryPtr process_list_entry = context.getProcessList().insert(
-            query,
-            ast.get(),
-            context.getClientInfo(),
-            settings);
-        context.setProcessListElement(&process_list_entry->get());
-
-        // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
-        // so that we can propagate current_memory_tracker into them.
-        if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
+        if (plan.isSupportPipeline())
         {
-            if (context.getDAGContext()->tunnel_set)
-                context.getDAGContext()->tunnel_set->updateMemTracker();
-            if (context.getDAGContext()->getMppReceiverSet())
-                context.getDAGContext()->getMppReceiverSet()->setUpConnection();
-        }
+            context.getDAGContext()->is_pipeline_mode = true;
+            assert(!internal && stage == QueryProcessingStage::Complete);
+            const Settings & settings = context.getSettingsRef();
 
-        auto interpreter = plan.interpreter(context, stage);
-        const auto * planner = static_cast<Planner *>(interpreter.get());
-        return planner->pipelineExecute(process_list_entry);
+            auto [query, ast] = plan.parse(settings.max_query_size);
+    
+            ProfileEvents::increment(ProfileEvents::Query);
+            context.setQueryContext(context);
+            ProcessList::EntryPtr process_list_entry = context.getProcessList().insert(
+                query,
+                ast.get(),
+                context.getClientInfo(),
+                settings);
+            context.setProcessListElement(&process_list_entry->get());
+    
+            // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
+            // so that we can propagate current_memory_tracker into them.
+            if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
+            {
+                if (context.getDAGContext()->tunnel_set)
+                    context.getDAGContext()->tunnel_set->updateMemTracker();
+                if (context.getDAGContext()->getMppReceiverSet())
+                    context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+            }
+    
+            auto interpreter = plan.interpreter(context, stage);
+            const auto * planner = static_cast<Planner *>(interpreter.get());
+            return planner->pipelineExecute(process_list_entry);
+        }
     }
-    else
-    {
-        return std::make_shared<DataStreamExecutor>(executeQueryAsStream(context, internal, stage));
-    }
+    return std::make_shared<DataStreamExecutor>(executeQueryAsStream(context, internal, stage));
 }
 } // namespace DB

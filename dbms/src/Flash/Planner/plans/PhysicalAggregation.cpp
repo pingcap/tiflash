@@ -14,6 +14,10 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
+#include <DataStreams/AggregatingBlockInputStream.h>
+#include <DataStreams/ConcatBlockInputStream.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/ParallelAggregatingBlockInputStream.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -24,6 +28,7 @@
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalFinalAggregation.h>
 #include <Flash/Planner/plans/PhysicalPartialAggregation.h>
+#include <Flash/Planner/plans/PhysicalPipelineAggregation.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -69,66 +74,154 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     /// project action after aggregation to remove useless columns.
     auto schema = PhysicalPlanHelper::addSchemaProjectAction(expr_after_agg_actions, analyzer.getCurrentInputColumns());
 
-    const auto & settings = context.getSettingsRef();
-    AggregateStorePtr aggregate_store = std::make_shared<AggregateStore>(
-        log->identifier(),
-        context.getFileProvider(),
-        true,
-        settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
+    if (!context.getDAGContext()->is_pipeline_mode)
+    {
+        auto physical_agg = std::make_shared<PhysicalAggregation>(
+            executor_id,
+            schema,
+            log->identifier(),
+            child,
+            before_agg_actions,
+            aggregation_keys,
+            collators,
+            AggregationInterpreterHelper::isFinalAgg(aggregation),
+            aggregate_descriptions,
+            expr_after_agg_actions);
+        return physical_agg;
+    }
+    else
+    {
+        const auto & settings = context.getSettingsRef();
+        AggregateStorePtr aggregate_store = std::make_shared<AggregateStore>(
+            log->identifier(),
+            context.getFileProvider(),
+            true,
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads));
 
-    auto physical_partial_agg = std::make_shared<PhysicalPartialAggregation>(
-        executor_id,
-        NamesAndTypes{},
-        log->identifier(),
-        child,
-        before_agg_actions,
-        aggregation_keys,
-        collators,
-        AggregationInterpreterHelper::isFinalAgg(aggregation),
-        aggregate_descriptions,
-        aggregate_store);
-    physical_partial_agg->notTiDBOperator();
-    physical_partial_agg->disableRestoreConcurrency();
-
-    auto physical_final_agg = std::make_shared<PhysicalFinalAggregation>(
-        executor_id,
-        schema,
-        log->identifier(),
-        aggregate_store,
-        expr_after_agg_actions);
-
-    auto physical_agg = std::make_shared<PhysicalAggregation>(
-        executor_id,
-        schema,
-        log->identifier(),
-        physical_partial_agg,
-        physical_final_agg);
-    physical_agg->notTiDBOperator();
-    physical_agg->disableRestoreConcurrency();
-    return physical_agg;
+        auto physical_partial_agg = std::make_shared<PhysicalPartialAggregation>(
+            executor_id,
+            NamesAndTypes{},
+            log->identifier(),
+            child,
+            before_agg_actions,
+            aggregation_keys,
+            collators,
+            AggregationInterpreterHelper::isFinalAgg(aggregation),
+            aggregate_descriptions,
+            aggregate_store);
+        physical_partial_agg->notTiDBOperator();
+        physical_partial_agg->disableRestoreConcurrency();
+    
+        auto physical_final_agg = std::make_shared<PhysicalFinalAggregation>(
+            executor_id,
+            schema,
+            log->identifier(),
+            aggregate_store,
+            expr_after_agg_actions);
+        physical_partial_agg->disableRestoreConcurrency();
+    
+        auto physical_agg = std::make_shared<PhysicalPipelineAggregation>(
+            executor_id,
+            schema,
+            log->identifier(),
+            physical_partial_agg,
+            physical_final_agg);
+        physical_agg->notTiDBOperator();
+        physical_agg->disableRestoreConcurrency();
+        return physical_agg;
+    }
 }
 
 void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
-    partial()->transform(pipeline, context, max_streams);
-    executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for pratial agg");
+    child->transform(pipeline, context, max_streams);
 
+    executeExpression(pipeline, before_agg_actions, log, "before aggregation");
+
+    Block before_agg_header = pipeline.firstStream()->getHeader();
+    AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+    auto params = AggregationInterpreterHelper::buildParams(
+        context,
+        before_agg_header,
+        pipeline.streams.size(),
+        aggregation_keys,
+        aggregation_collators,
+        aggregate_descriptions,
+        is_final_agg);
+
+    /// If there are several sources, then we perform parallel aggregation
+    if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
     {
-        DAGPipeline final_pipeline;
-        final()->transform(final_pipeline, context, max_streams);
-        assert(final_pipeline.streams_with_non_joined_data.empty());
-        pipeline.streams_with_non_joined_data = final_pipeline.streams;
+        const Settings & settings = context.getSettingsRef();
+        BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
+            pipeline.streams,
+            pipeline.streams_with_non_joined_data,
+            params,
+            context.getFileProvider(),
+            true,
+            max_streams,
+            settings.aggregation_memory_efficient_merge_threads ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads) : static_cast<size_t>(settings.max_threads),
+            log->identifier());
+
+        pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
+        pipeline.firstStream() = std::move(stream);
+        restoreConcurrency(pipeline, context.getDAGContext()->final_concurrency, log);
     }
+    else
+    {
+        BlockInputStreams inputs;
+        if (!pipeline.streams.empty())
+            inputs.push_back(pipeline.firstStream());
+
+        if (!pipeline.streams_with_non_joined_data.empty())
+            inputs.push_back(pipeline.streams_with_non_joined_data.at(0));
+
+        pipeline.streams.resize(1);
+        pipeline.streams_with_non_joined_data.clear();
+
+        pipeline.firstStream() = std::make_shared<AggregatingBlockInputStream>(
+            std::make_shared<ConcatBlockInputStream>(inputs, log->identifier()),
+            params,
+            context.getFileProvider(),
+            true,
+            log->identifier());
+    }
+
+    // we can record for agg after restore concurrency.
+    // Because the streams of expr_after_agg will provide the correct ProfileInfo.
+    // See #3804.
+    assert(expr_after_agg && !expr_after_agg->getActions().empty());
+    executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
 void PhysicalAggregation::finalize(const Names & parent_require)
 {
-    final()->finalize(parent_require);
-    partial()->finalize();
+    // schema.size() >= parent_require.size()
+    FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+    expr_after_agg->finalize(DB::toNames(schema));
+
+    Names before_agg_output;
+    // set required output for agg funcs's arguments and group by keys.
+    for (const auto & aggregate_description : aggregate_descriptions)
+    {
+        for (const auto & argument_name : aggregate_description.argument_names)
+            before_agg_output.push_back(argument_name);
+    }
+    for (const auto & aggregation_key : aggregation_keys)
+    {
+        before_agg_output.push_back(aggregation_key);
+    }
+
+    before_agg_actions->finalize(before_agg_output);
+    child->finalize(before_agg_actions->getRequiredColumns());
+    FinalizeHelper::prependProjectInputIfNeed(before_agg_actions, child->getSampleBlock().columns());
+
+    FinalizeHelper::checkSampleBlockContainsSchema(getSampleBlock(), schema);
 }
 
 const Block & PhysicalAggregation::getSampleBlock() const
 {
-    return final()->getSampleBlock();
+    return expr_after_agg->getSampleBlock();
 }
 } // namespace DB

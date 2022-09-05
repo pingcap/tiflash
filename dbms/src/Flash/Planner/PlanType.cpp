@@ -44,6 +44,8 @@ String PlanType::toString() const
         M(NonJoinProbe)
         M(JoinBuild)
         M(ResultHandler)
+        M(PipelineAggregation)
+        M(PipelineJoin)
 #undef M
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);

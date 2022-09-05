@@ -122,6 +122,8 @@ private:
 
     void initExchangeReceivers();
 
+    QueryExecutorPtr getQueryExecutorPtr();
+
     tipb::DAGRequest dag_req;
 
     ContextPtr context;
@@ -130,7 +132,8 @@ private:
     std::unique_ptr<DAGContext> dag_context;
     MemoryTracker * memory_tracker = nullptr;
 
-    QueryExecutorPtr executor = nullptr;
+    QueryExecutorPtr query_executor = nullptr;
+    std::mutex query_executor_mu;
 
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;

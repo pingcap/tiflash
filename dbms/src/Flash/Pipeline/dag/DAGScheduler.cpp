@@ -15,8 +15,8 @@
 #include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Pipeline/dag/PhysicalResultHandler.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
-#include <Flash/Planner/plans/PhysicalAggregation.h>
-#include <Flash/Planner/plans/PhysicalJoin.h>
+#include <Flash/Planner/plans/PhysicalPipelineAggregation.h>
+#include <Flash/Planner/plans/PhysicalPipelineJoin.h>
 #include <Flash/Planner/plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -224,23 +224,23 @@ std::unordered_set<UInt32> DAGScheduler::createParentPipelines(const PhysicalPla
         const auto & child = plan_node->children(i);
         switch (child->tp())
         {
-        case PlanType::Join:
+        case PlanType::PipelineJoin:
         {
-            // PhysicalJoin cannot be the root node.
-            auto physical_join = std::static_pointer_cast<PhysicalJoin>(child);
+            // PhysicalPipelineJoin cannot be the root node.
+            auto physical_join = std::static_pointer_cast<PhysicalPipelineJoin>(child);
             // pipeline breaker: PhysicalJoinBuild
             parent_ids.insert(genPipeline(physical_join->build())->getId());
 
-            // remove PhysicalJoin
+            // remove PhysicalPipelineJoin
             plan_node->setChild(0, physical_join->probe());
             const auto & ids = createParentPipelines(physical_join->probe());
             parent_ids.insert(ids.cbegin(), ids.cend());
             break;
         }
-        case PlanType::Aggregation:
+        case PlanType::PipelineAggregation:
         {
             // PhysicalAggregation cannot be the root node.
-            auto physical_agg = std::static_pointer_cast<PhysicalAggregation>(child);
+            auto physical_agg = std::static_pointer_cast<PhysicalPipelineAggregation>(child);
             // pipeline breaker: PhysicalPartialAggregation
             parent_ids.insert(genPipeline(physical_agg->partial())->getId());
 

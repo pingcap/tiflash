@@ -14,6 +14,7 @@
 
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Planner/Planner.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Parsers/makeDummyQuery.h>
 
 namespace DB
@@ -38,6 +39,31 @@ String PlanQuerySource::str(size_t)
 std::unique_ptr<IInterpreter> PlanQuerySource::interpreter(Context &, QueryProcessingStage::Enum)
 {
     return std::make_unique<Planner>(context, *this);
+}
+
+bool PlanQuerySource::isSupportPipeline() const
+{
+    bool is_support_pipeline = true;
+    traverseExecutors(
+        &getDAGRequest(),
+        [&](const tipb::Executor & executor) {
+            switch (executor.tp())
+            {
+            case tipb::ExecType::TypeSelection:
+            case tipb::ExecType::TypeAggregation:
+            case tipb::ExecType::TypeStreamAgg:
+            case tipb::ExecType::TypeExchangeSender:
+            case tipb::ExecType::TypeExchangeReceiver:
+            case tipb::ExecType::TypeProjection:
+            case tipb::ExecType::TypeTableScan:
+            case tipb::ExecType::TypeJoin:
+                return true;
+            default:
+                is_support_pipeline = false;
+                return false;
+            }
+        });
+    return is_support_pipeline;
 }
 
 } // namespace DB

@@ -12,24 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/QueryExecutor.h>
+#include <Flash/Planner/plans/PhysicalPipelineAggregation.h>
 
 namespace DB
 {
-std::pair<bool, String> QueryExecutor::execute()
+void PhysicalPipelineAggregation::transformImpl(DAGPipeline &, Context &, size_t)
 {
-    return execute(ResultHandler{});
+    throw Exception("Unsupport");
 }
 
-std::pair<bool, String> QueryExecutor::execute(ResultHandler::Handler handler)
+void PhysicalPipelineAggregation::finalize(const Names & parent_require)
 {
-    return execute(ResultHandler{handler});
+    final()->finalize(parent_require);
+    partial()->finalize();
 }
 
-void QueryExecutor::executeForTest(ResultHandler::Handler handler)
+const Block & PhysicalPipelineAggregation::getSampleBlock() const
 {
-    auto [is_success, err_msg] = execute(handler);
-    if (!is_success)
-        throw Exception(err_msg);
+    return final()->getSampleBlock();
 }
 } // namespace DB

@@ -42,6 +42,8 @@ struct PlanType
         FinalAggregation = 17,
         PartialAggregation = 18,
         NonJoinProbe = 19,
+        PipelineAggregation = 20,
+        PipelineJoin = 21,
     };
     PlanTypeEnum enum_value;
 

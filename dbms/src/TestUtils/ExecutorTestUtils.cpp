@@ -164,7 +164,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     // Currently, don't care about regions information in tests.
     auto executor = executeQuery(context.context);
     Blocks actual_blocks;
-    executor->execute([&actual_blocks](const Block & block) {
+    executor->executeForTest([&actual_blocks](const Block & block) {
         actual_blocks.push_back(block);
     });
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();

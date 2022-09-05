@@ -32,6 +32,8 @@ public:
     DAGContext & getDAGContext() const { return *context.getDAGContext(); }
     const tipb::DAGRequest & getDAGRequest() const { return *getDAGContext().dag_request; }
 
+    bool isSupportPipeline() const;
+
 private:
     Context & context;
 };

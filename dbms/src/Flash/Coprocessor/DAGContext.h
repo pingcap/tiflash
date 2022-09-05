@@ -347,6 +347,8 @@ public:
     /// It is used to ensure that the order of Execution summary of list based executors is the same as the order of list based executors.
     std::vector<String> list_based_executors_order;
 
+    bool is_pipeline_mode = false;
+
 private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();

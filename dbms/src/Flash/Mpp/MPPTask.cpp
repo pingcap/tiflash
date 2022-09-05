@@ -124,8 +124,8 @@ void MPPTask::abortDataStreams(AbortType abort_type)
     /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
     bool is_kill = abort_type == AbortType::ONCANCELLATION;
     context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
-    if (executor)
-        executor->cancel(is_kill);
+    if (auto query_executor_ptr = getQueryExecutorPtr(); query_executor_ptr)
+        query_executor_ptr->cancel(is_kill);
 }
 
 void MPPTask::closeAllTunnels(const String & reason)
@@ -359,7 +359,10 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
-    executor = executeQuery(*context);
+    {
+        std::unique_lock lock(query_executor_mu);
+        query_executor = executeQuery(*context);
+    }
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
         if (status != RUNNING)
@@ -408,23 +411,25 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        assert(executor);
-        bool is_success;
-        std::tie(is_success, err_msg) = executor->execute();
-        if (is_success)
+        if (auto query_executor_ptr = getQueryExecutorPtr(); query_executor_ptr)
         {
-            // finish receiver
-            receiver_set->close();
-            // finish MPPTunnel
-            finishWrite();
-
-            const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
-            LOG_FMT_DEBUG(
-                log,
-                "finish write with {} rows, {} blocks, {} bytes",
-                return_statistics.rows,
-                return_statistics.blocks,
-                return_statistics.bytes);
+            bool is_success;
+            std::tie(is_success, err_msg) = query_executor_ptr->execute();
+            if (is_success)
+            {
+                // finish receiver
+                receiver_set->close();
+                // finish MPPTunnel
+                finishWrite();
+    
+                const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
+                LOG_FMT_DEBUG(
+                    log,
+                    "finish write with {} rows, {} blocks, {} bytes",
+                    return_statistics.rows,
+                    return_statistics.blocks,
+                    return_statistics.bytes);
+            }
         }
     }
     catch (...)
@@ -466,6 +471,10 @@ void MPPTask::runImpl()
             }
         }
     }
+    {
+        std::unique_lock lock(query_executor_mu);
+        query_executor = nullptr;
+    }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     // unregister flag is only for FailPoint usage, to produce the situation that MPPTask is destructed
     // by grpc CancelMPPTask thread;
@@ -479,6 +488,12 @@ void MPPTask::runImpl()
 
     mpp_task_statistics.end(status.load(), err_string);
     mpp_task_statistics.logTracingJson();
+}
+
+QueryExecutorPtr MPPTask::getQueryExecutorPtr()
+{
+    std::unique_lock lock(query_executor_mu);
+    return query_executor;
 }
 
 void MPPTask::handleError(const String & error_msg)
