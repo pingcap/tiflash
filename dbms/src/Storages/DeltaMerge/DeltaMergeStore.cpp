@@ -772,7 +772,7 @@ void DeltaMergeStore::ingestFiles(
 {
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
-        const auto msg = fmt::format("Try to ingest files into a shutdown table");
+        const auto msg = fmt::format("Try to ingest files into a shutdown table, store={}", log->identifier());
         LOG_FMT_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
