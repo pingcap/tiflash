@@ -30,6 +30,7 @@ void AggregationTest::SetUpTestCase()
     };
 
     register_func(DB::registerAggregateFunctions);
+    register_func(DB::registerFunctions);
 }
 
 ::testing::AssertionResult AggregationTest::checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
