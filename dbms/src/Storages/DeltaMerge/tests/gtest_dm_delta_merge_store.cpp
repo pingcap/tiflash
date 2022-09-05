@@ -17,18 +17,25 @@
 #include <Common/MyTime.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <TestUtils/TiFlashTestEnv.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 
 #include <algorithm>
 #include <future>
 #include <iterator>
+
+#include "Storages/DeltaMerge/RowKeyRange.h"
 
 namespace DB
 {
@@ -84,8 +91,126 @@ try
         // check column structure of store
         const auto & cols = store->getTableColumns();
         // version & tag column added
-        ASSERT_EQ(cols.size(), 3UL);
+        ASSERT_EQ(cols.size(), 3);
     }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, DroppedInMiddleDTFileGC)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    {
+        // check column structure of store
+        const auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3);
+    }
+
+    // drop table in the middle of page storage gc
+    store->shutdown();
+    store = nullptr;
+
+    sp_gc.next(); // continue the page storage gc
+    th_gc.wait();
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, DroppedInMiddleDTFileRemoveCallback)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before removing dtfiles
+    auto sp_gc = SyncPointCtl::enableInScope("before_DeltaMergeStore::callbacks_remover_remove");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    {
+        // check column structure of store
+        const auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3);
+    }
+
+    // drop table and files in the middle of page storage gc
+    store->drop();
+    store = nullptr;
+
+    sp_gc.next(); // continue removing dtfiles
+    th_gc.wait();
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, CreateInMiddleDTFileGC)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    DeltaMergeStorePtr new_store;
+    ColumnDefinesPtr new_cols;
+    {
+        new_cols = DMTestEnv::getDefaultColumns();
+        ColumnDefine handle_column_define = (*new_cols)[0];
+        new_store = std::make_shared<DeltaMergeStore>(*db_context,
+                                                      false,
+                                                      "test",
+                                                      "t_200",
+                                                      200,
+                                                      *new_cols,
+                                                      handle_column_define,
+                                                      false,
+                                                      1,
+                                                      DeltaMergeStore::Settings());
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 100, false);
+        new_store->write(*db_context, db_context->getSettingsRef(), block);
+        new_store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    sp_gc.next(); // continue the page storage gc
+    th_gc.wait();
+
+    BlockInputStreamPtr in = new_store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             *new_cols,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             "",
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
+                                             /* expected_block_size= */ 1024)[0];
+    ASSERT_INPUTSTREAM_NROWS(in, 100);
 }
 CATCH
 
