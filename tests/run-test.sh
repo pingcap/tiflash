@@ -13,10 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+PY="python2"
+# PY="python3"
 
 function wait_table()
 {
-	python3 wait-table.py "$@"; return $?
+	${PY} wait-table.py "$@"; return $?
 }
 export -f wait_table
 
@@ -59,10 +61,10 @@ function run_file()
 	echo "$path: Running"
 	start_time=$(date +"%s.%N")
 	if [ "$ext" == "test" ]; then
-		python3 run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
+		${PY} run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
 	else
 		if [ "$ext" == "visual" ]; then
-			python3 run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose"
+			${PY} run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose"
 			if [ $? != 0 ]; then
 				echo "Generate test files failed: $file" >&2
 				exit 1
@@ -199,7 +201,7 @@ if [ "$fullstack" = true ]; then
         echo "create database '"$tidb_db"' failed" >&2
         exit 1
     fi
-    python3 generate-fullstack-test.py "$tidb_db" "$tidb_table"
+    ${PY} generate-fullstack-test.py "$tidb_db" "$tidb_table"
 fi
 
 run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
