@@ -20,6 +20,30 @@ function wait_table()
 }
 export -f wait_table
 
+function get_elapse_s() {
+	# time format:$(date +"%s.%N"), such as 1662367015.453429263
+	start_time=$1
+	end_time=$2
+	
+	start_s=${start_time%.*}
+	start_nanos=${start_time#*.}
+	end_s=${end_time%.*}
+	end_nanos=${end_time#*.}
+	
+	# end_nanos > start_nanos? 
+	# Another way, the time part may start with 0, which means
+	# it will be regarded as oct format, use "10#" to ensure
+	# calculateing with decimal
+	if [ "$end_nanos" -lt "$start_nanos" ];then
+		end_s=$(( 10#$end_s - 1 ))
+		end_nanos=$(( 10#$end_nanos + 10**9 ))
+	fi
+	
+	elapse_s=$(( 10#$end_s - 10#$start_s )).`printf "%03d\n" $(( (10#$end_nanos - 10#$start_nanos)/10**6 ))`
+	
+	echo $elapse_s
+}
+
 function run_file()
 {
 	local dbc="$1"
@@ -32,6 +56,8 @@ function run_file()
 
 	local ext=${path##*.}
 
+	echo "$path: Running"
+	start_time=$(date +"%s.%N")
 	if [ "$ext" == "test" ]; then
 		python2 run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
 	else
@@ -46,9 +72,11 @@ function run_file()
 	fi
 
 	if [ $? == 0 ]; then
-		echo $path: OK
+		end_time=$(date +"%s.%N")
+		elapse_s=$(get_elapse_s $start_time $end_time)
+		echo "$path: OK [$elapse_s s]"
 	else
-		echo $path: Failed
+		echo "$path: Failed"
 		if [ "$continue_on_error" != "true" ]; then
 			exit 1
 		fi
@@ -145,7 +173,7 @@ if [ -z "$dbc" ]; then
 fi
 
 if [ -z "$verbose" ]; then
-    verbose="false"
+	verbose="false"
 fi
 
 if [ -z "$continue_on_error" ]; then
