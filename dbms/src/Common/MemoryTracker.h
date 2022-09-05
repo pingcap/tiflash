@@ -106,7 +106,7 @@ public:
 
     void setFaultProbability(double value) { fault_probability = value; }
 
-    void setAccuracyDiff(double value) { accuracy_diff_for_test = value; }
+    void setAccuracyDiffForTest(double value) { accuracy_diff_for_test = value; }
 
     /// next should be changed only once: from nullptr to some value.
     void setNext(MemoryTracker * elem) { next.store(elem, std::memory_order_relaxed); }
