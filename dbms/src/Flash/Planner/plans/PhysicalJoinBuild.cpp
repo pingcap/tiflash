@@ -60,19 +60,9 @@ void PhysicalJoinBuild::buildSideTransform(DAGPipeline & build_pipeline, Context
         stream->setExtraInfo(join_build_extra_info);
         join_execute_info.join_build_streams.push_back(stream);
     });
-    // for test, join executor need the return blocks to output.
-    executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
-
     if (!join_ptr->initialized)
     {
         join_ptr->init(build_pipeline.firstStream()->getHeader(), join_build_concurrency);
-        if (!settings.enable_pipeline)
-        {
-            SubqueryForSet build_query;
-            build_query.source = build_pipeline.firstStream();
-            build_query.join = join_ptr;
-            dag_context.addSubquery(execId(), std::move(build_query));
-        }
     }
 }
 
