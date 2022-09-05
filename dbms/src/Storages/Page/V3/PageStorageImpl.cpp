@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/FileProvider.h>
 #include <Storages/Page/PageDefines.h>
@@ -24,6 +25,8 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
+
+#include <mutex>
 
 namespace DB
 {
@@ -336,24 +339,55 @@ bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_li
 // TODO: `clean_external_page` for all tables may slow down the whole gc process when there are lots of table.
 void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics)
 {
-    // TODO: `callbacks_mutex` is being held during the whole `cleanExternalPage`, meaning gc will block
-    // creating/dropping table, need to refine it later.
-    std::scoped_lock lock{callbacks_mutex};
-    statistics.num_external_callbacks = callbacks_container.size();
-    if (!callbacks_container.empty())
+    // Fine grained lock on `callbacks_mutex`.
+    // So that adding/removing a storage will not be blocked for the whole
+    // processing time of `cleanExternalPage`.
+    std::shared_ptr<ExternalPageCallbacks> ns_callbacks;
     {
-        Stopwatch external_watch;
-        for (const auto & [ns_id, callbacks] : callbacks_container)
+        std::scoped_lock lock{callbacks_mutex};
+        // check and get the begin iter
+        statistics.num_external_callbacks = callbacks_container.size();
+        auto iter = callbacks_container.begin();
+        if (iter == callbacks_container.end()) // empty
         {
-            // Note that we must call `scanner` before `getAliveExternalIds`
-            // Or some committed external ids is not included and we may
-            // remove the external page by accident with `remover`.
-            const auto pending_external_pages = callbacks.scanner();
-            statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
-            const auto alive_external_ids = page_directory->getAliveExternalIds(ns_id);
-            statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
-            callbacks.remover(pending_external_pages, alive_external_ids);
-            statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
+            statistics.clean_external_page_ms = gc_watch.elapsedMillisecondsFromLastTime();
+            return;
+        }
+
+        assert(iter != callbacks_container.end()); // early exit in the previous code
+        // keep the shared_ptr so that erasing ns_id from PageStorage won't invalid the `ns_callbacks`
+        ns_callbacks = iter->second;
+    }
+
+    Stopwatch external_watch;
+
+    SYNC_FOR("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+
+    while (true)
+    {
+        // 1. Note that we must call `scanner` before `getAliveExternalIds`.
+        // Or some committed external ids is not included in `alive_ids`
+        // but exist in `pending_external_pages`. They will be removed by
+        // accident with `remover` under this situation.
+        // 2. Assume calling the callbacks after erasing ns_is is safe.
+
+        // the external pages on disks.
+        auto pending_external_pages = ns_callbacks->scanner();
+        statistics.external_page_scan_ns += external_watch.elapsedFromLastTime();
+        auto alive_external_ids = page_directory->getAliveExternalIds(ns_callbacks->ns_id);
+        statistics.external_page_get_alive_ns += external_watch.elapsedFromLastTime();
+        // remove the external pages that is not alive now.
+        ns_callbacks->remover(pending_external_pages, alive_external_ids);
+        statistics.external_page_remove_ns += external_watch.elapsedFromLastTime();
+
+        // move to next namespace callbacks
+        {
+            std::scoped_lock lock{callbacks_mutex};
+            // next ns_id that is greater than `ns_id`
+            auto iter = callbacks_container.upper_bound(ns_callbacks->ns_id);
+            if (iter == callbacks_container.end())
+                break;
+            ns_callbacks = iter->second;
         }
     }
 
@@ -445,8 +479,13 @@ void PageStorageImpl::registerExternalPagesCallbacks(const ExternalPageCallbacks
     assert(callbacks.scanner != nullptr);
     assert(callbacks.remover != nullptr);
     assert(callbacks.ns_id != MAX_NAMESPACE_ID);
-    assert(callbacks_container.count(callbacks.ns_id) == 0);
-    callbacks_container.emplace(callbacks.ns_id, callbacks);
+    // NamespaceId(TableID) should not be reuse
+    RUNTIME_CHECK_MSG(
+        callbacks_container.count(callbacks.ns_id) == 0,
+        "Try to create callbacks for duplicated namespace id {}",
+        callbacks.ns_id);
+    // `emplace` won't invalid other iterator
+    callbacks_container.emplace(callbacks.ns_id, std::make_shared<ExternalPageCallbacks>(callbacks));
 }
 
 void PageStorageImpl::unregisterExternalPagesCallbacks(NamespaceId ns_id)
