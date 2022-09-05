@@ -29,7 +29,7 @@ extern const Metric MemoryTracking;
   * It throws an exception if amount of consumed memory become greater than certain limit.
   * The same memory tracker could be simultaneously used in different threads.
   */
-class MemoryTracker
+class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
 {
     std::atomic<Int64> amount{0};
     std::atomic<Int64> peak{0};
