@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/FinalAggregatingBlockInputStream.h>
+#include <Transforms/FinalAggregateSource.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -35,13 +36,11 @@ const Block & PhysicalFinalAggregation::getSampleBlock() const
 void PhysicalFinalAggregation::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t max_streams)
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
-    pipeline.streams.push_back(std::make_shared<FinalAggregatingBlockInputStream>(aggregate_store, log->identifier()));
-    restoreConcurrency(pipeline, max_streams, log);
-
-    // we can record for agg after restore concurrency.
-    // Because the streams of expr_after_agg will provide the correct ProfileInfo.
-    // See #3804.
-    assert(expr_after_agg && !expr_after_agg->getActions().empty());
+    FinalAggregateSourcePtr source = std::make_shared<FinalAggregateSource>(aggregate_store);
+    for (size_t i = 0; i < max_streams; ++i)
+    {
+        pipeline.streams.push_back(std::make_shared<FinalAggregatingBlockInputStream>(source, log->identifier()));
+    }
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 

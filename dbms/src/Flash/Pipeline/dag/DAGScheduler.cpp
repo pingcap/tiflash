@@ -134,7 +134,8 @@ void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)
     if (pipeline->active_task_num == 0)
     {
         status_machine.stateToComplete(event.pipeline_id);
-        if (status_machine.isCompleted(final_pipeline_id))
+        pipeline->finish();
+        if (event.pipeline_id == final_pipeline_id)
         {
             event_queue.finish();
             status_machine.finish();

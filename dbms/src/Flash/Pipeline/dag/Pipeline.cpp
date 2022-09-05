@@ -67,4 +67,9 @@ void Pipeline::cancel(bool is_kill)
     }
     task_streams.clear();
 }
+
+void Pipeline::finish()
+{
+    task_streams.clear();
+}
 } // namespace DB

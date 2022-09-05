@@ -39,6 +39,7 @@ public:
     const std::unordered_set<UInt32> & getParentIds() const { return parent_ids; }
 
     void cancel(bool is_kill);
+    void finish();
 
     PhysicalPlanNodePtr getPlanNode() const { return plan_node; }
 

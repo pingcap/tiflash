@@ -18,17 +18,11 @@ namespace DB
 {
 Block FinalAggregatingBlockInputStream::getHeader() const
 {
-    return aggregate_store->getHeader();
+    return final_agg_source->getHeader();
 }
 
 Block FinalAggregatingBlockInputStream::readImpl()
 {
-    assert(impl);
-    return impl->read();
-}
-
-void FinalAggregatingBlockInputStream::readPrefixImpl()
-{
-    impl = aggregate_store->merge();
+    return final_agg_source->read();
 }
 } // namespace DB

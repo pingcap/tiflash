@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Transforms/FinalAggregateSource.h>
 #include <Interpreters/AggregateStore.h>
 
 namespace DB
@@ -26,9 +27,9 @@ class FinalAggregatingBlockInputStream : public IProfilingBlockInputStream
 
 public:
     FinalAggregatingBlockInputStream(
-        const AggregateStorePtr & aggregate_store_,
+        const FinalAggregateSourcePtr & final_agg_source_,
         const String & req_id)
-        : aggregate_store(aggregate_store_)
+        : final_agg_source(final_agg_source_)
         , log(Logger::get(NAME, req_id))
     {}
 
@@ -38,14 +39,9 @@ public:
 
 protected:
     Block readImpl() override;
-    void readPrefixImpl() override;
 
-    AggregateStorePtr aggregate_store;
+    FinalAggregateSourcePtr final_agg_source;
 
-    const LoggerPtr log;
-
-    /** From here we get the finished blocks after the aggregation.
-      */
-    std::unique_ptr<IBlockInputStream> impl;
+    const LoggerPtr log;    
 };
 } // namespace DB

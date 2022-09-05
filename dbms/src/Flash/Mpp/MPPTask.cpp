@@ -360,7 +360,7 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     initExchangeReceivers();
     {
-        std::unique_lock lock(query_executor_mu);
+        std::lock_guard lock(query_executor_mu);
         query_executor = executeQuery(*context);
     }
     {
@@ -472,7 +472,7 @@ void MPPTask::runImpl()
         }
     }
     {
-        std::unique_lock lock(query_executor_mu);
+        std::lock_guard lock(query_executor_mu);
         query_executor = nullptr;
     }
     LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
@@ -492,7 +492,7 @@ void MPPTask::runImpl()
 
 QueryExecutorPtr MPPTask::getQueryExecutorPtr()
 {
-    std::unique_lock lock(query_executor_mu);
+    std::lock_guard lock(query_executor_mu);
     return query_executor;
 }
 
