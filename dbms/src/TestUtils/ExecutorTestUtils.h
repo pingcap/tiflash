@@ -25,6 +25,8 @@
 
 namespace DB::tests
 {
+TiDB::TP dataTypeToTP(const DataTypePtr & type);
+
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
 
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);

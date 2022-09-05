@@ -19,21 +19,27 @@
 
 #include <atomic>
 
-
+extern std::atomic<Int64> real_rss;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;
 }
 
+class MemoryTracker;
+using MemoryTrackerPtr = std::shared_ptr<MemoryTracker>;
+
 /** Tracks memory consumption.
   * It throws an exception if amount of consumed memory become greater than certain limit.
   * The same memory tracker could be simultaneously used in different threads.
   */
-class MemoryTracker
+class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
 {
     std::atomic<Int64> amount{0};
     std::atomic<Int64> peak{0};
     std::atomic<Int64> limit{0};
+
+    // How many bytes RSS(Resident Set Size) can be larger than limit(max_memory_usage_for_all_queries). Default: 5GB
+    Int64 bytes_rss_larger_than_limit = 5368709120;
 
     /// To test exception safety of calling code, memory tracker throws an exception on each memory allocation with specified probability.
     double fault_probability = 0;
@@ -48,11 +54,25 @@ class MemoryTracker
     /// This description will be used as prefix into log messages (if isn't nullptr)
     const char * description = nullptr;
 
-public:
+    /// Make constructors private to ensure all objects of this class is created by `MemoryTracker::create`.
     MemoryTracker() = default;
     explicit MemoryTracker(Int64 limit_)
         : limit(limit_)
     {}
+
+public:
+    /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
+    static MemoryTrackerPtr create(Int64 limit = 0)
+    {
+        if (limit == 0)
+        {
+            return std::shared_ptr<MemoryTracker>(new MemoryTracker);
+        }
+        else
+        {
+            return std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
+        }
+    }
 
     ~MemoryTracker();
 
@@ -70,12 +90,16 @@ public:
 
     Int64 getPeak() const { return peak.load(std::memory_order_relaxed); }
 
+    Int64 getLimit() const { return limit.load(std::memory_order_relaxed); }
+
     void setLimit(Int64 limit_) { limit.store(limit_, std::memory_order_relaxed); }
 
     /** Set limit if it was not set.
       * Otherwise, set limit to new value, if new value is greater than previous limit.
       */
     void setOrRaiseLimit(Int64 value);
+
+    void setBytesThatRssLargerThanLimit(Int64 value) { bytes_rss_larger_than_limit = value; }
 
     void setFaultProbability(double value) { fault_probability = value; }
 
@@ -93,7 +117,6 @@ public:
     /// Prints info about peak memory consumption into log.
     void logPeakMemoryUsage() const;
 };
-
 
 /** The MemoryTracker object is quite difficult to pass to all places where significant amounts of memory are allocated.
   * Therefore, a thread-local pointer to used MemoryTracker is set, or nullptr if MemoryTracker does not need to be used.

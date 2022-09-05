@@ -13,6 +13,7 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/BackgroundTask.h>
 #include <Common/assert_cast.h>
 #include <Debug/astToExecutor.h>
 #include <Flash/DiagnosticsService.h>
@@ -51,6 +52,7 @@ private:
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
     std::shared_ptr<ThreadManager> thread_manager;
+    CollectProcInfoBackgroundTask background_task;
 };
 
 } // namespace DB
