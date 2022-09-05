@@ -25,11 +25,14 @@ namespace CurrentMetrics
 extern const Metric MemoryTracking;
 }
 
+class MemoryTracker;
+using MemoryTrackerPtr = std::shared_ptr<MemoryTracker>;
+
 /** Tracks memory consumption.
   * It throws an exception if amount of consumed memory become greater than certain limit.
   * The same memory tracker could be simultaneously used in different threads.
   */
-class MemoryTracker
+class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
 {
     std::atomic<Int64> amount{0};
     std::atomic<Int64> peak{0};
@@ -51,11 +54,25 @@ class MemoryTracker
     /// This description will be used as prefix into log messages (if isn't nullptr)
     const char * description = nullptr;
 
-public:
+    /// Make constructors private to ensure all objects of this class is created by `MemoryTracker::create`.
     MemoryTracker() = default;
     explicit MemoryTracker(Int64 limit_)
         : limit(limit_)
     {}
+
+public:
+    /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
+    static MemoryTrackerPtr create(Int64 limit = 0)
+    {
+        if (limit == 0)
+        {
+            return std::shared_ptr<MemoryTracker>(new MemoryTracker);
+        }
+        else
+        {
+            return std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
+        }
+    }
 
     ~MemoryTracker();
 
@@ -100,7 +117,6 @@ public:
     /// Prints info about peak memory consumption into log.
     void logPeakMemoryUsage() const;
 };
-
 
 /** The MemoryTracker object is quite difficult to pass to all places where significant amounts of memory are allocated.
   * Therefore, a thread-local pointer to used MemoryTracker is set, or nullptr if MemoryTracker does not need to be used.

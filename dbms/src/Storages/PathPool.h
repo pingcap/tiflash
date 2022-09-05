@@ -412,7 +412,7 @@ public:
 
     void clearPSV2ObsoleteData();
 
-    void rename(const String & new_database, const String & new_table, bool clean_rename);
+    void rename(const String & new_database, const String & new_table);
 
     void drop(bool recursive, bool must_success = true);
 
