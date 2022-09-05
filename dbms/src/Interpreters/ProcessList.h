@@ -80,7 +80,7 @@ private:
     /// Progress of output stream
     Progress progress_out;
 
-    MemoryTracker memory_tracker;
+    std::shared_ptr<MemoryTracker> memory_tracker;
 
     QueryPriorities::Handle priority_handle;
 
@@ -115,14 +115,14 @@ public:
         QueryPriorities::Handle && priority_handle_)
         : query(query_)
         , client_info(client_info_)
-        , memory_tracker(max_memory_usage)
+        , memory_tracker(std::make_shared<MemoryTracker>(max_memory_usage))
         , priority_handle(std::move(priority_handle_))
     {
-        memory_tracker.setDescription("(for query)");
-        current_memory_tracker = &memory_tracker;
+        memory_tracker->setDescription("(for query)");
+        current_memory_tracker = memory_tracker.get();
 
         if (memory_tracker_fault_probability)
-            memory_tracker.setFaultProbability(memory_tracker_fault_probability);
+            memory_tracker->setFaultProbability(memory_tracker_fault_probability);
     }
 
     ~ProcessListElement()
@@ -177,8 +177,8 @@ public:
         res.total_rows = progress_in.total_rows;
         res.written_rows = progress_out.rows;
         res.written_bytes = progress_out.bytes;
-        res.memory_usage = memory_tracker.get();
-        res.peak_memory_usage = memory_tracker.getPeak();
+        res.memory_usage = memory_tracker->get();
+        res.peak_memory_usage = memory_tracker->getPeak();
 
         return res;
     }
