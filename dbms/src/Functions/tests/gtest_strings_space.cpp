@@ -67,10 +67,10 @@ TEST_F(StringSpace, nullTest)
 try
 {
     ASSERT_COLUMN_EQ(
-        toNullableVec({}),
+        toNullableVec({{}, "     "}),
         executeFunction(
             func_name,
-            toVecInt({})));
+            toVecInt({{}, 5})));
 
     ASSERT_COLUMN_EQ(
         toNullableVec({{}}),

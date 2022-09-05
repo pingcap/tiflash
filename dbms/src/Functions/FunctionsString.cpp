@@ -4397,7 +4397,8 @@ class FunctionSpace : public IFunction
 public:
     static constexpr auto name = "space";
 
-    static constexpr auto MAX = 16777216;
+    // tidb mysql.MaxBlobWidth space max input : space(MAX_BLOB_WIDTH) will return NULL
+    static constexpr auto MAX_BLOB_WIDTH = 16777216;
 
     FunctionSpace() = default;
 
@@ -4411,6 +4412,10 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        if (!arguments[0]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         return arguments[0]->onlyNull()
             ? makeNullable(std::make_shared<DataTypeNothing>())
             : makeNullable(std::make_shared<DataTypeString>());
@@ -4465,7 +4470,7 @@ private:
         {
             const ColumnConst * col_const_space_num = checkAndGetColumnConst<ColumnVector<IntType>>(c0_col_column.get());
             auto space_num_values = col_const_space_num->getValue<IntType>();
-            Int64 space_num = accurate::lessOp(INT64_MAX, space_num_values) ? INT32_MAX : space_num_values;
+            Int64 space_num = accurate::lessOp(INT64_MAX, space_num_values) ? INT64_MAX : space_num_values;
             for (size_t row = 0; row < val_num; ++row)
             {
                 result_null_map->getData()[row] = false;
@@ -4473,7 +4478,7 @@ private:
                 {
                     space_num = 0;
                 }
-                if (space_num > MAX)
+                if (space_num > MAX_BLOB_WIDTH)
                 {
                     result_null_map->getData()[row] = true;
                     space_num = 0;
@@ -4496,12 +4501,12 @@ private:
             {
                 result_null_map->getData()[row] = false;
 
-                Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT32_MAX : col_vector_space_num_value[row];
+                Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT64_MAX : col_vector_space_num_value[row];
                 if (space_num < 0)
                 {
                     space_num = 0;
                 }
-                if (space_num > MAX)
+                if (space_num > MAX_BLOB_WIDTH)
                 {
                     result_null_map->getData()[row] = true;
                     space_num = 0;
