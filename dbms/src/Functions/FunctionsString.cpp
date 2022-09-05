@@ -4409,8 +4409,6 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
 
-    bool useDefaultImplementationForConstants() const override { return true; }
-
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         return arguments[0]->onlyNull()
@@ -4453,42 +4451,73 @@ private:
         {
             return false;
         }
-        const auto & col_vector_space_num_value = col_vector_space_num->getData();
+
+
         size_t val_num = block.rows();
         auto result_null_map = ColumnUInt8::create(val_num);
         auto col_res = ColumnString::create();
-
         auto & col_res_data = col_res->getChars();
         auto & col_res_offsets = col_res->getOffsets();
-
+        col_res_data.reserve(c0_col_column->size());
         col_res_offsets.resize(c0_col_column->size());
         ColumnString::Offset res_offset = 0;
-
-
-        for (size_t row = 0; row < val_num; ++row)
+        if (c0_col_column->isColumnConst())
         {
-            result_null_map->getData()[row] = false;
+            const ColumnConst * col_const_space_num = checkAndGetColumnConst<ColumnVector<IntType>>(c0_col_column.get());
+            auto space_num_values = col_const_space_num->getValue<IntType>();
+            Int64 space_num = accurate::lessOp(INT64_MAX, space_num_values) ? INT32_MAX : space_num_values;
+            for (size_t row = 0; row < val_num; ++row)
+            {
+                result_null_map->getData()[row] = false;
+                if (space_num < 0)
+                {
+                    space_num = 0;
+                }
+                if (space_num > MAX)
+                {
+                    result_null_map->getData()[row] = true;
+                    space_num = 0;
+                }
+                col_res_data.resize(col_res_data.size() + space_num + 1);
+                for (auto i = 0; i < space_num; ++i)
+                {
+                    col_res_data[res_offset + i] = ' ';
+                }
 
-            Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT32_MAX : col_vector_space_num_value[row];
-            if (space_num < 0)
-            {
-                space_num = 0;
+                col_res_data[res_offset + space_num] = '\0';
+                res_offset += space_num + 1;
+                col_res_offsets[row] = res_offset;
             }
-            if (space_num > MAX)
-            {
-                result_null_map->getData()[row] = true;
-                space_num = 0;
-            }
-            col_res_data.resize(col_res_data.size() + space_num + 1);
-            for (auto i = 0; i < space_num; ++i)
-            {
-                col_res_data[res_offset + i] = ' ';
-            }
-
-            col_res_data[res_offset + space_num] = '\0';
-            res_offset += space_num + 1;
-            col_res_offsets[row] = res_offset;
         }
+        else
+        {
+            const auto & col_vector_space_num_value = col_vector_space_num->getData();
+            for (size_t row = 0; row < val_num; ++row)
+            {
+                result_null_map->getData()[row] = false;
+
+                Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT32_MAX : col_vector_space_num_value[row];
+                if (space_num < 0)
+                {
+                    space_num = 0;
+                }
+                if (space_num > MAX)
+                {
+                    result_null_map->getData()[row] = true;
+                    space_num = 0;
+                }
+                col_res_data.resize(col_res_data.size() + space_num + 1);
+                for (auto i = 0; i < space_num; ++i)
+                {
+                    col_res_data[res_offset + i] = ' ';
+                }
+
+                col_res_data[res_offset + space_num] = '\0';
+                res_offset += space_num + 1;
+                col_res_offsets[row] = res_offset;
+            }
+        }
+
 
         block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
         return true;
