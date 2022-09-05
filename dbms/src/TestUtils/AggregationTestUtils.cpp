@@ -14,6 +14,10 @@
 
 #include <TestUtils/AggregationTestUtils.h>
 
+#include <cstddef>
+
+#include "Parsers/IAST.h"
+
 namespace DB::tests
 {
 void AggregationTest::SetUpTestCase()
@@ -41,32 +45,37 @@ void AggregationTest::SetUpTestCase()
     return ::testing::AssertionFailure() << "Expect type: " << expect_type->getName() << " Actual type: " << ret_type->getName();
 }
 
-void AggregationTest::executeAggFunctionAndAssert(const String & func_name, const ColumnWithTypeAndName & column, const ColumnWithTypeAndName & expected_col)
+void AggregationTest::executeAggFunctionAndAssert(const std::vector<String> & func_names, const ColumnWithTypeAndName & column, const ColumnsWithTypeAndName & expected_cols)
 {
     String db_name = "test_agg_function";
     String table_name = "test_table_agg";
-    ASTPtr func = aggFunctionBuilder(func_name, column.name);
+    std::vector<ASTPtr> agg_funcs;
+    for (const auto & func_name : func_names)
+        agg_funcs.push_back(aggFunctionBuilder(func_name, column.name));
 
     MockColumnInfoVec column_infos;
     column_infos.push_back({column.name, dataTypeToTP(column.type)});
     context.addMockTable(db_name, table_name, column_infos, {column});
 
     auto request = context.scan(db_name, table_name)
-                       .aggregation(func, {})
+                       .aggregation(agg_funcs, {})
                        .build(context);
 
-    checkResult(request, {expected_col});
+    checkResult(request, expected_cols);
 }
 
-void AggregationTest::executeAggFunctionAndAssertWithTable(const String & db_name, const String & table_name, const String & func_name, const String & col_name, const ColumnWithTypeAndName & expected_col)
+void AggregationTest::executeAggFunctionAndAssertWithTable(const String & db_name, const String & table_name, const std::vector<String> & func_names, const std::vector<String> & col_names, const ColumnsWithTypeAndName & expected_cols)
 {
-    ASTPtr func = aggFunctionBuilder(func_name, col_name);
+    std::vector<ASTPtr> agg_funcs;
+
+    for (size_t i = 0; i < func_names.size(); ++i)
+        agg_funcs.push_back(aggFunctionBuilder(func_names[i], col_names[i]));
 
     auto request = context.scan(db_name, table_name)
-                       .aggregation(func, {})
+                       .aggregation(agg_funcs, {})
                        .build(context);
 
-    checkResult(request, {expected_col});
+    checkResult(request, expected_cols);
 }
 
 void AggregationTest::executeGroupByAndAssert(const ColumnsWithTypeAndName & cols, const ColumnsWithTypeAndName & expected_cols)
