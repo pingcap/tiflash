@@ -25,7 +25,7 @@ class AggregationTest : public ExecutorTest
 public:
     static ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type);
 
-    // Test one aggregation functions without group by.
+    // Test aggregation functions without group by.
     void executeAggFunctionAndAssert(
         const std::vector<String> & func_names,
         const ColumnWithTypeAndName & column,
