@@ -16,7 +16,7 @@
 
 function wait_table()
 {
-	python2 wait-table.py "$@"; return $?
+	python3 wait-table.py "$@"; return $?
 }
 export -f wait_table
 
@@ -59,10 +59,10 @@ function run_file()
 	echo "$path: Running"
 	start_time=$(date +"%s.%N")
 	if [ "$ext" == "test" ]; then
-		python2 run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
+		python3 run-test.py "$dbc" "$path" "$fuzz" "$mysql_client" "$verbose"
 	else
 		if [ "$ext" == "visual" ]; then
-			python2 run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose"
+			python3 run-test-gen-from-visual.py "$path" "$skip_raw_test" "$verbose"
 			if [ $? != 0 ]; then
 				echo "Generate test files failed: $file" >&2
 				exit 1
@@ -199,7 +199,7 @@ if [ "$fullstack" = true ]; then
         echo "create database '"$tidb_db"' failed" >&2
         exit 1
     fi
-    python2 generate-fullstack-test.py "$tidb_db" "$tidb_table"
+    python3 generate-fullstack-test.py "$tidb_db" "$tidb_table"
 fi
 
 run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
