@@ -26,17 +26,16 @@ public:
     static ::testing::AssertionResult checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type);
 
     // Test one aggregation functions without group by.
-    void executeAggFunctionAndAssert(const std::vector<String> & func_names, const ColumnWithTypeAndName & column, const ColumnsWithTypeAndName & expected_cols);
-
-    // Prequisite: add a mock table in MockDAGRequestContext.
-    // func_names: agg functions which are going to execute.
-    // col_names: columns each agg function executed on.
-    void executeAggFunctionAndAssertWithTable(const String & db_name, const String & table_name, const std::vector<String> & func_names, const std::vector<String> & col_names, const ColumnsWithTypeAndName & expected_cols);
+    void executeAggFunctionAndAssert(
+        const std::vector<String> & func_names,
+        const ColumnWithTypeAndName & column,
+        const ColumnsWithTypeAndName & expected_cols);
 
     // Test group by columns
-    void executeGroupByAndAssert(const ColumnsWithTypeAndName & cols, const ColumnsWithTypeAndName & expected_cols);
-    // Prequisite: add a mock table in MockDAGRequestContext.
-    void executeGroupByAndAssertWithTable(const String & db_name, const String & table_name, const std::vector<String> & group_by_cols, const ColumnsWithTypeAndName & expected_cols);
+    // Note that we must give columns in cols a name.
+    void executeGroupByAndAssert(
+        const ColumnsWithTypeAndName & cols,
+        const ColumnsWithTypeAndName & expected_cols);
 
     static void SetUpTestCase();
 

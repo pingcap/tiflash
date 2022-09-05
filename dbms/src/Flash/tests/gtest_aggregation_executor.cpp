@@ -358,13 +358,10 @@ CATCH
 TEST_F(ExecutorAggTestRunner, TestFramwork)
 try
 {
-    executeGroupByAndAssert({toNullableVec<Int8>("tinyint_", col_tinyint)}, {toNullableVec<Int8>(ColumnWithNullableInt8{-1, 2, {}, 0, 1, 3, -2})});
-    executeGroupByAndAssertWithTable(db_name, table_types, {types_col_name[2]}, {toNullableVec<Int8>(ColumnWithNullableInt8{-1, 2, {}, 0, 1, 3, -2})});
-
+    executeGroupByAndAssert({toNullableVec<Int8>("tinyint_", col_tinyint)}, {toNullableVec<Int8>({-1, 2, {}, 0, 1, 3, -2})});
+    executeGroupByAndAssert({toNullableVec<Int8>("tinyint_", col_tinyint), toNullableVec<Int16>("smallint_", col_smallint)}, {toNullableVec<Int8>({0, 2, 0, -1, 1, -2, 3, {}, {}}), toNullableVec<Int16>({-1, 3, -2, 4, 2, 0, {}, {}, 0})});
     executeAggFunctionAndAssert({"Max"}, toNullableVec<Int8>("tinyint_", col_tinyint), {toNullableVec<Int8>(ColumnWithNullableInt8{3})});
     executeAggFunctionAndAssert({"Max", "Min"}, toNullableVec<Int8>("tinyint_", col_tinyint), {toNullableVec<Int8>(ColumnWithNullableInt8{3}), toNullableVec<Int8>(ColumnWithNullableInt8{-2})});
-    executeAggFunctionAndAssertWithTable("test_db", "types", {"Max"}, {types_col_name[2]}, {toNullableVec<Int8>(ColumnWithNullableInt8{3})});
-    executeAggFunctionAndAssertWithTable("test_db", "types", {"Max", "Min"}, {types_col_name[2], types_col_name[2]}, {toNullableVec<Int8>(ColumnWithNullableInt8{3}), toNullableVec<Int8>(ColumnWithNullableInt8{-2})});
 }
 CATCH
 

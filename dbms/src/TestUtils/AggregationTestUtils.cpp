@@ -14,10 +14,6 @@
 
 #include <TestUtils/AggregationTestUtils.h>
 
-#include <cstddef>
-
-#include "Parsers/IAST.h"
-
 namespace DB::tests
 {
 void AggregationTest::SetUpTestCase()
@@ -64,22 +60,10 @@ void AggregationTest::executeAggFunctionAndAssert(const std::vector<String> & fu
     checkResult(request, expected_cols);
 }
 
-void AggregationTest::executeAggFunctionAndAssertWithTable(const String & db_name, const String & table_name, const std::vector<String> & func_names, const std::vector<String> & col_names, const ColumnsWithTypeAndName & expected_cols)
-{
-    std::vector<ASTPtr> agg_funcs;
-
-    for (size_t i = 0; i < func_names.size(); ++i)
-        agg_funcs.push_back(aggFunctionBuilder(func_names[i], col_names[i]));
-
-    auto request = context.scan(db_name, table_name)
-                       .aggregation(agg_funcs, {})
-                       .build(context);
-
-    checkResult(request, expected_cols);
-}
-
 void AggregationTest::executeGroupByAndAssert(const ColumnsWithTypeAndName & cols, const ColumnsWithTypeAndName & expected_cols)
 {
+    RUNTIME_CHECK_MSG(cols.size() == expected_cols.size(), "number of group_by columns don't match number of expected columns");
+
     String db_name = "test_group";
     String table_name = "test_table_group";
     MockAstVec group_by_cols;
@@ -102,29 +86,12 @@ void AggregationTest::executeGroupByAndAssert(const ColumnsWithTypeAndName & col
     checkResult(request, expected_cols);
 }
 
-void AggregationTest::executeGroupByAndAssertWithTable(const String & db_name, const String & table_name, const std::vector<String> & group_by_cols, const ColumnsWithTypeAndName & expected_cols)
-{
-    MockAstVec group_by_col_asts;
-    MockColumnNameVec proj_names;
-    for (const auto & col : group_by_cols)
-    {
-        group_by_col_asts.push_back(col(col));
-        proj_names.push_back(col);
-    }
-
-    auto request = context.scan(db_name, table_name)
-                       .aggregation({}, group_by_col_asts)
-                       .project(proj_names)
-                       .build(context);
-
-    checkResult(request, expected_cols);
-}
-
 void AggregationTest::checkResult(std::shared_ptr<tipb::DAGRequest> request, const ColumnsWithTypeAndName & expected_cols)
 {
     for (size_t i = 1; i <= 10; ++i)
         ASSERT_COLUMNS_EQ_UR(expected_cols, executeStreams(request, i)) << "expected_cols: " << getColumnsContent(expected_cols) << ", actual_cols: " << getColumnsContent(executeStreams(request, i));
 }
+
 ASTPtr AggregationTest::aggFunctionBuilder(const String & func_name, const String & col_name)
 {
     ASTPtr func;
