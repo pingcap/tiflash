@@ -31,4 +31,107 @@ void AggregationTest::SetUpTestCase()
 
     register_func(DB::registerAggregateFunctions);
 }
+
+::testing::AssertionResult AggregationTest::checkAggReturnType(const String & agg_name, const DataTypes & data_types, const DataTypePtr & expect_type)
+{
+    AggregateFunctionPtr agg_ptr = DB::AggregateFunctionFactory::instance().get(agg_name, data_types, {});
+    const DataTypePtr & ret_type = agg_ptr->getReturnType();
+    if (ret_type->equals(*expect_type))
+        return ::testing::AssertionSuccess();
+    return ::testing::AssertionFailure() << "Expect type: " << expect_type->getName() << " Actual type: " << ret_type->getName();
+}
+
+void AggregationTest::executeAggFunctionAndAssert(const String & func_name, const ColumnWithTypeAndName & column, const ColumnWithTypeAndName & expected_col)
+{
+    String db_name = "test_agg_function";
+    String table_name = "test_table_agg";
+    ASTPtr func = aggFunctionBuilder(func_name, column.name);
+
+    MockColumnInfoVec column_infos;
+    column_infos.push_back({column.name, dataTypeToTP(column.type)});
+    context.addMockTable(db_name, table_name, column_infos, {column});
+
+    auto request = context.scan(db_name, table_name)
+                       .aggregation(func, {})
+                       .build(context);
+
+    checkResult(request, {expected_col});
+}
+
+void AggregationTest::executeAggFunctionAndAssertWithTable(const String & db_name, const String & table_name, const String & func_name, const String & col_name, const ColumnWithTypeAndName & expected_col)
+{
+    ASTPtr func = aggFunctionBuilder(func_name, col_name);
+
+    auto request = context.scan(db_name, table_name)
+                       .aggregation(func, {})
+                       .build(context);
+
+    checkResult(request, {expected_col});
+}
+
+void AggregationTest::executeGroupByAndAssert(const ColumnsWithTypeAndName & cols, const ColumnsWithTypeAndName & expected_cols)
+{
+    String db_name = "test_group";
+    String table_name = "test_table_group";
+    MockAstVec group_by_cols;
+    MockColumnNameVec proj_names;
+    MockColumnInfoVec column_infos;
+    for (const auto & col : cols)
+    {
+        group_by_cols.push_back(col(col.name));
+        proj_names.push_back(col.name);
+        column_infos.push_back({col.name, dataTypeToTP(col.type)});
+    }
+
+    context.addMockTable(db_name, table_name, column_infos, cols);
+
+    auto request = context.scan(db_name, table_name)
+                       .aggregation({}, group_by_cols)
+                       .project(proj_names)
+                       .build(context);
+
+    checkResult(request, expected_cols);
+}
+
+void AggregationTest::executeGroupByAndAssertWithTable(const String & db_name, const String & table_name, const std::vector<String> & group_by_cols, const ColumnsWithTypeAndName & expected_cols)
+{
+    MockAstVec group_by_col_asts;
+    MockColumnNameVec proj_names;
+    for (const auto & col : group_by_cols)
+    {
+        group_by_col_asts.push_back(col(col));
+        proj_names.push_back(col);
+    }
+
+    auto request = context.scan(db_name, table_name)
+                       .aggregation({}, group_by_col_asts)
+                       .project(proj_names)
+                       .build(context);
+
+    checkResult(request, expected_cols);
+}
+
+void AggregationTest::checkResult(std::shared_ptr<tipb::DAGRequest> request, const ColumnsWithTypeAndName & expected_cols)
+{
+    for (size_t i = 1; i <= 10; ++i)
+        ASSERT_COLUMNS_EQ_UR(expected_cols, executeStreams(request, i)) << "expected_cols: " << getColumnsContent(expected_cols) << ", actual_cols: " << getColumnsContent(executeStreams(request, i));
+}
+ASTPtr AggregationTest::aggFunctionBuilder(const String & func_name, const String & col_name)
+{
+    ASTPtr func;
+    String func_name_lowercase = Poco::toLower(func_name);
+
+    // TODO support more agg functions.
+    if (func_name_lowercase == "max")
+        func = Max(col(col_name));
+    else if (func_name_lowercase == "min")
+        func = Min(col(col_name));
+    else if (func_name_lowercase == "count")
+        func = Count(col(col_name));
+    else if (func_name_lowercase == "sum")
+        func = Sum(col(col_name));
+    else
+        throw Exception(fmt::format("Unsupported agg function {}", func_name), ErrorCodes::LOGICAL_ERROR);
+    return func;
+}
 } // namespace DB::tests
