@@ -1238,6 +1238,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1248,11 +1251,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         /* is_raw = */ true,
         /* do_delete_mark_filter_for_raw = */ false,
         std::move(tasks),
-        after_segment_read);
+        after_segment_read,
+        req_info);
 
-    String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1311,12 +1312,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
-    // Also, too many read tasks of a segment with different samll ranges is not good for data sharing cache.
+    // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
 
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
     LOG_FMT_DEBUG(tracing_logger,
-                  "Read create segment snapshot done keep_order {} dt_enable_read_thread {} => enable_read_thread {}",
+                  "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
                   keep_order,
                   db_context.getSettingsRef().dt_enable_read_thread,
                   enable_read_thread);
@@ -1338,7 +1339,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         /* is_raw = */ is_fast_scan,
         /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
-        after_segment_read);
+        after_segment_read,
+        tracing_id);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
