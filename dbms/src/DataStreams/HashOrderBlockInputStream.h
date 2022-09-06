@@ -17,6 +17,7 @@
 #include <Common/HashTable/HashMap.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -30,10 +31,12 @@ public:
         const BlockInputStreamPtr & input_,
         SortDescription & description_,
         const String & req_id,
+        const Context & context_,
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
         , log(Logger::get(NAME, req_id))
+        , context(context_)
     {
         children.push_back(input_);
     }
@@ -150,9 +153,14 @@ private:
     template <typename Map, typename KeyGetter>
     void insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block);
 
+    template <typename Map, typename MapIterator>
+    Block output(Map & map, MapIterator & iter);
+
     Sizes key_sizes;
 
     std::shared_ptr<Arena> pool = std::make_shared<Arena>();
+
+    const Context & context;
 };
 
 } // namespace DB

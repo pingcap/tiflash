@@ -187,10 +187,32 @@ void HashOrderBlockInputStream::insert(Map & map, size_t rows, KeyGetter key_get
                  * We will insert each time the element into the second place.
                  * That is, the former second element, if it was, will be the third, and so on.
                  */
-            auto elem = reinterpret_cast<RowRefList *>(pool->alloc(sizeof(RowRefList)));
+            auto * elem = reinterpret_cast<RowRefList *>(pool->alloc(sizeof(RowRefList)));
             insertRowToList(&emplace_result.getMapped(), elem, block, i);
         }
     }
+}
+
+template <typename Map, typename MapIterator>
+Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
+{
+    if (iter == map->cend())
+    {
+        return blocks.front().cloneEmpty();
+    }
+
+    auto block_size_limit = context.getSettingsRef().max_block_size.get();
+
+    auto columns = blocks.front().cloneEmptyColumns();
+    while (iter != map->cend() && columns[0]->size() < block_size_limit)
+    {
+        for (const RowRefList * curr = &iter->getMapped(); curr != nullptr; curr = curr->next)
+            for (size_t j = 0; j < columns.size(); j++)
+                columns[j]->insertFrom(*curr->block->getByPosition(j).column.get(), curr->row_num);
+        ++iter;
+    }
+    
+    return blocks.front().cloneWithColumns(std::move(columns));
 }
 
 
@@ -203,6 +225,10 @@ Block HashOrderBlockInputStream::readImpl()
         bool inited = false;
         while (Block block = children.back()->read())
         {
+            if (!block)
+            {
+                continue;
+            }
             blocks.push_back(block);
 
             if (!inited)
@@ -233,28 +259,15 @@ Block HashOrderBlockInputStream::readImpl()
         }
     }
 
-    if (blocks.size() == 0)
+    if (blocks.empty())
     {
         return Block();
     }
     switch (type)
     {
-#define M(TYPE)                                                                                          \
-    case Type::TYPE:                                                                                     \
-        if (iters.TYPE != maps.TYPE->cend())                                                             \
-        {                                                                                                \
-            auto columns = blocks.front().cloneEmptyColumns();                                           \
-            for (const RowRefList * curr = &iters.TYPE->getMapped(); curr != nullptr; curr = curr->next) \
-                for (size_t j = 0; j < columns.size(); j++)                                              \
-                    columns[j]->insertFrom(*curr->block->getByPosition(j).column.get(), curr->row_num);  \
-            ++iters.TYPE;                                                                                \
-            return blocks.front().cloneWithColumns(std::move(columns));                                  \
-        }                                                                                                \
-        else                                                                                             \
-        {                                                                                                \
-            return Block();                                                                              \
-        }                                                                                                \
-        break;
+#define M(TYPE)      \
+    case Type::TYPE: \
+        return output(maps.TYPE, iters.TYPE);
         APPLY_FOR_HASH_ORDER_VARIANTS(M)
 #undef M
     }

@@ -187,7 +187,7 @@ void hashOrderStreams(
     // TODO: if already sorted once for this partition(without split block), we don't need to rebuild hash table.
     SortDescription hash_items(order_descr.begin(), order_descr.begin() + hash_items_count);
     pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashOrderBlockInputStream>(stream, order_descr, log->identifier(), limit);
+        stream = std::make_shared<HashOrderBlockInputStream>(stream, order_descr, log->identifier(), context, limit);
     });
 
     pipeline.transform([&](auto & stream) {
