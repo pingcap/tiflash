@@ -64,8 +64,11 @@ void recordJoinExecuteInfo(
 {
     JoinExecuteInfo join_execute_info;
     join_execute_info.build_side_root_executor_id = build_side_executor_id;
-    join_execute_info.join_ptr = join_ptr;
-    assert(join_execute_info.join_ptr);
+    if (!dag_context.is_pipeline_mode)
+    {
+        join_execute_info.join_ptr = join_ptr;
+        assert(join_execute_info.join_ptr);
+    }
     dag_context.getJoinExecuteInfoMap()[executor_id] = std::move(join_execute_info);
 }
 

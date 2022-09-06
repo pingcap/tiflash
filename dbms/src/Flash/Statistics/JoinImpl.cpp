@@ -42,7 +42,8 @@ void JoinStatistics::collectExtraRuntimeDetail()
     if (it != join_execute_info_map.end())
     {
         const auto & join_execute_info = it->second;
-        hash_table_bytes = join_execute_info.join_ptr->getTotalByteCount();
+        if (join_execute_info.join_ptr)
+            hash_table_bytes = join_execute_info.join_ptr->getTotalByteCount();
         build_side_child = join_execute_info.build_side_root_executor_id;
         for (const auto & non_joined_stream : join_execute_info.non_joined_streams)
         {
