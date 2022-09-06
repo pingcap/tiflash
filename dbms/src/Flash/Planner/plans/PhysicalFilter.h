@@ -52,6 +52,8 @@ public:
         return clone_one;
     }
 
+    void transform(TransformsPipeline & pipeline, Context & context) override;
+
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 

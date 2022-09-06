@@ -16,6 +16,8 @@
 
 #include <Transforms/Transforms.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Core/Block.h>
+#include <common/types.h>
 #include <Columns/FilterDescription.h>
 
 namespace DB
@@ -33,7 +35,7 @@ public:
 private:
     ExpressionActionsPtr expression;
     Block header;
-    ssize_t filter_column;
+    size_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
 };

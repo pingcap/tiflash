@@ -13,11 +13,11 @@
 // limitations under the License.
 
 #include <Transforms/FilterTransform.h>
+#include <Columns/FilterDescription.h>
+#include <Common/typeid_cast.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
-#include <Columns/FilterDescription.h>
-#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -26,8 +26,8 @@ FilterTransform::FilterTransform(
     const ExpressionActionsPtr & expression_,
     const String & filter_column_name)
     : expression(expression_)
+    , header(input_header)
 {
-    auto header = input_header;
     expression->execute(header);
 
     filter_column = header.getPositionByName(filter_column_name);
@@ -45,7 +45,7 @@ FilterTransform::FilterTransform(
     }
 }
 
-bool FilterTransform::transform(Block & block) override
+bool FilterTransform::transform(Block & block)
 {
     if (!block)
         return true;
@@ -76,6 +76,7 @@ bool FilterTransform::transform(Block & block) override
         return false;
     }
 
+    IColumn::Filter * filter;
     ColumnPtr filter_holder;
     
     if (constant_filter_description.always_true)

@@ -32,6 +32,8 @@ struct TransformsPipeline
             ff(transforms);
     }
 
+    size_t concurrency() const { return transforms_vec.size(); }
+
     std::vector<TransformsPtr> transforms_vec;
 };
 }

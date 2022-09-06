@@ -14,15 +14,25 @@
 
 #pragma once
 
-#include <Transforms/Transforms.h>
+#include <Transforms/Source.h>
+#include <DataStreams/IBlockInputStream.h>
 
 namespace DB
 {
-class SimpleTransform : public Transform
+class NonJoinedProbeSource : public Source
 {
 public:
-    SimpleTransform() {}
+    explicit NonJoinedProbeSource(
+        const BlockInputStreamPtr & impl_)
+        : impl(impl_)
+    {}
 
-    bool transform(Block &) override {}
+    Block read() override
+    {
+        return impl->read();
+    }
+
+private:
+    BlockInputStreamPtr impl;
 };
 }

@@ -39,6 +39,9 @@
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
+#include <Transforms/ExpressionTransform.h>
+#include <Transforms/HashJoinBuildSink.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -71,6 +74,20 @@ void PhysicalJoinBuild::transformImpl(DAGPipeline & pipeline, Context & context,
     child->transform(pipeline, context, max_streams);
 
     buildSideTransform(pipeline, context, max_streams);
+}
+
+void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & context)
+{
+    child->transform(pipeline, context);
+
+    pipeline.transform([&](auto & transforms) { 
+        transforms->append(std::make_shared<ExpressionTransform>(build_side_prepare_actions));
+        transforms->set(std::make_shared<HashJoinBuildSink>(join_ptr)); 
+    });
+    if (!join_ptr->initialized)
+    {
+        join_ptr->init(build_side_prepare_actions->getSampleBlock(), pipeline.concurrency());
+    }
 }
 
 void PhysicalJoinBuild::finalize(const Names & parent_require)

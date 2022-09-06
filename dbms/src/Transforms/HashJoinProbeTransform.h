@@ -22,7 +22,7 @@ namespace DB
 class HashJoinProbeTransform : public Transform
 {
 public:
-    explicit JoinProbeTransform(
+    explicit HashJoinProbeTransform(
         const ExpressionActionsPtr & join_probe_actions_)
         : join_probe_actions(join_probe_actions_)
     {

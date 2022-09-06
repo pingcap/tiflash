@@ -36,6 +36,9 @@
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
+#include <Transforms/NonJoinedProbeSource.h>
+#include <Transforms/ExpressionTransform.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -55,6 +58,26 @@ void PhysicalNonJoinProbe::probeSideTransform(DAGPipeline & probe_pipeline, Cont
         probe_pipeline.streams.push_back(non_joined_stream);
         join_execute_info.non_joined_streams.push_back(non_joined_stream);
     }
+}
+
+void PhysicalNonJoinProbe::transform(TransformsPipeline & pipeline, Context & context)
+{
+    const auto & settings = context.getSettingsRef();
+    size_t i = 0;
+    size_t not_joined_concurrency = pipeline.concurrency();
+    pipeline.transform([&](auto & transforms) {
+        auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(probe_side_prepare_header, i++, not_joined_concurrency, settings.max_block_size);
+        transforms->set(std::make_shared<NonJoinedProbeSource>(non_joined_stream));
+    });
+
+    // todo
+    // NamesWithAliases schema_project_cols;
+    // for (auto & c : schema)
+    //     schema_project_cols.emplace_back(c.name, c.name);
+    // ExpressionActionsPtr schema_project = generateProjectExpressionActions(probe_side_prepare_header, context, schema_project_cols);
+    // pipeline.transform([&](auto & transforms) { 
+    //     transforms->append(std::make_shared<ExpressionTransform>(schema_project));
+    // });
 }
 
 void PhysicalNonJoinProbe::transformImpl(DAGPipeline & pipeline, Context & context, size_t)
