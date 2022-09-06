@@ -97,16 +97,10 @@ public:
     static void recreateMetadataPath()
     {
         String path = TiFlashTestEnv::getContext().getPath();
-
         auto p = path + "/metadata/";
-        if (Poco::File file(p); file.exists())
-            file.remove(true);
-        Poco::File{p}.createDirectories();
-
+        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
         p = path + "/data/";
-        if (Poco::File file(p); file.exists())
-            file.remove(true);
-        Poco::File{p}.createDirectories();
+        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
     }
 
 protected:
