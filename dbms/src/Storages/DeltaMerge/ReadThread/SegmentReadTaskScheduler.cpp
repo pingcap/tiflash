@@ -43,7 +43,7 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         merging_segments[pool->tableId()][seg_id].push_back(pool->poolId());
         if (!seg_ids.insert(seg_id).second)
         {
-            throw DB::Exception(fmt::format("Not support split segment task. segment_ids {} => segment_id={} already exist.", seg_ids, seg_id));
+            throw DB::Exception(fmt::format("Not support split segment task. segment_ids={} => segment_id={} already exist.", seg_ids, seg_id));
         }
     }
     auto block_slots = pool->getFreeBlockSlots();

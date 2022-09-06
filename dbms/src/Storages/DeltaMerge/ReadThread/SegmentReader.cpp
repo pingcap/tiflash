@@ -114,7 +114,7 @@ private:
             }
             if (read_count <= 0)
             {
-                LOG_FMT_DEBUG(log, "pool_ids={} segment_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
+                LOG_FMT_DEBUG(log, "All finished, pool_ids={} segment_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
             }
         }
         catch (DB::Exception & e)
