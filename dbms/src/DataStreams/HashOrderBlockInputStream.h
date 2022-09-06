@@ -20,15 +20,12 @@
 
 namespace DB
 {
-/** Sorts each block individually by the values of the specified columns.
-  * At the moment, not very optimal algorithm is used.
-  */
+// TODO before review: add toggle about whether merge block or not, and whether split block or not.
 class HashOrderBlockInputStream : public IProfilingBlockInputStream
 {
     static constexpr auto NAME = "HashOrder";
 
 public:
-    /// limit - if not 0, then you can sort each block not completely, but only `limit` first rows by order.
     HashOrderBlockInputStream(
         const BlockInputStreamPtr & input_,
         SortDescription & description_,
@@ -48,7 +45,6 @@ public:
     const SortDescription & getSortDescription() const override { return description; }
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
-
 
     /// Reference to the row in block.
     struct RowRef
