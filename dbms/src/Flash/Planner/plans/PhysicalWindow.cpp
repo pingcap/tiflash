@@ -40,7 +40,8 @@ PhysicalPlanNodePtr PhysicalWindow::build(
     /// so the child plan cannot call `restoreConcurrency` that would destroy the ordering of the input data.
     child->disableRestoreConcurrency();
 
-    if (auto * sort = dynamic_cast<PhysicalWindowSort*>(child.get())) {
+    if (auto * sort = dynamic_cast<PhysicalWindowSort *>(child.get()))
+    {
         sort->partition_item_count = window.partition_by().size();
     }
 
