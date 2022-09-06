@@ -4459,34 +4459,14 @@ private:
         auto & col_res_offsets = col_res->getOffsets();
         col_res_data.reserve(c0_col_column->size());
         col_res_offsets.resize(c0_col_column->size());
-        ColumnString::Offset res_offset = 0;
+
+
         if (c0_col_column->isColumnConst())
         {
             const ColumnConst * col_const_space_num = checkAndGetColumnConst<ColumnVector<IntType>>(c0_col_column.get());
             auto space_num_values = col_const_space_num->getValue<IntType>();
             Int64 space_num = accurate::lessOp(INT64_MAX, space_num_values) ? INT64_MAX : space_num_values;
-            for (size_t row = 0; row < val_num; ++row)
-            {
-                result_null_map->getData()[row] = false;
-                if (space_num < 0)
-                {
-                    space_num = 0;
-                }
-                if (space_num > MAX_BLOB_WIDTH)
-                {
-                    result_null_map->getData()[row] = true;
-                    space_num = 0;
-                }
-                col_res_data.resize(col_res_data.size() + space_num + 1);
-                for (auto i = 0; i < space_num; ++i)
-                {
-                    col_res_data[res_offset + i] = ' ';
-                }
-
-                col_res_data[res_offset + space_num] = '\0';
-                res_offset += space_num + 1;
-                col_res_offsets[row] = res_offset;
-            }
+            executeConst(space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
         }
         else
         {
@@ -4495,36 +4475,82 @@ private:
             {
                 return false;
             }
-            const auto & col_vector_space_num_value = col_vector_space_num->getData();
-            for (size_t row = 0; row < val_num; ++row)
-            {
-                result_null_map->getData()[row] = false;
-
-                Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT64_MAX : col_vector_space_num_value[row];
-                if (space_num < 0)
-                {
-                    space_num = 0;
-                }
-                if (space_num > MAX_BLOB_WIDTH)
-                {
-                    result_null_map->getData()[row] = true;
-                    space_num = 0;
-                }
-                col_res_data.resize(col_res_data.size() + space_num + 1);
-                for (auto i = 0; i < space_num; ++i)
-                {
-                    col_res_data[res_offset + i] = ' ';
-                }
-
-                col_res_data[res_offset + space_num] = '\0';
-                res_offset += space_num + 1;
-                col_res_offsets[row] = res_offset;
-            }
+            executeVector(col_vector_space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
         }
 
 
         block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
         return true;
+    }
+
+    static void executeConst(
+        Int64 space_num,
+        size_t val_num,
+        ColumnUInt8::Container & result_null_map_data,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            result_null_map_data[row] = false;
+            if (space_num < 0)
+            {
+                space_num = 0;
+            }
+            if (space_num > MAX_BLOB_WIDTH)
+            {
+                result_null_map_data[row] = true;
+                space_num = 0;
+            }
+            res_data.resize(res_data.size() + space_num + 1);
+            for (auto i = 0; i < space_num; ++i)
+            {
+                res_data[res_offset + i] = ' ';
+            }
+
+            res_data[res_offset + space_num] = '\0';
+            res_offset += space_num + 1;
+            res_offsets[row] = res_offset;
+        }
+    }
+
+    template <typename IntType>
+    static void executeVector(
+        const IntType * col_vector_space_num,
+        size_t val_num,
+        ColumnUInt8::Container & result_null_map_data,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        ColumnString::Offset res_offset = 0;
+        const auto & col_vector_space_num_value = col_vector_space_num->getData();
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            result_null_map_data[row] = false;
+
+            Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT64_MAX : col_vector_space_num_value[row];
+            if (space_num < 0)
+            {
+                space_num = 0;
+            }
+            if (space_num > MAX_BLOB_WIDTH)
+            {
+                result_null_map_data[row] = true;
+                space_num = 0;
+            }
+            res_data.resize(res_data.size() + space_num + 1);
+            for (auto i = 0; i < space_num; ++i)
+            {
+                res_data[res_offset + i] = ' ';
+            }
+
+            res_data[res_offset + space_num] = '\0';
+            res_offset += space_num + 1;
+            res_offsets[row] = res_offset;
+        }
     }
 };
 
