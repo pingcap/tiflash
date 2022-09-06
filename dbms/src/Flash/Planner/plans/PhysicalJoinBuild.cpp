@@ -86,7 +86,7 @@ void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & conte
     });
     if (!join_ptr->initialized)
     {
-        join_ptr->init(build_side_prepare_actions->getSampleBlock(), pipeline.concurrency());
+        join_ptr->init(pipeline.getHeader(), pipeline.concurrency());
     }
 }
 

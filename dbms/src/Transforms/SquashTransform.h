@@ -42,7 +42,7 @@ public:
         }
     }
 
-    void transformSample(Block & block) override {}
+    void transformHeader(Block & block) override {}
 
 private:
     SquashingTransform transform;

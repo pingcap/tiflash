@@ -64,7 +64,7 @@ void PhysicalFilter::transform(TransformsPipeline & pipeline, Context & context)
 {
     child->transform(pipeline, context);
 
-    const Block & input_block = child->getSampleBlock();
+    const Block & input_block = pipeline.getHeader();
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<FilterTransform>(
             input_block,

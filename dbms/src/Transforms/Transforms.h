@@ -35,7 +35,7 @@ public:
     virtual ~Transform() = default;
 
     virtual bool transform(Block & block) = 0;
-    virtual void transformSample(Block & block) { transform(block); }
+    virtual void transformHeader(Block & header) { transform(header); }
 };
 using TransformPtr = std::shared_ptr<Transform>;
 
@@ -98,7 +98,7 @@ public:
         assert(source);
         Block block = source->getHeader();
         for (const auto & transform : transforms)
-            transform->transformSample(block);
+            transform->transformHeader(block);
         return block;
     }
 

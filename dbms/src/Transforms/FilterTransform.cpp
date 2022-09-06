@@ -45,7 +45,7 @@ FilterTransform::FilterTransform(
     }
 }
 
-void FilterTransform::transformSample(Block & block)
+void FilterTransform::transformHeader(Block & block)
 {
     block = header;
 }

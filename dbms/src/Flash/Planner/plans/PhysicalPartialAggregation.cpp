@@ -95,7 +95,7 @@ void PhysicalPartialAggregation::transform(TransformsPipeline & pipeline, Contex
 
     if (!aggregate_store->inited)
     {
-        Block before_agg_header = before_agg_actions->getSampleBlock();
+        Block before_agg_header = pipeline.getHeader();
         AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
         size_t max_threads = pipeline.concurrency();
         auto params = AggregationInterpreterHelper::buildParams(
