@@ -52,6 +52,7 @@ public:
     }
 
     void transform(TransformsPipeline & pipeline, Context &) override;
+
 private:
     void transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/) override;
 

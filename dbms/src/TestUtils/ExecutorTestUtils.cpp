@@ -14,12 +14,12 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
+#include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
 
 #include <functional>
 

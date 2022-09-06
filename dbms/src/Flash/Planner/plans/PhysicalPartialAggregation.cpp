@@ -18,9 +18,9 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalPartialAggregation.h>
+#include <Transforms/AggregateSink.h>
 #include <Transforms/ExpressionTransform.h>
 #include <Transforms/TransformsPipeline.h>
-#include <Transforms/AggregateSink.h>
 
 namespace DB
 {

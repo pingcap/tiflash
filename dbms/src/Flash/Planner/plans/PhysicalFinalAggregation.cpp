@@ -19,8 +19,8 @@
 #include <Flash/Planner/plans/PhysicalFinalAggregation.h>
 #include <Interpreters/Context.h>
 #include <Transforms/AggregateSource.h>
-#include <Transforms/FinalAggregateReader.h>
 #include <Transforms/ExpressionTransform.h>
+#include <Transforms/FinalAggregateReader.h>
 #include <Transforms/TransformsPipeline.h>
 
 namespace DB

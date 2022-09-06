@@ -34,7 +34,7 @@ void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Conte
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
-    std::vector<bool> bools{true}; \
+    std::vector<bool> bools{false, true}; \
     for (auto flag : bools)               \
     {                                     \
         enablePlanner(flag);

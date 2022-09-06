@@ -15,10 +15,10 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Transforms/ResultHandlerSink.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Transforms/ResultHandlerSink.h>
 #include <Transforms/TransformsPipeline.h>
 
 namespace DB
