@@ -196,7 +196,7 @@ static SqlMode default_sqlMode{false, false};
 
 Field parseMyDateTime(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid);
 Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, SqlMode sqlMode = default_sqlMode);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, bool is_Float = default_isFloat, SqlMode sqlMode = default_sqlMode);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, bool isFloat = default_isFloat, SqlMode sqlMode = default_sqlMode);
 std::pair<MyDateTime, bool> parseMyDateTimeFromNumAndJudgeIsDate(Int64 num);
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
