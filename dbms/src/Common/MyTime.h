@@ -150,6 +150,14 @@ struct MyDate : public MyTimeBase
     }
 };
 
+struct SqlMode
+{
+    bool allow_zero_in_date;
+    bool allow_invalid_date;
+};
+
+bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode);
+
 struct MyDateTimeFormatter
 {
     std::vector<std::function<void(const MyTimeBase & datetime, String & result)>> formatters;
@@ -183,10 +191,13 @@ private:
 
 static int8_t default_fsp = 6;
 static bool default_needCheckTimeValid = false;
+static bool default_isFloat = false;
+static SqlMode default_sqlMode{false, false};
 
 Field parseMyDateTime(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid);
-
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, SqlMode sqlMode = default_sqlMode);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, bool is_Float = default_isFloat, SqlMode sqlMode = default_sqlMode);
+std::pair<MyDateTime, bool> parseMyDateTimeFromNumAndJudgeIsDate(Int64 num);
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
 void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, bool from_utc, Int64 offset, bool throw_exception = false);

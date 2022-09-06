@@ -561,7 +561,114 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     return day <= getLastDay(year, month);
 }
 
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
+
+// Return true if the time is invalid.
+inline bool getDatetime(const Int64 & num, MyDateTime & result, SqlMode sqlMode)
+{
+    UInt64 ymd = num / 1000000;
+    UInt64 hms = num - ymd * 1000000;
+
+    UInt64 year = ymd / 10000;
+    ymd %= 10000;
+    UInt64 month = ymd / 100;
+    UInt64 day = ymd % 100;
+
+    UInt64 hour = hms / 10000;
+    hms %= 10000;
+    UInt64 minute = hms / 100;
+    UInt64 second = hms % 100;
+
+    if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
+    {
+        return true;
+    }
+    return !result.isValid(sqlMode.allow_zero_in_date, sqlMode.allow_invalid_date);
+}
+
+// Convert a integer number to DateTime and return true if the result is NULL.
+// If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
+// This function may throw exception.
+inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
+{
+    MyDateTime datetime(0);
+    if (number == 0)
+    {
+        if (sqlMode.allow_zero_in_date)
+        {
+            result = datetime;
+            return false;
+        }
+        return true;
+    }
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return getDatetime(number, result, sqlMode);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        return true;
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 20000000) * 1000000;
+        return getDatetime(number, result, sqlMode);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        return true;
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return getDatetime(number, result, sqlMode);
+    }
+
+    // check hour/min/second
+    if (number <= 99991231)
+    {
+        number *= 1000000;
+        return getDatetime(number, result, sqlMode);
+    }
+
+    // check MMDDHHMMSS
+    if (number < 101000000)
+    {
+        return true;
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return getDatetime(number, result, sqlMode);
+    }
+
+    // check YYYYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        return true;
+    }
+
+    // check YYMMDDHHMMSS
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return getDatetime(number, result, sqlMode);
+    }
+
+    return getDatetime(number, result, sqlMode);
+}
+
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid, bool isFloat, SqlMode sqlMode)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
@@ -582,7 +689,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         return seps.size() > 5 || (seps.size() == 1 && seps[0].size() > 4);
     };
 
-    if (!frac_str.empty())
+    if (!frac_str.empty() && !isFloat)
     {
         if (!no_absorb(seps))
         {
@@ -616,6 +723,31 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     case 1:
     {
         size_t l = seps[0].size();
+        if (isFloat)
+        {
+            MyDateTime date_time(0);
+            if (seps[0] == "0")
+            {
+                if (sqlMode.allow_zero_in_date)
+                {
+                    return {date_time.toPackedUInt(), is_date};
+                }
+                else
+                {
+                    return {Field(), is_date};
+                }
+            }
+            if (numberToDateTime(std::stoll(seps[0]), date_time, sqlMode))
+            {
+                return {Field(), is_date};
+            }
+            std::tie(year, month, day, hour, minute, second) = std::tuple(date_time.year, date_time.month, date_time.day, date_time.hour, date_time.minute, date_time.second);
+            if (seps[0] == "0" || (l >= 9 && l <= 14))
+            {
+                hhmmss = true;
+            }
+            break;
+        }
         switch (l)
         {
         case 14: // YYYYMMDDHHMMSS
@@ -683,6 +815,10 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         if (l == 5 || l == 6 || l == 8)
         {
+            if (isFloat)
+            {
+                break;
+            }
             // YYMMDD or YYYYMMDD
             // We must handle float => string => datetime, the difference is that fractional
             // part of float type is discarded directly, while fractional part of string type
@@ -772,7 +908,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     // If str is sepereated by delimiters, the first one is year, and if the year is 2 digit,
     // we should adjust it.
     // TODO: adjust year is very complex, now we only consider the simplest way.
-    if (seps[0].size() == 2)
+    if (seps[0].size() <= 2 && !isFloat)
     {
         if (year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 && frac_str.empty())
         {
@@ -866,6 +1002,11 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
 {
     return parseMyDateTimeAndJudgeIsDate(str, fsp, needCheckTimeValid).first;
+}
+
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, bool needCheckTimeValid, SqlMode sqlMode)
+{
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, needCheckTimeValid, true, sqlMode).first;
 }
 
 String MyDateTime::toString(int fsp) const
@@ -1097,7 +1238,7 @@ bool MyTimeBase::isValid(bool allow_zero_in_date, bool allow_invalid_date) const
         }
     }
 
-    if (year >= 9999 || month > 12)
+    if (year > 9999 || month > 12)
     {
         return false;
     }
