@@ -97,7 +97,7 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto seg = t->segment;
     BlockInputStreamPtr stream;
     if (is_raw)
@@ -179,7 +179,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto block = stream->read();
     if (block)
     {
@@ -222,8 +222,7 @@ int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 
 int64_t SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    double block_slots_scale = dm_context->db_context.getSettingsRef().dt_block_slots_scale;
-    auto block_slots = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * block_slots_scale));
+    auto block_slots = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
     if (block_slots < 3)
     {
         block_slots = 3;
@@ -233,8 +232,7 @@ int64_t SegmentReadTaskPool::getFreeBlockSlots() const
 
 int64_t SegmentReadTaskPool::getFreeActiveSegmentCountUnlock()
 {
-    double active_segments_scale = dm_context->db_context.getSettingsRef().dt_active_segments_scale;
-    auto active_segment_limit = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * active_segments_scale));
+    auto active_segment_limit = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
     if (active_segment_limit < 2)
     {
         active_segment_limit = 2;

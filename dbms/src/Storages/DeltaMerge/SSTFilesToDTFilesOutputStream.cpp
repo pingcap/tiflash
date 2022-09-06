@@ -29,11 +29,6 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <common/logger_useful.h>
 
-namespace ProfileEvents
-{
-extern const Event DMWriteBytes;
-}
-
 namespace DB
 {
 namespace ErrorCodes
@@ -83,9 +78,6 @@ void SSTFilesToDTFilesOutputStream::writeSuffix()
         // Add the DTFile to StoragePathPool so that we can restore it later
         const auto bytes_written = dt_file->getBytesOnDisk();
         storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
-
-        // Report DMWriteBytes for calculating write amplification
-        ProfileEvents::increment(ProfileEvents::DMWriteBytes, bytes_written);
 
         dt_stream.reset();
     }
@@ -155,8 +147,10 @@ void SSTFilesToDTFilesOutputStream::write()
 {
     size_t last_effective_num_rows = 0;
     size_t last_not_clean_rows = 0;
+    size_t last_deleted_rows = 0;
     size_t cur_effective_num_rows = 0;
     size_t cur_not_clean_rows = 0;
+    size_t cur_deleted_rows = 0;
     while (true)
     {
         Block block = child->read();
@@ -205,15 +199,17 @@ void SSTFilesToDTFilesOutputStream::write()
 
         // Write block to the output stream
         DMFileBlockOutputStream::BlockProperty property;
-        std::tie(cur_effective_num_rows, cur_not_clean_rows, property.gc_hint_version) //
+        std::tie(cur_effective_num_rows, cur_not_clean_rows, cur_deleted_rows, property.gc_hint_version) //
             = child->getMvccStatistics();
         property.effective_num_rows = cur_effective_num_rows - last_effective_num_rows;
         property.not_clean_rows = cur_not_clean_rows - last_not_clean_rows;
+        property.deleted_rows = cur_deleted_rows - last_deleted_rows;
         dt_stream->write(block, property);
 
         commit_rows += block.rows();
         last_effective_num_rows = cur_effective_num_rows;
         last_not_clean_rows = cur_not_clean_rows;
+        last_deleted_rows = cur_deleted_rows;
     }
 }
 

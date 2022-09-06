@@ -646,7 +646,8 @@ BlockInputStreams StorageDeltaMerge::read(
         throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
-    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
+    auto req_id = fmt::format("{} read_tso={}", query_info.req_id, mvcc_query_info.read_tso);
+    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), req_id);
 
     LOG_FMT_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
@@ -756,9 +757,9 @@ BlockInputStreams StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
-        query_info.req_id,
+        req_id,
         query_info.keep_order,
-        /* is_fast_mode */ tidb_table_info.tiflash_mode == TiDB::TiFlashMode::Fast, // read in normal mode or read in fast mode
+        /* is_fast_scan */ query_info.is_fast_scan,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -904,6 +905,15 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
     size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     if (after_delete_rows != total_rows - delete_rows)
         LOG_FMT_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
+}
+
+DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited()
+{
+    if (storeInited())
+    {
+        return _store;
+    }
+    return nullptr;
 }
 
 std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool need_block)
@@ -1185,62 +1195,31 @@ void StorageDeltaMerge::rename(
     const String & new_display_table_name)
 {
     tidb_table_info.name = new_display_table_name; // update name in table info
-    // For DatabaseTiFlash, simply update store's database is OK.
-    // `store->getTableName() == new_table_name` only keep for mock test.
-    bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
-    if (likely(clean_rename))
     {
-        if (storeInited())
-        {
-            _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
-            return;
-        }
-        std::lock_guard lock(store_mutex);
-        if (storeInited())
-        {
-            _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
-        }
-        else
-        {
-            table_column_info->db_name = new_database_name;
-            table_column_info->table_name = new_table_name;
-        }
+        // For DatabaseTiFlash, simply update store's database is OK.
+        // `store->getTableName() == new_table_name` only keep for mock test.
+        bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
+        RUNTIME_ASSERT(clean_rename,
+                       log,
+                       "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
+                       new_database_name,
+                       new_table_name);
+    }
+    if (storeInited())
+    {
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
         return;
     }
-
-    /// Note that this routine is only left for CI tests. `clean_rename` should always be true in production env.
-    auto & store = getAndMaybeInitStore();
-
-    // For DatabaseOrdinary, we need to rename data path, then recreate a new store.
-    const String new_path = new_path_to_db + "/" + new_table_name;
-
-    if (Poco::File{new_path}.exists())
-        throw Exception(
-            fmt::format("Target path already exists: {}", new_path),
-            ErrorCodes::DIRECTORY_ALREADY_EXISTS);
-
-    // flush store and then reset store to new path
-    store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
-    ColumnDefines table_column_defines = store->getTableColumns();
-    ColumnDefine handle_column_define = store->getHandle();
-    DeltaMergeStore::Settings settings = store->getSettings();
-
-    // remove background tasks
-    store->shutdown();
-    // rename directories for multi disks
-    store->rename(new_path, clean_rename, new_database_name, new_table_name);
-    // generate a new store
-    store = std::make_shared<DeltaMergeStore>(
-        global_context,
-        data_path_contains_database_name,
-        new_database_name,
-        new_table_name,
-        tidb_table_info.id,
-        std::move(table_column_defines),
-        std::move(handle_column_define),
-        is_common_handle,
-        rowkey_column_size,
-        settings);
+    std::lock_guard lock(store_mutex);
+    if (storeInited())
+    {
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
+    }
+    else
+    {
+        table_column_info->db_name = new_database_name;
+        table_column_info->table_name = new_table_name;
+    }
 }
 
 String StorageDeltaMerge::getTableName() const

@@ -201,7 +201,8 @@ void MPPTask::initExchangeReceivers()
                 context->getMaxStreams(),
                 log->identifier(),
                 executor_id,
-                executor.fine_grained_shuffle_stream_count());
+                executor.fine_grained_shuffle_stream_count(),
+                true);
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
@@ -412,7 +413,11 @@ void MPPTask::runImpl()
         while (from->read())
             continue;
 
+        // finish DataStream
         from->readSuffix();
+        // finish receiver
+        receiver_set->close();
+        // finish MPPTunnel
         finishWrite();
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();

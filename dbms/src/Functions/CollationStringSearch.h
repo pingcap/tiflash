@@ -14,33 +14,18 @@
 
 #pragma once
 
-#include <Core/Types.h>
-
-#include <mutex>
+#include <Columns/ColumnString.h>
 
 namespace DB
 {
-namespace DM
-{
-namespace tests
-{
-class IDGenerator
-{
-public:
-    IDGenerator()
-        : id{0}
-    {}
 
-    UInt64 get()
-    {
-        std::lock_guard guard{mutex};
-        return id++;
-    }
+template <bool revert>
+extern bool StringPatternMatch(
+    const ColumnString::Chars_t & a_data,
+    const ColumnString::Offsets & a_offsets,
+    const std::string_view & pattern_str,
+    uint8_t escape_char,
+    const TiDB::TiDBCollatorPtr & collator,
+    PaddedPODArray<UInt8> & c);
 
-private:
-    std::mutex mutex;
-    UInt64 id;
-};
-} // namespace tests
-} // namespace DM
 } // namespace DB
