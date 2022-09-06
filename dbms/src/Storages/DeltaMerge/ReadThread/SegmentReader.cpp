@@ -70,11 +70,11 @@ private:
         if (ret != 0)
         {
             // It can be failed due to some CPU core cannot access, such as CPU offline.
-            LOG_FMT_ERROR(log, "sched_setaffinity cpus {} fail: {}", cpus, std::strerror(errno));
+            LOG_FMT_ERROR(log, "sched_setaffinity fail, cpus={} errno={}", cpus, std::strerror(errno));
         }
         else
         {
-            LOG_FMT_DEBUG(log, "sched_setaffinity cpus {} succ", cpus);
+            LOG_FMT_DEBUG(log, "sched_setaffinity succ, cpus={}", cpus);
         }
 #endif
     }
@@ -114,7 +114,7 @@ private:
             }
             if (read_count <= 0)
             {
-                LOG_FMT_DEBUG(log, "pool_ids={} seg_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
+                LOG_FMT_DEBUG(log, "pool_ids={} segment_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
             }
         }
         catch (DB::Exception & e)

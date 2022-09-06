@@ -150,7 +150,7 @@ public:
         auto total_bytes = blk_stat.totalBytes();
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        LOG_FMT_DEBUG(log, "pool {} table {} pop {} pop_empty {} pop_empty_ratio {} max_queue_size {} blk_avg_bytes {} approximate_max_pending_block_bytes {} MB total_count {} total_bytes {} MB", //
+        LOG_FMT_DEBUG(log, "pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={} MB total_count={} total_bytes={} MB", //
                       pool_id,
                       table_id,
                       pop_times,

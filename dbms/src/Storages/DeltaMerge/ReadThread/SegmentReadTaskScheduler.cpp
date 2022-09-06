@@ -43,7 +43,7 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         merging_segments[pool->tableId()][seg_id].push_back(pool->poolId());
         if (!seg_ids.insert(seg_id).second)
         {
-            throw DB::Exception(fmt::format("Not support split segment task. seg_ids {} => seg_id {} already exist.", seg_ids, seg_id));
+            throw DB::Exception(fmt::format("Not support split segment task. segment_ids {} => segment_id={} already exist.", seg_ids, seg_id));
         }
     }
     auto block_slots = pool->getFreeBlockSlots();
@@ -200,7 +200,7 @@ bool SegmentReadTaskScheduler::schedule()
     auto [merged_task, run_sche] = scheduleMergedTask();
     if (merged_task != nullptr)
     {
-        LOG_FMT_DEBUG(log, "scheduleMergedTask seg_id={} pool_ids={} cost={}ms", merged_task->getSegmentId(), merged_task->getPoolIds(), sw.elapsedMilliseconds());
+        LOG_FMT_DEBUG(log, "scheduleMergedTask segment_id={} pool_ids={} cost={}ms", merged_task->getSegmentId(), merged_task->getPoolIds(), sw.elapsedMilliseconds());
         SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
     }
     return run_sche;
