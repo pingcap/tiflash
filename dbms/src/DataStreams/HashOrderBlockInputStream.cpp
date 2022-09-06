@@ -198,7 +198,7 @@ Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
 {
     if (iter == map->cend())
     {
-        return blocks.front().cloneEmpty();
+        return Block();
     }
 
     auto block_size_limit = context.getSettingsRef().max_block_size.get();
@@ -211,7 +211,7 @@ Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
                 columns[j]->insertFrom(*curr->block->getByPosition(j).column.get(), curr->row_num);
         ++iter;
     }
-    
+
     return blocks.front().cloneWithColumns(std::move(columns));
 }
 
