@@ -32,6 +32,11 @@ public:
         return final_agg_reader->read();
     }
 
+    Block getHeader() const override
+    {
+        return final_agg_reader->getHeader();
+    }
+
 private:
     FinalAggregateReaderPtr final_agg_reader;
 };

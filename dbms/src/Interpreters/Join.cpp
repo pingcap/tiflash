@@ -480,8 +480,9 @@ void Join::init(const Block & sample_block, size_t build_concurrency_)
     initialized = true;
     setBuildConcurrencyAndInitPool(build_concurrency_);
     /// Choose data structure to use for JOIN.
-    initMapImpl(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
-    setSampleBlock(sample_block);
+    Block materialized_block = materializeBlock(sample_block);
+    initMapImpl(chooseMethod(getKeyColumns(key_names_right, materialized_block), key_sizes));
+    setSampleBlock(materialized_block);
 }
 
 

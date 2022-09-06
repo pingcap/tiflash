@@ -42,6 +42,8 @@ public:
         }
     }
 
+    void transformSample(Block & block) override {}
+
 private:
     SquashingTransform transform;
 };

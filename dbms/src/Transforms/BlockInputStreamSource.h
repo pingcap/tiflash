@@ -32,6 +32,11 @@ public:
         return impl->read();
     }
 
+    Block getHeader() const override
+    {
+        return impl->getHeader();
+    }
+
 private:
     BlockInputStreamPtr impl;
 };

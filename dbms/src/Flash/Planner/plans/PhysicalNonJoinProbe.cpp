@@ -32,6 +32,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
+#include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalNonJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <Transforms/ExpressionTransform.h>
@@ -70,14 +71,11 @@ void PhysicalNonJoinProbe::transform(TransformsPipeline & pipeline, Context & co
         transforms->setSource(std::make_shared<BlockInputStreamSource>(non_joined_stream));
     });
 
-    // todo
-    // NamesWithAliases schema_project_cols;
-    // for (auto & c : schema)
-    //     schema_project_cols.emplace_back(c.name, c.name);
-    // ExpressionActionsPtr schema_project = generateProjectExpressionActions(probe_side_prepare_header, context, schema_project_cols);
-    // pipeline.transform([&](auto & transforms) {
-    //     transforms->append(std::make_shared<ExpressionTransform>(schema_project));
-    // });
+    ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(pipeline.getHeader(), context);
+    PhysicalPlanHelper::addSchemaProjectAction(schema_actions, schema);
+    pipeline.transform([&](auto & transforms) {
+        transforms->append(std::make_shared<ExpressionTransform>(schema_actions));
+    });
 }
 
 void PhysicalNonJoinProbe::transformImpl(DAGPipeline & pipeline, Context & context, size_t)

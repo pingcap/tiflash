@@ -25,6 +25,7 @@ class Source
 public:
     virtual ~Source() = default;
     virtual Block read() = 0;
+    virtual Block getHeader() const = 0;
 };
 
 using SourcePtr = std::shared_ptr<Source>;

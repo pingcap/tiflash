@@ -107,16 +107,14 @@ void PhysicalJoinProbe::transform(TransformsPipeline & pipeline, Context & conte
     auto join_probe_actions = PhysicalPlanHelper::newActions(probe_side_prepare_actions->getSampleBlock(), context);
     join_probe_actions->add(ExpressionAction::ordinaryJoin(join_ptr, columns_added_by_join));
     pipeline.transform([&](auto & transforms) {
-        transforms->append(std::make_shared<HashJoinProbeTransform>(probe_side_prepare_actions));
+        transforms->append(std::make_shared<HashJoinProbeTransform>(join_probe_actions));
     });
-    // todo
-    // NamesWithAliases schema_project_cols;
-    // for (auto & c : schema)
-    //     schema_project_cols.emplace_back(c.name, c.name);
-    // ExpressionActionsPtr schema_project = generateProjectExpressionActions(probe_side_prepare_header, context, schema_project_cols);
-    // pipeline.transform([&](auto & transforms) {
-    //     transforms->append(std::make_shared<ExpressionTransform>(schema_project));
-    // });
+
+    ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(pipeline.getHeader(), context);
+    PhysicalPlanHelper::addSchemaProjectAction(schema_actions, schema);
+    pipeline.transform([&](auto & transforms) {
+        transforms->append(std::make_shared<ExpressionTransform>(schema_actions));
+    });
 }
 
 void PhysicalJoinProbe::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

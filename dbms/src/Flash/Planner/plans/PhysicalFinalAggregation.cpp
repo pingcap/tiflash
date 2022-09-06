@@ -20,6 +20,7 @@
 #include <Interpreters/Context.h>
 #include <Transforms/AggregateSource.h>
 #include <Transforms/FinalAggregateReader.h>
+#include <Transforms/ExpressionTransform.h>
 #include <Transforms/TransformsPipeline.h>
 
 namespace DB
@@ -51,6 +52,7 @@ void PhysicalFinalAggregation::transform(TransformsPipeline & pipeline, Context 
     auto reader = std::make_shared<FinalAggregateReader>(aggregate_store);
     pipeline.transform([&](auto & transforms) {
         transforms->setSource(std::make_shared<AggregateSource>(reader));
+        transforms->append(std::make_shared<ExpressionTransform>(expr_after_agg));
     });
 }
 

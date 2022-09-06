@@ -35,6 +35,12 @@ struct TransformsPipeline
 
     size_t concurrency() const { return transforms_vec.size(); }
 
+    Block getHeader()
+    {
+        assert(!transforms_vec.empty());
+        return transforms_vec.back()->getHeader();
+    }
+
     std::vector<TransformsPtr> transforms_vec;
 };
 } // namespace DB

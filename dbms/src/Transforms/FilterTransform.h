@@ -32,6 +32,8 @@ public:
 
     bool transform(Block & block) override;
 
+    void transformSample(Block & block) override;
+
 private:
     ExpressionActionsPtr expression;
     Block header;

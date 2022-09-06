@@ -75,151 +75,151 @@ public:
     ColumnWithInt32 col_salary{1300, 0, {}, 900, {}, -300};
 };
 
-TEST_F(ExecutorTopNTestRunner, TopN)
-try
-{
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-    std::shared_ptr<tipb::DAGRequest> request;
-    std::vector<ColumnsWithTypeAndName> expect_cols;
+// TEST_F(ExecutorTopNTestRunner, TopN)
+// try
+// {
+//     WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+//     std::shared_ptr<tipb::DAGRequest> request;
+//     std::vector<ColumnsWithTypeAndName> expect_cols;
 
-    {
-        /// Test single column
-        size_t col_data_num = col0.size();
-        for (size_t i = 1; i <= 1; ++i)
-        {
-            bool is_desc;
-            is_desc = static_cast<bool>(i); /// Set descent or ascent
-            if (is_desc)
-                sort(col0.begin(), col0.end(), std::greater<ColStringType>()); /// Sort col0 for the following comparison
-            else
-                sort(col0.begin(), col0.end());
+//     {
+//         /// Test single column
+//         size_t col_data_num = col0.size();
+//         for (size_t i = 1; i <= 1; ++i)
+//         {
+//             bool is_desc;
+//             is_desc = static_cast<bool>(i); /// Set descent or ascent
+//             if (is_desc)
+//                 sort(col0.begin(), col0.end(), std::greater<ColStringType>()); /// Sort col0 for the following comparison
+//             else
+//                 sort(col0.begin(), col0.end());
 
-            for (size_t limit_num = 0; limit_num <= col_data_num + 5; ++limit_num)
-            {
-                request = buildDAGRequest(table_single_name, single_col_name, is_desc, limit_num);
+//             for (size_t limit_num = 0; limit_num <= col_data_num + 5; ++limit_num)
+//             {
+//                 request = buildDAGRequest(table_single_name, single_col_name, is_desc, limit_num);
 
-                expect_cols.clear();
-                if (limit_num == 0 || limit_num > col_data_num)
-                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.end()))});
-                else
-                    expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.begin() + limit_num))});
+//                 expect_cols.clear();
+//                 if (limit_num == 0 || limit_num > col_data_num)
+//                     expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.end()))});
+//                 else
+//                     expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.begin() + limit_num))});
 
-                ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 2), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 4), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 8), expect_cols[0]);
-            }
-        }
-    }
+//                 ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+//                 ASSERT_COLUMNS_EQ_R(executeStreams(request, 2), expect_cols[0]);
+//                 ASSERT_COLUMNS_EQ_R(executeStreams(request, 4), expect_cols[0]);
+//                 ASSERT_COLUMNS_EQ_R(executeStreams(request, 8), expect_cols[0]);
+//             }
+//         }
+//     }
 
-    {
-        /// Test multi-columns
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{36, 34, 32, 27, {}, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "male", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "usa", "china", "korea"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{900, -300, {}, 0, {}, 1300})},
-                       {toNullableVec<Int32>(col_name[0], ColumnWithInt32{32, {}, 34, 27, 36, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "china", "korea"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{{}, {}, -300, 0, 900, 1300})},
-                       {toNullableVec<Int32>(col_name[0], ColumnWithInt32{34, {}, 32, 36, {}, 27}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "china", "korea", "usa"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{-300, {}, {}, 900, 1300, 0})}};
+//     {
+//         /// Test multi-columns
+//         expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{36, 34, 32, 27, {}, {}}),
+//                         toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "male", "female"}),
+//                         toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "usa", "china", "korea"}),
+//                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{900, -300, {}, 0, {}, 1300})},
+//                        {toNullableVec<Int32>(col_name[0], ColumnWithInt32{32, {}, 34, 27, 36, {}}),
+//                         toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
+//                         toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "china", "korea"}),
+//                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{{}, {}, -300, 0, 900, 1300})},
+//                        {toNullableVec<Int32>(col_name[0], ColumnWithInt32{34, {}, 32, 36, {}, 27}),
+//                         toNullableVec<String>(col_name[1], ColumnWithString{"male", "male", "male", "female", "female", "female"}),
+//                         toNullableVec<String>(col_name[2], ColumnWithString{"china", "china", "usa", "china", "korea", "usa"}),
+//                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{-300, {}, {}, 900, 1300, 0})}};
 
-        std::vector<MockOrderByItemVec> order_by_items{
-            /// select * from clerk order by age DESC, gender DESC;
-            {MockOrderByItem(col_name[0], true), MockOrderByItem(col_name[1], true)},
-            /// select * from clerk order by gender DESC, salary ASC;
-            {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[3], false)},
-            /// select * from clerk order by gender DESC, country ASC, salary DESC;
-            {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[2], false), MockOrderByItem(col_name[3], true)}};
+//         std::vector<MockOrderByItemVec> order_by_items{
+//             /// select * from clerk order by age DESC, gender DESC;
+//             {MockOrderByItem(col_name[0], true), MockOrderByItem(col_name[1], true)},
+//             /// select * from clerk order by gender DESC, salary ASC;
+//             {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[3], false)},
+//             /// select * from clerk order by gender DESC, country ASC, salary DESC;
+//             {MockOrderByItem(col_name[1], true), MockOrderByItem(col_name[2], false), MockOrderByItem(col_name[3], true)}};
 
-        size_t test_num = expect_cols.size();
+//         size_t test_num = expect_cols.size();
 
-        for (size_t i = 0; i < test_num; ++i)
-        {
-            request = buildDAGRequest(table_name, order_by_items[i], 100);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[i]);
-        }
-    }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
-}
-CATCH
+//         for (size_t i = 0; i < test_num; ++i)
+//         {
+//             request = buildDAGRequest(table_name, order_by_items[i], 100);
+//             ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[i]);
+//         }
+//     }
+//     WRAP_FOR_DIS_ENABLE_PLANNER_END
+// }
+// CATCH
 
-TEST_F(ExecutorTopNTestRunner, TopNFunction)
-try
-{
-    std::shared_ptr<tipb::DAGRequest> request;
-    std::vector<ColumnsWithTypeAndName> expect_cols;
-    MockColumnNameVec output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
-    MockAstVec func_projection; // Do function operation for topn
-    MockOrderByItemVec order_by_items;
-    ASTPtr col0_ast = col(col_name[0]);
-    ASTPtr col1_ast = col(col_name[1]);
-    ASTPtr col2_ast = col(col_name[2]);
-    ASTPtr col3_ast = col(col_name[3]);
-    ASTPtr func_ast;
+// TEST_F(ExecutorTopNTestRunner, TopNFunction)
+// try
+// {
+//     std::shared_ptr<tipb::DAGRequest> request;
+//     std::vector<ColumnsWithTypeAndName> expect_cols;
+//     MockColumnNameVec output_projection{col_name[0], col_name[1], col_name[2], col_name[3]};
+//     MockAstVec func_projection; // Do function operation for topn
+//     MockOrderByItemVec order_by_items;
+//     ASTPtr col0_ast = col(col_name[0]);
+//     ASTPtr col1_ast = col(col_name[1]);
+//     ASTPtr col2_ast = col(col_name[2]);
+//     ASTPtr col3_ast = col(col_name[3]);
+//     ASTPtr func_ast;
 
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-    {
-        /// "and" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, {}, 32, 27, 36, 34}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "china", "usa", "usa", "china", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 0, 900, -300})}};
+//     WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+//     {
+//         /// "and" function
+//         expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, {}, 32, 27, 36, 34}),
+//                         toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
+//                         toNullableVec<String>(col_name[2], ColumnWithString{"korea", "china", "usa", "usa", "china", "china"}),
+//                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 0, 900, -300})}};
 
-        {
-            /// select * from clerk order by age and salary ASC limit 100;
-            order_by_items = {MockOrderByItem("and(age, salary)", false)};
-            func_ast = And(col(col_name[0]), col(col_name[3]));
-            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
+//         {
+//             /// select * from clerk order by age and salary ASC limit 100;
+//             order_by_items = {MockOrderByItem("and(age, salary)", false)};
+//             func_ast = And(col(col_name[0]), col(col_name[3]));
+//             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
-        }
-    }
+//             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
+//             ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+//         }
+//     }
 
-    {
-        /// "equal" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{27, 36, 34, 32, {}, {}}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "female", "male", "male", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "korea", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{0, 900, -300, {}, 1300, {}})}};
+//     {
+//         /// "equal" function
+//         expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{27, 36, 34, 32, {}, {}}),
+//                         toNullableVec<String>(col_name[1], ColumnWithString{"female", "female", "male", "male", "female", "male"}),
+//                         toNullableVec<String>(col_name[2], ColumnWithString{"usa", "china", "china", "usa", "korea", "china"}),
+//                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{0, 900, -300, {}, 1300, {}})}};
 
-        {
-            /// select age, salary from clerk order by age = salary DESC limit 100;
-            order_by_items = {MockOrderByItem("equals(age, salary)", true)};
-            func_ast = eq(col(col_name[0]), col(col_name[3]));
-            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
+//         {
+//             /// select age, salary from clerk order by age = salary DESC limit 100;
+//             order_by_items = {MockOrderByItem("equals(age, salary)", true)};
+//             func_ast = eq(col(col_name[0]), col(col_name[3]));
+//             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
-        }
-    }
+//             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
+//             ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+//         }
+//     }
 
-    {
-        /// "greater" function
-        expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, 32, {}, 36, 27, 34}),
-                        toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
-                        toNullableVec<String>(col_name[2], ColumnWithString{"korea", "usa", "china", "china", "usa", "china"}),
-                        toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 900, 0, -300})}};
+//     {
+//         /// "greater" function
+//         expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, 32, {}, 36, 27, 34}),
+//                         toNullableVec<String>(col_name[1], ColumnWithString{"female", "male", "male", "female", "female", "male"}),
+//                         toNullableVec<String>(col_name[2], ColumnWithString{"korea", "usa", "china", "china", "usa", "china"}),
+//                         toNullableVec<Int32>(col_name[3], ColumnWithInt32{1300, {}, {}, 900, 0, -300})}};
 
-        {
-            /// select age, gender, country, salary from clerk order by age > salary ASC limit 100;
-            order_by_items = {MockOrderByItem("greater(age, salary)", false)};
-            func_ast = gt(col(col_name[0]), col(col_name[3]));
-            func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
+//         {
+//             /// select age, gender, country, salary from clerk order by age > salary ASC limit 100;
+//             order_by_items = {MockOrderByItem("greater(age, salary)", false)};
+//             func_ast = gt(col(col_name[0]), col(col_name[3]));
+//             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
-            request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
-        }
-    }
+//             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
+//             ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+//         }
+//     }
 
-    /// TODO more functions...
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
-}
-CATCH
+//     /// TODO more functions...
+//     WRAP_FOR_DIS_ENABLE_PLANNER_END
+// }
+// CATCH
 
 } // namespace tests
 } // namespace DB

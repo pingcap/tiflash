@@ -35,6 +35,7 @@ public:
     virtual ~Transform() = default;
 
     virtual bool transform(Block & block) = 0;
+    virtual void transformSample(Block & block) { transform(block); }
 };
 using TransformPtr = std::shared_ptr<Transform>;
 
@@ -90,6 +91,15 @@ public:
         if (is_killed)
             throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
         return true;
+    }
+
+    Block getHeader()
+    {
+        assert(source);
+        Block block = source->getHeader();
+        for (const auto & transform : transforms)
+            transform->transformSample(block);
+        return block;
     }
 
 private:
