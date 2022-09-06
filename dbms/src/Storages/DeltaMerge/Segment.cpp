@@ -1418,14 +1418,14 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::logId() const
 {
-    return fmt::format("<segment_id={} @{}>",
+    return fmt::format("<segment_id={} epoch={}>",
                        segment_id,
                        epoch);
 }
 
 String Segment::simpleInfo() const
 {
-    return fmt::format("<segment_id={} @{} range={}{}>",
+    return fmt::format("<segment_id={} epoch={} range={}{}>",
                        segment_id,
                        epoch,
                        rowkey_range.toDebugString(),
@@ -1434,7 +1434,7 @@ String Segment::simpleInfo() const
 
 String Segment::info() const
 {
-    return fmt::format("<segment_id={} @{} range={}{} next_segment_id={} delta_rows={} delta_bytes={} delta_deletes={} stable_file={} stable_rows={} stable_bytes={}>",
+    return fmt::format("<segment_id={} epoch={} range={}{} next_segment_id={} delta_rows={} delta_bytes={} delta_deletes={} stable_file={} stable_rows={} stable_bytes={}>",
                        segment_id,
                        epoch,
                        rowkey_range.toDebugString(),
