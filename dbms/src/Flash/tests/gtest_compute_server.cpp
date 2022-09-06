@@ -353,7 +353,6 @@ try
                                                        .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
                                                        .project({col("max(l_table.s)"), col("l_table.s")}));
 
-        std::this_thread::sleep_for(std::chrono::seconds(2));
         EXPECT_TRUE(assertQueryActive(start_ts1));
         MockComputeServerManager::instance().cancelQuery(start_ts1);
         EXPECT_TRUE(assertQueryCancelled(start_ts1));
