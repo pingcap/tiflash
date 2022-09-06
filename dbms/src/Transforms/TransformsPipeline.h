@@ -22,7 +22,8 @@ struct TransformsPipeline
 {
     explicit TransformsPipeline(size_t concurrency)
     {
-        transforms_vec.resize(concurrency);
+        for (size_t i = 0; i < concurrency; ++i)
+            transforms_vec.emplace_back(std::make_shared<Transforms>());
     }
 
     template <typename FF>

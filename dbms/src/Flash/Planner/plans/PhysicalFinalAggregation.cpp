@@ -50,7 +50,7 @@ void PhysicalFinalAggregation::transform(TransformsPipeline & pipeline, Context 
 {
     auto reader = std::make_shared<FinalAggregateReader>(aggregate_store);
     pipeline.transform([&](auto & transforms) {
-        transforms->set(std::make_shared<AggregateSource>(reader));
+        transforms->setSource(std::make_shared<AggregateSource>(reader));
     });
 }
 

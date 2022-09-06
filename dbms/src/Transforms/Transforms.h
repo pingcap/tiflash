@@ -41,12 +41,12 @@ using TransformPtr = std::shared_ptr<Transform>;
 class Transforms
 {
 public:
-    void set(const SourcePtr & source_)
+    void setSource(const SourcePtr & source_)
     {
         assert(!source);
         source = source_;
     }
-    void set(const SinkPtr & sink_)
+    void setSink(const SinkPtr & sink_)
     {
         assert(!sink);
         sink = sink_;

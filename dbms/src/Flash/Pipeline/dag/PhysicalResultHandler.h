@@ -15,9 +15,11 @@
 #pragma once
 
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Transforms/ResultHandlerSink.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -100,6 +102,14 @@ public:
     {
         auto clone_one = std::make_shared<PhysicalResultHandler>(*this);
         return clone_one;
+    }
+
+    void transform(TransformsPipeline & pipeline, Context & context) override
+    {
+        child->transform(pipeline, context);
+        pipeline.transform([&](auto & transforms) {
+            transforms->setSink(std::make_shared<ResultHandlerSink>(result_handler));
+        });
     }
 
 private:

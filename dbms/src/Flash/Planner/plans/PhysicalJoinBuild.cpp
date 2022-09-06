@@ -82,7 +82,7 @@ void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & conte
 
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(build_side_prepare_actions));
-        transforms->set(std::make_shared<HashJoinBuildSink>(join_ptr));
+        transforms->setSink(std::make_shared<HashJoinBuildSink>(join_ptr));
     });
     if (!join_ptr->initialized)
     {

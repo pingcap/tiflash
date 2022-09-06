@@ -19,10 +19,10 @@
 
 namespace DB
 {
-class NonJoinedProbeSource : public Source
+class BlockInputStreamSource : public Source
 {
 public:
-    explicit NonJoinedProbeSource(
+    explicit BlockInputStreamSource(
         const BlockInputStreamPtr & impl_)
         : impl(impl_)
     {}

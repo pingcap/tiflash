@@ -18,6 +18,9 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalPartialAggregation.h>
+#include <Transforms/ExpressionTransform.h>
+#include <Transforms/TransformsPipeline.h>
+#include <Transforms/AggregateSink.h>
 
 namespace DB
 {
@@ -79,6 +82,35 @@ void PhysicalPartialAggregation::transformImpl(DAGPipeline & pipeline, Context &
             index % aggregate_store->max_threads,
             log->identifier());
         ++index;
+    });
+}
+
+void PhysicalPartialAggregation::transform(TransformsPipeline & pipeline, Context & context)
+{
+    child->transform(pipeline, context);
+
+    pipeline.transform([&](auto & transforms) {
+        transforms->append(std::make_shared<ExpressionTransform>(before_agg_actions));
+    });
+
+    if (!aggregate_store->inited)
+    {
+        Block before_agg_header = before_agg_actions->getSampleBlock();
+        AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
+        size_t max_threads = pipeline.concurrency();
+        auto params = AggregationInterpreterHelper::buildParams(
+            context,
+            before_agg_header,
+            max_threads,
+            aggregation_keys,
+            aggregation_collators,
+            aggregate_descriptions,
+            is_final_agg);
+        aggregate_store->init(max_threads, params);
+    }
+
+    pipeline.transform([&](auto & transforms) {
+        transforms->setSink(std::make_shared<AggregateSink>(aggregate_store));
     });
 }
 } // namespace DB

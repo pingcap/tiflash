@@ -19,6 +19,8 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalMockExchangeReceiver.h>
 #include <Interpreters/Context.h>
+#include <Transforms/BlockInputStreamSource.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -89,6 +91,15 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
         Block(schema),
         mock_streams);
     return physical_mock_exchange_receiver;
+}
+
+void PhysicalMockExchangeReceiver::transform(TransformsPipeline & pipeline, Context &)
+{
+    assert(pipeline.concurrency() == mock_streams.size());
+    size_t i = 0;
+    pipeline.transform([&](auto & transforms) {
+        transforms->setSource(std::make_shared<BlockInputStreamSource>(mock_streams[i++]));
+    });
 }
 
 void PhysicalMockExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t /*max_streams*/)

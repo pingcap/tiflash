@@ -32,7 +32,7 @@ public:
         if (!block)
             return false;
         aggregate_store->executeOnBlock(loop_id, block);
-        return block;
+        return true;
     }
 
 private:

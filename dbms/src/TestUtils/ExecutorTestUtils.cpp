@@ -19,6 +19,7 @@
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
+#include <Common/getNumberOfPhysicalCPUCores.h>
 
 #include <functional>
 
@@ -155,9 +156,9 @@ void ExecutorTest::enablePipeline(bool is_enable)
     context.context.setSetting("enable_pipeline", is_enable ? "true" : "false");
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t)
 {
-    DAGContext dag_context(*request, "executor_test", concurrency);
+    DAGContext dag_context(*request, "executor_test", getNumberOfPhysicalCPUCores());
     context.context.setExecutorTest();
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);

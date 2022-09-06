@@ -20,6 +20,8 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalMockTableScan.h>
 #include <Interpreters/Context.h>
+#include <Transforms/BlockInputStreamSource.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -95,6 +97,15 @@ void PhysicalMockTableScan::transformImpl(DAGPipeline & pipeline, Context & /*co
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
+}
+
+void PhysicalMockTableScan::transform(TransformsPipeline & pipeline, Context &)
+{
+    assert(pipeline.concurrency() == mock_streams.size());
+    size_t i = 0;
+    pipeline.transform([&](auto & transforms) {
+        transforms->setSource(std::make_shared<BlockInputStreamSource>(mock_streams[i++]));
+    });
 }
 
 void PhysicalMockTableScan::finalize(const Names & parent_require)
