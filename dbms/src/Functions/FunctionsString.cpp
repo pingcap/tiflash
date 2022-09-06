@@ -4397,7 +4397,7 @@ class FunctionSpace : public IFunction
 public:
     static constexpr auto name = "space";
 
-    // tidb mysql.MaxBlobWidth space max input : space(MAX_BLOB_WIDTH) will return NULL
+    // tidb mysql.MaxBlobWidth space max input : space(MAX_BLOB_WIDTH+1) will return NULL
     static constexpr auto MAX_BLOB_WIDTH = 16777216;
 
     FunctionSpace() = default;
@@ -4451,12 +4451,6 @@ private:
 
         Field res_field;
         auto c0_col_column = c0_col.column;
-        const auto * col_vector_space_num = checkAndGetColumn<ColumnVector<IntType>>(c0_col_column.get());
-        if (col_vector_space_num == nullptr)
-        {
-            return false;
-        }
-
 
         size_t val_num = block.rows();
         auto result_null_map = ColumnUInt8::create(val_num);
@@ -4496,6 +4490,11 @@ private:
         }
         else
         {
+            const auto * col_vector_space_num = checkAndGetColumn<ColumnVector<IntType>>(c0_col_column.get());
+            if (col_vector_space_num == nullptr)
+            {
+                return false;
+            }
             const auto & col_vector_space_num_value = col_vector_space_num->getData();
             for (size_t row = 0; row < val_num; ++row)
             {
