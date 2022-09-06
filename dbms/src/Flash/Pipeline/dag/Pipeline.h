@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Pipeline/task/PipelineTask.h>
+#include <Transforms/Transforms.h>
 
 #include <unordered_set>
 
@@ -33,13 +33,15 @@ public:
         const std::unordered_set<UInt32> & parent_ids_,
         const String & req_id);
 
-    std::vector<PipelineTask> transform(Context & context, size_t max_streams);
+    std::vector<PipelineTask> transform(Context & context, size_t concurrency);
 
     UInt32 getId() const { return id; }
     const std::unordered_set<UInt32> & getParentIds() const { return parent_ids; }
 
     void cancel(bool is_kill);
     void finish();
+
+    void finish(size_t task_id);
 
     PhysicalPlanNodePtr getPlanNode() const { return plan_node; }
 
@@ -55,7 +57,7 @@ private:
 
     std::unordered_set<UInt32> parent_ids;
 
-    std::vector<BlockInputStreamPtr> task_streams;
+    std::vector<TransformsPtr> task_transforms_vec;
 
     LoggerPtr log;
 };

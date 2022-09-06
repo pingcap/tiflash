@@ -12,17 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Transforms/Transforms.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Columns/FilterDescription.h>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+class FilterTransform : public Transform
 {
-    return final_agg_reader->getHeader();
-}
+public:
+    FilterTransform(
+        const Block & input_header,
+        const ExpressionActionsPtr & expression_,
+        const String & filter_column_name);
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+    bool transform(Block & block) override;
+
+private:
+    ExpressionActionsPtr expression;
+    Block header;
+    ssize_t filter_column;
+
+    ConstantFilterDescription constant_filter_description;
+};
 }
-} // namespace DB

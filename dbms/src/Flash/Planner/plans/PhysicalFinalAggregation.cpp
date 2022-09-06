@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/FinalAggregatingBlockInputStream.h>
-#include <Transforms/FinalAggregateSource.h>
+#include <Transforms/FinalAggregateReader.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -36,10 +36,10 @@ const Block & PhysicalFinalAggregation::getSampleBlock() const
 void PhysicalFinalAggregation::transformImpl(DAGPipeline & pipeline, Context & /*context*/, size_t max_streams)
 {
     assert(pipeline.streams.empty() && pipeline.streams_with_non_joined_data.empty());
-    FinalAggregateSourcePtr source = std::make_shared<FinalAggregateSource>(aggregate_store);
+    FinalAggregateReaderPtr reader = std::make_shared<FinalAggregateReader>(aggregate_store);
     for (size_t i = 0; i < max_streams; ++i)
     {
-        pipeline.streams.push_back(std::make_shared<FinalAggregatingBlockInputStream>(source, log->identifier()));
+        pipeline.streams.push_back(std::make_shared<FinalAggregatingBlockInputStream>(reader, log->identifier()));
     }
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }

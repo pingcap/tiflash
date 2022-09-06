@@ -14,40 +14,29 @@
 
 #pragma once
 
-#include <Core/Block.h>
-#include <Interpreters/AggregateStore.h>
-
-#include <memory>
+#include <Transforms/Sink.h>
+#include <Interpreters/Join.h>
 
 namespace DB
 {
-class FinalAggregateSource
+class HashJoinBuildSink : public Sink
 {
 public:
-    FinalAggregateSource(
-        const AggregateStorePtr & agg_store_)
-        : agg_store(agg_store_)
-        , impl(agg_store->merge())
+    explicit HashJoinBuildSink(
+        const JoinPtr & join_)
+        : join(join_)
     {}
 
-    Block getHeader()
+    bool write(Block & block, size_t loop_id) override
     {
-        assert(impl);
-        return impl->getHeader();
-    }
-
-    Block read()
-    {
-        std::lock_guard<std::mutex> lock(mu);
-        assert(impl);
-        return impl->read();
+        if (!block)
+            return false;
+        
+        join->insertFromBlock(block, loop_id);
+        return true;
     }
 
 private:
-    AggregateStorePtr agg_store;
-    std::unique_ptr<IBlockInputStream> impl;
-    std::mutex mu;
+    JoinPtr join;
 };
-
-using FinalAggregateSourcePtr = std::shared_ptr<FinalAggregateSource>;
 }

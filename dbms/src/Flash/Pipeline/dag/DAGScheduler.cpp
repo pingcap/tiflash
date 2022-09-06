@@ -28,11 +28,9 @@ namespace DB
 DAGScheduler::DAGScheduler(
     Context & context_,
     const MPPTaskId & mpp_task_id_,
-    size_t max_streams_,
     const String & req_id)
     : context(context_)
     , mpp_task_id(mpp_task_id_)
-    , max_streams(max_streams_)
     , log(Logger::get("DAGScheduler", req_id))
     , task_scheduler(*context.getTMTContext().getMPPTaskManager()->getPipelineManager().task_scheduler)
 {}
@@ -130,7 +128,7 @@ void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)
 {
     assert(event.type == PipelineEventType::finish);
     auto pipeline = status_machine.getPipeline(event.pipeline_id);
-    --pipeline->active_task_num;
+    pipeline->finish(event.task_id);
     if (pipeline->active_task_num == 0)
     {
         status_machine.stateToComplete(event.pipeline_id);
@@ -151,7 +149,7 @@ void DAGScheduler::handlePipelineSubmit(const PipelineEvent & event)
 {
     assert(event.type == PipelineEventType::submit && event.pipeline);
     auto pipeline = event.pipeline;
-    auto tasks = pipeline->transform(context, max_streams);
+    auto tasks = pipeline->transform(context, task_scheduler.concurrency());
     task_scheduler.submit(tasks);
 }
 

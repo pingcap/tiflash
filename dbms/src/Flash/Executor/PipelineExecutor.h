@@ -29,7 +29,6 @@ public:
     PipelineExecutor(
         Context & context_,
         const PhysicalPlanNodePtr & plan_node_,
-        size_t max_streams,
         const String & req_id,
         std::shared_ptr<ProcessListEntry> process_list_entry_);
 

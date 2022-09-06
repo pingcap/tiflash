@@ -14,33 +14,40 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Common/ThreadManager.h>
-#include <Flash/Pipeline/task/EventLoop.h>
-#include <Flash/Mpp/MPPTaskId.h>
+#include <Core/Block.h>
+#include <Interpreters/AggregateStore.h>
 
-#include <functional>
+#include <memory>
 
 namespace DB
 {
-struct PipelineManager;
-
-class TaskScheduler
+class FinalAggregateReader
 {
 public:
-    TaskScheduler(PipelineManager & pipeline_manager_);
+    FinalAggregateReader(
+        const AggregateStorePtr & agg_store_)
+        : agg_store(agg_store_)
+        , impl(agg_store->merge())
+    {}
 
-    ~TaskScheduler();
+    Block getHeader()
+    {
+        assert(impl);
+        return impl->getHeader();
+    }
 
-    void submit(std::vector<PipelineTask> & tasks);
-
-    void cancel(UInt32 pipeline_id);
-
-    size_t concurrency() const;
+    Block read()
+    {
+        std::lock_guard<std::mutex> lock(mu);
+        assert(impl);
+        return impl->read();
+    }
 
 private:
-    std::vector<EventLoopPtr> event_loops;
-
-    std::shared_ptr<ThreadPoolManager> thread_pool_manager;
+    AggregateStorePtr agg_store;
+    std::unique_ptr<IBlockInputStream> impl;
+    std::mutex mu;
 };
-} // namespace DB
+
+using FinalAggregateReaderPtr = std::shared_ptr<FinalAggregateReader>;
+}

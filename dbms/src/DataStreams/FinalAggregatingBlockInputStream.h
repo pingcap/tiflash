@@ -16,7 +16,7 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Transforms/FinalAggregateSource.h>
+#include <Transforms/FinalAggregateReader.h>
 #include <Interpreters/AggregateStore.h>
 
 namespace DB
@@ -27,9 +27,9 @@ class FinalAggregatingBlockInputStream : public IProfilingBlockInputStream
 
 public:
     FinalAggregatingBlockInputStream(
-        const FinalAggregateSourcePtr & final_agg_source_,
+        const FinalAggregateReaderPtr & final_agg_reader_,
         const String & req_id)
-        : final_agg_source(final_agg_source_)
+        : final_agg_reader(final_agg_reader_)
         , log(Logger::get(NAME, req_id))
     {}
 
@@ -40,7 +40,7 @@ public:
 protected:
     Block readImpl() override;
 
-    FinalAggregateSourcePtr final_agg_source;
+    FinalAggregateReaderPtr final_agg_reader;
 
     const LoggerPtr log;    
 };

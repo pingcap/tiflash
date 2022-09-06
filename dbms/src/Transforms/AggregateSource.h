@@ -12,17 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Transforms/Source.h>
+#include <Transforms/FinalAggregateReader.h>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+class AggregateSource : public Source
 {
-    return final_agg_reader->getHeader();
-}
+public:
+    explicit AggregateSource(
+        const FinalAggregateReaderPtr & final_agg_reader_)
+        : final_agg_reader(final_agg_reader_)
+    {}
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+    Block read() override
+    {
+        return final_agg_reader->read();
+    }
+
+private:
+    FinalAggregateReaderPtr final_agg_reader;
+};
 }
-} // namespace DB

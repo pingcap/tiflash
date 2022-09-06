@@ -12,17 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Transforms/Transforms.h>
+#include <Interpreters/ExpressionActions.h>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+class ExpressionTransform : public Transform
 {
-    return final_agg_reader->getHeader();
-}
+public:
+    explicit ExpressionTransform(
+        const ExpressionActionsPtr & expression_)
+        : expression(expression_)
+    {}
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+    bool transform(Block & block) override
+    {
+        if (block)
+            expression->execute(block);
+        return true;
+    }
+
+private:
+    ExpressionActionsPtr expression;
+};
 }
-} // namespace DB

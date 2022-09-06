@@ -12,17 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Flash/Executor/ResultHandler.h>
+#include <Transforms/Sink.h>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+class ResultHandlerSink : public Sink
 {
-    return final_agg_reader->getHeader();
-}
+public:
+    ResultHandlerSink(
+        ResultHandler result_handler_)
+        : result_handler(result_handler_)
+    {}
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+    bool write(Block & block, size_t) override
+    {
+        if (!block)
+            return false;
+
+        static std::mutex mu;
+        {
+            std::lock_guard lock(mu);
+            result_handler(block);
+        }
+        return true;
+    }
+
+private:
+    ResultHandler result_handler;
+};
 }
-} // namespace DB

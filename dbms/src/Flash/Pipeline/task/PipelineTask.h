@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <DataStreams/IBlockInputStream.h>
+#include <Transforms/Transforms.h>
 #include <Flash/Mpp/MPPTaskId.h>
 
 namespace DB
@@ -48,18 +48,18 @@ public:
         UInt32 task_id_,
         UInt32 pipeline_id_,
         const MPPTaskId & mpp_task_id_,
-        const BlockInputStreamPtr & stream_)
+        const TransformsPtr & transforms_)
         : task_id(task_id_)
         , pipeline_id(pipeline_id_)
         , mpp_task_id(mpp_task_id_)
-        , stream(stream_)
+        , transforms(transforms_)
     {}
 
     PipelineTask(PipelineTask && task)
         : task_id(std::move(task.task_id))
         , pipeline_id(std::move(task.pipeline_id))
         , mpp_task_id(std::move(task.mpp_task_id))
-        , stream(std::move(task.stream))
+        , transforms(std::move(task.transforms))
         , status(std::move(task.status))
     {}
 
@@ -70,19 +70,19 @@ public:
             task_id = std::move(task.task_id);
             pipeline_id = std::move(task.pipeline_id);
             mpp_task_id = std::move(task.mpp_task_id);
-            stream = std::move(task.stream);
+            transforms = std::move(task.transforms);
             status = std::move(task.status);
         }
         return *this;
     }
 
-    PipelineTaskResult execute(size_t);
+    PipelineTaskResult execute(size_t loop_id);
 
 public:
     UInt32 task_id;
     UInt32 pipeline_id;
     MPPTaskId mpp_task_id;
-    BlockInputStreamPtr stream;
+    TransformsPtr transforms;
 
     PipelineTaskStatus status = PipelineTaskStatus::prepare;
 

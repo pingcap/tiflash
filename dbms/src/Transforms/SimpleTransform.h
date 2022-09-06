@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Transforms/Transforms.h>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+class SimpleTransform : public Transform
 {
-    return final_agg_reader->getHeader();
-}
+public:
+    SimpleTransform() {}
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+    bool transform(Block &) override {}
+};
 }
-} // namespace DB

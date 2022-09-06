@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Transforms/TransformsPipeline.h>
 #include <Flash/Pipeline/dag/Pipeline.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Interpreters/Context.h>
@@ -36,40 +36,40 @@ Pipeline::Pipeline(
     LOG_FMT_DEBUG(log, "pipeline plan node:\n{}", PhysicalPlanVisitor::visitToString(plan_node));
 }
 
-std::vector<PipelineTask> Pipeline::transform(Context & context, size_t max_streams)
+std::vector<PipelineTask> Pipeline::transform(Context & context, size_t concurrency)
 {
     assert(plan_node);
-    DAGPipeline pipeline;
-    plan_node->transform(pipeline, context, max_streams);
-    assert(pipeline.streams_with_non_joined_data.empty());
-    std::vector<PipelineTask> task;
-    for (const auto & stream : pipeline.streams)
+    TransformsPipeline pipeline(concurrency);
+    plan_node->transform(pipeline, context);
+
+    std::vector<PipelineTask> tasks;
+    for (const auto & transforms : pipeline.transforms_vec)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
-        {
-            p_stream->setProgressCallback(context.getProgressCallback());
-            p_stream->setProcessListElement(context.getProcessListElement());
-        }
-        task.emplace_back(active_task_num++, id, mpp_task_id, stream);
-        task_streams.push_back(stream);
+        tasks.emplace_back(active_task_num++, id, mpp_task_id, transforms);
+        task_transforms_vec.push_back(transforms);
     }
-    return task;
+    return tasks;
 }
 
 void Pipeline::cancel(bool is_kill)
 {
-    for (const auto & stream : task_streams)
+    for (const auto & transforms : task_transforms_vec)
     {
-        if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream.get()); p_stream)
-        {
-            p_stream->cancel(is_kill);
-        }
+        transforms->cancel(is_kill);
     }
-    task_streams.clear();
+    task_transforms_vec.clear();
+}
+
+void Pipeline::finish(size_t task_id)
+{
+    assert(active_task_num > 0);
+    assert(!task_transforms_vec.empty());
+    --active_task_num;
+    task_transforms_vec[task_id] = nullptr;
 }
 
 void Pipeline::finish()
 {
-    task_streams.clear();
+    task_transforms_vec.clear();
 }
 } // namespace DB

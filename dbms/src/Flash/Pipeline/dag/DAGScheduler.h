@@ -45,7 +45,6 @@ public:
     DAGScheduler(
         Context & context_,
         const MPPTaskId & mpp_task_id_,
-        size_t max_streams_,
         const String & req_id);
 
     // return <is_success, err_msg>
@@ -98,8 +97,6 @@ private:
     Context & context;
 
     MPPTaskId mpp_task_id;
-
-    size_t max_streams;
 
     LoggerPtr log;
 

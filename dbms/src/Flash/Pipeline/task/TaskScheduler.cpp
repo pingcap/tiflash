@@ -58,4 +58,9 @@ void TaskScheduler::submit(std::vector<PipelineTask> & tasks)
         next_loop().submit(std::move(task));
     }
 }
+
+size_t TaskScheduler::concurrency() const
+{
+    return event_loops.size();
+}
 }

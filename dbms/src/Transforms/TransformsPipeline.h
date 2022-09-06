@@ -12,17 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Transforms/Transforms.h>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+struct TransformsPipeline
 {
-    return final_agg_reader->getHeader();
-}
+    explicit TransformsPipeline(size_t concurrency)
+    {
+        transforms_vec.resize(concurrency);
+    }
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+    template <typename FF>
+    void transform(FF && ff)
+    {
+        for (const auto & transforms : transforms_vec)
+            ff(transforms);
+    }
+
+    std::vector<TransformsPtr> transforms_vec;
+};
 }
-} // namespace DB

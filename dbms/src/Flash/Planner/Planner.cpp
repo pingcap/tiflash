@@ -51,7 +51,6 @@ QueryExecutorPtr Planner::pipelineExecute(std::shared_ptr<ProcessListEntry> proc
     return std::make_shared<PipelineExecutor>(
         context,
         physical_plan.rootNode(),
-        max_streams,
         log->identifier(),
         process_list_entry);
 }

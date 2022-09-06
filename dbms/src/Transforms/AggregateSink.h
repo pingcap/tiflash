@@ -12,17 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Transforms/Sink.h>
+#include <Interpreters/AggregateStore.h>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+class AggregateSink : public Sink
 {
-    return final_agg_reader->getHeader();
-}
+public:
+    explicit AggregateSink(
+        const AggregateStorePtr & aggregate_store_)
+        : aggregate_store(aggregate_store_)
+    {}
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+    bool write(Block & block, size_t loop_id) override
+    {
+        if (!block)
+            return false;
+        aggregate_store->executeOnBlock(loop_id, block);
+        return block;
+    }
+
+private:
+    AggregateStorePtr aggregate_store;
+};
 }
-} // namespace DB

@@ -12,17 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/FinalAggregatingBlockInputStream.h>
+#pragma once
+
+#include <Core/Block.h>
+
+#include <memory>
 
 namespace DB
 {
-Block FinalAggregatingBlockInputStream::getHeader() const
+class Sink
 {
-    return final_agg_reader->getHeader();
-}
+public:
+    virtual ~Sink() = default;
+    virtual bool write(Block & block, size_t loop_id) = 0;
+};
 
-Block FinalAggregatingBlockInputStream::readImpl()
-{
-    return final_agg_reader->read();
+using SinkPtr = std::shared_ptr<Sink>;
 }
-} // namespace DB

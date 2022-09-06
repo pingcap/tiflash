@@ -27,12 +27,11 @@ namespace DB
 PipelineExecutor::PipelineExecutor(
     Context & context_,
     const PhysicalPlanNodePtr & plan_node_,
-    size_t max_streams,
     const String & req_id,
     std::shared_ptr<ProcessListEntry> process_list_entry_)
     : QueryExecutor()
     , process_list_entry(process_list_entry_)
-    , dag_scheduler(std::make_shared<DAGScheduler>(context_, context_.getDAGContext()->getMPPTaskId(), max_streams, req_id))
+    , dag_scheduler(std::make_shared<DAGScheduler>(context_, context_.getDAGContext()->getMPPTaskId(), req_id))
     , plan_node(plan_node_)
     , context(context_)
 {
