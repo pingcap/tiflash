@@ -155,7 +155,7 @@ void PhysicalProjection::transform(TransformsPipeline & pipeline, Context & cont
 {
     child->transform(pipeline, context);
 
-    pipeline.transform([&](auto & transforms) { 
+    pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(project_actions));
     });
 }

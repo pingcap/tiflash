@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Flash/Planner/PhysicalPlanNode.h>
 #include <Flash/Pipeline/task/PipelineTask.h>
+#include <Flash/Planner/PhysicalPlanNode.h>
 #include <Transforms/Transforms.h>
 
 #include <unordered_set>

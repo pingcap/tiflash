@@ -47,4 +47,4 @@ void PipelineManager::unregisterDAGScheduler(const MPPTaskId & mpp_task_id)
         dag_scheduler_map.erase(dag_it);
     }
 }
-}
+} // namespace DB

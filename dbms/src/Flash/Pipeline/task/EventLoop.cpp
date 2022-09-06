@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/task/EventLoop.h>
 #include <Flash/Pipeline/PipelineManager.h>
 #include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Pipeline/dag/Event.h>
+#include <Flash/Pipeline/task/EventLoop.h>
 
 namespace DB
 {

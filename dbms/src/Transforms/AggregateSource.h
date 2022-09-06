@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Transforms/Source.h>
 #include <Transforms/FinalAggregateReader.h>
+#include <Transforms/Source.h>
 
 namespace DB
 {
@@ -35,4 +35,4 @@ public:
 private:
     FinalAggregateReaderPtr final_agg_reader;
 };
-}
+} // namespace DB

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Transforms/FilterTransform.h>
-#include <Columns/FilterDescription.h>
-#include <Common/typeid_cast.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/FilterDescription.h>
+#include <Common/typeid_cast.h>
+#include <Transforms/FilterTransform.h>
 
 namespace DB
 {
@@ -54,10 +54,10 @@ bool FilterTransform::transform(Block & block)
     {
         return false;
     }
-    
+
     if (constant_filter_description.always_true)
         return true;
-    
+
     expression->execute(block);
 
     size_t columns = block.columns();
@@ -70,7 +70,7 @@ bool FilterTransform::transform(Block & block)
         * For example, `ignore` function.
         */
     constant_filter_description = ConstantFilterDescription(*column_of_filter);
-    
+
     if (constant_filter_description.always_false)
     {
         return false;
@@ -78,7 +78,7 @@ bool FilterTransform::transform(Block & block)
 
     IColumn::Filter * filter;
     ColumnPtr filter_holder;
-    
+
     if (constant_filter_description.always_true)
     {
         return true;
@@ -159,4 +159,4 @@ bool FilterTransform::transform(Block & block)
 
     return true;
 }
-}
+} // namespace DB

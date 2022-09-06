@@ -111,7 +111,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             aggregate_store);
         physical_partial_agg->notTiDBOperator();
         physical_partial_agg->disableRestoreConcurrency();
-    
+
         auto physical_final_agg = std::make_shared<PhysicalFinalAggregation>(
             executor_id,
             schema,
@@ -119,7 +119,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             aggregate_store,
             expr_after_agg_actions);
         physical_partial_agg->disableRestoreConcurrency();
-    
+
         auto physical_agg = std::make_shared<PhysicalPipelineAggregation>(
             executor_id,
             schema,

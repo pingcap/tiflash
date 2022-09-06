@@ -16,8 +16,8 @@
 
 #include <Common/Exception.h>
 #include <Core/Block.h>
-#include <Transforms/Source.h>
 #include <Transforms/Sink.h>
+#include <Transforms/Source.h>
 
 #include <atomic>
 #include <memory>
@@ -101,4 +101,4 @@ private:
     std::atomic<bool> is_killed{false};
 };
 using TransformsPtr = std::shared_ptr<Transforms>;
-}
+} // namespace DB

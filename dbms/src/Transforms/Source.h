@@ -28,4 +28,4 @@ public:
 };
 
 using SourcePtr = std::shared_ptr<Source>;
-}
+} // namespace DB

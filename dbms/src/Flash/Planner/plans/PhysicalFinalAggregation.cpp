@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #include <DataStreams/FinalAggregatingBlockInputStream.h>
-#include <Transforms/FinalAggregateReader.h>
-#include <Transforms/TransformsPipeline.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalFinalAggregation.h>
 #include <Interpreters/Context.h>
 #include <Transforms/AggregateSource.h>
+#include <Transforms/FinalAggregateReader.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -49,8 +49,8 @@ void PhysicalFinalAggregation::transformImpl(DAGPipeline & pipeline, Context & /
 void PhysicalFinalAggregation::transform(TransformsPipeline & pipeline, Context & /*context*/)
 {
     auto reader = std::make_shared<FinalAggregateReader>(aggregate_store);
-    pipeline.transform([&](auto & transforms) { 
-        transforms->set(std::make_shared<AggregateSource>(reader)); 
+    pipeline.transform([&](auto & transforms) {
+        transforms->set(std::make_shared<AggregateSource>(reader));
     });
 }
 

@@ -421,7 +421,7 @@ void MPPTask::runImpl()
                 receiver_set->close();
                 // finish MPPTunnel
                 finishWrite();
-    
+
                 const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
                 LOG_FMT_DEBUG(
                     log,

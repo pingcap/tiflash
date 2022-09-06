@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Transforms/Sink.h>
 #include <Interpreters/AggregateStore.h>
+#include <Transforms/Sink.h>
 
 namespace DB
 {
@@ -38,4 +38,4 @@ public:
 private:
     AggregateStorePtr aggregate_store;
 };
-}
+} // namespace DB

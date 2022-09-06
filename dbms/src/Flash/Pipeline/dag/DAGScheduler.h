@@ -17,11 +17,11 @@
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Flash/Executor/ResultHandler.h>
+#include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Pipeline/dag/Event.h>
 #include <Flash/Pipeline/dag/Pipeline.h>
 #include <Flash/Pipeline/dag/PipelineStatusMachine.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
-#include <Flash/Mpp/MPPTaskId.h>
 
 #include <memory>
 

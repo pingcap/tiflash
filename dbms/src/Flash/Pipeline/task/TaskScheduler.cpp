@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/task/TaskScheduler.h>
 #include <Interpreters/Context.h>
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
 
 namespace DB
 {
@@ -63,4 +63,4 @@ size_t TaskScheduler::concurrency() const
 {
     return event_loops.size();
 }
-}
+} // namespace DB

@@ -36,4 +36,4 @@ struct TransformsPipeline
 
     std::vector<TransformsPtr> transforms_vec;
 };
-}
+} // namespace DB

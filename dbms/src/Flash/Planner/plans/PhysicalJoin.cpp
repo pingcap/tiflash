@@ -191,7 +191,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
             build_side_prepare_actions);
         physical_join_build->notTiDBOperator();
         physical_join_build->disableRestoreConcurrency();
-    
+
         auto physical_join_probe = std::make_shared<PhysicalJoinProbe>(
             executor_id,
             join_output_schema,
@@ -202,7 +202,7 @@ PhysicalPlanNodePtr PhysicalJoin::build(
             probe_side_prepare_actions,
             is_tiflash_right_join,
             Block(join_output_schema));
-    
+
         auto physical_join = std::make_shared<PhysicalPipelineJoin>(
             executor_id,
             join_output_schema,

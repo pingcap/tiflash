@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Pipeline/dag/PhysicalResultHandler.h>
+#include <Flash/Pipeline/task/TaskScheduler.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
+#include <Flash/Planner/plans/PhysicalJoinProbe.h>
 #include <Flash/Planner/plans/PhysicalPipelineAggregation.h>
 #include <Flash/Planner/plans/PhysicalPipelineJoin.h>
-#include <Flash/Planner/plans/PhysicalJoinProbe.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <Flash/Mpp/MPPTaskManager.h>
-#include <Flash/Pipeline/task/TaskScheduler.h>
 
 namespace DB
 {

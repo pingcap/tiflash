@@ -68,8 +68,8 @@ void PhysicalFilter::transform(TransformsPipeline & pipeline, Context & context)
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<FilterTransform>(
             input_block,
-            before_filter_actions, 
-            filter_column)); 
+            before_filter_actions,
+            filter_column));
     });
 }
 

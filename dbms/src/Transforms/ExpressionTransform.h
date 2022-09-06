@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Transforms/Transforms.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Transforms/Transforms.h>
 
 namespace DB
 {
@@ -37,4 +37,4 @@ public:
 private:
     ExpressionActionsPtr expression;
 };
-}
+} // namespace DB

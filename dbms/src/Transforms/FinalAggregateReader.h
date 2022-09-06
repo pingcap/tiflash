@@ -50,4 +50,4 @@ private:
 };
 
 using FinalAggregateReaderPtr = std::shared_ptr<FinalAggregateReader>;
-}
+} // namespace DB

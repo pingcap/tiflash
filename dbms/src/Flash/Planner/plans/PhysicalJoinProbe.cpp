@@ -38,11 +38,11 @@
 #include <Flash/Planner/plans/PhysicalJoinProbe.h>
 #include <Flash/Planner/plans/PhysicalNonJoinProbe.h>
 #include <Interpreters/Context.h>
-#include <common/logger_useful.h>
-#include <fmt/format.h>
 #include <Transforms/ExpressionTransform.h>
 #include <Transforms/HashJoinProbeTransform.h>
 #include <Transforms/TransformsPipeline.h>
+#include <common/logger_useful.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -99,14 +99,14 @@ void PhysicalJoinProbe::transform(TransformsPipeline & pipeline, Context & conte
 {
     child->transform(pipeline, context);
 
-    pipeline.transform([&](auto & transforms) { 
+    pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(probe_side_prepare_actions));
     });
 
     assert(!has_non_joined);
     auto join_probe_actions = PhysicalPlanHelper::newActions(probe_side_prepare_actions->getSampleBlock(), context);
     join_probe_actions->add(ExpressionAction::ordinaryJoin(join_ptr, columns_added_by_join));
-    pipeline.transform([&](auto & transforms) { 
+    pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<HashJoinProbeTransform>(probe_side_prepare_actions));
     });
     // todo
@@ -114,7 +114,7 @@ void PhysicalJoinProbe::transform(TransformsPipeline & pipeline, Context & conte
     // for (auto & c : schema)
     //     schema_project_cols.emplace_back(c.name, c.name);
     // ExpressionActionsPtr schema_project = generateProjectExpressionActions(probe_side_prepare_header, context, schema_project_cols);
-    // pipeline.transform([&](auto & transforms) { 
+    // pipeline.transform([&](auto & transforms) {
     //     transforms->append(std::make_shared<ExpressionTransform>(schema_project));
     // });
 }

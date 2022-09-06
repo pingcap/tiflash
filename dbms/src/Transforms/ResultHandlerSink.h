@@ -43,4 +43,4 @@ public:
 private:
     ResultHandler result_handler;
 };
-}
+} // namespace DB

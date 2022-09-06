@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <Transforms/Transforms.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Core/Block.h>
-#include <common/types.h>
 #include <Columns/FilterDescription.h>
+#include <Core/Block.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Transforms/Transforms.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -39,4 +39,4 @@ private:
 
     ConstantFilterDescription constant_filter_description;
 };
-}
+} // namespace DB

@@ -13,10 +13,10 @@
 // limitations under the License.
 
 #include <Flash/Coprocessor/InterpreterUtils.h>
-#include <Transforms/TransformsPipeline.h>
 #include <Flash/Pipeline/dag/Pipeline.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Interpreters/Context.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {

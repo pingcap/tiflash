@@ -28,4 +28,4 @@ public:
 };
 
 using SinkPtr = std::shared_ptr<Sink>;
-}
+} // namespace DB

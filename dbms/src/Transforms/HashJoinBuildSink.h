@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Transforms/Sink.h>
 #include <Interpreters/Join.h>
+#include <Transforms/Sink.h>
 
 namespace DB
 {
@@ -31,7 +31,7 @@ public:
     {
         if (!block)
             return false;
-        
+
         join->insertFromBlock(block, loop_id);
         return true;
     }
@@ -39,4 +39,4 @@ public:
 private:
     JoinPtr join;
 };
-}
+} // namespace DB

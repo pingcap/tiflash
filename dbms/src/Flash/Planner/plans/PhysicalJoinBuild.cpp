@@ -37,11 +37,11 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalJoinBuild.h>
 #include <Interpreters/Context.h>
-#include <common/logger_useful.h>
-#include <fmt/format.h>
 #include <Transforms/ExpressionTransform.h>
 #include <Transforms/HashJoinBuildSink.h>
 #include <Transforms/TransformsPipeline.h>
+#include <common/logger_useful.h>
+#include <fmt/format.h>
 
 namespace DB
 {
@@ -80,9 +80,9 @@ void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & conte
 {
     child->transform(pipeline, context);
 
-    pipeline.transform([&](auto & transforms) { 
+    pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(build_side_prepare_actions));
-        transforms->set(std::make_shared<HashJoinBuildSink>(join_ptr)); 
+        transforms->set(std::make_shared<HashJoinBuildSink>(join_ptr));
     });
     if (!join_ptr->initialized)
     {

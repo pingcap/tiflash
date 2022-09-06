@@ -14,11 +14,11 @@
 
 #pragma once
 
-#include <Flash/Pipeline/task/TaskScheduler.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Pipeline/task/TaskScheduler.h>
 
-#include <unordered_map>
 #include <memory>
+#include <unordered_map>
 
 namespace DB
 {
@@ -43,4 +43,4 @@ struct PipelineManager
 };
 
 using PipelineManagerPtr = std::unique_ptr<PipelineManager>;
-}
+} // namespace DB

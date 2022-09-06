@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Transforms/Source.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Transforms/Source.h>
 
 namespace DB
 {
@@ -35,4 +35,4 @@ public:
 private:
     BlockInputStreamPtr impl;
 };
-}
+} // namespace DB

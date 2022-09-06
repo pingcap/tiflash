@@ -34,11 +34,11 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/plans/PhysicalNonJoinProbe.h>
 #include <Interpreters/Context.h>
+#include <Transforms/ExpressionTransform.h>
+#include <Transforms/NonJoinedProbeSource.h>
+#include <Transforms/TransformsPipeline.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
-#include <Transforms/NonJoinedProbeSource.h>
-#include <Transforms/ExpressionTransform.h>
-#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -75,7 +75,7 @@ void PhysicalNonJoinProbe::transform(TransformsPipeline & pipeline, Context & co
     // for (auto & c : schema)
     //     schema_project_cols.emplace_back(c.name, c.name);
     // ExpressionActionsPtr schema_project = generateProjectExpressionActions(probe_side_prepare_header, context, schema_project_cols);
-    // pipeline.transform([&](auto & transforms) { 
+    // pipeline.transform([&](auto & transforms) {
     //     transforms->append(std::make_shared<ExpressionTransform>(schema_project));
     // });
 }

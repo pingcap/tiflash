@@ -16,8 +16,8 @@
 
 #include <Common/Logger.h>
 #include <Common/ThreadManager.h>
-#include <Flash/Pipeline/task/EventLoop.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Pipeline/task/EventLoop.h>
 
 #include <functional>
 

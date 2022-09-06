@@ -16,8 +16,8 @@
 
 #include <Common/Logger.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Transforms/FinalAggregateReader.h>
 #include <Interpreters/AggregateStore.h>
+#include <Transforms/FinalAggregateReader.h>
 
 namespace DB
 {
@@ -42,6 +42,6 @@ protected:
 
     FinalAggregateReaderPtr final_agg_reader;
 
-    const LoggerPtr log;    
+    const LoggerPtr log;
 };
 } // namespace DB
