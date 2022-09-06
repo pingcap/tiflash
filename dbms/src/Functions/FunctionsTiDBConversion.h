@@ -1319,7 +1319,7 @@ public:
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
-        SqlMode sqlMode{context.getDAGContext()->allowZeroInDate(), context.getDAGContext()->allowInvalidDate()};
+        SqlMode sql_mode{context.getDAGContext()->allowZeroInDate(), context.getDAGContext()->allowInvalidDate()};
 
         int to_fsp [[maybe_unused]] = 0;
         if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
@@ -1433,7 +1433,7 @@ public:
             for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
-                bool is_null = numberToDateTime(vec_from[i], datetime, sqlMode);
+                bool is_null = numberToDateTime(vec_from[i], datetime, sql_mode);
 
                 if (is_null)
                 {
@@ -1470,7 +1470,7 @@ public:
                 // Convert to string and then parse to time
                 String value_str = toString(value);
 
-                Field packed_uint_value = parseMyDateTimeFromFloat(value_str, 0, true, sqlMode);
+                Field packed_uint_value = parseMyDateTimeFromFloat(value_str, 0, true, sql_mode);
 
                 if (packed_uint_value.isNull())
                 {
@@ -1503,7 +1503,7 @@ public:
             {
                 String value_str = vec_from[i].toString(type.getScale());
 
-                Field value = parseMyDateTimeFromFloat(value_str, 0, true, sqlMode);
+                Field value = parseMyDateTimeFromFloat(value_str, 0, true, sql_mode);
 
                 if (value.getType() == Field::Types::Null)
                 {

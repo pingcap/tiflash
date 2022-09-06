@@ -1238,7 +1238,7 @@ bool MyTimeBase::isValid(bool allow_zero_in_date, bool allow_invalid_date) const
         }
     }
 
-    if (year > 9999 || month > 12)
+    if (year >= 9999 || month > 12)
     {
         return false;
     }
