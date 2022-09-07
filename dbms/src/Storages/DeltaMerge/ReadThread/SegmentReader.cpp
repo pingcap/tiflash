@@ -70,7 +70,7 @@ private:
         if (ret != 0)
         {
             // It can be failed due to some CPU core cannot access, such as CPU offline.
-            LOG_FMT_ERROR(log, "sched_setaffinity cpus {} fail: {}", cpus, std::strerror(errno));
+            LOG_FMT_WARNING(log, "sched_setaffinity cpus {} fail: {}", cpus, std::strerror(errno));
         }
         else
         {
