@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
@@ -53,7 +54,6 @@
 #include <common/logger_useful.h>
 
 #include <random>
-#include "Common/Exception.h"
 
 namespace DB
 {
