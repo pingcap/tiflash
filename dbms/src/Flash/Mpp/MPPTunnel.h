@@ -302,7 +302,6 @@ private:
     DataPacketMPMCQueuePtr send_queue;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
-
     TunnelSenderMode mode; // Tunnel transfer data mode
     TunnelSenderPtr tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience
     // According to mode value, among the sync/async/local_tunnel_senders, only the responding sender is not null and do actual work
