@@ -4458,12 +4458,17 @@ private:
         auto & col_res_data = col_res->getChars();
         auto & col_res_offsets = col_res->getOffsets();
         col_res_data.reserve(c0_col_column->size());
+        col_res_offsets.reserve(c0_col_column->size());
         col_res_offsets.resize(c0_col_column->size());
 
 
         if (c0_col_column->isColumnConst())
         {
             const ColumnConst * col_const_space_num = checkAndGetColumnConst<ColumnVector<IntType>>(c0_col_column.get());
+            if (col_const_space_num == nullptr)
+            {
+                return false;
+            }
             auto space_num_values = col_const_space_num->getValue<IntType>();
             Int64 space_num = accurate::lessOp(INT64_MAX, space_num_values) ? INT64_MAX : space_num_values;
             executeConst(space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
@@ -4477,7 +4482,6 @@ private:
             }
             executeVector(col_vector_space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
         }
-
 
         block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
         return true;
