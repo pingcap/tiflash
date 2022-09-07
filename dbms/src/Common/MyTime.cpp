@@ -554,7 +554,7 @@ const String & MyTimeBase::monthName() const
 
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
-    if (year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59)
+    if (year > 9999 || month < 0 || month > 12 || day < 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
     {
         return false;
     }
