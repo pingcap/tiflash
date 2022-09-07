@@ -90,6 +90,7 @@ execute_process(
 # grep - Normally, the exit status is 0 if selected lines are found and 1 otherwise. But the exit status is 2 if an error occurred.
 if (HAVE_APPLY_PATCH EQUAL 1)
   message(STATUS "grpc patch not apply: ${HAVE_APPLY_PATCH}, patching...")
+  # update the patch using `git format-patch` if you upgrade grpc
   set (GRPC_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/grpc-cmake/0001-disable-tcp-set-inq-debug-message.patch")
   # apply the patch
   execute_process(
