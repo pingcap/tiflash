@@ -27,37 +27,9 @@ namespace DB::tests
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath(const std::string_view test_case = "")
-    {
-        String path = "./tmp/";
-        if (!test_case.empty())
-            path += std::string(test_case);
+    static String getTemporaryPath(const std::string_view test_case = "", bool get_abs = true);
 
-        return Poco::Path(path).absolute().toString();
-    }
-
-    static void tryRemovePath(const std::string & path, bool recreate = false)
-    {
-        try
-        {
-            // drop the data on disk
-            Poco::File p(path);
-            if (p.exists())
-            {
-                p.remove(true);
-            }
-
-            // re-create empty directory for testing
-            if (recreate)
-            {
-                p.createDirectories();
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
-        }
-    }
+    static void tryRemovePath(const std::string & path, bool recreate = false);
 
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
     {

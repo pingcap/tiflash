@@ -245,6 +245,8 @@ public:
             return "BackgroundThreadPool";
         case Foreground:
             return "Foreground";
+        case ForegroundRPC:
+            return "ForegroundRPC";
         case BackgroundGCThread:
             return "BackgroundGCThread";
         default:
