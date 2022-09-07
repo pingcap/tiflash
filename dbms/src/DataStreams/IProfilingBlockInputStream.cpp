@@ -22,14 +22,14 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TOO_MANY_ROWS;
-    extern const int TOO_MANY_BYTES;
-    extern const int TOO_MANY_ROWS_OR_BYTES;
-    extern const int TIMEOUT_EXCEEDED;
-    extern const int TOO_SLOW;
-    extern const int LOGICAL_ERROR;
-    extern const int BLOCKS_HAVE_DIFFERENT_STRUCTURE;
-}
+extern const int TOO_MANY_ROWS;
+extern const int TOO_MANY_BYTES;
+extern const int TOO_MANY_ROWS_OR_BYTES;
+extern const int TIMEOUT_EXCEEDED;
+extern const int TOO_SLOW;
+extern const int LOGICAL_ERROR;
+extern const int BLOCKS_HAVE_DIFFERENT_STRUCTURE;
+} // namespace ErrorCodes
 
 
 IProfilingBlockInputStream::IProfilingBlockInputStream()
@@ -43,21 +43,74 @@ Block IProfilingBlockInputStream::read()
     return read(filter, false);
 }
 
+void IProfilingBlockInputStream::process1()
+{
+    if (total_rows_approx)
+    {
+        progressImpl(Progress(0, 0, total_rows_approx));
+        total_rows_approx = 0;
+    }
+
+    if (!info.started)
+    {
+        info.total_stopwatch.start();
+        info.started = true;
+    }
+}
+
+void IProfilingBlockInputStream::process2(FilterPtr & res_filter, Block & res, bool return_filter)
+{
+    if (!limit_exceeded_need_break)
+    {
+        if (return_filter)
+            res = readImpl(res_filter, return_filter);
+        else
+            res = readImpl();
+    }
+}
+
+void IProfilingBlockInputStream::process3(Block & res)
+{
+    if (res)
+    {
+        info.update(res);
+
+        if (enabled_extremes)
+            updateExtremes(res);
+
+        if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
+            limit_exceeded_need_break = true;
+
+        if (quota != nullptr)
+            checkQuota(res);
+    }
+    else
+    {
+        /** If the thread is over, then we will ask all children to abort the execution.
+          * This makes sense when running a query with LIMIT
+          * - there is a situation when all the necessary data has already been read,
+          *   but children sources are still working,
+          *   herewith they can work in separate threads or even remotely.
+          */
+        cancel(false);
+    }
+}
+void IProfilingBlockInputStream::process4(Block & res)
+{
+    progress(Progress(res.rows(), res.bytes()));
+
+#ifndef NDEBUG
+    if (res)
+    {
+        Block header = getHeader();
+        if (header)
+            assertBlocksHaveEqualStructure(res, header, getName());
+    }
+#endif
+}
+
 Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
-    auto process1 = [&] {
-        if (total_rows_approx)
-        {
-            progressImpl(Progress(0, 0, total_rows_approx));
-            total_rows_approx = 0;
-        }
-
-        if (!info.started)
-        {
-            info.total_stopwatch.start();
-            info.started = true;
-        }
-    };
     process1();
 
     Block res;
@@ -70,61 +123,13 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     if (!checkTimeLimit())
         limit_exceeded_need_break = true;
 
+    process2(res_filter, res, return_filter);
 
-    auto process3 = [&] {
-        if (!limit_exceeded_need_break)
-        {
-            if (return_filter)
-                res = readImpl(res_filter, return_filter);
-            else
-                res = readImpl();
-        }
-    };
     process3();
 
-    auto process4 = [&] {
-        if (res)
-        {
-            info.update(res);
-
-            if (enabled_extremes)
-                updateExtremes(res);
-
-            if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
-                limit_exceeded_need_break = true;
-
-            if (quota != nullptr)
-                checkQuota(res);
-        }
-        else
-        {
-            /** If the thread is over, then we will ask all children to abort the execution.
-          * This makes sense when running a query with LIMIT
-          * - there is a situation when all the necessary data has already been read,
-          *   but children sources are still working,
-          *   herewith they can work in separate threads or even remotely.
-          */
-            cancel(false);
-        }
-    };
     process4();
 
-
-    auto process5 = [&] {
-        progress(Progress(res.rows(), res.bytes()));
-
-#ifndef NDEBUG
-        if (res)
-        {
-            Block header = getHeader();
-            if (header)
-                assertBlocksHaveEqualStructure(res, header, getName());
-        }
-#endif
-
-        info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
-    };
-    process5();
+    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
 
     return res;
 }
