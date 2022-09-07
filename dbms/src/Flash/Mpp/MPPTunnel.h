@@ -286,6 +286,11 @@ private:
 
     void waitForSenderFinish(bool allow_throw);
 
+    MemoryTracker * getMemTracker()
+    {
+        return mem_tracker ? mem_tracker.get() : nullptr;
+    }
+
     std::shared_ptr<std::mutex> mu;
     std::condition_variable cv_for_status_changed;
 
