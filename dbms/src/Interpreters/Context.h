@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/TiFlashSecurity.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
@@ -209,6 +210,10 @@ public:
     void setConfig(const ConfigurationPtr & config);
     Poco::Util::AbstractConfiguration & getConfigRef() const;
 
+    /// Security configuration settings.
+    void setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
+    TiFlashSecurityConfig & getSecurityConfig();
+
     /** Take the list of users, quotas and configuration profiles from this config.
       * The list of users is completely replaced.
       * The accumulated quota values are not reset if the quota is not deleted.
@@ -393,6 +398,7 @@ public:
     BackgroundProcessingPool & getBlockableBackgroundPool();
 
     void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
+    void updateTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();

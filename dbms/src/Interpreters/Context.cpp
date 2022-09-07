@@ -48,6 +48,7 @@
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
+#include <Server/RaftConfigParser.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -129,6 +130,7 @@ struct ContextShared
     String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
     PathPool path_pool; /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config; /// Global configuration settings.
+    TiFlashSecurityConfig security_config; /// Security configuration settings.
 
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
@@ -569,6 +571,25 @@ ConfigurationPtr Context::getUsersConfig()
 {
     auto lock = getLock();
     return shared->users_config;
+}
+
+void Context::setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
+{
+    auto lock = getLock();
+    auto security_config = TiFlashSecurityConfig(config, log);
+    if (shared->security_config.shouldUpdate(security_config))
+    {
+        shared->security_config = security_config;
+        auto raft_config = TiFlashRaftConfig::parseSettings(config, log);
+        auto cluster_config = security_config.getClusterConfig(raft_config);
+        global_context->updateTMTContext(raft_config, std::move(cluster_config));
+    }
+}
+
+TiFlashSecurityConfig & Context::getSecurityConfig()
+{
+    auto lock = getLock();
+    return shared->security_config;
 }
 
 void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
@@ -1396,6 +1417,12 @@ void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::C
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
+}
+
+void Context::updateTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config)
+{
+    auto lock = getLock();
     shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config);
 }
 

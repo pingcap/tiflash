@@ -285,17 +285,6 @@ struct TiFlashProxyConfig
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
 
-pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_config, const TiFlashRaftConfig & raft_config)
-{
-    pingcap::ClusterConfig config;
-    config.tiflash_engine_key = raft_config.engine_key;
-    config.tiflash_engine_value = raft_config.engine_value;
-    config.ca_path = security_config.ca_path;
-    config.cert_path = security_config.cert_path;
-    config.key_path = security_config.key_path;
-    return config;
-}
-
 LoggerPtr grpc_log;
 
 void printGRPCLog(gpr_log_func_args * args)
@@ -526,7 +515,7 @@ public:
         , server_pool(1, server.config().getUInt("max_connections", 1024))
     {
         auto & config = server.config();
-        auto & security_config = server.security_config;
+        auto & security_config = server.global_context->getSecurityConfig();
 
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
@@ -969,7 +958,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// ===== Paths related configuration initialized end ===== ///
 
-    security_config = TiFlashSecurityConfig(config(), log);
+    global_context->setSecurityConfig(config(), log);
+    auto & security_config = global_context->getSecurityConfig();
     Redact::setRedactLog(security_config.redact_info_log);
 
     // Create directories for 'path' and for default database, if not exist.
@@ -1151,7 +1141,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(security_config, raft_config);
+        auto cluster_config = security_config.getClusterConfig(raft_config);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
@@ -1250,7 +1240,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), this->security_config, raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), this->context().getSecurityConfig(), raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);

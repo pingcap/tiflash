@@ -30,7 +30,7 @@ extern const int INVALID_CONFIG_PARAMETER;
 } // namespace ErrorCodes
 
 /// Load raft related configs.
-TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log)
 {
     TiFlashRaftConfig res;
     res.flash_server_addr = config.getString("flash.service_addr", "0.0.0.0:3930");

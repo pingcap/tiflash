@@ -40,8 +40,6 @@ public:
         return BaseDaemon::config();
     }
 
-    const TiFlashSecurityConfig & securityConfig() const override { return security_config; };
-
     Poco::Logger & logger() const override
     {
         return BaseDaemon::logger();
@@ -68,8 +66,6 @@ protected:
 
 private:
     std::unique_ptr<Context> global_context;
-
-    TiFlashSecurityConfig security_config;
 
     ServerInfo server_info;
 
