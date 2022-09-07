@@ -50,6 +50,7 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     /// Singly-linked list. All information will be passed to subsequent memory trackers also (it allows to implement trackers hierarchy).
     /// In terms of tree nodes it is the list of parents. Lifetime of these trackers should "include" lifetime of current tracker.
     std::atomic<MemoryTracker *> next{};
+    std::shared_ptr<MemoryTracker> next_holder; // hold this to prevent next Memtracker from being released
 
     /// You could specify custom metric to track memory usage.
     CurrentMetrics::Metric metric = CurrentMetrics::MemoryTracking;
@@ -109,7 +110,11 @@ public:
     void setAccuracyDiffForTest(double value) { accuracy_diff_for_test = value; }
 
     /// next should be changed only once: from nullptr to some value.
-    void setNext(MemoryTracker * elem) { next.store(elem, std::memory_order_relaxed); }
+    void setNext(MemoryTracker * elem)
+    {
+        next.store(elem, std::memory_order_relaxed);
+        next_holder = elem ? elem->shared_from_this() : nullptr;
+    }
 
     /// The memory consumption could be shown in realtime via CurrentMetrics counter
     void setMetric(CurrentMetrics::Metric metric_) { metric = metric_; }
