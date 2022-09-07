@@ -310,7 +310,6 @@ StringRef MPPTunnel::statusToString()
 void MPPTunnel::updateMemTracker()
 {
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
-    ;
 }
 
 void TunnelSender::consumerFinish(const String & msg)
