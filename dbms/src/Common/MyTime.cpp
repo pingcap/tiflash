@@ -561,7 +561,7 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     return day <= getLastDay(year, month);
 }
 
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool need_check_time_valid, bool ignore_zero_date)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
@@ -820,7 +820,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
     }
 
-    if (needCheckTimeValid && !checkTimeValid(year, month, day, hour, minute, second))
+    if ((need_check_time_valid && !checkTimeValid(year, month, day, hour, minute, second)) || (!ignore_zero_date && (month == 0 || day == 0))
     {
         return {Field(), is_date};
     }
@@ -863,9 +863,9 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 }
 
 // TODO: support parse time from float string
-Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
+Field parseMyDateTime(const String & str, int8_t fsp, bool need_check_time_valid, bool ignore_zero_date)
 {
-    return parseMyDateTimeAndJudgeIsDate(str, fsp, needCheckTimeValid).first;
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, need_check_time_valid, ignore_zero_date).first;
 }
 
 String MyDateTime::toString(int fsp) const
