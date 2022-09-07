@@ -361,6 +361,24 @@ try
         MockComputeServerManager::instance().cancelQuery(start_ts2);
         EXPECT_TRUE(assertQueryCancelled(start_ts2));
     }
+
+    // start 10 queries
+    {
+        std::vector<std::tuple<size_t, std::vector<BlockInputStreamPtr>>> queries;
+        for (size_t i = 0; i < 10; ++i)
+        {
+            queries.push_back(prepareMPPStreams(context
+                                                    .scan("test_db", "l_table")
+                                                    .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})));
+        }
+        for (size_t i = 0; i < 10; ++i)
+        {
+            auto start_ts = std::get<0>(queries[i]);
+            EXPECT_TRUE(assertQueryActive(start_ts));
+            MockComputeServerManager::instance().cancelQuery(start_ts);
+            EXPECT_TRUE(assertQueryCancelled(start_ts));
+        }
+    }
 }
 CATCH
 } // namespace tests
