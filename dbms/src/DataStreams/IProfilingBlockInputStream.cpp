@@ -45,17 +45,20 @@ Block IProfilingBlockInputStream::read()
 
 Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filter)
 {
-    if (total_rows_approx)
-    {
-        progressImpl(Progress(0, 0, total_rows_approx));
-        total_rows_approx = 0;
-    }
+    auto process1 = [&] {
+        if (total_rows_approx)
+        {
+            progressImpl(Progress(0, 0, total_rows_approx));
+            total_rows_approx = 0;
+        }
 
-    if (!info.started)
-    {
-        info.total_stopwatch.start();
-        info.started = true;
-    }
+        if (!info.started)
+        {
+            info.total_stopwatch.start();
+            info.started = true;
+        }
+    };
+    process1();
 
     Block res;
 
@@ -67,50 +70,62 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
     if (!checkTimeLimit())
         limit_exceeded_need_break = true;
 
-    if (!limit_exceeded_need_break)
-    {
-        if (return_filter)
-            res = readImpl(res_filter, return_filter);
+
+    auto process3 = [&] {
+        if (!limit_exceeded_need_break)
+        {
+            if (return_filter)
+                res = readImpl(res_filter, return_filter);
+            else
+                res = readImpl();
+        }
+    };
+    process3();
+
+    auto process4 = [&] {
+        if (res)
+        {
+            info.update(res);
+
+            if (enabled_extremes)
+                updateExtremes(res);
+
+            if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
+                limit_exceeded_need_break = true;
+
+            if (quota != nullptr)
+                checkQuota(res);
+        }
         else
-            res = readImpl();
-    }
-
-    if (res)
-    {
-        info.update(res);
-
-        if (enabled_extremes)
-            updateExtremes(res);
-
-        if (limits.mode == LIMITS_CURRENT && !limits.size_limits.check(info.rows, info.bytes, "result", ErrorCodes::TOO_MANY_ROWS_OR_BYTES))
-            limit_exceeded_need_break = true;
-
-        if (quota != nullptr)
-            checkQuota(res);
-    }
-    else
-    {
-        /** If the thread is over, then we will ask all children to abort the execution.
+        {
+            /** If the thread is over, then we will ask all children to abort the execution.
           * This makes sense when running a query with LIMIT
           * - there is a situation when all the necessary data has already been read,
           *   but children sources are still working,
           *   herewith they can work in separate threads or even remotely.
           */
-        cancel(false);
-    }
+            cancel(false);
+        }
+    };
+    process4();
 
-    progress(Progress(res.rows(), res.bytes()));
+
+    auto process5 = [&] {
+        progress(Progress(res.rows(), res.bytes()));
 
 #ifndef NDEBUG
-    if (res)
-    {
-        Block header = getHeader();
-        if (header)
-            assertBlocksHaveEqualStructure(res, header, getName());
-    }
+        if (res)
+        {
+            Block header = getHeader();
+            if (header)
+                assertBlocksHaveEqualStructure(res, header, getName());
+        }
 #endif
 
-    info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+        info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
+    };
+    process5();
+
     return res;
 }
 
