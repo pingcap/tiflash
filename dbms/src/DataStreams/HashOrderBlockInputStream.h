@@ -132,7 +132,7 @@ public:
 
 protected:
     Block readImpl() override;
-    Block readImplInternal();
+    NO_INLINE Block readImplInternal();
     void appendInfo(FmtBuffer & buffer) const override;
 
     bool executed = false;
