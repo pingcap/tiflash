@@ -1,0 +1,26 @@
+From 329cf5f20cd35369667d114404d80e49e5109d3d Mon Sep 17 00:00:00 2001
+From: JaySon-Huang <tshent@qq.com>
+Date: Tue, 6 Sep 2022 15:24:15 +0800
+Subject: [PATCH] disable tcp set inq debug message
+
+Signed-off-by: JaySon-Huang <tshent@qq.com>
+---
+ src/core/lib/iomgr/tcp_posix.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/core/lib/iomgr/tcp_posix.cc b/src/core/lib/iomgr/tcp_posix.cc
+index 3c943b0e53..6223983558 100644
+--- a/src/core/lib/iomgr/tcp_posix.cc
++++ b/src/core/lib/iomgr/tcp_posix.cc
+@@ -1790,7 +1790,7 @@ grpc_endpoint* grpc_tcp_create(grpc_fd* em_fd,
+   if (setsockopt(tcp->fd, SOL_TCP, TCP_INQ, &one, sizeof(one)) == 0) {
+     tcp->inq_capable = true;
+   } else {
+-    gpr_log(GPR_DEBUG, "cannot set inq fd=%d errno=%d", tcp->fd, errno);
++    //gpr_log(GPR_DEBUG, "cannot set inq fd=%d errno=%d", tcp->fd, errno);
+     tcp->inq_capable = false;
+   }
+ #else
+-- 
+2.37.2
+
