@@ -820,7 +820,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
     }
 
-    if ((need_check_time_valid && !checkTimeValid(year, month, day, hour, minute, second)) || (!ignore_zero_date && (month == 0 || day == 0))
+    if ((need_check_time_valid && !checkTimeValid(year, month, day, hour, minute, second)) || (!ignore_zero_date && (month == 0 || day == 0)))
     {
         return {Field(), is_date};
     }
