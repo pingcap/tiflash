@@ -183,7 +183,7 @@ private:
 
 static const int8_t DefaultFsp = 6;
 static const bool DefaultNeedCheckTimeValid = false;
-static const bool DefaultIgnoreZeroDate = false;
+static const bool DefaultIgnoreZeroDate = true;
 
 Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
