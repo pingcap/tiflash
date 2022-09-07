@@ -185,8 +185,8 @@ static const int8_t DefaultFsp = 6;
 static const bool DefaultNeedCheckTimeValid = false;
 static const bool DefaultIgnoreZeroDate = false;
 
-Field parseMyDateTime(const String & str, int8_t fsp = default_fsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
