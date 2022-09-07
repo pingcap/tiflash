@@ -311,6 +311,11 @@ private:
 
     void waitForSenderFinish(bool allow_throw);
 
+    MemoryTracker * getMemTracker()
+    {
+        return mem_tracker ? mem_tracker.get() : nullptr;
+    }
+
     std::mutex mu;
     std::condition_variable cv_for_status_changed;
 
@@ -321,10 +326,10 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
+    std::shared_ptr<MemoryTracker> mem_tracker;
     const size_t queue_size;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
-    MemoryTracker * mem_tracker;
     TunnelSenderMode mode; // Tunnel transfer data mode
     TunnelSenderPtr tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience
     // According to mode value, among the sync/async/local_tunnel_senders, only the responding sender is not null and do actual work
