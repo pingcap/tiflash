@@ -68,9 +68,10 @@ MPPTunnel::MPPTunnel(
     , status(TunnelStatus::Unconnected)
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
+    , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , send_queue(std::make_shared<MPMCQueue<TrackedMppDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
-    , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
+
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)

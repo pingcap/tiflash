@@ -296,12 +296,13 @@ private:
     // tunnel id is in the format like "tunnel[sender]+[receiver]"
     String tunnel_id;
 
+    std::shared_ptr<MemoryTracker> mem_tracker;
     using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
     using DataPacketMPMCQueuePtr = std::shared_ptr<MPMCQueue<TrackedMppDataPacketPtr>>;
     DataPacketMPMCQueuePtr send_queue;
     ConnectionProfileInfo connection_profile_info;
     const LoggerPtr log;
-    std::shared_ptr<MemoryTracker> mem_tracker;
+
     TunnelSenderMode mode; // Tunnel transfer data mode
     TunnelSenderPtr tunnel_sender; // Used to refer to one of sync/async/local_tunnel_sender which is not nullptr, just for coding convenience
     // According to mode value, among the sync/async/local_tunnel_senders, only the responding sender is not null and do actual work
