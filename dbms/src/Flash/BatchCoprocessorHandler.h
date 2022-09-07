@@ -23,6 +23,7 @@
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
+#include <Common/Logger.h>
 
 namespace DB
 {
@@ -43,6 +44,7 @@ protected:
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
 
     ::coprocessor::BatchResponse err_response;
+    const LoggerPtr logger;
 };
 
 using BatchCopHandlerPtr = std::shared_ptr<BatchCoprocessorHandler>;

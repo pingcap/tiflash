@@ -565,12 +565,17 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         const size_t batch_cop_split = settings.rn_batch_cop_split; // TODO: Remove batch_cop_split
         const size_t expect_concurrent_num = settings.max_threads;
         const size_t recv_buffer_size = settings.rn_recv_buffer;
+        const std::string log_id = log->identifier();
         auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, ranges_for_each_physical_table, store_type, batch_cop_split, &Poco::Logger::get("pingcap/coprocessor"));
         LOG_FMT_INFO(log, "build {} batch cop tasks with [split={}]", all_batch_tasks.size(), batch_cop_split);
+        for (size_t i = 0; i < all_batch_tasks.size(); ++i)
+        {
+            LOG_FMT_DEBUG(log, "gjt debug batch task[{}], storeAddr: {}, len(RegionInfo): {}", i, all_batch_tasks[i].store_addr, all_batch_tasks[i].region_infos.size());
+        }
         for (size_t task_idx = 0; task_idx < all_batch_tasks.size(); ++task_idx)
         {
             const auto & batch_task = all_batch_tasks[task_idx];
-            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, recv_buffer_size);
+            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, recv_buffer_size, log->identifier());
             size_t idx = 0;
             for (; idx < expect_concurrent_num / all_batch_tasks.size(); ++idx)
             {

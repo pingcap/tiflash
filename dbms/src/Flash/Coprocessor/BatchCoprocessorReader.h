@@ -84,7 +84,8 @@ public:
         pingcap::kv::Cluster * cluster_,
         pingcap::coprocessor::BatchCopTask task_,
         const pingcap::coprocessor::RequestPtr & req,
-        Int64 buffer_size)
+        Int64 buffer_size,
+        const String & log_id)
         : schema(schema_)
         , task(std::move(task_))
         , cluster(cluster_)
@@ -95,13 +96,14 @@ public:
         , total_wait_net_elapse_ms(0)
         , total_net_recv_bytes(0)
         , collected(false)
-        , log(Logger::get(name /*req_id, etc*/))
+        , log(Logger::get(name, log_id))
     {
         auto batch_req = std::make_shared<::coprocessor::BatchRequest>();
         batch_req->set_tp(req->tp);
         batch_req->set_data(req->data);
         batch_req->set_start_ts(req->start_ts);
         batch_req->set_schema_ver(req->schema_version);
+        batch_req->set_log_id(log_id);
 
         // TODO: set `regions`, `table_regions`
         for (const auto & ri : task.region_infos)
@@ -191,6 +193,7 @@ public:
         {
             assert(result.decode_detail.rows == 0);
             result.decode_detail = decodeChunks(result.resp, block_queue, header, schema);
+            LOG_FMT_DEBUG(log, "gjt debug read {} rows from {}", result.decode_detail.rows, task.store_addr);
         }
         return result;
     }
@@ -224,7 +227,6 @@ private:
     {
         bool meet_error = false;
         String local_err_msg;
-        LoggerPtr log = Logger::get(name /*req_info*/);
         auto status = grpc::Status::OK;
 
         size_t total_wait_net_elapse_ms = 0;
