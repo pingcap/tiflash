@@ -17,6 +17,7 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/Blob/BlobStat.h>
 #include <Storages/Page/V3/BlobStore.h>
+#include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WALStore.h>
 
@@ -27,8 +28,6 @@ using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 
 namespace PS::V3
 {
-class PageDirectory;
-using PageDirectoryPtr = std::unique_ptr<PageDirectory>;
 class WALStoreReader;
 using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 
@@ -36,37 +35,38 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
   * A helper class for creating `PageDirectory` instance and restore data from disk.
   * During restoring data, we need to restore `BlobStore::BlobStats` at the same time.
   */
+template <typename Trait>
 class PageDirectoryFactory
 {
 public:
     PageVersion max_applied_ver;
 
-    PageDirectoryFactory & setBlobStore(BlobStore & blob_store)
+    PageDirectoryFactory & setBlobStore(BlobStore<u128::BlobStoreTrait> & blob_store)
     {
         blob_stats = &blob_store.blob_stats;
         return *this;
     }
 
-    PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALConfig config);
+    typename Trait::PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALConfig config);
 
-    PageDirectoryPtr createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal);
-
-    // just for test
-    PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit);
+    typename Trait::PageDirectoryPtr createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal);
 
     // just for test
-    PageDirectoryFactory & setBlobStats(BlobStats & blob_stats_)
+    typename Trait::PageDirectoryPtr createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, typename Trait::PageEntriesEdit & edit);
+
+    // just for test
+    PageDirectoryFactory<Trait> & setBlobStats(BlobStats & blob_stats_)
     {
         blob_stats = &blob_stats_;
         return *this;
     }
 
 private:
-    void loadFromDisk(const PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
-    void loadEdit(const PageDirectoryPtr & dir, const PageEntriesEdit & edit);
+    void loadFromDisk(const typename Trait::PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
+    void loadEdit(const typename Trait::PageDirectoryPtr & dir, const typename Trait::PageEntriesEdit & edit);
     static void applyRecord(
-        const PageDirectoryPtr & dir,
-        const PageEntriesEdit::EditRecord & r);
+        const typename Trait::PageDirectoryPtr & dir,
+        const typename Trait::PageEntriesEdit::EditRecord & r);
 
     BlobStats * blob_stats = nullptr;
 
@@ -75,6 +75,29 @@ private:
     bool dump_entries = false;
 };
 
-} // namespace PS::V3
 
+namespace universal
+{
+struct FactoryTrait
+{
+    using PageDirectoryPtr = DB::PS::V3::universal::PageDirectoryPtr;
+    using PageDirectoryType = PageDirectory<DB::PS::V3::universal::PageDirectoryTrait>;
+    using PageEntriesEdit = DB::PS::V3::universal::PageEntriesEdit;
+};
+using PageDirectoryFactory = DB::PS::V3::PageDirectoryFactory<FactoryTrait>;
+} // namespace universal
+
+namespace u128
+{
+struct FactoryTrait
+{
+    using PageDirectoryPtr = DB::PS::V3::u128::PageDirectoryPtr;
+    using PageDirectoryType = PageDirectory<DB::PS::V3::u128::PageDirectoryTrait>;
+    using PageEntriesEdit = DB::PS::V3::u128::PageEntriesEdit;
+};
+using PageDirectoryFactory = DB::PS::V3::PageDirectoryFactory<FactoryTrait>;
+} // namespace u128
+
+
+} // namespace PS::V3
 } // namespace DB

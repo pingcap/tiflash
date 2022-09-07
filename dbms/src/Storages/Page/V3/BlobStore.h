@@ -40,8 +40,9 @@ extern const int LOGICAL_ERROR;
 
 namespace PS::V3
 {
-using PageIdAndVersionedEntries = std::vector<std::tuple<PageIdV3Internal, PageVersion, PageEntryV3>>;
 
+
+template <typename Trait>
 class BlobStore : private Allocator<false>
 {
 public:
@@ -55,41 +56,38 @@ public:
 
     std::vector<BlobFileId> getGCStats();
 
-    PageEntriesEdit gc(std::map<BlobFileId, PageIdAndVersionedEntries> & entries_need_gc,
-                       const PageSize & total_page_size,
-                       const WriteLimiterPtr & write_limiter = nullptr,
-                       const ReadLimiterPtr & read_limiter = nullptr);
+    typename Trait::PageEntriesEditType
+    gc(typename Trait::GcEntriesMap & entries_need_gc,
+       const PageSize & total_page_size,
+       const WriteLimiterPtr & write_limiter = nullptr,
+       const ReadLimiterPtr & read_limiter = nullptr);
 
-    PageEntriesEdit write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    typename Trait::PageEntriesEditType
+    write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntriesV3 & del_entries);
 
-    PageMap read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & read_limiter = nullptr);
+    typename Trait::PageMap read(typename Trait::PageIdAndEntries & entries, const ReadLimiterPtr & read_limiter = nullptr);
 
-    Page read(const PageIDAndEntryV3 & entry, const ReadLimiterPtr & read_limiter = nullptr);
+    typename Trait::Page read(const typename Trait::PageIdAndEntry & entry, const ReadLimiterPtr & read_limiter = nullptr);
 
-    struct FieldReadInfo
-    {
-        PageIdV3Internal page_id;
-        PageEntryV3 entry;
-        std::vector<size_t> fields;
-
-        FieldReadInfo(PageIdV3Internal id_, PageEntryV3 entry_, std::vector<size_t> fields_)
-            : page_id(id_)
-            , entry(entry_)
-            , fields(std::move(fields_))
-        {}
-    };
-    using FieldReadInfos = std::vector<FieldReadInfo>;
-    PageMap read(FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
+    typename Trait::PageMap read(typename Trait::FieldReadInfos & to_read, const ReadLimiterPtr & read_limiter = nullptr);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
 
-    PageEntriesEdit handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    typename Trait::PageEntriesEditType
+    handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
-    BlobFilePtr read(const PageIdV3Internal & page_id_v3, BlobFileId blob_id, BlobFileOffset offset, char * buffers, size_t size, const ReadLimiterPtr & read_limiter = nullptr, bool background = false);
+    BlobFilePtr read(
+        const typename Trait::PageId & page_id_v3,
+        BlobFileId blob_id,
+        BlobFileOffset offset,
+        char * buffers,
+        size_t size,
+        const ReadLimiterPtr & read_limiter = nullptr,
+        bool background = false);
 
     /**
      *  Ask BlobStats to get a span from BlobStat.
@@ -108,6 +106,7 @@ private:
 
     BlobFilePtr getBlobFile(BlobFileId blob_id);
 
+    template <typename>
     friend class PageDirectoryFactory;
     friend class PageStorageControlV3;
 
@@ -126,7 +125,37 @@ private:
 
     DB::LRUCache<BlobFileId, BlobFile> cached_files;
 };
-using BlobStorePtr = std::shared_ptr<BlobStore>;
+
+namespace u128
+{
+struct BlobStoreTrait
+{
+    using PageId = PageIdV3Internal;
+    using PageEntriesEditType = PageEntriesEdit;
+    using GcEntries = std::vector<std::tuple<PageId, PageVersion, PageEntryV3>>;
+    using GcEntriesMap = std::map<BlobFileId, GcEntries>;
+    using PageIdAndEntry = PageIDAndEntryV3;
+    using PageIdAndEntries = PageIDAndEntriesV3;
+    using Page = Page;
+    using PageMap = PageMap;
+
+    struct FieldReadInfo
+    {
+        PageId page_id;
+        PageEntryV3 entry;
+        std::vector<size_t> fields;
+
+        FieldReadInfo(const PageId & id_, PageEntryV3 entry_, std::vector<size_t> fields_)
+            : page_id(id_)
+            , entry(entry_)
+            , fields(std::move(fields_))
+        {}
+    };
+    using FieldReadInfos = std::vector<FieldReadInfo>;
+};
+
+using BlobStorePtr = std::shared_ptr<BlobStore<BlobStoreTrait>>;
+} // namespace u128
 
 } // namespace PS::V3
 } // namespace DB

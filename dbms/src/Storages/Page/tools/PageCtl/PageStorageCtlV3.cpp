@@ -17,6 +17,7 @@
 #include <Poco/ConsoleChannel.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/CLIService.h>
+#include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
@@ -26,6 +27,7 @@
 
 #include <boost/program_options.hpp>
 #include <magic_enum.hpp>
+
 
 namespace DB::PS::V3
 {
@@ -195,7 +197,7 @@ private:
         if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
             // Only restore the PageDirectory
-            PageDirectoryFactory factory;
+            u128::PageDirectoryFactory factory;
             factory.dump_entries = true;
             factory.create(String(NAME), provider, delegator, WALConfig::from(config));
             return 0;
@@ -204,7 +206,7 @@ private:
         // Other display mode need to restore ps instance
         PageStorageImpl ps(String(NAME), delegator, config, provider);
         ps.restore();
-        PageDirectory::MVCCMapType & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
+        auto & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
 
         switch (options.mode)
         {
@@ -242,7 +244,7 @@ private:
         return 0;
     }
 
-    static String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
+    static String getBlobsInfo(BlobStore<u128::BlobStoreTrait> & blob_store, UInt32 blob_id)
     {
         auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
@@ -292,9 +294,9 @@ private:
         return stats_info.toString();
     }
 
-    static String getDirectoryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
+    static String getDirectoryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, UInt64 ns_id, UInt64 page_id)
     {
-        auto page_info = [](UInt128 page_internal_id_, const VersionedPageEntriesPtr & versioned_entries) {
+        auto page_info = [](UInt128 page_internal_id_, const PageDirectory<u128::PageDirectoryTrait>::VersionedPageEntriesPtr & versioned_entries) {
             FmtBuffer page_str;
             page_str.fmtAppend("    page id {}\n", page_internal_id_);
             page_str.fmtAppend("      {}\n", versioned_entries->toDebugString());
@@ -357,10 +359,10 @@ private:
         return directory_info.toString();
     }
 
-    static String getSummaryInfo(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store)
+    static String getSummaryInfo(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store)
     {
-        UInt64 longest_version_chaim = 0;
-        UInt64 shortest_version_chaim = UINT64_MAX;
+        UInt64 longest_version_chain = 0;
+        UInt64 shortest_version_chain = UINT64_MAX;
         FmtBuffer dir_summary_info;
 
         dir_summary_info.append("  Directory summary info: \n");
@@ -368,14 +370,14 @@ private:
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
         {
             (void)internal_id;
-            longest_version_chaim = std::max(longest_version_chaim, versioned_entries->size());
-            shortest_version_chaim = std::min(shortest_version_chaim, versioned_entries->size());
+            longest_version_chain = std::max(longest_version_chain, versioned_entries->size());
+            shortest_version_chain = std::min(shortest_version_chain, versioned_entries->size());
         }
 
-        dir_summary_info.fmtAppend("    total pages: {}, longest version chaim: {} , shortest version chaim: {} \n\n",
+        dir_summary_info.fmtAppend("    total pages: {}, longest version chain: {} , shortest version chain: {} \n\n",
                                    mvcc_table_directory.size(),
-                                   longest_version_chaim,
-                                   shortest_version_chaim);
+                                   longest_version_chain,
+                                   shortest_version_chain);
 
         dir_summary_info.append("  Blobs summary info: \n");
         const auto & blob_stats = blob_store.blob_stats.getStats();
@@ -404,7 +406,7 @@ private:
         return dir_summary_info.toString();
     }
 
-    static String checkSinglePage(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, UInt64 ns_id, UInt64 page_id)
+    static String checkSinglePage(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, UInt64 ns_id, UInt64 page_id)
     {
         const auto & page_internal_id = buildV3Id(ns_id, page_id);
         const auto & it = mvcc_table_directory.find(page_internal_id);
@@ -436,8 +438,8 @@ private:
                         DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                         std::iota(std::begin(indices), std::end(indices), 0);
 
-                        BlobStore::FieldReadInfos infos;
-                        BlobStore::FieldReadInfo info(page_internal_id, entry, indices);
+                        u128::BlobStoreTrait::FieldReadInfos infos;
+                        u128::BlobStoreTrait::FieldReadInfo info(page_internal_id, entry, indices);
                         infos.emplace_back(info);
                         blob_store.read(infos);
                     }
@@ -460,12 +462,12 @@ private:
         return error_msg.toString();
     }
 
-    static String checkAllDataCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
+    static String checkAllDataCrc(PageDirectory<u128::PageDirectoryTrait>::MVCCMapType & mvcc_table_directory, BlobStore<u128::BlobStoreTrait> & blob_store, bool enable_fo_check)
     {
         size_t total_pages = mvcc_table_directory.size();
         size_t cut_index = 0;
         size_t index = 0;
-        std::cout << fmt::format("Begin to check all of datas CRC. enable_fo_check={}", static_cast<int>(enable_fo_check)) << std::endl;
+        std::cout << fmt::format("Begin to check all of data CRC. enable_fo_check={}", static_cast<int>(enable_fo_check)) << std::endl;
 
         std::list<std::pair<UInt128, PageVersion>> error_versioned_pages;
         for (const auto & [internal_id, versioned_entries] : mvcc_table_directory)
@@ -498,8 +500,8 @@ private:
                             DB::PageStorage::FieldIndices indices(entry.field_offsets.size());
                             std::iota(std::begin(indices), std::end(indices), 0);
 
-                            BlobStore::FieldReadInfos infos;
-                            BlobStore::FieldReadInfo info(internal_id, entry, indices);
+                            u128::BlobStoreTrait::FieldReadInfos infos;
+                            u128::BlobStoreTrait::FieldReadInfo info(internal_id, entry, indices);
                             infos.emplace_back(info);
                             blob_store.read(infos);
                         }

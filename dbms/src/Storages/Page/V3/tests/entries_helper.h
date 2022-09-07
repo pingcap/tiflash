@@ -25,6 +25,7 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <common/defines.h>
 #include <gtest/gtest.h>
 
 namespace DB
@@ -81,7 +82,7 @@ inline ::testing::AssertionResult getEntryCompare(
     const char * page_id_expr,
     const char * snap_expr,
     const PageEntryV3 & expected_entry,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -140,7 +141,7 @@ inline ::testing::AssertionResult getEntriesCompare(
     const char * page_ids_expr,
     const char * snap_expr,
     const PageIDAndEntriesV3 & expected_entries,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -214,7 +215,7 @@ inline ::testing::AssertionResult getEntryNotExist(
     const char * dir_expr,
     const char * page_id_expr,
     const char * snap_expr,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internal page_id,
     const PageDirectorySnapshotPtr & snap)
 {
@@ -254,7 +255,7 @@ inline ::testing::AssertionResult getEntriesNotExist(
     const char * dir_expr,
     const char * page_ids_expr,
     const char * snap_expr,
-    const PageDirectoryPtr & dir,
+    const u128::PageDirectoryPtr & dir,
     const PageIdV3Internals page_ids,
     const PageDirectorySnapshotPtr & snap)
 {

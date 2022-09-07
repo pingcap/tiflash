@@ -73,7 +73,7 @@ try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
     config.file_limit_size = 2560;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
 
     BlobFileId file_id1 = 10;
     BlobFileId file_id2 = 12;
@@ -148,7 +148,7 @@ try
     config.file_limit_size = 1024;
 
     // Generate blob [1,2,3]
-    auto write_blob_datas = [](BlobStore & blob_store) {
+    auto write_blob_datas = [](BlobStore<u128::BlobStoreTrait> & blob_store) {
         WriteBatch write_batch;
         PageId page_id = 55;
         size_t buff_size = 1024;
@@ -192,7 +192,7 @@ try
         return true;
     };
 
-    auto restore_blobs = [](BlobStore & blob_store, std::vector<BlobFileId> blob_ids) {
+    auto restore_blobs = [](BlobStore<u128::BlobStoreTrait> & blob_store, std::vector<BlobFileId> blob_ids) {
         blob_store.registerPaths();
         for (const auto & id : blob_ids)
         {
@@ -210,12 +210,12 @@ try
     // Case 1, all of blob been restored
     {
         auto test_paths = delegator->listPaths();
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
-        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store_check = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {1, 2, 3});
 
         blob_store_check.blob_stats.restore();
@@ -231,12 +231,12 @@ try
     // Case 2, only recover blob 1
     {
         auto test_paths = delegator->listPaths();
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
-        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store_check = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {1});
 
         blob_store_check.blob_stats.restore();
@@ -252,12 +252,12 @@ try
     // Case 3, only recover blob 2
     {
         auto test_paths = delegator->listPaths();
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
-        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store_check = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {2});
 
         blob_store_check.blob_stats.restore();
@@ -273,12 +273,12 @@ try
     // Case 4, only recover blob 3
     {
         auto test_paths = delegator->listPaths();
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
-        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store_check = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         restore_blobs(blob_store_check, {3});
 
         blob_store_check.blob_stats.restore();
@@ -294,12 +294,12 @@ try
     // Case 5, recover a not exist blob
     {
         auto test_paths = delegator->listPaths();
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         write_blob_datas(blob_store);
 
         ASSERT_TRUE(check_in_disk_file(test_paths, {1, 2, 3}));
 
-        auto blob_store_check = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store_check = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
         ASSERT_THROW(restore_blobs(blob_store_check, {4}), DB::Exception);
     }
 }
@@ -313,7 +313,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     size_t buff_nums = 21;
     size_t buff_size = 123;
 
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -330,7 +330,7 @@ TEST_F(BlobStoreTest, testWriteRead)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     char c_buff_read[buff_size * buff_nums];
@@ -398,11 +398,11 @@ TEST_F(BlobStoreTest, testWriteReadWithIOLimiter)
     size_t buff_size = 10ul * 1024;
     const size_t rate_target = buff_size - 1;
 
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[wb_nums * buff_size];
 
     WriteBatch wbs[wb_nums];
-    PageEntriesEdit edits[wb_nums];
+    u128::PageEntriesEdit edits[wb_nums];
 
     for (size_t i = 0; i < wb_nums; ++i)
     {
@@ -511,7 +511,7 @@ try
     size_t buff_size = 120;
     WriteBatch wb;
 
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[buff_size];
 
     for (size_t j = 0; j < buff_size; ++j)
@@ -525,14 +525,17 @@ try
     wb.putPage(page_id1, /* tag */ 0, buff1, buff_size, {20, 40, 40, 20});
     wb.putPage(page_id2, /* tag */ 0, buff2, buff_size, {10, 50, 20, 20, 20});
     wb.putPage(page_id3, /* tag */ 0, buff3, buff_size, {10, 5, 20, 20, 15, 5, 15, 30});
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
     ASSERT_EQ(edit.size(), 3);
 
-    BlobStore::FieldReadInfo read_info1(buildV3Id(TEST_NAMESPACE_ID, page_id1), edit.getRecords()[0].entry, {0, 1, 2, 3});
-    BlobStore::FieldReadInfo read_info2(buildV3Id(TEST_NAMESPACE_ID, page_id2), edit.getRecords()[1].entry, {2, 4});
-    BlobStore::FieldReadInfo read_info3(buildV3Id(TEST_NAMESPACE_ID, page_id3), edit.getRecords()[2].entry, {1, 3});
+    using BlobFieldReadInfo = u128::BlobStoreTrait::FieldReadInfo;
+    using BlobFieldReadInfos = u128::BlobStoreTrait::FieldReadInfos;
 
-    BlobStore::FieldReadInfos read_infos = {read_info1, read_info2, read_info3};
+    BlobFieldReadInfo read_info1(buildV3Id(TEST_NAMESPACE_ID, page_id1), edit.getRecords()[0].entry, {0, 1, 2, 3});
+    BlobFieldReadInfo read_info2(buildV3Id(TEST_NAMESPACE_ID, page_id2), edit.getRecords()[1].entry, {2, 4});
+    BlobFieldReadInfo read_info3(buildV3Id(TEST_NAMESPACE_ID, page_id3), edit.getRecords()[2].entry, {1, 3});
+
+    BlobFieldReadInfos read_infos = {read_info1, read_info2, read_info3};
 
     const auto & page_map = blob_store.read(read_infos, nullptr);
     ASSERT_EQ(page_map.size(), 3);
@@ -584,7 +587,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
         off += data_sz;
     }
 
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -601,7 +604,7 @@ TEST_F(BlobStoreTest, testFeildOffsetWriteRead)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
     char c_buff_read[buff_size * buff_nums];
@@ -641,7 +644,7 @@ TEST_F(BlobStoreTest, testWrite)
 try
 {
     const auto file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
 
     PageId page_id = 50;
     const size_t buff_size = 1024;
@@ -662,7 +665,7 @@ try
         wb.putPage(page_id, /*tag*/ 0, buff1, buff_size);
         wb.putPage(page_id, /*tag*/ 0, buff2, buff_size);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
         ASSERT_EQ(edit.size(), 2);
 
         auto records = edit.getRecords();
@@ -689,7 +692,7 @@ try
         wb.delPage(page_id + 1);
         wb.delPage(page_id);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
         ASSERT_EQ(edit.size(), 3);
 
         auto records = edit.getRecords();
@@ -722,7 +725,7 @@ try
         wb.putRefPage(page_id + 1, page_id);
         wb.delPage(page_id);
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
         auto records = edit.getRecords();
 
         auto record = records[0];
@@ -752,7 +755,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
 
     {
         config.file_limit_size = buff_size - 1;
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
 
         WriteBatch wb;
         char c_buff[buff_size];
@@ -776,7 +779,7 @@ TEST_F(BlobStoreTest, DISABLED_testWriteOutOfLimitSize)
     size_t buffer_sizes[] = {buff_size, buff_size - 1, buff_size / 2 + 1};
     for (const auto & buf_size : buffer_sizes)
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
 
         WriteBatch wb;
         char c_buff1[buf_size];
@@ -819,7 +822,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats)
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageId page_id = 50;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
     std::list<size_t> remove_entries_idx1 = {1, 3, 4, 7, 9};
     std::list<size_t> remove_entries_idx2 = {6, 8};
 
@@ -917,7 +920,7 @@ TEST_F(BlobStoreTest, testBlobStoreGcStats2)
     size_t buff_size = 1024;
     size_t buff_nums = 10;
     PageId page_id = 50;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
     std::list<size_t> remove_entries_idx = {0, 1, 2, 3, 4, 5, 6, 7};
 
     WriteBatch wb;
@@ -977,7 +980,7 @@ TEST_F(BlobStoreTest, GC)
     size_t buff_nums = 21;
     size_t buff_size = 123;
 
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
@@ -994,16 +997,15 @@ TEST_F(BlobStoreTest, GC)
     }
 
     ASSERT_EQ(wb.getTotalDataSize(), buff_nums * buff_size);
-    PageEntriesEdit edit = blob_store.write(wb, nullptr);
+    u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
     ASSERT_EQ(edit.size(), buff_nums);
 
-    PageIdAndVersionedEntries versioned_pageid_entries;
+    u128::PageDirectoryTrait::GcEntries versioned_pageid_entries;
     for (const auto & record : edit.getRecords())
     {
         versioned_pageid_entries.emplace_back(buildV3Id(TEST_NAMESPACE_ID, page_id), 1, record.entry);
     }
-    std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
-    gc_context[1] = versioned_pageid_entries;
+    u128::PageDirectoryTrait::GcEntriesMap gc_context{{1, versioned_pageid_entries}};
 
     // Before we do BlobStore we need change BlobFile0 to Read-Only
     auto stat = blob_store.blob_stats.blobIdToStat(1);
@@ -1045,12 +1047,12 @@ try
 
     BlobConfig config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
 
-    std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
+    u128::PageDirectoryTrait::GcEntriesMap gc_context;
 
     for (size_t i = 0; i < buff_nums; ++i)
     {
@@ -1061,13 +1063,13 @@ try
 
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         wb.putPage(page_id, /* tag */ 0, buff, buff_size);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         if (gc_context.find(records[0].entry.file_id) == gc_context.end())
         {
-            PageIdAndVersionedEntries versioned_pageid_entries;
+            u128::PageDirectoryTrait::GcEntries versioned_pageid_entries;
             versioned_pageid_entries.emplace_back(page_id, 1, records[0].entry);
             gc_context[records[0].entry.file_id] = std::move(versioned_pageid_entries);
         }
@@ -1096,12 +1098,13 @@ try
 
     BlobConfig config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 100;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
     char c_buff[buff_size * buff_nums];
 
     WriteBatch wb;
 
-    BlobStore::FieldReadInfos read_infos;
+    using BlobFieldReadInfos = u128::BlobStoreTrait::FieldReadInfos;
+    BlobFieldReadInfos read_infos;
     for (size_t i = 0; i < buff_nums; ++i)
     {
         for (size_t j = 0; j < buff_size; ++j)
@@ -1112,11 +1115,11 @@ try
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff + i * buff_size), buff_size);
         PageFieldSizes field_sizes{1, 2, 4, 8, (buff_size - 1 - 2 - 4 - 8)};
         wb.putPage(page_id, /* tag */ 0, buff, buff_size, field_sizes);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
-        read_infos.emplace_back(BlobStore::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
+        read_infos.emplace_back(u128::BlobStoreTrait::FieldReadInfo(buildV3Id(TEST_NAMESPACE_ID, page_id), records[0].entry, {0, 1, 2, 3, 4}));
 
         page_id++;
         wb.clear();
@@ -1141,7 +1144,7 @@ try
 
     BlobConfig config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 400;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
 
     // PUT page_id 50 into blob 1 range [0,200]
     {
@@ -1151,7 +1154,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_200);
         wb.putPage(page_id, /* tag */ 0, buff, size_200);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1178,7 +1181,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_500);
         wb.putPage(page_id, /* tag */ 0, buff, size_500);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1210,7 +1213,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_100);
         wb.putPage(page_id, /* tag */ 0, buff, size_100);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1237,7 +1240,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_300);
         wb.putPage(page_id, /* tag */ 0, buff, size_300);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 1);
@@ -1268,7 +1271,7 @@ try
         wb.putPage(page_id++, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff3), sizeof(c_buff3)), sizeof(c_buff3));
         wb.putPage(page_id++, /* tag */ 0, std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff4), sizeof(c_buff4)), sizeof(c_buff4));
 
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & records = edit.getRecords();
         ASSERT_EQ(records.size(), 4);
@@ -1307,7 +1310,7 @@ try
 
     BlobConfig config_with_small_file_limit_size;
     config_with_small_file_limit_size.file_limit_size = 400;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
 
     {
         size_t size_500 = 500;
@@ -1316,7 +1319,7 @@ try
         WriteBatch wb;
         ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(const_cast<char *>(c_buff), size_500);
         wb.putPage(page_id, /* tag */ 0, buff, size_500);
-        PageEntriesEdit edit = blob_store.write(wb, nullptr);
+        u128::PageEntriesEdit edit = blob_store.write(wb, nullptr);
 
         const auto & gc_info = blob_store.getGCStats();
         ASSERT_TRUE(gc_info.empty());
@@ -1342,7 +1345,7 @@ try
 
     PageEntryV3 entry_from_write;
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
         size_t size_500 = 500;
         char c_buff[size_500];
 
@@ -1356,7 +1359,7 @@ try
     }
 
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
         blob_store.registerPaths();
 
         blob_store.blob_stats.restoreByEntry(entry_from_write);
@@ -1382,7 +1385,7 @@ try
     PageEntryV3 entry_from_write1;
     PageEntryV3 entry_from_write2;
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
         size_t size_500 = 500;
         size_t size_200 = 200;
         char c_buff1[size_500];
@@ -1406,7 +1409,7 @@ try
 
     config_with_small_file_limit_size.file_limit_size = 400;
     {
-        auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+        auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
         blob_store.registerPaths();
         blob_store.blob_stats.restoreByEntry(entry_from_write1);
         blob_store.blob_stats.restoreByEntry(entry_from_write2);
@@ -1454,7 +1457,7 @@ try
     PageEntryV3 entry_from_write1;
     PageEntryV3 entry_from_write2;
     PageEntryV3 entry_from_write3;
-    auto blob_store = BlobStore(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
+    auto blob_store = BlobStore<u128::BlobStoreTrait>(getCurrentTestName(), file_provider, delegator, config_with_small_file_limit_size);
     {
         size_t size_100 = 100;
         size_t size_500 = 500;
@@ -1497,11 +1500,9 @@ try
 
         const auto & blob_need_gc2 = blob_store.getGCStats();
         ASSERT_EQ(blob_need_gc2.size(), 1);
-        std::map<BlobFileId, PageIdAndVersionedEntries> gc_context;
-        PageIdAndVersionedEntries versioned_pageid_entries;
-        versioned_pageid_entries.emplace_back(page_id2, 1, entry_from_write2);
-        gc_context[1] = versioned_pageid_entries;
-        PageEntriesEdit gc_edit = blob_store.gc(gc_context, 500);
+        u128::PageDirectoryTrait::GcEntries gc_entries{{buildV3Id(TEST_NAMESPACE_ID, page_id2), PageVersion(1), entry_from_write2}};
+        u128::PageDirectoryTrait::GcEntriesMap gc_context{{1, gc_entries}};
+        u128::PageEntriesEdit gc_edit = blob_store.gc(gc_context, 500);
         const auto & records = gc_edit.getRecords();
         ASSERT_EQ(records.size(), 1);
         ASSERT_EQ(records[0].entry.file_id, 2);

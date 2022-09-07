@@ -85,6 +85,9 @@ using BlobFileOffset = UInt64;
 static constexpr BlobFileId INVALID_BLOBFILE_ID = 0;
 static constexpr BlobFileOffset INVALID_BLOBFILE_OFFSET = std::numeric_limits<BlobFileOffset>::max();
 
+using UniversalPageId = String;
+using UniversalPageIds = std::vector<UniversalPageId>;
+
 struct ByteBuffer
 {
     using Pos = char *;

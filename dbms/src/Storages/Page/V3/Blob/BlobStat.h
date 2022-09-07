@@ -182,6 +182,7 @@ private:
 #endif
     void restoreByEntry(const PageEntryV3 & entry);
     void restore();
+    template <typename>
     friend class PageDirectoryFactory;
 
 #ifndef DBMS_PUBLIC_GTEST

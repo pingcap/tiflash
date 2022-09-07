@@ -102,7 +102,7 @@ try
     char c_buff[wb_nums * buff_size];
 
     WriteBatch wbs[wb_nums];
-    PageEntriesEdit edits[wb_nums];
+    u128::PageEntriesEdit edits[wb_nums];
 
     for (size_t i = 0; i < wb_nums; ++i)
     {

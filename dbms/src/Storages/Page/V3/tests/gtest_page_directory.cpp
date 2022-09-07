@@ -111,28 +111,28 @@ public:
         dir = restoreFromDisk();
     }
 
-    static PageDirectoryPtr restoreFromDisk()
+    static u128::PageDirectoryPtr restoreFromDisk()
     {
         auto path = getTemporaryPath();
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         FileProviderPtr provider = ctx.getFileProvider();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        PageDirectoryFactory factory;
+        u128::PageDirectoryFactory factory;
         return factory.create("PageDirectoryTest", provider, delegator, WALConfig());
     }
 
 protected:
-    static PageId getNormalPageIdU64(const PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
+    static PageId getNormalPageIdU64(const u128::PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
     {
         return d->getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap, true).low;
     }
-    static PageEntryV3 getEntry(const PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
+    static PageEntryV3 getEntry(const u128::PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
     {
         return d->getByID(buildV3Id(TEST_NAMESPACE_ID, page_id), snap).second;
     }
 
 protected:
-    PageDirectoryPtr dir;
+    u128::PageDirectoryPtr dir;
 
     LoggerPtr log;
 };
@@ -145,7 +145,7 @@ try
 
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         dir->apply(std::move(edit));
     }
@@ -155,7 +155,7 @@ try
 
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     }
@@ -172,7 +172,7 @@ try
 
     PageEntryV3 entry2_v2{.file_id = 2 + 102, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2_v2);
         dir->apply(std::move(edit));
@@ -193,7 +193,7 @@ try
 
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry1);
         dir->apply(std::move(edit));
     }
@@ -203,7 +203,7 @@ try
 
     PageEntryV3 entry2{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x1234, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry2);
         dir->apply(std::move(edit));
     }
@@ -221,7 +221,7 @@ try
     page_id++;
     PageEntryV3 entry3{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x12345, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry2);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry3);
@@ -243,7 +243,7 @@ try
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
@@ -256,7 +256,7 @@ try
     PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry4{.file_id = 4, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry3);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 4), entry4);
@@ -288,14 +288,14 @@ try
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
     }
@@ -306,14 +306,14 @@ try
     // Update on ref page is not allowed
     PageEntryV3 entry_updated{.file_id = 999, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry_updated);
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
 
     PageEntryV3 entry_updated2{.file_id = 777, .size = 16, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x123};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_updated2);
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
     }
@@ -326,14 +326,14 @@ try
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
     }
@@ -343,7 +343,7 @@ try
 
     // Delete 3, 2 won't get deleted.
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 3));
         dir->apply(std::move(edit));
     }
@@ -355,7 +355,7 @@ try
 
     // Delete 2, 3 won't get deleted.
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
     }
@@ -376,14 +376,14 @@ try
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
     }
@@ -393,7 +393,7 @@ try
 
     // Ref 4 -> 3
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 4), buildV3Id(TEST_NAMESPACE_ID, 3));
         dir->apply(std::move(edit));
     }
@@ -414,14 +414,14 @@ try
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
     }
@@ -431,7 +431,7 @@ try
 
 
     { // Ref 3 -> 2 again, should be idempotent
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
     }
@@ -442,7 +442,7 @@ try
     EXPECT_ENTRY_EQ(entry2, dir, 3, snap2);
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 3));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
@@ -458,7 +458,7 @@ try
     {
         // Adding ref after deleted.
         // It will invalid snap1 and snap2
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 1));
         dir->apply(std::move(edit));
     }
@@ -481,14 +481,14 @@ try
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
     }
 
     { // Ref 3->2
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 2));
         dir->apply(std::move(edit));
     }
@@ -498,7 +498,7 @@ try
 
 
     { // Ref 4 -> 3, collapse to 4 -> 2
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 4), buildV3Id(TEST_NAMESPACE_ID, 3));
         dir->apply(std::move(edit));
     }
@@ -514,7 +514,7 @@ CATCH
 
 TEST_F(PageDirectoryTest, RefWontDeadLock)
 {
-    PageEntriesEdit edit;
+    u128::PageEntriesEdit edit;
     {
         // 1. batch.putExternal(0, 0);
         PageEntryV3 entry1;
@@ -526,7 +526,7 @@ TEST_F(PageDirectoryTest, RefWontDeadLock)
 
     dir->apply(std::move(edit));
 
-    PageEntriesEdit edit2;
+    u128::PageEntriesEdit edit2;
     {
         // 1. batch.putRefPage(2, 1); // ref 2 -> 1 -> 0
         edit2.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
@@ -543,7 +543,7 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
     // Make sure creating ext page after itself and all its reference are clean
     // is idempotent
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
         auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
@@ -552,7 +552,7 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
     }
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 10)); // should be idempotent
         dir->apply(std::move(edit));
         auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
@@ -561,7 +561,7 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
     }
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
         dir->gcInMemEntries(); // clean in memory
@@ -572,7 +572,7 @@ TEST_F(PageDirectoryTest, IdempotentNewExtPageAfterAllCleaned)
 
     {
         // Add again after deleted
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
         auto alive_ids = dir->getAliveExternalIds(TEST_NAMESPACE_ID);
@@ -588,7 +588,7 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry3{.file_id = 3, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry2);
         dir->apply(std::move(edit));
@@ -596,7 +596,7 @@ try
 
     // Applying ref to not exist entry is not allowed
     { // Ref 4-> 999
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry3);
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 4), buildV3Id(TEST_NAMESPACE_ID, 999));
         ASSERT_ANY_THROW(dir->apply(std::move(edit)));
@@ -609,22 +609,22 @@ try
 {
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry1);
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 1));
         ASSERT_ANY_THROW({ dir->apply(std::move(edit)); });
     }
@@ -635,22 +635,22 @@ TEST_F(PageDirectoryTest, RefToDeletedExtPageTwoHops)
 try
 {
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 1));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 3), buildV3Id(TEST_NAMESPACE_ID, 1));
         ASSERT_ANY_THROW({ dir->apply(std::move(edit)); });
     }
@@ -663,39 +663,39 @@ try
     // Fix issue: https://github.com/pingcap/tiflash/issues/5570
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 951), entry1);
         dir->apply(std::move(edit));
     }
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 954), buildV3Id(TEST_NAMESPACE_ID, 951));
         dir->apply(std::move(edit));
     }
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 951));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 951));
         dir->apply(std::move(edit));
     }
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 972), buildV3Id(TEST_NAMESPACE_ID, 954));
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 985), buildV3Id(TEST_NAMESPACE_ID, 954));
         dir->apply(std::move(edit));
     }
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 954));
         dir->apply(std::move(edit));
     }
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 998), buildV3Id(TEST_NAMESPACE_ID, 985));
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 1011), buildV3Id(TEST_NAMESPACE_ID, 985));
         dir->apply(std::move(edit));
@@ -712,7 +712,7 @@ try
     PageId id = 50;
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, id), entry1);
         dir->apply(std::move(edit));
     }
@@ -774,7 +774,7 @@ try
         if (del_in_same_wb)
         {
             // create ref and del in the same write batch
-            PageEntriesEdit edit;
+            u128::PageEntriesEdit edit;
             for (const auto & x : new_ref_page_ids)
                 edit.ref(buildV3Id(TEST_NAMESPACE_ID, x.first), buildV3Id(TEST_NAMESPACE_ID, x.second));
             for (const auto x : delete_ref_page_ids)
@@ -785,13 +785,13 @@ try
         {
             // first create all ref, then del in another write batch
             {
-                PageEntriesEdit edit;
+                u128::PageEntriesEdit edit;
                 for (const auto & x : new_ref_page_ids)
                     edit.ref(buildV3Id(TEST_NAMESPACE_ID, x.first), buildV3Id(TEST_NAMESPACE_ID, x.second));
                 dir->apply(std::move(edit));
             }
             {
-                PageEntriesEdit edit;
+                u128::PageEntriesEdit edit;
                 for (const auto x : delete_ref_page_ids)
                     edit.del(buildV3Id(TEST_NAMESPACE_ID, x));
                 dir->apply(std::move(edit));
@@ -819,7 +819,7 @@ try
 {
     PageId id = 50;
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, id));
         dir->apply(std::move(edit));
     }
@@ -876,7 +876,7 @@ try
 
         if (del_in_same_wb)
         {
-            PageEntriesEdit edit;
+            u128::PageEntriesEdit edit;
             for (const auto & x : new_ref_page_ids)
                 edit.ref(buildV3Id(TEST_NAMESPACE_ID, x.first), buildV3Id(TEST_NAMESPACE_ID, x.second));
             for (const auto x : delete_ref_page_ids)
@@ -886,13 +886,13 @@ try
         else
         {
             {
-                PageEntriesEdit edit;
+                u128::PageEntriesEdit edit;
                 for (const auto & x : new_ref_page_ids)
                     edit.ref(buildV3Id(TEST_NAMESPACE_ID, x.first), buildV3Id(TEST_NAMESPACE_ID, x.second));
                 dir->apply(std::move(edit));
             }
             {
-                PageEntriesEdit edit;
+                u128::PageEntriesEdit edit;
                 for (const auto x : delete_ref_page_ids)
                     edit.del(buildV3Id(TEST_NAMESPACE_ID, x));
                 dir->apply(std::move(edit));
@@ -925,7 +925,7 @@ TEST_F(PageDirectoryTest, NormalPageId)
 try
 {
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 9), PageEntryV3{});
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
@@ -938,7 +938,7 @@ try
     EXPECT_ANY_THROW(getNormalPageIdU64(dir, 12, s0)); // not exist at all
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 12), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
@@ -956,7 +956,7 @@ try
     EXPECT_EQ(9, getNormalPageIdU64(dir, 14, s1));
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 14));
         dir->apply(std::move(edit));
@@ -970,7 +970,7 @@ try
     EXPECT_ANY_THROW(getNormalPageIdU64(dir, 14, s2));
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 13));
         dir->apply(std::move(edit));
@@ -992,7 +992,7 @@ class PageDirectoryGCTest : public PageDirectoryTest
 #define INSERT_ENTRY_TO(PAGE_ID, VERSION, BLOB_FILE_ID)                                                                                          \
     PageEntryV3 entry_v##VERSION{.file_id = (BLOB_FILE_ID), .size = (VERSION), .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567}; \
     {                                                                                                                                            \
-        PageEntriesEdit edit;                                                                                                                    \
+        u128::PageEntriesEdit edit;                                                                                                              \
         edit.put(buildV3Id(TEST_NAMESPACE_ID, (PAGE_ID)), entry_v##VERSION);                                                                     \
         dir->apply(std::move(edit));                                                                                                             \
     }
@@ -1004,7 +1004,7 @@ class PageDirectoryGCTest : public PageDirectoryTest
     auto snapshot##VERSION = dir->createSnapshot();
 #define INSERT_DELETE(PAGE_ID)                             \
     {                                                      \
-        PageEntriesEdit edit;                              \
+        u128::PageEntriesEdit edit;                        \
         edit.del(buildV3Id(TEST_NAMESPACE_ID, (PAGE_ID))); \
         dir->apply(std::move(edit));                       \
     }
@@ -1286,7 +1286,7 @@ try
     INSERT_ENTRY(another_page_id, 7);
     PageEntryV3 entry_v8{.file_id = 1, .size = 8, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, page_id));
         edit.put(buildV3Id(TEST_NAMESPACE_ID, another_page_id), entry_v8);
         dir->apply(std::move(edit));
@@ -1390,7 +1390,7 @@ try
     EXPECT_EQ(entries_in_file2.empty(), true);
     EXPECT_EQ(entries_in_file3.size(), 1); // 1 entries for 1 page id
 
-    PageEntriesEdit gc_migrate_entries;
+    u128::PageEntriesEdit gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
@@ -1446,7 +1446,7 @@ try
     // `page_id` get removed
     EXPECT_EQ(dir->numPages(), 1);
 
-    PageEntriesEdit gc_migrate_entries;
+    u128::PageEntriesEdit gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
@@ -1479,12 +1479,12 @@ try
     // 10->entry1, 11->10=>11->entry1; del 10->entry1
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
@@ -1497,7 +1497,7 @@ try
 
     // del 11->entry1
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         dir->apply(std::move(edit));
     }
@@ -1516,17 +1516,17 @@ try
     // 10->entry1, 11->10=>11->entry1; del 10->entry1
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 12), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
@@ -1539,7 +1539,7 @@ try
 
     // del 11->entry1
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
         dir->apply(std::move(edit));
@@ -1559,17 +1559,17 @@ try
     // 10->entry1, 11->10, 12->10
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 12), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
@@ -1594,7 +1594,7 @@ try
 
         // upsert 11->entry2
         // upsert 12->entry3
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
         edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
         // this will rewrite ref page 11, 12 to normal page
@@ -1615,7 +1615,7 @@ try
 
     // del 11->entry2
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         dir->apply(std::move(edit));
         // entry2 get removed
@@ -1625,7 +1625,7 @@ try
     }
     // del 12->entry3
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
         dir->apply(std::move(edit));
         // entry3 get removed
@@ -1717,12 +1717,12 @@ try
 {
     // 10->ext, 11->10=>11->ext; del 10->ext
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
@@ -1738,7 +1738,7 @@ try
 
     // del 11->ext
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         dir->apply(std::move(edit));
     }
@@ -1757,33 +1757,33 @@ TEST_F(PageDirectoryGCTest, GCOnRefedExternalEntries2)
 try
 {
     {
-        PageEntriesEdit edit; // ingest
+        u128::PageEntriesEdit edit; // ingest
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 352));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 353), buildV3Id(TEST_NAMESPACE_ID, 352));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit; // ingest done
+        u128::PageEntriesEdit edit; // ingest done
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 352));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit; // split
+        u128::PageEntriesEdit edit; // split
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 357), buildV3Id(TEST_NAMESPACE_ID, 353));
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 359), buildV3Id(TEST_NAMESPACE_ID, 353));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit; // split done
+        u128::PageEntriesEdit edit; // split done
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 353));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit; // one of segment delta-merge
+        u128::PageEntriesEdit edit; // one of segment delta-merge
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 359));
         dir->apply(std::move(edit));
     }
@@ -1802,13 +1802,13 @@ try
 
     auto s0 = dir->createSnapshot();
     auto edit = dir->dumpSnapshotToEdit(s0);
-    auto restore_from_edit = [](const PageEntriesEdit & edit) {
-        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+    auto restore_from_edit = [](const u128::PageEntriesEdit & edit) {
+        auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        PageDirectoryFactory factory;
+        u128::PageDirectoryFactory factory;
         auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
         return d;
     };
@@ -1825,13 +1825,13 @@ CATCH
 TEST_F(PageDirectoryGCTest, DumpAndRestore)
 try
 {
-    auto restore_from_edit = [](const PageEntriesEdit & edit) {
-        auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
+    auto restore_from_edit = [](const u128::PageEntriesEdit & edit) {
+        auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        PageDirectoryFactory factory;
+        u128::PageDirectoryFactory factory;
         auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, deseri_edit);
         return d;
     };
@@ -1841,14 +1841,14 @@ try
     PageEntryV3 entry_2_v1{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_2_v2{.file_id = 2, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v2);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_2_v1);
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_2_v2);
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 3));
         dir->apply(std::move(edit));
@@ -1870,7 +1870,7 @@ try
     PageEntryV3 entry_50{.file_id = 1, .size = 50, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_60{.file_id = 1, .size = 90, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
         edit.putExternal(buildV3Id(TEST_NAMESPACE_ID, 10));
@@ -1900,7 +1900,7 @@ try
     check_s1();
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
 
@@ -1950,7 +1950,7 @@ try
 
     {
         // only 51->50 left
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 21));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 22));
@@ -1986,7 +1986,7 @@ try
 
     {
         // only 51->50 left
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 51));
         dir->apply(std::move(edit));
     }
@@ -2034,25 +2034,25 @@ try
     PageEntryV3 entry_5_v1{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x100, .checksum = 0x4567};
     PageEntryV3 entry_5_v2{.file_id = file_id2, .size = 255, .padded_size = 0, .tag = 0, .offset = 0x400, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_1_v1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_5_v1);
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 2), buildV3Id(TEST_NAMESPACE_ID, 1));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_5_v2); // replaced for page 5 entry
         dir->apply(std::move(edit));
     }
 
-    auto restore_from_edit = [](PageEntriesEdit & edit, BlobStats & stats) {
+    auto restore_from_edit = [](u128::PageEntriesEdit & edit, BlobStats & stats) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        PageDirectoryFactory factory;
+        u128::PageDirectoryFactory factory;
         auto d = factory.setBlobStats(stats).createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
@@ -2091,18 +2091,18 @@ try
     PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
-    auto restore_from_edit = [](PageEntriesEdit & edit) {
+    auto restore_from_edit = [](const u128::PageEntriesEdit & edit) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        PageDirectoryFactory factory;
+        u128::PageDirectoryFactory factory;
         auto d = factory.createFromEdit(getCurrentTestName(), provider, delegator, edit);
         return d;
     };
 
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 50), entry_50_1);
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 50), entry_50_2);
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 51), buildV3Id(TEST_NAMESPACE_ID, 50));
@@ -2119,6 +2119,37 @@ CATCH
 #undef INSERT_ENTRY
 #undef INSERT_ENTRY_ACQ_SNAP
 #undef INSERT_DELETE
+
+
+class PageDirectoryStringTest : public DB::base::TiFlashStorageTestBasic
+{
+public:
+    PageDirectoryStringTest()
+        : log(Logger::get("PageDirectoryStringTest"))
+    {}
+
+    void SetUp() override
+    {
+        auto path = getTemporaryPath();
+        dropDataOnDisk(path);
+        dir = restoreFromDisk();
+    }
+
+    static u128::PageDirectoryPtr restoreFromDisk()
+    {
+        auto path = getTemporaryPath();
+        auto ctx = DB::tests::TiFlashTestEnv::getContext();
+        FileProviderPtr provider = ctx.getFileProvider();
+        PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
+        u128::PageDirectoryFactory factory;
+        return factory.create("PageDirectoryTest", provider, delegator, WALConfig());
+    }
+
+protected:
+    u128::PageDirectoryPtr dir;
+
+    LoggerPtr log;
+};
 
 } // namespace PS::V3::tests
 } // namespace DB
