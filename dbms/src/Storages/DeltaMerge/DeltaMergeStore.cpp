@@ -1733,16 +1733,31 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             return;
     }
 
-    if (try_bg_merge_delta())
-        return;
-    else if (try_bg_split(segment))
-        return;
-    else if (try_bg_merge())
-        return;
-    else if (try_bg_compact())
-        return;
+    if (dm_context->enable_logical_split)
+    {
+        // Logical split point is calculated based on stable. Always try to merge delta into the stable
+        // before logical split is good for calculating the split point.
+        if (try_bg_merge_delta())
+            return;
+        if (try_bg_split(segment))
+            return;
+    }
     else
-        try_place_delta_index();
+    {
+        // During the physical split delta will be merged, so we prefer physical split over merge delta.
+        if (try_bg_split(segment))
+            return;
+        if (try_bg_merge_delta())
+            return;
+    }
+    if (try_bg_merge())
+        return;
+    if (try_bg_compact())
+        return;
+    if (try_place_delta_index())
+        return;
+
+    // The segment does not need any updates for now.
 }
 
 bool DeltaMergeStore::updateGCSafePoint()
@@ -2233,8 +2248,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     }
 
     // Not counting the early give up action.
-    auto delta_bytes = static_cast<Int64>(left_snap->delta->getBytes()) + right_snap->getBytes();
-    auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->getRows();
+    auto delta_bytes = static_cast<Int64>(left_snap->delta->getBytes()) + right_snap->delta->getBytes();
+    auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->delta->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
     if (is_foreground)
