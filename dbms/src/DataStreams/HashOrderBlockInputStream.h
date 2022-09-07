@@ -161,6 +161,8 @@ private:
     std::shared_ptr<Arena> pool = std::make_shared<Arena>();
 
     const Context & context;
+
+    size_t call_count = 0;
 };
 
 } // namespace DB

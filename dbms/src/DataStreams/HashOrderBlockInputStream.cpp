@@ -218,6 +218,9 @@ Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
 
 Block HashOrderBlockInputStream::readImpl()
 {
+    call_count += 1;
+    LOG_FMT_WARNING(log, "call count = {}", call_count);
+
     if (!executed)
     {
         executed = true;
