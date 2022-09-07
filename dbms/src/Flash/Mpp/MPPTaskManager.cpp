@@ -245,6 +245,12 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithoutLock(UInt64 query_id)
     return it == mpp_query_map.end() ? nullptr : it->second;
 }
 
+MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
+{
+    std::lock_guard lock(mu);
+    return getQueryTaskSetWithoutLock(query_id);
+}
+
 bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
 {
     std::lock_guard lock(mu);

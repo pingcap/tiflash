@@ -99,7 +99,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
         // wait until the task is empty for <query:start_ts>
-        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) != nullptr)
+        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(start_ts) != nullptr)
         {
             std::this_thread::sleep_for(seconds);
             retry_times++;
@@ -117,8 +117,7 @@ String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     for (int i = test_meta.context_idx; i < TiFlashTestEnv::globalContextSize(); ++i)
     {
-        // wait until the task is empty for <query:start_ts>
-        while (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSetWithoutLock(start_ts) == nullptr)
+        if (TiFlashTestEnv::getGlobalContext(i).getTMTContext().getMPPTaskManager()->getQueryTaskSet(start_ts) == nullptr)
         {
             return ::testing::AssertionFailure() << "Query " << start_ts << "not active" << std::endl;
         }
