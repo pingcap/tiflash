@@ -88,7 +88,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     switch (executor->tp())
     {
     case tipb::ExecType::TypeLimit:
-        pushBack(PhysicalLimit::build(executor_id, log, executor->limit(), popBack()));
+        pushBack(PhysicalLimit::build(context, executor_id, log, executor->limit(), popBack()));
         break;
     case tipb::ExecType::TypeTopN:
         pushBack(PhysicalTopN::build(context, executor_id, log, executor->topn(), popBack()));

@@ -18,24 +18,59 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/plans/PhysicalLimit.h>
+#include <Flash/Planner/plans/PhysicalPartialLimit.h>
+#include <Flash/Planner/plans/PhysicalFinalLimit.h>
+#include <Flash/Planner/plans/PhysicalPipelineBreaker.h>
 #include <Interpreters/Context.h>
 
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalLimit::build(
+    const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Limit & limit,
     const PhysicalPlanNodePtr & child)
 {
     assert(child);
-    auto physical_limit = std::make_shared<PhysicalLimit>(
-        executor_id,
-        child->getSchema(),
-        log->identifier(),
-        child,
-        limit.limit());
-    return physical_limit;
+    if (!context.getDAGContext()->is_pipeline_mode)
+    {
+        auto physical_limit = std::make_shared<PhysicalLimit>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            child,
+            limit.limit());
+        return physical_limit;
+    }
+    else
+    {
+        LimitBreakerPtr limit_breaker = std::make_shared<LimitBreaker>(limit.limit());
+
+        auto physical_partial_limit = std::make_shared<PhysicalPartialLimit>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            child,
+            limit_breaker);
+        physical_partial_limit->notTiDBOperator();
+
+        auto physical_final_limit = std::make_shared<PhysicalFinalLimit>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            child->getSampleBlock(),
+            limit_breaker);
+
+        auto physical_breaker = std::make_shared<PhysicalPipelineBreaker>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            physical_partial_limit,
+            physical_final_limit);
+        physical_breaker->notTiDBOperator();
+        return physical_breaker;
+    }
 }
 
 void PhysicalLimit::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

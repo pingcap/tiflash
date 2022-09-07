@@ -12,34 +12,35 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Logger.h>
-#include <Flash/Planner/FinalizeHelper.h>
-#include <Flash/Planner/plans/PhysicalFinalTopN.h>
+#include <Flash/Planner/plans/PhysicalPartialLimit.h>
 #include <Interpreters/Context.h>
-#include <Transforms/SortedSource.h>
+#include <Transforms/LimitSink.h>
 #include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
-void PhysicalFinalTopN::transformImpl(DAGPipeline &, Context &, size_t)
+void PhysicalPartialLimit::transformImpl(DAGPipeline &, Context &, size_t)
 {
     throw Exception("Unsupport");
 }
 
-void PhysicalFinalTopN::finalize(const Names & parent_require)
+void PhysicalPartialLimit::finalize(const Names & parent_require)
 {
-    FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+    child->finalize(parent_require);
 }
 
-const Block & PhysicalFinalTopN::getSampleBlock() const
+const Block & PhysicalPartialLimit::getSampleBlock() const
 {
-    return sample_block;
+    return child->getSampleBlock();
 }
 
-void PhysicalFinalTopN::transform(TransformsPipeline & pipeline, Context &)
+void PhysicalPartialLimit::transform(TransformsPipeline & pipeline, Context & context)
 {
+    child->transform(pipeline, context);
+
     pipeline.transform([&](auto & transforms) {
-        transforms->setSource(std::make_shared<SortedSource>(sort_breaker));
+        transforms->setSink(std::make_shared<LimitSink>(limit_breaker));
     });
+    limit_breaker->initForRead(pipeline.getHeader());
 }
 } // namespace DB

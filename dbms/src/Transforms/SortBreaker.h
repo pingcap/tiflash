@@ -41,7 +41,7 @@ public:
 
     Block read();
 
-    void initForRead(const Block & sample_block);
+    void initForRead(const Block & header);
 
     Block getHeader();
 

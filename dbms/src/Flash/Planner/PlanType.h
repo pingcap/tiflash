@@ -45,6 +45,8 @@ struct PlanType
         PipelineBreaker = 20,
         PartialTopN = 21,
         FinalTopN = 22,
+        PartialLimit = 23,
+        FinalLimit = 24,
     };
     PlanTypeEnum enum_value;
 

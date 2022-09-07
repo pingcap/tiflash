@@ -29,7 +29,7 @@ Block SortBreaker::read()
     return impl->read();
 }
 
-void SortBreaker::initForRead(const Block & sample_block)
+void SortBreaker::initForRead(const Block & header)
 {
     std::lock_guard<std::mutex> lock(mu);
     size_t reverse_size = 0;
@@ -41,9 +41,9 @@ void SortBreaker::initForRead(const Block & sample_block)
         for (auto & local_block : local_blocks)
             blocks.emplace_back(std::move(local_block));
     }
-    assert(sample_block.rows() == 0);
+    assert(header.rows() == 0);
     if (blocks.empty())
-        blocks.push_back(sample_block);
+        blocks.push_back(header);
     impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
         blocks, 
         description, 

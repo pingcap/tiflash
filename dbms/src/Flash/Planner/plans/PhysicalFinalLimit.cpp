@@ -14,32 +14,32 @@
 
 #include <Common/Logger.h>
 #include <Flash/Planner/FinalizeHelper.h>
-#include <Flash/Planner/plans/PhysicalFinalTopN.h>
+#include <Flash/Planner/plans/PhysicalFinalLimit.h>
 #include <Interpreters/Context.h>
-#include <Transforms/SortedSource.h>
+#include <Transforms/LimitSource.h>
 #include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
-void PhysicalFinalTopN::transformImpl(DAGPipeline &, Context &, size_t)
+void PhysicalFinalLimit::transformImpl(DAGPipeline &, Context &, size_t)
 {
     throw Exception("Unsupport");
 }
 
-void PhysicalFinalTopN::finalize(const Names & parent_require)
+void PhysicalFinalLimit::finalize(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
 }
 
-const Block & PhysicalFinalTopN::getSampleBlock() const
+const Block & PhysicalFinalLimit::getSampleBlock() const
 {
     return sample_block;
 }
 
-void PhysicalFinalTopN::transform(TransformsPipeline & pipeline, Context &)
+void PhysicalFinalLimit::transform(TransformsPipeline & pipeline, Context &)
 {
     pipeline.transform([&](auto & transforms) {
-        transforms->setSource(std::make_shared<SortedSource>(sort_breaker));
+        transforms->setSource(std::make_shared<LimitSource>(limit_breaker));
     });
 }
 } // namespace DB

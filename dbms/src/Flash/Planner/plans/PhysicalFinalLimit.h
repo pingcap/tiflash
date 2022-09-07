@@ -14,29 +14,23 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalUnary.h>
-#include <tipb/executor.pb.h>
+#include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <Transforms/LimitBreaker.h>
 
 namespace DB
 {
-class PhysicalLimit : public PhysicalUnary
+class PhysicalFinalLimit : public PhysicalLeaf
 {
 public:
-    static PhysicalPlanNodePtr build(
-        const Context & context,
-        const String & executor_id,
-        const LoggerPtr & log,
-        const tipb::Limit & limit,
-        const PhysicalPlanNodePtr & child);
-
-    PhysicalLimit(
+    PhysicalFinalLimit(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & child_,
-        size_t limit_)
-        : PhysicalUnary(executor_id_, PlanType::Limit, schema_, req_id, child_)
-        , limit(limit_)
+        const Block & sample_block_,
+        const LimitBreakerPtr & limit_breaker_)
+        : PhysicalLeaf(executor_id_, PlanType::Limit, schema_, req_id)
+        , sample_block(sample_block_)
+        , limit_breaker(limit_breaker_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -45,13 +39,17 @@ public:
 
     PhysicalPlanNodePtr cloneOne() const override
     {
-        auto clone_one = std::make_shared<PhysicalLimit>(*this);
+        auto clone_one = std::make_shared<PhysicalFinalLimit>(*this);
         return clone_one;
     }
+
+    void transform(TransformsPipeline & pipeline, Context &) override;
 
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 
-    size_t limit;
+    Block sample_block;
+
+    LimitBreakerPtr limit_breaker;
 };
 } // namespace DB
