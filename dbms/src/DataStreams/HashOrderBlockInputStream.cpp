@@ -221,7 +221,7 @@ Block HashOrderBlockInputStream::readImpl()
 }
 
 
-Block HashOrderBlockInputStream::readImplInternal()
+NO_INLINE Block HashOrderBlockInputStream::readImplInternal()
 {
     call_count += 1;
     LOG_FMT_WARNING(log, "call count = {}", call_count);
