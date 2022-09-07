@@ -125,9 +125,9 @@ Block IProfilingBlockInputStream::read(FilterPtr & res_filter, bool return_filte
 
     process2(res_filter, res, return_filter);
 
-    process3();
+    process3(res);
 
-    process4();
+    process4(res);
 
     info.updateExecutionTime(info.total_stopwatch.elapsed() - start_time);
 
