@@ -70,7 +70,7 @@ MPPTunnel::MPPTunnel(
     , tunnel_id(tunnel_id_)
     , send_queue(std::make_shared<MPMCQueue<TrackedMppDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
-    , mem_tracker(current_memory_tracker)
+    , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -129,7 +129,7 @@ void MPPTunnel::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), mem_tracker));
+                    send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), mem_tracker.get()));
                     if (mode == TunnelSenderMode::ASYNC_GRPC)
                         async_tunnel_sender->tryFlushOne();
                 }
@@ -164,7 +164,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
         if (status == TunnelStatus::Finished)
             throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
 
-        if (send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker)) == MPMCQueueResult::OK)
+        if (send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(data, mem_tracker.get())) == MPMCQueueResult::OK)
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -308,7 +308,8 @@ StringRef MPPTunnel::statusToString()
 
 void MPPTunnel::updateMemTracker()
 {
-    mem_tracker = current_memory_tracker;
+    mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+    ;
 }
 
 void TunnelSender::consumerFinish(const String & msg)
