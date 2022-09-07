@@ -20,6 +20,10 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalTopN.h>
+#include <Flash/Planner/plans/PhysicalFinalTopN.h>
+#include <Flash/Planner/plans/PhysicalPartialTopN.h>
+#include <Flash/Planner/plans/PhysicalPipelineBreaker.h>
+#include <Transforms/SortBreaker.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -45,15 +49,54 @@ PhysicalPlanNodePtr PhysicalTopN::build(
     auto order_columns = analyzer.buildOrderColumns(before_sort_actions, top_n.order_by());
     SortDescription order_descr = getSortDescription(order_columns, top_n.order_by());
 
-    auto physical_top_n = std::make_shared<PhysicalTopN>(
-        executor_id,
-        child->getSchema(),
-        log->identifier(),
-        child,
-        order_descr,
-        before_sort_actions,
-        top_n.limit());
-    return physical_top_n;
+    if (!context.getDAGContext()->is_pipeline_mode)
+    {
+        auto physical_top_n = std::make_shared<PhysicalTopN>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            child,
+            order_descr,
+            before_sort_actions,
+            top_n.limit());
+        return physical_top_n;
+    }
+    else
+    {
+        const auto & settings = context.getSettingsRef();
+        SortBreakerPtr sort_breaker = std::make_shared<SortBreaker>(
+            order_descr,
+            log->identifier(),
+            settings.max_block_size,
+            top_n.limit());
+
+        auto physical_partial_topn = std::make_shared<PhysicalPartialTopN>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            child,
+            order_descr,
+            before_sort_actions,
+            top_n.limit(),
+            sort_breaker);
+        physical_partial_topn->notTiDBOperator();
+
+        auto physical_final_topn = std::make_shared<PhysicalFinalTopN>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            before_sort_actions->getSampleBlock(),
+            sort_breaker);
+
+        auto physical_breaker = std::make_shared<PhysicalPipelineBreaker>(
+            executor_id,
+            child->getSchema(),
+            log->identifier(),
+            physical_partial_topn,
+            physical_final_topn);
+        physical_breaker->notTiDBOperator();
+        return physical_breaker;
+    }
 }
 
 void PhysicalTopN::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

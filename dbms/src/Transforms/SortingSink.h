@@ -14,19 +14,33 @@
 
 #pragma once
 
-#include <Core/Block.h>
-
-#include <memory>
+#include <Core/SortDescription.h>
+#include <Interpreters/sortBlock.h>
+#include <Transforms/Sink.h>
+#include <Transforms/SortBreaker.h>
 
 namespace DB
 {
-class Sink
+class SortingSink : public Sink
 {
 public:
-    virtual ~Sink() = default;
-    virtual bool write(Block & block, size_t loop_id) = 0;
-    virtual void finish() {}
-};
+    SortingSink(
+        const SortDescription & description_,
+        size_t limit_,
+        const SortBreakerPtr & sort_breaker_)
+        : description(description_)
+        , limit(limit_)
+        , sort_breaker(sort_breaker_)
+    {}
 
-using SinkPtr = std::shared_ptr<Sink>;
-} // namespace DB
+    bool write(Block & block, size_t) override;
+
+    void finish() override;
+private:
+    SortDescription description;
+    size_t limit;
+
+    SortBreakerPtr sort_breaker;
+    Blocks local_blocks;
+};
+}

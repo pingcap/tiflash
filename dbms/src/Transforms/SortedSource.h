@@ -14,19 +14,30 @@
 
 #pragma once
 
-#include <Core/Block.h>
-
-#include <memory>
+#include <Transforms/SortBreaker.h>
+#include <Transforms/Source.h>
 
 namespace DB
 {
-class Sink
+class SortedSource : public Source
 {
 public:
-    virtual ~Sink() = default;
-    virtual bool write(Block & block, size_t loop_id) = 0;
-    virtual void finish() {}
-};
+    explicit SortedSource(
+        const SortBreakerPtr & sort_breaker_)
+        : sort_breaker(sort_breaker_)
+    {}
 
-using SinkPtr = std::shared_ptr<Sink>;
+    Block read() override
+    {
+        return sort_breaker->read();
+    }
+
+    Block getHeader() const override
+    {
+        return sort_breaker->getHeader();
+    }
+
+private:
+    SortBreakerPtr sort_breaker;
+};
 } // namespace DB

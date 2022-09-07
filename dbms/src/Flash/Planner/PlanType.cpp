@@ -26,6 +26,8 @@ String PlanType::toString() const
         return #t;
         M(Limit)
         M(TopN)
+        M(PartialTopN)
+        M(FinalTopN)
         M(Filter)
         M(Aggregation)
         M(FinalAggregation)
@@ -44,8 +46,7 @@ String PlanType::toString() const
         M(NonJoinProbe)
         M(JoinBuild)
         M(ResultHandler)
-        M(PipelineAggregation)
-        M(PipelineJoin)
+        M(PipelineBreaker)
 #undef M
     default:
         throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);

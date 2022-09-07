@@ -42,7 +42,7 @@
 #include <Flash/Planner/plans/PhysicalJoin.h>
 #include <Flash/Planner/plans/PhysicalJoinBuild.h>
 #include <Flash/Planner/plans/PhysicalJoinProbe.h>
-#include <Flash/Planner/plans/PhysicalPipelineJoin.h>
+#include <Flash/Planner/plans/PhysicalPipelineBreaker.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -193,7 +193,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
             join_ptr,
             build_side_prepare_actions);
         physical_join_build->notTiDBOperator();
-        physical_join_build->disableRestoreConcurrency();
 
         auto physical_join_probe = std::make_shared<PhysicalJoinProbe>(
             executor_id,
@@ -206,15 +205,14 @@ PhysicalPlanNodePtr PhysicalJoin::build(
             is_tiflash_right_join,
             Block(join_output_schema));
 
-        auto physical_join = std::make_shared<PhysicalPipelineJoin>(
+        auto physical_breaker = std::make_shared<PhysicalPipelineBreaker>(
             executor_id,
             join_output_schema,
             log->identifier(),
-            physical_join_probe,
-            physical_join_build);
-        physical_join->notTiDBOperator();
-        physical_join_build->disableRestoreConcurrency();
-        return physical_join;
+            physical_join_build,
+            physical_join_probe);
+        physical_breaker->notTiDBOperator();
+        return physical_breaker;
     }
 }
 

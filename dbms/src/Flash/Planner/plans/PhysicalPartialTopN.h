@@ -14,37 +14,50 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalBinary.h>
+#include <Core/SortDescription.h>
+#include <Flash/Planner/plans/PhysicalUnary.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Transforms/SortBreaker.h>
 
 namespace DB
 {
-class PhysicalPipelineJoin : public PhysicalBinary
+class PhysicalPartialTopN : public PhysicalUnary
 {
 public:
-    PhysicalPipelineJoin(
+    PhysicalPartialTopN(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & probe_,
-        const PhysicalPlanNodePtr & build_)
-        : PhysicalBinary(executor_id_, PlanType::PipelineJoin, schema_, req_id, probe_, build_)
+        const PhysicalPlanNodePtr & child_,
+        const SortDescription & order_descr_,
+        const ExpressionActionsPtr & before_sort_actions_,
+        size_t limit_,
+        const SortBreakerPtr & sort_breaker_)
+        : PhysicalUnary(executor_id_, PlanType::PartialTopN, schema_, req_id, child_)
+        , order_descr(order_descr_)
+        , before_sort_actions(before_sort_actions_)
+        , limit(limit_)
+        , sort_breaker(sort_breaker_)
     {}
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
-    /// the right side is the build side.
-    const PhysicalPlanNodePtr & probe() const { return left; }
-    const PhysicalPlanNodePtr & build() const { return right; }
-
     PhysicalPlanNodePtr cloneOne() const override
     {
-        auto clone_one = std::make_shared<PhysicalPipelineJoin>(*this);
+        auto clone_one = std::make_shared<PhysicalPartialTopN>(*this);
         return clone_one;
     }
 
+    void transform(TransformsPipeline & pipeline, Context & context) override;
+
 private:
     void transformImpl(DAGPipeline &, Context &, size_t) override;
+
+    SortDescription order_descr;
+    ExpressionActionsPtr before_sort_actions;
+    size_t limit;
+    SortBreakerPtr sort_breaker;
 };
 } // namespace DB

@@ -28,7 +28,7 @@
 #include <Flash/Planner/plans/PhysicalAggregation.h>
 #include <Flash/Planner/plans/PhysicalFinalAggregation.h>
 #include <Flash/Planner/plans/PhysicalPartialAggregation.h>
-#include <Flash/Planner/plans/PhysicalPipelineAggregation.h>
+#include <Flash/Planner/plans/PhysicalPipelineBreaker.h>
 #include <Interpreters/Context.h>
 
 namespace DB
@@ -110,7 +110,6 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             aggregate_descriptions,
             aggregate_store);
         physical_partial_agg->notTiDBOperator();
-        physical_partial_agg->disableRestoreConcurrency();
 
         auto physical_final_agg = std::make_shared<PhysicalFinalAggregation>(
             executor_id,
@@ -118,17 +117,15 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
             log->identifier(),
             aggregate_store,
             expr_after_agg_actions);
-        physical_partial_agg->disableRestoreConcurrency();
 
-        auto physical_agg = std::make_shared<PhysicalPipelineAggregation>(
+        auto physical_breaker = std::make_shared<PhysicalPipelineBreaker>(
             executor_id,
             schema,
             log->identifier(),
             physical_partial_agg,
             physical_final_agg);
-        physical_agg->notTiDBOperator();
-        physical_agg->disableRestoreConcurrency();
-        return physical_agg;
+        physical_breaker->notTiDBOperator();
+        return physical_breaker;
     }
 }
 

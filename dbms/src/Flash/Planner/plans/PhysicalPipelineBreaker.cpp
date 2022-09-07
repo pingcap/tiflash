@@ -26,22 +26,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/plans/PhysicalPipelineJoin.h>
+#include <Flash/Planner/plans/PhysicalPipelineBreaker.h>
 
 namespace DB
 {
-void PhysicalPipelineJoin::transformImpl(DAGPipeline &, Context &, size_t)
+void PhysicalPipelineBreaker::transformImpl(DAGPipeline &, Context &, size_t)
 {
     throw Exception("Unsupport");
 }
 
-void PhysicalPipelineJoin::finalize(const Names & parent_require)
+void PhysicalPipelineBreaker::finalize(const Names & parent_require)
 {
-    probe()->finalize(parent_require);
+    after()->finalize(parent_require);
+    before()->finalize();
 }
 
-const Block & PhysicalPipelineJoin::getSampleBlock() const
+const Block & PhysicalPipelineBreaker::getSampleBlock() const
 {
-    return probe()->getSampleBlock();
+    return after()->getSampleBlock();
 }
 } // namespace DB

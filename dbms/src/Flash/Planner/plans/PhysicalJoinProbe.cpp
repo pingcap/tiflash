@@ -165,7 +165,6 @@ std::optional<PhysicalPlanNodePtr> PhysicalJoinProbe::splitNonJoinedPlanNode()
         probe_side_prepare_actions->getSampleBlock(),
         sample_block);
     non_joined_plan->notTiDBOperator();
-    non_joined_plan->disableRestoreConcurrency();
     return {non_joined_plan};
 }
 } // namespace DB

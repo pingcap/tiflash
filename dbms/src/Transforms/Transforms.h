@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/Exception.h>
 #include <Core/Block.h>
 #include <Transforms/Sink.h>
 #include <Transforms/Source.h>
@@ -42,65 +41,20 @@ using TransformPtr = std::shared_ptr<Transform>;
 class Transforms
 {
 public:
-    void setSource(const SourcePtr & source_)
-    {
-        assert(!source);
-        source = source_;
-    }
-    void setSink(const SinkPtr & sink_)
-    {
-        assert(!sink);
-        sink = sink_;
-    }
-    void append(const TransformPtr & transform)
-    {
-        transforms.emplace_back(transform);
-    }
+    void setSource(const SourcePtr & source_);
+    void setSink(const SinkPtr & sink_);
+    void append(const TransformPtr & transform);
 
-    bool execute(size_t loop_id)
-    {
-        assert(source);
-        assert(sink);
+    bool execute(size_t loop_id);
 
-        if (isCancelledOrThrowIfKilled())
-            return false;
+    void prepare();
+    void finish();
 
-        Block block = source->read();
-        for (const auto & transform : transforms)
-        {
-            if (!transform->transform(block))
-                return true;
-        }
-        return sink->write(block, loop_id);
-    }
+    void cancel(bool kill);
 
-    void prepare() {}
-    void finish() {}
+    bool isCancelledOrThrowIfKilled() const;
 
-    void cancel(bool kill)
-    {
-        if (kill)
-            is_killed = true;
-        is_cancelled = true;
-    }
-
-    bool isCancelledOrThrowIfKilled() const
-    {
-        if (!is_cancelled)
-            return false;
-        if (is_killed)
-            throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
-        return true;
-    }
-
-    Block getHeader()
-    {
-        assert(source);
-        Block block = source->getHeader();
-        for (const auto & transform : transforms)
-            transform->transformHeader(block);
-        return block;
-    }
+    Block getHeader();
 
 private:
     SourcePtr source;

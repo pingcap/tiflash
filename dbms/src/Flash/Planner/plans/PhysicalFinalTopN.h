@@ -14,37 +14,42 @@
 
 #pragma once
 
-#include <Flash/Planner/plans/PhysicalBinary.h>
+#include <Flash/Planner/plans/PhysicalLeaf.h>
+#include <Transforms/SortBreaker.h>
 
 namespace DB
 {
-class PhysicalPipelineAggregation : public PhysicalBinary
+class PhysicalFinalTopN : public PhysicalLeaf
 {
 public:
-    PhysicalPipelineAggregation(
+    PhysicalFinalTopN(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const String & req_id,
-        const PhysicalPlanNodePtr & partial_,
-        const PhysicalPlanNodePtr & final_)
-        : PhysicalBinary(executor_id_, PlanType::PipelineAggregation, schema_, req_id, partial_, final_)
+        const Block & sample_block_,
+        const SortBreakerPtr & sort_breaker_)
+        : PhysicalLeaf(executor_id_, PlanType::FinalTopN, schema_, req_id)
+        , sample_block(sample_block_)
+        , sort_breaker(sort_breaker_)
     {}
 
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
 
-    /// the right side is the final side.
-    const PhysicalPlanNodePtr & partial() const { return left; }
-    const PhysicalPlanNodePtr & final() const { return right; }
-
     PhysicalPlanNodePtr cloneOne() const override
     {
-        auto clone_one = std::make_shared<PhysicalPipelineAggregation>(*this);
+        auto clone_one = std::make_shared<PhysicalFinalTopN>(*this);
         return clone_one;
     }
 
+    void transform(TransformsPipeline & pipeline, Context &) override;
+
 private:
     void transformImpl(DAGPipeline &, Context &, size_t) override;
+
+    Block sample_block;
+
+    SortBreakerPtr sort_breaker;
 };
 } // namespace DB

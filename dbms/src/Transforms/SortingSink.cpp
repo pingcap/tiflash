@@ -12,23 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/plans/PhysicalPipelineAggregation.h>
+#include <Transforms/SortingSink.h>
 
 namespace DB
 {
-void PhysicalPipelineAggregation::transformImpl(DAGPipeline &, Context &, size_t)
+bool SortingSink::write(Block & block, size_t)
 {
-    throw Exception("Unsupport");
+    if (!block)
+        return false;
+
+    sortBlock(block, description, limit);
+    local_blocks.emplace_back(std::move(block));
+    return true;
 }
 
-void PhysicalPipelineAggregation::finalize(const Names & parent_require)
+void SortingSink::finish()
 {
-    final()->finalize(parent_require);
-    partial()->finalize();
+    sort_breaker->add(std::move(local_blocks));
 }
-
-const Block & PhysicalPipelineAggregation::getSampleBlock() const
-{
-    return final()->getSampleBlock();
 }
-} // namespace DB
