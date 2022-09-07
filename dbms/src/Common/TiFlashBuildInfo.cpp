@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
 #include <Common/config_version.h>
 #include <common/config_common.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <openssl/opensslv.h>
 
 #include <ostream>
 #include <string>
@@ -51,15 +53,25 @@ std::string getUTCBuildTime()
 {
     return TIFLASH_UTC_BUILD_TIME;
 }
+// clang-format off
 std::string getEnabledFeatures()
 {
     std::vector<std::string> features
     {
 // allocator
 #if USE_JEMALLOC
-        "jemalloc",
+            "jemalloc",
 #elif USE_MIMALLOC
-        "mimalloc",
+            "mimalloc",
+#endif
+
+// OpenSSL or BoringSSL
+#if USE_INTERNAL_SSL_LIBRARY
+            "boringssl",
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+            "openssl(no sm4)",
+#else
+            "openssl(sm4)",
 #endif
 
 // mem-profiling
@@ -119,6 +131,7 @@ std::string getEnabledFeatures()
     };
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
+// clang-format on
 std::string getProfile()
 {
     return TIFLASH_PROFILE;

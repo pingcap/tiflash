@@ -100,7 +100,7 @@ public:
             break;
         case EncryptionMethod::SM4Ctr:
 #if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-            throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
+            throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
                                        Errors::Encryption::Internal);
 #else
             // Openssl support SM4 after 1.1.1 release version.
