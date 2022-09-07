@@ -1319,7 +1319,12 @@ public:
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
 
-        SqlMode sql_mode{context.getDAGContext()->allowZeroInDate(), context.getDAGContext()->allowInvalidDate()};
+        SqlMode sql_mode{false, false};
+        if (context.getDAGContext())
+        {
+            sql_mode.allow_zero_in_date = context.getDAGContext()->allowZeroInDate();
+            sql_mode.allow_invalid_date = context.getDAGContext()->allowInvalidDate();
+        }
 
         int to_fsp [[maybe_unused]] = 0;
         if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
