@@ -215,8 +215,13 @@ Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
     return blocks.front().cloneWithColumns(std::move(columns));
 }
 
-
 Block HashOrderBlockInputStream::readImpl()
+{
+    return readImplInternal();
+}
+
+
+Block HashOrderBlockInputStream::readImplInternal()
 {
     call_count += 1;
     LOG_FMT_WARNING(log, "call count = {}", call_count);
