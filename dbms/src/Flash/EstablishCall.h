@@ -81,7 +81,7 @@ private:
 
     void write(const mpp::MPPDataPacket & packet);
     /// Called when a application error happens.
-    /// Connection will finish after writing this packet.
+    /// No more packet can be written after writing this packet.
     void writeErr(const mpp::MPPDataPacket & packet);
     /// Called when write is done.
     /// It will try to call async_sender's consumerFinish to inform it's finished.
