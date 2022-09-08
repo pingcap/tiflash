@@ -392,7 +392,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
 template <typename RegionPtrWrap>
 void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
-    LOG_FMT_INFO(log, "Try to apply snapshot {}", new_region->toString(true));
+    LOG_FMT_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
@@ -401,7 +401,7 @@ void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContex
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_FMT_INFO(log, "{} apply snapshot success", new_region->toString(false));
+    LOG_FMT_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(false));
 }
 
 template void KVStore::handlePreApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
