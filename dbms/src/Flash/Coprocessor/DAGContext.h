@@ -305,6 +305,7 @@ public:
     {
         mpp_receiver_set = receiver_set;
     }
+    const MPPReceiverSetPtr & getMppReceiverSet() const;
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     std::vector<CoprocessorReaderPtr> & getCoprocessorReaders();
 

@@ -68,8 +68,10 @@ MPPTunnel::MPPTunnel(
     , status(TunnelStatus::Unconnected)
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
-    , send_queue(std::make_shared<MPMCQueue<MPPDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
+    , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
+    , send_queue(std::make_shared<MPMCQueue<TrackedMppDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -109,6 +111,10 @@ void MPPTunnel::finishSendQueue()
 /// exit abnormally, such as being cancelled.
 void MPPTunnel::close(const String & reason)
 {
+    SCOPE_EXIT({
+        // ensure the tracked memory is released and udpated before memotry tracker(in ProcListEntry) is released
+        send_queue->finishAndDrain(); // drain the send_queue when close
+    });
     {
         std::unique_lock lk(*mu);
         switch (status)
@@ -124,7 +130,7 @@ void MPPTunnel::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    send_queue->push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
+                    send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), getMemTracker()));
                     if (mode == TunnelSenderMode::ASYNC_GRPC)
                         async_tunnel_sender->tryFlushOne();
                 }
@@ -159,7 +165,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
         if (status == TunnelStatus::Finished)
             throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
 
-        if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)) == MPMCQueueResult::OK)
+        if (send_queue->push(std::make_shared<DB::TrackedMppDataPacket>(data, getMemTracker())) == MPMCQueueResult::OK)
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -301,6 +307,11 @@ StringRef MPPTunnel::statusToString()
     }
 }
 
+void MPPTunnel::updateMemTracker()
+{
+    mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+}
+
 void TunnelSender::consumerFinish(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
@@ -321,10 +332,10 @@ void SyncTunnelSender::sendJob()
     String err_msg;
     try
     {
-        MPPDataPacketPtr res;
+        TrackedMppDataPacketPtr res;
         while (send_queue->pop(res) == MPMCQueueResult::OK)
         {
-            if (!writer->write(*res))
+            if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -379,11 +390,11 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     bool queue_empty_flag = false;
     try
     {
-        MPPDataPacketPtr res;
+        TrackedMppDataPacketPtr res;
         queue_empty_flag = send_queue->pop(res) != MPMCQueueResult::OK;
         if (!queue_empty_flag)
         {
-            if (!writer->write(*res))
+            if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
             }
@@ -413,11 +424,15 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     }
 }
 
-LocalTunnelSender::MPPDataPacketPtr LocalTunnelSender::readForLocal()
+std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
 {
-    MPPDataPacketPtr res;
+    TrackedMppDataPacketPtr res;
     if (send_queue->pop(res) == MPMCQueueResult::OK)
+    {
+        // switch tunnel's memory tracker into receiver's
+        res->switchMemTracker(current_memory_tracker);
         return res;
+    }
     consumerFinish("");
     return nullptr;
 }

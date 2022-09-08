@@ -124,7 +124,8 @@ public:
         bool is_raw_,
         bool do_range_filter_for_raw_,
         SegmentReadTasks && tasks_,
-        AfterSegmentRead after_segment_read_)
+        AfterSegmentRead after_segment_read_,
+        const String & tracing_id)
         : pool_id(nextPoolId())
         , table_id(table_id_)
         , dm_context(dm_context_)
@@ -136,10 +137,10 @@ public:
         , do_range_filter_for_raw(do_range_filter_for_raw_)
         , tasks(std::move(tasks_))
         , after_segment_read(after_segment_read_)
-        , log(&Poco::Logger::get("SegmentReadTaskPool"))
+        , log(Logger::get("SegmentReadTaskPool", tracing_id))
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
-        , mem_tracker(current_memory_tracker)
+        , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     {}
 
     ~SegmentReadTaskPool()
@@ -150,7 +151,7 @@ public:
         auto total_bytes = blk_stat.totalBytes();
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
         auto approximate_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        LOG_FMT_DEBUG(log, "pool {} table {} pop {} pop_empty {} pop_empty_ratio {} max_queue_size {} blk_avg_bytes {} approximate_max_pending_block_bytes {} MB total_count {} total_bytes {} MB", //
+        LOG_FMT_DEBUG(log, "Done. pool_id={} table_id={} pop={} pop_empty={} pop_empty_ratio={} max_queue_size={} blk_avg_bytes={} approximate_max_pending_block_bytes={:.2f}MB total_count={} total_bytes={:.2f}MB", //
                       pool_id,
                       table_id,
                       pop_times,
@@ -216,14 +217,15 @@ private:
     std::unordered_set<uint64_t> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::atomic<int64_t> unordered_input_stream_ref_count;
 
     std::atomic<bool> exception_happened;
     DB::Exception exception;
 
-    MemoryTracker * mem_tracker;
+    // The memory tracker of MPPTask.
+    MemoryTrackerPtr mem_tracker;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;

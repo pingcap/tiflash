@@ -97,7 +97,7 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto seg = t->segment;
     BlockInputStreamPtr stream;
     if (is_raw)
@@ -109,7 +109,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
         auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
         stream = seg->getInputStream(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
     }
-    LOG_FMT_DEBUG(log, "getInputStream pool {} seg_id {} succ", pool_id, seg->segmentId());
+    LOG_FMT_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, seg->segmentId());
     return stream;
 }
 
@@ -122,7 +122,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
         active_segment_ids.erase(seg->segmentId());
         pool_finished = active_segment_ids.empty() && tasks.empty();
     }
-    LOG_FMT_DEBUG(log, "finishSegment pool {} seg_id {} pool_finished {}", pool_id, seg->segmentId(), pool_finished);
+    LOG_FMT_DEBUG(log, "finishSegment pool_id={} segment_id={} pool_finished={}", pool_id, seg->segmentId(), pool_finished);
     if (pool_finished)
     {
         q.finish();
@@ -136,7 +136,7 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(uint64_t seg_id)
     auto itr = std::find_if(tasks.begin(), tasks.end(), [seg_id](const SegmentReadTaskPtr & task) { return task->segment->segmentId() == seg_id; });
     if (itr == tasks.end())
     {
-        throw Exception(fmt::format("pool {} seg_id {} not found", pool_id, seg_id));
+        throw Exception(fmt::format("{} pool_id={} segment_id={} not found", __PRETTY_FUNCTION__, pool_id, seg_id));
     }
     auto t = *(itr);
     tasks.erase(itr);
@@ -159,11 +159,11 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
         auto itr = segments.find(task->segment->segmentId());
         if (itr == segments.end())
         {
-            throw DB::Exception(fmt::format("seg_id {} not found from merging segments", task->segment->segmentId()));
+            throw DB::Exception(fmt::format("segment_id {} not found from merging segments", task->segment->segmentId()));
         }
         if (std::find(itr->second.begin(), itr->second.end(), poolId()) == itr->second.end())
         {
-            throw DB::Exception(fmt::format("pool {} not found from merging segment {}=>{}", poolId(), itr->first, itr->second));
+            throw DB::Exception(fmt::format("pool_id={} not found from merging segment {}=>{}", poolId(), itr->first, itr->second));
         }
         if (target == segments.end() || itr->second.size() > target->second.size())
         {
@@ -179,7 +179,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto block = stream->read();
     if (block)
     {
