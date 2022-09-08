@@ -77,10 +77,11 @@ private:
     /// with a `this` pointer because the pointer may be gotten by another grpc thread in
     /// a very short time.
     /// Keep it in mind if you want to change any logic here.
-    void initRpc();
 
+    void initRpc();
+    /// The packet will be written to grpc.
     void write(const mpp::MPPDataPacket & packet);
-    /// Called when a application error happens.
+    /// Called when an application error happens.
     /// No more packet can be written after writing this packet.
     void writeErr(const mpp::MPPDataPacket & packet);
     /// Called when write is done.
@@ -88,7 +89,7 @@ private:
     void writeDone(String msg, const grpc::Status & status);
     /// Called when a grpc error happens or in shutdown progress.
     void unexpectedWriteDone();
-
+    /// Try to send one msg.
     void trySendOneMsg();
 
     // Server instance

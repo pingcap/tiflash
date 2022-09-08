@@ -116,26 +116,26 @@ void EstablishCallData::initRpc()
 
         auto res = service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
 
-        bool success = std::visit(variant_op::overloaded{
-                                      [this](grpc::Status & status) {
-                                          if (!status.ok())
-                                          {
-                                              writeDone("initRpc called with no-ok status", status);
-                                              return false;
-                                          }
-                                          return true;
-                                      },
-                                      [this](std::string & err_msg) {
-                                          if (!err_msg.empty())
-                                          {
-                                              writeErr(getPacketWithError(err_msg));
-                                              return false;
-                                          }
-                                          return true;
-                                      }},
-                                  res);
+        bool success = true;
+        std::visit(variant_op::overloaded{
+                       [&, this](grpc::Status & status) {
+                           if (!status.ok())
+                           {
+                               writeDone("initRpc called with no-ok status", status);
+                               success = false;
+                           }
+                       },
+                       [&, this](std::string & err_msg) {
+                           if (!err_msg.empty())
+                           {
+                               writeErr(getPacketWithError(err_msg));
+                               success = false;
+                           }
+                       }},
+                   res);
         if (!success)
         {
+            // If success is false, return immediately due to calling `write` or `writeErr`.
             return;
         }
     }
@@ -186,7 +186,7 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
         {
             msg = fmt::format("{}: {}", async_tunnel_sender->getTunnelId(), msg);
         }
-        // Trigger mpp tunnel finish work
+        // Trigger mpp tunnel finish work.
         async_tunnel_sender->consumerFinish(msg);
     }
 
