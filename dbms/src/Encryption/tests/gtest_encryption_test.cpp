@@ -130,7 +130,7 @@ public:
         generateCiphertext(iv);
 
         EncryptionMethod method = std::get<1>(GetParam());
-        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(method));
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(method));
         std::string iv_str(reinterpret_cast<const char *>(iv), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(method, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
@@ -300,7 +300,7 @@ try
 
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto file_provider = std::make_shared<FileProvider>(key_manager, true);
@@ -326,7 +326,7 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_wr_file");
     WriteReadableFilePtr file = std::make_shared<PosixWriteReadableFile>(file_path, true, -1, 0600, nullptr, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");
@@ -369,7 +369,7 @@ public:
         String file_path = tests::TiFlashTestEnv::getTemporaryPath(file_name);
         B file = std::make_shared<T>(file_path, true, -1, 0600);
 
-        std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+        std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
         std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
         auto encryption_info = key_manager->newFile("encryption");
@@ -481,7 +481,7 @@ try
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("enc_posix_file");
     WritableFilePtr file = std::make_shared<PosixWritableFile>(file_path, true, -1, 0600, nullptr);
 
-    std::string key_str(reinterpret_cast<const char *>(test::KEY), KeySize(EncryptionMethod::Aes128Ctr));
+    std::string key_str(reinterpret_cast<const char *>(test::KEY), keySize(EncryptionMethod::Aes128Ctr));
     std::string iv_str(reinterpret_cast<const char *>(test::IV_RANDOM), 16);
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(EncryptionMethod::Aes128Ctr, key_str, iv_str);
     auto encryption_info = key_manager->newFile("encryption");

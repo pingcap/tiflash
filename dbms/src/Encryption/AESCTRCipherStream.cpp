@@ -20,6 +20,7 @@
 
 #include <cassert>
 #include <cstddef>
+#include <ext/scope_guard.h>
 #include <limits>
 
 namespace DB
@@ -29,7 +30,7 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
-size_t KeySize(EncryptionMethod method)
+size_t keySize(EncryptionMethod method)
 {
     switch (method)
     {
@@ -52,6 +53,27 @@ size_t KeySize(EncryptionMethod method)
     }
 }
 
+size_t blockSize(EncryptionMethod method)
+{
+    switch (method)
+    {
+    case EncryptionMethod::Aes128Ctr:
+    case EncryptionMethod::Aes192Ctr:
+    case EncryptionMethod::Aes256Ctr:
+        return AES_BLOCK_SIZE;
+    case EncryptionMethod::SM4Ctr:
+#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
+                                   Errors::Encryption::Internal);
+#else
+        // OpenSSL support SM4 after 1.1.1 release version.
+        return SM4_BLOCK_SIZE;
+#endif
+    default:
+        return 0;
+    }
+}
+
 void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_size, bool is_encrypt)
 {
 #if OPENSSL_VERSION_NUMBER < 0x01000200f
@@ -64,10 +86,9 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     int ret = 1;
     EVP_CIPHER_CTX * ctx = nullptr;
     InitCipherContext(ctx);
-    if (ctx == nullptr)
-    {
-        throw DB::TiFlashException("Failed to create cipher context.", Errors::Encryption::Internal);
-    }
+    RUNTIME_CHECK_MSG(ctx != nullptr, "Failed to create cipher context.");
+
+    SCOPE_EXIT({ FreeCipherContext(ctx); });
 
     const size_t block_size = blockSize();
     uint64_t block_index = file_offset / block_size;
@@ -88,19 +109,12 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     memcpy(iv + sizeof(uint64_t), &iv_low, sizeof(uint64_t));
 
     ret = EVP_CipherInit(ctx, cipher_, reinterpret_cast<const unsigned char *>(key_.data()), iv, (is_encrypt ? 1 : 0));
-    if (ret != 1)
-    {
-        throw DB::TiFlashException("Failed to create cipher context.", Errors::Encryption::Internal);
-    }
+    RUNTIME_CHECK_MSG(ret == 1, "Failed to create cipher context.");
 
     // Disable padding. After disabling padding, data size should always be
     // multiply of block size.
     ret = EVP_CIPHER_CTX_set_padding(ctx, 0);
-    if (ret != 1)
-    {
-        FreeCipherContext(ctx);
-        throw DB::TiFlashException("Failed to disable padding for cipher context.", Errors::Encryption::Internal);
-    }
+    RUNTIME_CHECK_MSG(ret == 1, "Failed to disable padding for cipher context.");
 
     uint64_t data_offset = 0;
     size_t remaining_data_size = data_size;
@@ -117,20 +131,11 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
         size_t partial_block_size = std::min<size_t>(block_size - block_offset, remaining_data_size);
         memcpy(partial_block + block_offset, data, partial_block_size);
         ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
-        if (ret != 1)
-        {
-            FreeCipherContext(ctx);
-            throw DB::TiFlashException(
-                "Crypter failed for first block, offset " + std::to_string(file_offset),
-                Errors::Encryption::Internal);
-        }
-        if (output_size != static_cast<int>(block_size))
-        {
-            FreeCipherContext(ctx);
-            throw DB::TiFlashException("Unexpected crypter output size for first block, expected " + std::to_string(block_size)
-                                           + " vs actual " + std::to_string(output_size),
-                                       Errors::Encryption::Internal);
-        }
+        RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for first block, offset {}.", file_offset);
+        RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
+                          "Unexpected cipher output size for first block, expected {} actual {}",
+                          block_size,
+                          output_size);
         memcpy(data, partial_block + block_offset, partial_block_size);
         data_offset += partial_block_size;
         remaining_data_size -= partial_block_size;
@@ -142,20 +147,11 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
         size_t actual_data_size = remaining_data_size - remaining_data_size % block_size;
         unsigned char * full_blocks = reinterpret_cast<unsigned char *>(data) + data_offset;
         ret = EVP_CipherUpdate(ctx, full_blocks, &output_size, full_blocks, static_cast<int>(actual_data_size));
-        if (ret != 1)
-        {
-            FreeCipherContext(ctx);
-            throw DB::TiFlashException(
-                "Crypter failed at offset " + std::to_string(file_offset + data_offset),
-                Errors::Encryption::Internal);
-        }
-        if (output_size != static_cast<int>(actual_data_size))
-        {
-            FreeCipherContext(ctx);
-            throw DB::TiFlashException("Unexpected crypter output size, expected " + std::to_string(actual_data_size) + " vs actual "
-                                           + std::to_string(output_size),
-                                       Errors::Encryption::Internal);
-        }
+        RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for offset {}.", file_offset + data_offset);
+        RUNTIME_CHECK_MSG(output_size == static_cast<int>(actual_data_size),
+                          "Unexpected cipher output size for block, expected {} actual {}",
+                          actual_data_size,
+                          output_size);
         data_offset += actual_data_size;
         remaining_data_size -= actual_data_size;
     }
@@ -167,23 +163,13 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
         assert(remaining_data_size < AES_BLOCK_SIZE);
         memcpy(partial_block, data + data_offset, remaining_data_size);
         ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
-        if (ret != 1)
-        {
-            FreeCipherContext(ctx);
-            throw DB::TiFlashException(
-                "Crypter failed for last block, offset " + std::to_string(file_offset + data_offset),
-                Errors::Encryption::Internal);
-        }
-        if (output_size != static_cast<int>(block_size))
-        {
-            FreeCipherContext(ctx);
-            throw DB::TiFlashException("Unexpected crypter output size for last block, expected " + std::to_string(block_size)
-                                           + " vs actual " + std::to_string(output_size),
-                                       Errors::Encryption::Internal);
-        }
+        RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for last block, offset {}.", file_offset + data_offset);
+        RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
+                          "Unexpected cipher output size for last block, expected {} actual {}",
+                          block_size,
+                          output_size);
         memcpy(data + data_offset, partial_block, remaining_data_size);
     }
-    FreeCipherContext(ctx);
 #endif
 }
 
@@ -192,7 +178,10 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
     const EncryptionPath & encryption_path_)
 {
     const auto & key = *(encryption_info_.key);
+    RUNTIME_CHECK_MSG(key.size() == keySize(encryption_info_.method), "Encryption key size mismatch.");
+    RUNTIME_CHECK_MSG(encryption_info_.iv->size() == DB::blockSize(encryption_info_.method), "Encryption iv size mismatch.");
 
+    // `cipher` is just a pointer to a static storage, so no need to free it after use.
     const EVP_CIPHER * cipher = nullptr;
     switch (encryption_info_.method)
     {
@@ -216,18 +205,6 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
 #endif
     default:
         throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
-                                   Errors::Encryption::Internal);
-    }
-    if (key.size() != KeySize(encryption_info_.method))
-    {
-        throw DB::TiFlashException("Encryption key size mismatch. " + std::to_string(key.size()) + "(actual) vs. "
-                                       + std::to_string(KeySize(encryption_info_.method)) + "(expected).",
-                                   Errors::Encryption::Internal);
-    }
-    if (encryption_info_.iv->size() != AES_BLOCK_SIZE)
-    {
-        throw DB::TiFlashException("iv size not equal to block cipher block size: " + std::to_string(encryption_info_.iv->size())
-                                       + "(actual) vs. " + std::to_string(AES_BLOCK_SIZE) + "(expected).",
                                    Errors::Encryption::Internal);
     }
     auto iv_high = readBigEndian<uint64_t>(reinterpret_cast<const char *>(encryption_info_.iv->data()));
