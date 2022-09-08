@@ -371,6 +371,7 @@ Block DMFileReader::read()
     // bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan && deleted_rows == 0;
     bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan; // just for test single dmfile
 
+    // std::cout << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << std::endl;
     //std::cout << "do_clean_read_on_normal_mode " << do_clean_read_on_normal_mode << " do_clean_read_on_handle_on_fast_mode " << do_clean_read_on_handle_on_fast_mode << " do_clean_read_on_del_on_fast_mode " << do_clean_read_on_del_on_fast_mode << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << " enable_del_clean_read " <<  enable_del_clean_read << std::endl;
     if (do_clean_read_on_normal_mode)
     {
@@ -445,6 +446,7 @@ Block DMFileReader::read()
             }
             else if (cd.id == TAG_COLUMN_ID && do_clean_read_on_del_on_normal_mode)
             { // do_clean_read_on_normal_mode = false but do_clean_read_on_del_on_normal_mode = true
+                //std::cout << " column " << cd.id << " sub2 " << std::endl;
                 ColumnPtr column;
                 column = cd.type->createColumnConst(read_rows, Field(static_cast<UInt64>(pack_stats[start_pack_id].first_tag)));
                 res.insert(ColumnWithTypeAndName{column, cd.type, cd.name, cd.id});
@@ -495,6 +497,7 @@ Block DMFileReader::read()
                                 throw Exception("Unknown strategy", ErrorCodes::LOGICAL_ERROR);
                             }
                         }
+                        //std::cout << " column " << cd.id << " sub3 " << std::endl;
                         ColumnPtr result_column = std::move(column);
                         size_t rows_offset = 0;
                         for (size_t cursor = start_pack_id; cursor < start_pack_id + read_packs; cursor++)
@@ -508,6 +511,7 @@ Block DMFileReader::read()
                     }
                     else
                     {
+                        //std::cout << " column " << cd.id << " sub4 " << std::endl;
                         auto data_type = dmfile->getColumnStat(cd.id).type;
                         ColumnPtr column;
                         readColumn(cd, column, start_pack_id, read_packs, read_rows, skip_packs_by_column[i], single_file_mode);
@@ -519,6 +523,7 @@ Block DMFileReader::read()
                 }
                 else
                 {
+                    std::cout << " column " << cd.id << " sub5 " << std::endl;
                     LOG_FMT_TRACE(
                         log,
                         "Column [id: {}, name: {}, type: {}] not found, use default value. DMFile: {}",

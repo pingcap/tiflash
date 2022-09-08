@@ -47,7 +47,7 @@ public:
         // dropDataOnDisk
         try
         {
-            const auto * path = "/data2/hongyunyan/tiflash/build_release/dbms/bench_hyy/";
+            const auto * path = "/Users/hongyunyan/Desktop/tiflash/build_release/dbms/bench_hyy/";
             if (Poco::File file(path); file.exists())
             {
                 file.remove(true);
@@ -89,7 +89,7 @@ public:
 
     void tiFlashStorageTestBasicReload(DB::Settings && db_settings = DB::Settings())
     {
-        String path = "/data2/hongyunyan/tiflash/build_release/dbms/bench_hyy/";
+        String path = "/Users/hongyunyan/Desktop/tiflash/build_release/dbms/bench_hyy/";
         Strings test_paths;
         test_paths.emplace_back(path);
         // test_paths.push_back(base::TiFlashStorageTestBasic::getTemporaryPath());
@@ -381,10 +381,10 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization
     }
 }
 
-constexpr size_t num_iterations_test = 1000;
+constexpr size_t num_iterations_test = 10000;
 
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
-// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
+BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, DMFileReadWithDelOptimization)->Iterations(num_iterations_test)->Args({50000, 20, 0})->Args({50000, 15, 0})->Args({50000, 10, 0})->Args({50000, 8, 0})->Args({50000, 5, 0});
 
 BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10})->Args({5000, 20, 0, 20})->Args({5000, 15, 0, 20})->Args({5000, 10, 0, 20})->Args({5000, 8, 0, 20})->Args({5000, 5, 0, 20})->Args({5000, 20, 0, 30})->Args({5000, 15, 0, 30})->Args({5000, 10, 0, 30})->Args({5000, 8, 0, 30})->Args({5000, 5, 0, 30})->Args({5000, 20, 0, 50})->Args({5000, 15, 0, 50})->Args({5000, 10, 0, 50})->Args({5000, 8, 0, 50})->Args({5000, 5, 0, 50});
 BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)->Iterations(num_iterations_test)->Args({5000, 20, 0, 1})->Args({5000, 15, 0, 1})->Args({5000, 10, 0, 1})->Args({5000, 8, 0, 1})->Args({5000, 5, 0, 1})->Args({5000, 20, 0, 10})->Args({5000, 15, 0, 10})->Args({5000, 10, 0, 10})->Args({5000, 8, 0, 10})->Args({5000, 5, 0, 10})->Args({5000, 20, 0, 20})->Args({5000, 15, 0, 20})->Args({5000, 10, 0, 20})->Args({5000, 8, 0, 20})->Args({5000, 5, 0, 20})->Args({5000, 20, 0, 30})->Args({5000, 15, 0, 30})->Args({5000, 10, 0, 30})->Args({5000, 8, 0, 30})->Args({5000, 5, 0, 30})->Args({5000, 20, 0, 50})->Args({5000, 15, 0, 50})->Args({5000, 10, 0, 50})->Args({5000, 8, 0, 50})->Args({5000, 5, 0, 50});

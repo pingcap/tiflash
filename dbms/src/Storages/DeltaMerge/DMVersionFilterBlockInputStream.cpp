@@ -325,7 +325,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             auto cur_handle = rowkey_column->getRowKeyValue(rows - 1);
             auto cur_version = (*version_col_data)[rows - 1];
 
-            auto deleted = static_cast<UInt8>((delete_col_data != nullptr) & (*delete_col_data)[rows - 1]);
+            auto deleted = static_cast<UInt8>((delete_col_data != nullptr) && (*delete_col_data)[rows - 1]);
 
             if (!initNextBlock())
             {
