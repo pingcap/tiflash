@@ -122,7 +122,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++version_pos;
                 }
             }
-            
+
             // if delete_col_data is nullptr --> means the del column is a const column --> means all these are not deleted rows.
             if (delete_col_data != nullptr)
             {
@@ -260,7 +260,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++filter_pos;
                 }
             }
-            
+
             // Let's calculate is_deleted
             is_deleted.resize(rows);
             {

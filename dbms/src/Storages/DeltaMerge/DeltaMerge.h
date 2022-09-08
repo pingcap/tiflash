@@ -341,7 +341,7 @@ private:
 
         cur_stable_block_rows = block.rows();
 
-        // Because the del column in block from stable layer may be a const column, 
+        // Because the del column in block from stable layer may be a const column,
         // thus the del column in cur_stable_block_columns may also be a const column.
         for (size_t column_id = 0; column_id < num_columns; ++column_id)
             cur_stable_block_columns.push_back(block.getByPosition(column_id).column);
@@ -482,7 +482,7 @@ private:
                     cur_stable_block_columns[column_id]->get(0, value);
                     for (size_t index = 0; index < final_limit; ++index)
                     {
-                        output_columns[column_id]->insert(value);
+                        output_columns[column_id]->insert(value); // todo check how it fulfill
                     }
                 }
                 else

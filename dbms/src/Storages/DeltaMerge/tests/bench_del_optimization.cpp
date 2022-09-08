@@ -219,7 +219,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
                                              EMPTY_FILTER,
                                              "",
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024,
                                              {},
                                              InvalidColumnID)[0];
@@ -283,7 +283,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
                                              EMPTY_FILTER,
                                              "",
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024,
                                              {},
                                              InvalidColumnID)[0];
