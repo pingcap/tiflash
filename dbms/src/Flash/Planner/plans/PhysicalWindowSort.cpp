@@ -56,7 +56,7 @@ void PhysicalWindowSort::transformImpl(DAGPipeline & pipeline, Context & context
 
     if (context.getSettingsRef().debug_enable_optimize_hash_sort_window)
     {
-        hashOrderStreams(pipeline, max_streams, order_descr, 0, this->partition_item_count.value(), fine_grained_shuffle.enable(), context, log);
+        hashOrderStreams(pipeline, max_streams, order_descr, 0, this->partition_item_count.value(), fine_grained_shuffle.enable(), context, log, getSampleBlock());
     }
     else
     {

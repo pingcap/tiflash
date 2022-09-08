@@ -32,14 +32,8 @@ public:
         SortDescription & description_,
         const String & req_id,
         const Context & context_,
-        size_t limit_ = 0)
-        : description(description_)
-        , limit(limit_)
-        , log(Logger::get(NAME, req_id))
-        , context(context_)
-    {
-        children.push_back(input_);
-    }
+        const Block & sample_block,
+        size_t limit_ = 0);
 
     String getName() const override { return NAME; }
 
@@ -73,7 +67,7 @@ public:
         {}
     };
 
-    void insertRowToList(RowRefList * list, RowRefList * elem, Block * stored_block, size_t index)
+    static void insertRowToList(RowRefList * list, RowRefList * elem, Block * stored_block, size_t index)
     {
         elem->next = list->next; // NOLINT(clang-analyzer-core.NullDereference)
         list->next = elem;

@@ -69,7 +69,8 @@ void hashOrderStreams(
     size_t hash_items,
     bool enable_fine_grained_shuffle,
     const Context & context,
-    const LoggerPtr & log);
+    const LoggerPtr & log,
+    const Block & sample_block);
 
 void executeCreatingSets(
     DAGPipeline & pipeline,

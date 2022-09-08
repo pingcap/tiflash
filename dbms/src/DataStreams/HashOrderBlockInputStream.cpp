@@ -30,6 +30,7 @@ namespace ErrorCodes
 extern const int UNKNOWN_SET_DATA_VARIANT;
 } // namespace ErrorCodes
 
+
 NO_INLINE ColumnRawPtrs getKeyColumns(SortDescription descr, const Block & block)
 {
     size_t keys_size = descr.size();
@@ -44,6 +45,24 @@ NO_INLINE ColumnRawPtrs getKeyColumns(SortDescription descr, const Block & block
     }
 
     return key_columns;
+}
+
+HashOrderBlockInputStream::HashOrderBlockInputStream(
+    const BlockInputStreamPtr & input_,
+    SortDescription & description_,
+    const String & req_id,
+    const Context & context_,
+    const Block & sample_block,
+    size_t limit_)
+    : description(description_)
+    , limit(limit_)
+    , log(Logger::get(NAME, req_id))
+    , context(context_)
+{
+    children.push_back(input_);
+
+    type = chooseMethod(getKeyColumns(description, sample_block), key_sizes);
+    initMapImpl(0);
 }
 
 NO_INLINE void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
@@ -271,10 +290,7 @@ NO_INLINE Block HashOrderBlockInputStream::readImplInternal()
 
         if (!blocks.empty())
         {
-            size_t estimate_rows = getEstimateRows(blocks);
-
-            type = chooseMethod(getKeyColumns(description, blocks.front()), key_sizes);
-            initMapImpl(estimate_rows);
+            //            size_t estimate_rows = getEstimateRows(blocks);
 
             for (auto & block : blocks)
             {

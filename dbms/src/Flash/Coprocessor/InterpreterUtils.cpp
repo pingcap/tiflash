@@ -176,7 +176,8 @@ void hashOrderStreams(
     size_t hash_items_count,
     [[maybe_unused]] bool enable_fine_grained_shuffle,
     const Context & context,
-    const LoggerPtr & log)
+    const LoggerPtr & log,
+    const Block & sample_block)
 {
     assert(enable_fine_grained_shuffle);
 
@@ -187,7 +188,7 @@ void hashOrderStreams(
     // TODO: if already sorted once for this partition(without split block), we don't need to rebuild hash table.
     SortDescription hash_items(order_descr.begin(), order_descr.begin() + hash_items_count);
     pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashOrderBlockInputStream>(stream, order_descr, log->identifier(), context, limit);
+        stream = std::make_shared<HashOrderBlockInputStream>(stream, order_descr, log->identifier(), context, sample_block, limit);
     });
 
     pipeline.transform([&](auto & stream) {
