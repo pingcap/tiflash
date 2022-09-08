@@ -145,10 +145,12 @@ public:
 
     String toString()
     {
-        std::stringstream s;
-        s << "{placed rows:" << placed_rows << ", deletes:" << placed_deletes << ", delta tree: " << delta_tree->numEntries() << "|"
-          << delta_tree->numInserts() << "|" << delta_tree->numDeletes() << "}";
-        return s.str();
+        return fmt::format("<placed_rows={} placed_deletes={} tree_entries={} tree_inserts={} tree_deletes={}>",
+                           placed_rows,
+                           placed_deletes,
+                           delta_tree->numEntries(),
+                           delta_tree->numInserts(),
+                           delta_tree->numDeletes());
     }
 
     UInt64 getId() const { return id; }

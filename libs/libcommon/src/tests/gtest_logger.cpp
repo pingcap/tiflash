@@ -60,8 +60,7 @@ TEST_F(LoggerUsefulTest, Log)
     LOG_WARNING(log, "Warning log");
     LOG_ERROR(log, "Error log");
 
-    // Do not accept more than one parameter
-    // LOG_ERROR(log, "Error log, num: ", 1);
+    LOG_ERROR(log, "Error log, num: ", 1);
 
     std::string msg_in_log;
     msg_in_log = "hello tiflash";
@@ -77,10 +76,9 @@ TEST_F(LoggerUsefulTest, LogFmt)
     LOG_FMT_WARNING(log, "Warning log");
     LOG_FMT_ERROR(log, "Error log");
 
-    // Error! Do not accept a variable as format string.
-    // std::string msg_in_log;
-    // msg_in_log = "hello tiflash";
-    // LOG_FMT_DEBUG(log, msg_in_log);
+    std::string msg_in_log;
+    msg_in_log = "hello tiflash";
+    LOG_FMT_DEBUG(log, msg_in_log);
 }
 
 } // namespace tests

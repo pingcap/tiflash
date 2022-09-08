@@ -65,7 +65,3 @@ target_link_libraries(dm_test_delta_value_space dbms gtest_main clickhouse_funct
 
 add_executable(dm_test_column_file EXCLUDE_FROM_ALL gtest_dm_column_file.cpp)
 target_link_libraries(dm_test_column_file dbms gtest_main clickhouse_functions)
-
-add_subdirectory (bank EXCLUDE_FROM_ALL)
-
-add_subdirectory (stress EXCLUDE_FROM_ALL)

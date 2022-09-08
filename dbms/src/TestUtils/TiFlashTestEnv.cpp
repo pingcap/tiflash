@@ -30,6 +30,42 @@ namespace DB::tests
 {
 std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
 
+String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
+{
+    String path = "./tmp/";
+    if (!test_case.empty())
+        path += std::string(test_case);
+
+    Poco::Path poco_path(path);
+    if (get_abs)
+        return poco_path.absolute().toString();
+    else
+        return poco_path.toString();
+}
+
+void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
+{
+    try
+    {
+        // drop the data on disk
+        Poco::File p(path);
+        if (p.exists())
+        {
+            p.remove(true);
+        }
+
+        // re-create empty directory for testing
+        if (recreate)
+        {
+            p.createDirectories();
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
+    }
+}
+
 void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
     addGlobalContext(testdata_path, ps_run_mode, bg_thread_count);
@@ -87,8 +123,9 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     TiFlashRaftConfig raft_config;
 
-    raft_config.ignore_databases = {"default", "system"};
+    raft_config.ignore_databases = {"system"};
     raft_config.engine = TiDB::StorageEngine::DT;
+    raft_config.for_unit_test = true;
     global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
@@ -102,7 +139,12 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     Context context = *global_contexts[0];
     context.setGlobalContext(*global_contexts[0]);
     // Load `testdata_path` as path if it is set.
-    const String root_path = testdata_path.empty() ? (DB::toString(getpid()) + "/" + getTemporaryPath()) : testdata_path[0];
+    const String root_path = [&]() {
+        const auto root_path = testdata_path.empty()
+            ? (DB::toString(getpid()) + "/" + getTemporaryPath("", /*get_abs*/ false))
+            : testdata_path[0];
+        return Poco::Path(root_path).absolute().toString();
+    }();
     if (testdata_path.empty())
         testdata_path.push_back(root_path);
     context.setPath(root_path);
