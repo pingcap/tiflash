@@ -177,7 +177,7 @@ private:
         {
             file_provider_ptr = context.getFileProvider();
         }
-        BlobStore::Config blob_config;
+        BlobConfig blob_config;
 
         PageStorage::Config config;
         PageStorageImpl ps_v3("PageStorageControlV3", delegator, config, file_provider_ptr);

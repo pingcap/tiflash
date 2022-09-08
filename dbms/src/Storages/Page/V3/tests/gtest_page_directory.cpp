@@ -2581,7 +2581,7 @@ try
         dir->apply(std::move(edit));
     }
 
-    auto restore_from_edit = [](const PageEntriesEdit & edit, BlobStore::BlobStats & stats) {
+    auto restore_from_edit = [](const PageEntriesEdit & edit, BlobStats & stats) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
@@ -2595,8 +2595,8 @@ try
         auto edit = dir->dumpSnapshotToEdit(snap);
         auto path = getTemporaryPath();
         PSDiskDelegatorPtr delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto config = BlobStore::Config{};
-        BlobStore::BlobStats stats(log, delegator, config);
+        auto config = BlobConfig{};
+        BlobStats stats(log, delegator, config);
         {
             const auto & lock = stats.lock();
             stats.createStatNotChecking(file_id1, BLOBFILE_LIMIT_SIZE, lock);

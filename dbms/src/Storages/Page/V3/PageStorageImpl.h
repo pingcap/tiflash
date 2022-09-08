@@ -38,9 +38,9 @@ public:
 
     ~PageStorageImpl() override;
 
-    static BlobStore::Config parseBlobConfig(const Config & config)
+    static BlobConfig parseBlobConfig(const Config & config)
     {
-        BlobStore::Config blob_config;
+        BlobConfig blob_config;
 
         blob_config.file_limit_size = config.blob_file_limit_size;
         blob_config.cached_fd_size = config.blob_cached_fd_size;
