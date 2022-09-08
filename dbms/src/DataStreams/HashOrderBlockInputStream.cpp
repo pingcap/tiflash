@@ -31,7 +31,7 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 } // namespace ErrorCodes
 
 
-NO_INLINE ColumnRawPtrs getKeyColumns(SortDescription descr, const Block & block)
+ColumnRawPtrs getKeyColumns(SortDescription descr, const Block & block)
 {
     size_t keys_size = descr.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -62,10 +62,9 @@ HashOrderBlockInputStream::HashOrderBlockInputStream(
     children.push_back(input_);
 
     type = chooseMethod(getKeyColumns(description, sample_block), key_sizes);
-    initMapImpl(0);
 }
 
-NO_INLINE void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
+void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
 {
     switch (type)
     {
@@ -80,7 +79,7 @@ NO_INLINE void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
     }
 }
 
-NO_INLINE HashOrderBlockInputStream::Type HashOrderBlockInputStream::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
+HashOrderBlockInputStream::Type HashOrderBlockInputStream::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
 {
     size_t keys_size = key_columns.size();
 
@@ -194,7 +193,7 @@ struct KeyGetterForType
 
 
 template <typename Map, typename KeyGetter>
-NO_INLINE void HashOrderBlockInputStream::insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block)
+void HashOrderBlockInputStream::insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block)
 {
     for (size_t i = 0; i < rows; ++i)
     {
@@ -215,7 +214,7 @@ NO_INLINE void HashOrderBlockInputStream::insert(Map & map, size_t rows, KeyGett
 }
 
 template <typename Map, typename MapIterator>
-NO_INLINE Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
+Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
 {
     if (iter == map->cend())
     {
@@ -236,12 +235,12 @@ NO_INLINE Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
     return blocks.front().cloneWithColumns(std::move(columns));
 }
 
-NO_INLINE Block HashOrderBlockInputStream::readImpl()
+Block HashOrderBlockInputStream::readImpl()
 {
     return readImplInternal();
 }
 
-NO_INLINE void HashOrderBlockInputStream::insertFromBlock(Block * block)
+void HashOrderBlockInputStream::insertFromBlock(Block * block)
 {
     size_t rows = block->rows();
     switch (type)
@@ -262,7 +261,7 @@ NO_INLINE void HashOrderBlockInputStream::insertFromBlock(Block * block)
     }
 }
 
-NO_INLINE size_t getEstimateRows(BlocksList & blocks)
+size_t getEstimateRows(BlocksList & blocks)
 {
     // TODO: use sample or other methods.
     size_t rows = 0;
@@ -274,7 +273,7 @@ NO_INLINE size_t getEstimateRows(BlocksList & blocks)
 }
 
 
-NO_INLINE Block HashOrderBlockInputStream::readImplInternal()
+Block HashOrderBlockInputStream::readImplInternal()
 {
     call_count += 1;
     LOG_FMT_WARNING(log, "call count = {}", call_count);
@@ -282,20 +281,12 @@ NO_INLINE Block HashOrderBlockInputStream::readImplInternal()
     if (!executed)
     {
         executed = true;
+        initMapImpl(80000000);
 
         while (Block block = children.back()->read())
         {
             blocks.push_back(block);
-        }
-
-        if (!blocks.empty())
-        {
-            //            size_t estimate_rows = getEstimateRows(blocks);
-
-            for (auto & block : blocks)
-            {
-                insertFromBlock(&block);
-            }
+            insertFromBlock(&blocks.back());
         }
     }
 

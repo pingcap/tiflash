@@ -126,7 +126,7 @@ public:
 
 protected:
     Block readImpl() override;
-    NO_INLINE Block readImplInternal();
+    Block readImplInternal();
     void appendInfo(FmtBuffer & buffer) const override;
 
     bool executed = false;
@@ -142,14 +142,14 @@ private:
     BlocksList blocks;
 
     using Sizes = std::vector<size_t>;
-    NO_INLINE static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
+    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
     void initMapImpl(size_t capacity);
 
     template <typename Map, typename KeyGetter>
     void insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block);
 
     template <typename Map, typename MapIterator>
-    NO_INLINE Block output(Map & map, MapIterator & iter);
+    Block output(Map & map, MapIterator & iter);
 
     Sizes key_sizes;
 
