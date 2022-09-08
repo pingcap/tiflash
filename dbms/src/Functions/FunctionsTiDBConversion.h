@@ -1280,7 +1280,14 @@ struct TiDBConvertToTime
                 size_t string_size = next_offset - current_offset - 1;
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
+<<<<<<< HEAD
                 try
+=======
+
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, true);
+
+                if (packed_uint_value.isNull())
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
                 {
                     Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
                     UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
@@ -1408,7 +1415,13 @@ struct TiDBConvertToTime
                 }
                 else
                 {
+<<<<<<< HEAD
                     try
+=======
+                    Field packed_uint_value = parseMyDateTime(value_str, to_fsp, true);
+
+                    if (packed_uint_value.isNull())
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
                     {
                         Field packed_uint_value = parseMyDateTime(value_str, to_fsp);
                         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
@@ -1441,7 +1454,13 @@ struct TiDBConvertToTime
             for (size_t i = 0; i < size; i++)
             {
                 String value_str = vec_from[i].toString(type.getScale());
+<<<<<<< HEAD
                 try
+=======
+                Field value = parseMyDateTime(value_str, to_fsp, true);
+
+                if (value.getType() == Field::Types::Null)
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
                 {
                     Field value = parseMyDateTime(value_str, to_fsp);
                     MyDateTime datetime(value.template safeGet<UInt64>());
