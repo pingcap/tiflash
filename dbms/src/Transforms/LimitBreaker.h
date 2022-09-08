@@ -18,15 +18,21 @@
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
 
-#include <memory>
 #include <atomic>
+#include <memory>
 
 namespace DB
 {
 class LimitBreaker
 {
 public:
-    explicit LimitBreaker(size_t limit_): limit(limit_) {}
+    explicit LimitBreaker(
+        size_t limit_)
+        : limit(limit_)
+    {
+        if (limit == 0)
+            is_stop = true;
+    }
 
     bool insert(Block && block)
     {
@@ -68,7 +74,7 @@ public:
         if (blocks.empty())
             return {};
 
-        Block block = std::move(blocks[blocks.size()]);
+        Block block = std::move(blocks.back());
         blocks.pop_back();
         return block;
     }
@@ -93,4 +99,4 @@ private:
     Blocks blocks;
 };
 using LimitBreakerPtr = std::shared_ptr<LimitBreaker>;
-}
+} // namespace DB

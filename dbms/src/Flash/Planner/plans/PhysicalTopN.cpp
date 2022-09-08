@@ -19,12 +19,12 @@
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
-#include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Flash/Planner/plans/PhysicalFinalTopN.h>
 #include <Flash/Planner/plans/PhysicalPartialTopN.h>
 #include <Flash/Planner/plans/PhysicalPipelineBreaker.h>
-#include <Transforms/SortBreaker.h>
+#include <Flash/Planner/plans/PhysicalTopN.h>
 #include <Interpreters/Context.h>
+#include <Transforms/SortBreaker.h>
 
 namespace DB
 {

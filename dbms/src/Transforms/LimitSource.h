@@ -35,7 +35,8 @@ public:
     {
         return limit_breaker->getHeader();
     }
+
 private:
     LimitBreakerPtr limit_breaker;
 };
-}
+} // namespace DB

@@ -36,6 +36,7 @@ public:
     bool write(Block & block, size_t) override;
 
     void finish() override;
+
 private:
     SortDescription description;
     size_t limit;
@@ -43,4 +44,4 @@ private:
     SortBreakerPtr sort_breaker;
     Blocks local_blocks;
 };
-}
+} // namespace DB

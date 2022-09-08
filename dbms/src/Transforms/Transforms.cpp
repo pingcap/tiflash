@@ -50,7 +50,10 @@ bool Transforms::execute(size_t loop_id)
 }
 
 void Transforms::prepare() {}
-void Transforms::finish() { sink->finish(); }
+void Transforms::finish()
+{
+    sink->finish();
+}
 
 void Transforms::cancel(bool kill)
 {
@@ -76,4 +79,4 @@ Block Transforms::getHeader()
         transform->transformHeader(block);
     return block;
 }
-}
+} // namespace DB

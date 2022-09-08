@@ -21,8 +21,8 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalPartialTopN.h>
 #include <Interpreters/Context.h>
-#include <Transforms/SortingSink.h>
 #include <Transforms/ExpressionTransform.h>
+#include <Transforms/SortingSink.h>
 #include <Transforms/TransformsPipeline.h>
 
 namespace DB

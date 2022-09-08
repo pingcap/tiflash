@@ -35,6 +35,18 @@ public:
                              {toNullableVec<String>(col_name, col0)});
     }
 
+    static const size_t max_concurrency_level = 10;
+
+    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows)
+    {
+        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+        for (size_t i = 1; i <= max_concurrency_level; i += 2)
+        {
+            ASSERT_EQ(expect_rows, Block(executeStreams(request, i)).rows());
+        }
+        WRAP_FOR_DIS_ENABLE_PLANNER_END
+    }
+
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(size_t limit_num)
     {
         return context.scan(db_name, table_name).limit(limit_num).build(context);
@@ -47,33 +59,23 @@ public:
     const ColumnWithData col0{"col0-0", {}, "col0-2", "col0-3", {}, "col0-5", "col0-6", "col0-7"};
 };
 
-// TEST_F(ExecutorLimitTestRunner, Limit)
-// try
-// {
-//     std::shared_ptr<tipb::DAGRequest> request;
-//     ColumnsWithTypeAndName expect_cols;
+TEST_F(ExecutorLimitTestRunner, Limit)
+try
+{
+    std::shared_ptr<tipb::DAGRequest> request;
+    ColumnsWithTypeAndName expect_cols;
 
-//     /// Check limit result with various parameters
-//     const size_t col_data_num = col0.size();
-//     for (size_t limit_num = 0; limit_num <= col_data_num + 3; ++limit_num)
-//     {
-//         if (limit_num == col_data_num + 3)
-//             limit_num = INT_MAX;
-//         request = buildDAGRequest(limit_num);
-
-//         if (limit_num == 0)
-//             expect_cols = {};
-//         else if (limit_num > col_data_num)
-//             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.end()))};
-//         else
-//             expect_cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + limit_num))};
-
-//         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-//         ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
-//         WRAP_FOR_DIS_ENABLE_PLANNER_END
-//     }
-// }
-// CATCH
+    /// Check limit result with various parameters
+    const size_t col_data_num = col0.size();
+    for (size_t limit_num = 0; limit_num <= col_data_num + 3; ++limit_num)
+    {
+        if (limit_num == col_data_num + 3)
+            limit_num = INT_MAX;
+        request = buildDAGRequest(limit_num);
+        executeWithConcurrency(request, std::min(limit_num, col_data_num));
+    }
+}
+CATCH
 
 } // namespace tests
 } // namespace DB

@@ -57,4 +57,4 @@ private:
     std::unique_ptr<IBlockInputStream> impl;
 };
 using SortBreakerPtr = std::shared_ptr<SortBreaker>;
-}
+} // namespace DB

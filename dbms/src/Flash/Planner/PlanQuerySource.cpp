@@ -58,6 +58,7 @@ bool PlanQuerySource::isSupportPipeline() const
             case tipb::ExecType::TypeTableScan:
             case tipb::ExecType::TypeJoin:
             case tipb::ExecType::TypeTopN:
+            case tipb::ExecType::TypeLimit:
                 return true;
             default:
                 is_support_pipeline = false;

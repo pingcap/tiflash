@@ -28,9 +28,13 @@ public:
 
     bool write(Block & block, size_t) override
     {
+        if (!block)
+            return false;
+
         return limit_breaker->insert(std::move(block));
     }
+
 private:
     LimitBreakerPtr limit_breaker;
 };
-}
+} // namespace DB

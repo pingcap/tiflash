@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Transforms/SortBreaker.h>
 #include <DataStreams/MergeSortingBlockInputStream.h>
+#include <Transforms/SortBreaker.h>
 
 namespace DB
 {
@@ -45,10 +45,10 @@ void SortBreaker::initForRead(const Block & header)
     if (blocks.empty())
         blocks.push_back(header);
     impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
-        blocks, 
-        description, 
-        req_id, 
-        max_merged_block_size, 
+        blocks,
+        description,
+        req_id,
+        max_merged_block_size,
         limit);
 }
 
@@ -57,4 +57,4 @@ Block SortBreaker::getHeader()
     assert(impl);
     return impl->getHeader();
 }
-}
+} // namespace DB

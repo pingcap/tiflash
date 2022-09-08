@@ -25,6 +25,8 @@ String PlanType::toString() const
     case t:  \
         return #t;
         M(Limit)
+        M(PartialLimit)
+        M(FinalLimit)
         M(TopN)
         M(PartialTopN)
         M(FinalTopN)

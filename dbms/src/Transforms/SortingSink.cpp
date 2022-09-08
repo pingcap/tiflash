@@ -30,4 +30,4 @@ void SortingSink::finish()
 {
     sort_breaker->add(std::move(local_blocks));
 }
-}
+} // namespace DB
