@@ -76,15 +76,28 @@ void WindowBlockInputStream::initialWorkspaces()
     only_have_pure_window = onlyHaveRowNumberAndRank();
 }
 
+std::optional<Block> WindowBlockInputStream::returnIfCancelledOrKilled()
+{
+    if (isCancelledOrThrowIfKilled())
+    {
+        if (!window_blocks.empty())
+            window_blocks.erase(window_blocks.begin(), window_blocks.end());
+        input_is_finished = true;
+        return {Block{}};
+    }
+    return {};
+}
+
 Block WindowBlockInputStream::readImpl()
 {
     const auto & stream = children.back();
     while (!input_is_finished)
     {
+        if (auto res = returnIfCancelledOrKilled(); res.has_value())
+            return res.value();
+
         if (Block output_block = tryGetOutputBlock())
-        {
             return output_block;
-        }
 
         Block block = stream->read();
         if (!block)
@@ -94,6 +107,8 @@ Block WindowBlockInputStream::readImpl()
         tryCalculate();
     }
 
+    if (auto res = returnIfCancelledOrKilled(); res.has_value())
+        return res.value();
     // return last partition block, if already return then return null
     return tryGetOutputBlock();
 }
@@ -361,14 +376,6 @@ void WindowBlockInputStream::writeOutCurrentRow()
 
 Block WindowBlockInputStream::tryGetOutputBlock()
 {
-    if (isCancelledOrThrowIfKilled())
-    {
-        if (!window_blocks.empty())
-            window_blocks.erase(window_blocks.begin(), window_blocks.end());
-        input_is_finished = true;
-        return {};
-    }
-
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
     // calculated the window functions for all input rows. That's why the
