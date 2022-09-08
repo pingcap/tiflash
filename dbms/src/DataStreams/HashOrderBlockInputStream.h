@@ -149,7 +149,7 @@ private:
 
     using Sizes = std::vector<size_t>;
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
-    void initMapImpl();
+    void initMapImpl(size_t capacity);
 
     template <typename Map, typename KeyGetter>
     void insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block);
@@ -164,6 +164,8 @@ private:
     const Context & context;
 
     size_t call_count = 0;
+
+    void insertFromBlock(Block * block);
 };
 
 } // namespace DB
