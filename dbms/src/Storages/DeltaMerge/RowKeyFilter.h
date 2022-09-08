@@ -49,6 +49,8 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
             for (size_t i = 0; i < block.columns(); i++)
             {
                 auto & column = block.getByPosition(i);
+                // if the column is a const column, because offset_and_limits.size() = 1,
+                // we don't need to change it, and the output column will also have the const column.
                 if (column.column->isColumnConst())
                 {
                     continue;
@@ -63,6 +65,8 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
             for (size_t i = 0; i < block.columns(); i++)
             {
                 auto & column = block.getByPosition(i);
+                // if the column is a const column, because offset_and_limits.size() = 1,
+                // we don't need to change it, and the output column will also have the const column.
                 if (column.column->isColumnConst())
                 {
                     continue;
@@ -86,11 +90,12 @@ inline Block cutBlock(Block && block, std::vector<std::pair<size_t, size_t>> off
             {
                 if (block.getByPosition(i).column->isColumnConst())
                 {
-                    if (new_columns[i]->empty())
+                    Field value; // TODO: check can we don't create this field.
+                    block.getByPosition(i).column->get(0, value);
+                    for (size_t index = 0; index < limit; ++index)
                     {
-                        new_columns[i] = (*std::move(block.getByPosition(i).column)).mutate();
+                        new_columns[i]->insert(value); //TODO: 看一下这个地方会怎么涉及到内存分配的问题，要不要提前把一块都分配好
                     }
-                    continue;
                 }
                 new_columns[i]->insertRangeFrom(*block.getByPosition(i).column, offset, limit);
             }

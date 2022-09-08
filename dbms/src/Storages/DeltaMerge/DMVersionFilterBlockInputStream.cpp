@@ -122,7 +122,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++version_pos;
                 }
             }
-
+            
+            // if delete_col_data is nullptr --> means the del column is a const column --> means all these are not deleted rows.
             if (delete_col_data != nullptr)
             {
                 UInt8 * filter_pos = filter.data();
@@ -259,8 +260,8 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                     ++filter_pos;
                 }
             }
-
-            // Let's set is_delete.
+            
+            // Let's calculate is_deleted
             is_deleted.resize(rows);
             {
                 UInt8 * is_deleted_pos = is_deleted.data();
@@ -291,6 +292,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
                 size_t handle_pos = 0;
                 size_t next_handle_pos = handle_pos + 1;
                 auto * version_pos = const_cast<UInt64 *>(version_col_data->data());
+
                 auto * delete_pos = const_cast<UInt8 *>(delete_col_data->data());
                 for (size_t i = 0; i < batch_rows; ++i)
                 {
@@ -322,11 +324,9 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             // Now let's handle the last row of current block.
             auto cur_handle = rowkey_column->getRowKeyValue(rows - 1);
             auto cur_version = (*version_col_data)[rows - 1];
-            UInt8 deleted = 0;
-            if (delete_col_data != nullptr)
-            {
-                deleted = (*delete_col_data)[rows - 1];
-            }
+
+            auto deleted = static_cast<UInt8>((delete_col_data != nullptr) & (*delete_col_data)[rows - 1]);
+
             if (!initNextBlock())
             {
                 // No more block.
@@ -412,10 +412,12 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
         else
         {
             Block res;
+            // in normal read，del column will not in header, means that we don't need filter del column.
+            // while in compact read, del column will in header, means that we need filter del column.
+            // It means the output may still have the const column.
             for (const auto & c : header)
             {
                 auto & column = cur_raw_block.getByName(c.name);
-                column.column = column.column->filter(filter, passed_count);
                 res.insert(std::move(column));
             }
             return res;

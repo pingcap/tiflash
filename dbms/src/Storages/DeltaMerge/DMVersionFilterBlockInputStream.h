@@ -106,9 +106,7 @@ private:
 #define next_handle rowkey_column->getRowKeyValue(i + 1)
 #define cur_version (*version_col_data)[i]
 #define next_version (*version_col_data)[i + 1]
-        UInt8 deleted = 0;
-        if (delete_col_data != nullptr)
-            deleted = (*delete_col_data)[i];
+        auto deleted = static_cast<UInt8>((delete_col_data != nullptr) & (*delete_col_data)[i]);
         // #define deleted (*delete_col_data)[i]
         if constexpr (MODE == DM_VERSION_FILTER_MODE_MVCC)
         {
@@ -150,6 +148,7 @@ private:
             rowkey_column = std::make_unique<RowKeyColumnContainer>(raw_block.getByPosition(handle_col_pos).column, is_common_handle);
             version_col_data = getColumnVectorDataPtr<UInt64>(raw_block, version_col_pos);
 
+            // If del column is a const column, we make delete_col_data to be nullptr, to make special process.
             if (raw_block.getByPosition(delete_col_pos).column->isColumnConst())
             {
                 delete_col_data = nullptr;

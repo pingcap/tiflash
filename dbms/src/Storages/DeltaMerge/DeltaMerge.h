@@ -340,6 +340,9 @@ private:
             return false;
 
         cur_stable_block_rows = block.rows();
+
+        // Because the del column in block from stable layer may be a const column, 
+        // thus the del column in cur_stable_block_columns may also be a const column.
         for (size_t column_id = 0; column_id < num_columns; ++column_id)
             cur_stable_block_columns.push_back(block.getByPosition(column_id).column);
         return true;
@@ -454,6 +457,8 @@ private:
         if (!output_offset && !final_offset && final_limit == cur_stable_block_rows)
         {
             // Simply return columns in current stable block.
+            // Because the del column in current stable block may be a const column,
+            // the del column in output_columns may also be a const column.
             for (size_t column_id = 0; column_id < output_columns.size(); ++column_id)
                 output_columns[column_id] = (*std::move(cur_stable_block_columns[column_id])).mutate();
 
@@ -469,12 +474,14 @@ private:
                     output_columns[column_id]->reserve(max_block_size);
             }
             for (size_t column_id = 0; column_id < num_columns; ++column_id)
+                // because the del column in current stable block may be a const column,
+                // we need to check whether it is a const column, and do the corresponding operation.
                 if (cur_stable_block_columns[column_id]->isColumnConst())
                 {
+                    Field value; // TODO: check can we don't create this field.
+                    cur_stable_block_columns[column_id]->get(0, value);
                     for (size_t index = 0; index < final_limit; ++index)
                     {
-                        Field value;
-                        cur_stable_block_columns[column_id]->get(0, value);
                         output_columns[column_id]->insert(value);
                     }
                 }
