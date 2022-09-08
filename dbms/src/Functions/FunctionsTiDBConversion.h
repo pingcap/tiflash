@@ -1345,6 +1345,7 @@ public:
                 size_t string_size = next_offset - current_offset - 1;
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
+<<<<<<< HEAD
                 try
                 {
                     Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
@@ -1361,6 +1362,12 @@ public:
                     }
                 }
                 catch (const Exception &)
+=======
+
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, true);
+
+                if (packed_uint_value.isNull())
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
                 {
                     // Fill NULL if cannot parse
                     (*vec_null_map_to)[i] = 1;
@@ -1474,6 +1481,7 @@ public:
                 }
                 else
                 {
+<<<<<<< HEAD
                     try
                     {
                         Field packed_uint_value = parseMyDateTime(value_str, to_fsp);
@@ -1490,6 +1498,11 @@ public:
                         }
                     }
                     catch (const Exception &)
+=======
+                    Field packed_uint_value = parseMyDateTime(value_str, to_fsp, true);
+
+                    if (packed_uint_value.isNull())
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
                     {
                         // Fill NULL if cannot parse
                         (*vec_null_map_to)[i] = 1;
@@ -1515,7 +1528,21 @@ public:
             for (size_t i = 0; i < size; i++)
             {
                 String value_str = vec_from[i].toString(type.getScale());
+<<<<<<< HEAD
                 try
+=======
+                Field value = parseMyDateTime(value_str, to_fsp, true);
+
+                if (value.getType() == Field::Types::Null)
+                {
+                    (*vec_null_map_to)[i] = 1;
+                    vec_to[i] = 0;
+                    continue;
+                }
+
+                MyDateTime datetime(value.template safeGet<UInt64>());
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
                 {
                     Field value = parseMyDateTime(value_str, to_fsp);
                     MyDateTime datetime(value.template safeGet<UInt64>());
