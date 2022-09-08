@@ -107,15 +107,15 @@ struct AggregateFunctionSumData
     template <typename Value>
     void NO_SANITIZE_UNDEFINED NO_INLINE addMany(const Value * __restrict ptr, size_t count)
     {
-        if (isArchSupported(TargetArch::AVX512BW))
+        if (TargetSpecific::AVX512Checker::runtimeSupport())
         {
             addManyImplAVX512(ptr, count);
         }
-        else if (isArchSupported(TargetArch::AVX2))
+        else if (TargetSpecific::AVXChecker::runtimeSupport())
         {
-            addManyImplAVX2(ptr, count);
+            addManyImplAVX(ptr, count);
         }
-        else if (isArchSupported(TargetArch::SSE4))
+        else if (TargetSpecific::SSE4Checker::runtimeSupport())
         {
             addManyImplSSE4(ptr, count);
         }

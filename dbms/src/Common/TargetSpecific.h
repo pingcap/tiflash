@@ -46,25 +46,6 @@
  * 4. TIFLASH_IMPLEMENT_MULTITARGET_FUNCTION: implement the function body
  */
 
-namespace DB
-{
-enum class TargetArch : UInt32
-{
-    Default = 0, /// Without any additional compiler options.
-    SSE4 = (1 << 0), /// SSE4
-    AVX = (1 << 1),
-    AVX2 = (1 << 2),
-    AVX512F = (1 << 3),
-    AVX512BW = (1 << 4),
-    AVX512VBMI = (1 << 5),
-    AVX512VBMI2 = (1 << 6),
-};
-
-/// Runtime detection.
-bool isArchSupported(TargetArch arch);
-
-String toString(TargetArch arch);
-} // namespace DB
 // clang-format off
 #if defined(__clang__)
 
@@ -743,21 +724,21 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
   *     )
   *
   *     void testFunction(int value) {
-  *         if (isArchSupported(Arch::AVX512))
+  *         if (TargetSpecific::AVX512Checker::runtimeSupport())
   *         {
   *             testFunctionImplAVX512(value);
   *         }
-  *         if (isArchSupported(TargetArch::AVX2))
+  *         else if (TargetSpecific::AVXChecker::runtimeSupport())
   *         {
-  *             testFunctionImplAVX2(value);
+  *             testFunctionImplAVX(value);
   *         }
-  *         else if (isArchSupported(TargetArch::SSE4))
+  *         else if (TargetSpecific::SSE4Checker::runtimeSupport())
   *         {
   *             testFunctionImplSSE4(value);
   *         }
   *         else
   *         {
-  *             testFunction(value);
+  *             testFunctionImpl(value);
   *         }
   *     }
   *};
@@ -783,7 +764,7 @@ TIFLASH_TARGET_SPECIFIC_NAMESPACE(
     FUNCTION_HEADER \
     \
     AVX_FUNCTION_SPECIFIC_ATTRIBUTE \
-    name##AVX2 \
+    name##AVX \
     FUNCTION_BODY \
     \
     FUNCTION_HEADER \
