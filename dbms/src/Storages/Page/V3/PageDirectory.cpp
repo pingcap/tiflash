@@ -1144,7 +1144,11 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     PageVersion new_version(last_sequence + 1, 0);
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    wal->apply(edit, new_version, write_limiter);
+    for (auto & r : edit.getMutRecords())
+    {
+        r.version = new_version;
+    }
+    wal->apply(ser::serializeTo(edit), write_limiter);
 
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
@@ -1211,7 +1215,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     }
 
     // Apply migrate edit into WAL with the increased epoch version
-    wal->apply(migrated_edit, write_limiter);
+    wal->apply(ser::serializeTo(migrated_edit), write_limiter);
 
     // Apply migrate edit to the mvcc map
     for (const auto & record : migrated_edit.getRecords())
@@ -1313,7 +1317,7 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
             /* for_dump_snapshot */ true);
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
         auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
-        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit_from_disk), write_limiter);
+        done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
     }
     return done_any_io;
 }
