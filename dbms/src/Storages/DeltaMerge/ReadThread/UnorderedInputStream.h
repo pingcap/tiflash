@@ -45,18 +45,18 @@ public:
     {
         if (extra_table_id_index != InvalidColumnID)
         {
-            ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+            auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
             ColumnWithTypeAndName col{extra_table_id_col_define.type->createColumn(), extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id, extra_table_id_col_define.default_value};
             header.insert(extra_table_id_index, col);
         }
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
-        LOG_FMT_DEBUG(log, "pool {} ref {} created", task_pool->poolId(), ref_no);
+        LOG_FMT_DEBUG(log, "Created, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
     ~UnorderedInputStream()
     {
         task_pool->decreaseUnorderedInputStreamRefCount();
-        LOG_FMT_DEBUG(log, "pool {} ref {} destroy", task_pool->poolId(), ref_no);
+        LOG_FMT_DEBUG(log, "Destroy, pool_id={} ref_no={}", task_pool->poolId(), ref_no);
     }
 
     String getName() const override { return NAME; }
@@ -70,7 +70,7 @@ protected:
         return readImpl(filter_ignored, false);
     }
 
-    // Currently, res_fiter and return_filter is unused.
+    // Currently, res_filter and return_filter is unused.
     Block readImpl(FilterPtr & /*res_filter*/, bool /*return_filter*/) override
     {
         if (done)
@@ -87,7 +87,7 @@ protected:
             {
                 if (extra_table_id_index != InvalidColumnID)
                 {
-                    ColumnDefine extra_table_id_col_define = getExtraTableIDColumnDefine();
+                    auto & extra_table_id_col_define = getExtraTableIDColumnDefine();
                     ColumnWithTypeAndName col{{}, extra_table_id_col_define.type, extra_table_id_col_define.name, extra_table_id_col_define.id};
                     size_t row_number = res.rows();
                     auto col_data = col.type->createColumnConst(row_number, Field(physical_table_id));
@@ -114,7 +114,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_FMT_DEBUG(log, "pool {} ref {} finish read {} rows from storage", task_pool->poolId(), ref_no, total_rows);
+        LOG_FMT_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, total_rows);
     }
 
 private:
