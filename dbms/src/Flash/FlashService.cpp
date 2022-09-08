@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/VariantOp.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/FlashService.h>
@@ -116,7 +117,7 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
+grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, const coprocessor::BatchRequest * request, grpc::ServerWriter<coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
@@ -150,10 +151,10 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService::DispatchMPPTask(
-    ::grpc::ServerContext * grpc_context,
-    const ::mpp::DispatchTaskRequest * request,
-    ::mpp::DispatchTaskResponse * response)
+grpc::Status FlashService::DispatchMPPTask(
+    grpc::ServerContext * grpc_context,
+    const mpp::DispatchTaskRequest * request,
+    mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
@@ -193,9 +194,9 @@ grpc::Status FlashService::Coprocessor(
     return mpp_handler.execute(db_context, response);
 }
 
-::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]],
-                                     const ::mpp::IsAliveRequest * request [[maybe_unused]],
-                                     ::mpp::IsAliveResponse * response [[maybe_unused]])
+grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_unused]],
+                                   const mpp::IsAliveRequest * request [[maybe_unused]],
+                                   mpp::IsAliveResponse * response [[maybe_unused]])
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     if (!security_config->checkGrpcContext(grpc_context))
@@ -211,13 +212,13 @@ grpc::Status FlashService::Coprocessor(
 
     auto & tmt_context = db_context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
-    return ::grpc::Status::OK;
+    return grpc::Status::OK;
 }
 
-std::variant<::grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
-                                                                                          const ::mpp::EstablishMPPConnectionRequest * request,
-                                                                                          ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
-                                                                                          IAsyncCallData * call_data)
+std::variant<grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(grpc::ServerContext * grpc_context,
+                                                                                        const mpp::EstablishMPPConnectionRequest * request,
+                                                                                        grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer,
+                                                                                        IAsyncCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
@@ -260,24 +261,9 @@ std::variant<::grpc::Status, std::string> FlashService::establishMPPConnectionSy
     if (tunnel == nullptr)
     {
         LOG_ERROR(log, err_msg);
-        if (call_data)
-        {
-            return err_msg;
-        }
-        else
-        {
-            if (sync_writer->Write(getPacketWithError(err_msg)))
-            {
-                return grpc::Status::OK;
-            }
-            else
-            {
-                LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
-                return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
-            }
-        }
+        return err_msg;
     }
-    Stopwatch stopwatch;
+
     if (call_data)
     {
         // In async mode, this function won't wait for the request done and the finish event is handled in IAsyncCallData.
@@ -285,6 +271,7 @@ std::variant<::grpc::Status, std::string> FlashService::establishMPPConnectionSy
     }
     else
     {
+        Stopwatch stopwatch;
         SyncPacketWriter writer(sync_writer);
         tunnel->connect(&writer);
         tunnel->waitForFinish();
@@ -296,10 +283,33 @@ std::variant<::grpc::Status, std::string> FlashService::establishMPPConnectionSy
     return grpc::Status::OK;
 }
 
-::grpc::Status FlashService::CancelMPPTask(
-    ::grpc::ServerContext * grpc_context,
-    const ::mpp::CancelTaskRequest * request,
-    ::mpp::CancelTaskResponse * response)
+grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer)
+{
+    auto res = establishMPPConnectionSyncOrAsync(grpc_context, request, sync_writer, nullptr);
+    grpc::Status status;
+    std::visit(variant_op::overloaded{
+                   [&](grpc::Status & stat) {
+                       status = stat;
+                   },
+                   [&](std::string & err_msg) {
+                       if (!sync_writer->Write(getPacketWithError(err_msg)))
+                       {
+                           status = grpc::Status::OK;
+                       }
+                       else
+                       {
+                           LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
+                           status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                       }
+                   }},
+               res);
+    return status;
+}
+
+grpc::Status FlashService::CancelMPPTask(
+    grpc::ServerContext * grpc_context,
+    const mpp::CancelTaskRequest * request,
+    mpp::CancelTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
@@ -408,7 +418,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     }
 }
 
-::grpc::Status FlashService::Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     if (!security_config->checkGrpcContext(grpc_context))

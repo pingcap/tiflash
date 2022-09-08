@@ -14,12 +14,12 @@
 
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/VariantOp.h>
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
-#include <Storages/Transaction/Utils.h>
 
 namespace DB
 {
@@ -126,11 +126,8 @@ void EstablishCallData::initRpc()
                            }
                        },
                        [&, this](std::string & err_msg) {
-                           if (!err_msg.empty())
-                           {
-                               writeErr(getPacketWithError(err_msg));
-                               success = false;
-                           }
+                           writeErr(getPacketWithError(err_msg));
+                           success = false;
                        }},
                    res);
         if (!success)

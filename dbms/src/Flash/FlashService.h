@@ -58,43 +58,36 @@ public:
         const coprocessor::Request * request,
         coprocessor::Response * response) override;
 
-    ::grpc::Status BatchCoprocessor(::grpc::ServerContext * context,
-                                    const ::coprocessor::BatchRequest * request,
-                                    ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer) override;
+    grpc::Status BatchCoprocessor(grpc::ServerContext * context,
+                                  const coprocessor::BatchRequest * request,
+                                  grpc::ServerWriter<coprocessor::BatchResponse> * writer) override;
 
-    ::grpc::Status DispatchMPPTask(
-        ::grpc::ServerContext * context,
-        const ::mpp::DispatchTaskRequest * request,
-        ::mpp::DispatchTaskResponse * response) override;
+    grpc::Status DispatchMPPTask(
+        grpc::ServerContext * context,
+        const mpp::DispatchTaskRequest * request,
+        mpp::DispatchTaskResponse * response) override;
 
-    ::grpc::Status IsAlive(
-        ::grpc::ServerContext * context,
-        const ::mpp::IsAliveRequest * request,
-        ::mpp::IsAliveResponse * response) override;
+    grpc::Status IsAlive(
+        grpc::ServerContext * context,
+        const mpp::IsAliveRequest * request,
+        mpp::IsAliveResponse * response) override;
 
-    std::variant<::grpc::Status, std::string> establishMPPConnectionSyncOrAsync(::grpc::ServerContext * context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer, IAsyncCallData * call_data);
+    /// Return grpc::Status::OK when the connection is established.
+    /// Return non-OK grpc::Status when the connection can not be established.
+    /// Return std::string when a error happens in application and it should be sent to the client then close the connection with grpc::Status::OK.
+    std::variant<grpc::Status, std::string> establishMPPConnectionSyncOrAsync(grpc::ServerContext * context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer, IAsyncCallData * call_data);
 
-    ::grpc::Status EstablishMPPConnection(::grpc::ServerContext * grpc_context, const ::mpp::EstablishMPPConnectionRequest * request, ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer) override
-    {
-        auto res = establishMPPConnectionSyncOrAsync(grpc_context, request, sync_writer, nullptr);
-        auto * status = std::get_if<::grpc::Status>(&res);
-        if (status == nullptr)
-        {
-            // Should not happen at the time of writing.
-            return ::grpc::Status::OK;
-        }
-        return *status;
-    }
+    grpc::Status EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer) override;
 
-    ::grpc::Status CancelMPPTask(::grpc::ServerContext * grpc_context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
+    grpc::Status CancelMPPTask(grpc::ServerContext * grpc_context, const mpp::CancelTaskRequest * request, mpp::CancelTaskResponse * response) override;
 
-    ::grpc::Status Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
+    grpc::Status Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response) override;
 
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
 
 protected:
-    std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
+    std::tuple<ContextPtr, grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
     const TiFlashSecurityConfig * security_config = nullptr;
     Context * context = nullptr;
