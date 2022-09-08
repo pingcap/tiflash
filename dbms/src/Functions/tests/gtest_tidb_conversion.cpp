@@ -1877,5 +1877,60 @@ try
 }
 CATCH
 
+// for https://github.com/pingcap/tics/issues/3595
+TEST_F(TestTidbConversion, castStringAsDateTime3595)
+try
+{
+    DAGContext * dag_context = context.getDAGContext();
+    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto to_datetime_column = createConstColumn<String>(1, "Nullable(MyDateTime(6))");
+    ColumnWithTypeAndName expect_datetime_column(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({{}}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(6)),
+        "result");
+    auto to_date_column = createConstColumn<String>(1, "Nullable(MyDate)");
+    ColumnWithTypeAndName expect_date_column(
+        createColumn<Nullable<DataTypeMyDate::FieldType>>({{}}).column,
+        makeNullable(std::make_shared<DataTypeMyDate>()),
+        "result");
+
+    auto from_column = createColumn<String>({"08:45:16"});
+    auto vector_result = executeFunction("tidb_cast", {from_column, to_datetime_column});
+    for (size_t i = 0; i < from_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_column, to_date_column});
+    for (size_t i = 0; i < from_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+
+    auto from_decimal_column = createColumn<Decimal32>(std::make_tuple(9, 3), {"102310.023"});
+    vector_result = executeFunction("tidb_cast", {from_decimal_column, to_datetime_column});
+    for (size_t i = 0; i < from_decimal_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_decimal_column, to_date_column});
+    for (size_t i = 0; i < from_decimal_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+
+    auto from_float_column = createColumn<DataTypeFloat64::FieldType>({102310.023});
+    vector_result = executeFunction("tidb_cast", {from_float_column, to_datetime_column});
+    for (size_t i = 0; i < from_float_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_float_column, to_date_column});
+    for (size_t i = 0; i < from_float_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+}
+CATCH
+
 } // namespace
 } // namespace DB::tests
