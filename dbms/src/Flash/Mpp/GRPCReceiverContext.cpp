@@ -210,8 +210,8 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.send_task_id = sender_task->task_id();
     req.recv_task_id = task_meta.task_id();
     req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-    req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
-    req.req->set_allocated_sender_meta(sender_task.release());
+    req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta)); // NOLINT
+    req.req->set_allocated_sender_meta(sender_task.release()); // NOLINT
     return req;
 }
 
