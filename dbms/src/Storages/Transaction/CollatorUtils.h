@@ -41,7 +41,7 @@ FLATTEN_INLINE_PURE static inline int RawStrEqualCompare(const std::string_view 
 // Compare str view by memcmp
 FLATTEN_INLINE_PURE inline int RawStrCompare(const std::string_view & v1, const std::string_view & v2)
 {
-    return v1.compare(v2);
+    return mem_utils::CompareStrView(v1, v2);
 }
 
 constexpr char SPACE = ' ';

@@ -200,21 +200,21 @@ private:
     {
         if (collator == nullptr)
             return a < b;
-        return collator->compare(a.data, a.size, b.data, b.size) < 0;
+        return collator->compareFastPath(a.data, a.size, b.data, b.size) < 0;
     }
 
     bool greater(const StringRef & a, const StringRef & b) const
     {
         if (collator == nullptr)
             return a > b;
-        return collator->compare(a.data, a.size, b.data, b.size) > 0;
+        return collator->compareFastPath(a.data, a.size, b.data, b.size) > 0;
     }
 
     bool equalTo(const StringRef & a, const StringRef & b) const
     {
         if (collator == nullptr)
             return a == b;
-        return collator->compare(a.data, a.size, b.data, b.size) == 0;
+        return collator->compareFastPath(a.data, a.size, b.data, b.size) == 0;
     }
 
 public:

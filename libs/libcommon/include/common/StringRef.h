@@ -16,6 +16,7 @@
 
 #include <city.h>
 #include <common/mem_utils.h>
+#include <common/mem_utils_opt.h>
 #include <common/types.h>
 #include <common/unaligned.h>
 
@@ -87,13 +88,7 @@ using StringRefs = std::vector<StringRef>;
 // - otherwise, use `std::string_view == std::string_view` or `mem_utils::avx2_mem_equal`(under x86-64 with avx2)
 inline bool operator==(StringRef lhs, StringRef rhs)
 {
-    if (lhs.size != rhs.size)
-        return false;
-
-    if (lhs.size == 0)
-        return true;
-
-    return mem_utils::memoryEqual(lhs.data, rhs.data, lhs.size);
+    return mem_utils::IsStrViewEqual({lhs}, {rhs});
 }
 
 inline bool operator!=(StringRef lhs, StringRef rhs)
@@ -103,14 +98,12 @@ inline bool operator!=(StringRef lhs, StringRef rhs)
 
 inline bool operator<(StringRef lhs, StringRef rhs)
 {
-    int cmp = memcmp(lhs.data, rhs.data, std::min(lhs.size, rhs.size));
-    return cmp < 0 || (cmp == 0 && lhs.size < rhs.size);
+    return mem_utils::CompareStrView({lhs}, {rhs}) < 0;
 }
 
 inline bool operator>(StringRef lhs, StringRef rhs)
 {
-    int cmp = memcmp(lhs.data, rhs.data, std::min(lhs.size, rhs.size));
-    return cmp > 0 || (cmp == 0 && lhs.size > rhs.size);
+    return mem_utils::CompareStrView({lhs}, {rhs}) > 0;
 }
 
 

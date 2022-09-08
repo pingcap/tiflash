@@ -211,10 +211,10 @@ public:
 
         StringRef res;
 
-        if (collator != nullptr)
+        if (likely(collator != nullptr))
         {
             // Skip last zero byte.
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
+            auto sort_key = collator->sortKeyFastPath(reinterpret_cast<const char *>(src), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             src = sort_key.data;
         }
@@ -244,10 +244,10 @@ public:
     {
         size_t string_size = sizeAt(n);
         size_t offset = offsetAt(n);
-        if (collator != nullptr)
+        if (likely(collator != nullptr))
         {
             // Skip last zero byte.
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
+            auto sort_key = collator->sortKeyFastPath(reinterpret_cast<const char *>(&chars[offset]), string_size - 1, sort_key_container);
             string_size = sort_key.size;
             hash.update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
             hash.update(sort_key.data, sort_key.size);
