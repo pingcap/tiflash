@@ -50,6 +50,13 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
     }
 }
 
+String constructStatusString(ExchangeReceiverState state, const String & error_message)
+{
+    if (error_message.empty())
+        return fmt::format("Receiver status is {}", getReceiverStateStr(state));
+    return fmt::format("Receiver status is {}, with error message: {}", getReceiverStateStr(state), error_message);
+}
+
 // If enable_fine_grained_shuffle:
 //      Seperate chunks according to packet.stream_ids[i], then push to msg_channels[stream_id].
 // If fine grained_shuffle is disabled:
@@ -736,16 +743,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
 
         if (state != ExchangeReceiverState::NORMAL)
         {
-            String msg;
-            if (state == ExchangeReceiverState::CANCELED)
-                msg = "query canceled";
-            else if (state == ExchangeReceiverState::CLOSED)
-                msg = "ExchangeReceiver closed";
-            else if (!err_msg.empty())
-                msg = err_msg;
-            else
-                msg = "Unknown error";
-            return ExchangeReceiverResult::newError(0, name, msg);
+            return ExchangeReceiverResult::newError(0, name, constructStatusString(state, err_msg));
         }
         else /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
         {
@@ -811,9 +809,7 @@ template <typename RPCContext>
 String ExchangeReceiverBase<RPCContext>::getStatusString()
 {
     std::unique_lock lock(mu);
-    if (err_msg.empty())
-        return fmt::format("Receiver status is {}", getReceiverStateStr(state));
-    return fmt::format("Receiver status is {}, with error message: {}", getReceiverStateStr(state), err_msg);
+    return constructStatusString(state, err_msg);
 }
 
 template <typename RPCContext>
