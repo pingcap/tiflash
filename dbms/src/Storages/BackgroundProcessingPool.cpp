@@ -152,9 +152,9 @@ void BackgroundProcessingPool::threadFunction()
         addThreadId(getTid());
     }
 
-    MemoryTracker memory_tracker;
-    memory_tracker.setMetric(CurrentMetrics::MemoryTrackingInBackgroundProcessingPool);
-    current_memory_tracker = &memory_tracker;
+    auto memory_tracker = MemoryTracker::create();
+    memory_tracker->setMetric(CurrentMetrics::MemoryTrackingInBackgroundProcessingPool);
+    current_memory_tracker = memory_tracker.get();
 
     pcg64 rng(randomSeed());
     std::this_thread::sleep_for(std::chrono::duration<double>(std::uniform_real_distribution<double>(0, sleep_seconds_random_part)(rng)));

@@ -1347,7 +1347,7 @@ public:
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
 
-                Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, true);
 
                 if (packed_uint_value.isNull())
                 {
@@ -1475,7 +1475,7 @@ public:
                 }
                 else
                 {
-                    Field packed_uint_value = parseMyDateTime(value_str, to_fsp);
+                    Field packed_uint_value = parseMyDateTime(value_str, to_fsp, true);
 
                     if (packed_uint_value.isNull())
                     {
@@ -1508,7 +1508,7 @@ public:
             for (size_t i = 0; i < size; i++)
             {
                 String value_str = vec_from[i].toString(type.getScale());
-                Field value = parseMyDateTime(value_str, to_fsp);
+                Field value = parseMyDateTime(value_str, to_fsp, true);
 
                 if (value.getType() == Field::Types::Null)
                 {

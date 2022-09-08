@@ -24,6 +24,34 @@
 
 namespace DB::tests
 {
+TiDB::TP dataTypeToTP(const DataTypePtr & type)
+{
+    // TODO support more types.
+    switch (removeNullable(type)->getTypeId())
+    {
+    case TypeIndex::UInt8:
+    case TypeIndex::Int8:
+        return TiDB::TP::TypeTiny;
+    case TypeIndex::UInt16:
+    case TypeIndex::Int16:
+        return TiDB::TP::TypeShort;
+    case TypeIndex::UInt32:
+    case TypeIndex::Int32:
+        return TiDB::TP::TypeLong;
+    case TypeIndex::UInt64:
+    case TypeIndex::Int64:
+        return TiDB::TP::TypeLongLong;
+    case TypeIndex::String:
+        return TiDB::TP::TypeString;
+    case TypeIndex::Float32:
+        return TiDB::TP::TypeFloat;
+    case TypeIndex::Float64:
+        return TiDB::TP::TypeDouble;
+    default:
+        throw Exception("Unsupport type");
+    }
+}
+
 DAGContext & ExecutorTest::getDAGContext()
 {
     assert(dag_context_ptr != nullptr);
@@ -107,15 +135,26 @@ Block mergeBlocks(Blocks blocks)
 }
 } // namespace
 
-DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
+void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {
-    Blocks actual_blocks;
     stream->readPrefix();
     while (auto block = stream->read())
     {
-        actual_blocks.push_back(block);
+        blocks.push_back(block);
     }
     stream->readSuffix();
+}
+
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
+{
+    return readBlocks({stream});
+}
+
+DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
+{
+    Blocks actual_blocks;
+    for (const auto & stream : streams)
+        readStream(actual_blocks, stream);
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 
@@ -132,12 +171,6 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     return readBlock(executeQuery(context.context).in);
-}
-
-DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
-{
-    auto res = executeMPPQuery(context.context, properties, tasks, server_config_map);
-    return readBlock(res);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

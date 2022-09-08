@@ -245,6 +245,8 @@ public:
             return "BackgroundThreadPool";
         case Foreground:
             return "Foreground";
+        case ForegroundRPC:
+            return "ForegroundRPC";
         case BackgroundGCThread:
             return "BackgroundGCThread";
         default:
@@ -314,7 +316,7 @@ public:
         return table_name;
     }
 
-    void rename(String new_path, bool clean_rename, String new_database_name, String new_table_name);
+    void rename(String new_path, String new_database_name, String new_table_name);
 
     void clearData();
 
@@ -529,7 +531,7 @@ public:
 #endif
 
     Context & global_context;
-    StoragePathPool path_pool;
+    std::shared_ptr<StoragePathPool> path_pool;
     Settings settings;
     StoragePoolPtr storage_pool;
 

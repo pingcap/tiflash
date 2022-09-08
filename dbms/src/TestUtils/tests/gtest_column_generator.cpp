@@ -12,35 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/Types.h>
-
-#include <mutex>
+#include <TestUtils/ColumnGenerator.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
-namespace DM
-{
 namespace tests
 {
-class IDGenerator
+
+TEST(TestColumnGenerator, run)
+try
 {
-public:
-    IDGenerator()
-        : id{0}
-    {}
-
-    UInt64 get()
+    std::vector<String> type_vec = {"Int8", "Int16", "Int32", "Int64", "UInt8", "UInt16", "UInt32", "UInt64", "Float32", "Float64", "String", "MyDateTime", "MyDate", "Decimal"};
+    for (size_t i = 10; i <= 100000; i *= 10)
     {
-        std::lock_guard guard{mutex};
-        return id++;
+        for (auto type : type_vec)
+            ASSERT_EQ(ColumnGenerator::instance().generate({i, type, RANDOM}).column->size(), i);
     }
+}
+CATCH
 
-private:
-    std::mutex mutex;
-    UInt64 id;
-};
 } // namespace tests
-} // namespace DM
+
 } // namespace DB

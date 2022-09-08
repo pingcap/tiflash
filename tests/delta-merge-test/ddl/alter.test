@@ -72,21 +72,5 @@
 └───┴──────┴───────┴──────┘
 
 
-## rename table
->> drop table if exists dm_test_renamed
->> rename table dm_test to dm_test_renamed
->> select * from dm_test
-Received exception from server (version {#WORD}):
-Code: 60. DB::Exception: Received from {#WORD} DB::Exception: Table default.dm_test doesn't exist..
-
->> select * from dm_test_renamed
-┌─a─┬────b─┬─────c─┬────d─┐
-│ 1 │    0 │     0 │   \N │
-│ 2 │ 1024 │ 65535 │ 4096 │
-│ 3 │ 2048 │ 65536 │   \N │
-└───┴──────┴───────┴──────┘
-
-
 ## Clean up
 >> drop table if exists dm_test
->> drop table if exists dm_test_renamed
