@@ -44,7 +44,7 @@ size_t KeySize(EncryptionMethod method)
         throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
                                    Errors::Encryption::Internal);
 #else
-        // Openssl support SM4 after 1.1.1 release version.
+        // OpenSSL support SM4 after 1.1.1 release version.
         return 16;
 #endif
     default:
