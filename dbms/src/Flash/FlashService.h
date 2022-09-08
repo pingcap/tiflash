@@ -81,6 +81,7 @@ public:
     }
 
     ::grpc::Status CancelMPPTask(::grpc::ServerContext * context, const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response) override;
+    ::grpc::Status cancelMPPTaskForTest(const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response);
 
     ::grpc::Status Compact(::grpc::ServerContext * context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response) override;
 
@@ -88,6 +89,7 @@ public:
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
 
 protected:
+    std::tuple<ContextPtr, grpc::Status> createDBContextForTest() const;
     std::tuple<ContextPtr, ::grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;
 
     const TiFlashSecurityConfig & security_config;
@@ -133,5 +135,4 @@ public:
         ::grpc::Service::RequestAsyncServerStreaming(EstablishMPPConnectionApiID, context, request, writer, new_call_cq, notification_cq, tag);
     }
 };
-
 } // namespace DB
