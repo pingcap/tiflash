@@ -36,7 +36,7 @@ class KickTag : public grpc::internal::CompletionQueueTag
 {
 public:
     explicit KickTag(std::function<void *()> a)
-        : action(a)
+        : action(std::move(a))
     {}
 
     bool FinalizeResult(void ** tag_, bool * /*status*/) override
