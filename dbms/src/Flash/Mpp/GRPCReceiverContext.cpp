@@ -72,6 +72,8 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
     {
         return reader->Finish();
     }
+
+    void cancel(const String &) override {}
 };
 
 struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
@@ -127,7 +129,8 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         if (local_tunnel_sender)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            local_tunnel_sender->consumerFinish("Receiver closed");
+            local_tunnel_sender->consumerFinish("Receiver exists");
+            local_tunnel_sender.reset();
         }
     }
 
@@ -140,11 +143,22 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         return success;
     }
 
+    void cancel(const String & reason) override
+    {
+        if (local_tunnel_sender)
+        {
+            local_tunnel_sender->consumerFinish(fmt::format("Receiver cancelled, reason: {}", reason));
+            local_tunnel_sender.reset();
+        }
+    }
+
     ::grpc::Status finish() override
     {
         if (local_tunnel_sender)
+        {
             local_tunnel_sender->consumerFinish("Receiver finished!");
-        local_tunnel_sender.reset();
+            local_tunnel_sender.reset();
+        }
         return ::grpc::Status::OK;
     }
 };

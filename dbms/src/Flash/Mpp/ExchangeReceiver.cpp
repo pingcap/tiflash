@@ -633,7 +633,11 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                     break;
                 has_data = true;
                 if (packet->hasError())
-                    throw Exception("Exchange receiver meet error : " + packet->error().msg());
+                {
+                    meet_error = true;
+                    local_err_msg = fmt::format("Read error message from mpp packet: {}", packet->getPacket().error().msg());
+                    break;
+                }
 
                 if (!pushPacket<enable_fine_grained_shuffle, true>(
                         req.source_index,
@@ -643,15 +647,14 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                         log))
                 {
                     meet_error = true;
-                    auto local_state = getState();
-                    local_err_msg = "receiver's state is " + getReceiverStateStr(local_state) + ", exit from readLoop";
-                    LOG_WARNING(log, local_err_msg);
+                    local_err_msg = fmt::format("Push mpp packet failed. {}", getStatusString());
                     break;
                 }
             }
             // if meet error, such as decode packet fails, it will not retry.
             if (meet_error)
             {
+                reader->cancel(local_err_msg);
                 break;
             }
             status = reader->finish();
@@ -683,20 +686,10 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             local_err_msg = status.error_message();
         }
     }
-    catch (Exception & e)
-    {
-        meet_error = true;
-        local_err_msg = e.message();
-    }
-    catch (std::exception & e)
-    {
-        meet_error = true;
-        local_err_msg = e.what();
-    }
     catch (...)
     {
         meet_error = true;
-        local_err_msg = "fatal error";
+        local_err_msg = getCurrentExceptionMessage(false);
     }
     connectionDone(meet_error, local_err_msg, log);
 }
@@ -815,10 +808,12 @@ bool ExchangeReceiverBase<RPCContext>::setEndState(ExchangeReceiverState new_sta
 }
 
 template <typename RPCContext>
-ExchangeReceiverState ExchangeReceiverBase<RPCContext>::getState()
+String ExchangeReceiverBase<RPCContext>::getStatusString()
 {
     std::unique_lock lock(mu);
-    return state;
+    if (err_msg.empty())
+        return fmt::format("Receiver status is {}", getReceiverStateStr(state));
+    return fmt::format("Receiver status is {}, with error message: {}", getReceiverStateStr(state), err_msg);
 }
 
 template <typename RPCContext>
