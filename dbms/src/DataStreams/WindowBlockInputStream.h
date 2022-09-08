@@ -171,7 +171,7 @@ public:
 protected:
     Block readImpl() override;
     void appendInfo(FmtBuffer & buffer) const override;
-    std::optional<Block> returnIfCancelledOrKilled();
+    bool returnIfCancelledOrKilled();
 
     LoggerPtr log;
 

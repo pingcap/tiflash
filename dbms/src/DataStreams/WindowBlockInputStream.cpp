@@ -76,16 +76,16 @@ void WindowBlockInputStream::initialWorkspaces()
     only_have_pure_window = onlyHaveRowNumberAndRank();
 }
 
-std::optional<Block> WindowBlockInputStream::returnIfCancelledOrKilled()
+bool WindowBlockInputStream::returnIfCancelledOrKilled()
 {
     if (isCancelledOrThrowIfKilled())
     {
         if (!window_blocks.empty())
             window_blocks.erase(window_blocks.begin(), window_blocks.end());
         input_is_finished = true;
-        return {Block{}};
+        return true;
     }
-    return {};
+    return false;
 }
 
 Block WindowBlockInputStream::readImpl()
@@ -93,8 +93,8 @@ Block WindowBlockInputStream::readImpl()
     const auto & stream = children.back();
     while (!input_is_finished)
     {
-        if (auto res = returnIfCancelledOrKilled(); res.has_value())
-            return res.value();
+        if (returnIfCancelledOrKilled())
+            return {};
 
         if (Block output_block = tryGetOutputBlock())
             return output_block;
@@ -107,8 +107,8 @@ Block WindowBlockInputStream::readImpl()
         tryCalculate();
     }
 
-    if (auto res = returnIfCancelledOrKilled(); res.has_value())
-        return res.value();
+    if (returnIfCancelledOrKilled())
+        return {};
     // return last partition block, if already return then return null
     return tryGetOutputBlock();
 }
