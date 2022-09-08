@@ -281,7 +281,9 @@ Block HashOrderBlockInputStream::readImplInternal()
     if (!executed)
     {
         executed = true;
-        initMapImpl(80000000);
+
+        auto block_size_limit = context.getSettingsRef().debug_hash_sort_window_reserve_size.get();
+        initMapImpl(block_size_limit);
 
         while (Block block = children.back()->read())
         {
