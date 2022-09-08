@@ -53,8 +53,8 @@ String getReceiverStateStr(const ExchangeReceiverState & s)
 String constructStatusString(ExchangeReceiverState state, const String & error_message)
 {
     if (error_message.empty())
-        return fmt::format("Receiver status is {}", getReceiverStateStr(state));
-    return fmt::format("Receiver status is {}, with error message: {}", getReceiverStateStr(state), error_message);
+        return fmt::format("Receiver state: {}", getReceiverStateStr(state));
+    return fmt::format("Receiver state: {}, error message: {}", getReceiverStateStr(state), error_message);
 }
 
 // If enable_fine_grained_shuffle:
