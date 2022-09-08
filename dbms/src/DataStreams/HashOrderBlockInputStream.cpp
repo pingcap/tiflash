@@ -30,7 +30,7 @@ namespace ErrorCodes
 extern const int UNKNOWN_SET_DATA_VARIANT;
 } // namespace ErrorCodes
 
-ColumnRawPtrs getKeyColumns(SortDescription descr, const Block & block)
+NO_INLINE ColumnRawPtrs getKeyColumns(SortDescription descr, const Block & block)
 {
     size_t keys_size = descr.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -46,7 +46,7 @@ ColumnRawPtrs getKeyColumns(SortDescription descr, const Block & block)
     return key_columns;
 }
 
-void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
+NO_INLINE void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
 {
     switch (type)
     {
@@ -61,7 +61,7 @@ void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
     }
 }
 
-HashOrderBlockInputStream::Type HashOrderBlockInputStream::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
+NO_INLINE HashOrderBlockInputStream::Type HashOrderBlockInputStream::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
 {
     size_t keys_size = key_columns.size();
 
@@ -175,7 +175,7 @@ struct KeyGetterForType
 
 
 template <typename Map, typename KeyGetter>
-void HashOrderBlockInputStream::insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block)
+NO_INLINE void HashOrderBlockInputStream::insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block)
 {
     for (size_t i = 0; i < rows; ++i)
     {
@@ -196,7 +196,7 @@ void HashOrderBlockInputStream::insert(Map & map, size_t rows, KeyGetter key_get
 }
 
 template <typename Map, typename MapIterator>
-Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
+NO_INLINE Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
 {
     if (iter == map->cend())
     {
@@ -217,12 +217,12 @@ Block HashOrderBlockInputStream::output(Map & map, MapIterator & iter)
     return blocks.front().cloneWithColumns(std::move(columns));
 }
 
-Block HashOrderBlockInputStream::readImpl()
+NO_INLINE Block HashOrderBlockInputStream::readImpl()
 {
     return readImplInternal();
 }
 
-void HashOrderBlockInputStream::insertFromBlock(Block * block)
+NO_INLINE void HashOrderBlockInputStream::insertFromBlock(Block * block)
 {
     size_t rows = block->rows();
     switch (type)
@@ -243,7 +243,7 @@ void HashOrderBlockInputStream::insertFromBlock(Block * block)
     }
 }
 
-size_t getEstimateRows(BlocksList & blocks)
+NO_INLINE size_t getEstimateRows(BlocksList & blocks)
 {
     // TODO: use sample or other methods.
     size_t rows = 0;
