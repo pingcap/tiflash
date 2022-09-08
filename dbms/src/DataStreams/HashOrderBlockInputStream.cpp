@@ -54,6 +54,7 @@ void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
     case Type::TYPE:                                                                \
         maps.TYPE = std::make_unique<typename decltype(maps.TYPE)::element_type>(); \
         maps.TYPE->reserve(capacity);                                               \
+        iters.TYPE = maps.TYPE->cbegin();                                           \
         break;
         APPLY_FOR_HASH_ORDER_VARIANTS(M)
 #undef M
@@ -268,7 +269,7 @@ NO_INLINE Block HashOrderBlockInputStream::readImplInternal()
             blocks.push_back(block);
         }
 
-        if (blocks.empty())
+        if (!blocks.empty())
         {
             size_t estimate_rows = getEstimateRows(blocks);
 
