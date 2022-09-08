@@ -40,7 +40,7 @@ ALWAYS_INLINE static inline T clear_rightmost_bit_one(const T value)
 ALWAYS_INLINE static inline uint32_t rightmost_bit_one_index(const uint32_t value)
 {
     assert(value != 0);
-    return _tzcnt_u32(value);
+    return __builtin_ctz(value);
 }
 
 using Block32 = __m256i;
@@ -112,18 +112,37 @@ FLATTEN_INLINE_PURE static inline int cmp_block16(const char * p1, const char * 
     if (unlikely(mask != 0))
     {
         auto pos = rightmost_bit_one_index(mask);
-        return cmp_block1(p1 + pos, p2 + pos);
+        int ret = cmp_block1(p1 + pos, p2 + pos);
+        if (ret == 0)
+        {
+            __builtin_unreachable();
+        }
+        else
+        {
+            return ret;
+        }
     }
     return 0;
 }
-FLATTEN_INLINE_PURE static inline int cmp_block32(const char * p1, const char * p2)
+
+template <bool must_not_eq = false>
+FLATTEN_INLINE_PURE static inline int cmp_block32(const char * p1,
+                                                  const char * p2)
 {
     uint32_t mask = get_block32_cmp_eq_mask(p1, p2); // mask is up to 0xffffffff
     mask -= Block32Mask;
-    if (unlikely(mask != 0))
+    if (must_not_eq || unlikely(mask != 0))
     {
         auto pos = rightmost_bit_one_index(mask);
-        return cmp_block1(p1 + pos, p2 + pos);
+        int ret = cmp_block1(p1 + pos, p2 + pos);
+        if (ret == 0)
+        {
+            __builtin_unreachable();
+        }
+        else
+        {
+            return ret;
+        }
     }
     return 0;
 }
@@ -136,28 +155,28 @@ FLATTEN_INLINE_PURE static inline bool check_block32x4_eq(const char * a, const 
         auto all_ones = _mm256_set1_epi8(0xFF);
         Block32 data = all_ones;
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
-            data = _mm256_and_si256(data, _mm256_cmpeq_epi8(load_block32(a + i * BLOCK32_SIZE), load_block32(b + i * BLOCK32_SIZE)));
+            data = _mm256_and_si256(data, _mm256_cmpeq_epi8(load_block32(b + i * BLOCK32_SIZE), load_block32(a + i * BLOCK32_SIZE)));
         return 0 != _mm256_testc_si256(data, all_ones);
     }
     else
     {
         uint32_t mask = Block32Mask;
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
-            mask &= get_block32_cmp_eq_mask(a + i * BLOCK32_SIZE, b + i * BLOCK32_SIZE);
+            mask &= get_block32_cmp_eq_mask(b + i * BLOCK32_SIZE, a + i * BLOCK32_SIZE);
         return mask == Block32Mask;
     }
 }
 
 FLATTEN_INLINE_PURE static inline int cmp_block32x4(const char * a, const char * b)
 {
-    if (check_block32x4_eq(a, b))
+    if (likely(check_block32x4_eq(a, b)))
         return 0;
-    for (size_t i = 0; i < AVX2_UNROLL_NUM - 1; ++i)
+    for (size_t i = 0; i < 3; ++i)
     {
-        if (auto ret = cmp_block32(a + i * BLOCK32_SIZE, (b + i * BLOCK32_SIZE)); ret)
+        if (auto ret = cmp_block32(a + i * BLOCK32_SIZE, (b + i * BLOCK32_SIZE)); unlikely(ret))
             return ret;
     }
-    return cmp_block32(a + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE, (b + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE));
+    return cmp_block32<true>(a + 3 * BLOCK32_SIZE, (b + 3 * BLOCK32_SIZE));
 }
 FLATTEN_INLINE_PURE static inline uint32_t swap_u32(uint32_t val)
 {
@@ -179,13 +198,53 @@ FLATTEN_INLINE_PURE static inline uint64_t swap_u64(uint64_t val)
 }
 
 // ref: https://github.com/lattera/glibc/blob/master/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
-FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char * p2, size_t n)
+FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char * p2, size_t n) noexcept
 {
     constexpr size_t loop_block32x4_size = AVX2_UNROLL_NUM * BLOCK32_SIZE;
 
     // n <= 32
     if (likely(n <= BLOCK32_SIZE))
     {
+#ifdef M
+        static_assert(false, "`M` is defined");
+#else
+#define M(x)                             \
+    case (x):                            \
+    {                                    \
+        return std::memcmp(p1, p2, (x)); \
+    }
+#endif
+        switch (n)
+        {
+            M(0);
+            M(1);
+            M(2);
+            M(3);
+            M(4);
+            M(5);
+            M(6);
+            M(7);
+            M(8);
+            M(9);
+            M(10);
+            M(11);
+            M(12);
+            M(13);
+            M(14);
+            M(15);
+            M(16);
+        default:
+        {
+            // 17~32
+            if (auto ret = cmp_block16(p1, p2); ret)
+                return ret;
+            return cmp_block16(p1 + n - BLOCK16_SIZE, p2 + n - BLOCK16_SIZE);
+        }
+        }
+#undef M
+
+// an optional way to check small str
+#if defined(AVX2_MEM_CMP_NORMAL_IF_ELSE)
         if (unlikely(n < 2))
         {
             // 0~1
@@ -245,6 +304,7 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
                 return ret;
             return cmp_block16(p1 + n - BLOCK16_SIZE, p2 + n - BLOCK16_SIZE);
         }
+#endif
     }
     //  8 * 32 < n
     if (unlikely(8 * BLOCK32_SIZE < n))
@@ -255,10 +315,10 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
             return ret;
         {
             // align addr of one data pointer
-            auto offset = BLOCK32_SIZE - OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE);
-            p1 += offset;
-            p2 += offset;
-            n -= offset;
+            auto offset = ssize_t(OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE)) - BLOCK32_SIZE;
+            p1 -= offset;
+            p2 -= offset;
+            n += offset;
         }
 
         for (; n >= loop_block32x4_size;)
@@ -312,7 +372,7 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
     }
 }
 
-FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const char * p2, size_t n)
+FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const char * p2, size_t n) noexcept
 {
     constexpr size_t loop_block32x4_size = AVX2_UNROLL_NUM * BLOCK32_SIZE;
 
@@ -415,10 +475,10 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
             return false;
         {
             // align addr of one data pointer
-            auto offset = BLOCK32_SIZE - OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE);
-            p1 += offset;
-            p2 += offset;
-            n -= offset;
+            auto offset = ssize_t(OFFSET_FROM_ALIGNED(size_t(p2), BLOCK32_SIZE)) - BLOCK32_SIZE;
+            p1 -= offset;
+            p2 -= offset;
+            n += offset;
         }
 
         for (; n >= loop_block32x4_size;)
