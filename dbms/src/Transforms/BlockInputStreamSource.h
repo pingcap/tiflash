@@ -27,9 +27,9 @@ public:
         : impl(impl_)
     {}
 
-    Block read() override
+    std::pair<bool, Block> read() override
     {
-        return impl->read();
+        return {true, impl->read()};
     }
 
     Block getHeader() const override

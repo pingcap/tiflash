@@ -27,9 +27,9 @@ public:
         : final_agg_reader(final_agg_reader_)
     {}
 
-    Block read() override
+    std::pair<bool, Block> read() override
     {
-        return final_agg_reader->read();
+        return {true, final_agg_reader->read()};
     }
 
     Block getHeader() const override

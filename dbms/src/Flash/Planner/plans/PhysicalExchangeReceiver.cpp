@@ -15,6 +15,9 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Transforms/TiRemoteSource.h>
+#include <Transforms/SquashTransform.h>
+#include <Transforms/TransformsPipeline.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
@@ -58,6 +61,21 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
         Block(schema),
         mpp_exchange_receiver);
     return physical_exchange_receiver;
+}
+
+void PhysicalExchangeReceiver::transform(TransformsPipeline & pipeline, Context &)
+{
+    bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
+    RUNTIME_CHECK(!enable_fine_grained_shuffle, enable_fine_grained_shuffle);
+
+    pipeline.transform([&](auto & transforms) {
+        transforms->setSource(std::make_shared<ExchangeReceiverSource>(
+            mpp_exchange_receiver,
+            log->identifier(),
+            execId(),
+            /*stream_id=*/0));
+        transforms->append(std::make_shared<SquashTransform>(8192, 0, log->identifier()));
+    });
 }
 
 void PhysicalExchangeReceiver::transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)

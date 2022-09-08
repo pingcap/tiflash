@@ -27,9 +27,9 @@ public:
         : sort_breaker(sort_breaker_)
     {}
 
-    Block read() override
+    std::pair<bool, Block> read() override
     {
-        return sort_breaker->read();
+        return {true, sort_breaker->read()};
     }
 
     Block getHeader() const override

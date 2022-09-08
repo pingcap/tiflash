@@ -40,7 +40,9 @@ bool Transforms::execute(size_t loop_id)
     if (isCancelledOrThrowIfKilled())
         return false;
 
-    Block block = source->read();
+    auto [is_ready, block] = source->read();
+    if (!is_ready)
+        return true;
     for (const auto & transform : transforms)
     {
         if (!transform->transform(block))
@@ -60,6 +62,8 @@ void Transforms::cancel(bool kill)
     if (kill)
         is_killed = true;
     is_cancelled = true;
+    assert(source);
+    source->cancel(kill);
 }
 
 bool Transforms::isCancelledOrThrowIfKilled() const

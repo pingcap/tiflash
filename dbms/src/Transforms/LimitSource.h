@@ -26,9 +26,9 @@ public:
         : limit_breaker(limit_breaker_)
     {}
 
-    Block read() override
+    std::pair<bool, Block> read() override
     {
-        return limit_breaker->read();
+        return {true, limit_breaker->read()};
     }
 
     Block getHeader() const override

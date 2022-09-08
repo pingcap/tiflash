@@ -16,6 +16,7 @@
 
 #include <Core/Block.h>
 
+#include <utility>
 #include <memory>
 
 namespace DB
@@ -24,8 +25,9 @@ class Source
 {
 public:
     virtual ~Source() = default;
-    virtual Block read() = 0;
+    virtual std::pair<bool, Block> read() = 0;
     virtual Block getHeader() const = 0;
+    virtual void cancel(bool /*kill*/) {}
 };
 
 using SourcePtr = std::shared_ptr<Source>;

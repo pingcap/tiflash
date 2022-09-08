@@ -19,18 +19,19 @@
 
 namespace DB
 {
-class SquashingTransform : public Transform
+class SquashTransform : public Transform
 {
 public:
-    explicit SquashingTransform(
+    explicit SquashTransform(
         size_t min_block_size_rows,
-        size_t min_block_size_bytes)
-        : transform(min_block_size_rows, min_block_size_bytes, req_id)
+        size_t min_block_size_bytes,
+        const String & req_id)
+        : squashing_transform(min_block_size_rows, min_block_size_bytes, req_id)
     {}
 
     bool transform(Block & block) override
     {
-        SquashingTransform::Result result = transform.add(std::move(block));
+        SquashingTransform::Result result = squashing_transform.add(std::move(block));
         if (result.ready)
         {
             block = std::move(result.block);
@@ -42,9 +43,9 @@ public:
         }
     }
 
-    void transformHeader(Block & block) override {}
+    void transformHeader(Block &) override {}
 
 private:
-    SquashingTransform transform;
+    SquashingTransform squashing_transform;
 };
 } // namespace DB

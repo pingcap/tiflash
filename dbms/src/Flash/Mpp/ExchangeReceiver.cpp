@@ -729,6 +729,48 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::asyncNextResult(std::queue<Block> & block_queue, const Block & header, size_t stream_id)
+{
+    if (unlikely(stream_id >= msg_channels.size()))
+    {
+        LOG_FMT_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
+        return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
+    }
+    std::shared_ptr<ReceivedMessage> recv_msg;
+    auto try_pop_result = msg_channels[stream_id]->tryPop(recv_msg);
+    if (try_pop_result == MPMCQueueResult::EMPTY)
+    {
+        return ExchangeReceiverResult::newAwait(name);
+    }
+    else if (try_pop_result != MPMCQueueResult::OK)
+    {
+        std::unique_lock lock(mu);
+
+        if (state != ExchangeReceiverState::NORMAL)
+        {
+            String msg;
+            if (state == ExchangeReceiverState::CANCELED)
+                msg = "query canceled";
+            else if (state == ExchangeReceiverState::CLOSED)
+                msg = "ExchangeReceiver closed";
+            else if (!err_msg.empty())
+                msg = err_msg;
+            else
+                msg = "Unknown error";
+            return ExchangeReceiverResult::newError(0, name, msg);
+        }
+        else /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
+        {
+            return ExchangeReceiverResult::newEOF(name);
+        }
+    }
+    else
+    {
+        return toResult(block_queue, header, recv_msg);
+    }
+}
+
+template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header, size_t stream_id)
 {
     if (unlikely(stream_id >= msg_channels.size()))
@@ -759,6 +801,15 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
             return ExchangeReceiverResult::newEOF(name);
         }
     }
+    return toResult(block_queue, header, recv_msg);
+}
+
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toResult(
+    std::queue<Block> & block_queue,
+    const Block & header,
+    const std::shared_ptr<ReceivedMessage> & recv_msg)
+{
     assert(recv_msg != nullptr);
     ExchangeReceiverResult result;
     if (recv_msg->error_ptr != nullptr)

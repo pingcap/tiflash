@@ -67,6 +67,7 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
+    bool await;
     DecodeDetail decode_detail;
 
     ExchangeReceiverResult()
@@ -88,6 +89,11 @@ struct ExchangeReceiverResult
         return {/*resp*/ nullptr, call_index, req_info, /*meet_error*/ true, error_msg, /*eof*/ false};
     }
 
+    static ExchangeReceiverResult newAwait(const String & req_info_)
+    {
+        return {/*resp*/ nullptr, 0, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false, /*await*/ true};
+    }
+
 private:
     ExchangeReceiverResult(
         std::shared_ptr<tipb::SelectResponse> resp_,
@@ -95,13 +101,15 @@ private:
         const String & req_info_ = "",
         bool meet_error_ = false,
         const String & error_msg_ = "",
-        bool eof_ = false)
+        bool eof_ = false,
+        bool await_ = false)
         : resp(resp_)
         , call_index(call_index_)
         , req_info(req_info_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
+        , await(await_)
     {}
 };
 
@@ -147,6 +155,11 @@ public:
         const Block & header,
         size_t stream_id);
 
+    ExchangeReceiverResult asyncNextResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        size_t stream_id);
+
     size_t getSourceNum() const { return source_num; }
     uint64_t getFineGrainedShuffleStreamCount() const { return fine_grained_shuffle_stream_count; }
 
@@ -169,6 +182,11 @@ public:
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
     using Request = typename RPCContext::Request;
+
+    ExchangeReceiverResult toResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        const std::shared_ptr<ReceivedMessage> & recv_msg);
 
     // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
     template <bool enable_fine_grained_shuffle>
