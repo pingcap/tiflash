@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <common/defines.h>
 #include <Interpreters/SettingsCommon.h>
-#include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/spacemap/SpaceMap.h>
+#include <common/defines.h>
 
 namespace DB::PS::V3
 {
@@ -42,4 +42,4 @@ struct BlobConfig
                            heavy_gc_valid_rate);
     }
 };
-}
+} // namespace DB::PS::V3
