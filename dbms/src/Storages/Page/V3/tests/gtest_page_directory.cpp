@@ -109,6 +109,16 @@ public:
     }
 
 protected:
+    static PageId getNormalPageIdU64(const PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
+    {
+        return d->getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap, true).low;
+    }
+    static PageEntryV3 getEntry(const PageDirectoryPtr & d, PageId page_id, const PageDirectorySnapshotPtr & snap)
+    {
+        return d->getByID(buildV3Id(TEST_NAMESPACE_ID, page_id), snap).second;
+    }
+
+protected:
     PageDirectoryPtr dir;
 
     LoggerPtr log;
@@ -909,10 +919,10 @@ try
     }
     auto s0 = dir->createSnapshot();
     // calling getNormalPageId on non-external-page will return itself
-    EXPECT_EQ(9, dir->getNormalPageId(9, s0).low);
-    EXPECT_EQ(10, dir->getNormalPageId(10, s0).low);
-    EXPECT_ANY_THROW(dir->getNormalPageId(11, s0)); // not exist at all
-    EXPECT_ANY_THROW(dir->getNormalPageId(12, s0)); // not exist at all
+    EXPECT_EQ(9, getNormalPageIdU64(dir, 9, s0));
+    EXPECT_EQ(10, getNormalPageIdU64(dir, 10, s0));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 11, s0)); // not exist at all
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 12, s0)); // not exist at all
 
     {
         PageEntriesEdit edit;
@@ -925,12 +935,12 @@ try
         dir->apply(std::move(edit));
     }
     auto s1 = dir->createSnapshot();
-    EXPECT_ANY_THROW(dir->getNormalPageId(10, s1));
-    EXPECT_EQ(10, dir->getNormalPageId(11, s1).low);
-    EXPECT_EQ(10, dir->getNormalPageId(12, s1).low);
-    EXPECT_ANY_THROW(dir->getNormalPageId(9, s1));
-    EXPECT_EQ(9, dir->getNormalPageId(13, s1).low);
-    EXPECT_EQ(9, dir->getNormalPageId(14, s1).low);
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 10, s1));
+    EXPECT_EQ(10, getNormalPageIdU64(dir, 11, s1));
+    EXPECT_EQ(10, getNormalPageIdU64(dir, 12, s1));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 9, s1));
+    EXPECT_EQ(9, getNormalPageIdU64(dir, 13, s1));
+    EXPECT_EQ(9, getNormalPageIdU64(dir, 14, s1));
 
     {
         PageEntriesEdit edit;
@@ -939,12 +949,12 @@ try
         dir->apply(std::move(edit));
     }
     auto s2 = dir->createSnapshot();
-    EXPECT_ANY_THROW(dir->getNormalPageId(10, s2));
-    EXPECT_ANY_THROW(dir->getNormalPageId(11, s2));
-    EXPECT_EQ(10, dir->getNormalPageId(12, s2).low);
-    EXPECT_ANY_THROW(dir->getNormalPageId(9, s2));
-    EXPECT_EQ(9, dir->getNormalPageId(13, s2).low);
-    EXPECT_ANY_THROW(dir->getNormalPageId(14, s2));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 10, s2));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 11, s2));
+    EXPECT_EQ(10, getNormalPageIdU64(dir, 12, s2));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 9, s2));
+    EXPECT_EQ(9, getNormalPageIdU64(dir, 13, s2));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 14, s2));
 
     {
         PageEntriesEdit edit;
@@ -953,12 +963,12 @@ try
         dir->apply(std::move(edit));
     }
     auto s3 = dir->createSnapshot();
-    EXPECT_ANY_THROW(dir->getNormalPageId(10, s3));
-    EXPECT_ANY_THROW(dir->getNormalPageId(11, s3));
-    EXPECT_ANY_THROW(dir->getNormalPageId(12, s3));
-    EXPECT_ANY_THROW(dir->getNormalPageId(9, s3));
-    EXPECT_ANY_THROW(dir->getNormalPageId(13, s3));
-    EXPECT_ANY_THROW(dir->getNormalPageId(14, s3));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 10, s3));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 11, s3));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 12, s3));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 9, s3));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 13, s3));
+    EXPECT_ANY_THROW(getNormalPageIdU64(dir, 14, s3));
 }
 CATCH
 
@@ -1653,7 +1663,7 @@ TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
     dir = restoreFromDisk();
     {
         auto snap = dir->createSnapshot();
-        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        ASSERT_SAME_ENTRY(getEntry(dir, page_id0, snap), last_entry_for_0);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
     }
 
@@ -1674,9 +1684,9 @@ TEST_F(PageDirectoryGCTest, ManyEditsAndDumpSnapshot)
     dir = restoreFromDisk();
     {
         auto snap = dir->createSnapshot();
-        ASSERT_SAME_ENTRY(dir->get(page_id0, snap).second, last_entry_for_0);
+        ASSERT_SAME_ENTRY(getEntry(dir, page_id0, snap), last_entry_for_0);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id1, snap);
-        ASSERT_SAME_ENTRY(dir->get(page_id2, snap).second, last_entry_for_2);
+        ASSERT_SAME_ENTRY(getEntry(dir, page_id2, snap), last_entry_for_2);
         EXPECT_ENTRY_NOT_EXIST(dir, page_id3, snap);
     }
 }
@@ -2314,14 +2324,14 @@ try
 
     {
         auto snap = dir->createSnapshot();
-        auto normal_id = dir->getNormalPageId(357, snap);
-        EXPECT_EQ(normal_id.low, 352);
+        auto normal_id = getNormalPageIdU64(dir, 357, snap);
+        EXPECT_EQ(normal_id, 352);
     }
     dir->gcInMemEntries();
     {
         auto snap = dir->createSnapshot();
-        auto normal_id = dir->getNormalPageId(357, snap);
-        EXPECT_EQ(normal_id.low, 352);
+        auto normal_id = getNormalPageIdU64(dir, 357, snap);
+        EXPECT_EQ(normal_id, 352);
     }
 
     auto s0 = dir->createSnapshot();
@@ -2339,8 +2349,8 @@ try
     {
         auto restored_dir = restore_from_edit(edit);
         auto snap = restored_dir->createSnapshot();
-        auto normal_id = restored_dir->getNormalPageId(357, snap);
-        EXPECT_EQ(normal_id.low, 352);
+        auto normal_id = getNormalPageIdU64(restored_dir, 357, snap);
+        EXPECT_EQ(normal_id, 352);
     }
 }
 CATCH
@@ -2383,9 +2393,9 @@ try
         auto edit = dir->dumpSnapshotToEdit(s0);
         auto restored_dir = restore_from_edit(edit);
         auto temp_snap = restored_dir->createSnapshot();
-        EXPECT_SAME_ENTRY(restored_dir->get(1, temp_snap).second, entry_1_v2);
-        EXPECT_SAME_ENTRY(restored_dir->get(2, temp_snap).second, entry_2_v2);
-        EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 1, temp_snap), entry_1_v2);
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 2, temp_snap), entry_2_v2);
+        EXPECT_ANY_THROW(getEntry(restored_dir, 3, temp_snap));
     };
     check_s0();
 
@@ -2409,16 +2419,16 @@ try
         auto edit = dir->dumpSnapshotToEdit(s1);
         auto restored_dir = restore_from_edit(edit);
         auto temp_snap = restored_dir->createSnapshot();
-        EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 1, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 2, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 3, temp_snap));
         auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_ex.size(), 3);
         EXPECT_GT(alive_ex.count(10), 0);
         EXPECT_GT(alive_ex.count(20), 0);
         EXPECT_GT(alive_ex.count(30), 0);
-        EXPECT_SAME_ENTRY(restored_dir->get(50, temp_snap).second, entry_50);
-        EXPECT_SAME_ENTRY(restored_dir->get(60, temp_snap).second, entry_60);
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 50, temp_snap), entry_50);
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 60, temp_snap), entry_60);
     };
     check_s0();
     check_s1();
@@ -2447,26 +2457,26 @@ try
         auto edit = dir->dumpSnapshotToEdit(s2);
         auto restored_dir = restore_from_edit(edit);
         auto temp_snap = restored_dir->createSnapshot();
-        EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 1, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 2, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 3, temp_snap));
         auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_ex.size(), 2);
         EXPECT_GT(alive_ex.count(10), 0);
-        EXPECT_EQ(restored_dir->getNormalPageId(11, temp_snap).low, 10);
+        EXPECT_EQ(getNormalPageIdU64(restored_dir, 11, temp_snap), 10);
 
         EXPECT_GT(alive_ex.count(20), 0);
-        EXPECT_EQ(restored_dir->getNormalPageId(21, temp_snap).low, 20);
-        EXPECT_EQ(restored_dir->getNormalPageId(22, temp_snap).low, 20);
+        EXPECT_EQ(getNormalPageIdU64(restored_dir, 21, temp_snap), 20);
+        EXPECT_EQ(getNormalPageIdU64(restored_dir, 22, temp_snap), 20);
 
         EXPECT_EQ(alive_ex.count(30), 0); // removed
 
-        EXPECT_ANY_THROW(restored_dir->get(50, temp_snap));
-        EXPECT_SAME_ENTRY(restored_dir->get(51, temp_snap).second, entry_50);
-        EXPECT_SAME_ENTRY(restored_dir->get(52, temp_snap).second, entry_50);
+        EXPECT_ANY_THROW(getEntry(restored_dir, 50, temp_snap));
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 51, temp_snap), entry_50);
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 52, temp_snap), entry_50);
 
-        EXPECT_SAME_ENTRY(restored_dir->get(60, temp_snap).second, entry_60);
-        EXPECT_ANY_THROW(restored_dir->get(61, temp_snap));
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 60, temp_snap), entry_60);
+        EXPECT_ANY_THROW(getEntry(restored_dir, 61, temp_snap));
     };
     check_s0();
     check_s1();
@@ -2487,21 +2497,21 @@ try
         auto edit = dir->dumpSnapshotToEdit(s3);
         auto restored_dir = restore_from_edit(edit);
         auto temp_snap = restored_dir->createSnapshot();
-        EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 1, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 2, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 3, temp_snap));
         auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_ex.size(), 0);
         EXPECT_EQ(alive_ex.count(10), 0); // removed
         EXPECT_EQ(alive_ex.count(20), 0); // removed
         EXPECT_EQ(alive_ex.count(30), 0); // removed
 
-        EXPECT_ANY_THROW(restored_dir->get(50, temp_snap));
-        EXPECT_SAME_ENTRY(restored_dir->get(51, temp_snap).second, entry_50);
-        EXPECT_ANY_THROW(restored_dir->get(52, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 50, temp_snap));
+        EXPECT_SAME_ENTRY(getEntry(restored_dir, 51, temp_snap), entry_50);
+        EXPECT_ANY_THROW(getEntry(restored_dir, 52, temp_snap));
 
-        EXPECT_ANY_THROW(restored_dir->get(60, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(61, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 60, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 61, temp_snap));
     };
     check_s0();
     check_s1();
@@ -2519,21 +2529,21 @@ try
         auto edit = dir->dumpSnapshotToEdit(s4);
         auto restored_dir = restore_from_edit(edit);
         auto temp_snap = restored_dir->createSnapshot();
-        EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(2, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(3, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 1, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 2, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 3, temp_snap));
         auto alive_ex = restored_dir->getAliveExternalIds(TEST_NAMESPACE_ID);
         EXPECT_EQ(alive_ex.size(), 0);
         EXPECT_EQ(alive_ex.count(10), 0); // removed
         EXPECT_EQ(alive_ex.count(20), 0); // removed
         EXPECT_EQ(alive_ex.count(30), 0); // removed
 
-        EXPECT_ANY_THROW(restored_dir->get(50, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(51, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(52, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 50, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 51, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 52, temp_snap));
 
-        EXPECT_ANY_THROW(restored_dir->get(60, temp_snap));
-        EXPECT_ANY_THROW(restored_dir->get(61, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 60, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 61, temp_snap));
     };
     check_s0();
     check_s1();
@@ -2594,9 +2604,9 @@ try
         }
         auto restored_dir = restore_from_edit(edit, stats);
         auto temp_snap = restored_dir->createSnapshot();
-        EXPECT_SAME_ENTRY(entry_1_v1, restored_dir->get(2, temp_snap).second);
-        EXPECT_ANY_THROW(restored_dir->get(1, temp_snap));
-        EXPECT_SAME_ENTRY(entry_5_v2, restored_dir->get(5, temp_snap).second);
+        EXPECT_SAME_ENTRY(entry_1_v1, getEntry(restored_dir, 2, temp_snap));
+        EXPECT_ANY_THROW(getEntry(restored_dir, 1, temp_snap));
+        EXPECT_SAME_ENTRY(entry_5_v2, getEntry(restored_dir, 5, temp_snap));
 
         // The entry_1_v1 should be restored to stats
         auto stat_for_file_1 = stats.blobIdToStat(file_id1, /*ignore_not_exist*/ false);
