@@ -40,21 +40,21 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-#define CATCH_FLASHSERVICE_EXCEPTION                                                                                                       \
-    catch (Exception & e)                                                                                                                  \
-    {                                                                                                                                      \
-        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());                                                                               \
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message())); \
-    }                                                                                                                                      \
-    catch (const std::exception & e)                                                                                                       \
-    {                                                                                                                                      \
-        LOG_FMT_ERROR(log, "std exception: {}", e.what());                                                                                 \
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));                    \
-    }                                                                                                                                      \
-    catch (...)                                                                                                                            \
-    {                                                                                                                                      \
-        LOG_FMT_ERROR(log, "other exception");                                                                                             \
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));           \
+#define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
+    catch (Exception & e)                                                                                                                   \
+    {                                                                                                                                       \
+        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());                                                                                \
+        return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message())); \
+    }                                                                                                                                       \
+    catch (const std::exception & e)                                                                                                        \
+    {                                                                                                                                       \
+        LOG_FMT_ERROR(log, "std exception: {}", e.what());                                                                                  \
+        return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));                    \
+    }                                                                                                                                       \
+    catch (...)                                                                                                                             \
+    {                                                                                                                                       \
+        LOG_FMT_ERROR(log, "other exception");                                                                                              \
+        return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));           \
     }
 
 constexpr char tls_err_msg[] = "common name check is failed";
@@ -364,8 +364,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     try
     {
         /// Create DB context.
-        auto tmp_context = std::make_shared<Context>(context);
-        tmp_context->setGlobalContext(context);
+        auto tmp_context = std::make_shared<Context>(*context);
+        tmp_context->setGlobalContext(*context);
 
         String query_id;
         tmp_context->setCurrentQueryId(query_id);
@@ -381,7 +381,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     }
     CATCH_FLASHSERVICE_EXCEPTION
 }
-
 
 ::grpc::Status FlashService::cancelMPPTaskForTest(const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
 {
