@@ -37,6 +37,7 @@ public:
     virtual ~ExchangePacketReader() = default;
     virtual bool read(TrackedMppDataPacketPtr & packet) = 0;
     virtual ::grpc::Status finish() = 0;
+    virtual void cancel(const String & reason) = 0;
 };
 using ExchangePacketReaderPtr = std::shared_ptr<ExchangePacketReader>;
 

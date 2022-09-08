@@ -66,6 +66,8 @@ public:
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
 
+    MPPQueryTaskSetPtr getQueryTaskSet(UInt64 query_id);
+
     std::pair<bool, String> registerTask(MPPTaskPtr task);
 
     std::pair<bool, String> unregisterTask(MPPTask * task);

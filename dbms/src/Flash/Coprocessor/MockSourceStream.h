@@ -17,6 +17,7 @@
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/MockExchangeReceiverInputStream.h>
+#include <DataStreams/MockTableScanBlockInputStream.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Interpreters/Context.h>
 
@@ -60,7 +61,10 @@ std::pair<NamesAndTypes, std::vector<std::shared_ptr<SourceType>>> mockSourceStr
                     column_with_type_and_name.name));
         }
         start += row_for_current_stream;
-        mock_source_streams.emplace_back(std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size));
+        if constexpr (std::is_same_v<SourceType, MockTableScanBlockInputStream>)
+            mock_source_streams.emplace_back(std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size, context.isCancelTest()));
+        else
+            mock_source_streams.emplace_back(std::make_shared<SourceType>(columns_for_stream, context.getSettingsRef().max_block_size));
     }
     RUNTIME_ASSERT(start == rows, log, "mock source streams' total size must same as user input");
     return {names_and_types, mock_source_streams};

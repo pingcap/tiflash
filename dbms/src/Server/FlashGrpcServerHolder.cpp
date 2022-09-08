@@ -210,4 +210,9 @@ void FlashGrpcServerHolder::setMockMPPServerInfo(MockMPPServerInfo info)
 {
     flash_service->setMockMPPServerInfo(info);
 }
+
+std::unique_ptr<FlashService> & FlashGrpcServerHolder::flashService()
+{
+    return flash_service;
+}
 } // namespace DB
