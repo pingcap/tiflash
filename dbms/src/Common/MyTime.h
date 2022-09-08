@@ -178,8 +178,17 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
+<<<<<<< HEAD
 Field parseMyDateTime(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
+=======
+static const int8_t DefaultFsp = 6;
+static const bool DefaultNeedCheckTimeValid = false;
+static const bool DefaultIgnoreZeroDate = true;
+
+Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 

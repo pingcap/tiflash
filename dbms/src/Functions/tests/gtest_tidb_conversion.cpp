@@ -1749,5 +1749,174 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+TEST_F(TestTidbConversion, castTimeAsDuration)
+try
+{
+    const auto to_type_1 = std::make_shared<DataTypeMyDuration>(5); // from_fsp <  to_fsp
+    const auto to_type_2 = std::make_shared<DataTypeMyDuration>(4); // from_fsp == to_fsp
+    const auto to_type_3 = std::make_shared<DataTypeMyDuration>(2); // from_fsp >  to_fsp
+    // cast datetime to duration
+    const auto datetime_type_ptr = std::make_shared<DataTypeMyDateTime>(4);
+    MyDateTime date(2021, 10, 26, 0, 0, 0, 0);
+    MyDateTime datetime(2021, 10, 26, 11, 11, 11, 0);
+    MyDateTime datetime_frac1(2021, 10, 26, 11, 11, 11, 111100);
+    MyDateTime datetime_frac2(2021, 10, 26, 11, 11, 11, 123500);
+    MyDateTime datetime_frac3(2021, 10, 26, 11, 11, 11, 999900);
+
+    auto col_datetime = ColumnUInt64::create();
+    col_datetime->insert(Field(date.toPackedUInt()));
+    col_datetime->insert(Field(datetime.toPackedUInt()));
+    col_datetime->insert(Field(datetime_frac1.toPackedUInt()));
+    col_datetime->insert(Field(datetime_frac2.toPackedUInt()));
+    col_datetime->insert(Field(datetime_frac3.toPackedUInt()));
+
+    auto ctn_datetime = ColumnWithTypeAndName(std::move(col_datetime), datetime_type_ptr, "datetime");
+    ColumnWithTypeAndName datetime_output1(
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        to_type_1,
+        "datetime_output1");
+    ColumnWithTypeAndName datetime_output2(
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        to_type_2,
+        "datetime_output2");
+
+    ColumnWithTypeAndName datetime_output3(
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 110000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L,
+                                                     (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L})
+            .column,
+        to_type_3,
+        "datetime_output3");
+
+
+    ASSERT_COLUMN_EQ(datetime_output1, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(datetime_output2, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(datetime_output3, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_3->getName())}));
+
+
+    // Test Const
+    ColumnWithTypeAndName input_const(createConstColumn<DataTypeMyDateTime::FieldType>(1, datetime_frac2.toPackedUInt()).column, datetime_type_ptr, "input_const");
+    ColumnWithTypeAndName output1_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L).column, to_type_1, "output1_const");
+    ColumnWithTypeAndName output2_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L).column, to_type_2, "output2_const");
+    ColumnWithTypeAndName output3_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L).column, to_type_3, "output3_const");
+
+    ASSERT_COLUMN_EQ(output1_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(output2_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(output3_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_3->getName())}));
+
+    // Test Nullable
+    ColumnWithTypeAndName input_nullable(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({datetime_frac1.toPackedUInt(),
+                                                               {},
+                                                               datetime_frac2.toPackedUInt(),
+                                                               {},
+                                                               datetime_frac3.toPackedUInt()})
+            .column,
+        makeNullable(datetime_type_ptr),
+        "input_nullable");
+    ColumnWithTypeAndName output1_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        makeNullable(to_type_1),
+        "output1_output");
+    ColumnWithTypeAndName output2_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        makeNullable(to_type_2),
+        "output2_output");
+    ColumnWithTypeAndName output3_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 110000000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L})
+            .column,
+        makeNullable(to_type_3),
+        "output3_output");
+
+    ASSERT_COLUMN_EQ(output1_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_1)->getName())}));
+    ASSERT_COLUMN_EQ(output2_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_2)->getName())}));
+    ASSERT_COLUMN_EQ(output3_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_3)->getName())}));
+}
+CATCH
+
+// for https://github.com/pingcap/tics/issues/3595
+TEST_F(TestTidbConversion, castStringAsDateTime3595)
+try
+{
+    DAGContext * dag_context = context.getDAGContext();
+    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto to_datetime_column = createConstColumn<String>(1, "Nullable(MyDateTime(6))");
+    ColumnWithTypeAndName expect_datetime_column(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({{}}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(6)),
+        "result");
+    auto to_date_column = createConstColumn<String>(1, "Nullable(MyDate)");
+    ColumnWithTypeAndName expect_date_column(
+        createColumn<Nullable<DataTypeMyDate::FieldType>>({{}}).column,
+        makeNullable(std::make_shared<DataTypeMyDate>()),
+        "result");
+
+    auto from_column = createColumn<String>({"08:45:16"});
+    auto vector_result = executeFunction("tidb_cast", {from_column, to_datetime_column});
+    for (size_t i = 0; i < from_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_column, to_date_column});
+    for (size_t i = 0; i < from_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+
+    auto from_decimal_column = createColumn<Decimal32>(std::make_tuple(9, 3), {"102310.023"});
+    vector_result = executeFunction("tidb_cast", {from_decimal_column, to_datetime_column});
+    for (size_t i = 0; i < from_decimal_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_decimal_column, to_date_column});
+    for (size_t i = 0; i < from_decimal_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+
+    auto from_float_column = createColumn<DataTypeFloat64::FieldType>({102310.023});
+    vector_result = executeFunction("tidb_cast", {from_float_column, to_datetime_column});
+    for (size_t i = 0; i < from_float_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_float_column, to_date_column});
+    for (size_t i = 0; i < from_float_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+}
+CATCH
+
+>>>>>>> 25c898ab0e (Fix issue 3595 that invalid string/decimal/float cast to non-null datetime/date (#5805))
 } // namespace
 } // namespace DB::tests
