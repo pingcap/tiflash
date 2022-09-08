@@ -679,4 +679,5 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
 #undef INSERT_ENTRY
 #undef INSERT_GC_ENTRY
 
-}
+} // namespace PS::V3::tests
+} // namespace DB
