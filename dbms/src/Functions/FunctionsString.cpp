@@ -4459,7 +4459,6 @@ private:
         auto & col_res_data = col_res->getChars();
         auto & col_res_offsets = col_res->getOffsets();
 
-        col_res_offsets.reserve(c0_col_column->size());
         col_res_offsets.resize(c0_col_column->size());
 
 
@@ -4496,24 +4495,35 @@ private:
         ColumnString::Offsets & res_offsets)
     {
         ColumnString::Offset res_offset = 0;
-        res_data.reserve(val_num * (space_num + 1));
+        auto is_big = false;
+
+        if (space_num > MAX_BLOB_WIDTH)
+        {
+            res_data.reserve(val_num);
+            is_big = true;
+        }
+        else
+        {
+            res_data.reserve(val_num * (space_num + 1));
+        }
+        if (space_num < 0)
+        {
+            space_num = 0;
+        }
+
         for (size_t row = 0; row < val_num; ++row)
         {
             result_null_map_data[row] = false;
-            if (space_num < 0)
-            {
-                space_num = 0;
-            }
-            if (space_num > MAX_BLOB_WIDTH)
+
+            if (is_big)
             {
                 result_null_map_data[row] = true;
                 space_num = 0;
             }
             res_data.resize(res_data.size() + space_num + 1);
-            for (auto i = 0; i < space_num; ++i)
-            {
-                res_data[res_offset + i] = ' ';
-            }
+
+            std::string res_string(space_num, ' ');
+            memcpy(&res_data[res_offset], &res_string[0], space_num);
 
             res_data[res_offset + space_num] = '\0';
             res_offset += space_num + 1;
@@ -4548,10 +4558,9 @@ private:
                 space_num = 0;
             }
             res_data.resize(res_data.size() + space_num + 1);
-            for (auto i = 0; i < space_num; ++i)
-            {
-                res_data[res_offset + i] = ' ';
-            }
+
+            std::string res_string(space_num, ' ');
+            memcpy(&res_data[res_offset], &res_string[0], space_num);
 
             res_data[res_offset + space_num] = '\0';
             res_offset += space_num + 1;
