@@ -12,5 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-add_library (memcpy STATIC memcpy.cpp)
-target_include_directories(memcpy PUBLIC ${TiFlash_SOURCE_DIR}/libs/libcommon/include)
+option(TIFLASH_FOLLY_MEMCPY_IS_MEMCPY "use folly memcpy as default `memcpy` and `memmove`" ON)
+
+set_property(SOURCE folly/memcpy.S PROPERTY LANGUAGE CXX)
+
+if (TIFLASH_ENABLE_AVX_SUPPORT)
+    set_property(SOURCE folly/memcpy.S APPEND PROPERTY COMPILE_OPTIONS "-x" "assembler-with-cpp")
+    set_property(SOURCE folly/memcpy.S APPEND PROPERTY COMPILE_FLAGS "-mavx -mavx2")
+    set_property(SOURCE folly/FollyMemcpy.cpp APPEND PROPERTY COMPILE_FLAGS "-mavx -mavx2")
+endif ()
+
+set (memcpy_sources)
+
+list (APPEND memcpy_sources folly/memcpy.S folly/FollyMemcpy.cpp)
+
+if (USE_INTERNAL_MEMCPY)
+    if (TIFLASH_FOLLY_MEMCPY_IS_MEMCPY)
+        message (STATUS "Use folly memcpy as default `memcpy` and `memmove`")
+        add_definitions(-DFOLLY_MEMCPY_IS_MEMCPY=1)
+    else ()
+        list (APPEND memcpy_sources memcpy.cpp)
+    endif ()
+endif()
+
+add_library (memcpy STATIC ${memcpy_sources})
+
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fomit-frame-pointer")
+set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fomit-frame-pointer")

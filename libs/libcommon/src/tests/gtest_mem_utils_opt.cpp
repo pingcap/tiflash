@@ -14,6 +14,7 @@
 
 #include <common/defines.h>
 #include <common/mem_utils_opt.h>
+#include <common/memcpy.h>
 #include <fmt/core.h>
 #include <gtest/gtest.h>
 
@@ -24,6 +25,8 @@
 #include <random>
 #include <string_view>
 #include <utility>
+
+#include "../../libmemcpy/folly/FollyMemcpy.h"
 
 #if defined(TIFLASH_ENABLE_AVX_SUPPORT)
 
@@ -168,6 +171,64 @@ TEST(MemUtilsTestOPT, CompareStr)
     for (size_t size = 0; size < (256 + 128 + 10); ++size)
     {
         TestStrCmpFunc(size);
+    }
+}
+
+#endif
+
+template <bool overlap, typename F>
+void TestMemCopyFunc(size_t size, F && fn_memcpy)
+{
+    std::string oa(size + 100, 0);
+    char * start = oa.data();
+    start += (16 - size_t(start) % 16);
+    start += 5;
+    {
+        uint8_t n1 = 1, n2 = 2;
+        for (auto * p = start; p != start + size; ++p)
+        {
+            *p = n1 + n2;
+            n1 = n2;
+            n2 = *p;
+        }
+    }
+
+    std::string ob;
+    char * tar{};
+
+    if constexpr (overlap)
+        tar = start - 3;
+    else
+    {
+        ob.resize(size + 100, 0);
+        tar = ob.data();
+        tar += (16 - size_t(tar) % 16);
+        tar += 1;
+    }
+
+    fn_memcpy(tar, start, size);
+    {
+        uint8_t n1 = 1, n2 = 2;
+        for (const auto * p = tar; p != tar + size; ++p)
+        {
+            ASSERT_EQ(uint8_t(*p), uint8_t(n1 + n2));
+            n1 = n2;
+            n2 = *p;
+        }
+    }
+}
+
+#if defined(__SSE2__)
+
+TEST(MemUtilsTestOPT, Memcopy)
+{
+    for (size_t size = 0; size < 256; ++size)
+    {
+        TestMemCopyFunc<false>(size, __folly_memcpy);
+        { // test memmove
+            TestMemCopyFunc<true>(size, __folly_memcpy);
+        }
+        TestMemCopyFunc<false>(size, inline_memcpy);
     }
 }
 
