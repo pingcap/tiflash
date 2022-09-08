@@ -169,6 +169,11 @@ public:
 
 protected:
     Block readImpl() override;
+<<<<<<< HEAD
+=======
+    void appendInfo(FmtBuffer & buffer) const override;
+    bool returnIfCancelledOrKilled();
+>>>>>>> 8ffb734c88 (Fix incorrect window function cancellation handling (#5818))
 
     LoggerPtr log;
 
