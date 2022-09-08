@@ -89,16 +89,22 @@ def main():
 
         if args.check_formatted:
             diff_res = run_cmd('git diff --name-only')
-            if diff_res:
+            files_not_in_contrib = [f for f in diff_res if not f.startswith('contrib')]
+            files_contrib = [f for f in diff_res if f.startswith('contrib')]
+            if files_not_in_contrib:
+                print('')
                 print('Error: found files NOT formatted')
-                print(''.join(diff_res))
+                print(''.join(files_not_in_contrib))
                 exit(-1)
+            elif files_contrib:
+                print('')
+                print('Warn: found contrib changed')
+                print(''.join(files_contrib))
+                print('')
+                print(''.join(run_cmd('git status')))
             else:
                 print("Format check passed")
         else:
-            cmd = 'clang-format -i {}'.format(' '.join(files_to_format))
-            if subprocess.Popen(cmd, shell=True, cwd=tics_repo_path).wait():
-                exit(-1)
             print("Finish code format")
     else:
         print('No file to format')
