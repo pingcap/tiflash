@@ -17,29 +17,31 @@
 #include <Common/MPMCQueue.h>
 #include <Common/Stopwatch.h>
 #include <Flash/FlashService.h>
-#include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/PacketWriter.h>
+#include <Flash/Mpp/GRPCSendQueue.h>
+#include <kvproto/tikvpb.grpc.pb.h>
 
 namespace DB
 {
-class MPPTunnel;
 class AsyncTunnelSender;
 class AsyncFlashService;
 
-class SyncPacketWriter : public PacketWriter
+class IAsyncCallData
 {
 public:
-    explicit SyncPacketWriter(grpc::ServerWriter<mpp::MPPDataPacket> * writer)
-        : writer(writer)
-    {}
+    virtual ~IAsyncCallData() = default;
 
-    bool write(const mpp::MPPDataPacket & packet) override { return writer->Write(packet); }
+    /// Should return a non-null `grpc_call`.
+    virtual grpc_call * grpcCall() = 0;
 
-private:
-    ::grpc::ServerWriter<::mpp::MPPDataPacket> * writer;
+    /// Attach async sender in order to notify consumer finish msg directly.
+    virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) = 0;
+
+    /// The default `GRPCKickFunc` implementation is to push tag into completion queue.
+    /// Here return a user-defined `GRPCKickFunc` only for test.
+    virtual std::optional<GRPCKickFunc> getKickFuncForTest() { return std::nullopt; }
 };
 
-class EstablishCallData : public PacketWriter
+class EstablishCallData : public IAsyncCallData
 {
 public:
     // A state machine used for async grpc api EstablishMPPConnection. When a relative grpc event arrives,
@@ -52,21 +54,13 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
-    ~EstablishCallData();
+    ~EstablishCallData() override;
 
-    bool write(const mpp::MPPDataPacket & packet) override;
+    void proceed(bool ok);
 
-    void tryFlushOne() override;
+    grpc_call * grpcCall() override;
 
-    void writeDone(const ::grpc::Status & status) override;
-
-    void writeErr(const mpp::MPPDataPacket & packet);
-
-    void proceed();
-
-    void cancel();
-
-    virtual void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override;
+    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -78,37 +72,40 @@ public:
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
 private:
-    void notifyReady();
+    /// WARNING: Since a event from one grpc completion queue may be handled by different
+    /// thread, it's EXTREMELY DANGEROUS to read/write any data after calling a grpc function
+    /// with a `this` pointer because the pointer may be gotten by another grpc thread in
+    /// a very short time.
+    /// Keep it in mind if you want to change any logic here.
 
     void initRpc();
+    /// The packet will be written to grpc.
+    void write(const mpp::MPPDataPacket & packet);
+    /// Called when an application error happens.
+    /// No more packet can be written after writing this packet.
+    void writeErr(const mpp::MPPDataPacket & packet);
+    /// Called when write is done.
+    /// It will try to call async_sender's consumerFinish to inform it's finished.
+    void writeDone(String msg, const grpc::Status & status);
+    /// Called when a grpc error happens or in shutdown progress.
+    void unexpectedWriteDone();
+    /// Try to send one msg.
+    void trySendOneMsg();
 
-    void finishTunnelAndResponder();
-
-    /// Will try to call async_sender's consumerFinish if needed
-    void setFinishState(const String & msg);
-
-    void responderFinish(const grpc::Status & status);
-
-    std::mutex mu;
-    // server instance
+    // Server instance
     AsyncFlashService * service;
 
     // The producer-consumer queue where for asynchronous server notifications.
-    ::grpc::ServerCompletionQueue * cq;
-    ::grpc::ServerCompletionQueue * notify_cq;
+    grpc::ServerCompletionQueue * cq;
+    grpc::ServerCompletionQueue * notify_cq;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
-    ::grpc::ServerContext ctx;
-    ::grpc::Status err_status;
+    grpc::ServerContext ctx;
 
     // What we get from the client.
-    ::mpp::EstablishMPPConnectionRequest request;
+    mpp::EstablishMPPConnectionRequest request;
 
     // The means to get back to the client.
-    ::grpc::ServerAsyncWriter<::mpp::MPPDataPacket> responder;
-
-    // If the CallData is ready to write a msg. Like a semaphore. We can only write once, when it's CQ event comes.
-    // It's protected by mu.
-    bool ready = false;
+    grpc::ServerAsyncWriter<mpp::MPPDataPacket> responder;
 
     // Let's implement a state machine with the following states.
     enum CallStatus
@@ -118,8 +115,10 @@ private:
         ERR_HANDLE,
         FINISH
     };
-    CallStatus state; // The current serving state.
+    // The current serving state.
+    CallStatus state;
+
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
-    std::shared_ptr<Stopwatch> stopwatch;
+    std::unique_ptr<Stopwatch> stopwatch;
 };
 } // namespace DB
