@@ -1354,7 +1354,7 @@ public:
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
 
-                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, true);
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, checkTimeValid);
 
                 if (packed_uint_value.isNull())
                 {
@@ -1475,7 +1475,7 @@ public:
                 // Convert to string and then parse to time
                 String value_str = toString(value);
 
-                Field packed_uint_value = parseMyDateTimeFromFloat(value_str, to_fsp, true, sql_mode);
+                Field packed_uint_value = parseMyDateTimeFromFloat(value_str, to_fsp, checkTimeValid, sql_mode);
 
                 if (packed_uint_value.isNull())
                 {
@@ -1508,7 +1508,7 @@ public:
             {
                 String value_str = vec_from[i].toString(type.getScale());
 
-                Field value = parseMyDateTimeFromFloat(value_str, to_fsp, true, sql_mode);
+                Field value = parseMyDateTimeFromFloat(value_str, to_fsp, checkTimeValid, sql_mode);
 
                 if (value.getType() == Field::Types::Null)
                 {

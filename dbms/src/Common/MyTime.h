@@ -189,19 +189,21 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
+bool checkTimeValidAllowZeroMonthAndDay(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
+bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
+bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32);
+
+using CheckTimeFunc = std::function<bool(Int32, Int32, Int32, Int32, Int32, Int32)>;
+
 static const int8_t DefaultFsp = 6;
-static const bool DefaultNeedCheckTimeValid = false;
-static const bool DefaultIgnoreZeroDate = true;
-static bool default_isFloat = false;
-static SqlMode default_sqlMode{false, false};
+static bool DefaultIsFloat = false;
+static SqlMode DefaultSqlMode{false, false};
+static CheckTimeFunc DefaultCheckTimeFunc = noNeedCheckTime;
 
-Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, SqlMode sqlMode = DefaultSqlMode);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, bool isFloat = DefaultIsFloat, SqlMode sqlMode = DefaultSqlMode);
 
-Field parseMyDateTime(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid);
-Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, SqlMode sqlMode = default_sqlMode);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, bool isFloat = default_isFloat, SqlMode sqlMode = default_sqlMode);
-std::pair<MyDateTime, bool> parseMyDateTimeFromNumAndJudgeIsDate(Int64 num);
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 
 void convertTimeZoneByOffset(UInt64 from_time, UInt64 & to_time, bool from_utc, Int64 offset, bool throw_exception = false);

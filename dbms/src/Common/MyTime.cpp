@@ -552,7 +552,7 @@ const String & MyTimeBase::monthName() const
     return month_names[month - 1];
 }
 
-bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
+bool checkTimeValidAllowZeroMonthAndDay(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
     if (year > 9999 || month < 0 || month > 12 || day < 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
     {
@@ -561,6 +561,19 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     return day <= getLastDay(year, month);
 }
 
+bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
+{
+    if (year > 9999 || month <= 0 || month > 12 || day <= 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
+    {
+        return false;
+    }
+    return day <= getLastDay(year, month);
+}
+
+bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32)
+{
+    return true;
+}
 
 // Return true if the time is invalid.
 inline bool getDatetime(const Int64 & num, MyDateTime & result, SqlMode sqlMode)
@@ -668,7 +681,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
     return getDatetime(number, result, sqlMode);
 }
 
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid, bool isFloat, SqlMode sqlMode)
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, bool isFloat, SqlMode sqlMode)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
@@ -956,7 +969,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
     }
 
-    if ((need_check_time_valid && !checkTimeValid(year, month, day, hour, minute, second)) || (!ignore_zero_date && (month == 0 || day == 0)))
+    if (!checkTimeFunc(year, month, day, hour, minute, second))
     {
         return {Field(), is_date};
     }
@@ -999,14 +1012,14 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 }
 
 // TODO: support parse time from float string
-Field parseMyDateTime(const String & str, int8_t fsp, bool need_check_time_valid, bool ignore_zero_date)
+Field parseMyDateTime(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc)
 {
-    return parseMyDateTimeAndJudgeIsDate(str, fsp, need_check_time_valid, ignore_zero_date).first;
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc).first;
 }
 
-Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, bool needCheckTimeValid, SqlMode sqlMode)
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, SqlMode sqlMode)
 {
-    return parseMyDateTimeAndJudgeIsDate(str, fsp, needCheckTimeValid, true, sqlMode).first;
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc, true, sqlMode).first;
 }
 
 String MyDateTime::toString(int fsp) const
