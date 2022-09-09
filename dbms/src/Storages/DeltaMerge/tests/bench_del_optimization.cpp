@@ -223,7 +223,10 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithoutDelOptimization)
                                              /* expected_block_size= */ 1024,
                                              {},
                                              InvalidColumnID)[0];
+
+        in->readPrefix();
         while (in->read()) {};
+        in->readSuffix();
     }
     FailPointHelper::disableFailPoint(FailPoints::non_del_optimization);
     FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
@@ -288,7 +291,9 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithDelOptimization)
                                              {},
                                              InvalidColumnID)[0];
 
+        in->readPrefix();
         while (in->read()) {};
+        in->readSuffix();
     }
 
     FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);

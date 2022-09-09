@@ -418,6 +418,7 @@ Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool r
             for (const auto & c : header)
             {
                 auto & column = cur_raw_block.getByName(c.name);
+                column.column = column.column->filter(filter, passed_count);
                 res.insert(std::move(column));
             }
             return res;

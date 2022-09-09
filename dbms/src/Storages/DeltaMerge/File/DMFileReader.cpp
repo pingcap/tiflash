@@ -368,8 +368,8 @@ Block DMFileReader::read()
 
     bool do_clean_read_on_handle_on_fast_mode = enable_handle_clean_read && is_fast_scan && expected_handle_res == All;
     bool do_clean_read_on_del_on_fast_mode = enable_del_clean_read && is_fast_scan && deleted_rows == 0;
-    // bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan && deleted_rows == 0;
-    bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan; // just for test single dmfile
+    bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan && deleted_rows == 0;
+    //bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan; // just for test single dmfile
 
     // std::cout << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << std::endl;
     //std::cout << "do_clean_read_on_normal_mode " << do_clean_read_on_normal_mode << " do_clean_read_on_handle_on_fast_mode " << do_clean_read_on_handle_on_fast_mode << " do_clean_read_on_del_on_fast_mode " << do_clean_read_on_del_on_fast_mode << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << " enable_del_clean_read " <<  enable_del_clean_read << std::endl;
