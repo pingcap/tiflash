@@ -13,6 +13,9 @@
 
 #include <type_traits>
 
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
+
 
 namespace DB
 {
@@ -185,7 +188,24 @@ struct AssociativeOperationImpl
         if (Op::isSaturable())
         {
             UInt8 a = vec[i];
-            return Op::isSaturatedValue(a) ? a : continuation.apply(i);
+
+            // !!a is a hack
+            // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1 
+            // which correspond to false or true. However, for columns with UInt8 type, 
+            // no more convertion will be executed on them and the values stored
+            // in them are 'origin' which means that they won't be converted to 0 or 1.
+            // For example:
+            //   Input column with non-UInt8 type:
+            //      column_values = {-2, 0, 2}
+            //   then, we will get vec
+            //      vec = {1, 0, 1} (here vec stores converted values)
+            //
+            //   Input column with UInt8 type:
+            //      column_values = {1, 0, 2}
+            //   then, we will get vec
+            //      vec = {1, 0, 2} (error, we only want 0 or 1)
+            // See issue: https://github.com/pingcap/tidb/issues/37258
+            return Op::isSaturatedValue(a) ? !!a : continuation.apply(i);
         }
         else
         {
@@ -388,6 +408,8 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
+        auto log = &Poco::Logger::get("LRUCache");
+        LOG_FMT_INFO(log, "or function is executed.");
         bool has_nullable_input_column = false;
         size_t num_arguments = arguments.size();
 
