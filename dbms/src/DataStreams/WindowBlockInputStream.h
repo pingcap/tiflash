@@ -170,6 +170,8 @@ public:
 protected:
     Block readImpl() override;
 
+    bool returnIfCancelledOrKilled();
+
     LoggerPtr log;
 
 public:
