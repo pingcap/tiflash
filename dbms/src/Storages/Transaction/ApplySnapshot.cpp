@@ -304,7 +304,17 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
     uint64_t term,
     TMTContext & tmt)
 {
-    return preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
+    std::vector<UInt64> ids;
+    try
+    {
+        ids = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
+        e.rethrow();
+    }
+    return ids;
 }
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
