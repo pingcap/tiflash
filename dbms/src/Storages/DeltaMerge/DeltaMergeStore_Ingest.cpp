@@ -15,8 +15,8 @@
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Segment.h>
 
 namespace ProfileEvents
 {
@@ -259,5 +259,5 @@ void DeltaMergeStore::ingestFiles(
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-}
-}
+} // namespace DM
+} // namespace DB
