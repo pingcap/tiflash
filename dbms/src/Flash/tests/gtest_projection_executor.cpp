@@ -383,6 +383,7 @@ try
                            {toNullableVec<Int64>({1, 1, 1, 1, 1}),
                             toNullableVec<Int64>({1, 1, 1, 1, 1}),
                             toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
                             toNullableVec<Int64>({1, 1, 1, 1, 1})});
 }
 CATCH
@@ -430,7 +431,7 @@ try
               .build(context);
     executeWithConcurrency(req,
                            {toVec<UInt64>({5}),
-                            toNullableVec<Int64>({5}),
+                            toVec<UInt64>({5}),
                             toNullableVec<Int64>({1}),
                             toNullableVec<Int64>({1})});
 }
