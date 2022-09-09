@@ -155,6 +155,13 @@ TEST(MemUtilsTestOPT, CompareNormal)
         std::string b(2, char(1));
         ASSERT_EQ(-1,
                   mem_utils::StrFind({start, size}, b));
+        ASSERT_EQ(-1,
+                  mem_utils::avx2_strstr(start, size, b.data(), b.size()));
+    }
+    {
+        std::string a(32, char(0));
+        char * p = a.data() + 16 - size_t(a.data()) % 16 + 5;
+        ASSERT_EQ(nullptr, mem_utils::avx2_memchr(p, 5, char(1)));
     }
 }
 

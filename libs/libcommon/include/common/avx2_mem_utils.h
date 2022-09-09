@@ -91,20 +91,6 @@ FLATTEN_INLINE_PURE static inline int cmp_block1(const void * p1, const void * p
     return int32_t(read<uint8_t>(p1)) - int32_t(read<uint8_t>(p2));
 }
 
-FLATTEN_INLINE_PURE static inline int cmp_block8(const void * p1, const void * p2)
-{
-    // the left most bit may be 1, use std::memcmp(,,8) to use `sbb`
-    /*
-        bswap   rcx
-        bswap   rdx
-        xor     eax, eax
-        cmp     rcx, rdx
-        seta    al
-        sbb     eax, 0
-    */
-    return std::memcmp(p1, p2, 8);
-}
-
 FLATTEN_INLINE_PURE static inline int cmp_block16(const char * p1, const char * p2)
 {
     uint32_t mask = get_block16_cmp_eq_mask(p1, p2); // mask is up to 0xffff
@@ -177,24 +163,6 @@ FLATTEN_INLINE_PURE static inline int cmp_block32x4(const char * a, const char *
             return ret;
     }
     return cmp_block32<true>(a + 3 * BLOCK32_SIZE, (b + 3 * BLOCK32_SIZE));
-}
-FLATTEN_INLINE_PURE static inline uint32_t swap_u32(uint32_t val)
-{
-    return __builtin_bswap32(val);
-}
-FLATTEN_INLINE_PURE static inline uint64_t swap_u64(uint64_t val)
-{
-    return __builtin_bswap64(val);
-}
-
-[[maybe_unused]] FLATTEN_INLINE_PURE static inline uint32_t read_u32_swap(const void * data)
-{
-    return swap_u32(read<uint32_t>(data));
-}
-
-[[maybe_unused]] FLATTEN_INLINE_PURE static inline uint64_t read_u64_swap(const void * data)
-{
-    return swap_u64(read<uint64_t>(data));
 }
 
 // ref: https://github.com/lattera/glibc/blob/master/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
