@@ -298,9 +298,12 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
     if (timeout.count() > 0)
     {
         LOG_FMT_TRACE(log, "start waitUntilConnectedOrFinished");
+        if (status == TunnelStatus::Unconnected)
+        {
+            fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
+        }
         auto res = cv_for_status_changed.wait_for(lk, timeout, not_unconnected);
         LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
-        fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, res = false;);
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
