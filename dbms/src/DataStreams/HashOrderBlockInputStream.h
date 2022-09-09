@@ -143,7 +143,8 @@ private:
 
     using Sizes = std::vector<size_t>;
     static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
-    void initMapImpl(size_t capacity);
+    void initMap(size_t capacity);
+    void initIter();
 
     template <typename Map, typename KeyGetter>
     void insert(Map & map, size_t rows, KeyGetter key_getter, std::vector<std::string> & sort_key_container, Block * block);

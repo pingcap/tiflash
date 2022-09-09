@@ -64,7 +64,7 @@ HashOrderBlockInputStream::HashOrderBlockInputStream(
     type = chooseMethod(getKeyColumns(description, sample_block), key_sizes);
 }
 
-void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
+void HashOrderBlockInputStream::initMap(size_t capacity = 0)
 {
     switch (type)
     {
@@ -72,7 +72,20 @@ void HashOrderBlockInputStream::initMapImpl(size_t capacity = 0)
     case Type::TYPE:                                                                \
         maps.TYPE = std::make_unique<typename decltype(maps.TYPE)::element_type>(); \
         maps.TYPE->reserve(capacity);                                               \
-        iters.TYPE = maps.TYPE->cbegin();                                           \
+        break;
+        APPLY_FOR_HASH_ORDER_VARIANTS(M)
+#undef M
+    }
+}
+
+void HashOrderBlockInputStream::initIter()
+{
+    switch (type)
+    {
+#define M(TYPE)                           \
+    case Type::TYPE:                      \
+        assert(maps.TYPE);                \
+        iters.TYPE = maps.TYPE->cbegin(); \
         break;
         APPLY_FOR_HASH_ORDER_VARIANTS(M)
 #undef M
@@ -283,13 +296,14 @@ Block HashOrderBlockInputStream::readImplInternal()
         executed = true;
 
         auto block_size_limit = context.getSettingsRef().debug_hash_sort_window_reserve_size.get();
-        initMapImpl(block_size_limit);
+        initMap(block_size_limit);
 
         while (Block block = children.back()->read())
         {
             blocks.push_back(block);
             insertFromBlock(&blocks.back());
         }
+        initIter();
     }
 
     if (blocks.empty())
