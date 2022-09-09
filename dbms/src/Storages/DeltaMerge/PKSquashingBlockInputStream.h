@@ -85,7 +85,13 @@ public:
                 {
                     auto & cur_col_with_name = cur_block.getByPosition(col_idx);
                     auto & next_col_with_name = next_block.getByPosition(col_idx);
-                    LOG_FMT_DEBUG(logger, "running on col_idx={}, name={}, id={}, type={}", col_idx, next_col_with_name.name, next_col_with_name.column_id, next_col_with_name.type->getName());
+                    LOG_FMT_DEBUG(logger,
+                                  "running on col_idx={}, name={}, id={}, type={}, size={}",
+                                  col_idx,
+                                  next_col_with_name.name,
+                                  next_col_with_name.column_id,
+                                  next_col_with_name.type->getName(),
+                                  next_col_with_name.column->size());
                     auto * cur_col_raw = const_cast<IColumn *>(cur_col_with_name.column.get());
                     cur_col_raw->insertRangeFrom(*next_col_with_name.column, 0, cut_offset);
                     LOG_FMT_DEBUG(logger, "copy done");
@@ -93,14 +99,19 @@ public:
                     if (cut_offset != next_block_nrows)
                     {
                         // TODO: we can track the valid range instead of copying data.
-                        LOG_FMT_DEBUG(logger, "removing copied rows for col_idx={}, cut_offset={}, next_nrows={}", col_idx, cut_offset, next_block_nrows);
+                        LOG_FMT_DEBUG(logger,
+                                      "removing copied rows for col_idx={}, cut_offset={}, next_nrows={}, next_col_nrows={}",
+                                      col_idx,
+                                      cut_offset,
+                                      next_block_nrows,
+                                      next_col_with_name.column->size());
                         size_t nrows_to_copy = next_block_nrows - cut_offset;
                         // Pop front `cut_offset` elems from `next_col_with_name`
                         assert(next_block_nrows == next_col_with_name.column->size());
                         MutableColumnPtr cutted_next_column = next_col_with_name.column->cloneEmpty();
                         cutted_next_column->insertRangeFrom(*next_col_with_name.column, cut_offset, nrows_to_copy);
                         next_col_with_name.column = cutted_next_column->getPtr();
-                        LOG_FMT_DEBUG(logger, "removed copied rows done, new_size={}", cutted_next_column->size());
+                        LOG_FMT_DEBUG(logger, "removed copied rows done, new_col_size={}", cutted_next_column->size());
                     }
                 }
                 if (cut_offset != next_block_nrows)
