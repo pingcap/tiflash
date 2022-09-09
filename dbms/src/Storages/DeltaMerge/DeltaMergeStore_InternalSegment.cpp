@@ -302,10 +302,10 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
 SegmentPtr DeltaMergeStore::segmentMergeDelta(
     DMContext & dm_context,
     const SegmentPtr & segment,
-    const TaskRunThread run_thread,
+    const MergeDeltaReason reason,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_INFO(log, "MergeDelta - Begin, thread={} safe_point={} segment={}", toString(run_thread), dm_context.min_version, segment->info());
+    LOG_FMT_INFO(log, "MergeDelta - Begin, reason={} safe_point={} segment={}", toString(reason), dm_context.min_version, segment->info());
 
     ColumnDefinesPtr schema_snap;
 
@@ -338,19 +338,19 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, static_cast<Int64>(segment_snap->getBytes())};
     CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, static_cast<Int64>(segment_snap->getRows())};
 
-    switch (run_thread)
+    switch (reason)
     {
-    case TaskRunThread::BackgroundThreadPool:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge).Increment();
+    case MergeDeltaReason::BackgroundThreadPool:
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg).Increment();
         break;
-    case TaskRunThread::Foreground:
+    case MergeDeltaReason::BackgroundGCThread:
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
+        break;
+    case MergeDeltaReason::ForegroundWrite:
         GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
         break;
-    case TaskRunThread::ForegroundRPC:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg_rpc).Increment();
-        break;
-    case TaskRunThread::BackgroundGCThread:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
+    case MergeDeltaReason::Manual:
+        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_manual).Increment();
         break;
     default:
         break;
@@ -358,19 +358,19 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
     Stopwatch watch_delta_merge;
     SCOPE_EXIT({
-        switch (run_thread)
+        switch (reason)
         {
-        case TaskRunThread::BackgroundThreadPool:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge).Observe(watch_delta_merge.elapsedSeconds());
+        case MergeDeltaReason::BackgroundThreadPool:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg).Observe(watch_delta_merge.elapsedSeconds());
             break;
-        case TaskRunThread::Foreground:
+        case MergeDeltaReason::BackgroundGCThread:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc).Observe(watch_delta_merge.elapsedSeconds());
+            break;
+        case MergeDeltaReason::ForegroundWrite:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg).Observe(watch_delta_merge.elapsedSeconds());
             break;
-        case TaskRunThread::ForegroundRPC:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg_rpc).Observe(watch_delta_merge.elapsedSeconds());
-            break;
-        case TaskRunThread::BackgroundGCThread:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc).Observe(watch_delta_merge.elapsedSeconds());
+        case MergeDeltaReason::Manual:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_manual).Observe(watch_delta_merge.elapsedSeconds());
             break;
         default:
             break;
