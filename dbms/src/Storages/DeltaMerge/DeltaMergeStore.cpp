@@ -1238,6 +1238,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1248,11 +1251,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         /* is_raw = */ true,
         /* do_delete_mark_filter_for_raw = */ false,
         std::move(tasks),
-        after_segment_read);
+        after_segment_read,
+        req_info);
 
-    String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1311,12 +1312,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
-    // Also, too many read tasks of a segment with different samll ranges is not good for data sharing cache.
+    // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
 
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
     LOG_FMT_DEBUG(tracing_logger,
-                  "Read create segment snapshot done keep_order {} dt_enable_read_thread {} => enable_read_thread {}",
+                  "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
                   keep_order,
                   db_context.getSettingsRef().dt_enable_read_thread,
                   enable_read_thread);
@@ -1338,7 +1339,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         /* is_raw = */ is_fast_scan,
         /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
-        after_segment_read);
+        after_segment_read,
+        tracing_id);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1733,16 +1735,31 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             return;
     }
 
-    if (try_bg_merge_delta())
-        return;
-    else if (try_bg_split(segment))
-        return;
-    else if (try_bg_merge())
-        return;
-    else if (try_bg_compact())
-        return;
+    if (dm_context->enable_logical_split)
+    {
+        // Logical split point is calculated based on stable. Always try to merge delta into the stable
+        // before logical split is good for calculating the split point.
+        if (try_bg_merge_delta())
+            return;
+        if (try_bg_split(segment))
+            return;
+    }
     else
-        try_place_delta_index();
+    {
+        // During the physical split delta will be merged, so we prefer physical split over merge delta.
+        if (try_bg_split(segment))
+            return;
+        if (try_bg_merge_delta())
+            return;
+    }
+    if (try_bg_merge())
+        return;
+    if (try_bg_compact())
+        return;
+    if (try_place_delta_index())
+        return;
+
+    // The segment does not need any updates for now.
 }
 
 bool DeltaMergeStore::updateGCSafePoint()
@@ -2233,8 +2250,8 @@ void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & le
     }
 
     // Not counting the early give up action.
-    auto delta_bytes = static_cast<Int64>(left_snap->delta->getBytes()) + right_snap->getBytes();
-    auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->getRows();
+    auto delta_bytes = static_cast<Int64>(left_snap->delta->getBytes()) + right_snap->delta->getBytes();
+    auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->delta->getRows();
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
     if (is_foreground)

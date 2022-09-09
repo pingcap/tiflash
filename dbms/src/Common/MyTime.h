@@ -189,10 +189,14 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
-static int8_t default_fsp = 6;
-static bool default_needCheckTimeValid = false;
+static const int8_t DefaultFsp = 6;
+static const bool DefaultNeedCheckTimeValid = false;
+static const bool DefaultIgnoreZeroDate = true;
 static bool default_isFloat = false;
 static SqlMode default_sqlMode{false, false};
+
+Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
 
 Field parseMyDateTime(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid);
 Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = default_fsp, bool needCheckTimeValid = default_needCheckTimeValid, SqlMode sqlMode = default_sqlMode);

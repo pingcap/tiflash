@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
 
 namespace DB
@@ -50,10 +51,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             });
             // If ok is false, it means server is shutdown.
             // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-            if (ok)
-                static_cast<EstablishCallData *>(tag)->proceed();
-            else
-                static_cast<EstablishCallData *>(tag)->cancel();
+            static_cast<EstablishCallData *>(tag)->proceed(ok);
         }
         catch (Exception & e)
         {
@@ -103,9 +101,11 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     /// Init and register flash service.
     bool enable_async_server = context.getSettingsRef().enable_async_server;
     if (enable_async_server)
-        flash_service = std::make_unique<AsyncFlashService>(security_config, context);
+        flash_service = std::make_unique<AsyncFlashService>();
     else
-        flash_service = std::make_unique<FlashService>(security_config, context);
+        flash_service = std::make_unique<FlashService>();
+    flash_service->init(security_config, context);
+
     diagnostics_service = std::make_unique<DiagnosticsService>(context, config_);
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
@@ -209,5 +209,10 @@ void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
 void FlashGrpcServerHolder::setMockMPPServerInfo(MockMPPServerInfo info)
 {
     flash_service->setMockMPPServerInfo(info);
+}
+
+std::unique_ptr<FlashService> & FlashGrpcServerHolder::flashService()
+{
+    return flash_service;
 }
 } // namespace DB

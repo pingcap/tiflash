@@ -24,9 +24,11 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
+#include <memory>
+
 namespace DB::tests
 {
-std::unique_ptr<Context> TiFlashTestEnv::global_context = nullptr;
+std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
 
 String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
 {
@@ -66,8 +68,14 @@ void TiFlashTestEnv::tryRemovePath(const std::string & path, bool recreate)
 
 void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
 {
+    addGlobalContext(testdata_path, ps_run_mode, bg_thread_count);
+}
+
+void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode ps_run_mode, uint64_t bg_thread_count)
+{
     // set itself as global context
-    global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
+    auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
+    global_contexts.push_back(global_context);
     global_context->setGlobalContext(*global_context);
     global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
 
@@ -128,8 +136,8 @@ void TiFlashTestEnv::initializeGlobalContext(Strings testdata_path, PageStorageR
 
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
 {
-    Context context = *global_context;
-    context.setGlobalContext(*global_context);
+    Context context = *global_contexts[0];
+    context.setGlobalContext(*global_contexts[0]);
     // Load `testdata_path` as path if it is set.
     const String root_path = [&]() {
         const auto root_path = testdata_path.empty()
@@ -142,16 +150,19 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     context.setPath(root_path);
     auto paths = getPathPool(testdata_path);
     context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
-    global_context->initializeGlobalStoragePoolIfNeed(context.getPathPool());
+    global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
     context.getSettingsRef() = settings;
     return context;
 }
 
 void TiFlashTestEnv::shutdown()
 {
-    global_context->getTMTContext().setStatusTerminated();
-    global_context->shutdown();
-    global_context.reset();
+    for (auto & context : global_contexts)
+    {
+        context->getTMTContext().setStatusTerminated();
+        context->shutdown();
+        context.reset();
+    }
 }
 
 void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)

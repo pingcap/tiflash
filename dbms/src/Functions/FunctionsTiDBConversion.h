@@ -1354,7 +1354,7 @@ public:
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
 
-                Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, true);
 
                 if (packed_uint_value.isNull())
                 {

@@ -135,15 +135,26 @@ Block mergeBlocks(Blocks blocks)
 }
 } // namespace
 
-DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
+void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {
-    Blocks actual_blocks;
     stream->readPrefix();
     while (auto block = stream->read())
     {
-        actual_blocks.push_back(block);
+        blocks.push_back(block);
     }
     stream->readSuffix();
+}
+
+DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream)
+{
+    return readBlocks({stream});
+}
+
+DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
+{
+    Blocks actual_blocks;
+    for (const auto & stream : streams)
+        readStream(actual_blocks, stream);
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
 }
 
@@ -160,12 +171,6 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     return readBlock(executeQuery(context.context).in);
-}
-
-DB::ColumnsWithTypeAndName ExecutorTest::executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
-{
-    auto res = executeMPPQuery(context.context, properties, tasks, server_config_map);
-    return readBlock(res);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

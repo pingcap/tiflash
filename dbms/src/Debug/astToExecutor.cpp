@@ -826,13 +826,14 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         *exchange_sender->add_types() = tipb_type;
     }
 
+    int i = 0;
     for (auto task_id : mpp_info.sender_target_task_ids)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
-        meta.set_partition_id(mpp_info.partition_id);
-        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        meta.set_partition_id(i);
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[i++].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
 
         auto * meta_string = exchange_sender->add_encoded_task_meta();
@@ -857,6 +858,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
+
     for (auto & field : output_schema)
     {
         auto tipb_type = TiDB::columnInfoToFieldType(field.second);
@@ -865,6 +867,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         auto * field_type = exchange_receiver->add_field_types();
         *field_type = tipb_type;
     }
+
     auto it = mpp_info.receiver_source_task_ids_map.find(name);
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
@@ -876,7 +879,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[i].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
