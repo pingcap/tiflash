@@ -373,6 +373,17 @@ try
               .project({lit(Field(String("a")))})
               .build(context);
     executeWithConcurrency(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+
+    req = context
+              .scan("test_db", "test_table3")
+              .project({col("s1")})
+              .project({col("s1"), col("s1"), col("s1"), col("s1"), col("s1")})
+              .build(context);
+    executeWithConcurrency(req,
+                           {toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                            toNullableVec<Int64>({1, 1, 1, 1, 1})});
 }
 CATCH
 
@@ -411,6 +422,17 @@ try
               .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
               .build(context);
     executeWithConcurrency(req, {createColumns({toVec<UInt64>({5})})});
+
+    req = context
+              .scan("test_db", "test_table3")
+              .project({col("s1")})
+              .aggregation({Count(col("s1")), Sum(col("s1")), Max(col("s1")), Min(col("s1"))}, {})
+              .build(context);
+    executeWithConcurrency(req,
+                           {toVec<UInt64>({5}),
+                            toNullableVec<Int64>({5}),
+                            toNullableVec<Int64>({1}),
+                            toNullableVec<Int64>({1})});
 }
 CATCH
 
