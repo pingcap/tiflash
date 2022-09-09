@@ -85,7 +85,7 @@ public:
 
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override = 0;
 
-    int compareFastPath(const char * s1, size_t length1, const char * s2, size_t length2) const
+    ALWAYS_INLINE inline int compareFastPath(const char * s1, size_t length1, const char * s2, size_t length2) const
     {
         if (likely(isPaddingBinary()))
         {
@@ -101,7 +101,7 @@ public:
     bool isBinary() const;
     bool isCI() const;
 
-    inline bool isPaddingBinary() const
+    ALWAYS_INLINE inline bool isPaddingBinary() const
     {
         switch (collator_type)
         {
