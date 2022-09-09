@@ -24,6 +24,7 @@
 // - it is recommended to use for inline function with `sse2` supported
 // - it perform better than `legacy::inline_memcpy`(from clickhouse) according to `libs/libcommon/src/tests/bench_memcpy.cpp`
 // - like `std::memcpy`, the behavior is undefined when the source and the destination objects overlap
+// - moving data from register to memory costs more than the reversed way, so it's useful to reduce times about memory copying.
 ALWAYS_INLINE static inline void * sse2_inline_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
     char * __restrict dst = reinterpret_cast<char * __restrict>(dst_);

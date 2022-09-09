@@ -104,11 +104,11 @@ protected:
     }                                                                    \
     BENCHMARK_REGISTER_F(id, name)->Iterations(iters);
 
-#define BENCH_MEM_COPY_ALL_IMPL(id, min, max, align, hot, loop_cnt, iters)      \
-    using id = MemUtilsCopy<min, max, align, hot, loop_cnt>;                    \
-    BENCH_MEM_COPY(id, stl_mempy, std::memcpy, iters)                           \
-    BENCH_MEM_COPY(id, tiflash_internal_memcpy, tiflash_internal_memcpy, iters) \
-    BENCH_MEM_COPY(id, clickhouse_memcpy, legacy::inline_memcpy, iters)         \
+#define BENCH_MEM_COPY_ALL_IMPL(id, min, max, align, hot, loop_cnt, iters)     \
+    using id = MemUtilsCopy<min, max, align, hot, loop_cnt>;                   \
+    BENCH_MEM_COPY(id, stl_mempy, std::memcpy, iters)                          \
+    BENCH_MEM_COPY(id, inline_clickhouse_memcpy, legacy::inline_memcpy, iters) \
+    BENCH_MEM_COPY(id, inline_tiflash_memcpy, tiflash_internal_memcpy, iters)  \
     BENCH_MEM_COPY(id, folly_memcpy, __folly_memcpy, iters)
 
 #define BENCH_MEM_IMPL_ID(min, max, align, hot, loop_cnt) MemUtilsCopy##_##min##_##max##_##align##_##hot##_##loop_cnt
@@ -118,6 +118,7 @@ protected:
 
 BENCH_MEM_COPY_ALL(1, 20, 3, true, 20000, 500);
 BENCH_MEM_COPY_ALL(1, 40, 3, true, 20000, 500);
+BENCH_MEM_COPY_ALL(1, 80, 3, true, 20000, 500);
 BENCH_MEM_COPY_ALL(1, 200, 3, true, 20000, 500);
 BENCH_MEM_COPY_ALL(1, 1000, 3, true, 20000, 500);
 

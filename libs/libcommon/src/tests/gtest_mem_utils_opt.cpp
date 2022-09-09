@@ -176,7 +176,7 @@ TEST(MemUtilsTestOPT, CompareStr)
 
 #endif
 
-template <bool overlap, typename F>
+template <ssize_t overlap_offset, typename F>
 void TestMemCopyFunc(size_t size, F && fn_memcpy)
 {
     std::string oa(size + 100, 0);
@@ -196,8 +196,8 @@ void TestMemCopyFunc(size_t size, F && fn_memcpy)
     std::string ob;
     char * tar{};
 
-    if constexpr (overlap)
-        tar = start - 3;
+    if constexpr (overlap_offset)
+        tar = start + overlap_offset;
     else
     {
         ob.resize(size + 100, 0);
@@ -224,11 +224,13 @@ TEST(MemUtilsTestOPT, Memcopy)
 {
     for (size_t size = 0; size < 256; ++size)
     {
-        TestMemCopyFunc<false>(size, __folly_memcpy);
-        { // test memmove
-            TestMemCopyFunc<true>(size, __folly_memcpy);
+        TestMemCopyFunc<0>(size, __folly_memcpy);
+        {
+            // test memmove
+            TestMemCopyFunc<3>(size, __folly_memcpy);
+            TestMemCopyFunc<-3>(size, __folly_memcpy);
         }
-        TestMemCopyFunc<false>(size, inline_memcpy);
+        TestMemCopyFunc<0>(size, inline_memcpy);
     }
 }
 
