@@ -1361,8 +1361,12 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     LOG_INFO(log, "Loaded all schemas.");
 }
 
+// product env
 template struct SchemaBuilder<SchemaGetter, SchemaNameMapper>;
+// mock test
 template struct SchemaBuilder<MockSchemaGetter, MockSchemaNameMapper>;
+// unit test
+template struct SchemaBuilder<MockSchemaGetter, SchemaNameMapper>;
 
 // end namespace
 } // namespace DB

@@ -14,33 +14,11 @@
 
 #pragma once
 
-#include <Core/Types.h>
-
-#include <mutex>
-
-namespace DB
-{
-namespace DM
-{
-namespace tests
-{
-class IDGenerator
-{
-public:
-    IDGenerator()
-        : id{0}
-    {}
-
-    UInt64 get()
-    {
-        std::lock_guard guard{mutex};
-        return id++;
-    }
-
-private:
-    std::mutex mutex;
-    UInt64 id;
-};
-} // namespace tests
-} // namespace DM
-} // namespace DB
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+#include <grpcpp/grpcpp.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
