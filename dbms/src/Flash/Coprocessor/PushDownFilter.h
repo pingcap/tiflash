@@ -23,7 +23,11 @@ namespace DB
 {
 struct PushDownFilter
 {
-    static PushDownFilter toPushDownFilter(const String & executor_id, const tipb::Executor * executor);
+    static PushDownFilter pushDownFilterFrom(const String & executor_id, const tipb::Executor * executor);
+
+    static PushDownFilter pushDownFilterFrom(const String & executor_id, const tipb::Selection & selection);
+
+    PushDownFilter() = default;
 
     PushDownFilter(
         const String & executor_id_,

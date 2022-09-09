@@ -16,6 +16,7 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockServerInfo.h>
 #include <Debug/MockTiDB.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
@@ -50,7 +51,17 @@ extern String LOCAL_HOST;
 void setServiceAddr(const std::string & addr);
 } // namespace Debug
 
-std::pair<String, String> splitQualifiedName(const String & s);
+// We use qualified format like "db_name.table_name.column_name"
+// to identify one column of a table.
+// We can split the qualified format into the ColumnName struct.
+struct ColumnName
+{
+    String db_name;
+    String table_name;
+    String column_name;
+};
+
+ColumnName splitQualifiedName(const String & s);
 
 struct MPPCtx
 {
@@ -165,11 +176,11 @@ struct TableScan : public Executor
 
     void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
     {
-        auto column_name = splitQualifiedName(dag_column_info.first).second;
-        if (column_name == MutableSupport::tidb_pk_column_name)
+        auto names = splitQualifiedName(dag_column_info.first);
+        if (names.column_name == MutableSupport::tidb_pk_column_name)
             ci->set_column_id(-1);
         else
-            ci->set_column_id(table_info.getColumnID(column_name));
+            ci->set_column_id(table_info.getColumnID(names.column_name));
         ci->set_tp(dag_column_info.second.tp);
         ci->set_flag(dag_column_info.second.flag);
         ci->set_columnlen(dag_column_info.second.flen);
@@ -255,17 +266,22 @@ struct Join : Executor
 {
     tipb::JoinType tp;
 
-    const ASTPtr using_expr_list;
+    const ASTs join_cols{};
+    const ASTs left_conds{};
+    const ASTs right_conds{};
+    const ASTs other_conds{};
+    const ASTs other_eq_conds_from_in{};
 
-    // todo(ljr): support on expr
-    const ASTPtr on_expr{};
-
-    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, ASTPtr using_expr_list_)
+    Join(size_t & index_, const DAGSchema & output_schema_, tipb::JoinType tp_, const ASTs & join_cols_, const ASTs & l_conds, const ASTs & r_conds, const ASTs & o_conds, const ASTs & o_eq_conds)
         : Executor(index_, "Join_" + std::to_string(index_), output_schema_)
         , tp(tp_)
-        , using_expr_list(using_expr_list_)
+        , join_cols(join_cols_)
+        , left_conds(l_conds)
+        , right_conds(r_conds)
+        , other_conds(o_conds)
+        , other_eq_conds_from_in(o_eq_conds)
     {
-        if (using_expr_list == nullptr)
+        if (!(join_cols.size() + left_conds.size() + right_conds.size() + other_conds.size() + other_eq_conds_from_in.size()))
             throw Exception("No join condition found.");
     }
 
@@ -338,7 +354,7 @@ struct Sort : Executor
 
 using ExecutorPtr = std::shared_ptr<mock::Executor>;
 
-ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, String & table_alias, bool append_pk_column);
+ExecutorPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column);
 
 ExecutorPtr compileSelection(ExecutorPtr input, size_t & executor_index, ASTPtr filter);
 
@@ -359,7 +375,7 @@ ExecutorPtr compileProject(ExecutorPtr input, size_t & executor_index, ASTPtr se
 /// avoid using ASTTableJoin.
 ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, ASTPtr params);
 
-ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, ASTPtr using_expr_list);
+ExecutorPtr compileJoin(size_t & executor_index, ExecutorPtr left, ExecutorPtr right, tipb::JoinType tp, const ASTs & join_cols, const ASTs & left_conds = {}, const ASTs & right_conds = {}, const ASTs & other_conds = {}, const ASTs & other_eq_conds_from_in = {});
 
 ExecutorPtr compileExchangeSender(ExecutorPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
 

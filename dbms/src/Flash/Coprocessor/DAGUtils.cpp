@@ -39,6 +39,8 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::Rank, "rank"},
     {tipb::ExprType::DenseRank, "dense_rank"},
     {tipb::ExprType::RowNumber, "row_number"},
+    {tipb::ExprType::Lead, "lead"},
+    {tipb::ExprType::Lag, "lag"},
 });
 
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
@@ -107,7 +109,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::CastTimeAsString, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsDecimal, "tidb_cast"},
     {tipb::ScalarFuncSig::CastTimeAsTime, "tidb_cast"},
-    //{tipb::ScalarFuncSig::CastTimeAsDuration, "cast"},
+    {tipb::ScalarFuncSig::CastTimeAsDuration, "tidb_cast"},
     //{tipb::ScalarFuncSig::CastTimeAsJson, "cast"},
 
     //{tipb::ScalarFuncSig::CastDurationAsInt, "cast"},
@@ -431,6 +433,10 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::LikeSig, "like3Args"},
     {tipb::ScalarFuncSig::RegexpSig, "regexp"},
     {tipb::ScalarFuncSig::RegexpUTF8Sig, "regexp"},
+    {tipb::ScalarFuncSig::RegexpLikeSig, "regexp"},
+    // {tipb::ScalarFuncSig::RegexpInStrSig, "regexp_instr"},
+    // {tipb::ScalarFuncSig::RegexpReplaceSig, "regexp_replace"},
+    // {tipb::ScalarFuncSig::RegexpSubstrSig, "regexp_substr"},
 
     //{tipb::ScalarFuncSig::JsonExtractSig, "cast"},
     //{tipb::ScalarFuncSig::JsonUnquoteSig, "cast"},
@@ -610,7 +616,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Concat, "tidbConcat"},
     {tipb::ScalarFuncSig::ConcatWS, "tidbConcatWS"},
     //{tipb::ScalarFuncSig::Convert, "cast"},
-    //{tipb::ScalarFuncSig::Elt, "cast"},
+    {tipb::ScalarFuncSig::Elt, "elt"},
     //{tipb::ScalarFuncSig::ExportSet3Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet4Arg, "cast"},
     //{tipb::ScalarFuncSig::ExportSet5Arg, "cast"},

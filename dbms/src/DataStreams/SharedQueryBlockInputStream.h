@@ -112,7 +112,10 @@ public:
     }
 
 protected:
-    Block readImpl() override
+    /// The BlockStreamProfileInfo of SharedQuery is useless,
+    /// and it will trigger tsan UT fail because of data race.
+    /// So overriding method `read` here.
+    Block read(FilterPtr &, bool) override
     {
         std::unique_lock lock(mutex);
 
@@ -122,7 +125,7 @@ protected:
             throw Exception("read operation called after readSuffix");
 
         Block block;
-        if (!queue.pop(block))
+        if (queue.pop(block) != MPMCQueueResult::OK)
         {
             if (!isCancelled())
             {
@@ -133,6 +136,10 @@ protected:
         }
 
         return block;
+    }
+    Block readImpl() override
+    {
+        throw Exception("Unsupport");
     }
 
     void fetchBlocks()
@@ -145,7 +152,7 @@ protected:
                 FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_sharedquery_failpoint);
                 Block block = in->read();
                 // in is finished or queue is canceled
-                if (!block || !queue.push(block))
+                if (!block || queue.push(block) != MPMCQueueResult::OK)
                     break;
             }
             in->readSuffix();

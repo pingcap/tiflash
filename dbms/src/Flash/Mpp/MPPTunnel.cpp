@@ -14,8 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/ThreadFactory.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
 #include <fmt/core.h>
@@ -27,6 +27,24 @@ namespace FailPoints
 extern const char exception_during_mpp_close_tunnel[];
 extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
+
+namespace
+{
+String tunnelSenderModeToString(TunnelSenderMode mode)
+{
+    switch (mode)
+    {
+    case TunnelSenderMode::ASYNC_GRPC:
+        return "async";
+    case TunnelSenderMode::SYNC_GRPC:
+        return "sync";
+    case TunnelSenderMode::LOCAL:
+        return "local";
+    default:
+        return "unknown";
+    }
+}
+} // namespace
 
 MPPTunnel::MPPTunnel(
     const mpp::TaskMeta & receiver_meta_,
@@ -49,8 +67,10 @@ MPPTunnel::MPPTunnel(
     : status(TunnelStatus::Unconnected)
     , timeout(timeout_)
     , tunnel_id(tunnel_id_)
-    , send_queue(std::make_shared<MPMCQueue<MPPDataPacketPtr>>(std::max(5, input_steams_num_ * 5))) // MPMCQueue can benefit from a slightly larger queue size
+    , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
+    , queue_size(std::max(5, input_steams_num_ * 5)) // MPMCQueue can benefit from a slightly larger queue size
     , log(Logger::get("MPPTunnel", req_id, tunnel_id))
+
 {
     RUNTIME_ASSERT(!(is_local_ && is_async_), log, "is_local: {}, is_async: {}.", is_local_, is_async_);
     if (is_local_)
@@ -69,20 +89,7 @@ MPPTunnel::~MPPTunnel()
     });
     try
     {
-        {
-            std::unique_lock lock(mu);
-            if (status == TunnelStatus::Finished)
-            {
-                LOG_DEBUG(log, "already finished!");
-                return;
-            }
-
-            /// make sure to finish the tunnel after it is connected
-            waitUntilConnectedOrFinished(lock);
-            finishSendQueue();
-        }
-        LOG_FMT_TRACE(log, "waiting consumer finish!");
-        waitForSenderFinish(/*allow_throw=*/false);
+        close("");
     }
     catch (...)
     {
@@ -91,18 +98,24 @@ MPPTunnel::~MPPTunnel()
     LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
-void MPPTunnel::finishSendQueue()
+void MPPTunnel::finishSendQueue(bool drain)
 {
-    bool flag = send_queue->finish();
-    if (flag && mode == TunnelSenderMode::ASYNC_GRPC)
+    if (tunnel_sender)
     {
-        async_tunnel_sender->tryFlushOne();
+        if (drain)
+            tunnel_sender->finishAndDrain();
+        else
+            tunnel_sender->finish();
     }
 }
 
 /// exit abnormally, such as being cancelled.
 void MPPTunnel::close(const String & reason)
 {
+    SCOPE_EXIT({
+        // ensure the tracked memory is released and updated before memory tracker(in ProcListEntry) is released
+        finishSendQueue(true); // drain the send_queue when close
+    });
     {
         std::unique_lock lk(mu);
         switch (status)
@@ -118,9 +131,7 @@ void MPPTunnel::close(const String & reason)
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    send_queue->push(std::make_shared<mpp::MPPDataPacket>(getPacketWithError(reason)));
-                    if (mode == TunnelSenderMode::ASYNC_GRPC)
-                        async_tunnel_sender->tryFlushOne();
+                    tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), getMemTracker()));
                 }
                 catch (...)
                 {
@@ -153,12 +164,10 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
                 throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         }
 
-        if (send_queue->push(std::make_shared<mpp::MPPDataPacket>(data)))
+        if (tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(data, getMemTracker())))
         {
             connection_profile_info.bytes += data.ByteSizeLong();
             connection_profile_info.packets += 1;
-            if (mode == TunnelSenderMode::ASYNC_GRPC)
-                async_tunnel_sender->tryFlushOne();
             if (close_after_write)
             {
                 finishSendQueue();
@@ -197,29 +206,56 @@ void MPPTunnel::connect(PacketWriter * writer)
         switch (mode)
         {
         case TunnelSenderMode::LOCAL:
+        {
             RUNTIME_ASSERT(writer == nullptr, log);
-            local_tunnel_sender = std::make_shared<LocalTunnelSender>(mode, send_queue, nullptr, log, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender>(queue_size, log, tunnel_id);
             tunnel_sender = local_tunnel_sender;
             break;
+        }
         case TunnelSenderMode::SYNC_GRPC:
+        {
             RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
-            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(mode, send_queue, writer, log, tunnel_id);
-            sync_tunnel_sender->startSendThread();
+            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, log, tunnel_id);
+            sync_tunnel_sender->startSendThread(writer);
             tunnel_sender = sync_tunnel_sender;
             break;
-        case TunnelSenderMode::ASYNC_GRPC:
-            RUNTIME_ASSERT(writer != nullptr, log, "Async writer shouldn't be null");
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(mode, send_queue, writer, log, tunnel_id);
-            tunnel_sender = async_tunnel_sender;
-            writer->attachAsyncTunnelSender(async_tunnel_sender);
-            break;
+        }
         default:
-            RUNTIME_ASSERT(false, log, "Unsupported TunnelSenderMode: {}", mode);
+            RUNTIME_ASSERT(false, log, "Unsupported TunnelSenderMode in connect: {}", mode);
         }
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
     LOG_DEBUG(log, "connected");
+}
+
+void MPPTunnel::connectAsync(IAsyncCallData * call_data)
+{
+    {
+        std::unique_lock lk(mu);
+        if (status != TunnelStatus::Unconnected)
+            throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
+
+        LOG_FMT_TRACE(log, "ready to connect async");
+        RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", mode);
+        RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
+
+        auto kick_func_for_test = call_data->getKickFuncForTest();
+        if (unlikely(kick_func_for_test.has_value()))
+        {
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, kick_func_for_test.value());
+        }
+        else
+        {
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, call_data->grpcCall());
+        }
+        call_data->attachAsyncTunnelSender(async_tunnel_sender);
+        tunnel_sender = async_tunnel_sender;
+
+        status = TunnelStatus::Connected;
+        cv_for_status_changed.notify_all();
+    }
+    LOG_FMT_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
 }
 
 void MPPTunnel::waitForFinish()
@@ -298,10 +334,15 @@ StringRef MPPTunnel::statusToString()
     }
 }
 
+void MPPTunnel::updateMemTracker()
+{
+    mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
+}
+
 void TunnelSender::consumerFinish(const String & msg)
 {
     LOG_FMT_TRACE(log, "calling consumer Finish");
-    send_queue->finish();
+    finish();
     consumer_state.setMsg(msg);
 }
 
@@ -311,17 +352,17 @@ SyncTunnelSender::~SyncTunnelSender()
     thread_manager->wait();
 }
 
-void SyncTunnelSender::sendJob()
+void SyncTunnelSender::sendJob(PacketWriter * writer)
 {
     GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Increment();
     GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Set(std::max(GET_METRIC(tiflash_thread_count, type_max_threads_of_establish_mpp).Value(), GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Value()));
     String err_msg;
     try
     {
-        MPPDataPacketPtr res;
-        while (send_queue->pop(res))
+        TrackedMppDataPacketPtr res;
+        while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
-            if (!writer->write(*res))
+            if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
                 break;
@@ -342,64 +383,23 @@ void SyncTunnelSender::sendJob()
     GET_METRIC(tiflash_thread_count, type_active_threads_of_establish_mpp).Decrement();
 }
 
-void SyncTunnelSender::startSendThread()
+void SyncTunnelSender::startSendThread(PacketWriter * writer)
 {
     thread_manager = newThreadManager();
-    thread_manager->schedule(true, "MPPTunnel", [this] {
-        sendJob();
+    thread_manager->schedule(true, "MPPTunnel", [this, writer] {
+        sendJob(writer);
     });
 }
 
-void AsyncTunnelSender::tryFlushOne()
+std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
 {
-    // When consumer finished, sending work is done already, just return
-    if (consumer_state.msgHasSet())
-        return;
-    writer->tryFlushOne();
-}
-
-void AsyncTunnelSender::sendOne()
-{
-    // When consumer finished, sending work is done already, just return
-    if (consumer_state.msgHasSet())
-        return;
-
-    String err_msg;
-    bool queue_empty_flag = false;
-    try
+    TrackedMppDataPacketPtr res;
+    if (send_queue.pop(res) == MPMCQueueResult::OK)
     {
-        MPPDataPacketPtr res;
-        queue_empty_flag = !send_queue->pop(res);
-        if (!queue_empty_flag)
-        {
-            if (!writer->write(*res))
-            {
-                err_msg = "grpc writes failed.";
-            }
-        }
-    }
-    catch (...)
-    {
-        err_msg = getCurrentExceptionMessage(true);
-    }
-    if (!err_msg.empty())
-    {
-        err_msg = fmt::format("{} meet error: {}", tunnel_id, err_msg);
-        LOG_ERROR(log, err_msg);
-        trimStackTrace(err_msg);
-    }
-    if (!err_msg.empty() || queue_empty_flag)
-    {
-        consumerFinish(err_msg);
-        writer->writeDone(grpc::Status::OK);
-    }
-}
-
-LocalTunnelSender::MPPDataPacketPtr LocalTunnelSender::readForLocal()
-{
-    MPPDataPacketPtr res;
-    if (send_queue->pop(res))
+        // switch tunnel's memory tracker into receiver's
+        res->switchMemTracker(current_memory_tracker);
         return res;
+    }
     consumerFinish("");
     return nullptr;
 }

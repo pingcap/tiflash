@@ -91,9 +91,9 @@
 #include <memory>
 
 #if Poco_NetSSL_FOUND
+#include <Common/grpcpp.h>
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
-#include <grpc++/grpc++.h>
 #endif
 
 #if USE_JEMALLOC
@@ -956,15 +956,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
-    /// Initialize the background & blockable background thread pool.
-    Settings & settings = global_context->getSettingsRef();
-    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
-    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
-    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
-
+    /// Determining PageStorage run mode based on current files on disk and storage config.
+    /// Do it as early as possible after loading storage config.
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
-    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
@@ -1079,6 +1073,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
 
+    ///
+    /// The config value in global settings can only be used from here because we just loaded it from config file.
+    ///
+
+    /// Initialize the background & blockable background thread pool.
+    Settings & settings = global_context->getSettingsRef();
+    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
+    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
+    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+
+    /// PageStorage run mode has been determined above
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
 
@@ -1150,9 +1158,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+    DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
-    DM::DMFileReaderPool::instance();
 
     {
         // Note that this must do before initialize schema sync service.
@@ -1221,8 +1230,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
             throw Exception("Raft Proxy Helper is not set, should not happen");
+        auto & path_pool = global_context->getPathPool();
         /// initialize TMTContext
-        global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
+        global_context->getTMTContext().restore(path_pool, tiflash_instance_wrap.proxy_helper);
     }
 
     /// setting up elastic thread pool
@@ -1271,21 +1281,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             users_config_reloader.reset();
         });
 
-        /// try to load dictionaries immediately, throw on error and die
-        try
-        {
-            if (!config().getBool("dictionaries_lazy_load", true))
-            {
-                global_context->tryCreateEmbeddedDictionaries();
-                global_context->tryCreateExternalDictionaries();
-            }
-        }
-        catch (...)
-        {
-            LOG_FMT_ERROR(log, "Caught exception while loading dictionaries.");
-            throw;
-        }
-
         /// This object will periodically calculate some metrics.
         /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
@@ -1314,14 +1309,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
             size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
-            tmt_context.getKVStore()->initReadIndexWorkers(
+            auto & kvstore_ptr = tmt_context.getKVStore();
+            kvstore_ptr->initReadIndexWorkers(
                 [&]() {
                     // get from tmt context
                     return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
                 },
                 /*running thread count*/ runner_cnt);
             tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-            WaitCheckRegionReady(tmt_context, terminate_signals_counter);
+            WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
         SCOPE_EXIT({
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)

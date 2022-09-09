@@ -16,6 +16,7 @@
 
 #include <Poco/Logger.h>
 #include <Storages/BackgroundProcessingPool.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 
@@ -56,6 +57,8 @@ public:
     // GC immediately
     // Only used on dbgFuncMisc
     bool gc();
+
+    FileUsageStatistics getLogFileUsage() const;
 
 private:
     bool gc(const Settings & settings, bool immediately = false, const Seconds & try_gc_period = DELTA_MERGE_GC_PERIOD);

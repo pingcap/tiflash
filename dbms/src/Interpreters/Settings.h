@@ -147,6 +147,8 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingFloat, memory_tracker_fault_probability, 0., "For testing of `exception safety` - throw an exception every time you allocate memory with the specified probability.")                                                      \
                                                                                                                                                                                                                                         \
+    M(SettingInt64 , memory_tracker_accuracy_diff_for_test, 0, "For testing of the accuracy of the memory tracker - throw an exception when real_rss is much larger than tracked amount.")                                                       \
+                                                                                                                                                                                                                                        \
     M(SettingBool, enable_http_compression, 0, "Compress the result if the client over HTTP said that it understands data compressed by gzip or deflate.")                                                                              \
     M(SettingInt64, http_zlib_compression_level, 3, "Compression level - used if the client on HTTP said that it understands data compressed by gzip or deflate.")                                                                      \
                                                                                                                                                                                                                                         \
@@ -315,11 +317,8 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingUInt64, dt_checksum_frame_size, DBMS_DEFAULT_BUFFER_SIZE, "Frame size for delta tree stable storage")                                                                                                                      \
                                                                                                                                                                                                                                         \
-    M(SettingDouble, dt_storage_blob_heavy_gc_valid_rate, 0.2, "Max valid rate of deciding a blob can be compact")                                                                                                                      \
-    M(SettingDouble, dt_storage_blob_block_alignment_bytes, 0, "Blob IO alignment size")                                                                                                                                                \
-    M(SettingBool, dt_enable_read_thread, false, "Enable storage read thread or not")                                                                                                                                                          \
-    M(SettingDouble, dt_block_slots_scale, 1.0, "Block slots limit of a read request")                                                                                                                                                          \
-    M(SettingDouble, dt_active_segments_scale, 1.0, "Acitve segments limit of a read request")                                                                                                                                                          \
+    M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
+    M(SettingBool, dt_enable_read_thread, true, "Enable storage read thread or not")                                                                                                                                                   \
                                                                                                                                                                                                                                         \
     M(SettingChecksumAlgorithm, dt_checksum_algorithm, ChecksumAlgo::XXH3, "Checksum algorithm for delta tree stable storage")                                                                                                          \
     M(SettingCompressionMethod, dt_compression_method, CompressionMethod::LZ4, "The method of data compression when writing.")                                                                                                          \
@@ -344,6 +343,7 @@ struct Settings
     M(SettingUInt64, max_memory_usage, 0, "Maximum memory usage for processing of single query. Zero means unlimited.")                                                                                                                 \
     M(SettingUInt64, max_memory_usage_for_user, 0, "Maximum memory usage for processing all concurrently running queries for the user. Zero means unlimited.")                                                                          \
     M(SettingUInt64, max_memory_usage_for_all_queries, 0, "Maximum memory usage for processing all concurrently running queries on the server. Zero means unlimited.")                                                                  \
+    M(SettingUInt64, bytes_that_rss_larger_than_limit, 5368709120, "How many bytes RSS(Resident Set Size) can be larger than limit(max_memory_usage_for_all_queries). Default: 5GB ")                                                   \
                                                                                                                                                                                                                                         \
     M(SettingUInt64, max_network_bandwidth, 0, "The maximum speed of data exchange over the network in bytes per second for a query. Zero means unlimited.")                                                                            \
     M(SettingUInt64, max_network_bytes, 0, "The maximum number of bytes (compressed) to receive or transmit over the network for execution of the query.")                                                                              \
@@ -367,8 +367,9 @@ struct Settings
                                                                                                                                                                                                                                         \
     M(SettingUInt64, manual_compact_pool_size, 1, "The number of worker threads to handle manual compact requests.")                                                                                                                    \
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
-    M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")
-
+    M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
+                                                                                                                                                                                                                                        \
+    M(SettingBool, enable_planner, true, "Enable planner")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
 

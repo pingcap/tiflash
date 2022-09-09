@@ -20,9 +20,11 @@
 #include <Encryption/FileProvider.h>
 #include <Poco/Ext/ThreadNumber.h>
 #include <Storages/Page/Page.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/MapUtils.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdsByNamespace.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WALStore.h>
@@ -166,7 +168,7 @@ public:
         RESOLVE_TO_NORMAL,
     };
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
-    resolveToPageId(UInt64 seq, bool check_prev, PageEntryV3 * entry);
+    resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
     Int64 incrRefCount(const PageVersion & ver);
 
@@ -187,38 +189,16 @@ public:
         std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries);
 
     /**
-     * GC will give a `lowest_seq`.
-     * We will find the second entry which `LE` than `lowest_seq`.
-     * And reclaim all entries before that one.
-     * If we can't found any entry less than `lowest_seq`.
-     * Then all entries will be remained.
-     * 
-     * Ex1. 
-     *    entry 1 : seq 2 epoch 0
-     *    entry 2 : seq 2 epoch 1
-     *    entry 3 : seq 3 epoch 0
-     *    entry 4 : seq 4 epoch 0
-     * 
-     *    lowest_seq : 3
-     *    Then (entry 1, entry 2) will be delete.
-     * 
-     * Ex2. 
-     *    entry 1 : seq 2 epoch 0
-     *    entry 2 : seq 2 epoch 1
-     *    entry 3 : seq 4 epoch 0
-     *    entry 4 : seq 4 epoch 1
-     * 
-     *    lowest_seq : 3
-     *    Then (entry 1) will be delete
-     * 
-     * Ex3. 
-     *    entry 1 : seq 2 epoch 0
-     *    entry 2 : seq 2 epoch 1
-     *    entry 3 : seq 4 epoch 0
-     *    entry 4 : seq 4 epoch 1
-     * 
-     *    lowest_seq : 1
-     *    Then no entry should be delete.
+     * Given a `lowest_seq`, this will clean all outdated entries before `lowest_seq`.
+     * It takes good care of the entries being ref by another page id.
+     *
+     * `normal_entries_to_deref`: Return the informations that the entries need
+     *   to be decreased the ref count by `derefAndClean`.
+     *   The elem is <page_id, <version, num to decrease ref count>> 
+     * `entries_removed`: Return the entries removed from the version list
+     * `keep_last_valid_var_entry`: Keep the last valid entry, useful for dumping snapshot.
+     *
+     * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
      */
     bool cleanOutdatedEntries(
         UInt64 lowest_seq,
@@ -370,7 +350,20 @@ public:
     // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
     PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
 
-    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const;
+    // Get the external id that is not deleted or being ref by another id by
+    // `ns_id`.
+    std::set<PageId> getAliveExternalIds(NamespaceId ns_id) const
+    {
+        return external_ids_by_ns.getAliveIds(ns_id);
+    }
+
+    // After table dropped, the `getAliveIds` with specified
+    // `ns_id` will not be cleaned. We need this method to
+    // cleanup all external id ptrs.
+    void unregisterNamespace(NamespaceId ns_id)
+    {
+        external_ids_by_ns.unregisterNamespace(ns_id);
+    }
 
     PageEntriesEdit dumpSnapshotToEdit(PageDirectorySnapshotPtr snap = nullptr);
 
@@ -413,8 +406,7 @@ private:
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
-    mutable std::mutex external_ids_mutex;
-    mutable std::list<std::weak_ptr<PageIdV3Internal>> external_ids;
+    mutable ExternalIdsByNamespace external_ids_by_ns;
 
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;

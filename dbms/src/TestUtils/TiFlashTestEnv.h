@@ -27,29 +27,9 @@ namespace DB::tests
 class TiFlashTestEnv
 {
 public:
-    static String getTemporaryPath(const std::string_view test_case = "")
-    {
-        String path = "./tmp/";
-        if (!test_case.empty())
-            path += std::string(test_case);
+    static String getTemporaryPath(const std::string_view test_case = "", bool get_abs = true);
 
-        return Poco::Path(path).absolute().toString();
-    }
-
-    static void tryRemovePath(const std::string & path)
-    {
-        try
-        {
-            if (Poco::File p(path); p.exists())
-            {
-                p.remove(true);
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException("gtest", fmt::format("while removing dir `{}`", path));
-        }
-    }
+    static void tryRemovePath(const std::string & path, bool recreate = false);
 
     static std::pair<Strings, Strings> getPathPool(const Strings & testdata_path = {})
     {
@@ -90,12 +70,15 @@ public:
     static Context getContext(const DB::Settings & settings = DB::Settings(), Strings testdata_path = {});
 
     static void initializeGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 0);
-    static Context & getGlobalContext() { return *global_context; }
+    static void addGlobalContext(Strings testdata_path = {}, PageStorageRunMode ps_run_mode = PageStorageRunMode::ONLY_V3, uint64_t bg_thread_count = 0);
+    static Context & getGlobalContext() { return *global_contexts[0]; }
+    static Context & getGlobalContext(int idx) { return *global_contexts[idx]; }
+    static int globalContextSize() { return global_contexts.size(); }
     static void shutdown();
 
     TiFlashTestEnv() = delete;
 
 private:
-    static std::unique_ptr<Context> global_context;
+    static std::vector<std::shared_ptr<Context>> global_contexts;
 };
 } // namespace DB::tests

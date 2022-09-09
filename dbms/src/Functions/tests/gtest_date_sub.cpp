@@ -108,6 +108,10 @@ TEST_F(Datesub, dateSubStringIntUnitTest)
     ASSERT_COLUMN_EQ(
         toNullableVec({"2012-12-12 00:00:01", "2012-12-12 12:12:13", "2012-12-12 00:00:01", "2012-12-12 12:12:13"}),
         executeFunction("subtractSeconds", toNullableVec({"20121212", "20121212121212", "2012-12-12", "2012-12-12 12:12:12"}), toConst(-1)));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec({{}, {}, {}, {}, {}, {}, {}, {}}),
+        executeFunction("subtractSeconds", toNullableVec({"20130229", "20121312", "20120012", "20121200", "20121232", "20121212241212", "20121212126012", "20121212121260"}), toConst(-1)));
 }
 
 TEST_F(Datesub, dateSubStringRealUnitTest)

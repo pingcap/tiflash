@@ -54,7 +54,7 @@ public:
 
     Block read() override final;
 
-    Block read(FilterPtr & res_filter, bool return_filter) override final;
+    Block read(FilterPtr & res_filter, bool return_filter) override;
 
     /** The default implementation calls readPrefixImpl() on itself, and then readPrefix() recursively for all children.
       * There are cases when you do not want `readPrefix` of children to be called synchronously, in this function,

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
@@ -21,6 +22,7 @@
 #include <Core/SortDescription.h>
 #include <Functions/FunctionsConversion.h>
 #include <Interpreters/sortBlock.h>
+#include <Poco/Exception.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DMSegmentThreadInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -41,6 +43,7 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
+#include <memory>
 
 namespace ProfileEvents
 {
@@ -59,15 +62,10 @@ extern const Event DMAppendDeltaCleanUpNS;
 
 namespace CurrentMetrics
 {
-extern const Metric DT_DeltaMerge;
-extern const Metric DT_SegmentSplit;
-extern const Metric DT_SegmentMerge;
 extern const Metric DT_DeltaMergeTotalBytes;
 extern const Metric DT_DeltaMergeTotalRows;
 extern const Metric DT_SnapshotOfRead;
 extern const Metric DT_SnapshotOfReadRaw;
-extern const Metric DT_SnapshotOfSegmentSplit;
-extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
 } // namespace CurrentMetrics
@@ -85,12 +83,9 @@ extern const char skip_check_segment_update[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char pause_when_writing_to_dt_store[];
-extern const char pause_when_ingesting_to_dt_store[];
 extern const char pause_when_altering_dt_store[];
 extern const char force_triggle_background_merge_delta[];
 extern const char force_triggle_foreground_flush[];
-extern const char force_set_segment_ingest_packs_fail[];
-extern const char segment_merge_after_ingest_packs[];
 extern const char random_exception_after_dt_write_done[];
 extern const char force_slow_page_storage_snapshot_release[];
 extern const char exception_before_drop_segment[];
@@ -99,9 +94,6 @@ extern const char exception_after_drop_segment[];
 
 namespace DM
 {
-// It is used to prevent hash conflict of file caches.
-static std::atomic<UInt64> DELTA_MERGE_STORE_HASH_SALT{0};
-
 // ================================================
 //   MergeDeltaTaskPool
 // ================================================
@@ -139,8 +131,8 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
 
     LOG_FMT_DEBUG(
         log_,
-        "Segment [{}] task [{}] add to background task pool by [{}]",
-        task.segment->segmentId(),
+        "Segment task add to background task pool, segment={} task={} by_whom={}",
+        task.segment->simpleInfo(),
         toString(task.type),
         toString(whom));
     return std::make_pair(true, is_heavy);
@@ -156,7 +148,7 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
     auto task = tasks.front();
     tasks.pop();
 
-    LOG_FMT_DEBUG(log_, "Segment [{}] task [{}] pop from background task pool", task.segment->segmentId(), toString(task.type));
+    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), toString(task.type));
 
     return task;
 }
@@ -199,7 +191,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  size_t rowkey_column_size_,
                                  const Settings & settings_)
     : global_context(db_context.getGlobalContext())
-    , path_pool(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name))
+    , path_pool(std::make_shared<StoragePathPool>(global_context.getPathPool().withTable(db_name_, table_name_, data_path_contains_database_name)))
     , settings(settings_)
     , db_name(db_name_)
     , table_name(table_name_)
@@ -210,17 +202,16 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , hash_salt(++DELTA_MERGE_STORE_HASH_SALT)
-    , log(Logger::get("DeltaMergeStore", fmt::format("{}.{}", db_name, table_name)))
+    , log(Logger::get("DeltaMergeStore", fmt::format("<{}.{} table_id={}>", db_name, table_name, physical_table_id_)))
 {
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store start [{}.{}] [table_id = {}]", db_name, table_name, physical_table_id);
+    LOG_FMT_INFO(log, "Restore DeltaMerge Store start");
 
     storage_pool = std::make_shared<StoragePool>(global_context,
                                                  ns_id,
-                                                 path_pool,
+                                                 *path_pool,
                                                  db_name_ + "." + table_name_);
 
     // Restore existing dm files and set capacity for path_pool.
@@ -286,39 +277,60 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     setUpBackgroundTask(dm_context);
 
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store end [{}.{}], [ps_run_mode={}]", db_name, table_name, static_cast<UInt8>(page_storage_run_mode));
+    LOG_FMT_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", static_cast<UInt8>(page_storage_run_mode));
 }
 
 DeltaMergeStore::~DeltaMergeStore()
 {
-    LOG_FMT_INFO(log, "Release DeltaMerge Store start [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Release DeltaMerge Store start");
 
     shutdown();
 
-    LOG_FMT_INFO(log, "Release DeltaMerge Store end [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Release DeltaMerge Store end");
 }
 
 void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
 {
+    // Callbacks for cleaning outdated DTFiles. Note that there is a chance
+    // that callbacks is called after the `DeltaMergeStore` dropped, we must
+    // make the callbacks safe.
     ExternalPageCallbacks callbacks;
-    // V2 callbacks for cleaning DTFiles
-    callbacks.scanner = [this]() {
+    callbacks.ns_id = storage_pool->getNamespaceId();
+    callbacks.scanner = [path_pool_weak_ref = std::weak_ptr<StoragePathPool>(path_pool), file_provider = global_context.getFileProvider()]() {
         ExternalPageCallbacks::PathAndIdsVec path_and_ids_vec;
-        auto delegate = path_pool.getStableDiskDelegator();
+
+        // If the StoragePathPool is invalid, meaning we call `scanner` after dropping the table,
+        // simply return an empty list is OK.
+        auto path_pool = path_pool_weak_ref.lock();
+        if (!path_pool)
+            return path_and_ids_vec;
+
+        // Return the DTFiles on disks.
+        auto delegate = path_pool->getStableDiskDelegator();
+        // Only return the DTFiles can be GC. The page id of not able to be GC files, which is being ingested or in the middle of
+        // SegmentSplit/Merge/MergeDelta, is not yet applied
+        // to PageStorage is marked as not able to be GC, so we don't return them and run the `remover`
         DMFile::ListOptions options;
         options.only_list_can_gc = true;
         for (auto & root_path : delegate.listPaths())
         {
-            auto & path_and_ids = path_and_ids_vec.emplace_back();
-            path_and_ids.first = root_path;
-            auto file_ids_in_current_path = DMFile::listAllInPath(global_context.getFileProvider(), root_path, options);
-            for (auto id : file_ids_in_current_path)
-                path_and_ids.second.insert(id);
+            std::set<PageId> ids_under_path;
+            auto file_ids_in_current_path = DMFile::listAllInPath(file_provider, root_path, options);
+            path_and_ids_vec.emplace_back(root_path, std::move(file_ids_in_current_path));
         }
         return path_and_ids_vec;
     };
-    callbacks.remover = [this](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
-        auto delegate = path_pool.getStableDiskDelegator();
+    callbacks.remover = [path_pool_weak_ref = std::weak_ptr<StoragePathPool>(path_pool), //
+                         file_provider = global_context.getFileProvider(),
+                         logger = log](const ExternalPageCallbacks::PathAndIdsVec & path_and_ids_vec, const std::set<PageId> & valid_ids) {
+        // If the StoragePathPool is invalid, meaning we call `remover` after dropping the table,
+        // simply skip is OK.
+        auto path_pool = path_pool_weak_ref.lock();
+        if (!path_pool)
+            return;
+
+        SYNC_FOR("before_DeltaMergeStore::callbacks_remover_remove");
+        auto delegate = path_pool->getStableDiskDelegator();
         for (const auto & [path, ids] : path_and_ids_vec)
         {
             for (auto id : ids)
@@ -327,18 +339,50 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     continue;
 
                 // Note that page_id is useless here.
-                auto dmfile = DMFile::restore(global_context.getFileProvider(), id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
-                if (dmfile->canGC())
+                auto dmfile = DMFile::restore(file_provider, id, /* page_id= */ 0, path, DMFile::ReadMetaMode::none());
+                if (unlikely(!dmfile))
                 {
-                    delegate.removeDTFile(dmfile->fileId());
-                    dmfile->remove(global_context.getFileProvider());
+                    // If the dtfile directory is not exist, it means `StoragePathPool::drop` have been
+                    // called in another thread. Just try to clean if any id is left.
+                    try
+                    {
+                        delegate.removeDTFile(id);
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        // just ignore
+                    }
+                    LOG_FMT_INFO(logger,
+                                 "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
+                                 DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
                 }
-
-                LOG_FMT_INFO(log, "GC removed useless dmfile: {}", dmfile->path());
+                else if (dmfile->canGC())
+                {
+                    // StoragePathPool::drop may be called concurrently, ignore and continue next file if any exception thrown
+                    String err_msg;
+                    try
+                    {
+                        // scanner should only return dtfiles that can GC,
+                        // just another check here.
+                        delegate.removeDTFile(dmfile->fileId());
+                        dmfile->remove(file_provider);
+                    }
+                    catch (DB::Exception & e)
+                    {
+                        err_msg = e.message();
+                    }
+                    catch (Poco::Exception & e)
+                    {
+                        err_msg = e.message();
+                    }
+                    if (err_msg.empty())
+                        LOG_FMT_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
+                    else
+                        LOG_FMT_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={} err_msg={}", dmfile->path(), err_msg);
+                }
             }
         }
     };
-    callbacks.ns_id = storage_pool->getNamespaceId();
     // remember to unregister it when shutdown
     storage_pool->dataRegisterExternalPagesCallbacks(callbacks);
     storage_pool->enableGC();
@@ -359,20 +403,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
     blockable_background_pool_handle->wake();
 }
 
-void DeltaMergeStore::rename(String /*new_path*/, bool clean_rename, String new_database_name, String new_table_name)
+void DeltaMergeStore::rename(String /*new_path*/, String new_database_name, String new_table_name)
 {
-    if (clean_rename)
-    {
-        path_pool.rename(new_database_name, new_table_name, clean_rename);
-    }
-    else
-    {
-        LOG_FMT_WARNING(log, "Applying heavy renaming for table {}.{} to {}.{}", db_name, table_name, new_database_name, new_table_name);
-
-        // Remove all background task first
-        shutdown();
-        path_pool.rename(new_database_name, new_table_name, clean_rename); // rename for multi-disk
-    }
+    path_pool->rename(new_database_name, new_table_name);
 
     // TODO: replacing these two variables is not atomic, but could be good enough?
     table_name.swap(new_table_name);
@@ -450,13 +483,13 @@ void DeltaMergeStore::clearData()
 {
     // Remove all background task first
     shutdown();
-    LOG_FMT_INFO(log, "Clear DeltaMerge segments data [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data");
     // We don't drop the first segment in clearData, because if we drop it and tiflash crashes before drop the table's metadata,
     // when restart the table will try to restore the first segment but failed to do it which cause tiflash crash again.
     // The reason this happens is that even we delete all data in a PageStorage instance,
     // the call to PageStorage::getMaxId is still not 0 so tiflash treat it as an old table and will try to restore it's first segment.
     dropAllSegments(true);
-    LOG_FMT_INFO(log, "Clear DeltaMerge segments data done [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Clear DeltaMerge segments data done");
 }
 
 void DeltaMergeStore::drop()
@@ -464,13 +497,13 @@ void DeltaMergeStore::drop()
     // Remove all background task first
     shutdown();
 
-    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem [{}.{}]", db_name, table_name);
+    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem");
     dropAllSegments(false);
     storage_pool->drop();
 
     // Drop data in storage path pool
-    path_pool.drop(/*recursive=*/true, /*must_success=*/false);
-    LOG_FMT_INFO(log, "Drop DeltaMerge done [{}.{}]", db_name, table_name);
+    path_pool->drop(/*recursive=*/true, /*must_success=*/false);
+    LOG_FMT_INFO(log, "Drop DeltaMerge done");
 }
 
 void DeltaMergeStore::shutdown()
@@ -479,7 +512,7 @@ void DeltaMergeStore::shutdown()
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start [{}.{}]", db_name, table_name);
+    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start");
     // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
     // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
     storage_pool->shutdown();
@@ -489,7 +522,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end [{}.{}]", db_name, table_name);
+    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end");
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
@@ -500,9 +533,8 @@ DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB:
     // Because db_context could be a temporary object and won't last long enough during the query process.
     // Like the context created by InterpreterSelectWithUnionQuery.
     auto * ctx = new DMContext(db_context.getGlobalContext(),
-                               path_pool,
+                               *path_pool,
                                *storage_pool,
-                               hash_salt,
                                latest_gc_safe_point.load(std::memory_order_acquire),
                                settings.not_compress_columns,
                                is_common_handle,
@@ -571,7 +603,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "table: {}.{}, rows: {}", db_name, table_name, block.rows());
+    LOG_FMT_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -704,223 +736,9 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
         checkSegmentUpdate(dm_context, segment, ThreadType::Write);
 }
 
-std::tuple<String, PageId> DeltaMergeStore::preAllocateIngestFile()
-{
-    if (shutdown_called.load(std::memory_order_relaxed))
-        return {};
-
-    auto delegator = path_pool.getStableDiskDelegator();
-    auto parent_path = delegator.choosePath();
-    auto new_id = storage_pool->newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-    return {parent_path, new_id};
-}
-
-void DeltaMergeStore::preIngestFile(const String & parent_path, const PageId file_id, size_t file_size)
-{
-    if (shutdown_called.load(std::memory_order_relaxed))
-        return;
-
-    auto delegator = path_pool.getStableDiskDelegator();
-    delegator.addDTFile(file_id, file_size, parent_path);
-}
-
-void DeltaMergeStore::ingestFiles(
-    const DMContextPtr & dm_context,
-    const RowKeyRange & range,
-    const PageIds & file_ids,
-    bool clear_data_in_range)
-{
-    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
-    {
-        const auto msg = fmt::format("try to ingest files into a shutdown table: {}.{}", db_name, table_name);
-        LOG_FMT_WARNING(log, "{}", msg);
-        throw Exception(msg);
-    }
-
-    EventRecorder write_block_recorder(ProfileEvents::DMWriteFile, ProfileEvents::DMWriteFileNS);
-
-    auto delegate = dm_context->path_pool.getStableDiskDelegator();
-    auto file_provider = dm_context->db_context.getFileProvider();
-
-    size_t rows = 0;
-    size_t bytes = 0;
-    size_t bytes_on_disk = 0;
-
-    DMFiles files;
-    for (auto file_id : file_ids)
-    {
-        auto file_parent_path = delegate.getDTFilePath(file_id);
-
-        // we always create a ref file to this DMFile with all meta info restored later, so here we just restore meta info to calculate its' memory and disk size
-        auto file = DMFile::restore(file_provider, file_id, file_id, file_parent_path, DMFile::ReadMetaMode::memoryAndDiskSize());
-        rows += file->getRows();
-        bytes += file->getBytes();
-        bytes_on_disk += file->getBytesOnDisk();
-
-        files.emplace_back(std::move(file));
-    }
-
-    LOG_FMT_INFO(
-        log,
-        "table: {}.{}, rows: {}, bytes: {}, bytes on disk: {}, region range: {}, clear_data: {}",
-        db_name,
-        table_name,
-        rows,
-        bytes,
-        bytes_on_disk,
-        range.toDebugString(),
-        clear_data_in_range);
-
-    Segments updated_segments;
-    RowKeyRange cur_range = range;
-
-    // Put the ingest file ids into `storage_pool` and use ref id in each segments to ensure the atomic
-    // of ingesting.
-    // Check https://github.com/pingcap/tics/issues/2040 for more details.
-    // TODO: If tiflash crash during the middle of ingesting, we may leave some DTFiles on disk and
-    // they can not be deleted. We should find a way to cleanup those files.
-    WriteBatches ingest_wbs(*storage_pool, dm_context->getWriteLimiter());
-    if (!files.empty())
-    {
-        for (const auto & file : files)
-        {
-            ingest_wbs.data.putExternal(file->fileId(), 0);
-        }
-        ingest_wbs.writeLogAndData();
-        ingest_wbs.setRollback(); // rollback if exception thrown
-    }
-
-    while (!cur_range.none())
-    {
-        RowKeyRange segment_range;
-
-        // Keep trying until succeeded.
-        while (true)
-        {
-            SegmentPtr segment;
-            {
-                std::shared_lock lock(read_write_mutex);
-
-                auto segment_it = segments.upper_bound(cur_range.getStart());
-                if (segment_it == segments.end())
-                {
-                    throw Exception(
-                        fmt::format("Failed to locate segment begin with start in range: {}", cur_range.toDebugString()),
-                        ErrorCodes::LOGICAL_ERROR);
-                }
-                segment = segment_it->second;
-            }
-
-            FAIL_POINT_PAUSE(FailPoints::pause_when_ingesting_to_dt_store);
-            waitForWrite(dm_context, segment);
-            if (segment->hasAbandoned())
-                continue;
-
-            segment_range = segment->getRowKeyRange();
-
-            // Write could fail, because other threads could already updated the instance. Like split/merge, merge delta.
-            ColumnFiles column_files;
-            WriteBatches wbs(*storage_pool, dm_context->getWriteLimiter());
-
-            for (const auto & file : files)
-            {
-                /// Generate DMFile instance with a new ref_id pointed to the file_id.
-                auto file_id = file->fileId();
-                const auto & file_parent_path = file->parentPath();
-                auto page_id = storage_pool->newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
-
-                auto ref_file = DMFile::restore(file_provider, file_id, page_id, file_parent_path, DMFile::ReadMetaMode::all());
-                auto column_file = std::make_shared<ColumnFileBig>(*dm_context, ref_file, segment_range);
-                if (column_file->getRows() != 0)
-                {
-                    column_files.emplace_back(std::move(column_file));
-                    wbs.data.putRefPage(page_id, file->pageId());
-                }
-            }
-
-            // We have to commit those file_ids to PageStorage, because as soon as packs are written into segments,
-            // they are visible for readers who require file_ids to be found in PageStorage.
-            wbs.writeLogAndData();
-
-            bool ingest_success = segment->ingestColumnFiles(*dm_context, range.shrink(segment_range), column_files, clear_data_in_range);
-            fiu_do_on(FailPoints::force_set_segment_ingest_packs_fail, { ingest_success = false; });
-            if (ingest_success)
-            {
-                updated_segments.push_back(segment);
-                fiu_do_on(FailPoints::segment_merge_after_ingest_packs, {
-                    segment->flushCache(*dm_context);
-                    segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundThreadPool);
-                    storage_pool->gc(global_context.getSettingsRef(), StoragePool::Seconds(0));
-                });
-                break;
-            }
-            else
-            {
-                wbs.rollbackWrittenLogAndData();
-            }
-        }
-
-        cur_range.setStart(segment_range.end);
-        cur_range.setEnd(range.end);
-    }
-
-    // Enable gc for DTFile after all segment applied.
-    // Note that we can not enable gc for them once they have applied to any segments.
-    // Assume that one segment get compacted after file ingested, `gc_handle` gc the
-    // DTFiles before they get applied to all segments. Then we will apply some
-    // deleted DTFiles to other segments.
-    for (const auto & file : files)
-        file->enableGC();
-    // After the ingest DTFiles applied, remove the original page
-    ingest_wbs.rollbackWrittenLogAndData();
-
-    {
-        // Add some logging about the ingested file ids and updated segments
-        // Example: "ingest dmf_1001,1002,1003 into segment [1,3]"
-        //          "ingest <empty> into segment [1,3]"
-        FmtBuffer fmt_buf;
-        if (file_ids.empty())
-        {
-            fmt_buf.append("ingest <empty>");
-        }
-        else
-        {
-            fmt_buf.append("ingest dmf_");
-            fmt_buf.joinStr(
-                file_ids.begin(),
-                file_ids.end(),
-                [](const PageId id, FmtBuffer & fb) { fb.fmtAppend("{}", id); },
-                ",");
-        }
-        fmt_buf.append(" into segment [");
-        fmt_buf.joinStr(
-            updated_segments.begin(),
-            updated_segments.end(),
-            [](const auto & segment, FmtBuffer & fb) { fb.fmtAppend("{}", segment->segmentId()); },
-            ",");
-        fmt_buf.append("]");
-        LOG_FMT_INFO(
-            log,
-            "table: {}.{}, clear_data: {}, {}",
-            db_name,
-            table_name,
-            clear_data_in_range,
-            fmt_buf.toString());
-    }
-
-    GET_METRIC(tiflash_storage_throughput_bytes, type_ingest).Increment(bytes);
-    GET_METRIC(tiflash_storage_throughput_rows, type_ingest).Increment(rows);
-
-    flushCache(dm_context, range);
-
-    // TODO: Update the tracing_id before checkSegmentUpdate?
-    for (auto & segment : updated_segments)
-        checkSegmentUpdate(dm_context, segment, ThreadType::Write);
-}
-
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_FMT_INFO(log, "table: {}.{} delete range {}", db_name, table_name, delete_range.toDebugString());
+    LOG_FMT_INFO(log, "Table delete range, range={}", delete_range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -1028,6 +846,8 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
 
 void DeltaMergeStore::mergeDeltaAll(const Context & context)
 {
+    LOG_FMT_INFO(log, "Begin table mergeDeltaAll");
+
     auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaAll");
 
     std::vector<SegmentPtr> all_segments;
@@ -1044,10 +864,14 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
     {
         segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
     }
+
+    LOG_FMT_INFO(log, "Finish table mergeDeltaAll");
 }
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
 {
+    LOG_FMT_INFO(log, "Table mergeDeltaBySegment, start={}", start_key.toDebugString());
+
     SYNC_FOR("before_DeltaMergeStore::mergeDeltaBySegment");
 
     updateGCSafePoint();
@@ -1185,6 +1009,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         this->checkSegmentUpdate(dm_context_, segment_, ThreadType::Read);
     };
     size_t final_num_stream = std::min(num_streams, tasks.size());
+    String req_info;
+    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
+        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         physical_table_id,
         dm_context,
@@ -1195,11 +1022,9 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         /* is_raw = */ true,
         /* do_delete_mark_filter_for_raw = */ false,
         std::move(tasks),
-        after_segment_read);
+        after_segment_read,
+        req_info);
 
-    String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1247,7 +1072,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                                         const RSOperatorPtr & filter,
                                         const String & tracing_id,
                                         bool keep_order,
-                                        bool is_fast_mode,
+                                        bool is_fast_scan,
                                         size_t expected_block_size,
                                         const SegmentIdSet & read_segments,
                                         size_t extra_table_id_index)
@@ -1258,12 +1083,12 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread && !keep_order;
     // SegmentReadTaskScheduler and SegmentReadTaskPool use table_id + segment id as unique ID when read thread is enabled.
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
-    // Also, too many read tasks of a segment with different samll ranges is not good for data sharing cache.
+    // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
 
     auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
     LOG_FMT_DEBUG(tracing_logger,
-                  "Read create segment snapshot done keep_order {} dt_enable_read_thread {} => enable_read_thread {}",
+                  "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
                   keep_order,
                   db_context.getSettingsRef().dt_enable_read_thread,
                   enable_read_thread);
@@ -1282,10 +1107,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* is_raw = */ is_fast_mode,
-        /* do_delete_mark_filter_for_raw = */ is_fast_mode,
+        /* is_raw = */ is_fast_scan,
+        /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
-        after_segment_read);
+        after_segment_read,
+        tracing_id);
 
     String req_info;
     if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
@@ -1313,8 +1139,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 filter,
                 max_version,
                 expected_block_size,
-                /* is_raw_ */ is_fast_mode,
-                /* do_delete_mark_filter_for_raw_ */ is_fast_mode,
+                /* is_raw_= */ is_fast_scan,
+                /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
                 extra_table_id_index,
                 physical_table_id,
                 req_info);
@@ -1354,6 +1180,7 @@ void DeltaMergeStore::waitForWrite(const DMContextPtr & dm_context, const Segmen
     if (delta_rows < forceMergeDeltaRows(dm_context) && delta_bytes < forceMergeDeltaBytes(dm_context))
         return;
 
+    // FIXME: checkSegmentUpdate will also count write stalls at each call.
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds()); });
 
@@ -1500,9 +1327,20 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     {
         if (should_foreground_flush)
         {
+            Stopwatch watch;
+            SCOPE_EXIT({
+                // We may be flushing in BG threads. Do not count them as write stalls.
+                if (thread_type == ThreadType::Write)
+                {
+                    // FIXME: We'd better count write stall duration for per-write, instead of per-call,
+                    //   in order to produce a meaningful value.
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_flush).Observe(watch.elapsedSeconds());
+                }
+            });
+
             delta_last_try_flush_rows = delta_rows;
             delta_last_try_flush_bytes = delta_bytes;
-            LOG_FMT_DEBUG(log, "Foreground flush cache {}", segment->info());
+            LOG_FMT_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
             segment->flushCache(*dm_context);
         }
         else if (should_background_flush)
@@ -1556,7 +1394,9 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     };
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
-        if (should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes)
+        // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
+        // or the raft-log apply threads may be blocked.
+        if ((should_foreground_merge_delta_by_rows_or_bytes || should_foreground_merge_delta_by_deletes) && replica_exist.load())
         {
             delta_last_try_merge_delta_rows = delta_rows;
 
@@ -1564,10 +1404,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
             Stopwatch watch;
             SCOPE_EXIT({
+                // FIXME: We'd better count write stall duration for per-write, instead of per-call,
+                //   in order to produce a meaningful value.
                 if (should_foreground_merge_delta_by_rows_or_bytes)
-                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_write).Observe(watch.elapsedSeconds());
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delta_merge_by_write).Observe(watch.elapsedSeconds());
                 if (should_foreground_merge_delta_by_deletes)
-                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delete_range).Observe(watch.elapsedSeconds());
+                    GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delta_merge_by_delete_range).Observe(watch.elapsedSeconds());
             });
 
             return segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
@@ -1598,6 +1440,13 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         auto my_should_split = my_segment_size >= dm_context->segment_force_split_bytes;
         if (my_should_split && !my_segment->isSplitForbidden())
         {
+            Stopwatch watch;
+            SCOPE_EXIT({
+                // FIXME: We'd better count write stall duration for per-write, instead of per-call,
+                //   in order to produce a meaningful value.
+                GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_split).Observe(watch.elapsedSeconds());
+            });
+
             return segmentSplit(*dm_context, my_segment, true).first != nullptr;
         }
         return false;
@@ -1657,16 +1506,31 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             return;
     }
 
-    if (try_bg_merge_delta())
-        return;
-    else if (try_bg_split(segment))
-        return;
-    else if (try_bg_merge())
-        return;
-    else if (try_bg_compact())
-        return;
+    if (dm_context->enable_logical_split)
+    {
+        // Logical split point is calculated based on stable. Always try to merge delta into the stable
+        // before logical split is good for calculating the split point.
+        if (try_bg_merge_delta())
+            return;
+        if (try_bg_split(segment))
+            return;
+    }
     else
-        try_place_delta_index();
+    {
+        // During the physical split delta will be merged, so we prefer physical split over merge delta.
+        if (try_bg_split(segment))
+            return;
+        if (try_bg_merge_delta())
+            return;
+    }
+    if (try_bg_merge())
+        return;
+    if (try_bg_compact())
+        return;
+    if (try_place_delta_index())
+        return;
+
+    // The segment does not need any updates for now.
 }
 
 bool DeltaMergeStore::updateGCSafePoint()
@@ -1744,10 +1608,10 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         LOG_FMT_ERROR(
             log,
-            "Task {} on Segment [{}]{} failed. Error msg: {}",
+            "Execute task on segment failed, task={} segment={}{} err={}",
             DeltaMergeStore::toString(task.type),
-            task.segment->segmentId(),
-            ((bool)task.next_segment ? (fmt::format(" and [{}]", task.next_segment->segmentId())) : ""),
+            task.segment->simpleInfo(),
+            ((bool)task.next_segment ? (fmt::format(" next_segment={}", task.next_segment->simpleInfo())) : ""),
             e.message());
         e.rethrow();
     }
@@ -1931,27 +1795,24 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     finish_gc_on_segment = true;
                     LOG_FMT_DEBUG(
                         log,
-                        "GC-merge-delta done on Segment [{}] [range={}] [table={}]",
-                        segment_id,
-                        segment_range.toDebugString(),
+                        "Finish GC-merge-delta, segment={} table={}",
+                        segment->simpleInfo(),
                         table_name);
                 }
                 else
                 {
                     LOG_FMT_DEBUG(
                         log,
-                        "GC aborted on Segment [{}] [range={}] [table={}]",
-                        segment_id,
-                        segment_range.toDebugString(),
+                        "GC aborted, segment={} table={}",
+                        segment->simpleInfo(),
                         table_name);
                 }
             }
             if (!finish_gc_on_segment)
                 LOG_FMT_TRACE(
                     log,
-                    "GC is skipped Segment [{}] [range={}] [table={}]",
-                    segment_id,
-                    segment_range.toDebugString(),
+                    "GC skipped, segment={} table={}",
+                    segment->simpleInfo(),
                     table_name);
         }
         catch (Exception & e)
@@ -1963,423 +1824,9 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
     if (gc_segments_num != 0)
     {
-        LOG_FMT_DEBUG(log, "Finish GC on {} segments [table={}]", gc_segments_num, table_name);
+        LOG_FMT_DEBUG(log, "Finish GC, gc_segments_num={}", gc_segments_num);
     }
     return gc_segments_num;
-}
-
-SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
-{
-    LOG_FMT_DEBUG(
-        log,
-        "{} split segment {}, safe point: {}",
-        (is_foreground ? "Foreground" : "Background"),
-        segment->info(),
-        dm_context.min_version);
-
-    SegmentSnapshotPtr segment_snap;
-    ColumnDefinesPtr schema_snap;
-
-    {
-        std::shared_lock lock(read_write_mutex);
-
-        if (!isSegmentValid(lock, segment))
-        {
-            LOG_FMT_DEBUG(log, "Give up segment [{}] split", segment->segmentId());
-            return {};
-        }
-
-        segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
-        if (!segment_snap || !segment_snap->getRows())
-        {
-            LOG_FMT_DEBUG(log, "Give up segment [{}] split", segment->segmentId());
-            return {};
-        }
-        schema_snap = store_columns;
-    }
-
-    // Not counting the early give up action.
-    auto delta_bytes = static_cast<Int64>(segment_snap->delta->getBytes());
-    auto delta_rows = static_cast<Int64>(segment_snap->delta->getRows());
-
-    size_t duplicated_bytes = 0;
-    size_t duplicated_rows = 0;
-
-    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
-    Stopwatch watch_seg_split;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds()); });
-
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
-
-    auto range = segment->getRowKeyRange();
-    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs);
-
-    if (!split_info_opt.has_value())
-    {
-        // Likely we can not find an appropriate split point for this segment later, forbid the split until this segment get updated through applying delta-merge. Or it will slow down the write a lot.
-        segment->forbidSplit();
-        LOG_FMT_WARNING(log, "Giving up and forbid later split. Segment [{}]. Because of prepare split failed", segment->segmentId());
-        return {};
-    }
-
-    auto & split_info = split_info_opt.value();
-
-    wbs.writeLogAndData();
-    split_info.my_stable->enableDMFilesGC();
-    split_info.other_stable->enableDMFilesGC();
-
-    SegmentPtr new_left, new_right;
-    {
-        std::unique_lock lock(read_write_mutex);
-
-        if (!isSegmentValid(lock, segment))
-        {
-            LOG_FMT_DEBUG(log, "Give up segment [{}] split", segment->segmentId());
-            wbs.setRollback();
-            return {};
-        }
-
-        LOG_FMT_DEBUG(log, "Apply split. Segment [{}]", segment->segmentId());
-
-        auto segment_lock = segment->mustGetUpdateLock();
-
-        std::tie(new_left, new_right) = segment->applySplit(dm_context, segment_snap, wbs, split_info);
-
-        wbs.writeMeta();
-
-        segment->abandon(dm_context);
-        segments.erase(range.getEnd());
-        id_to_segment.erase(segment->segmentId());
-
-        segments[new_left->getRowKeyRange().getEnd()] = new_left;
-        segments[new_right->getRowKeyRange().getEnd()] = new_right;
-
-        id_to_segment.emplace(new_left->segmentId(), new_left);
-        id_to_segment.emplace(new_right->segmentId(), new_right);
-
-        if constexpr (DM_RUN_CHECK)
-        {
-            new_left->check(dm_context, "After split left");
-            new_right->check(dm_context, "After split right");
-        }
-
-        duplicated_bytes = new_left->getDelta()->getBytes();
-        duplicated_rows = new_right->getDelta()->getBytes();
-
-        LOG_FMT_DEBUG(log, "Apply split done. Segment [{}]", segment->segmentId());
-    }
-
-    wbs.writeRemoves();
-
-    if (!split_info.is_logical)
-    {
-        GET_METRIC(tiflash_storage_throughput_bytes, type_split).Increment(delta_bytes);
-        GET_METRIC(tiflash_storage_throughput_rows, type_split).Increment(delta_rows);
-    }
-    else
-    {
-        // For logical split, delta is duplicated into two segments. And will be merged into stable twice later. So we need to decrease it here.
-        // Otherwise the final total delta merge bytes is greater than bytes written into.
-        GET_METRIC(tiflash_storage_throughput_bytes, type_split).Decrement(duplicated_bytes);
-        GET_METRIC(tiflash_storage_throughput_rows, type_split).Decrement(duplicated_rows);
-    }
-
-    if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
-
-    return {new_left, new_right};
-}
-
-void DeltaMergeStore::segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground)
-{
-    LOG_FMT_DEBUG(
-        log,
-        "{} merge Segment [{}] and [{}], safe point: {}",
-        (is_foreground ? "Foreground" : "Background"),
-        left->info(),
-        right->info(),
-        dm_context.min_version);
-
-    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
-    /// And only saved data in this segment will be filtered by the segment range in the merge process,
-    /// unsaved data will be directly copied to the new segment.
-    /// So we flush here to make sure that all potential data left by previous split operation is saved.
-    while (!left->flushCache(dm_context))
-    {
-        // keep flush until success if not abandoned
-        if (left->hasAbandoned())
-        {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
-            return;
-        }
-    }
-    while (!right->flushCache(dm_context))
-    {
-        // keep flush until success if not abandoned
-        if (right->hasAbandoned())
-        {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
-            return;
-        }
-    }
-
-    SegmentSnapshotPtr left_snap;
-    SegmentSnapshotPtr right_snap;
-    ColumnDefinesPtr schema_snap;
-
-    {
-        std::shared_lock lock(read_write_mutex);
-
-        if (!isSegmentValid(lock, left))
-        {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
-            return;
-        }
-        if (!isSegmentValid(lock, right))
-        {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
-            return;
-        }
-
-        left_snap = left->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
-        right_snap = right->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
-
-        if (!left_snap || !right_snap)
-        {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
-            return;
-        }
-        schema_snap = store_columns;
-    }
-
-    // Not counting the early give up action.
-    auto delta_bytes = static_cast<Int64>(left_snap->delta->getBytes()) + right_snap->getBytes();
-    auto delta_rows = static_cast<Int64>(left_snap->delta->getRows()) + right_snap->getRows();
-
-    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
-    GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
-    Stopwatch watch_seg_merge;
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds()); });
-
-    auto left_range = left->getRowKeyRange();
-    auto right_range = right->getRowKeyRange();
-
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
-    auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs);
-    wbs.writeLogAndData();
-    merged_stable->enableDMFilesGC();
-
-    {
-        std::unique_lock lock(read_write_mutex);
-
-        if (!isSegmentValid(lock, left) || !isSegmentValid(lock, right))
-        {
-            LOG_FMT_DEBUG(log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
-            wbs.setRollback();
-            return;
-        }
-
-        LOG_FMT_DEBUG(log, "Apply merge. Left [{}], right [{}]", left->segmentId(), right->segmentId());
-
-        auto left_lock = left->mustGetUpdateLock();
-        auto right_lock = right->mustGetUpdateLock();
-
-        auto merged = Segment::applyMerge(dm_context, left, left_snap, right, right_snap, wbs, merged_stable);
-
-        wbs.writeMeta();
-
-        left->abandon(dm_context);
-        right->abandon(dm_context);
-        segments.erase(left_range.getEnd());
-        segments.erase(right_range.getEnd());
-        id_to_segment.erase(left->segmentId());
-        id_to_segment.erase(right->segmentId());
-
-        segments.emplace(merged->getRowKeyRange().getEnd(), merged);
-        id_to_segment.emplace(merged->segmentId(), merged);
-
-        if constexpr (DM_RUN_CHECK)
-        {
-            merged->check(dm_context, "After segment merge");
-        }
-
-        LOG_FMT_DEBUG(log, "Apply merge done. [{}] and [{}]", left->info(), right->info());
-    }
-
-    wbs.writeRemoves();
-
-    GET_METRIC(tiflash_storage_throughput_bytes, type_merge).Increment(delta_bytes);
-    GET_METRIC(tiflash_storage_throughput_rows, type_merge).Increment(delta_rows);
-
-    if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
-}
-
-SegmentPtr DeltaMergeStore::segmentMergeDelta(
-    DMContext & dm_context,
-    const SegmentPtr & segment,
-    const TaskRunThread run_thread,
-    SegmentSnapshotPtr segment_snap)
-{
-    LOG_FMT_DEBUG(log, "{} merge delta, segment [{}], safe point: {}", toString(run_thread), segment->segmentId(), dm_context.min_version);
-
-    ColumnDefinesPtr schema_snap;
-
-    {
-        std::shared_lock lock(read_write_mutex);
-
-        if (!isSegmentValid(lock, segment))
-        {
-            LOG_FMT_DEBUG(log, "Give up merge delta, segment [{}]", segment->segmentId());
-            return {};
-        }
-
-        // Try to generate a new snapshot if there is no pre-allocated one
-        if (!segment_snap)
-            segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-
-        if (unlikely(!segment_snap))
-        {
-            LOG_FMT_DEBUG(log, "Give up merge delta, segment [{}]", segment->segmentId());
-            return {};
-        }
-        schema_snap = store_columns;
-    }
-
-    // Not counting the early give up action.
-    auto delta_bytes = static_cast<Int64>(segment_snap->delta->getBytes());
-    auto delta_rows = static_cast<Int64>(segment_snap->delta->getRows());
-
-    CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_DeltaMerge};
-    CurrentMetrics::Increment cur_dm_total_bytes{CurrentMetrics::DT_DeltaMergeTotalBytes, static_cast<Int64>(segment_snap->getBytes())};
-    CurrentMetrics::Increment cur_dm_total_rows{CurrentMetrics::DT_DeltaMergeTotalRows, static_cast<Int64>(segment_snap->getRows())};
-
-    switch (run_thread)
-    {
-    case TaskRunThread::BackgroundThreadPool:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge).Increment();
-        break;
-    case TaskRunThread::Foreground:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg).Increment();
-        break;
-    case TaskRunThread::ForegroundRPC:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_fg_rpc).Increment();
-        break;
-    case TaskRunThread::BackgroundGCThread:
-        GET_METRIC(tiflash_storage_subtask_count, type_delta_merge_bg_gc).Increment();
-        break;
-    default:
-        break;
-    }
-
-    Stopwatch watch_delta_merge;
-    SCOPE_EXIT({
-        switch (run_thread)
-        {
-        case TaskRunThread::BackgroundThreadPool:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge).Observe(watch_delta_merge.elapsedSeconds());
-            break;
-        case TaskRunThread::Foreground:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg).Observe(watch_delta_merge.elapsedSeconds());
-            break;
-        case TaskRunThread::ForegroundRPC:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_fg_rpc).Observe(watch_delta_merge.elapsedSeconds());
-            break;
-        case TaskRunThread::BackgroundGCThread:
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_delta_merge_bg_gc).Observe(watch_delta_merge.elapsedSeconds());
-            break;
-        default:
-            break;
-        }
-    });
-
-    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
-
-    auto new_stable = segment->prepareMergeDelta(dm_context, schema_snap, segment_snap, wbs);
-    wbs.writeLogAndData();
-    new_stable->enableDMFilesGC();
-
-    SegmentPtr new_segment;
-    {
-        std::unique_lock read_write_lock(read_write_mutex);
-
-        if (!isSegmentValid(read_write_lock, segment))
-        {
-            LOG_FMT_DEBUG(log, "Give up merge delta, segment [{}]", segment->segmentId());
-            wbs.setRollback();
-            return {};
-        }
-
-        LOG_FMT_DEBUG(log, "Apply merge delta. Segment [{}]", segment->info());
-
-        auto segment_lock = segment->mustGetUpdateLock();
-
-        new_segment = segment->applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
-
-        wbs.writeMeta();
-
-
-        // The instance of PKRange::End is closely linked to instance of PKRange. So we cannot reuse it.
-        // Replace must be done by erase + insert.
-        segments.erase(segment->getRowKeyRange().getEnd());
-        id_to_segment.erase(segment->segmentId());
-
-        segments[new_segment->getRowKeyRange().getEnd()] = new_segment;
-        id_to_segment[new_segment->segmentId()] = new_segment;
-
-        segment->abandon(dm_context);
-
-        if constexpr (DM_RUN_CHECK)
-        {
-            new_segment->check(dm_context, "After merge delta");
-        }
-
-        LOG_FMT_DEBUG(log, "Apply merge delta done. Segment [{}]", segment->segmentId());
-    }
-
-    wbs.writeRemoves();
-
-    GET_METRIC(tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
-    GET_METRIC(tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
-
-    if constexpr (DM_RUN_CHECK)
-        check(dm_context.db_context);
-
-    return new_segment;
-}
-
-bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
-{
-    if (segment->hasAbandoned())
-    {
-        LOG_FMT_DEBUG(log, "Segment [{}] instance has abandoned", segment->segmentId());
-        return false;
-    }
-    // Segment instance could have been removed or replaced.
-    auto it = segments.find(segment->getRowKeyRange().getEnd());
-    if (it == segments.end())
-    {
-        LOG_FMT_DEBUG(log, "Segment [{}] not found in segment map", segment->segmentId());
-
-        auto it2 = id_to_segment.find(segment->segmentId());
-        if (it2 != id_to_segment.end())
-        {
-            LOG_FMT_DEBUG(
-                log,
-                "Found segment with same id in id_to_segment: {}, while my segment: {}",
-                it2->second->info(),
-                segment->info());
-        }
-        return false;
-    }
-    auto & cur_segment = it->second;
-    if (cur_segment.get() != segment.get())
-    {
-        LOG_FMT_DEBUG(log, "Segment [{}] instance has been replaced in segment map", segment->segmentId());
-        return false;
-    }
-    return true;
 }
 
 void DeltaMergeStore::check(const Context & /*db_context*/)
@@ -2463,6 +1910,10 @@ void DeltaMergeStore::applyAlters(
             // primary key flag
             original_table_handle_define.name = pk_names[0];
         }
+        if (table_info.value().get().replica_info.count == 0)
+        {
+            replica_exist.store(false);
+        }
     }
 
     auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);
@@ -2491,7 +1942,7 @@ void DeltaMergeStore::restoreStableFiles()
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
     options.clean_up = true;
     auto file_provider = global_context.getFileProvider();
-    auto path_delegate = path_pool.getStableDiskDelegator();
+    auto path_delegate = path_pool->getStableDiskDelegator();
     for (const auto & root_path : path_delegate.listPaths())
     {
         for (const auto & file_id : DMFile::listAllInPath(file_provider, root_path, options))
@@ -2610,7 +2061,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=data] [database={}] [table={}]", db_name, table_name);
+                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=data");
             }
         }
     }
@@ -2632,7 +2083,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=log] [database={}] [table={}]", db_name, table_name);
+                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=log");
             }
         }
     }
@@ -2654,7 +2105,7 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot.[type=meta] [database={}] [table={}]", db_name, table_name);
+                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=meta");
             }
         }
     }

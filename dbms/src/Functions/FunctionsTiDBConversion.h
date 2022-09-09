@@ -22,6 +22,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnsCommon.h>
 #include <Common/FieldVisitors.h>
+#include <Common/MyDuration.h>
 #include <Common/MyTime.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
@@ -1345,28 +1346,30 @@ public:
                 size_t string_size = next_offset - current_offset - 1;
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
-                try
-                {
-                    Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
-                    UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
-                    MyDateTime datetime(packed_uint);
-                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
-                    {
-                        MyDate date(datetime.year, datetime.month, datetime.day);
-                        vec_to[i] = date.toPackedUInt();
-                    }
-                    else
-                    {
-                        vec_to[i] = packed_uint;
-                    }
-                }
-                catch (const Exception &)
+
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, true);
+
+                if (packed_uint_value.isNull())
                 {
                     // Fill NULL if cannot parse
                     (*vec_null_map_to)[i] = 1;
                     vec_to[i] = 0;
-                    handleInvalidTime(context, string_value);
+                    current_offset = next_offset;
+                    continue;
                 }
+
+                UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                MyDateTime datetime(packed_uint);
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = packed_uint;
+                }
+
                 current_offset = next_offset;
             }
         }
@@ -1427,28 +1430,26 @@ public:
 
             for (size_t i = 0; i < size; ++i)
             {
-                try
+                MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
+                bool is_null = numberToDateTime(vec_from[i], datetime, context.getDAGContext());
+
+                if (is_null)
                 {
-                    MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
-                    bool is_null = numberToDateTime(vec_from[i], datetime, context.getDAGContext());
-                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
-                    {
-                        MyDate date(datetime.year, datetime.month, datetime.day);
-                        vec_to[i] = date.toPackedUInt();
-                    }
-                    else
-                    {
-                        vec_to[i] = datetime.toPackedUInt();
-                    }
-                    (*vec_null_map_to)[i] = is_null;
-                }
-                catch (const TiFlashException & e)
-                {
-                    // Cannot cast, fill with NULL
                     (*vec_null_map_to)[i] = 1;
                     vec_to[i] = 0;
-                    handleInvalidTime(context, vec_from[i]);
+                    continue;
                 }
+
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = datetime.toPackedUInt();
+                }
+                (*vec_null_map_to)[i] = is_null;
             }
         }
         else if constexpr (std::is_floating_point_v<FromFieldType>)
@@ -1474,34 +1475,26 @@ public:
                 }
                 else
                 {
-                    try
-                    {
-                        Field packed_uint_value = parseMyDateTime(value_str, to_fsp);
-                        UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
-                        MyDateTime datetime(packed_uint);
-                        if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
-                        {
-                            MyDate date(datetime.year, datetime.month, datetime.day);
-                            vec_to[i] = date.toPackedUInt();
-                        }
-                        else
-                        {
-                            vec_to[i] = packed_uint;
-                        }
-                    }
-                    catch (const Exception &)
+                    Field packed_uint_value = parseMyDateTime(value_str, to_fsp, true);
+
+                    if (packed_uint_value.isNull())
                     {
                         // Fill NULL if cannot parse
                         (*vec_null_map_to)[i] = 1;
                         vec_to[i] = 0;
-                        handleInvalidTime(context, value_str);
+                        continue;
                     }
-                    catch (const std::exception &)
+
+                    UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                    MyDateTime datetime(packed_uint);
+                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
                     {
-                        // Fill NULL if cannot parse
-                        (*vec_null_map_to)[i] = 1;
-                        vec_to[i] = 0;
-                        handleInvalidTime(context, value_str);
+                        MyDate date(datetime.year, datetime.month, datetime.day);
+                        vec_to[i] = date.toPackedUInt();
+                    }
+                    else
+                    {
+                        vec_to[i] = packed_uint;
                     }
                 }
             }
@@ -1515,25 +1508,24 @@ public:
             for (size_t i = 0; i < size; i++)
             {
                 String value_str = vec_from[i].toString(type.getScale());
-                try
-                {
-                    Field value = parseMyDateTime(value_str, to_fsp);
-                    MyDateTime datetime(value.template safeGet<UInt64>());
-                    if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
-                    {
-                        MyDate date(datetime.year, datetime.month, datetime.day);
-                        vec_to[i] = date.toPackedUInt();
-                    }
-                    else
-                    {
-                        vec_to[i] = datetime.toPackedUInt();
-                    }
-                }
-                catch (const Exception &)
+                Field value = parseMyDateTime(value_str, to_fsp, true);
+
+                if (value.getType() == Field::Types::Null)
                 {
                     (*vec_null_map_to)[i] = 1;
                     vec_to[i] = 0;
-                    handleInvalidTime(context, value_str);
+                    continue;
+                }
+
+                MyDateTime datetime(value.template safeGet<UInt64>());
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = datetime.toPackedUInt();
                 }
             }
         }
@@ -1558,7 +1550,7 @@ private:
     }
 };
 
-/// cast duration as duration
+/// cast time/duration as duration
 /// TODO: support more types convert to duration
 template <typename FromDataType, typename ToDataType, bool return_nullable>
 struct TiDBConvertToDuration
@@ -1610,6 +1602,41 @@ struct TiDBConvertToDuration
                 block.getByPosition(result).column = std::move(to_col);
             }
         }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDate>)
+        {
+            // cast date as duration
+            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            block.getByPosition(result).column = to_type->createColumnConst(size, toField(0)); // The DATE type is used for values with a date part but no time part. The value of Duration is always zero.
+        }
+        else if constexpr (std::is_same_v<FromDataType, DataTypeMyDateTime>)
+        {
+            // cast time as duration
+            const auto * col_from = checkAndGetColumn<ColumnUInt64>(block.getByPosition(arguments[0]).column.get());
+            const ColumnUInt64::Container & from_vec = col_from->getData();
+            const auto & from_type = checkAndGetDataType<DataTypeMyDateTime>(block.getByPosition(arguments[0]).type.get());
+            int from_fsp = from_type->getFraction();
+
+            auto to_col = ColumnVector<Int64>::create();
+            auto & vec_to = to_col->getData();
+            vec_to.resize(size);
+            const auto & to_type = checkAndGetDataType<DataTypeMyDuration>(removeNullable(block.getByPosition(result).type).get());
+            int to_fsp = to_type->getFsp();
+
+            for (size_t i = 0; i < size; ++i)
+            {
+                MyDateTime datetime(from_vec[i]);
+                MyDuration duration(1 /*neg*/, datetime.hour, datetime.minute, datetime.second, datetime.micro_second, from_fsp);
+                if (to_fsp < from_fsp)
+                {
+                    vec_to[i] = round(duration.nanoSecond(), (6 - to_fsp) + 3);
+                }
+                else
+                {
+                    vec_to[i] = duration.nanoSecond();
+                }
+            }
+            block.getByPosition(result).column = std::move(to_col);
+        }
         else
         {
             throw Exception(
@@ -1634,6 +1661,7 @@ struct TiDBConvertToDuration
     }
 };
 
+// Return true if the time is invalid.
 inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx)
 {
     UInt64 ymd = num / 1000000;
@@ -1651,15 +1679,15 @@ inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx
 
     if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return true;
     }
     if (ctx)
     {
-        result.check(ctx->allowZeroInDate(), ctx->allowInvalidDate());
+        return !result.isValid(ctx->allowZeroInDate(), ctx->allowInvalidDate());
     }
     else
     {
-        result.check(false, false);
+        return !result.isValid(false, false);
     }
     return false;
 }
@@ -1685,7 +1713,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     // check MMDD
     if (number < 101)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return true;
     }
 
     // check YYMMDD: 2000-2069
@@ -1697,7 +1725,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
 
     if (number < 70 * 10000 + 101)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return true;
     }
 
     // check YYMMDD
@@ -1717,7 +1745,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     // check MMDDHHMMSS
     if (number < 101000000)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return true;
     }
 
     // check YYMMDDhhmmss: 2000-2069
@@ -1730,7 +1758,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     // check YYYYMMDDhhmmss
     if (number < 70 * 10000000000 + 101000000)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return true;
     }
 
     // check YYMMDDHHMMSS

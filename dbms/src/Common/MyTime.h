@@ -113,8 +113,8 @@ struct MyTimeBase
     std::tuple<int, int> calcWeek(UInt32 mode) const;
 
     // Check validity of time under specified SQL_MODE.
-    // May throw exception.
-    void check(bool allow_zero_in_date, bool allow_invalid_date) const;
+    // return false if time is invalid
+    bool isValid(bool allow_zero_in_date, bool allow_invalid_date) const;
 };
 
 struct MyDateTime : public MyTimeBase
@@ -181,8 +181,12 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
-Field parseMyDateTime(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
+static const int8_t DefaultFsp = 6;
+static const bool DefaultNeedCheckTimeValid = false;
+static const bool DefaultIgnoreZeroDate = true;
+
+Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 

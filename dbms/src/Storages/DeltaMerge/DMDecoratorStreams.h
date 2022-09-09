@@ -65,6 +65,18 @@ public:
             if (block.rows() == 0)
                 continue;
 
+            /// if the pack is do clean read for del column, the del column returned is a const column, with size 1.
+            /// In this case, all the del_mark must be 0. Thus we don't need extra filter.
+            if (block.getByPosition(delete_col_pos).column->isColumnConst())
+            {
+                ++total_blocks;
+                ++complete_passed;
+                total_rows += block.rows();
+                passed_rows += block.rows();
+
+                return getNewBlockByHeader(header, block);
+            }
+
             delete_col_data = getColumnVectorDataPtr<UInt8>(block, delete_col_pos);
 
             size_t rows = block.rows();

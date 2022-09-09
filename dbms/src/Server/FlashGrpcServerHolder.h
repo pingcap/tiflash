@@ -13,6 +13,8 @@
 // limitations under the License.
 #pragma once
 
+#include <Common/BackgroundTask.h>
+#include <Common/ThreadManager.h>
 #include <Common/assert_cast.h>
 #include <Debug/astToExecutor.h>
 #include <Flash/DiagnosticsService.h>
@@ -22,6 +24,9 @@
 
 namespace DB
 {
+using MockStorage = tests::MockStorage;
+using MockMPPServerInfo = tests::MockMPPServerInfo;
+
 class FlashGrpcServerHolder
 {
 public:
@@ -33,6 +38,11 @@ public:
         const LoggerPtr & log_);
     ~FlashGrpcServerHolder();
 
+    void setMockStorage(MockStorage & mock_storage);
+    void setMockMPPServerInfo(MockMPPServerInfo info);
+
+    std::unique_ptr<FlashService> & flashService();
+
 private:
     const LoggerPtr & log;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
@@ -43,6 +53,7 @@ private:
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
     std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
     std::shared_ptr<ThreadManager> thread_manager;
+    CollectProcInfoBackgroundTask background_task;
 };
 
 } // namespace DB

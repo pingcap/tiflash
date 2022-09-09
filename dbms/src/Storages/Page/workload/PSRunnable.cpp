@@ -29,9 +29,9 @@ namespace DB::PS::tests
 void PSRunnable::run()
 try
 {
-    MemoryTracker tracker;
-    tracker.setDescription(nullptr);
-    current_memory_tracker = &tracker;
+    auto tracker = MemoryTracker::create();
+    tracker->setDescription(nullptr);
+    current_memory_tracker = tracker.get();
     // If runImpl() return false, means it need break itself
     while (StressEnvStatus::getInstance().isRunning() && runImpl())
     {

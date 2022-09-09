@@ -50,10 +50,14 @@
 #    define ALWAYS_INLINE __forceinline
 #    define NO_INLINE static __declspec(noinline)
 #    define MAY_ALIAS
+#    define FLATTEN_INLINE_PURE
+#    define FLATTEN_INLINE
 #else
 #    define ALWAYS_INLINE __attribute__((__always_inline__))
 #    define NO_INLINE __attribute__((__noinline__))
 #    define MAY_ALIAS __attribute__((__may_alias__))
+#    define FLATTEN_INLINE_PURE __attribute__((flatten, always_inline, pure))
+#    define FLATTEN_INLINE __attribute__((flatten, always_inline))
 #endif
 
 #if !defined(__x86_64__) && !defined(__aarch64__) && !defined(__PPC__)
