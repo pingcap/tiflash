@@ -161,7 +161,8 @@ private:
     {
         non_test,
         mpp_test,
-        executor_test
+        executor_test,
+        cancel_test
     };
     TestMode test_mode = non_test;
 
@@ -470,9 +471,11 @@ public:
 
     size_t getMaxStreams() const;
 
-    /// For executor tests and MPPTask tests.
+    /// For executor, MPPTask, CancelMPPTasks tests.
     bool isMPPTest() const;
     void setMPPTest();
+    bool isCancelTest() const;
+    void setCancelTest();
     bool isExecutorTest() const;
     void setExecutorTest();
     bool isTest() const;

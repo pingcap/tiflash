@@ -29,9 +29,8 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 
 void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
 
-::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
-
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
+DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
     std::vector<bool> bools{false, true}; \
@@ -95,8 +94,6 @@ public:
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
-
-    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
 protected:
     MockDAGRequestContext context;
