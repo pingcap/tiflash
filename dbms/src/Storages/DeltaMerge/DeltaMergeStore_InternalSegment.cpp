@@ -463,6 +463,6 @@ bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
     return true;
 }
 
-}
+} // namespace DM
 
-}
+} // namespace DB
