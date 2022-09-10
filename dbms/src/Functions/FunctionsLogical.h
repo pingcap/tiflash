@@ -203,7 +203,7 @@ struct AssociativeOperationImpl
         {
             UInt8 a = vec[i];
 
-            // !!a is a hack
+            // !!a is a trick
             // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1 
             // which correspond to false or true. However, for columns with UInt8 type, 
             // no more convertion will be executed on them and the values stored
@@ -211,12 +211,12 @@ struct AssociativeOperationImpl
             // For example:
             //   Input column with non-UInt8 type:
             //      column_values = {-2, 0, 2}
-            //   then, we will get vec
+            //   then, they will be converted to:
             //      vec = {1, 0, 1} (here vec stores converted values)
             //
             //   Input column with UInt8 type:
             //      column_values = {1, 0, 2}
-            //   then, we will get vec
+            //   then, the vec will be:
             //      vec = {1, 0, 2} (error, we only want 0 or 1)
             // See issue: https://github.com/pingcap/tidb/issues/37258
             return Op::isSaturatedValue(a) ? !!a : continuation.apply(i);
