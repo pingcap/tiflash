@@ -40,9 +40,13 @@ bool Transforms::execute(size_t loop_id)
     if (isCancelledOrThrowIfKilled())
         return false;
 
+    if (!sink->isReady())
+        return true;
+
     auto [is_ready, block] = source->read();
     if (!is_ready)
         return true;
+
     for (const auto & transform : transforms)
     {
         if (!transform->transform(block))

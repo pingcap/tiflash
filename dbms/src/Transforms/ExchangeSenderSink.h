@@ -14,20 +14,39 @@
 
 #pragma once
 
-#include <Core/Block.h>
-
-#include <memory>
+#include <Transforms/Sink.h>
+#include <Flash/Coprocessor/AsyncMPPTunnelWriter.h>
 
 namespace DB
 {
-class Sink
+class ExchangeSenderSink : public Sink
 {
 public:
-    virtual ~Sink() = default;
-    virtual bool write(Block & block, size_t loop_id) = 0;
-    virtual void finish() {}
-    virtual bool isReady() { return true; }
-};
+    explicit ExchangeSenderSink(
+        const LimitBreakerPtr & limit_breaker_)
+        : limit_breaker(limit_breaker_)
+    {}
 
-using SinkPtr = std::shared_ptr<Sink>;
+    bool write(Block & block, size_t) override
+    {
+        if (!block)
+            return false;
+
+        async_writer->write(std::move(block));
+        return true;
+    }
+
+    void finish() override
+    {
+        async_writer.finishWrite();
+    }
+
+    bool isReady() override
+    {
+        async_writer.isReady();
+    }
+
+private:
+    AsyncMPPTunnelWriter async_writer;
+};
 } // namespace DB
