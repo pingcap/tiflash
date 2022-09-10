@@ -54,16 +54,14 @@ inline std::shared_ptr<MemoryTracker> getSharedPtrOfMemTracker(MemoryTracker * m
 struct MemTrackerWrapper
 {
     MemTrackerWrapper(size_t _size, MemoryTracker * memory_tracker)
-        : memory_tracker_holder(getSharedPtrOfMemTracker(memory_tracker))
-        , memory_tracker(memory_tracker)
+        : memory_tracker(getSharedPtrOfMemTracker(memory_tracker))
         , size(0)
     {
         alloc(_size);
     }
 
     explicit MemTrackerWrapper(MemoryTracker * memory_tracker)
-        : memory_tracker_holder(getSharedPtrOfMemTracker(memory_tracker))
-        , memory_tracker(memory_tracker)
+        : memory_tracker(getSharedPtrOfMemTracker(memory_tracker))
         , size(0)
     {}
 
@@ -95,8 +93,7 @@ struct MemTrackerWrapper
     {
         int bak_size = size;
         freeAll();
-        memory_tracker_holder = getSharedPtrOfMemTracker(new_memory_tracker);
-        memory_tracker = new_memory_tracker;
+        memory_tracker = getSharedPtrOfMemTracker(new_memory_tracker);
         alloc(bak_size);
     }
     ~MemTrackerWrapper()
@@ -109,8 +106,7 @@ struct MemTrackerWrapper
         free(size);
     }
 
-    std::shared_ptr<MemoryTracker> memory_tracker_holder;
-    MemoryTracker * memory_tracker;
+    std::shared_ptr<MemoryTracker> memory_tracker;
     size_t size = 0;
 };
 
