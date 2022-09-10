@@ -13,9 +13,6 @@
 
 #include <type_traits>
 
-#include <Common/Logger.h>
-#include <common/logger_useful.h>
-
 
 namespace DB
 {
@@ -408,8 +405,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
-        auto log = &Poco::Logger::get("LRUCache");
-        LOG_FMT_INFO(log, "or function is executed.");
         bool has_nullable_input_column = false;
         size_t num_arguments = arguments.size();
 
