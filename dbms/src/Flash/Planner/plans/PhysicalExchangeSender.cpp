@@ -105,7 +105,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
 
 void PhysicalExchangeSender::transform(TransformsPipeline & pipeline, Context & context)
 {
-    RUNTIME_CHECK(!fine_grained_shuffle.enable(), fine_grained_shuffle.enable());
+    RUNTIME_CHECK(!fine_grained_shuffle.enable());
 
     child->transform(pipeline, context);
 

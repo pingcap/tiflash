@@ -36,12 +36,13 @@
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>
+#include <Transforms/ExpressionTransform.h>
+#include <Transforms/FilterTransform.h>
+#include <Transforms/NullSource.h>
+#include <Transforms/TransformsPipeline.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
 
 
 namespace DB
@@ -247,6 +248,14 @@ void DAGStorageInterpreter::execute(DAGPipeline & pipeline)
     executeImpl(pipeline);
 }
 
+void DAGStorageInterpreter::execute(TransformsPipeline & pipeline)
+{
+    assert(max_streams == pipeline.concurrency());
+
+    prepare();
+    executeImpl(pipeline);
+}
+
 void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
@@ -288,11 +297,11 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     /// We don't want the table to be dropped during the lifetime of this query,
     /// and sometimes if there is no local region, we will use the RemoteBlockInputStream
     /// or even the null_stream to hold the lock.
-    pipeline.transform([&](auto & stream) {
+    pipeline.transform([&](auto & transforms) {
         // todo do not need to hold all locks in each stream, if the stream is reading from table a
         //  it only needs to hold the lock of table a
         for (const auto & lock : drop_locks)
-            stream->addTableLock(lock);
+            transforms->addTableLock(lock);
     });
 
     /// Set the limits and quota for reading data, the speed and time of the query.
@@ -310,6 +319,47 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
         executePushedDownFilter(remote_read_streams_start_index, pipeline);
         recordProfileStreams(pipeline, push_down_filter.executor_id);
     }
+}
+
+void DAGStorageInterpreter::executeImpl(TransformsPipeline & pipeline)
+{
+    std::vector<SourcePtr> sources;
+    if (!mvcc_query_info->regions_query_info.empty())
+        sources = buildLocalSources(settings.max_block_size);
+    RUNTIME_CHECK(sources.size() <= pipeline.concurrency());
+
+    // Should build `remote_requests` and `null_source` under protect of `table_structure_lock`.
+    while(sources.size() < pipeline.concurrency())
+        sources.emplace_back(std::make_shared<NullSource>(storage_for_logical_table->getSampleBlockForColumns(required_columns)));
+
+    auto remote_requests = buildRemoteRequests();
+    RUNTIME_CHECK(remote_requests.empty());
+
+    const TableLockHolders drop_locks = releaseAlterLocks();
+
+    {
+        size_t i = 0;
+        pipeline.transform([&](auto & transforms) {
+            transforms->setSource(sources[i++]);
+        });
+    }
+
+    /// We don't want the table to be dropped during the lifetime of this query,
+    /// and sometimes if there is no local region, we will use the RemoteBlockInputStream
+    /// or even the null_stream to hold the lock.
+    pipeline.transform([&](auto & stream) {
+        // todo do not need to hold all locks in each stream, if the stream is reading from table a
+        //  it only needs to hold the lock of table a
+        for (const auto & lock : drop_locks)
+            stream->addTableLock(lock);
+    });
+
+    /// handle timezone/duration cast
+    executeCastAfterTableScan(pipeline);
+
+    /// handle pushed down filter
+    if (push_down_filter.hasValue())
+        executePushedDownFilter(pipeline);
 }
 
 void DAGStorageInterpreter::prepare()
@@ -346,6 +396,34 @@ void DAGStorageInterpreter::prepare()
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 }
 
+
+void DAGStorageInterpreter::executePushedDownFilter(TransformsPipeline & pipeline)
+{
+    ExpressionActionsChain chain;
+    analyzer->initChain(chain, analyzer->getCurrentInputColumns());
+    String filter_column_name = analyzer->appendWhere(chain, push_down_filter.conditions);
+    ExpressionActionsPtr before_where = chain.getLastActions();
+    chain.addStep();
+
+    // remove useless tmp column and keep the schema of local streams and remote streams the same.
+    NamesWithAliases project_cols;
+    for (const auto & col : analyzer->getCurrentInputColumns())
+    {
+        chain.getLastStep().required_output.push_back(col.name);
+        project_cols.emplace_back(col.name, col.name);
+    }
+    chain.getLastActions()->add(ExpressionAction::project(project_cols));
+    ExpressionActionsPtr project_after_where = chain.getLastActions();
+    chain.finalize();
+    chain.clear();
+
+    const Block & input_block = pipeline.getHeader();
+    pipeline.transform([&](auto & transforms) {
+        transforms->append(std::make_shared<FilterTransform>(input_block, before_where, filter_column_name));
+        transforms->append(std::make_shared<ExpressionTransform>(project_after_where));
+    });
+}
+
 void DAGStorageInterpreter::executePushedDownFilter(
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
@@ -379,6 +457,26 @@ void DAGStorageInterpreter::executePushedDownFilter(
         // after filter, do project action to keep the schema of local streams and remote streams the same.
         stream = std::make_shared<ExpressionBlockInputStream>(stream, project_after_where, log->identifier());
         stream->setExtraInfo("projection after push down filter");
+    }
+}
+
+void DAGStorageInterpreter::executeCastAfterTableScan(TransformsPipeline & pipeline)
+{
+    auto original_source_columns = analyzer->getCurrentInputColumns();
+
+    ExpressionActionsChain chain;
+    analyzer->initChain(chain, original_source_columns);
+
+    // execute timezone cast or duration cast if needed for local table scan
+    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, table_scan))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        chain.finalize();
+        chain.clear();
+
+        pipeline.transform([&](auto & transforms) {
+            transforms->append(std::make_shared<ExpressionTransform>(extra_cast));
+        });
     }
 }
 
@@ -629,6 +727,33 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         ret.emplace(table_id, std::move(query_info));
     }
     return ret;
+}
+
+std::vector<SourcePtr> DAGStorageInterpreter::buildLocalSources(size_t max_block_size)
+{
+    size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
+    if (total_local_region_num == 0)
+        return {};
+
+    const auto table_query_infos = generateSelectQueryInfos();
+    RUNTIME_CHECK(table_query_infos.size() == 1);
+    const auto & table_query_info = *table_query_infos.cbegin();
+    const TableID table_id = table_query_info.first;
+    const SelectQueryInfo & query_info = table_query_info.second;
+    size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
+    if (region_num == 0)
+        return {};
+
+    assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
+    auto & storage = storages_with_structure_lock[table_id].storage;
+    auto sources = storage->readSources(required_columns, query_info, context, max_block_size, max_streams);
+
+    // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
+    // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
+    // may contain different data other than expected.
+    validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
+
+    return sources;
 }
 
 void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size)

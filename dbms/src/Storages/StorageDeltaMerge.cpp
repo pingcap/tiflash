@@ -584,6 +584,179 @@ std::unordered_set<UInt64> parseSegmentSet(const ASTPtr & ast)
     throw Exception(fmt::format("Unable to parse segment IDs in literal form: `{}`", partition_ast.fields_str.toString()));
 }
 
+std::vector<SourcePtr> StorageDeltaMerge::readSources(
+    const Names & column_names,
+    const SelectQueryInfo & query_info,
+    const Context & context,
+    size_t max_block_size,
+    unsigned num_streams)
+{
+    auto & store = getAndMaybeInitStore();
+    // Note that `columns_to_read` should keep the same sequence as ColumnRef
+    // in `Coprocessor.TableScan.columns`, or rough set filter could be
+    // failed to parsed.
+    ColumnDefines columns_to_read;
+    auto header = store->getHeader();
+    size_t extra_table_id_index = InvalidColumnID;
+    for (size_t i = 0; i < column_names.size(); i++)
+    {
+        ColumnDefine col_define;
+        if (column_names[i] == EXTRA_HANDLE_COLUMN_NAME)
+            col_define = store->getHandle();
+        else if (column_names[i] == VERSION_COLUMN_NAME)
+            col_define = getVersionColumnDefine();
+        else if (column_names[i] == TAG_COLUMN_NAME)
+            col_define = getTagColumnDefine();
+        else if (column_names[i] == EXTRA_TABLE_ID_COLUMN_NAME)
+        {
+            extra_table_id_index = i;
+            continue;
+        }
+        else
+        {
+            auto & column = header->getByName(column_names[i]);
+            col_define.name = column.name;
+            col_define.id = column.column_id;
+            col_define.type = column.type;
+            col_define.default_value = column.default_value;
+        }
+        columns_to_read.push_back(col_define);
+    }
+
+    const ASTSelectQuery & select_query = typeid_cast<const ASTSelectQuery &>(*query_info.query);
+    RUNTIME_CHECK(!select_query.raw_for_mutable, select_query.raw_for_mutable);
+
+    // Read with MVCC filtering
+    TMTContext & tmt = context.getTMTContext();
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    RUNTIME_CHECK(tmt.isInitialized());
+
+    const auto & mvcc_query_info = *query_info.mvcc_query_info;
+    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
+
+    LOG_FMT_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
+
+    // Check whether tso is smaller than TiDB GcSafePoint
+    const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
+        auto pd_client = tmt.getPDClient();
+        if (likely(!pd_client->isMock()))
+        {
+            auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+                pd_client,
+                /* ignore_cache= */ false,
+                global_context.getSettingsRef().safe_point_update_interval_seconds);
+            if (read_tso < safe_point)
+            {
+                throw Exception(
+                    fmt::format("query id: {}, read tso: {} is smaller than tidb gc safe point: {}",
+                                context.getCurrentQueryId(),
+                                read_tso,
+                                safe_point),
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    };
+    check_read_tso(mvcc_query_info.read_tso);
+
+    FmtBuffer fmt_buf;
+    if (unlikely(tracing_logger->trace()))
+    {
+        fmt_buf.append("orig, ");
+        fmt_buf.joinStr(
+            mvcc_query_info.regions_query_info.begin(),
+            mvcc_query_info.regions_query_info.end(),
+            [](const auto & region, FmtBuffer & fb) {
+                if (!region.required_handle_ranges.empty())
+                {
+                    fb.joinStr(
+                        region.required_handle_ranges.begin(),
+                        region.required_handle_ranges.end(),
+                        [region_id = region.region_id](const auto & range, FmtBuffer & fb) {
+                            fb.fmtAppend("{}{}", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                        },
+                        ",");
+                }
+                else
+                {
+                    /// only used for test cases
+                    const auto & range = region.range_in_table;
+                    fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                }
+            },
+            ",");
+    }
+
+    auto ranges = getQueryRanges(
+        mvcc_query_info.regions_query_info,
+        tidb_table_info.id,
+        is_common_handle,
+        rowkey_column_size,
+        /*expected_ranges_count*/ num_streams,
+        tracing_logger);
+
+    if (unlikely(tracing_logger->trace()))
+    {
+        fmt_buf.append(" merged, ");
+        fmt_buf.joinStr(
+            ranges.begin(),
+            ranges.end(),
+            [](const auto & range, FmtBuffer & fb) {
+                fb.append(range.toDebugString());
+            },
+            ",");
+        LOG_FMT_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
+    }
+
+    /// Get Rough set filter from query
+    DM::RSOperatorPtr rs_operator = DM::EMPTY_FILTER;
+    const bool enable_rs_filter = context.getSettingsRef().dt_enable_rough_set_filter;
+    if (enable_rs_filter)
+    {
+        if (likely(query_info.dag_query))
+        {
+            /// Query from TiDB / TiSpark
+            auto create_attr_by_column_id = [this](ColumnID column_id) -> Attr {
+                const ColumnDefines & defines = this->getAndMaybeInitStore()->getTableColumns();
+                auto iter = std::find_if(
+                    defines.begin(),
+                    defines.end(),
+                    [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
+                if (iter != defines.end())
+                    return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
+                // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
+                return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
+            };
+            rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
+        }
+        if (likely(rs_operator != DM::EMPTY_FILTER))
+            LOG_FMT_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
+    }
+    else
+        LOG_FMT_DEBUG(tracing_logger, "Rough set filter is disabled.");
+
+    auto sources = store->readSources(
+        context,
+        context.getSettingsRef(),
+        columns_to_read,
+        ranges,
+        num_streams,
+        /*max_version=*/mvcc_query_info.read_tso,
+        rs_operator,
+        query_info.req_id,
+        query_info.keep_order,
+        /* is_fast_scan */ query_info.is_fast_scan,
+        max_block_size,
+        parseSegmentSet(select_query.segment_expression_list),
+        extra_table_id_index);
+
+    /// Ensure read_tso info after read.
+    check_read_tso(mvcc_query_info.read_tso);
+
+    LOG_FMT_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), sources.size());
+
+    return sources;
+}
+
 BlockInputStreams StorageDeltaMerge::read(
     const Names & column_names,
     const SelectQueryInfo & query_info,

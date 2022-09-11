@@ -27,6 +27,7 @@
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Transforms/Source.h>
 
 #include <queue>
 
@@ -365,6 +366,20 @@ public:
     ///     when is_fast_scan == true, we will read rows without MVCC and sorted merge.
     /// `sorted_ranges` should be already sorted and merged.
     BlockInputStreams read(const Context & db_context,
+                           const DB::Settings & db_settings,
+                           const ColumnDefines & columns_to_read,
+                           const RowKeyRanges & sorted_ranges,
+                           size_t num_streams,
+                           UInt64 max_version,
+                           const RSOperatorPtr & filter,
+                           const String & tracing_id,
+                           bool keep_order,
+                           bool is_fast_scan = false,
+                           size_t expected_block_size = DEFAULT_BLOCK_SIZE,
+                           const SegmentIdSet & read_segments = {},
+                           size_t extra_table_id_index = InvalidColumnID);
+
+    std::vector<SourcePtr> readSources(const Context & db_context,
                            const DB::Settings & db_settings,
                            const ColumnDefines & columns_to_read,
                            const RowKeyRanges & sorted_ranges,

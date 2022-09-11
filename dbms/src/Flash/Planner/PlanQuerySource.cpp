@@ -49,13 +49,17 @@ bool PlanQuerySource::isSupportPipeline() const
         [&](const tipb::Executor & executor) {
             switch (executor.tp())
             {
+            case tipb::ExecType::TypeTableScan:
+            {
+                is_support_pipeline &= (!executor.tbl_scan().keep_order());
+                return is_support_pipeline;
+            }
             case tipb::ExecType::TypeSelection:
             case tipb::ExecType::TypeAggregation:
             case tipb::ExecType::TypeStreamAgg:
             case tipb::ExecType::TypeExchangeSender:
             case tipb::ExecType::TypeExchangeReceiver:
             case tipb::ExecType::TypeProjection:
-            case tipb::ExecType::TypeTableScan:
             case tipb::ExecType::TypeJoin:
             case tipb::ExecType::TypeTopN:
             case tipb::ExecType::TypeLimit:

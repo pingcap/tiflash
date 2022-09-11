@@ -22,6 +22,8 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Interpreters/Context.h>
+#include <Transforms/ExpressionTransform.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -79,6 +81,38 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
     ExpressionActionsPtr schema_project = generateProjectExpressionActions(pipeline.firstStream(), context, schema_project_cols);
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
+}
+
+void PhysicalTableScan::transform(TransformsPipeline & pipeline, Context & context)
+{
+    RUNTIME_CHECK(!tidb_table_scan.keepOrder());
+    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, pipeline.concurrency());
+    storage_interpreter.execute(pipeline);
+
+    const auto & storage_schema = storage_interpreter.analyzer->getCurrentInputColumns();
+    RUNTIME_CHECK(
+        storage_schema.size() == schema.size(),
+        storage_schema.size(),
+        schema.size());
+    NamesWithAliases schema_project_cols;
+    for (size_t i = 0; i < schema.size(); ++i)
+    {
+        RUNTIME_CHECK(
+            schema[i].type->equals(*storage_schema[i].type),
+            schema[i].name,
+            schema[i].type->getName(),
+            storage_schema[i].name,
+            storage_schema[i].type->getName());
+        assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
+        schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
+    }
+    /// In order to keep BlockInputStream's schema consistent with PhysicalPlan's schema.
+    /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.
+    ExpressionActionsPtr schema_actions = PhysicalPlanHelper::newActions(pipeline.getHeader(), context);
+    schema_actions->add(ExpressionAction::project(schema_project_cols));
+    pipeline.transform([&](auto & transforms) {
+        transforms->append(std::make_shared<ExpressionTransform>(schema_actions));
+    });
 }
 
 void PhysicalTableScan::finalize(const Names & parent_require)

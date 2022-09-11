@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Storages/TableLockHolder.h>
 #include <Transforms/Sink.h>
 #include <Transforms/Source.h>
 
@@ -56,7 +57,11 @@ public:
 
     Block getHeader();
 
+    void addTableLock(const TableLockHolder & lock);
+
 private:
+    TableLockHolders table_locks;
+
     SourcePtr source;
     std::vector<TransformPtr> transforms;
     SinkPtr sink;

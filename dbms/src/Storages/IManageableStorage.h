@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Transforms/Source.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
@@ -168,6 +169,18 @@ public:
     virtual void releaseDecodingBlock(Int64 /* block_decoding_schema_version */, BlockUPtr /* block */)
     {
         throw Exception("Method getDecodingSchemaSnapshot is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual std::vector<SourcePtr> readSources(
+        const Names &,
+        const SelectQueryInfo &,
+        const Context &,
+        size_t,
+        unsigned)
+    {
+        throw Exception(
+            "Method readSources is not supported by storage " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
 
 private:

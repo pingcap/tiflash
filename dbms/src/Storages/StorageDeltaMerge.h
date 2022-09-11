@@ -66,6 +66,13 @@ public:
         size_t max_block_size,
         unsigned num_streams) override;
 
+    std::vector<SourcePtr> readSources(
+        const Names & column_names,
+        const SelectQueryInfo & query_info,
+        const Context & context,
+        size_t max_block_size,
+        unsigned num_streams) override;
+
     BlockOutputStreamPtr write(const ASTPtr & query, const Settings & settings) override;
 
     /// Write from raft layer.

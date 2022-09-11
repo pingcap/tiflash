@@ -37,6 +37,11 @@ using TablesRegionInfoMap = std::unordered_map<Int64, std::reference_wrapper<con
 /// DAGStorageInterpreter encapsulates operations around storage during interprete stage.
 /// It's only intended to be used by DAGQueryBlockInterpreter.
 /// After DAGStorageInterpreter::execute some of its members will be transferred to DAGQueryBlockInterpreter.
+
+struct TransformsPipeline;
+class Source;
+using SourcePtr = std::shared_ptr<Source>;
+
 class DAGStorageInterpreter
 {
 public:
@@ -49,6 +54,7 @@ public:
     DISALLOW_MOVE(DAGStorageInterpreter);
 
     void execute(DAGPipeline & pipeline);
+    void execute(TransformsPipeline & pipeline);
 
     /// Members will be transferred to DAGQueryBlockInterpreter after execute
 
@@ -65,6 +71,7 @@ private:
     LearnerReadSnapshot doBatchCopLearnerRead();
 
     void buildLocalStreams(DAGPipeline & pipeline, size_t max_block_size);
+    std::vector<SourcePtr> buildLocalSources(size_t max_block_size);
 
     std::unordered_map<TableID, StorageWithStructureLock> getAndLockStorages(Int64 query_schema_version);
 
@@ -85,14 +92,17 @@ private:
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
+    void executeCastAfterTableScan(TransformsPipeline & pipeline);
 
     void executePushedDownFilter(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
+    void executePushedDownFilter(TransformsPipeline & pipeline);
 
     void prepare();
 
     void executeImpl(DAGPipeline & pipeline);
+    void executeImpl(TransformsPipeline & pipeline);
 
 private:
     std::vector<ExtraCastAfterTSMode> is_need_add_cast_column;
