@@ -53,6 +53,24 @@ inline std::shared_ptr<MemoryTracker> getSharedPtrOfMemTracker(MemoryTracker * m
 
 struct MemTrackerWrapper
 {
+    MemTrackerWrapper(MemTrackerWrapper && other)
+        : memory_tracker(std::move(other.memory_tracker))
+        , size(other.size)
+    {
+        other.size = 0;
+    }
+
+    MemTrackerWrapper & operator=(MemTrackerWrapper && other)
+    {
+        if (this != &other)
+        {
+            memory_tracker = std::move(other.memory_tracker);
+            size = other.size;
+            other.size = 0;
+        }
+        return *this;
+    }
+
     MemTrackerWrapper(size_t _size, MemoryTracker * memory_tracker)
         : memory_tracker(getSharedPtrOfMemTracker(memory_tracker))
         , size(0)
@@ -112,6 +130,26 @@ struct MemTrackerWrapper
 
 struct TrackedMppDataPacket
 {
+    TrackedMppDataPacket(TrackedMppDataPacket && other)
+        : mem_tracker_wrapper(std::move(other.mem_tracker_wrapper))
+        , packet(std::move(other.packet))
+        , need_recompute(other.need_recompute)
+    {
+        other.need_recompute = false;
+    }
+
+    TrackedMppDataPacket & operator=(TrackedMppDataPacket && other)
+    {
+        if (this != &other)
+        {
+            mem_tracker_wrapper = std::move(other.mem_tracker_wrapper);
+            packet = std::move(other.packet);
+            need_recompute = other.need_recompute;
+            other.need_recompute = false;
+        }
+        return *this;
+    }
+
     explicit TrackedMppDataPacket(const mpp::MPPDataPacket & data, MemoryTracker * memory_tracker)
         : mem_tracker_wrapper(estimateAllocatedSize(data), memory_tracker)
     {
@@ -195,6 +233,21 @@ struct TrackedMppDataPacket
 
 struct TrackedSelectResp
 {
+    TrackedSelectResp(TrackedSelectResp && other)
+        : memory_tracker(std::move(other.memory_tracker))
+        , response(other.response)
+    {}
+
+    TrackedSelectResp & operator=(TrackedSelectResp && other)
+    {
+        if (this != &other)
+        {
+            memory_tracker = std::move(other.memory_tracker);
+            response = std::move(other.response);
+        }
+        return *this;
+    }
+
     explicit TrackedSelectResp()
         : memory_tracker(current_memory_tracker)
     {}

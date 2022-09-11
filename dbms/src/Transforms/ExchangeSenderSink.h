@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Transforms/Sink.h>
-#include <Flash/Coprocessor/AsyncMPPTunnelWriter.h>
+#include <Flash/Mpp/AsyncMPPTunnelWriter.h>
 
 namespace DB
 {
@@ -23,8 +23,21 @@ class ExchangeSenderSink : public Sink
 {
 public:
     explicit ExchangeSenderSink(
-        const LimitBreakerPtr & limit_breaker_)
-        : limit_breaker(limit_breaker_)
+        const MPPTunnelSetPtr writer_,
+        const std::vector<Int64> & partition_col_ids_,
+        const TiDB::TiDBCollators & collators_,
+        const tipb::ExchangeType & exchange_type_,
+        Int64 records_per_chunk_,
+        Int64 batch_send_min_limit_,
+        DAGContext & dag_context_)
+        : async_writer(
+            writer_, 
+            partition_col_ids_, 
+            collators_, 
+            exchange_type_, 
+            records_per_chunk_, 
+            batch_send_min_limit_, 
+            dag_context_)
     {}
 
     bool write(Block & block, size_t) override
@@ -32,18 +45,18 @@ public:
         if (!block)
             return false;
 
-        async_writer->write(std::move(block));
+        async_writer.write(std::move(block));
         return true;
     }
 
-    void finish() override
+    bool finish() override
     {
-        async_writer.finishWrite();
+        return async_writer.finishWrite();
     }
 
     bool isReady() override
     {
-        async_writer.isReady();
+        return async_writer.isReady();
     }
 
 private:

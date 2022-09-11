@@ -56,9 +56,9 @@ bool Transforms::execute(size_t loop_id)
 }
 
 void Transforms::prepare() {}
-void Transforms::finish()
+bool Transforms::finish()
 {
-    sink->finish();
+    return sink->finish();
 }
 
 void Transforms::cancel(bool kill)

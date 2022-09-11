@@ -73,9 +73,14 @@ public:
     {
     }
 
+    virtual MPMCQueueResult nativePush(TrackedMppDataPacketPtr && data)
+    {
+        return send_queue.push(std::move(data));
+    }
+
     virtual bool push(TrackedMppDataPacketPtr && data)
     {
-        return send_queue.push(data) == MPMCQueueResult::OK;
+        return nativePush(std::move(data)) == MPMCQueueResult::OK;
     }
 
     virtual bool finish()
@@ -292,6 +297,8 @@ public:
     SyncTunnelSenderPtr getSyncTunnelSender() { return sync_tunnel_sender; }
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
     LocalTunnelSenderPtr getLocalTunnelSender() { return local_tunnel_sender; }
+
+    bool asyncWrite(const mpp::MPPDataPacket & data);
 
 private:
     friend class tests::TestMPPTunnel;

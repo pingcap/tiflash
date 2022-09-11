@@ -152,6 +152,35 @@ void MPPTunnel::close(const String & reason)
     waitForSenderFinish(/*allow_throw=*/false);
 }
 
+bool MPPTunnel::asyncWrite(const mpp::MPPDataPacket & data)
+{
+    LOG_FMT_TRACE(log, "ready to write");
+    {
+        std::unique_lock lk(mu);
+        waitUntilConnectedOrFinished(lk);
+        if (status == TunnelStatus::Finished)
+            throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
+    }
+    auto res = tunnel_sender->nativePush(std::make_shared<DB::TrackedMppDataPacket>(data, getMemTracker()));
+    switch (res)
+    {
+    case MPMCQueueResult::OK:
+    {
+        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.packets += 1;
+        return true;
+    }
+    case MPMCQueueResult::FULL:
+        return false;
+    default:
+    {
+        // push failed, wait consumer for the final state
+        waitForSenderFinish(/*allow_throw=*/true);
+        return true;
+    }
+    }
+}
+
 // TODO: consider to hold a buffer
 void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
 {

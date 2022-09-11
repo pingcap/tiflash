@@ -48,7 +48,7 @@ public:
     bool execute(size_t loop_id);
 
     void prepare();
-    void finish();
+    bool finish();
 
     void cancel(bool kill);
 

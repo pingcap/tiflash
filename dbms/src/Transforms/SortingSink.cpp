@@ -26,8 +26,9 @@ bool SortingSink::write(Block & block, size_t)
     return true;
 }
 
-void SortingSink::finish()
+bool SortingSink::finish()
 {
     sort_breaker->add(std::move(local_blocks));
+    return true;
 }
 } // namespace DB

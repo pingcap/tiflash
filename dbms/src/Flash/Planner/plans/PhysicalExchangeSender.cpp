@@ -21,6 +21,8 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Planner/plans/PhysicalExchangeSender.h>
 #include <Interpreters/Context.h>
+#include <Transforms/ExchangeSenderSink.h>
+#include <Transforms/TransformsPipeline.h>
 
 namespace DB
 {
@@ -99,6 +101,27 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
         });
     }
+}
+
+void PhysicalExchangeSender::transform(TransformsPipeline & pipeline, Context & context)
+{
+    RUNTIME_CHECK(!fine_grained_shuffle.enable(), fine_grained_shuffle.enable());
+
+    child->transform(pipeline, context);
+
+    auto & dag_context = *context.getDAGContext();
+    RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
+
+    pipeline.transform([&](auto & transforms) {
+        transforms->setSink(std::make_shared<ExchangeSenderSink>(
+            dag_context.tunnel_set,
+            partition_col_ids,
+            partition_col_collators,
+            exchange_type,
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
+            dag_context));
+    });
 }
 
 void PhysicalExchangeSender::finalize(const Names & parent_require)

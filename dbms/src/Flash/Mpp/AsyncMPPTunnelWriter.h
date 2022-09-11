@@ -28,24 +28,25 @@ class AsyncMPPTunnelWriter
 {
 public:
     AsyncMPPTunnelWriter(
-        MPPTunnelSetPtr writer_,
-        std::vector<Int64> partition_col_ids_,
-        TiDB::TiDBCollators collators_,
-        tipb::ExchangeType exchange_type_,
+        const MPPTunnelSetPtr & writer_,
+        const std::vector<Int64> & partition_col_ids_,
+        const TiDB::TiDBCollators & collators_,
+        const tipb::ExchangeType & exchange_type_,
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         DAGContext & dag_context_);
     void write(Block && block);
-    void finishWrite();
+    bool finishWrite();
     bool isReady();
 
 private:
     void batchWrite();
 
-    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks) const;
-    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks) const;
+    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks);
+    void partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks);
 
-    void writePackets(const std::vector<size_t> & responses_row_count, std::vector<TrackedMppDataPacket> & packets) const;
+    void writePacket(TrackedMppDataPacket & packet);
+    void writePackets(std::vector<size_t> & responses_row_count, std::vector<TrackedMppDataPacket> & packets);
 
     Int64 records_per_chunk;
     DAGContext & dag_context;
@@ -58,6 +59,12 @@ private:
     size_t rows_in_blocks;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
+
+    // hash
+    std::vector<std::pair<uint16_t, TrackedMppDataPacket>> not_ready_packets;
+    // broadcast/passthrough
+    std::optional<TrackedMppDataPacket> not_ready_packet;
+    std::vector<uint16_t> not_ready_partitions;
 };
 
 } // namespace DB

@@ -17,7 +17,7 @@
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Flash/Coprocessor/AsyncMPPTunnelWriter.h>
+#include <Flash/Mpp/AsyncMPPTunnelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Coprocessor/DAGContext.h>
 
@@ -89,10 +89,10 @@ void computeHash(const Block & input_block,
 }
 
 AsyncMPPTunnelWriter::AsyncMPPTunnelWriter(
-    MPPTunnelSetPtr writer_,
-    std::vector<Int64> partition_col_ids_,
-    TiDB::TiDBCollators collators_,
-    tipb::ExchangeType exchange_type_,
+    const MPPTunnelSetPtr & writer_,
+    const std::vector<Int64> & partition_col_ids_,
+    const TiDB::TiDBCollators & collators_,
+    const tipb::ExchangeType & exchange_type_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
     DAGContext & dag_context_)
@@ -122,14 +122,10 @@ AsyncMPPTunnelWriter::AsyncMPPTunnelWriter(
     }
 }
 
-bool AsyncMPPTunnelWriter::isReady()
-{
-    return true;
-}
-
-void AsyncMPPTunnelWriter::finishWrite()
+bool AsyncMPPTunnelWriter::finishWrite()
 {
     batchWrite();
+    return isReady();
 }
 
 void AsyncMPPTunnelWriter::write(Block && block)
@@ -146,7 +142,65 @@ void AsyncMPPTunnelWriter::write(Block && block)
     }
 }
 
-void AsyncMPPTunnelWriter::encodeThenWriteBlocks(const std::vector<Block> & input_blocks) const
+void AsyncMPPTunnelWriter::batchWrite()
+{
+    if (exchange_type == tipb::ExchangeType::Hash)
+    {
+        partitionAndEncodeThenWriteBlocks(blocks);
+    }
+    else
+    {
+        encodeThenWriteBlocks(blocks);
+    }
+    blocks.clear();
+    rows_in_blocks = 0;
+}
+
+bool AsyncMPPTunnelWriter::isReady()
+{
+    if (exchange_type == tipb::ExchangeType::Hash)
+    {
+        if (not_ready_packets.empty())
+            return true;
+
+        auto iter = not_ready_packets.begin();
+        while(iter != not_ready_packets.end())
+        {
+            if (writer->asyncWrite(iter->second.getPacket(), iter->first))
+                iter = not_ready_packets.erase(iter);
+            else
+                ++iter;
+        }
+        return not_ready_packets.empty();
+    }
+    else
+    {
+        if (!not_ready_packet.has_value())
+            return true;
+
+        const auto & packet = not_ready_packet.value().getPacket();
+        assert(!not_ready_partitions.empty());
+        auto iter = not_ready_partitions.begin();
+        while(iter != not_ready_partitions.end())
+        {
+            if (writer->asyncWrite(packet, *iter))
+                iter = not_ready_partitions.erase(iter);
+            else
+                ++iter;
+        }
+        if (not_ready_partitions.empty())
+        {
+            not_ready_packet.reset();
+            return true;
+        }
+        else
+        {
+            return false;   
+        }
+    }
+}
+
+void AsyncMPPTunnelWriter::encodeThenWriteBlocks(const std::vector<Block> & input_blocks)
 {
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
@@ -159,7 +213,7 @@ void AsyncMPPTunnelWriter::encodeThenWriteBlocks(const std::vector<Block> & inpu
             tracked_packet.addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(tracked_packet.getPacket());
+        writePacket(tracked_packet);
     }
     else /// passthrough data to a TiDB node
     {
@@ -193,38 +247,26 @@ void AsyncMPPTunnelWriter::encodeThenWriteBlocks(const std::vector<Block> & inpu
             response.addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(response.getResponse());
+
+        TrackedMppDataPacket tracked_packet;
+        tracked_packet.serializeByResponse(response.getResponse());
+        writePacket(tracked_packet);
     }
 }
 
-
-void AsyncMPPTunnelWriter::batchWrite()
+void AsyncMPPTunnelWriter::writePacket(TrackedMppDataPacket & tracked_packet)
 {
-    if (exchange_type == tipb::ExchangeType::Hash)
+    assert(!not_ready_packet.has_value() && not_ready_partitions.empty());
+    for (uint16_t part_id = 0; part_id < writer->getPartitionNum(); ++part_id)
     {
-        partitionAndEncodeThenWriteBlocks(blocks);
+        if (!writer->asyncWrite(tracked_packet.getPacket(), part_id))
+            not_ready_partitions.emplace_back(part_id);
     }
-    else
-    {
-        encodeThenWriteBlocks(blocks);
-    }
-    blocks.clear();
-    rows_in_blocks = 0;
+    if (!not_ready_partitions.empty())
+        not_ready_packet.emplace(std::move(tracked_packet));
 }
 
-
-void AsyncMPPTunnelWriter::writePackets(
-    const std::vector<size_t> & responses_row_count,
-    std::vector<TrackedMppDataPacket> & packets) const
-{
-    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
-    {
-        if (responses_row_count[part_id] > 0)
-            writer->write(packets[part_id].getPacket(), part_id);
-    }
-}
-
-void AsyncMPPTunnelWriter::partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks) const
+void AsyncMPPTunnelWriter::partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks)
 {
     if (input_blocks.empty())
         return;
@@ -242,7 +284,7 @@ void AsyncMPPTunnelWriter::partitionAndEncodeThenWriteBlocks(std::vector<Block> 
 
         computeHash(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
 
-        for (size_t part_id = 0; part_id < partition_num; ++part_id)
+        for (uint16_t part_id = 0; part_id < partition_num; ++part_id)
         {
             dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
             responses_row_count[part_id] += dest_block.rows();
@@ -253,5 +295,20 @@ void AsyncMPPTunnelWriter::partitionAndEncodeThenWriteBlocks(std::vector<Block> 
     }
 
     writePackets(responses_row_count, tracked_packets);
+}
+
+void AsyncMPPTunnelWriter::writePackets(
+    std::vector<size_t> & responses_row_count,
+    std::vector<TrackedMppDataPacket> & packets)
+{
+    assert(not_ready_packets.empty());
+    for (uint16_t part_id = 0; part_id < packets.size(); ++part_id)
+    {
+        if (responses_row_count[part_id] > 0)
+        {
+            if (!writer->asyncWrite(packets[part_id].getPacket(), part_id))
+                not_ready_packets.emplace_back(part_id, std::move(packets[part_id]));
+        }
+    }
 }
 } // namespace DB

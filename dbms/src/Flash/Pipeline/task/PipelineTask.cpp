@@ -37,8 +37,7 @@ PipelineTaskResult PipelineTask::execute(size_t loop_id)
         }
         case PipelineTaskStatus::finish:
         {
-            transforms->finish();
-            return finish();
+            return transforms->finish() ? finish() : running();
         }
         default:
             return fail("unknown status");
