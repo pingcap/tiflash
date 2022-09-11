@@ -166,3 +166,5 @@ endif()
 if (ARCH_AARCH64 AND ARCH_LINUX)
     add_subdirectory(arm-optimized-routines-cmake)
 endif ()
+
+add_subdirectory(magic_enum)
