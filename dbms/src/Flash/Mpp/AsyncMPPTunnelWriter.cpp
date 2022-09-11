@@ -16,10 +16,10 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Mpp/AsyncMPPTunnelWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <Flash/Coprocessor/DAGContext.h>
 
 #include <iostream>
 
@@ -86,7 +86,7 @@ void computeHash(const Block & input_block,
         }
     }
 }
-}
+} // namespace
 
 AsyncMPPTunnelWriter::AsyncMPPTunnelWriter(
     const MPPTunnelSetPtr & writer_,
@@ -164,7 +164,7 @@ bool AsyncMPPTunnelWriter::isReady()
             return true;
 
         auto iter = not_ready_packets.begin();
-        while(iter != not_ready_packets.end())
+        while (iter != not_ready_packets.end())
         {
             if (writer->asyncWrite(iter->second.getPacket(), iter->first))
                 iter = not_ready_packets.erase(iter);
@@ -181,7 +181,7 @@ bool AsyncMPPTunnelWriter::isReady()
         const auto & packet = not_ready_packet.value().getPacket();
         assert(!not_ready_partitions.empty());
         auto iter = not_ready_partitions.begin();
-        while(iter != not_ready_partitions.end())
+        while (iter != not_ready_partitions.end())
         {
             if (writer->asyncWrite(packet, *iter))
                 iter = not_ready_partitions.erase(iter);
@@ -195,7 +195,7 @@ bool AsyncMPPTunnelWriter::isReady()
         }
         else
         {
-            return false;   
+            return false;
         }
     }
 }

@@ -21,7 +21,9 @@ namespace DB
 class NullSource : public Source
 {
 public:
-    explicit NullSource(const Block & header) : header(header) {}
+    explicit NullSource(const Block & header)
+        : header(header)
+    {}
 
     std::pair<bool, Block> read() override
     {

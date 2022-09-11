@@ -40,7 +40,6 @@
 #include <Transforms/FilterTransform.h>
 #include <Transforms/NullSource.h>
 #include <Transforms/TransformsPipeline.h>
-
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
 
@@ -329,7 +328,7 @@ void DAGStorageInterpreter::executeImpl(TransformsPipeline & pipeline)
     RUNTIME_CHECK(sources.size() <= pipeline.concurrency());
 
     // Should build `remote_requests` and `null_source` under protect of `table_structure_lock`.
-    while(sources.size() < pipeline.concurrency())
+    while (sources.size() < pipeline.concurrency())
         sources.emplace_back(std::make_shared<NullSource>(storage_for_logical_table->getSampleBlockForColumns(required_columns)));
 
     auto remote_requests = buildRemoteRequests();

@@ -16,8 +16,8 @@
 
 #include <Core/Block.h>
 
-#include <utility>
 #include <memory>
+#include <utility>
 
 namespace DB
 {

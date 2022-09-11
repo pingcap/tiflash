@@ -33,8 +33,8 @@ void Transforms::append(const TransformPtr & transform)
 }
 
 void Transforms::addTableLock(const TableLockHolder & lock)
-{ 
-    table_locks.push_back(lock); 
+{
+    table_locks.push_back(lock);
 }
 
 bool Transforms::execute(size_t loop_id)

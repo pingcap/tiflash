@@ -15,9 +15,6 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
-#include <Transforms/TiRemoteSource.h>
-#include <Transforms/SquashTransform.h>
-#include <Transforms/TransformsPipeline.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
@@ -27,6 +24,9 @@
 #include <Flash/Planner/plans/PhysicalExchangeReceiver.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TypeMapping.h>
+#include <Transforms/SquashTransform.h>
+#include <Transforms/TiRemoteSource.h>
+#include <Transforms/TransformsPipeline.h>
 #include <fmt/format.h>
 
 namespace DB

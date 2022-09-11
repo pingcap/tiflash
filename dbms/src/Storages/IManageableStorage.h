@@ -15,7 +15,6 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
-#include <Transforms/Source.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
@@ -23,6 +22,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <Storages/Transaction/Types.h>
+#include <Transforms/Source.h>
 
 namespace TiDB
 {

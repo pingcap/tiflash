@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Transforms/Sink.h>
 #include <Flash/Mpp/AsyncMPPTunnelWriter.h>
+#include <Transforms/Sink.h>
 
 namespace DB
 {
@@ -31,12 +31,12 @@ public:
         Int64 batch_send_min_limit_,
         DAGContext & dag_context_)
         : async_writer(
-            writer_, 
-            partition_col_ids_, 
-            collators_, 
-            exchange_type_, 
-            records_per_chunk_, 
-            batch_send_min_limit_, 
+            writer_,
+            partition_col_ids_,
+            collators_,
+            exchange_type_,
+            records_per_chunk_,
+            batch_send_min_limit_,
             dag_context_)
     {}
 

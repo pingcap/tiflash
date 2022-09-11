@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/FmtUtils.h>
-#include <Transforms/Source.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
@@ -23,6 +22,7 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
+#include <Transforms/Source.h>
 #include <common/logger_useful.h>
 
 #include <chrono>
@@ -58,7 +58,9 @@ class TiRemoteSource : public Source
 
     enum class FetchResult
     {
-        finished, fetched, notFetched
+        finished,
+        fetched,
+        notFetched
     };
     FetchResult fetchRemoteResult()
     {
@@ -122,8 +124,7 @@ public:
                 return {true, {}};
             case FetchResult::notFetched:
                 return {false, {}};
-            default:
-                ;
+            default:;
             }
         }
         // todo should merge some blocks to make sure the output block is big enough

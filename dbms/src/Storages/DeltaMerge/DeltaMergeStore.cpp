@@ -39,8 +39,8 @@
 #include <Storages/Page/V2/VersionSet/PageEntriesVersionSetWithDelta.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/logger_useful.h>
 #include <Transforms/UnorderSource.h>
+#include <common/logger_useful.h>
 
 #include <atomic>
 #include <ext/scope_guard.h>
@@ -1158,18 +1158,18 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
 }
 
 std::vector<SourcePtr> DeltaMergeStore::readSources(const Context & db_context,
-                                        const DB::Settings & db_settings,
-                                        const ColumnDefines & columns_to_read,
-                                        const RowKeyRanges & sorted_ranges,
-                                        size_t num_streams,
-                                        UInt64 max_version,
-                                        const RSOperatorPtr & filter,
-                                        const String & tracing_id,
-                                        bool keep_order,
-                                        bool is_fast_scan,
-                                        size_t expected_block_size,
-                                        const SegmentIdSet & read_segments,
-                                        size_t extra_table_id_index)
+                                                    const DB::Settings & db_settings,
+                                                    const ColumnDefines & columns_to_read,
+                                                    const RowKeyRanges & sorted_ranges,
+                                                    size_t num_streams,
+                                                    UInt64 max_version,
+                                                    const RSOperatorPtr & filter,
+                                                    const String & tracing_id,
+                                                    bool keep_order,
+                                                    bool is_fast_scan,
+                                                    size_t expected_block_size,
+                                                    const SegmentIdSet & read_segments,
+                                                    size_t extra_table_id_index)
 {
     // Use the id from MPP/Coprocessor level as tracing_id
     auto dm_context = newDMContext(db_context, db_settings, tracing_id);
@@ -1214,11 +1214,11 @@ std::vector<SourcePtr> DeltaMergeStore::readSources(const Context & db_context,
     for (size_t i = 0; i < final_num_stream; ++i)
     {
         SourcePtr source = std::make_shared<UnorderSource>(
-                read_task_pool,
-                columns_to_read,
-                extra_table_id_index,
-                physical_table_id,
-                req_info);
+            read_task_pool,
+            columns_to_read,
+            extra_table_id_index,
+            physical_table_id,
+            req_info);
         res.push_back(source);
     }
     SegmentReadTaskScheduler::instance().add(read_task_pool);
