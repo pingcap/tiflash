@@ -41,11 +41,18 @@ public:
 
     Block read();
 
-    void initForRead(const Block & header);
+    void initHeader(const Block & header_)
+    {
+        header = header_;
+    }
+
+    void initForRead();
 
     Block getHeader();
 
 private:
+    Block header;
+
     SortDescription description;
     String req_id;
     size_t max_merged_block_size;

@@ -14,11 +14,11 @@
 
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Pipeline/dag/DAGScheduler.h>
-#include <Flash/Planner/plans/PhysicalResultHandler.h>
 #include <Flash/Pipeline/task/TaskScheduler.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/plans/PhysicalJoinProbe.h>
 #include <Flash/Planner/plans/PhysicalPipelineBreaker.h>
+#include <Flash/Planner/plans/PhysicalResultHandler.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 

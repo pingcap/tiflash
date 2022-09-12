@@ -38,6 +38,7 @@ const Block & PhysicalFinalTopN::getSampleBlock() const
 
 void PhysicalFinalTopN::transform(TransformsPipeline & pipeline, Context &, size_t concurrency)
 {
+    sort_breaker->initForRead();
     pipeline.init(concurrency);
     pipeline.transform([&](auto & transforms) {
         transforms->setSource(std::make_shared<SortedSource>(sort_breaker));

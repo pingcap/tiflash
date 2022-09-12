@@ -29,7 +29,7 @@ Block SortBreaker::read()
     return impl->read();
 }
 
-void SortBreaker::initForRead(const Block & header)
+void SortBreaker::initForRead()
 {
     std::lock_guard<std::mutex> lock(mu);
     size_t reverse_size = 0;

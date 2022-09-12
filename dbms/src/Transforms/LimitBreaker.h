@@ -79,7 +79,7 @@ public:
         return block;
     }
 
-    void initForRead(const Block & header_)
+    void initHeader(const Block & header_)
     {
         header = header_;
     }
