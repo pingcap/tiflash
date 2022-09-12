@@ -11,17 +11,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #pragma once
 
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
 #include <IO/ReadBufferFromString.h>
-#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/StorageEngineType.h>
+#include <Storages/Transaction/Types.h>
+#include <TiDB/Schema/ColumnInfo.h>
+#include <TiDB/Schema/IndexInfo.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
+#include <TiDB/Schema/SchemaState.h>
+#include <TiDB/Schema/PartitionInfo.h>
+
 
 namespace TiDB
 {
+using DB::ColumnID;
+using DB::TableID;
+
+
 struct TableInfo
 {
     TableInfo() = default;

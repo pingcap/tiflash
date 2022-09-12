@@ -14,30 +14,31 @@
 
 #pragma once
 
+#include <Core/Types.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <Poco/Dynamic/Var.h>
-#include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
-#include <Poco/JSON/Parser.h>
 #pragma GCC diagnostic pop
 
 namespace TiDB
 {
-struct DBInfo
+
+struct PartitionInfo
 {
-    DatabaseID id = -1;
-    String name;
-    String charset;
-    String collate;
-    SchemaState state;
+    PartitionInfo() = default;
 
-    DBInfo() = default;
-    explicit DBInfo(const String & json) { deserialize(json); }
+    explicit PartitionInfo(Poco::JSON::Object::Ptr json);
 
-    String serialize() const;
+    Poco::JSON::Object::Ptr getJSONObject() const;
 
-    void deserialize(const String & json_str);
+    void deserialize(Poco::JSON::Object::Ptr json);
+
+    PartitionType type = PartitionTypeRange;
+    String expr;
+    // Columns []CIStr       `json:"columns"`
+    bool enable = false;
+    std::vector<PartitionDefinition> definitions;
+    UInt64 num = 0;
 };
 } // namespace TiDB

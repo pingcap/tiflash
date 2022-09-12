@@ -14,30 +14,28 @@
 
 #pragma once
 
+#include <Core/Types.h>
+
+#include <optional>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <Poco/Dynamic/Var.h>
-#include <Poco/JSON/Array.h>
 #include <Poco/JSON/Object.h>
-#include <Poco/JSON/Parser.h>
 #pragma GCC diagnostic pop
 
 namespace TiDB
 {
-struct DBInfo
+
+struct TiFlashReplicaInfo
 {
-    DatabaseID id = -1;
-    String name;
-    String charset;
-    String collate;
-    SchemaState state;
+    UInt64 count = 0;
 
-    DBInfo() = default;
-    explicit DBInfo(const String & json) { deserialize(json); }
+    /// Fields below are useless for tiflash now.
+    // Strings location_labels
+    // bool available
+    // std::vector<Int64> available_partition_ids;
 
-    String serialize() const;
-
-    void deserialize(const String & json_str);
+    Poco::JSON::Object::Ptr getJSONObject() const;
+    void deserialize(Poco::JSON::Object::Ptr & json);
 };
 } // namespace TiDB

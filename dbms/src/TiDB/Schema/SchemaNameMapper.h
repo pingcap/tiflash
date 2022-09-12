@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Storages/Transaction/TiDB.h>
+#include <TiDB/Schema/DBInfo.h>
+#include <TiDB/Schema/TableInfo.h>
 
 namespace DB
 {

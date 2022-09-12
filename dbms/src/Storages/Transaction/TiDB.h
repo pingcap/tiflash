@@ -21,6 +21,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
 #include <TiDB/Schema/DBInfo.h>
+#include <TiDB/Schema/SchemaState.h>
 #include <TiDB/Schema/TableInfo.h>
 
 #include <optional>
@@ -158,77 +159,6 @@ enum CodecFlag
 #undef M
 };
 
-enum SchemaState
-{
-    StateNone = 0,
-    StateDeleteOnly,
-    StateWriteOnly,
-    StateWriteReorganization,
-    StateDeleteReorganization,
-    StatePublic,
-};
-
-struct ColumnInfo
-{
-    ColumnInfo() = default;
-
-    explicit ColumnInfo(Poco::JSON::Object::Ptr json);
-
-    Poco::JSON::Object::Ptr getJSONObject() const;
-
-    void deserialize(Poco::JSON::Object::Ptr json);
-
-    ColumnID id = -1;
-    String name;
-    Poco::Dynamic::Var origin_default_value;
-    Poco::Dynamic::Var default_value;
-    Poco::Dynamic::Var default_bit_value;
-    TP tp = TypeDecimal; // TypeDecimal is not used by TiDB.
-    UInt32 flag = 0;
-    Int32 flen = 0;
-    Int32 decimal = 0;
-    Poco::Dynamic::Var charset;
-    Poco::Dynamic::Var collate;
-    // Elems is the element list for enum and set type.
-    std::vector<std::pair<std::string, Int16>> elems;
-    SchemaState state = StateNone;
-    String comment;
-
-#ifdef M
-#error "Please undefine macro M first."
-#endif
-#define M(f, v)                      \
-    inline bool has##f##Flag() const \
-    {                                \
-        return (flag & (v)) != 0;    \
-    }                                \
-    inline void set##f##Flag()       \
-    {                                \
-        flag |= (v);                 \
-    }                                \
-    inline void clear##f##Flag()     \
-    {                                \
-        flag &= (~(v));              \
-    }
-    COLUMN_FLAGS(M)
-#undef M
-
-    DB::Field defaultValueToField() const;
-    CodecFlag getCodecFlag() const;
-    DB::Field getDecimalValue(const String &) const;
-    Int64 getEnumIndex(const String &) const;
-    UInt64 getSetValue(const String &) const;
-    static Int64 getTimeValue(const String &);
-    static Int64 getYearValue(const String &);
-    static UInt64 getBitValue(const String &);
-
-private:
-    /// please be very careful when you have to use offset,
-    /// because we never update offset when DDL action changes.
-    /// Thus, our offset will not exactly correspond the order of columns.
-    Int32 offset = -1;
-};
-
 enum PartitionType
 {
     PartitionTypeRange = 1,
@@ -303,27 +233,6 @@ private:
     /// because we never update offset when DDL action changes.
     /// Thus, our offset will not exactly correspond the order of columns.
     Int32 offset;
-};
-struct IndexInfo
-{
-    IndexInfo() = default;
-
-    explicit IndexInfo(Poco::JSON::Object::Ptr json);
-
-    Poco::JSON::Object::Ptr getJSONObject() const;
-
-    void deserialize(Poco::JSON::Object::Ptr json);
-
-    Int64 id;
-    String idx_name;
-    String tbl_name;
-    std::vector<IndexColumnInfo> idx_cols;
-    SchemaState state;
-    Int32 index_type;
-    bool is_unique;
-    bool is_primary;
-    bool is_invisible;
-    bool is_global;
 };
 
 enum class TiFlashMode

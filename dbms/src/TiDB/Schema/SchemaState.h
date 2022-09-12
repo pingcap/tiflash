@@ -14,30 +14,15 @@
 
 #pragma once
 
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <Poco/Dynamic/Var.h>
-#include <Poco/JSON/Array.h>
-#include <Poco/JSON/Object.h>
-#include <Poco/JSON/Parser.h>
-#pragma GCC diagnostic pop
-
 namespace TiDB
 {
-struct DBInfo
+enum SchemaState
 {
-    DatabaseID id = -1;
-    String name;
-    String charset;
-    String collate;
-    SchemaState state;
-
-    DBInfo() = default;
-    explicit DBInfo(const String & json) { deserialize(json); }
-
-    String serialize() const;
-
-    void deserialize(const String & json_str);
+    StateNone = 0,
+    StateDeleteOnly,
+    StateWriteOnly,
+    StateWriteReorganization,
+    StateDeleteReorganization,
+    StatePublic,
 };
 } // namespace TiDB
