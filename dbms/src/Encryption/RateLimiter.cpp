@@ -99,6 +99,23 @@ inline CurrentMetrics::Increment pendingRequestMetrics(LimiterType type)
     }
 }
 
+inline std::string getLimiterName(LimiterType type)
+{
+    switch (type)
+    {
+    case LimiterType::FG_READ:
+        return "FG_READ";
+    case LimiterType::BG_READ:
+        return "BG_READ";
+    case LimiterType::FG_WRITE:
+        return "FG_WRITE";
+    case LimiterType::BG_WRITE:
+        return "BG_WRITE";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 WriteLimiter::WriteLimiter(Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_}
     , refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)}
@@ -107,6 +124,7 @@ WriteLimiter::WriteLimiter(Int64 rate_limit_per_sec_, LimiterType type_, UInt64 
     , requests_to_wait{0}
     , type(type_)
     , alloc_bytes{0}
+    , log(Logger::get(getLimiterName(type)))
 {}
 
 WriteLimiter::~WriteLimiter()
@@ -131,7 +149,8 @@ void WriteLimiter::request(Int64 bytes)
         consumeBytes(bytes);
         return;
     }
-
+    Stopwatch sw_pending;
+    Int64 wait_times = 0;
     auto pending_request = pendingRequestMetrics(type);
 
     // request cannot be satisfied at this moment, enqueue
@@ -140,7 +159,7 @@ void WriteLimiter::request(Int64 bytes)
     while (!r.granted)
     {
         assert(!req_queue.empty());
-
+        wait_times++;
         bool timed_out = false;
         // if this request is in the front of req_queue,
         // then it is responsible to trigger the refill process.
@@ -191,6 +210,7 @@ void WriteLimiter::request(Int64 bytes)
             }
         }
     }
+    LOG_FMT_DEBUG(log, "pending_us {} wait_times {} pending_count {} rate_limit_per_sec {}", sw_pending.elapsed() / 1000, wait_times, req_queue.size(), refill_balance_per_period * 1000 / refill_period_ms);
 }
 
 size_t WriteLimiter::setStop()
@@ -296,7 +316,6 @@ ReadLimiter::ReadLimiter(
     : WriteLimiter(rate_limit_per_sec_, type_, refill_period_ms_)
     , get_read_bytes(std::move(get_read_bytes_))
     , last_stat_bytes(get_read_bytes())
-    , log(Logger::get("ReadLimiter"))
     , last_refill_time(std::chrono::system_clock::now())
 {}
 
@@ -729,26 +748,13 @@ IOLimitTuner::TuneResult IOLimitTuner::tune() const
     }
 
     auto [max_read_bytes_per_sec, max_write_bytes_per_sec, rw_tuned] = tuneReadWrite();
-    LOG_FMT_INFO(
-        log,
-        "tuneReadWrite: max_read {} max_write {} rw_tuned {}",
-        max_read_bytes_per_sec,
-        max_write_bytes_per_sec,
-        rw_tuned);
     auto [max_bg_read_bytes_per_sec, max_fg_read_bytes_per_sec, read_tuned] = tuneRead(max_read_bytes_per_sec);
-    LOG_FMT_INFO(
-        log,
-        "tuneRead: bg_read {} fg_read {} read_tuned {}",
-        max_bg_read_bytes_per_sec,
-        max_fg_read_bytes_per_sec,
-        read_tuned);
     auto [max_bg_write_bytes_per_sec, max_fg_write_bytes_per_sec, write_tuned] = tuneWrite(max_write_bytes_per_sec);
-    LOG_FMT_INFO(
-        log,
-        "tuneWrite: bg_write {} fg_write {} write_tuned {}",
-        max_bg_write_bytes_per_sec,
-        max_fg_write_bytes_per_sec,
-        write_tuned);
+    if (rw_tuned || read_tuned || write_tuned)
+    {
+        LOG_FMT_INFO(log, "tune_msg: bg_write {} => {} fg_write {} => {} bg_read {} => {} fg_read {} => {}", bg_write_stat != nullptr ? bg_write_stat->maxBytesPerSec() : 0, max_bg_write_bytes_per_sec, fg_write_stat != nullptr ? fg_write_stat->maxBytesPerSec() : 0, max_fg_write_bytes_per_sec, bg_read_stat != nullptr ? bg_read_stat->maxBytesPerSec() : 0, max_bg_read_bytes_per_sec, fg_read_stat != nullptr ? fg_read_stat->maxBytesPerSec() : 0, max_fg_read_bytes_per_sec);
+    }
+
     return {.max_bg_read_bytes_per_sec = max_bg_read_bytes_per_sec,
             .max_fg_read_bytes_per_sec = max_fg_read_bytes_per_sec,
             .read_tuned = read_tuned || rw_tuned,

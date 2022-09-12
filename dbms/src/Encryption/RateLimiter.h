@@ -153,6 +153,7 @@ protected:
 
     Stopwatch stat_stop_watch;
     UInt64 alloc_bytes;
+    LoggerPtr log;
 };
 
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
@@ -194,7 +195,6 @@ private:
 
     std::function<Int64()> get_read_bytes;
     Int64 last_stat_bytes;
-    LoggerPtr log;
     std::chrono::time_point<std::chrono::system_clock> last_refill_time;
 };
 
