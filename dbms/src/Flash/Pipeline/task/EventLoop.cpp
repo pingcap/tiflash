@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/setThreadName.h>
 #include <Flash/Pipeline/PipelineManager.h>
 #include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Pipeline/dag/Event.h>
 #include <Flash/Pipeline/task/EventLoop.h>
+#include <errno.h>
 
 namespace DB
 {
@@ -71,6 +73,16 @@ void EventLoop::handleSubmit(PipelineTask & task)
 
 void EventLoop::loop()
 {
+#ifdef __linux__
+    cpu_set_t cpu_set;
+    CPU_ZERO(&cpu_set);
+    CPU_SET(loop_id, &cpu_set);
+    int ret = sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
+    if (ret != 0)
+        throw Exception(fmt::format("sched_setaffinity fail: {}", std::strerror(errno)));
+#endif
+    setThreadName(fmt::format("event loop(%s)", loop_id).c_str());
+
     PipelineTask task;
     while (event_queue.pop(task) == MPMCQueueResult::OK)
     {
