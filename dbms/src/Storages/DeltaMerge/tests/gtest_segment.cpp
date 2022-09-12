@@ -65,7 +65,7 @@ try
     auto segment_id = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     ASSERT_TRUE(segment_id.has_value());
 
-    mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id);
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id});
 }
 CATCH
 
@@ -86,7 +86,7 @@ try
     flushSegmentCache(*segment_id);
     deleteRangeSegment(*segment_id);
     writeSegmentWithDeletedPack(*segment_id);
-    mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id);
+    mergeSegment({ DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id });
 
     EXPECT_EQ(getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID), origin_rows);
 }
@@ -95,7 +95,6 @@ CATCH
 TEST_F(SegmentOperationTest, TestSegmentRandom)
 try
 {
-    srand(time(nullptr));
     SegmentTestOptions options;
     options.is_common_handle = true;
     reloadWithOptions(options);
@@ -192,7 +191,7 @@ try
         th_seg_split.wait();
 
         LOG_DEBUG(log, "finishApplySplit");
-        mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id);
+        mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id});
     }
 
     for (const auto & [seg_id, seg] : segments)
@@ -242,7 +241,7 @@ try
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
         auto th_seg_merge = std::async([&]() {
-            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /* check_rows */ false);
+            mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id}, /* check_rows */ false);
         });
         sp_seg_merge_apply.waitAndPause();
 
@@ -289,7 +288,6 @@ CATCH
 TEST_F(SegmentOperationTest, DISABLED_TestSegmentRandomForCI)
 try
 {
-    srand(time(nullptr));
     SegmentTestOptions options;
     options.is_common_handle = true;
     reloadWithOptions(options);
@@ -360,7 +358,7 @@ try
     // Start a segment merge and suspend it before applyMerge
     auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
     auto th_seg_merge = std::async([&]() {
-        mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /*check_rows=*/false);
+        mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id}, /*check_rows=*/false);
     });
     sp_seg_merge_apply.waitAndPause();
     LOG_DEBUG(log, "pausedBeforeApplyMerge");
@@ -430,7 +428,7 @@ try
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
         auto th_seg_merge = std::async([&]() {
-            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /*check_rows=*/false);
+            mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id}, /*check_rows=*/false);
         });
         sp_seg_merge_apply.waitAndPause();
         LOG_DEBUG(log, "pausedBeforeApplyMerge");

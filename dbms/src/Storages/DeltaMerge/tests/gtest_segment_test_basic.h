@@ -21,6 +21,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <vector>
+#include <random>
 
 namespace DB
 {
@@ -43,7 +44,7 @@ public:
     // When `check_rows` is true, it will compare the rows num before and after the segment update.
     // So if there is some write during the segment update, it will report false failure if `check_rows` is true.
     std::optional<PageId> splitSegment(PageId segment_id, bool check_rows = true);
-    void mergeSegment(PageId left_segment_id, PageId right_segment_id, bool check_rows = true);
+    void mergeSegment(const std::vector<PageId> & segments, bool check_rows = true);
     void mergeSegmentDelta(PageId segment_id, bool check_rows = true);
 
     void flushSegmentCache(PageId segment_id);
@@ -70,10 +71,12 @@ public:
     std::pair<Int64, Int64> getSegmentKeyRange(SegmentPtr segment);
 
 protected:
+    std::mt19937 random;
+
     // <segment_id, segment_ptr>
     std::map<PageId, SegmentPtr> segments;
 
-    enum SegmentOperatorType
+    enum class SegmentOperatorType: size_t
     {
         Write = 0,
         DeleteRange,
@@ -98,9 +101,7 @@ protected:
 
     PageId getRandomSegmentId();
 
-    std::pair<PageId, PageId> getRandomMergeablePair();
-
-    RowKeyRange commonHandleKeyRange();
+    std::vector<PageId> getRandomMergeableSegments();
 
     SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings);
 

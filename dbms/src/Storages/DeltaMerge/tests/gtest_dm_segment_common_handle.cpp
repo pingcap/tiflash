@@ -708,7 +708,7 @@ try
     // TODO: enable merge test!
     if (false)
     {
-        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
+        segment = Segment::merge(dmContext(), tableColumns(), {segment, new_segment});
         {
             // check merged segment range
             const auto & merged_range = segment->getRowKeyRange();

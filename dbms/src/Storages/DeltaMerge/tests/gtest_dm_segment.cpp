@@ -796,7 +796,7 @@ try
 
     // merge segments
     {
-        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
+        segment = Segment::merge(dmContext(), tableColumns(), {segment, new_segment});
         {
             // check merged segment range
             const auto & merged_range = segment->getRowKeyRange();
@@ -1141,7 +1141,7 @@ try
         ASSERT_EQ(rows1 + rows2, (size_t)200);
     }
 
-    // Test merge
+    // Test merge two
     {
         WriteBatches wbs(dmContext().storage_pool);
 
@@ -1152,7 +1152,7 @@ try
         write_100_rows(other_segment);
         segment->flushCache(dmContext());
 
-        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), segment, left_snap, other_segment, right_snap, wbs);
+        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), {segment, other_segment}, {left_snap, right_snap}, wbs);
 
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC();
@@ -1160,7 +1160,7 @@ try
         auto left_lock = segment->mustGetUpdateLock();
         auto right_lock = other_segment->mustGetUpdateLock();
 
-        segment = Segment::applyMerge(dmContext(), segment, left_snap, other_segment, right_snap, wbs, merged_stable);
+        segment = Segment::applyMerge(dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
 
         wbs.writeAll();
     }
@@ -1170,6 +1170,50 @@ try
         auto rows = read_rows(new_segment);
         ASSERT_EQ(rows, (size_t)300);
     }
+
+    // Split into 3
+    SegmentPtr seg1, seg2, seg3;
+    {
+        std::tie(seg1, seg2) = segment->split(dmContext(), tableColumns());
+        ASSERT_TRUE(seg1);
+        ASSERT_TRUE(seg2);
+        std::tie(seg2, seg3) = seg2->split(dmContext(), tableColumns());
+        ASSERT_TRUE(seg2);
+        ASSERT_TRUE(seg3);
+    }
+
+//    {
+//        // TODO: This test case can be more readable when we support split at point.
+//
+//        auto actual_new_rows = 0;
+//        {
+//            actual_new_rows += (seg2->getRowKeyRange().getEnd().int_value - seg2->getRowKeyRange().getStart().int_value);
+//            Block block = DMTestEnv::prepareSimpleWriteBlock(seg2->getRowKeyRange().getStart().int_value - 50, seg2->getRowKeyRange().getEnd().int_value + 50, false, /* tso */ 5);
+//            segment->write(dmContext(), std::move(block));
+//            // Not flushed.
+//        }
+//
+//        WriteBatches wbs(dmContext().storage_pool);
+//        auto snap1 = seg1->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+//        auto snap2 = seg2->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+//        auto snap3 = seg3->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+//
+//        {
+//            actual_new_rows += 100;
+//            Block block = DMTestEnv::prepareSimpleWriteBlock(seg3->getRowKeyRange().getStart().int_value - 50, seg3->getRowKeyRange().getStart().int_value + 100, false, /* tso */ 5);
+//            segment->write(dmContext(), std::move(block));
+//            // Not flushed, write after snapshot.
+//        }
+//
+//        {
+//            actual_new_rows += 42;
+//            Block block = DMTestEnv::prepareSimpleWriteBlock(seg1->getRowKeyRange().getEnd().int_value - 42, seg1->getRowKeyRange().getEnd().int_value + 50, false, /* tso */ 5);
+//            segment->write(dmContext(), std::move(block));
+//            segment->flushCache(dmContext()); // Flushed after snapshot.
+//        }
+//
+//
+//    }
 }
 CATCH
 
