@@ -86,7 +86,7 @@ try
     flushSegmentCache(*segment_id);
     deleteRangeSegment(*segment_id);
     writeSegmentWithDeletedPack(*segment_id);
-    mergeSegment({ DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id });
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id});
 
     EXPECT_EQ(getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID), origin_rows);
 }
@@ -134,10 +134,10 @@ try
     ASSERT_EQ(segments.size(), 3);
 
     writeSegment(*segment_id_2nd, 7);
-    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25+7);
-    mergeSegment({ *segment_id_2nd, *segment_id_3rd });
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25 + 7);
+    mergeSegment({*segment_id_2nd, *segment_id_3rd});
     // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID, segment_id_2nd }
-    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 50+7);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 50 + 7);
     ASSERT_TRUE(segments.find(*segment_id_3rd) == segments.end());
     ASSERT_EQ(segments.size(), 2);
 }
@@ -162,12 +162,12 @@ try
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 11);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
-    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 50+11);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 50 + 11);
     writeSegment(*segment_id_2nd, 7);
-    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25+7);
-    mergeSegment({ DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id_2nd, *segment_id_3rd });
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25 + 7);
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id_2nd, *segment_id_3rd});
     // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID }
-    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 100+11+7);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 100 + 11 + 7);
     ASSERT_TRUE(segments.find(*segment_id_2nd) == segments.end());
     ASSERT_TRUE(segments.find(*segment_id_3rd) == segments.end());
     ASSERT_EQ(segments.size(), 1);
@@ -187,7 +187,7 @@ try
     auto segment_id_3rd = splitSegment(*segment_id_2nd);
     // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID, segment_id_2nd, segment_id_3rd }
 
-    ASSERT_THROW({ mergeSegment({ DELTA_MERGE_FIRST_SEGMENT_ID, /* omit segment_id_2nd */ *segment_id_3rd }); }, DB::Exception);
+    ASSERT_THROW({ mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, /* omit segment_id_2nd */ *segment_id_3rd}); }, DB::Exception);
 }
 CATCH
 
