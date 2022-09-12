@@ -195,6 +195,7 @@ private:
     std::function<Int64()> get_read_bytes;
     Int64 last_stat_bytes;
     LoggerPtr log;
+    std::chrono::time_point<std::chrono::system_clock> last_refill_time;
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;

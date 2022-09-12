@@ -297,6 +297,7 @@ ReadLimiter::ReadLimiter(
     , get_read_bytes(std::move(get_read_bytes_))
     , last_stat_bytes(get_read_bytes())
     , log(Logger::get("ReadLimiter"))
+    , last_refill_time(std::chrono::system_clock::now())
 {}
 
 Int64 ReadLimiter::getAvailableBalance()
@@ -318,8 +319,12 @@ Int64 ReadLimiter::getAvailableBalance()
     {
         Int64 real_alloc_bytes = bytes - last_stat_bytes;
         metricAllocBytes(type, real_alloc_bytes);
+        // `alloc_bytes` is the number of byte that ReadLimiter has allocated.
+        if (available_balance > 0)
+        {
+            alloc_bytes += std::min(real_alloc_bytes, available_balance);
+        }
         available_balance -= real_alloc_bytes;
-        alloc_bytes += real_alloc_bytes;
     }
     last_stat_bytes = bytes;
     return available_balance;
@@ -338,10 +343,24 @@ bool ReadLimiter::canGrant([[maybe_unused]] Int64 bytes)
 
 void ReadLimiter::refillAndAlloc()
 {
-    if (available_balance < refill_balance_per_period)
+    // `available_balance` of `ReadLimiter` may be overdrawn.
+    if (available_balance < 0)
     {
-        available_balance += refill_balance_per_period;
+        // Limiter may not be called for a long time.
+        // During this time, limiter can be refilled at most `max_refill_times` times and covers some overdraft.
+        auto elapsed_duration = std::chrono::system_clock::now() - last_refill_time;
+        UInt64 elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed_duration).count();
+        // At least refill one time.
+        Int64 max_refill_times = std::max(elapsed_ms, refill_period_ms) / refill_period_ms;
+        Int64 max_refill_bytes = max_refill_times * refill_balance_per_period;
+        alloc_bytes += std::min(-available_balance, max_refill_bytes);
+        available_balance = std::min(available_balance + max_refill_bytes, refill_balance_per_period);
     }
+    else
+    {
+        available_balance = refill_balance_per_period;
+    }
+    last_refill_time = std::chrono::system_clock::now();
 
     assert(!req_queue.empty());
     auto * head_req = req_queue.front();

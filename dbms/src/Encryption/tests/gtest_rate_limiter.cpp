@@ -22,8 +22,6 @@
 #include <random>
 #include <thread>
 
-#include "common/types.h"
-
 #ifdef __linux__
 #include <sys/syscall.h>
 #endif
@@ -350,6 +348,31 @@ TEST(ReadLimiterTest, LimiterStat)
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
     ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
     ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+}
+
+TEST(ReadLimiterTest2, ReadMany)
+{
+    Int64 real_read_bytes{0};
+    auto get_read_bytes = [&]() {
+        return real_read_bytes;
+    };
+    auto request = [&](ReadLimiter & limiter, Int64 bytes) {
+        limiter.request(bytes);
+        real_read_bytes += bytes;
+    };
+
+    constexpr Int64 bytes_per_sec = 1000;
+    constexpr UInt64 refill_period_ms = 100;
+    ReadLimiter read_limiter(get_read_bytes, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
+    ASSERT_EQ(read_limiter.getAvailableBalance(), 100);
+    request(read_limiter, 1000);
+    ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
+    ASSERT_EQ(read_limiter.alloc_bytes, 100);
+
+    std::this_thread::sleep_for(1200ms);
+    Stopwatch sw;
+    request(read_limiter, 100);
+    ASSERT_LE(sw.elapsedMilliseconds(), 1); // Not blocked.
 }
 
 #ifdef __linux__
