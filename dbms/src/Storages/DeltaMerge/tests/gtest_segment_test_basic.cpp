@@ -236,12 +236,15 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows)
 
     LOG_FMT_DEBUG(logger, "write to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
+    auto segment_max_rows = static_cast<UInt64>(end_key - start_key);
+    if (segment_max_rows == 0)
+        return;
     // If the length of segment key range is larger than `write_rows`, then
     // write the new data with the same tso in one block.
     // Otherwise create multiple block with increasing tso until the `remain_row_num`
     // down to 0.
     UInt64 remain_row_num = 0;
-    if (static_cast<UInt64>(end_key - start_key) > write_rows)
+    if (segment_max_rows > write_rows)
     {
         // The segment range is large enough, let's randomly pick a start key:
         //    Suppose we have segment range = [0, 11), which could contain at most 11 rows.
@@ -251,7 +254,7 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows)
     }
     else
     {
-        remain_row_num = write_rows - static_cast<UInt64>(end_key - start_key);
+        remain_row_num = write_rows - segment_max_rows;
     }
     {
         // write to segment and not flush
@@ -262,7 +265,7 @@ void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows)
     }
     while (remain_row_num > 0)
     {
-        UInt64 write_num = std::min(remain_row_num, static_cast<UInt64>(end_key - start_key));
+        UInt64 write_num = std::min(remain_row_num, segment_max_rows);
         LOG_FMT_DEBUG(logger, "write block to segment, block_range=[{}, {})", start_key, write_num + start_key);
         Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, write_num + start_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
         segment->write(dmContext(), std::move(block), false);
@@ -314,19 +317,22 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment);
 
+    auto segment_max_rows = static_cast<UInt64>(end_key - start_key);
+    if (segment_max_rows == 0)
+        return;
     // If the length of segment key range is larger than `write_rows`, then
     // write the new data with the same tso in one block.
     // Otherwise create multiple block with increasing tso until the `remain_row_num`
     // down to 0.
     UInt64 remain_row_num = 0;
-    if (static_cast<UInt64>(end_key - start_key) > write_rows)
+    if (segment_max_rows > write_rows)
     {
         start_key = std::uniform_int_distribution<Int64>{start_key, end_key - static_cast<Int64>(write_rows)}(random);
         end_key = start_key + write_rows;
     }
     else
     {
-        remain_row_num = write_rows - static_cast<UInt64>(end_key - start_key);
+        remain_row_num = write_rows - segment_max_rows;
     }
     {
         // write to segment and not flush
@@ -337,7 +343,7 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
     }
     while (remain_row_num > 0)
     {
-        UInt64 write_num = std::min(remain_row_num, static_cast<UInt64>(end_key - start_key));
+        UInt64 write_num = std::min(remain_row_num, segment_max_rows);
         LOG_FMT_DEBUG(logger, "ingest block to segment, block_range=[{}, {})", start_key, write_num + start_key);
         Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, write_num + start_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
         write_data(segment, block);
@@ -355,19 +361,22 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 wri
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment);
 
+    auto segment_max_rows = static_cast<UInt64>(end_key - start_key);
+    if (segment_max_rows == 0)
+        return;
     // If the length of segment key range is larger than `write_rows`, then
     // write the new data with the same tso in one block.
     // Otherwise create multiple block with increasing tso until the `remain_row_num`
     // down to 0.
     UInt64 remain_row_num = 0;
-    if (static_cast<UInt64>(end_key - start_key) > write_rows)
+    if (segment_max_rows > write_rows)
     {
         start_key = std::uniform_int_distribution<Int64>{start_key, end_key - static_cast<Int64>(write_rows)}(random);
         end_key = start_key + write_rows;
     }
     else
     {
-        remain_row_num = write_rows - static_cast<UInt64>(end_key - start_key);
+        remain_row_num = write_rows - segment_max_rows;
     }
     {
         // write to segment and not flush
@@ -378,7 +387,7 @@ void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 wri
     }
     while (remain_row_num > 0)
     {
-        UInt64 write_num = std::min(remain_row_num, static_cast<UInt64>(end_key - start_key));
+        UInt64 write_num = std::min(remain_row_num, segment_max_rows);
         LOG_FMT_DEBUG(logger, "write block to segment, block_range=[{}, {})", start_key, write_num + start_key);
         Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, write_num + start_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle, 1, true, true);
         segment->write(dmContext(), std::move(block), true);
