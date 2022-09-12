@@ -287,6 +287,7 @@ bool DMFileReader::getSkippedRows(size_t & skip_rows)
     skip_rows = 0;
     const auto & use_packs = pack_filter.getUsePacks();
     const auto & pack_stats = dmfile->getPackStats();
+
     for (; next_pack_id < use_packs.size() && !use_packs[next_pack_id]; ++next_pack_id)
     {
         skip_rows += pack_stats[next_pack_id].rows;
@@ -371,7 +372,7 @@ Block DMFileReader::read()
     bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan && deleted_rows == 0;
     //bool do_clean_read_on_del_on_normal_mode = enable_del_clean_read && !is_fast_scan; // just for test single dmfile
 
-    // std::cout << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << std::endl;
+    //std::cout << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << std::endl;
     //std::cout << "do_clean_read_on_normal_mode " << do_clean_read_on_normal_mode << " do_clean_read_on_handle_on_fast_mode " << do_clean_read_on_handle_on_fast_mode << " do_clean_read_on_del_on_fast_mode " << do_clean_read_on_del_on_fast_mode << " do_clean_read_on_del_on_normal_mode " << do_clean_read_on_del_on_normal_mode << " enable_del_clean_read " <<  enable_del_clean_read << std::endl;
     if (do_clean_read_on_normal_mode)
     {
@@ -523,7 +524,7 @@ Block DMFileReader::read()
                 }
                 else
                 {
-                    std::cout << " column " << cd.id << " sub5 " << std::endl;
+                    //std::cout << " column " << cd.id << " sub5 " << std::endl;
                     LOG_FMT_TRACE(
                         log,
                         "Column [id: {}, name: {}, type: {}] not found, use default value. DMFile: {}",
