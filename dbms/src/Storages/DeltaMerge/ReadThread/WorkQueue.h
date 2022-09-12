@@ -122,6 +122,34 @@ public:
         writer_cv.notify_one();
         return true;
     }
+
+    /**
+   * try to pop an item off the work queue.  It will not block.
+   *
+   * @param[out] item  If `pop` returns `true`, it contains the popped item or is unmodified.
+   *                    If `pop` returns `false`, it is unmodified.
+   * @returns          True upon success or `finish()` has been called.
+   *                    False if the queue is empty.
+   */
+    bool tryPop(T & item)
+    {
+        {
+            std::unique_lock<std::mutex> lock(mu);
+            pop_times++;
+            if (done)
+                return true;
+            if (queue.empty())
+            {
+                pop_empty_times++;
+                return false;
+            }
+            item = std::move(queue.front());
+            queue.pop();
+        }
+        writer_cv.notify_one();
+        return true;
+    }
+
     /**
    * Sets the maximum queue size.  If `maxSize == 0` then it is unbounded.
    *
