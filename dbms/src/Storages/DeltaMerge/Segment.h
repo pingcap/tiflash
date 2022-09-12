@@ -270,6 +270,7 @@ public:
     const DeltaValueSpacePtr & getDelta() const { return delta; }
     const StableValueSpacePtr & getStable() const { return stable; }
 
+    String logId() const;
     String simpleInfo() const;
     String info() const;
 
@@ -280,7 +281,7 @@ public:
     {
         Lock lock;
         if (!getUpdateLock(lock))
-            throw Exception("Segment [" + DB::toString(segmentId()) + "] get update lock failed", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Segment get update lock failed, segment={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
         return lock;
     }
 
@@ -289,16 +290,16 @@ public:
     /// The abandon state is usually triggered by the DeltaMergeStore.
     void abandon(DMContext & context)
     {
-        LOG_FMT_DEBUG(log, "Abandon segment [{}]", segment_id);
+        LOG_FMT_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);
     }
 
     /// Returns whether this segment has been marked as abandoned.
     /// Note: Segment member functions never abandon the segment itself.
     /// The abandon state is usually triggered by the DeltaMergeStore.
-    bool hasAbandoned() { return delta->hasAbandoned(); }
+    bool hasAbandoned() const { return delta->hasAbandoned(); }
 
-    bool isSplitForbidden() { return split_forbidden; }
+    bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
 
     void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
@@ -416,7 +417,7 @@ private:
 
     bool split_forbidden = false;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB::DM

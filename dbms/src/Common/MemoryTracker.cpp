@@ -78,6 +78,19 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     {
         Int64 current_limit = limit.load(std::memory_order_relaxed);
 
+        if (unlikely(!next.load(std::memory_order_relaxed) && accuracy_diff_for_test && current_limit && real_rss > accuracy_diff_for_test + current_limit))
+        {
+            DB::FmtBuffer fmt_buf;
+            fmt_buf.append("Memory tracker accuracy ");
+            if (description)
+                fmt_buf.fmtAppend(" {}", description);
+
+            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({})",
+                              formatReadableSizeWithBinarySuffix(real_rss),
+                              formatReadableSizeWithBinarySuffix(current_limit));
+            throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+        }
+
         /// Using non-thread-safe random number generator. Joint distribution in different threads would not be uniform.
         /// In this case, it doesn't matter.
         if (unlikely(fault_probability && drand48() < fault_probability))

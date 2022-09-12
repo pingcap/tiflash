@@ -14,6 +14,7 @@
 
 # Must enable DT rough set filter and open debug level log to run this test, otherwise disable this test
 # Preparation.
+# Use 'mpp_query:true' to make the logging contains tso prefix
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)
@@ -42,7 +43,7 @@
 └───────────────┴────────────┴─────────────────┴───────────────────┘
 
 # The default time zone in cop request is UTC
-=> DBGInvoke dag('select * from default.test')
+=> DBGInvoke dag('select * from default.test', 4, 'mpp_query:true')
 ┌─test.col_1─┬────────────────test.col_2─┐
 │         50 │ 2019-06-10 09:00:00.00000 │
 │         51 │ 2019-06-11 07:00:00.00000 │
@@ -52,14 +53,14 @@
 │         55 │ 2019-06-13 12:00:01.00000 │
 └────────────┴───────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 09:00:00.00000\')')
+=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 09:00:00.00000\')', 4, 'mpp_query:true')
 
 => DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 09:00:00.00000\')')
+=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 09:00:00.00000\')', 4, 'mpp_query:true')
 ┌─test.col_1─┬────────────────test.col_2─┐
 │         50 │ 2019-06-10 09:00:00.00000 │
 └────────────┴───────────────────────────┘
@@ -72,14 +73,14 @@
 # when using 'default' encoding, return timestamp value is shown in UTC time zone
 # but the literal timestamp value in where clause is in the time zone specified by the cop request
 # so '2019-06-10 17:00:00.00000'(tz_offset:28800) below is equal to '2019-06-10 09:00:00.00000' in UTC
-=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 17:00:00.00000\')',4,'encode_type:default,tz_offset:28800')
+=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 17:00:00.00000\')',4,'encode_type:default,tz_offset:28800,mpp_query:true')
 
 => DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 17:00:00.00000\')',4,'encode_type:default,tz_offset:28800')
+=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 17:00:00.00000\')',4,'encode_type:default,tz_offset:28800,mpp_query:true')
 ┌─test.col_1─┬────────────────test.col_2─┐
 │         50 │ 2019-06-10 09:00:00.00000 │
 └────────────┴───────────────────────────┘
@@ -89,14 +90,14 @@
 │ 0.00                                        │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 04:00:00.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+=> DBGInvoke dag('select * from default.test where col_2 < cast_string_datetime(\'2019-06-10 04:00:00.00000\')',4,'encode_type:default,tz_name:America/Chicago,mpp_query:true')
 
 => DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 04:00:00.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+=> DBGInvoke dag('select * from default.test where col_2 <= cast_string_datetime(\'2019-06-10 04:00:00.00000\')',4,'encode_type:default,tz_name:America/Chicago,mpp_query:true')
 ┌─test.col_1─┬────────────────test.col_2─┐
 │         50 │ 2019-06-10 09:00:00.00000 │
 └────────────┴───────────────────────────┘
@@ -106,14 +107,14 @@
 │ 0.00                                        │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 12:00:01.00000\')')
+=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 12:00:01.00000\')', 4, 'mpp_query:true')
 
 => DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 12:00:01.00000\')')
+=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 12:00:01.00000\')', 4, 'mpp_query:true')
 ┌─test.col_1─┬────────────────test.col_2─┐
 │         55 │ 2019-06-13 12:00:01.00000 │
 └────────────┴───────────────────────────┘
@@ -123,14 +124,14 @@
 │ 0.00                                        │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 20:00:01.00000\')',4,'encode_type:default,tz_offset:28800')
+=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 20:00:01.00000\')',4,'encode_type:default,tz_offset:28800,mpp_query:true')
 
 => DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 20:00:01.00000\')',4,'encode_type:default,tz_offset:28800')
+=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 20:00:01.00000\')',4,'encode_type:default,tz_offset:28800,mpp_query:true')
 ┌─test.col_1─┬────────────────test.col_2─┐
 │         55 │ 2019-06-13 12:00:01.00000 │
 └────────────┴───────────────────────────┘
@@ -140,19 +141,19 @@
 │ 0.00                                        │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 07:00:01.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+=> DBGInvoke dag('select * from default.test where col_2 > cast_string_datetime(\'2019-06-13 07:00:01.00000\')',4,'encode_type:default,tz_name:America/Chicago,mpp_query:true')
 
 => DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 100.00                                      │
 └─────────────────────────────────────────────┘
 
-=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 07:00:01.00000\')',4,'encode_type:default,tz_name:America/Chicago')
+=> DBGInvoke dag('select * from default.test where col_2 >= cast_string_datetime(\'2019-06-13 07:00:01.00000\')',4,'encode_type:default,tz_name:America/Chicago,mpp_query:true')
 ┌─test.col_1─┬────────────────test.col_2─┐
 │         55 │ 2019-06-13 12:00:01.00000 │
 └────────────┴───────────────────────────┘
 
-=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter')
+=> DBGInvoke search_log_for_key('RSFilter exclude rate', 'Rough set filter', 4, 'mpp_query:true')
 ┌─search_log_for_key("RSFilter exclude rate")─┐
 │ 0.00                                        │
 └─────────────────────────────────────────────┘

@@ -29,7 +29,8 @@ inline size_t getReadTSOForLog(const String & line)
     {
         std::regex rx(R"((0|[1-9][0-9]*))");
         std::smatch m;
-        auto pos = line.find("read_tso=");
+        // Rely on that MPP task prefix "MPP<query:435802637197639681,task:1>"
+        auto pos = line.find("query:");
         if (pos != std::string::npos && regex_search(line.cbegin() + pos, line.cend(), m, rx))
         {
             return std::stoul(m[1]);
@@ -61,7 +62,7 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         throw Exception("Args not matched, should be: key, thread_hint", ErrorCodes::BAD_ARGUMENTS);
 
     auto key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    // the candidate line must be printed by a thread which also print a line contains `thread_hint`
+    // the candidate line must be printed by a thread which also print a line contains `tso_hint`
     auto tso_hint = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     auto log_path = context.getConfigRef().getString("logger.log");
 

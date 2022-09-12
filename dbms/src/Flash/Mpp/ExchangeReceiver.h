@@ -167,6 +167,7 @@ public:
     }
 
 private:
+    std::shared_ptr<MemoryTracker> mem_tracker;
     using Request = typename RPCContext::Request;
 
     // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
@@ -176,7 +177,7 @@ private:
     void reactor(const std::vector<Request> & async_requests);
 
     bool setEndState(ExchangeReceiverState new_state);
-    ExchangeReceiverState getState();
+    String getStatusString();
 
     DecodeDetail decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,

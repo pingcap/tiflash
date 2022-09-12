@@ -206,7 +206,7 @@ Segment::Segment(UInt64 epoch_, //
     , next_segment_id(next_segment_id_)
     , delta(delta_)
     , stable(stable_)
-    , log(&Poco::Logger::get("Segment"))
+    , log(Logger::get("Segment", logId()))
 {}
 
 SegmentPtr Segment::newSegment(DMContext & context,
@@ -311,13 +311,13 @@ void Segment::serialize(WriteBatch & wb)
 
 bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}, isBigFile{}", segment_id, column_file->getRows(), column_file->isBigFile());
+    LOG_FMT_TRACE(log, "Segment write to disk, rows={} isBigFile={}", column_file->getRows(), column_file->isBigFile());
     return delta->appendColumnFile(dm_context, column_file);
 }
 
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to cache rows: {}", segment_id, limit);
+    LOG_FMT_TRACE(log, "Segment write to cache, rows={}", limit);
     if (unlikely(limit == 0))
         return true;
     return delta->appendToCache(dm_context, block, offset, limit);
@@ -325,7 +325,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 
 bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] write to disk rows: {}", segment_id, block.rows());
+    LOG_FMT_TRACE(log, "Segment write to disk, rows={}", block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto column_file = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
@@ -354,18 +354,18 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     auto new_range = delete_range.shrink(rowkey_range);
     if (new_range.none())
     {
-        LOG_FMT_WARNING(log, "Try to write an invalid delete range {} into {}", delete_range.toDebugString(), simpleInfo());
+        LOG_FMT_WARNING(log, "Try to write an invalid delete range, delete_range={}", delete_range.toDebugString());
         return true;
     }
 
-    LOG_FMT_TRACE(log, "Segment [{}] write delete range: {}", segment_id, delete_range.toDebugString());
+    LOG_FMT_TRACE(log, "Segment write delete range, delete_range={}", delete_range.toDebugString());
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
 bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
-    LOG_FMT_TRACE(log, "Segment [{}] write region snapshot: {}", segment_id, new_range.toDebugString());
+    LOG_FMT_TRACE(log, "Segment write region snapshot, range={} clear={}", new_range.toDebugString(), clear_data_in_range);
 
     return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
 }
@@ -389,7 +389,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
                                             UInt64 max_version,
                                             size_t expected_block_size)
 {
-    LOG_FMT_TRACE(log, "Segment [{}] [epoch={}] create InputStream", segment_id, epoch);
+    LOG_FMT_TRACE(log, "Begin segment create input stream");
 
 
     bool enable_del_clean_read = true;
@@ -473,9 +473,8 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         dm_context.tracing_id);
 
     LOG_FMT_TRACE(
-        Logger::get(log, dm_context.tracing_id),
-        "Segment [{}] is read by max_version: {}, {} ranges: {}",
-        segment_id,
+        Logger::get(log->name(), log->identifier(), dm_context.tracing_id),
+        "Finish segment create input stream, max_version={} range_size={} ranges={}",
         max_version,
         real_ranges.size(),
         DB::DM::toDebugString(read_ranges));
@@ -668,12 +667,11 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
                                                const SegmentSnapshotPtr & segment_snap,
                                                WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(log,
-                 "Segment [{}] prepare merge delta start. delta column files: {}, delta total rows: {}, delta total size: {}",
-                 segment_id,
-                 segment_snap->delta->getColumnFileCount(),
-                 segment_snap->delta->getRows(),
-                 segment_snap->delta->getBytes());
+    LOG_FMT_DEBUG(log,
+                  "MergeDelta - Begin prepare, delta_column_files={} delta_rows={} delta_bytes={}",
+                  segment_snap->delta->getColumnFileCount(),
+                  segment_snap->delta->getRows(),
+                  segment_snap->delta->getBytes());
 
     EventRecorder recorder(ProfileEvents::DMDeltaMerge, ProfileEvents::DMDeltaMergeNS);
 
@@ -687,7 +685,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
 
     auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
-    LOG_FMT_INFO(log, "Segment [{}] prepare merge delta done.", segment_id);
+    LOG_FMT_DEBUG(log, "MergeDelta - Finish prepare, segment={}", info());
 
     return new_stable;
 }
@@ -697,7 +695,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
                                     WriteBatches & wbs,
                                     const StableValueSpacePtr & new_stable) const
 {
-    LOG_FMT_INFO(log, "Before apply merge delta: {}", info());
+    LOG_FMT_DEBUG(log, "MergeDelta - Begin apply");
 
     auto [persisted_column_files, in_memory_files] = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getColumnFilesInSnapshot(), wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
@@ -724,7 +722,7 @@ SegmentPtr Segment::applyMergeDelta(DMContext & context,
     // Remove old stable's files.
     stable->recordRemovePacksPages(wbs);
 
-    LOG_FMT_INFO(log, "After apply merge delta new segment: {}", new_me->info());
+    LOG_FMT_DEBUG(log, "MergeDelta - Finish apply, old_me={} new_me={}", info(), new_me->info());
 
     return new_me;
 }
@@ -831,7 +829,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     {
         LOG_FMT_WARNING(
             log,
-            "unexpected split_handle: {}, should be in range {}, cur_rows: {}, read_row_in_pack: {}, file_index: {}",
+            "Split - unexpected split_point: {}, should be in range {}, cur_rows: {}, read_row_in_pack: {}, file_index: {}",
             split_point.toRowKeyValueRef().toDebugString(),
             rowkey_range.toDebugString(),
             cur_rows,
@@ -880,7 +878,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
 
     if (exact_rows == 0)
     {
-        LOG_FMT_WARNING(log, "Segment {} has no rows, should not split.", info());
+        LOG_FMT_WARNING(log, "Segment has no rows, should not split, segment={}", info());
         return {};
     }
 
@@ -965,7 +963,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
         {
             LOG_FMT_INFO(
                 log,
-                "Got bad split point [{}] for segment {}, fall back to split physical.",
+                "Split - Got bad split point, fall back to split physical, split_point={} segment={}",
                 (split_point_opt.has_value() ? split_point_opt->toRowKeyValueRef().toDebugString() : "no value"),
                 info());
 #ifdef FIU_ENABLE
@@ -984,7 +982,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
                                                                RowKeyValue & split_point,
                                                                WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(log, "Segment [{}] prepare split logical start", segment_id);
+    LOG_FMT_DEBUG(log, "Split - SplitLogical - Begin prepare");
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
@@ -997,7 +995,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     {
         LOG_FMT_WARNING(
             log,
-            "unexpected range! my_range: {}, other_range: {}, aborted",
+            "Split - SplitLogical - Unexpected range, aborted, my_range: {}, other_range: {}",
             my_range.toDebugString(),
             other_range.toDebugString());
         return {};
@@ -1052,7 +1050,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitLogical(DMContext & dm_co
     my_stable->setFiles(my_stable_files, my_range, &dm_context);
     other_stable->setFiles(other_stable_files, other_range, &dm_context);
 
-    LOG_FMT_INFO(log, "Segment [{}] prepare split logical done", segment_id);
+    LOG_FMT_DEBUG(log, "Split - SplitLogical - Finish prepare, segment={} split_point={}", info(), split_point.toDebugString());
 
     return {SplitInfo{true, split_point, my_stable, other_stable}};
 }
@@ -1062,7 +1060,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
                                                                 const SegmentSnapshotPtr & segment_snap,
                                                                 WriteBatches & wbs) const
 {
-    LOG_FMT_INFO(log, "Segment [{}] prepare split physical start", segment_id);
+    LOG_FMT_DEBUG(log, "Split - SplitPhysical - Begin prepare");
 
     EventRecorder recorder(ProfileEvents::DMSegmentSplit, ProfileEvents::DMSegmentSplitNS);
 
@@ -1080,7 +1078,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     {
         LOG_FMT_WARNING(
             log,
-            "unexpected range! my_range: {}, other_range: {}, aborted",
+            "Split - SplitPhysical - Unexpected range, aborted, my_range: {}, other_range: {}",
             my_range.toDebugString(),
             other_range.toDebugString());
         return {};
@@ -1090,9 +1088,6 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     StableValueSpacePtr other_stable;
 
     {
-        // Write my data
-        LOG_FMT_DEBUG(log, "Created my placed stream");
-
         auto my_delta_reader = read_info.getDeltaReader(schema_snap);
 
         RowKeyRanges my_ranges{my_range};
@@ -1118,12 +1113,10 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
         my_new_stable = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs);
     }
 
-    LOG_FMT_INFO(log, "prepare my_new_stable done");
+    LOG_FMT_DEBUG(log, "Split - SplitPhysical - Finish prepare my_new_stable");
 
     {
         // Write new segment's data
-        LOG_FMT_DEBUG(log, "Created other placed stream");
-
         auto other_delta_reader = read_info.getDeltaReader(schema_snap);
 
         RowKeyRanges other_ranges{other_range};
@@ -1149,7 +1142,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
         other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
     }
 
-    LOG_FMT_INFO(log, "prepare other_stable done");
+    LOG_FMT_DEBUG(log, "Split - SplitPhysical - Finish prepare other_stable");
 
     // Remove old stable's files.
     for (const auto & file : stable->getDMFiles())
@@ -1159,7 +1152,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
         wbs.removed_data.delPage(file->pageId());
     }
 
-    LOG_FMT_INFO(log, "Segment [{}] prepare split physical done", segment_id);
+    LOG_FMT_DEBUG(log, "Split - SplitPhysical - Finish prepare, segment={} split_point={}", info(), split_point.toDebugString());
 
     return {SplitInfo{false, split_point, my_new_stable, other_stable}};
 }
@@ -1169,7 +1162,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
                                 WriteBatches & wbs,
                                 SplitInfo & split_info) const
 {
-    LOG_FMT_INFO(log, "Segment [{}] apply split", segment_id);
+    LOG_FMT_DEBUG(log, "Split - {} - Begin apply", split_info.is_logical ? "SplitLogical" : "SplitPhysical");
 
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
@@ -1215,7 +1208,7 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     // Remove old stable's files.
     stable->recordRemovePacksPages(wbs);
 
-    LOG_FMT_INFO(log, "Segment {} split into {} and {}", info(), new_me->info(), other->info());
+    LOG_FMT_DEBUG(log, "Split - {} - Finish apply, old_me={} new_me={} new_other={}", split_info.is_logical ? "SplitLogical" : "SplitPhysical", info(), new_me->info(), other->info());
 
     return {new_me, other};
 }
@@ -1232,7 +1225,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
         // keep flush until success if not abandoned
         if (left->hasAbandoned())
         {
-            LOG_FMT_DEBUG(left->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(left->log, "Merge - Give up segmentMerge because left abandoned, left={} right={}", left->simpleInfo(), right->simpleInfo());
             return {};
         }
     }
@@ -1241,7 +1234,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
         // keep flush until success if not abandoned
         if (right->hasAbandoned())
         {
-            LOG_FMT_DEBUG(right->log, "Give up merge segments left [{}], right [{}]", left->segmentId(), right->segmentId());
+            LOG_FMT_DEBUG(left->log, "Merge - Give up segmentMerge because right abandoned, left={} right={}", left->simpleInfo(), right->simpleInfo());
             return {};
         }
     }
@@ -1280,11 +1273,11 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
                                           const SegmentSnapshotPtr & right_snap,
                                           WriteBatches & wbs)
 {
-    LOG_FMT_INFO(left->log, "Segment [{}] and [{}] prepare merge start", left->segmentId(), right->segmentId());
+    LOG_FMT_DEBUG(left->log, "Merge - Begin prepare, left={} right={}", left->simpleInfo(), right->simpleInfo());
 
     if (unlikely(compare(left->rowkey_range.getEnd(), right->rowkey_range.getStart()) != 0 || left->next_segment_id != right->segment_id))
         throw Exception(
-            fmt::format("The ranges of merge segments are not consecutive: first end: {}, second start: {}",
+            fmt::format("The ranges of merge segments are not consecutive: leftEnd={} rightStart={}",
                         left->rowkey_range.getEnd().toDebugString(),
                         right->rowkey_range.getStart().toDebugString()));
 
@@ -1330,7 +1323,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
     auto merged_stable_id = left->stable->getId();
     auto merged_stable = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
-    LOG_FMT_INFO(left->log, "Segment [{}] and [{}] prepare merge done", left->segmentId(), right->segmentId());
+    LOG_FMT_DEBUG(left->log, "Merge - Finish prepare, left={} right={}", left->info(), right->info());
 
     return merged_stable;
 }
@@ -1343,7 +1336,7 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
                                WriteBatches & wbs,
                                const StableValueSpacePtr & merged_stable)
 {
-    LOG_FMT_INFO(left->log, "Segment [{}] and [{}] apply merge", left->segmentId(), right->segmentId());
+    LOG_FMT_DEBUG(left->log, "Merge - Begin apply, left={} right={}", left->simpleInfo(), right->simpleInfo());
 
     RowKeyRange merged_range(left->rowkey_range.start, right->rowkey_range.end, left->is_common_handle, left->rowkey_column_size);
 
@@ -1383,7 +1376,7 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     wbs.removed_meta.delPage(right->delta->getId());
     wbs.removed_meta.delPage(right->stable->getId());
 
-    LOG_FMT_INFO(left->log, "Segment [{}] and [{}] merged into {}", left->info(), right->info(), merged->info());
+    LOG_FMT_DEBUG(left->log, "Merge - Finish apply, left={} right={} merged={}", left->info(), right->info(), merged->info());
 
     return merged;
 }
@@ -1401,7 +1394,7 @@ SegmentPtr Segment::dropNextSegment(WriteBatches & wbs, const RowKeyRange & next
                                                  stable);
     new_segment->serialize(wbs.meta);
     wbs.writeMeta();
-    LOG_FMT_INFO(log, "Segment [{}] drop its next segment done", info());
+    LOG_FMT_INFO(log, "Finish segment drop its next segment, segment={}", info());
     return new_segment;
 }
 
@@ -1439,18 +1432,30 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
                 {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
 }
 
+String Segment::logId() const
+{
+    return fmt::format("<segment_id={} epoch={}>",
+                       segment_id,
+                       epoch);
+}
+
 String Segment::simpleInfo() const
 {
-    return "{" + DB::toString(segment_id) + ":" + rowkey_range.toDebugString() + "}";
+    return fmt::format("<segment_id={} epoch={} range={}{}>",
+                       segment_id,
+                       epoch,
+                       rowkey_range.toDebugString(),
+                       hasAbandoned() ? " abandoned=true" : "");
 }
 
 String Segment::info() const
 {
-    return fmt::format("[id:{}], [next:{}], [epoch:{}], [rowkey_range:{}], [delta rows:{}], [delta bytes:{}], [delete ranges:{}], [stable({}):rows:{}, bytes:{}]",
+    return fmt::format("<segment_id={} epoch={} range={}{} next_segment_id={} delta_rows={} delta_bytes={} delta_deletes={} stable_file={} stable_rows={} stable_bytes={}>",
                        segment_id,
-                       next_segment_id,
                        epoch,
                        rowkey_range.toDebugString(),
+                       hasAbandoned() ? " abandoned=true" : "",
+                       next_segment_id,
                        delta->getRows(),
                        delta->getBytes(),
                        delta->getDeletes(),
@@ -1477,8 +1482,8 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
                                        const RowKeyRanges & read_ranges,
                                        UInt64 max_version) const
 {
-    auto tracing_logger = Logger::get(log, dm_context.tracing_id);
-    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] [epoch={}] getReadInfo start", segment_id, epoch);
+    auto tracing_logger = Logger::get(log->name(), log->identifier(), dm_context.tracing_id);
+    LOG_FMT_DEBUG(tracing_logger, "Begin segment getReadInfo");
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs
@@ -1493,14 +1498,14 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
     // Hold compacted_index reference, to prevent it from deallocated.
     delta_reader->setDeltaIndex(compacted_index);
 
-    LOG_FMT_DEBUG(tracing_logger, "Segment[{}] [epoch={}] getReadInfo end", segment_id, epoch);
+    LOG_FMT_DEBUG(tracing_logger, "Finish segment getReadInfo");
 
     if (fully_indexed)
     {
         // Try update shared index, if my_delta_index is more advanced.
         bool ok = segment_snap->delta->getSharedDeltaIndex()->updateIfAdvanced(*my_delta_index);
         if (ok)
-            LOG_FMT_DEBUG(tracing_logger, "{} Updated delta index", simpleInfo());
+            LOG_FMT_DEBUG(tracing_logger, "Segment updated delta index");
     }
 
     // Refresh the reference in DeltaIndexManager, so that the index can be properly managed.
@@ -1665,8 +1670,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(const DMContext & dm_context
 
     LOG_FMT_DEBUG(
         log,
-        "{} read_ranges:{}, place item count: {}, shared delta index: {}, my delta index: {}",
-        simpleInfo(),
+        "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={}",
         DB::DM::toDebugString(read_ranges),
         items.size(),
         delta_snap->getSharedDeltaIndex()->toString(),
