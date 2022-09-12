@@ -39,7 +39,7 @@ private:
 
 private:
     size_t loop_id;
-    MPMCQueue<PipelineTask> event_queue{99999};
+    MPMCQueue<PipelineTask> event_queue{499999};
 
     PipelineManager & pipeline_manager;
 };

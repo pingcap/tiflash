@@ -88,16 +88,21 @@ private:
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
     void buildRemoteStreams(std::vector<RemoteRequest> && remote_requests, DAGPipeline & pipeline);
+    std::vector<SourcePtr> buildRemoteSources(std::vector<RemoteRequest> && remote_requests);
 
     void executeCastAfterTableScan(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
-    void executeCastAfterTableScan(TransformsPipeline & pipeline);
+    void executeCastAfterTableScan(
+        size_t remote_read_sources_start_index,
+        TransformsPipeline & pipeline);
 
     void executePushedDownFilter(
         size_t remote_read_streams_start_index,
         DAGPipeline & pipeline);
-    void executePushedDownFilter(TransformsPipeline & pipeline);
+    void executePushedDownFilter(
+        size_t remote_read_sources_start_index,
+        TransformsPipeline & pipeline);
 
     void prepare();
 

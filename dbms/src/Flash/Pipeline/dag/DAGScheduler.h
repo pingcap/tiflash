@@ -92,7 +92,7 @@ private:
 
     PipelineIDGenerator id_generator;
 
-    MPMCQueue<PipelineEvent> event_queue{999};
+    MPMCQueue<PipelineEvent> event_queue{4999};
 
     Context & context;
 
