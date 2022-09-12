@@ -61,11 +61,12 @@ void PhysicalNonJoinProbe::probeSideTransform(DAGPipeline & probe_pipeline, Cont
     }
 }
 
-void PhysicalNonJoinProbe::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalNonJoinProbe::transform(TransformsPipeline & pipeline, Context & context, size_t)
 {
     const auto & settings = context.getSettingsRef();
     size_t i = 0;
-    size_t not_joined_concurrency = pipeline.concurrency();
+    size_t not_joined_concurrency = join_ptr->getNotJoinedStreamConcurrency();
+    pipeline.init(not_joined_concurrency);
     pipeline.transform([&](auto & transforms) {
         auto non_joined_stream = join_ptr->createStreamWithNonJoinedRows(probe_side_prepare_header, i++, not_joined_concurrency, settings.max_block_size);
         transforms->setSource(std::make_shared<BlockInputStreamSource>(non_joined_stream));

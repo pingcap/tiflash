@@ -93,9 +93,9 @@ PhysicalPlanNodePtr PhysicalMockExchangeReceiver::build(
     return physical_mock_exchange_receiver;
 }
 
-void PhysicalMockExchangeReceiver::transform(TransformsPipeline & pipeline, Context &)
+void PhysicalMockExchangeReceiver::transform(TransformsPipeline & pipeline, Context &, size_t)
 {
-    assert(pipeline.concurrency() == mock_streams.size());
+    pipeline.init(mock_streams.size());
     size_t i = 0;
     pipeline.transform([&](auto & transforms) {
         transforms->setSource(std::make_shared<BlockInputStreamSource>(mock_streams[i++]));

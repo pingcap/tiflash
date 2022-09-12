@@ -83,10 +83,10 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     executeExpression(pipeline, schema_project, log, "table scan schema projection");
 }
 
-void PhysicalTableScan::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalTableScan::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!tidb_table_scan.keepOrder());
-    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, pipeline.concurrency());
+    DAGStorageInterpreter storage_interpreter(context, tidb_table_scan, push_down_filter, concurrency);
     storage_interpreter.execute(pipeline);
 
     const auto & storage_schema = storage_interpreter.analyzer->getCurrentInputColumns();

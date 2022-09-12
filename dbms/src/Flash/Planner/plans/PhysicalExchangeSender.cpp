@@ -103,11 +103,11 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     }
 }
 
-void PhysicalExchangeSender::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalExchangeSender::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
     RUNTIME_CHECK(!fine_grained_shuffle.enable());
 
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     auto & dag_context = *context.getDAGContext();
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");

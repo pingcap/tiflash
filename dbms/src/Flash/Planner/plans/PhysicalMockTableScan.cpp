@@ -99,9 +99,9 @@ void PhysicalMockTableScan::transformImpl(DAGPipeline & pipeline, Context & /*co
     pipeline.streams.insert(pipeline.streams.end(), mock_streams.begin(), mock_streams.end());
 }
 
-void PhysicalMockTableScan::transform(TransformsPipeline & pipeline, Context &)
+void PhysicalMockTableScan::transform(TransformsPipeline & pipeline, Context &, size_t)
 {
-    assert(pipeline.concurrency() == mock_streams.size());
+    pipeline.init(mock_streams.size());
     size_t i = 0;
     pipeline.transform([&](auto & transforms) {
         transforms->setSource(std::make_shared<BlockInputStreamSource>(mock_streams[i++]));

@@ -151,9 +151,9 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, Context & context
     executeExpression(pipeline, project_actions, log, extra_info);
 }
 
-void PhysicalProjection::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalProjection::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(project_actions));

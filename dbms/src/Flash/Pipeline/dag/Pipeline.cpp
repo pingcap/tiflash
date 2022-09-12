@@ -39,8 +39,8 @@ Pipeline::Pipeline(
 std::vector<PipelineTask> Pipeline::transform(Context & context, size_t concurrency)
 {
     assert(plan_node);
-    TransformsPipeline pipeline(concurrency);
-    plan_node->transform(pipeline, context);
+    TransformsPipeline pipeline;
+    plan_node->transform(pipeline, context, concurrency);
 
     std::vector<PipelineTask> tasks;
     for (const auto & transforms : pipeline.transforms_vec)

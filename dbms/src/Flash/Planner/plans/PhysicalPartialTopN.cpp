@@ -51,9 +51,9 @@ const Block & PhysicalPartialTopN::getSampleBlock() const
     return before_sort_actions->getSampleBlock();
 }
 
-void PhysicalPartialTopN::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalPartialTopN::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(before_sort_actions));

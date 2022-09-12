@@ -20,8 +20,12 @@ namespace DB
 {
 struct TransformsPipeline
 {
-    explicit TransformsPipeline(size_t concurrency)
+    TransformsPipeline() = default;
+
+    void init(size_t concurrency)
     {
+        assert(!has_inited);
+        has_inited = true;
         for (size_t i = 0; i < concurrency; ++i)
             transforms_vec.emplace_back(std::make_shared<Transforms>());
     }
@@ -29,18 +33,25 @@ struct TransformsPipeline
     template <typename FF>
     void transform(FF && ff)
     {
+        assert(has_inited);
         for (const auto & transforms : transforms_vec)
             ff(transforms);
     }
 
-    size_t concurrency() const { return transforms_vec.size(); }
+    size_t concurrency() const
+    {
+        assert(has_inited);
+        return transforms_vec.size();
+    }
 
     Block getHeader()
     {
+        assert(has_inited);
         assert(!transforms_vec.empty());
         return transforms_vec.back()->getHeader();
     }
 
+    bool has_inited = false;
     std::vector<TransformsPtr> transforms_vec;
 };
 } // namespace DB

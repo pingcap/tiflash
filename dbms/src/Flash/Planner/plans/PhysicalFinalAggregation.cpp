@@ -47,8 +47,9 @@ void PhysicalFinalAggregation::transformImpl(DAGPipeline & pipeline, Context & /
     executeExpression(pipeline, expr_after_agg, log, "expr after aggregation");
 }
 
-void PhysicalFinalAggregation::transform(TransformsPipeline & pipeline, Context & /*context*/)
+void PhysicalFinalAggregation::transform(TransformsPipeline & pipeline, Context & /*context*/, size_t concurrency)
 {
+    pipeline.init(concurrency);
     auto reader = std::make_shared<FinalAggregateReader>(aggregate_store);
     pipeline.transform([&](auto & transforms) {
         transforms->setSource(std::make_shared<AggregateSource>(reader));

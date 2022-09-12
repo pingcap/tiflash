@@ -60,9 +60,9 @@ void PhysicalFilter::transformImpl(DAGPipeline & pipeline, Context & context, si
     pipeline.transform([&](auto & stream) { stream = std::make_shared<FilterBlockInputStream>(stream, before_filter_actions, filter_column, log->identifier()); });
 }
 
-void PhysicalFilter::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalFilter::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     const Block & input_block = pipeline.getHeader();
     pipeline.transform([&](auto & transforms) {

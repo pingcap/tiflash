@@ -14,8 +14,6 @@
 
 #pragma once
 
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Planner/plans/PhysicalUnary.h>
 #include <Transforms/ResultHandlerSink.h>
@@ -23,43 +21,6 @@
 
 namespace DB
 {
-class ResultHandlerBlockInputStream : public IProfilingBlockInputStream
-{
-private:
-    static constexpr auto NAME = "ResultHandler";
-
-public:
-    ResultHandlerBlockInputStream(
-        const BlockInputStreamPtr & input,
-        ResultHandler result_handler_)
-        : result_handler(result_handler_)
-    {
-        children.push_back(input);
-    }
-
-    String getName() const override { return NAME; }
-    Block getHeader() const override
-    {
-        return children.back()->getHeader();
-    }
-
-protected:
-    Block readImpl() override
-    {
-        Block block = children.back()->read();
-        if (block)
-        {
-            static std::mutex mu;
-            std::lock_guard lock(mu);
-            result_handler(block);
-        }
-        return block;
-    }
-
-private:
-    ResultHandler result_handler;
-};
-
 class PhysicalResultHandler : public PhysicalUnary
 {
 public:
@@ -104,19 +65,18 @@ public:
         return clone_one;
     }
 
-    void transform(TransformsPipeline & pipeline, Context & context) override
+    void transform(TransformsPipeline & pipeline, Context & context, size_t concurrency) override
     {
-        child->transform(pipeline, context);
+        child->transform(pipeline, context, concurrency);
         pipeline.transform([&](auto & transforms) {
             transforms->setSink(std::make_shared<ResultHandlerSink>(result_handler));
         });
     }
 
 private:
-    void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override
+    void transformImpl(DAGPipeline &, Context &, size_t) override
     {
-        child->transform(pipeline, context, max_streams);
-        pipeline.transform([&](auto & stream) { stream = std::make_shared<ResultHandlerBlockInputStream>(stream, result_handler); });
+        throw Exception("Unsupport");
     }
 
 private:

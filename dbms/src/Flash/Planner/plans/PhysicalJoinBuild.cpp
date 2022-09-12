@@ -76,9 +76,9 @@ void PhysicalJoinBuild::transformImpl(DAGPipeline & pipeline, Context & context,
     buildSideTransform(pipeline, context, max_streams);
 }
 
-void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(build_side_prepare_actions));
@@ -86,7 +86,11 @@ void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & conte
     });
     if (!join_ptr->initialized)
     {
-        join_ptr->init(pipeline.getHeader(), pipeline.concurrency());
+        const auto & settings = context.getSettingsRef();
+        size_t join_build_concurrency = settings.join_concurrent_build
+            ? std::min(concurrency, pipeline.concurrency())
+            : 1;
+        join_ptr->init(pipeline.getHeader(), join_build_concurrency);
     }
 }
 

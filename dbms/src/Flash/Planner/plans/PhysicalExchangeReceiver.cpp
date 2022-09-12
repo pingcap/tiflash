@@ -63,11 +63,12 @@ PhysicalPlanNodePtr PhysicalExchangeReceiver::build(
     return physical_exchange_receiver;
 }
 
-void PhysicalExchangeReceiver::transform(TransformsPipeline & pipeline, Context &)
+void PhysicalExchangeReceiver::transform(TransformsPipeline & pipeline, Context &, size_t concurrency)
 {
     bool enable_fine_grained_shuffle = enableFineGrainedShuffle(mpp_exchange_receiver->getFineGrainedShuffleStreamCount());
     RUNTIME_CHECK(!enable_fine_grained_shuffle);
 
+    pipeline.init(concurrency);
     pipeline.transform([&](auto & transforms) {
         transforms->setSource(std::make_shared<ExchangeReceiverSource>(
             mpp_exchange_receiver,

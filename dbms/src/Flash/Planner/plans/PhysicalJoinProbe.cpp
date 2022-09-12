@@ -95,9 +95,9 @@ void PhysicalJoinProbe::probeSideTransform(DAGPipeline & probe_pipeline, Context
     }
 }
 
-void PhysicalJoinProbe::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalJoinProbe::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(probe_side_prepare_actions));

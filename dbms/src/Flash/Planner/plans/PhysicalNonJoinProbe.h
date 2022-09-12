@@ -46,7 +46,7 @@ public:
         return clone_one;
     }
 
-    void transform(TransformsPipeline & pipeline, Context & context) override;
+    void transform(TransformsPipeline & pipeline, Context & context, size_t) override;
 
 private:
     void probeSideTransform(DAGPipeline & probe_pipeline, Context & context);

@@ -20,6 +20,7 @@
 #include <Flash/Pipeline/task/EventLoop.h>
 
 #include <functional>
+#include <random>
 
 namespace DB
 {
@@ -42,5 +43,8 @@ private:
     std::vector<EventLoopPtr> event_loops;
 
     std::shared_ptr<ThreadPoolManager> thread_pool_manager;
+
+    std::mt19937 gen;
+    std::uniform_int_distribution<size_t> dis;
 };
 } // namespace DB

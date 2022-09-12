@@ -85,9 +85,9 @@ void PhysicalPartialAggregation::transformImpl(DAGPipeline & pipeline, Context &
     });
 }
 
-void PhysicalPartialAggregation::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalPartialAggregation::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(before_agg_actions));

@@ -74,7 +74,7 @@ public:
 
     virtual PhysicalPlanNodePtr cloneOne() const = 0;
 
-    virtual void transform(TransformsPipeline &, Context &) { throw Exception("Unsupport"); }
+    virtual void transform(TransformsPipeline &, Context &, size_t) { throw Exception("Unsupport"); }
 
 protected:
     virtual void transformImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/){};

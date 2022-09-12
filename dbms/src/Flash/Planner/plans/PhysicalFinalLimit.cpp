@@ -36,8 +36,9 @@ const Block & PhysicalFinalLimit::getSampleBlock() const
     return sample_block;
 }
 
-void PhysicalFinalLimit::transform(TransformsPipeline & pipeline, Context &)
+void PhysicalFinalLimit::transform(TransformsPipeline & pipeline, Context &, size_t concurrency)
 {
+    pipeline.init(concurrency);
     pipeline.transform([&](auto & transforms) {
         transforms->setSource(std::make_shared<LimitSource>(limit_breaker));
     });

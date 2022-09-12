@@ -35,6 +35,10 @@ TaskScheduler::TaskScheduler(PipelineManager & pipeline_manager)
             event_loops[index]->loop();
         });
     }
+
+    std::random_device rd;
+    gen = std::mt19937{rd()};
+    dis = std::uniform_int_distribution<size_t>(0, cores - 1);
 }
 
 TaskScheduler::~TaskScheduler()
@@ -47,15 +51,22 @@ TaskScheduler::~TaskScheduler()
 
 void TaskScheduler::submit(std::vector<PipelineTask> & tasks)
 {
-    size_t i = 0;
-    auto next_loop = [&]() -> EventLoop & {
-        EventLoop & loop = *event_loops[i++];
-        i %= event_loops.size();
-        return loop;
-    };
-    for (auto & task : tasks)
+    if (tasks.size() == event_loops.size())
     {
-        next_loop().submit(std::move(task));
+        size_t i = 0;
+        for (auto & task : tasks)
+            event_loops[i++]->submit(std::move(task));
+    }
+    else
+    {
+        size_t i = dis(gen);
+        auto next_loop = [&]() -> EventLoop & {
+            EventLoop & loop = *event_loops[i++];
+            i %= event_loops.size();
+            return loop;
+        };
+        for (auto & task : tasks)
+            next_loop().submit(std::move(task));
     }
 }
 

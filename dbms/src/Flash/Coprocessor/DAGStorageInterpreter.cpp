@@ -325,10 +325,9 @@ void DAGStorageInterpreter::executeImpl(TransformsPipeline & pipeline)
     std::vector<SourcePtr> sources;
     if (!mvcc_query_info->regions_query_info.empty())
         sources = buildLocalSources(settings.max_block_size);
-    RUNTIME_CHECK(sources.size() <= pipeline.concurrency());
 
     // Should build `remote_requests` and `null_source` under protect of `table_structure_lock`.
-    while (sources.size() < pipeline.concurrency())
+    while (sources.empty())
         sources.emplace_back(std::make_shared<NullSource>(storage_for_logical_table->getSampleBlockForColumns(required_columns)));
 
     auto remote_requests = buildRemoteRequests();
@@ -337,6 +336,7 @@ void DAGStorageInterpreter::executeImpl(TransformsPipeline & pipeline)
     const TableLockHolders drop_locks = releaseAlterLocks();
 
     {
+        pipeline.init(sources.size());
         size_t i = 0;
         pipeline.transform([&](auto & transforms) {
             transforms->setSource(sources[i++]);

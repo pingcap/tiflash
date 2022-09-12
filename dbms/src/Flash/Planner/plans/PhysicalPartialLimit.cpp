@@ -34,9 +34,9 @@ const Block & PhysicalPartialLimit::getSampleBlock() const
     return child->getSampleBlock();
 }
 
-void PhysicalPartialLimit::transform(TransformsPipeline & pipeline, Context & context)
+void PhysicalPartialLimit::transform(TransformsPipeline & pipeline, Context & context, size_t concurrency)
 {
-    child->transform(pipeline, context);
+    child->transform(pipeline, context, concurrency);
 
     pipeline.transform([&](auto & transforms) {
         transforms->setSink(std::make_shared<LimitSink>(limit_breaker));
