@@ -212,19 +212,17 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         {
             if (!isSegmentValid(lock, seg))
             {
-                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->info());
+                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->simpleInfo());
                 return {};
             }
         }
 
         for (const auto & seg : ordered_segments)
         {
-            // TODO: Should we ensure the ordering of "segments" first?
-
             auto snap = seg->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
             if (!snap)
             {
-                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because snapshot failed, segment={}", seg->info());
+                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because snapshot failed, segment={}", seg->simpleInfo());
                 return {};
             }
 
@@ -269,7 +267,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         {
             if (!isSegmentValid(lock, seg))
             {
-                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->info());
+                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->simpleInfo());
                 wbs.setRollback();
                 return {};
             }
