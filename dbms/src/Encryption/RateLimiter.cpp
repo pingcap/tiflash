@@ -350,7 +350,7 @@ Int64 ReadLimiter::getAvailableBalance()
     return available_balance;
 }
 
-void ReadLimiter::consumeBytes([[maybe_unused]]Int64 bytes)
+void ReadLimiter::consumeBytes([[maybe_unused]] Int64 bytes)
 {
     // Do nothing for read.
 }
