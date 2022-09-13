@@ -1,0 +1,92 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> create table test.t (a int);
+Query OK, 0 rows affected (0.13 sec)
+
+mysql> alter table test.t set tiflash replica 1;
+Query OK, 0 rows affected (0.20 sec)
+
+mysql> set tidb_enforce_mpp=1;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> set tidb_isolation_read_engines='tiflash';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> use test;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> insert t values (null);
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert t values (100);
+Query OK, 1 row affected (0.01 sec)
+
+mysql> insert t values (-100);
+Query OK, 1 row affected (0.00 sec)
+
+mysql> explain select a, bit_count(a) from t;
++---------------------------+---------+--------------+---------------+-----------------------------------------+
+| id                        | estRows | task         | access object | operator info                           |
++---------------------------+---------+--------------+---------------+-----------------------------------------+
+| TableReader_9             | 3.00    | root         |               | data:ExchangeSender_8                   |
+| └─ExchangeSender_8        | 3.00    | mpp[tiflash] |               | ExchangeType: PassThrough               |
+|   └─Projection_4          | 3.00    | mpp[tiflash] |               | test.t.a, bit_count(test.t.a)->Column#3 |
+|     └─TableFullScan_7     | 3.00    | mpp[tiflash] | table:t       | keep order:false, stats:pseudo          |
++---------------------------+---------+--------------+---------------+-----------------------------------------+
+4 rows in set (0.00 sec)
+
+mysql> mysql> select a, bit_count(a) from t;
++------+--------------+
+| a    | bit_count(a) |
++------+--------------+
+| NULL |         NULL |
+|  100 |            3 |
+| -100 |           60 |
++------+--------------+
+3 rows in set (0.23 sec)
+
+mysql> create table s (a bigint);
+Query OK, 0 rows affected (0.08 sec)
+
+mysql> alter table s set tiflash replica 1;
+Query OK, 0 rows affected (0.21 sec)
+
+mysql> insert s values (-9223372036854775808);
+Query OK, 1 row affected (0.00 sec)
+
+mysql> insert s values (9223372036854775807);
+Query OK, 1 row affected (0.01 sec)
+
+mysql> explain select a, bit_count(a) from s;
++---------------------------+----------+--------------+---------------+-----------------------------------------+
+| id                        | estRows  | task         | access object | operator info                           |
++---------------------------+----------+--------------+---------------+-----------------------------------------+
+| TableReader_9             | 10000.00 | root         |               | data:ExchangeSender_8                   |
+| └─ExchangeSender_8        | 10000.00 | mpp[tiflash] |               | ExchangeType: PassThrough               |
+|   └─Projection_4          | 10000.00 | mpp[tiflash] |               | test.s.a, bit_count(test.s.a)->Column#3 |
+|     └─TableFullScan_7     | 10000.00 | mpp[tiflash] | table:s       | keep order:false, stats:pseudo          |
++---------------------------+----------+--------------+---------------+-----------------------------------------+
+4 rows in set (0.00 sec)
+
+mysql> select a, bit_count(a) from s;
++----------------------+--------------+
+| a                    | bit_count(a) |
++----------------------+--------------+
+| -9223372036854775808 |            1 |
+|  9223372036854775807 |           63 |
++----------------------+--------------+
+2 rows in set (0.10 sec)
