@@ -59,7 +59,7 @@ try
             func_name,
             createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
             createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}})));
-    // issue 37258
+    // issue 5849
     ASSERT_COLUMN_EQ(
         createColumn<UInt8>({0, 1, 1, 1}),
         executeFunction(

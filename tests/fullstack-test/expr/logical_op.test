@@ -71,7 +71,7 @@ mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select count(*) from test.t3 group by a having ifnull(null,count(*)) and min(null);
 # empty
 
-# issue 37258
+# issue 5849
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a or b from test.t4;
 +--------+
 | a or b |
