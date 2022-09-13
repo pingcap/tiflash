@@ -187,8 +187,8 @@ struct AssociativeOperationImpl
             UInt8 a = vec[i];
 
             // !!a is a trick
-            // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1 
-            // which correspond to false or true. However, for columns with UInt8 type, 
+            // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1
+            // which correspond to false or true. However, for columns with UInt8 type,
             // no more convertion will be executed on them and the values stored
             // in them are 'origin' which means that they won't be converted to 0 or 1.
             // For example:
