@@ -38,6 +38,11 @@ function bake_llvm_base_amd64() {
     export CXX=clang++
     export LD=ld.lld
 
+    # OpenSSL
+    source $SCRIPTPATH/install_openssl.sh
+    install_openssl "1_1_1l"
+    export OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
+
     # Go
     source $SCRIPTPATH/install_go.sh
     install_go "1.17" "amd64"
