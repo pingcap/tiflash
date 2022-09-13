@@ -93,7 +93,10 @@ public:
     void request(Int64 bytes);
 
     // just for test purpose
-    inline UInt64 getTotalBytesThrough() const { return alloc_bytes; }
+    inline UInt64 getTotalBytesThrough() const
+    {
+        return available_balance < 0 ? alloc_bytes - available_balance : alloc_bytes;
+    }
 
     LimiterStat getStat();
 
