@@ -24,6 +24,11 @@
 
 #include <future>
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfDeltaMerge;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 
@@ -35,6 +40,10 @@ extern const char force_segment_logical_split[];
 
 namespace DM
 {
+namespace GC
+{
+bool shouldCompactStableWithTooLargeDTFileRange(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log);
+}
 namespace tests
 {
 class SegmentOperationTest : public SegmentTestBasic
@@ -331,6 +340,42 @@ try
 
         FailPointHelper::enableFailPoint(FailPoints::try_segment_logical_split);
         splitSegment(rand_seg_id);
+    }
+}
+CATCH
+
+TEST_F(SegmentOperationTest, GCCheckAfterSegmentLogicalSplit)
+try
+{
+    {
+        SegmentTestOptions options;
+        options.db_settings.dt_segment_stable_pack_rows = 100;
+        reloadWithOptions(options);
+    }
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto invalid_data_ratio_threshold = dm_context->db_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc;
+    {
+        auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
+        auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooLargeDTFileRange(snap, invalid_data_ratio_threshold, log));
+    }
+
+    FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+
+    {
+        auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
+        auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_TRUE(GC::shouldCompactStableWithTooLargeDTFileRange(snap, invalid_data_ratio_threshold, log));
+    }
+    {
+        auto segment = segments[new_seg_id_opt.value()];
+        auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_TRUE(GC::shouldCompactStableWithTooLargeDTFileRange(snap, invalid_data_ratio_threshold, log));
     }
 }
 CATCH

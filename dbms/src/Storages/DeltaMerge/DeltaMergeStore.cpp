@@ -1657,7 +1657,7 @@ static std::string toString(Type type)
 
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
-bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, const LoggerPtr & log)
+bool shouldCompactStableWithTooManyInvalidVersion(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, const LoggerPtr & log)
 {
     // Always GC.
     if (ratio_threshold < 1.0)
@@ -1700,7 +1700,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     return (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
 }
 
-bool shouldCompactStable(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log)
+bool shouldCompactStableWithTooLargeDTFileRange(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log)
 {
     auto valid_rows = snap->stable->getRows();
     auto valid_bytes = snap->stable->getBytes();
@@ -1811,7 +1811,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             else if (!segment->isValidDataRatioChecked())
             {
                 segment->setValidDataRatioChecked();
-                if (GC::shouldCompactStable(segment_snap, invalid_data_ratio_threshold, log))
+                if (GC::shouldCompactStableWithTooLargeDTFileRange(segment_snap, invalid_data_ratio_threshold, log))
                 {
                     should_compact = true;
                     gc_type = GC::Type::TooLargeDTFileRange;
@@ -1831,7 +1831,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 if (!segment->getStable()->isStablePropertyCached())
                     segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
 
-                if (GC::shouldCompactStable(
+                if (GC::shouldCompactStableWithTooManyInvalidVersion(
                         segment,
                         gc_safe_point,
                         global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
