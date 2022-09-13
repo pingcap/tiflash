@@ -109,6 +109,7 @@ private:
     using Threads = std::vector<std::thread>;
 
     const size_t size;
+    const std::string thread_prefix;
     static constexpr double sleep_seconds = 10;
     static constexpr double sleep_seconds_random_part = 1.0;
 
@@ -122,8 +123,6 @@ private:
 
     std::atomic<bool> shutdown{false};
     std::condition_variable wake_event;
-
-    std::string thread_prefix;
 
     void threadFunction(size_t thread_idx);
 };

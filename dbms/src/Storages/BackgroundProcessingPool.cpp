@@ -84,8 +84,8 @@ void BackgroundProcessingPool::TaskInfo::wake()
 
 BackgroundProcessingPool::BackgroundProcessingPool(int size_, std::string thread_prefix_)
     : size(size_)
-    , thread_ids_counter(size_)
     , thread_prefix(thread_prefix_)
+    , thread_ids_counter(size_)
 {
     LOG_FMT_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool, prefix={} n_threads={}", thread_prefix, size);
 
