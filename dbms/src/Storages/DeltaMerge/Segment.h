@@ -302,6 +302,9 @@ public:
     bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
 
+    bool isValidDataRatioChecked() const { return check_valid_data_ratio.load(std::memory_order_relaxed); }
+    void setValidDataRatioChecked() { check_valid_data_ratio.store(true, std::memory_order_relaxed); }
+
     void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
 
     bool isFlushing() const { return delta->isFlushing(); }
@@ -415,6 +418,7 @@ private:
     const StableValueSpacePtr stable;
 
     bool split_forbidden = false;
+    std::atomic<bool> check_valid_data_ratio = false;
 
     LoggerPtr log;
 };

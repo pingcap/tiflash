@@ -1654,7 +1654,7 @@ bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, dou
     return false;
 }
 
-bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double ratio_threshold, const LoggerPtr & log)
+bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double invalid_data_ratio_threshold, const LoggerPtr & log)
 {
     auto actual_delete_range = snap->delta->getSquashDeleteRange().shrink(segment_range);
     if (actual_delete_range.none())
@@ -1674,8 +1674,26 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     //   because before write apply snapshot file, it will write a delete range first, and will meet the following gc criteria.
     //   But the cost should be really minor because merge delta on an empty segment should be very fast.
     //   What's more, we can ignore this kind of delete range in future to avoid this extra gc.
-    bool should_compact = (delete_rows >= stable_rows * ratio_threshold) || (delete_bytes >= stable_bytes * ratio_threshold);
-    return should_compact;
+    return (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
+}
+
+bool shouldCompactStable(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log)
+{
+    auto valid_rows = snap->stable->getRows();
+    auto valid_bytes = snap->stable->getBytes();
+
+    const auto & dm_files = snap->stable->getDMFiles();
+    size_t total_rows = 0;
+    size_t total_bytes = 0;
+    for (const auto & file : dm_files)
+    {
+        total_rows += file->getRows();
+        total_bytes += file->getBytes();
+    }
+
+    LOG_FMT_TRACE(log, "valid_rows [{}], valid_bytes [{}] total_rows [{}] total_bytes [{}]", valid_rows, valid_bytes, total_rows, total_bytes);
+
+    return (valid_rows < total_rows * (1 - invalid_data_ratio_threshold)) || (valid_bytes < total_bytes * (1 - invalid_data_ratio_threshold));
 }
 } // namespace GC
 
@@ -1753,15 +1771,22 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         try
         {
             // Check whether we should apply gc on this segment
+            auto invalid_data_ratio_threshold = global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc;
+            RUNTIME_ASSERT(invalid_data_ratio_threshold >= 0 && invalid_data_ratio_threshold <= 1);
             bool should_compact = false;
             if (GC::shouldCompactDeltaWithStable(
                     *dm_context,
                     segment_snap,
                     segment_range,
-                    global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc,
+                    invalid_data_ratio_threshold,
                     log))
             {
                 should_compact = true;
+            }
+            else if (!segment->isValidDataRatioChecked())
+            {
+                segment->setValidDataRatioChecked();
+                should_compact = GC::shouldCompactStable(segment_snap, invalid_data_ratio_threshold, log);
             }
             else if (segment->getLastCheckGCSafePoint() < gc_safe_point)
             {
