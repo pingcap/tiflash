@@ -78,14 +78,14 @@ public:
         return send_queue.push(data) == MPMCQueueResult::OK;
     }
 
+    virtual void cancelWith(const String & reason)
+    {
+        send_queue.cancelWith(reason);
+    }
+
     virtual bool finish()
     {
         return send_queue.finish();
-    }
-
-    virtual void finishAndDrain()
-    {
-        send_queue.finishAndDrain();
     }
 
     void consumerFinish(const String & err_msg);
@@ -180,9 +180,14 @@ public:
         return queue.finish();
     }
 
-    void finishAndDrain() override
+    void cancelWith(const String & reason) override
     {
-        queue.finishAndDrain();
+        queue.cancelWith(reason);
+    }
+
+    const String & getCancelReason() const
+    {
+        return queue.getCancelReason();
     }
 
     GRPCSendQueueRes pop(TrackedMppDataPacketPtr & data, void * new_tag)
@@ -202,6 +207,9 @@ public:
     using Base = TunnelSender;
     using Base::Base;
     TrackedMppDataPacketPtr readForLocal();
+
+private:
+    bool send_cancel_reason = false;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;
@@ -260,15 +268,17 @@ public:
 
     const String & id() const { return tunnel_id; }
 
-    // write a single packet to the tunnel, it will block if tunnel is not ready.
-    void write(const mpp::MPPDataPacket & data, bool close_after_write = false);
+    // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
+    void write(const mpp::MPPDataPacket & data);
 
-    // finish the writing.
+    // finish the writing, and wait until the sender finishes.
     void writeDone();
 
-    /// close() finishes the tunnel, if the tunnel is connected already, it will
-    /// write the error message to the tunnel, otherwise it just close the tunnel
-    void close(const String & reason);
+    /// close() cancel the tunnel's send queue with `reason`, if reason is not empty, the tunnel sender will
+    /// write this reason as an error message to its receiver. If `wait_sender_finish` is true, close() will
+    /// not return until tunnel sender finishes, otherwise, close() will return just after the send queue is
+    /// cancelled(which is a non-blocking operation)
+    void close(const String & reason, bool wait_sender_finish);
 
     // a MPPConn request has arrived. it will build connection by this tunnel;
     void connect(PacketWriter * writer);
@@ -300,12 +310,11 @@ private:
     {
         Unconnected, // Not connect to any writer, not able to accept new data
         Connected, // Connected to some writer, accepting data
-        WaitingForSenderFinish, // Accepting all data already, wait for sender to finish
+        WaitingForSenderFinish, // Wait for sender to finish
         Finished // Final state, no more work to do
     };
 
     StringRef statusToString();
-    void finishSendQueue(bool drain = false);
 
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 

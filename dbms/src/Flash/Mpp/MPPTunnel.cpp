@@ -24,7 +24,6 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char exception_during_mpp_close_tunnel[];
 extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
@@ -87,34 +86,13 @@ MPPTunnel::~MPPTunnel()
     SCOPE_EXIT({
         GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Decrement();
     });
-    try
-    {
-        close("");
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
-    }
+    close("", true);
     LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
-void MPPTunnel::finishSendQueue(bool drain)
-{
-    if (tunnel_sender)
-    {
-        if (drain)
-            tunnel_sender->finishAndDrain();
-        else
-            tunnel_sender->finish();
-    }
-}
-
 /// exit abnormally, such as being cancelled.
-void MPPTunnel::close(const String & reason)
+void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 {
-    SCOPE_EXIT({
-        finishSendQueue(true); // drain the send_queue when close, to release useless memory
-    });
     {
         std::unique_lock lk(mu);
         switch (status)
@@ -124,59 +102,46 @@ void MPPTunnel::close(const String & reason)
             cv_for_status_changed.notify_all();
             return;
         case TunnelStatus::Connected:
+        case TunnelStatus::WaitingForSenderFinish:
         {
             if (!reason.empty())
             {
-                try
-                {
-                    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
-                    tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(getPacketWithError(reason), getMemTracker()));
-                }
-                catch (...)
-                {
-                    tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
-                }
+                tunnel_sender->cancelWith(reason);
             }
-            finishSendQueue();
+            else
+            {
+                tunnel_sender->finish();
+            }
             break;
         }
-        case TunnelStatus::WaitingForSenderFinish:
-            break;
         case TunnelStatus::Finished:
             return;
         default:
             RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", status);
         }
     }
-    waitForSenderFinish(/*allow_throw=*/false);
+    if (wait_sender_finish)
+        waitForSenderFinish(false);
 }
 
 // TODO: consider to hold a buffer
-void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
+void MPPTunnel::write(const mpp::MPPDataPacket & data)
 {
     LOG_FMT_TRACE(log, "ready to write");
     {
-        {
-            std::unique_lock lk(mu);
-            waitUntilConnectedOrFinished(lk);
-            if (status == TunnelStatus::Finished)
-                throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
-        }
-
-        if (tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(data, getMemTracker())))
-        {
-            connection_profile_info.bytes += data.ByteSizeLong();
-            connection_profile_info.packets += 1;
-            if (close_after_write)
-            {
-                finishSendQueue();
-                LOG_FMT_TRACE(log, "finish write.");
-            }
-            return;
-        }
+        std::unique_lock lk(mu);
+        waitUntilConnectedOrFinished(lk);
+        if (tunnel_sender == nullptr)
+            throw Exception(fmt::format("write to tunnel which is already closed."));
     }
-    // push failed, wait consumer for the final state
-    waitForSenderFinish(/*allow_throw=*/true);
+
+    if (tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(data, getMemTracker())))
+    {
+        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.packets += 1;
+        return;
+    }
+    throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -185,12 +150,13 @@ void MPPTunnel::writeDone()
     LOG_FMT_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
     {
         std::unique_lock lk(mu);
-        if (status == TunnelStatus::Finished)
-            throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrFinished(lk);
-        finishSendQueue();
+        if (tunnel_sender == nullptr)
+            throw Exception(fmt::format("write to tunnel which is already closed."));
     }
+    if (!tunnel_sender->finish())
+        throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
     waitForSenderFinish(/*allow_throw=*/true);
 }
 
@@ -359,12 +325,21 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
     try
     {
         TrackedMppDataPacketPtr res;
-        while (send_queue.pop(res) == MPMCQueueResult::OK)
+        MPMCQueueResult result;
+        while (result = send_queue.pop(res), result == MPMCQueueResult::OK)
         {
             if (!writer->write(res->packet))
             {
                 err_msg = "grpc writes failed.";
                 break;
+            }
+        }
+        /// write the last error packet if needed
+        if (result == MPMCQueueResult::CANCELLED && !send_queue.getCancelReason().empty())
+        {
+            if (!writer->write(getPacketWithError(send_queue.getCancelReason())))
+            {
+                err_msg = "grpc writes failed.";
             }
         }
     }
@@ -393,11 +368,21 @@ void SyncTunnelSender::startSendThread(PacketWriter * writer)
 std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
 {
     TrackedMppDataPacketPtr res;
-    if (send_queue.pop(res) == MPMCQueueResult::OK)
+    auto result = send_queue.pop(res);
+    if (result == MPMCQueueResult::OK)
     {
         // switch tunnel's memory tracker into receiver's
         res->switchMemTracker(current_memory_tracker);
         return res;
+    }
+    else if (result == MPMCQueueResult::CANCELLED)
+    {
+        if (!send_cancel_reason && !send_queue.getCancelReason().empty())
+        {
+            send_cancel_reason = true;
+            res = std::make_shared<TrackedMppDataPacket>(getPacketWithError(send_queue.getCancelReason()), current_memory_tracker);
+            return res;
+        }
     }
     consumerFinish("");
     return nullptr;

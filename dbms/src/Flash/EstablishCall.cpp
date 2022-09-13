@@ -207,6 +207,16 @@ void EstablishCallData::trySendOneMsg()
     case GRPCSendQueueRes::FINISHED:
         writeDone("", grpc::Status::OK);
         return;
+    case GRPCSendQueueRes::CANCELLED:
+        if (async_tunnel_sender->getCancelReason().empty())
+        {
+            writeDone("", grpc::Status::OK);
+        }
+        else
+        {
+            writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
+        }
+        return;
     case GRPCSendQueueRes::EMPTY:
         // No new message.
         return;

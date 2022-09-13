@@ -96,13 +96,9 @@ private:
 
     void unregisterTask();
 
-    /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnels(const String & reason);
-
     void abort(const String & message, AbortType abort_type);
 
-    void abortTunnels(const String & message, AbortType abort_type);
+    void abortTunnels(const String & message, bool wait_sender_finish);
     void abortReceivers();
     void abortDataStreams(AbortType abort_type);
 

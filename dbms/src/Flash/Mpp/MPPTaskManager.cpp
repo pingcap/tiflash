@@ -166,7 +166,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     const auto & it = mpp_query_map.find(task->id.start_ts);
     if (it != mpp_query_map.end() && it->second->to_be_aborted)
     {
-        return {false, "query is being aborted"};
+        return {false, fmt::format("query is being aborted, error message = {}", it->second->error_message)};
     }
     if (it != mpp_query_map.end() && it->second->task_map.find(task->id) != it->second->task_map.end())
     {
@@ -213,7 +213,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(MPPTask * task)
     if (it != mpp_query_map.end())
     {
         if (it->second->to_be_aborted)
-            return {false, "query is being aborted"};
+            return {false, fmt::format("query is being aborted, error message = {}", it->second->error_message)};
         auto task_it = it->second->task_map.find(task->id);
         if (task_it != it->second->task_map.end())
         {

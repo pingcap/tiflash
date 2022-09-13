@@ -21,13 +21,10 @@
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/CoprocessorHandler.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
-#include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
-#include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
@@ -50,7 +47,6 @@ extern const char exception_before_mpp_register_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
-extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 extern const char random_task_lifecycle_failpoint[];
 } // namespace FailPoints
@@ -71,7 +67,7 @@ MPPTask::~MPPTask()
     /// to current_memory_tracker in the destructor
     if (current_memory_tracker != memory_tracker)
         current_memory_tracker = memory_tracker;
-    closeAllTunnels("");
+    abortTunnels("", true);
     if (schedule_state == ScheduleState::SCHEDULED)
     {
         /// the threads of this task are not fully freed now, since the BlockIO and DAGContext are not destructed
@@ -82,17 +78,14 @@ MPPTask::~MPPTask()
     LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
-void MPPTask::abortTunnels(const String & message, AbortType abort_type)
+void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
 {
-    if (abort_type == AbortType::ONCANCELLATION)
     {
-        closeAllTunnels(message);
+        std::unique_lock lock(tunnel_and_receiver_mu);
+        if (unlikely(tunnel_set == nullptr))
+            return;
     }
-    else
-    {
-        RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-        tunnel_set->writeError(message);
-    }
+    tunnel_set->close(message, wait_sender_finish);
 }
 
 void MPPTask::abortReceivers()
@@ -110,16 +103,6 @@ void MPPTask::abortDataStreams(AbortType abort_type)
     /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
     bool is_kill = abort_type == AbortType::ONCANCELLATION;
     context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
-}
-
-void MPPTask::closeAllTunnels(const String & reason)
-{
-    {
-        std::unique_lock lock(tunnel_and_receiver_mu);
-        if (unlikely(tunnel_set == nullptr))
-            return;
-    }
-    tunnel_set->close(reason);
 }
 
 void MPPTask::finishWrite()
@@ -208,12 +191,13 @@ void MPPTask::initExchangeReceivers()
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
 {
-    if (status == CANCELLED)
+    if (status == CANCELLED || status == FAILED)
     {
         auto err_msg = fmt::format(
-            "can't find tunnel ({} + {}) because the task is cancelled",
+            "can't find tunnel ({} + {}) because the task is aborted, error message = {}",
             request->sender_meta().task_id(),
-            request->receiver_meta().task_id());
+            request->receiver_meta().task_id(),
+            err_string);
         return {nullptr, err_msg};
     }
 
@@ -513,7 +497,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             err_string = message;
             /// if the task is in initializing state, mpp task can return error to TiDB directly,
             /// so just close all tunnels here
-            closeAllTunnels("");
+            abortTunnels("", false);
             unregisterTask();
             LOG_WARNING(log, "Finish abort task from uninitialized");
             return;
@@ -524,7 +508,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// first, the top components may see an error caused by the abort, which is not
             /// the original error
             err_string = message;
-            abortTunnels(message, abort_type);
+            abortTunnels(message, false);
             abortDataStreams(abort_type);
             abortReceivers();
             scheduleThisTask(ScheduleState::FAILED);

@@ -24,7 +24,6 @@
 
 namespace DB
 {
-
 namespace tests
 {
 class TestGRPCSendQueue;
@@ -58,6 +57,7 @@ enum class GRPCSendQueueRes
     OK,
     FINISHED,
     EMPTY,
+    CANCELLED,
 };
 
 /// A multi-producer-single-consumer queue dedicated to async grpc streaming send work.
@@ -120,6 +120,21 @@ public:
         return ret;
     }
 
+    bool cancelWith(const String & reason)
+    {
+        auto ret = send_queue.cancelWith(reason);
+        if (ret)
+        {
+            kickCompletionQueue();
+        }
+        return ret;
+    }
+
+    const String & getCancelReason() const
+    {
+        return send_queue.getCancelReason();
+    }
+
     /// Pop the data from queue.
     ///
     /// Return OK if pop is done.
@@ -142,6 +157,8 @@ public:
             return GRPCSendQueueRes::OK;
         case MPMCQueueResult::FINISHED:
             return GRPCSendQueueRes::FINISHED;
+        case MPMCQueueResult::CANCELLED:
+            return GRPCSendQueueRes::CANCELLED;
         case MPMCQueueResult::EMPTY:
             // Handle this case later.
             break;
@@ -161,6 +178,8 @@ public:
             return GRPCSendQueueRes::OK;
         case MPMCQueueResult::FINISHED:
             return GRPCSendQueueRes::FINISHED;
+        case MPMCQueueResult::CANCELLED:
+            return GRPCSendQueueRes::CANCELLED;
         case MPMCQueueResult::EMPTY:
         {
             // If empty, change status to WAITING.
@@ -184,13 +203,6 @@ public:
             kickCompletionQueue();
         }
         return ret;
-    }
-
-    /// Finish and drain the queue.
-    void finishAndDrain()
-    {
-        send_queue.finishAndDrain();
-        kickCompletionQueue();
     }
 
 private:
