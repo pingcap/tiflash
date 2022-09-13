@@ -123,9 +123,7 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
 namespace
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
-    {"plusInt", tipb::ScalarFuncSig::PlusInt},
     {"plusint", tipb::ScalarFuncSig::PlusInt},
-    {"minusInt", tipb::ScalarFuncSig::MinusInt},
     {"minusint", tipb::ScalarFuncSig::MinusInt},
     {"equals", tipb::ScalarFuncSig::EQInt},
     {"notEquals", tipb::ScalarFuncSig::NEInt},
