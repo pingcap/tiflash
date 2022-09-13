@@ -1197,49 +1197,51 @@ SegmentPair Segment::applySplit(DMContext & dm_context, //
     return {new_me, other};
 }
 
-SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const SegmentPtr & left, const SegmentPtr & right)
+SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const std::vector<SegmentPtr> & ordered_segments)
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
     /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
     /// And only saved data in this segment will be filtered by the segment range in the merge process,
     /// unsaved data will be directly copied to the new segment.
     /// So we flush here to make sure that all potential data left by previous split operation is saved.
-    while (!left->flushCache(dm_context))
+    for (const auto & seg : ordered_segments)
     {
-        // keep flush until success if not abandoned
-        if (left->hasAbandoned())
+        while (!seg->flushCache(dm_context))
         {
-            LOG_FMT_DEBUG(left->log, "Merge - Give up segmentMerge because left abandoned, left={} right={}", left->simpleInfo(), right->simpleInfo());
-            return {};
-        }
-    }
-    while (!right->flushCache(dm_context))
-    {
-        // keep flush until success if not abandoned
-        if (right->hasAbandoned())
-        {
-            LOG_FMT_DEBUG(left->log, "Merge - Give up segmentMerge because right abandoned, left={} right={}", left->simpleInfo(), right->simpleInfo());
-            return {};
+            // keep flush until success if not abandoned
+            if (seg->hasAbandoned())
+            {
+                LOG_FMT_DEBUG(seg->log, "Merge - Give up segmentMerge because abandoned, seg={}", seg->simpleInfo());
+                return {};
+            }
         }
     }
 
+    std::vector<SegmentSnapshotPtr> ordered_snapshots;
+    for (const auto & seg : ordered_segments)
+    {
+        auto snap = seg->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
+        if (!snap)
+        {
+            LOG_FMT_DEBUG(seg->log, "Merge - Give up segmentMerge because snapshot failed, seg={}", seg->simpleInfo());
+            return {};
+        }
+        ordered_snapshots.emplace_back(snap);
+    }
 
-    auto left_snap = left->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
-    auto right_snap = right->createSnapshot(dm_context, true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
-    if (!left_snap || !right_snap)
-        return {};
-
-    auto merged_stable = prepareMerge(dm_context, schema_snap, left, left_snap, right, right_snap, wbs);
+    auto merged_stable = prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
 
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
 
     SYNC_FOR("before_Segment::applyMerge"); // pause without holding the lock on segments to be merged
 
-    auto left_lock = left->mustGetUpdateLock();
-    auto right_lock = right->mustGetUpdateLock();
+    std::vector<Segment::Lock> locks;
+    locks.reserve(ordered_segments.size());
+    for (const auto & seg : ordered_segments)
+        locks.emplace_back(seg->mustGetUpdateLock());
 
-    auto merged = applyMerge(dm_context, left, left_snap, right, right_snap, wbs, merged_stable);
+    auto merged = applyMerge(dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
 
     wbs.writeAll();
     return merged;
@@ -1251,26 +1253,36 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
 /// So remember to do a flush for the segments before merge.
 StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
                                           const ColumnDefinesPtr & schema_snap,
-                                          const SegmentPtr & left,
-                                          const SegmentSnapshotPtr & left_snap,
-                                          const SegmentPtr & right,
-                                          const SegmentSnapshotPtr & right_snap,
+                                          const std::vector<SegmentPtr> & ordered_segments,
+                                          const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
                                           WriteBatches & wbs)
 {
-    LOG_FMT_DEBUG(left->log, "Merge - Begin prepare, left={} right={}", left->simpleInfo(), right->simpleInfo());
+    RUNTIME_CHECK(ordered_segments.size() >= 2, ordered_snapshots.size());
+    RUNTIME_CHECK(ordered_segments.size() == ordered_snapshots.size(), ordered_segments.size(), ordered_snapshots.size());
 
-    if (unlikely(compare(left->rowkey_range.getEnd(), right->rowkey_range.getStart()) != 0 || left->next_segment_id != right->segment_id))
-        throw Exception(
-            fmt::format("The ranges of merge segments are not consecutive: leftEnd={} rightStart={}",
-                        left->rowkey_range.getEnd().toDebugString(),
-                        right->rowkey_range.getStart().toDebugString()));
+    const auto & log = ordered_segments[0]->log;
+    LOG_FMT_DEBUG(log, "Merge - Begin prepare, segments_to_merge={}", simpleInfo(ordered_segments));
+
+    for (size_t i = 1; i < ordered_segments.size(); i++)
+    {
+        RUNTIME_CHECK(
+            compare(ordered_segments[i - 1]->rowkey_range.getEnd(), ordered_segments[i]->rowkey_range.getStart()) == 0,
+            i,
+            ordered_segments[i - 1]->info(),
+            ordered_segments[i]->info());
+        RUNTIME_CHECK(
+            ordered_segments[i - 1]->next_segment_id == ordered_segments[i]->segment_id,
+            i,
+            ordered_segments[i - 1]->info(),
+            ordered_segments[i]->info());
+    }
 
     auto get_stream = [&](const SegmentPtr & segment, const SegmentSnapshotPtr & segment_snap) {
         auto read_info = segment->getReadInfo(
             dm_context,
             *schema_snap,
             segment_snap,
-            {RowKeyRange::newAll(left->is_common_handle, left->rowkey_column_size)});
+            {RowKeyRange::newAll(segment->is_common_handle, segment->rowkey_column_size)});
         RowKeyRanges rowkey_ranges{segment->rowkey_range};
         BlockInputStreamPtr stream = getPlacedStream(dm_context,
                                                      *read_info.read_columns,
@@ -1293,10 +1305,12 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
         return stream;
     };
 
-    auto left_stream = get_stream(left, left_snap);
-    auto right_stream = get_stream(right, right_snap);
+    std::vector<BlockInputStreamPtr> input_streams;
+    input_streams.reserve(ordered_segments.size());
+    for (size_t i = 0; i < ordered_segments.size(); i++)
+        input_streams.emplace_back(get_stream(ordered_segments[i], ordered_snapshots[i]));
 
-    BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(BlockInputStreams{left_stream, right_stream}, /*req_id=*/"");
+    BlockInputStreamPtr merged_stream = std::make_shared<ConcatBlockInputStream>(input_streams, /*req_id=*/"");
     // for the purpose to calculate StableProperty of the new segment
     merged_stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_COMPACT>>(
         merged_stream,
@@ -1304,44 +1318,48 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
         dm_context.min_version,
         dm_context.is_common_handle);
 
-    auto merged_stable_id = left->stable->getId();
+    auto merged_stable_id = ordered_segments[0]->stable->getId();
     auto merged_stable = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
-    LOG_FMT_DEBUG(left->log, "Merge - Finish prepare, left={} right={}", left->info(), right->info());
+    LOG_FMT_DEBUG(log, "Merge - Finish prepare, segments_to_merge={}", info(ordered_segments));
 
     return merged_stable;
 }
 
 SegmentPtr Segment::applyMerge(DMContext & dm_context, //
-                               const SegmentPtr & left,
-                               const SegmentSnapshotPtr & left_snap,
-                               const SegmentPtr & right,
-                               const SegmentSnapshotPtr & right_snap,
+                               const std::vector<SegmentPtr> & ordered_segments,
+                               const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
                                WriteBatches & wbs,
                                const StableValueSpacePtr & merged_stable)
 {
-    LOG_FMT_DEBUG(left->log, "Merge - Begin apply, left={} right={}", left->simpleInfo(), right->simpleInfo());
+    RUNTIME_CHECK(ordered_segments.size() >= 2, ordered_snapshots.size());
+    RUNTIME_CHECK(ordered_segments.size() == ordered_snapshots.size(), ordered_segments.size(), ordered_snapshots.size());
 
-    RowKeyRange merged_range(left->rowkey_range.start, right->rowkey_range.end, left->is_common_handle, left->rowkey_column_size);
+    const auto & first_seg = ordered_segments.front();
+    const auto & last_seg = ordered_segments.back();
+    const auto & log = first_seg->log;
+    LOG_FMT_DEBUG(log, "Merge - Begin apply, segments_to_merge={}", simpleInfo(ordered_segments));
 
-    auto [left_persisted_files, left_in_memory_files] = left->delta->checkHeadAndCloneTail(dm_context, merged_range, left_snap->delta->getColumnFilesInSnapshot(), wbs);
-    auto [right_persisted_files, right_in_memory_files] = right->delta->checkHeadAndCloneTail(dm_context, merged_range, right_snap->delta->getColumnFilesInSnapshot(), wbs);
+    RowKeyRange merged_range(first_seg->rowkey_range.start, last_seg->rowkey_range.end, first_seg->is_common_handle, first_seg->rowkey_column_size);
+
+    ColumnFilePersisteds merged_persisted_column_files;
+    ColumnFiles merged_in_memory_files;
+    for (size_t i = 0; i < ordered_segments.size(); i++)
+    {
+        const auto [persisted_files, in_memory_files] = ordered_segments[i]->delta->checkHeadAndCloneTail(dm_context, merged_range, ordered_snapshots[i]->delta->getColumnFilesInSnapshot(), wbs);
+        merged_persisted_column_files.insert(merged_persisted_column_files.end(), persisted_files.begin(), persisted_files.end());
+        merged_in_memory_files.insert(merged_in_memory_files.end(), in_memory_files.begin(), in_memory_files.end());
+    }
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
-    ColumnFilePersisteds merged_persisted_column_files = std::move(left_persisted_files);
-    ColumnFiles merged_in_memory_files = std::move(left_in_memory_files);
+    auto merged_delta = std::make_shared<DeltaValueSpace>(first_seg->delta->getId(), merged_persisted_column_files, merged_in_memory_files);
 
-    merged_persisted_column_files.insert(merged_persisted_column_files.end(), right_persisted_files.begin(), right_persisted_files.end());
-    merged_in_memory_files.insert(merged_in_memory_files.end(), right_in_memory_files.begin(), right_in_memory_files.end());
-
-    auto merged_delta = std::make_shared<DeltaValueSpace>(left->delta->getId(), merged_persisted_column_files, merged_in_memory_files);
-
-    auto merged = std::make_shared<Segment>(left->epoch + 1, //
+    auto merged = std::make_shared<Segment>(first_seg->epoch + 1, //
                                             merged_range,
-                                            left->segment_id,
-                                            right->next_segment_id,
+                                            first_seg->segment_id,
+                                            last_seg->next_segment_id,
                                             merged_delta,
                                             merged_stable);
 
@@ -1350,17 +1368,20 @@ SegmentPtr Segment::applyMerge(DMContext & dm_context, //
     merged->stable->saveMeta(wbs.meta);
     merged->serialize(wbs.meta);
 
-    left->delta->recordRemoveColumnFilesPages(wbs);
-    left->stable->recordRemovePacksPages(wbs);
+    for (size_t i = 0; i < ordered_segments.size(); i++)
+    {
+        const auto & seg = ordered_segments[i];
+        seg->delta->recordRemoveColumnFilesPages(wbs);
+        seg->stable->recordRemovePacksPages(wbs);
+        if (i > 0) // The first seg's id is preserved, so don't del id.
+        {
+            wbs.removed_meta.delPage(seg->segmentId());
+            wbs.removed_meta.delPage(seg->delta->getId());
+            wbs.removed_meta.delPage(seg->stable->getId());
+        }
+    }
 
-    right->delta->recordRemoveColumnFilesPages(wbs);
-    right->stable->recordRemovePacksPages(wbs);
-
-    wbs.removed_meta.delPage(right->segmentId());
-    wbs.removed_meta.delPage(right->delta->getId());
-    wbs.removed_meta.delPage(right->stable->getId());
-
-    LOG_FMT_DEBUG(left->log, "Merge - Finish apply, left={} right={} merged={}", left->info(), right->info(), merged->info());
+    LOG_FMT_DEBUG(log, "Merge - Finish apply, merged={} merged_from_segments={}", merged->info(), info(ordered_segments));
 
     return merged;
 }
@@ -1446,6 +1467,36 @@ String Segment::info() const
                        stable->getDMFilesString(),
                        stable->getRows(),
                        stable->getBytes());
+}
+
+String Segment::simpleInfo(const std::vector<SegmentPtr> & segments)
+{
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("[{} segments: ", segments.size());
+    fmt_buf.joinStr(
+        segments.cbegin(),
+        segments.cend(),
+        [&](const SegmentPtr & seg, FmtBuffer & fb) {
+            fb.append(seg->simpleInfo());
+        },
+        ", ");
+    fmt_buf.fmtAppend("]");
+    return fmt_buf.toString();
+}
+
+String Segment::info(const std::vector<SegmentPtr> & segments)
+{
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("[{} segments: ", segments.size());
+    fmt_buf.joinStr(
+        segments.cbegin(),
+        segments.cend(),
+        [&](const SegmentPtr & seg, FmtBuffer & fb) {
+            fb.append(seg->info());
+        },
+        ", ");
+    fmt_buf.fmtAppend("]");
+    return fmt_buf.toString();
 }
 
 void Segment::drop(const FileProviderPtr & file_provider, WriteBatches & wbs)
