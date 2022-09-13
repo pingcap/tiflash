@@ -87,10 +87,8 @@ void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & conte
     if (!join_ptr->initialized)
     {
         const auto & settings = context.getSettingsRef();
-        size_t join_build_concurrency = settings.join_concurrent_build
-            ? std::min(concurrency, pipeline.concurrency())
-            : 1;
-        join_ptr->init(pipeline.getHeader(), join_build_concurrency);
+        RUNTIME_CHECK(settings.join_concurrent_build);
+        join_ptr->init(pipeline.getHeader(), concurrency);
     }
 }
 
