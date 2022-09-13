@@ -28,6 +28,7 @@ namespace DB
 
 namespace FailPoints
 {
+extern const char gc_skip_update_safe_point[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 } // namespace FailPoints
@@ -458,8 +459,15 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     if (shutdown_called.load(std::memory_order_relaxed))
         return 0;
 
-    if (!updateGCSafePoint())
-        return 0;
+    bool skip_update_safe_point = false;
+    fiu_do_on(FailPoints::gc_skip_update_safe_point, {
+        skip_update_safe_point = true;
+    });
+    if (!skip_update_safe_point)
+    {
+        if (!updateGCSafePoint())
+            return 0;
+    }
 
     {
         std::shared_lock lock(read_write_mutex);
