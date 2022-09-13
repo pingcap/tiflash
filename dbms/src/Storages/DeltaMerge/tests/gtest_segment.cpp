@@ -42,7 +42,7 @@ namespace DM
 {
 namespace GC
 {
-bool shouldCompactStableWithTooLargeDTFileRange(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log);
+bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log);
 }
 namespace tests
 {
@@ -457,7 +457,7 @@ try
     {
         auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
         auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-        ASSERT_FALSE(GC::shouldCompactStableWithTooLargeDTFileRange(snap, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(snap, invalid_data_ratio_threshold, log));
     }
 
     FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
@@ -467,12 +467,12 @@ try
     {
         auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
         auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-        ASSERT_TRUE(GC::shouldCompactStableWithTooLargeDTFileRange(snap, invalid_data_ratio_threshold, log));
+        ASSERT_TRUE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(snap, invalid_data_ratio_threshold, log));
     }
     {
         auto segment = segments[new_seg_id_opt.value()];
         auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-        ASSERT_TRUE(GC::shouldCompactStableWithTooLargeDTFileRange(snap, invalid_data_ratio_threshold, log));
+        ASSERT_TRUE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(snap, invalid_data_ratio_threshold, log));
     }
 }
 CATCH

@@ -427,6 +427,10 @@ private:
     const StableValueSpacePtr stable;
 
     bool split_forbidden = false;
+    // After logical split, it is very possible that only half of the data in the segment's DTFile is valid for this segment.
+    // So we want to do merge delta on this kind of segment to clean out the invalid data.
+    // This involves to check the valid data ratio in the background gc thread,
+    // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
 
     LoggerPtr log;

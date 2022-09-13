@@ -253,7 +253,7 @@ enum Type
 {
     Unknown,
     TooManyDeleteRange,
-    TooLargeDTFileRange,
+    TooMuchOutOfRange,
     TooManyInvalidVersion,
 };
 
@@ -263,8 +263,8 @@ static std::string toString(Type type)
     {
     case TooManyDeleteRange:
         return "TooManyDeleteRange";
-    case TooLargeDTFileRange:
-        return "TooLargeDTFileRange";
+    case TooMuchOutOfRange:
+        return "TooMuchOutOfRange";
     case TooManyInvalidVersion:
         return "TooManyInvalidVersion";
     default:
@@ -317,7 +317,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     return (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
 }
 
-bool shouldCompactStableWithTooLargeDTFileRange(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log)
+bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log)
 {
     auto valid_rows = snap->stable->getRows();
     auto valid_bytes = snap->stable->getBytes();
@@ -428,10 +428,10 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             else if (!segment->isValidDataRatioChecked())
             {
                 segment->setValidDataRatioChecked();
-                if (GC::shouldCompactStableWithTooLargeDTFileRange(segment_snap, invalid_data_ratio_threshold, log))
+                if (GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(segment_snap, invalid_data_ratio_threshold, log))
                 {
                     should_compact = true;
-                    gc_type = GC::Type::TooLargeDTFileRange;
+                    gc_type = GC::Type::TooMuchOutOfRange;
                 }
             }
             else if (!should_compact && (segment->getLastCheckGCSafePoint() < gc_safe_point))
