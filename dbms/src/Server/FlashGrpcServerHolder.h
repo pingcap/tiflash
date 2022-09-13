@@ -14,6 +14,7 @@
 #pragma once
 
 #include <Common/BackgroundTask.h>
+#include <Common/ThreadManager.h>
 #include <Common/assert_cast.h>
 #include <Debug/astToExecutor.h>
 #include <Flash/DiagnosticsService.h>
@@ -39,6 +40,8 @@ public:
 
     void setMockStorage(MockStorage & mock_storage);
     void setMockMPPServerInfo(MockMPPServerInfo info);
+
+    std::unique_ptr<FlashService> & flashService();
 
 private:
     const LoggerPtr & log;
