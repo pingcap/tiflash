@@ -14,50 +14,61 @@
 
 #include <Functions/FunctionUnaryArithmetic.h>
 
-namespace DB {
-    namespace {
+namespace DB
+{
+namespace
+{
 
-        template<typename A>
-        struct BitCountImpl {
-            using ResultType = uint64_t;
-            static ResultType apply(A a) {
-                ResultType value;
-                if constexpr(IsDecimal<A>) {
-                    value = static_cast<ResultType>(a.value);
-                } else {
-                    value = static_cast<ResultType>(a);
-                }
-                value = value - ((value >> 1) & 0x5555555555555555);
-                value = (value & 0x3333333333333333) + ((value >> 2) & 0x3333333333333333);
-                value = (value & 0x0f0f0f0f0f0f0f0f) + ((value >> 4) & 0x0f0f0f0f0f0f0f0f);
-                value = value + (value >> 8);
-                value = value + (value >> 16);
-                value = value + (value >> 32);
-                value = value & 0x7f;
-                return value;
-            }
-        };
-
-
-        struct NameBitCount {
-            static constexpr auto name = "bitCount";
-        };
-
-        using FunctionBitCount = FunctionUnaryArithmetic<BitCountImpl, NameBitCount, false>;
-
-    }
-
-    template<>
-    struct FunctionUnaryArithmeticMonotonicity<NameBitCount> {
-        static bool has() { return false; }
-
-        static IFunction::Monotonicity get(const Field &, const Field &) {
-            return {};
+template <typename A>
+struct BitCountImpl
+{
+    using ResultType = uint64_t;
+    static ResultType apply(A a)
+    {
+        ResultType value;
+        if constexpr (IsDecimal<A>)
+        {
+            value = static_cast<ResultType>(a.value);
         }
-    };
-
-    void registerFunctionBitCount(FunctionFactory &factory) {
-        factory.registerFunction<FunctionBitCount>();
+        else
+        {
+            value = static_cast<ResultType>(a);
+        }
+        value = value - ((value >> 1) & 0x5555555555555555);
+        value = (value & 0x3333333333333333) + ((value >> 2) & 0x3333333333333333);
+        value = (value & 0x0f0f0f0f0f0f0f0f) + ((value >> 4) & 0x0f0f0f0f0f0f0f0f);
+        value = value + (value >> 8);
+        value = value + (value >> 16);
+        value = value + (value >> 32);
+        value = value & 0x7f;
+        return value;
     }
+};
+
+
+struct NameBitCount
+{
+    static constexpr auto name = "bitCount";
+};
+
+using FunctionBitCount = FunctionUnaryArithmetic<BitCountImpl, NameBitCount, false>;
+
+} // namespace
+
+template <>
+struct FunctionUnaryArithmeticMonotonicity<NameBitCount>
+{
+    static bool has() { return false; }
+
+    static IFunction::Monotonicity get(const Field &, const Field &)
+    {
+        return {};
+    }
+};
+
+void registerFunctionBitCount(FunctionFactory & factory)
+{
+    factory.registerFunction<FunctionBitCount>();
+}
 
 } // namespace DB
