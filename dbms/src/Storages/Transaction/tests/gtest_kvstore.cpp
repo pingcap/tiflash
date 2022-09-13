@@ -16,6 +16,7 @@
 #include <Debug/MockSSTReader.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionExecutionResult.h>
@@ -35,7 +36,6 @@ extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const Ti
 extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
 } // namespace RegionBench
 
-extern std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true);
 extern void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true);
 extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
 extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_left, const RegionState & source_region_state);
@@ -787,7 +787,7 @@ TEST_F(RegionKVStoreTest, Region)
             ASSERT_EQ(k->lock_version(), 3);
         }
         {
-            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region);
+            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
             ASSERT_TRUE(data_list_read);
             ASSERT_EQ(1, data_list_read->size());
             RemoveRegionCommitCache(region, *data_list_read);
@@ -827,7 +827,7 @@ TEST_F(RegionKVStoreTest, Region)
         region->remove("write", RecordKVFormat::genKey(table_id, 4, 8));
         ASSERT_EQ(1, region->writeCFCount());
         {
-            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region);
+            std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
             ASSERT_TRUE(data_list_read);
             ASSERT_EQ(1, data_list_read->size());
             RemoveRegionCommitCache(region, *data_list_read);

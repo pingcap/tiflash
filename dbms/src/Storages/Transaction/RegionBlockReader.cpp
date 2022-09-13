@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnsNumber.h>
+#include <Common/typeid_cast.h>
+#include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/Datum.h>

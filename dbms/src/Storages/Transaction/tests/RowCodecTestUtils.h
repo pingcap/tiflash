@@ -200,7 +200,8 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
         else
         {
             column_info_fields.emplace(column_id_value.id,
-                                       std::make_tuple(getColumnInfo<ValueType>(column_id_value.id), static_cast<NearestType>(std::move(column_id_value.value))));
+                                       std::make_tuple(getColumnInfo<ValueType>(column_id_value.id),
+                                                       static_cast<NearestType>(std::move(column_id_value.value))));
         }
     }
 }
