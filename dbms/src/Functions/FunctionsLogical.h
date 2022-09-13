@@ -201,7 +201,7 @@ struct AssociativeOperationImpl
             //      vec = {1, 0, 2} (error, we only want 0 or 1)
             // See issue: https://github.com/pingcap/tidb/issues/37258
             bool a = static_cast<bool>(vec[i]);
-            return Op::isSaturatedValue(a) ? static_cast<UInt8>(a) : continuation.apply(i);
+            return Op::isSaturatedValue(a) ? a : continuation.apply(i);
         }
         else
         {

@@ -59,6 +59,13 @@ try
             func_name,
             createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
             createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}})));
+    // issue 37258
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<UInt8>>({0, 1, 1, 1, 1, {}}),
+        executeFunction(
+            func_name,
+            createColumn<Nullable<UInt8>>({0, 123, 0, 41, {}, 0}),
+            createColumn<Nullable<UInt8>>({0, 11, 221, 0, 11, {}})));
     // column, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({1, 1}),
