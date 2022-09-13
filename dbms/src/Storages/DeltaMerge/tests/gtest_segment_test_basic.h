@@ -15,11 +15,13 @@
 
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <random>
 #include <vector>
 
 namespace DB
@@ -43,13 +45,13 @@ public:
     // When `check_rows` is true, it will compare the rows num before and after the segment update.
     // So if there is some write during the segment update, it will report false failure if `check_rows` is true.
     std::optional<PageId> splitSegment(PageId segment_id, bool check_rows = true);
-    void mergeSegment(PageId left_segment_id, PageId right_segment_id, bool check_rows = true);
+    void mergeSegment(const std::vector<PageId> & segments, bool check_rows = true);
     void mergeSegmentDelta(PageId segment_id, bool check_rows = true);
 
     void flushSegmentCache(PageId segment_id);
     void writeSegment(PageId segment_id, UInt64 write_rows = 100);
     void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100);
-    void writeSegmentWithDeletedPack(PageId segment_id);
+    void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100);
     void deleteRangeSegment(PageId segment_id);
 
 
@@ -66,41 +68,40 @@ public:
     PageId createNewSegmentWithSomeData();
     size_t getSegmentRowNumWithoutMVCC(PageId segment_id);
     size_t getSegmentRowNum(PageId segment_id);
-    void checkSegmentRow(PageId segment_id, size_t expected_row_num);
     std::pair<Int64, Int64> getSegmentKeyRange(SegmentPtr segment);
 
 protected:
+    std::mt19937 random;
+
     // <segment_id, segment_ptr>
     std::map<PageId, SegmentPtr> segments;
 
-    enum SegmentOperatorType
-    {
-        Write = 0,
-        DeleteRange,
-        Split,
-        Merge,
-        MergeDelta,
-        FlushCache,
-        WriteDeletedPack,
-        SegmentOperatorMax
-    };
-
-    const std::vector<std::function<void()>> segment_operator_entries = {
-        [this] { writeRandomSegment(); },
-        [this] { deleteRangeRandomSegment(); },
-        [this] { splitRandomSegment(); },
-        [this] { mergeRandomSegment(); },
-        [this] { mergeDeltaRandomSegment(); },
-        [this] { flushCacheRandomSegment(); },
-        [this] {
-            writeRandomSegmentWithDeletedPack();
-        }};
+    const std::vector<std::pair<double /* probability */, std::function<void()>>> segment_operator_entries = {
+        {1.0, [this] {
+             writeRandomSegment();
+         }},
+        {0.25, [this] {
+             deleteRangeRandomSegment();
+         }},
+        {1.0, [this] {
+             splitRandomSegment();
+         }},
+        {0.5, [this] {
+             mergeRandomSegment();
+         }},
+        {1.0, [this] {
+             mergeDeltaRandomSegment();
+         }},
+        {1.0, [this] {
+             flushCacheRandomSegment();
+         }},
+        {0.25, [this] {
+             writeRandomSegmentWithDeletedPack();
+         }}};
 
     PageId getRandomSegmentId();
 
-    std::pair<PageId, PageId> getRandomMergeablePair();
-
-    RowKeyRange commonHandleKeyRange();
+    std::vector<PageId> getRandomMergeableSegments();
 
     SegmentPtr reload(bool is_common_handle, const ColumnDefinesPtr & pre_define_columns, DB::Settings && db_settings);
 
@@ -123,6 +124,9 @@ protected:
     SegmentPtr root_segment;
     UInt64 version = 0;
     SegmentTestOptions options;
+
+    LoggerPtr logger_op;
+    LoggerPtr logger;
 };
 } // namespace tests
 } // namespace DM
