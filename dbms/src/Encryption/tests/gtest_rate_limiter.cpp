@@ -331,26 +331,25 @@ TEST(ReadLimiterTest, LimiterStat)
         ASSERT_GT(stat.pct(), 100) << stat.toString();
     }
 
-    static constexpr UInt64 alloc_bytes = 2047;
+    static constexpr UInt64 total_bytes = 2047;
     for (int i = 0; i < 11; i++)
     {
         request(read_limiter, 1 << i);
     }
-
     std::this_thread::sleep_for(100ms);
     ASSERT_EQ(read_limiter.getAvailableBalance(), -947);
 
     stat = read_limiter.getStat();
-    ASSERT_EQ(stat.alloc_bytes, alloc_bytes);
-    ASSERT_GE(stat.elapsed_ms, alloc_bytes / 100 + 1);
+    ASSERT_EQ(stat.alloc_bytes, total_bytes + read_limiter.getAvailableBalance());
+    ASSERT_GE(stat.elapsed_ms, stat.alloc_bytes / 100 + 1);
     ASSERT_EQ(stat.refill_period_ms, 100ul);
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
-    ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
-    ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+    ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
+    ASSERT_EQ(stat.pct(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
 }
 
-TEST(ReadLimiterTest2, ReadMany)
+TEST(ReadLimiterTest, ReadMany)
 {
     Int64 real_read_bytes{0};
     auto get_read_bytes = [&]() {

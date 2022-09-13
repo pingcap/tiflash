@@ -337,11 +337,12 @@ Int64 ReadLimiter::getAvailableBalance()
     else
     {
         Int64 real_alloc_bytes = bytes - last_stat_bytes;
-        metricAllocBytes(type, real_alloc_bytes);
         // `alloc_bytes` is the number of byte that ReadLimiter has allocated.
         if (available_balance > 0)
         {
-            alloc_bytes += std::min(real_alloc_bytes, available_balance);
+            auto can_alloc_bytes = std::min(real_alloc_bytes, available_balance);
+            alloc_bytes += can_alloc_bytes;
+            metricAllocBytes(type, can_alloc_bytes);
         }
         available_balance -= real_alloc_bytes;
     }
@@ -349,9 +350,8 @@ Int64 ReadLimiter::getAvailableBalance()
     return available_balance;
 }
 
-void ReadLimiter::consumeBytes(Int64 bytes)
+void ReadLimiter::consumeBytes([[maybe_unused]]Int64 bytes)
 {
-    metricRequestBytes(type, bytes);
     // Do nothing for read.
 }
 
@@ -372,7 +372,9 @@ void ReadLimiter::refillAndAlloc()
         // At least refill one time.
         Int64 max_refill_times = std::max(elapsed_ms, refill_period_ms) / refill_period_ms;
         Int64 max_refill_bytes = max_refill_times * refill_balance_per_period;
-        alloc_bytes += std::min(-available_balance, max_refill_bytes);
+        Int64 can_alloc_bytes = std::min(-available_balance, max_refill_bytes);
+        alloc_bytes += can_alloc_bytes;
+        metricAllocBytes(type, can_alloc_bytes);
         available_balance = std::min(available_balance + max_refill_bytes, refill_balance_per_period);
     }
     else
