@@ -1632,6 +1632,29 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
 
 namespace GC
 {
+enum Type
+{
+    Unknown,
+    TooManyDeleteRange,
+    TooLargeDTFileRange,
+    TooManyInvalidVersion,
+};
+
+static std::string toString(Type type)
+{
+    switch (type)
+    {
+    case TooManyDeleteRange:
+        return "TooManyDeleteRange";
+    case TooLargeDTFileRange:
+        return "TooLargeDTFileRange";
+    case TooManyInvalidVersion:
+        return "TooManyInvalidVersion";
+    default:
+        return "Unknown";
+    }
+}
+
 // Returns true if it needs gc.
 // This is for optimization purpose, does not mean to be accurate.
 bool shouldCompactStable(const SegmentPtr & seg, DB::Timestamp gc_safepoint, double ratio_threshold, const LoggerPtr & log)
@@ -1774,6 +1797,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             auto invalid_data_ratio_threshold = global_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc;
             RUNTIME_ASSERT(invalid_data_ratio_threshold >= 0 && invalid_data_ratio_threshold <= 1);
             bool should_compact = false;
+            GC::Type gc_type = GC::Type::Unknown;
             if (GC::shouldCompactDeltaWithStable(
                     *dm_context,
                     segment_snap,
@@ -1782,13 +1806,18 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     log))
             {
                 should_compact = true;
+                gc_type = GC::Type::TooManyDeleteRange;
             }
             else if (!segment->isValidDataRatioChecked())
             {
                 segment->setValidDataRatioChecked();
-                should_compact = GC::shouldCompactStable(segment_snap, invalid_data_ratio_threshold, log);
+                if (GC::shouldCompactStable(segment_snap, invalid_data_ratio_threshold, log))
+                {
+                    should_compact = true;
+                    gc_type = GC::Type::TooLargeDTFileRange;
+                }
             }
-            else if (segment->getLastCheckGCSafePoint() < gc_safe_point)
+            else if (!should_compact && (segment->getLastCheckGCSafePoint() < gc_safe_point))
             {
                 // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
                 // Because after we calculate StableProperty and compare it with this gc_safe_point,
@@ -1802,11 +1831,15 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                 if (!segment->getStable()->isStablePropertyCached())
                     segment->getStable()->calculateStableProperty(*dm_context, segment_range, isCommonHandle());
 
-                should_compact = GC::shouldCompactStable(
-                    segment,
-                    gc_safe_point,
-                    global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
-                    log);
+                if (GC::shouldCompactStable(
+                        segment,
+                        gc_safe_point,
+                        global_context.getSettingsRef().dt_bg_gc_ratio_threhold_to_trigger_gc,
+                        log))
+                {
+                    should_compact = true;
+                    gc_type = GC::Type::TooManyInvalidVersion;
+                }
             }
             bool finish_gc_on_segment = false;
             if (should_compact)
@@ -1820,17 +1853,19 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     finish_gc_on_segment = true;
                     LOG_FMT_DEBUG(
                         log,
-                        "Finish GC-merge-delta, segment={} table={}",
+                        "Finish GC-merge-delta, segment={} table={}, gc_type={}",
                         segment->simpleInfo(),
-                        table_name);
+                        table_name,
+                        GC::toString(gc_type));
                 }
                 else
                 {
                     LOG_FMT_DEBUG(
                         log,
-                        "GC aborted, segment={} table={}",
+                        "GC aborted, segment={} table={}, gc_type={}",
                         segment->simpleInfo(),
-                        table_name);
+                        table_name,
+                        GC::toString(gc_type));
                 }
             }
             if (!finish_gc_on_segment)
