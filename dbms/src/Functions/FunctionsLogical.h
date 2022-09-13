@@ -198,9 +198,7 @@ struct AssociativeOperationImpl
     {
         if (Op::isSaturable())
         {
-            UInt8 a = vec[i];
-
-            // !!a is a trick
+            // cast a: UInt8 -> bool -> UInt8 is a trick
             // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1
             // which correspond to false or true. However, for columns with UInt8 type,
             // no more convertion will be executed on them and the values stored
@@ -216,7 +214,8 @@ struct AssociativeOperationImpl
             //   then, the vec will be:
             //      vec = {1, 0, 2} (error, we only want 0 or 1)
             // See issue: https://github.com/pingcap/tidb/issues/37258
-            return Op::isSaturatedValue(a) ? !!a : continuation.apply(i);
+            bool a = static_cast<bool>(vec[i]);
+            return Op::isSaturatedValue(a) ? static_cast<UInt8>(a) : continuation.apply(i);
         }
         else
         {
