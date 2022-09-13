@@ -15,6 +15,7 @@
 
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>

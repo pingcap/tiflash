@@ -1237,6 +1237,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     SYNC_FOR("before_Segment::applyMerge"); // pause without holding the lock on segments to be merged
 
     std::vector<Segment::Lock> locks;
+    locks.reserve(ordered_segments.size());
     for (const auto & seg : ordered_segments)
         locks.emplace_back(seg->mustGetUpdateLock());
 

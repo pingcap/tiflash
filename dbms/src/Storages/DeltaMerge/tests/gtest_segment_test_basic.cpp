@@ -131,6 +131,7 @@ void SegmentTestBasic::mergeSegment(const std::vector<PageId> & segments_id, boo
 
     std::vector<SegmentPtr> segments_to_merge;
     std::vector<size_t> segments_rows;
+    size_t merged_rows = 0;
     segments_to_merge.reserve(segments_id.size());
     segments_rows.reserve(segments_id.size());
 
@@ -139,7 +140,10 @@ void SegmentTestBasic::mergeSegment(const std::vector<PageId> & segments_id, boo
         auto it = segments.find(segment_id);
         RUNTIME_CHECK(it != segments.end(), segment_id);
         segments_to_merge.emplace_back(it->second);
-        segments_rows.emplace_back(getSegmentRowNum(segment_id));
+
+        auto rows = getSegmentRowNum(segment_id);
+        segments_rows.emplace_back(rows);
+        merged_rows += rows;
     }
 
     LOG_FMT_DEBUG(logger, "begin merge, segments=[{}] each_rows=[{}]", fmt::join(segments_id, ","), fmt::join(segments_rows, ","));
@@ -155,7 +159,6 @@ void SegmentTestBasic::mergeSegment(const std::vector<PageId> & segments_id, boo
         segments.erase(segments.find(segment_id));
     segments[merged_segment->segmentId()] = merged_segment;
 
-    int merged_rows = std::accumulate(segments_rows.begin(), segments_rows.end(), 0);
     if (check_rows)
         EXPECT_EQ(getSegmentRowNum(merged_segment->segmentId()), merged_rows);
 
