@@ -1573,7 +1573,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             type = ThreadType::BG_Split;
             break;
         case TaskType::Merge:
-            segmentMerge(*task.dm_context, task.segment, task.next_segment, false);
+            segmentMerge(*task.dm_context, {task.segment, task.next_segment}, false);
             type = ThreadType::BG_Merge;
             break;
         case TaskType::MergeDelta:

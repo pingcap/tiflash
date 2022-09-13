@@ -796,7 +796,7 @@ try
 
     // merge segments
     {
-        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
+        segment = Segment::merge(dmContext(), tableColumns(), {segment, new_segment});
         {
             // check merged segment range
             const auto & merged_range = segment->getRowKeyRange();
@@ -1152,7 +1152,7 @@ try
         write_100_rows(other_segment);
         segment->flushCache(dmContext());
 
-        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), segment, left_snap, other_segment, right_snap, wbs);
+        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), {segment, other_segment}, {left_snap, right_snap}, wbs);
 
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC();
@@ -1160,7 +1160,7 @@ try
         auto left_lock = segment->mustGetUpdateLock();
         auto right_lock = other_segment->mustGetUpdateLock();
 
-        segment = Segment::applyMerge(dmContext(), segment, left_snap, other_segment, right_snap, wbs, merged_stable);
+        segment = Segment::applyMerge(dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
 
         wbs.writeAll();
     }
