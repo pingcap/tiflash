@@ -113,8 +113,7 @@ void MPPTunnel::finishSendQueue(bool drain)
 void MPPTunnel::close(const String & reason)
 {
     SCOPE_EXIT({
-        // ensure the tracked memory is released and updated before memory tracker(in ProcListEntry) is released
-        finishSendQueue(true); // drain the send_queue when close
+        finishSendQueue(true); // drain the send_queue when close, to release useless memory
     });
     {
         std::unique_lock lk(mu);
