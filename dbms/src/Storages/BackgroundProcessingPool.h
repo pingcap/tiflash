@@ -81,7 +81,7 @@ public:
     using TaskHandle = std::shared_ptr<TaskInfo>;
 
 
-    explicit BackgroundProcessingPool(int size_);
+    explicit BackgroundProcessingPool(int size_, std::string thread_prefix_);
 
     size_t getNumberOfThreads() const { return size; }
 
@@ -123,8 +123,9 @@ private:
     std::atomic<bool> shutdown{false};
     std::condition_variable wake_event;
 
+    std::string thread_prefix;
 
-    void threadFunction();
+    void threadFunction(size_t thread_idx);
 };
 
 using BackgroundProcessingPoolPtr = std::shared_ptr<BackgroundProcessingPool>;
