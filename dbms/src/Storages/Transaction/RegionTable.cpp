@@ -187,8 +187,8 @@ void RegionTable::removeTable(TableID table_id)
     for (const auto & region_info : table.regions)
     {
         regions.erase(region_info.first);
-        leader_safets.erase(region_info.first);
-        self_safets.erase(region_info.first);
+        leader_safe_ts.erase(region_info.first);
+        self_safe_ts.erase(region_info.first);
     }
 
     // Remove from table map.
@@ -267,8 +267,8 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         handle_range = internal_region_it->second.range_in_table;
 
         regions.erase(it);
-        leader_safets.erase(region_id);
-        self_safets.erase(region_id);
+        leader_safe_ts.erase(region_id);
+        self_safe_ts.erase(region_id);
         table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {

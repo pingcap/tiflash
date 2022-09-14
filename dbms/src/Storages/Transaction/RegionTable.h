@@ -169,30 +169,30 @@ public:
 
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
-    void updateSelfSafeTS(UInt64 region_id, UInt64 self_safe_ts)
+    void updateSelfSafeTS(UInt64 region_id, UInt64 safe_ts)
     {
-        if (self_safe_ts == InvalidSafeTS)
+        if (safe_ts == InvalidSafeTS)
         {
             return;
         }
-        self_safets[region_id] = self_safe_ts;
+        self_safe_ts[region_id] = safe_ts;
     }
-    void updateLeaderSafeTS(UInt64 region_id, UInt64 leader_safe_ts)
+    void updateLeaderSafeTS(UInt64 region_id, UInt64 safe_ts)
     {
-        if (leader_safe_ts == InvalidSafeTS)
+        if (safe_ts == InvalidSafeTS)
         {
             return;
         }
-        leader_safets[region_id] = leader_safe_ts;
+        leader_safe_ts[region_id] = safe_ts;
     }
 
     // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
     static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
-    bool isSafeTSDiffLarge(UInt64 region_id)
+    bool isSafeTSLag(UInt64 region_id)
     {
-        auto self_it = self_safets.find(region_id);
-        auto leader_it = leader_safets.find(region_id);
-        if (self_it == self_safets.end() || leader_it == leader_safets.end())
+        auto self_it = self_safe_ts.find(region_id);
+        auto leader_it = leader_safe_ts.find(region_id);
+        if (self_it == self_safe_ts.end() || leader_it == leader_safe_ts.end())
         {
             return false;
         }
@@ -218,8 +218,11 @@ private:
 private:
     TableMap tables;
     RegionInfoMap regions;
-    SafeTsMap leader_safets;
-    SafeTsMap self_safets;
+    // safe_ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
+    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts in check_leader RPC as leader_safe_ts.
+    SafeTsMap leader_safe_ts;
+    // self_safe_ts is the safe_ts in learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update self_safe_ts when TiFlash has applied the raft log to applied_index.
+    SafeTsMap self_safe_ts;
     DirtyRegions dirty_regions;
 
     FlushThresholds flush_thresholds;

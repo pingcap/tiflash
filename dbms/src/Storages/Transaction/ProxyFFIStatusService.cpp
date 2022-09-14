@@ -60,12 +60,13 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             region_list.reserve(regions.size());
             for (const auto & region : regions)
             {
-                if (!region_table.isSafeTSDiffLarge(region.first))
+                if (!region_table.isSafeTSLag(region.first))
                 {
                     region_list.push_back(region.first);
                 }
             }
             count = region_list.size();
+            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id:{}, tolal region count:{}, response region count:{}", table_id, regions.size(), count);
         });
     }
     ss << count << std::endl;
