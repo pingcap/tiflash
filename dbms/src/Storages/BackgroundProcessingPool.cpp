@@ -87,11 +87,13 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_, std::string thread
     , thread_prefix(thread_prefix_)
     , thread_ids_counter(size_)
 {
-    LOG_FMT_INFO(&Poco::Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool, prefix={} n_threads={}", thread_prefix, size);
+    LOG_FMT_INFO(Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool, prefix={} n_threads={}", thread_prefix, size);
 
     threads.resize(size);
-    for (size_t i = 0; i < size; i++)
+    for (size_t i = 0; i < size; ++i)
+    {
         threads[i] = std::thread([this, i] { threadFunction(i); });
+    }
 }
 
 
