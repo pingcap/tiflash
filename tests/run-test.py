@@ -19,7 +19,7 @@ import sys
 import time
 
 if sys.version_info.major == 2:
-    print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
+    # print('running with py2: {}.{}.{}'.format(sys.version_info.major, sys.version_info.minor, sys.version_info.micro))
     from urllib2 import HTTPError
     from urllib2 import Request as UrlRequest
     from urllib2 import urlopen

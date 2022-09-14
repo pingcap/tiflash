@@ -22,7 +22,8 @@ function wait_table()
 }
 export -f wait_table
 
-function get_elapse_s() {
+function get_elapse_s()
+{
 	# time format:$(date +"%s.%N"), such as 1662367015.453429263
 	start_time=$1
 	end_time=$2
