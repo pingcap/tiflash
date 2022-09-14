@@ -164,7 +164,7 @@ private:
         executor_test,
         cancel_test
     };
-    TestMode test_mode = non_test;
+    std::atomic<TestMode> test_mode = non_test;
 
     MockStorage mock_storage;
     MockMPPServerInfo mpp_server_info{};

@@ -1838,43 +1838,36 @@ size_t Context::getMaxStreams() const
 
 bool Context::isMPPTest() const
 {
-    auto lock = getLock();
     return test_mode == mpp_test || test_mode == cancel_test;
 }
 
 void Context::setMPPTest()
 {
-    auto lock = getLock();
     test_mode = mpp_test;
 }
 
 bool Context::isCancelTest() const
 {
-    auto lock = getLock();
     return test_mode == cancel_test;
 }
 
 void Context::setCancelTest()
 {
-    auto lock = getLock();
     test_mode = cancel_test;
 }
 
 bool Context::isExecutorTest() const
 {
-    auto lock = getLock();
     return test_mode == executor_test;
 }
 
 void Context::setExecutorTest()
 {
-    auto lock = getLock();
     test_mode = executor_test;
 }
 
 bool Context::isTest() const
 {
-    auto lock = getLock();
     return test_mode != non_test;
 }
 
