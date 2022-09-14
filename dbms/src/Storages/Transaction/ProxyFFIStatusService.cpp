@@ -55,11 +55,17 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     // if storage is not created in ch, flash replica should not be available.
     if (tmt.getStorages().get(table_id))
     {
-        tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
-            count = regions.size();
+        RegionTable & region_table = tmt.getRegionTable();
+        region_table.handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
             region_list.reserve(regions.size());
             for (const auto & region : regions)
-                region_list.push_back(region.first);
+            {
+                if (!region_table.isSafeTSDiffLarge(region.first))
+                {
+                    region_list.push_back(region.first);
+                }
+            }
+            count = region_list.size();
         });
     }
     ss << count << std::endl;

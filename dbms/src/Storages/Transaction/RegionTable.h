@@ -23,9 +23,11 @@
 #include <Storages/Transaction/RegionLockInfo.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <condition_variable>
 #include <functional>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <variant>
@@ -55,6 +57,12 @@ struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 
+using SafeTS = UInt64;
+enum : SafeTS
+{
+    InvalidSafeTS = std::numeric_limits<UInt64>::max()
+};
+
 class RegionTable : private boost::noncopyable
 {
 public:
@@ -76,7 +84,7 @@ public:
 
     struct Table : boost::noncopyable
     {
-        Table(const TableID table_id_)
+        explicit Table(const TableID table_id_)
             : table_id(table_id_)
         {}
         TableID table_id;
@@ -85,6 +93,7 @@ public:
 
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionInfoMap = std::unordered_map<RegionID, TableID>;
+    using SafeTsMap = std::unordered_map<RegionID, UInt64>;
 
     using DirtyRegions = std::unordered_set<RegionID>;
     using TableToOptimize = std::unordered_set<TableID>;
@@ -93,7 +102,7 @@ public:
     {
         using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
 
-        FlushThresholds(FlushThresholdsData && data_)
+        explicit FlushThresholds(FlushThresholdsData && data_)
             : data(std::make_shared<FlushThresholdsData>(std::move(data_)))
         {}
 
@@ -117,7 +126,7 @@ public:
         mutable std::mutex mutex;
     };
 
-    RegionTable(Context & context_);
+    explicit RegionTable(Context & context_);
     void restore();
 
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
@@ -127,14 +136,14 @@ public:
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
 
-    void removeRegion(const RegionID region_id, bool remove_data, const RegionTaskLock &);
+    void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
     bool tryFlushRegions();
     RegionDataReadInfoList tryFlushRegion(RegionID region_id, bool try_persist = false);
     RegionDataReadInfoList tryFlushRegion(const RegionPtrWithBlock & region, bool try_persist);
 
-    void handleInternalRegionsByTable(const TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
-    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(const TableID table_id) const;
+    void handleInternalRegionsByTable(TableID table_id, std::function<void(const InternalRegions &)> && callback) const;
+    std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(TableID table_id) const;
 
     /// Write the data of the given region into the table with the given table ID, fill the data list for outer to remove.
     /// Will trigger schema sync on read error for only once,
@@ -159,17 +168,47 @@ public:
                                                                     Poco::Logger * log);
 
     /// extend range for possible InternalRegion or add one.
-    void extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys);
+    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
+    void updateSelfSafeTS(UInt64 region_id, UInt64 self_safe_ts)
+    {
+        if (self_safe_ts == InvalidSafeTS)
+        {
+            return;
+        }
+        self_safets[region_id] = self_safe_ts;
+    }
+    void updateLeaderSafeTS(UInt64 region_id, UInt64 leader_safe_ts)
+    {
+        if (leader_safe_ts == InvalidSafeTS)
+        {
+            return;
+        }
+        leader_safets[region_id] = leader_safe_ts;
+    }
+
+    // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
+    static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
+    bool isSafeTSDiffLarge(UInt64 region_id)
+    {
+        auto self_it = self_safets.find(region_id);
+        auto leader_it = leader_safets.find(region_id);
+        if (self_it == self_safets.end() || leader_it == leader_safets.end())
+        {
+            return false;
+        }
+        LOG_FMT_TRACE(log, "region_id:{}, table_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, regions[region_id], leader_it->second, self_it->second);
+        return (leader_it->second > self_it->second) && (leader_it->second - self_it->second > SafeTsDiffThreshold);
+    }
 
 private:
     friend class MockTiDB;
     friend class StorageDeltaMerge;
 
-    Table & getOrCreateTable(const TableID table_id);
+    Table & getOrCreateTable(TableID table_id);
     void removeTable(TableID table_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(const Region & region);
-    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
     RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
@@ -179,6 +218,8 @@ private:
 private:
     TableMap tables;
     RegionInfoMap regions;
+    SafeTsMap leader_safets;
+    SafeTsMap self_safets;
     DirtyRegions dirty_regions;
 
     FlushThresholds flush_thresholds;
