@@ -1,6 +1,7 @@
 mysql> drop table if exists test.t1;
 mysql> drop table if exists test.t2;
 mysql> drop table if exists test.t3;
+mysql> drop table if exists test.t4;
 mysql> create table test.t1(a char(20),b double);
 mysql> create table test.t2(a char(20));
 mysql> create table test.t3(a int);
