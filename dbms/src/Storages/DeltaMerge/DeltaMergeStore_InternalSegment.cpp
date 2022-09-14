@@ -322,7 +322,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     const MergeDeltaReason reason,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_INFO(log, "MergeDelta - Begin, thread={} safe_point={} segment={}", magic_enum::enum_name(run_thread), dm_context.min_version, segment->info());
+    LOG_FMT_INFO(log, "MergeDelta - Begin, reason={} safe_point={} segment={}", magic_enum::enum_name(reason), dm_context.min_version, segment->info());
 
     ColumnDefinesPtr schema_snap;
 
