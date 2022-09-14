@@ -1347,7 +1347,7 @@ public:
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
 
-                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, checkTimeValid);
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, checkTimeValidAllowMonthAndDayZero);
 
                 if (packed_uint_value.isNull())
                 {
@@ -1431,7 +1431,7 @@ public:
             for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
-                bool is_null = numberToDateTime(vec_from[i], datetime, false);
+                bool is_null = numberToDateTime(vec_from[i], datetime);
 
                 if (is_null)
                 {

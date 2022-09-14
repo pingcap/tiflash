@@ -561,6 +561,15 @@ bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute
     return day <= getLastDay(year, month);
 }
 
+bool checkTimeValidAllowMonthAndDayZero(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
+{
+    if (year > 9999 || month < 0 || month > 12 || day < 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
+    {
+        return false;
+    }
+    return day <= getLastDay(year, month);
+}
+
 bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32)
 {
     return true;
@@ -1243,10 +1252,6 @@ bool MyTimeBase::isValid(bool allow_zero_in_date, bool allow_invalid_date) const
     UInt8 max_day = 31;
     if (!allow_invalid_date)
     {
-        if (month < 1)
-        {
-            return false;
-        }
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         static auto is_leap_year = [](UInt16 _year) {
             return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0);

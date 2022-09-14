@@ -184,6 +184,7 @@ private:
 };
 
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
+bool checkTimeValidAllowMonthAndDayZero(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
 bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32);
 
 using CheckTimeFunc = std::function<bool(Int32, Int32, Int32, Int32, Int32, Int32)>;

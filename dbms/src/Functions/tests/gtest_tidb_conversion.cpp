@@ -987,10 +987,17 @@ try
                         {createColumn<Nullable<UInt32>>({MAX_UINT32}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_COLUMN_EQ(
-        createDateTimeColumn({{}}, 6),
+        createDateTimeColumn({{{0, 0, 0, 0, 0, 0, 0}}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{{2012, 0, 0, 0, 0, 0, 0}}}, 6),
+        executeFunction(func_name,
+                        {createColumn<Nullable<UInt64>>({20120000}),
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+
     ASSERT_COLUMN_EQ(
         createDateTimeColumn({{}, {}}, 6),
         executeFunction(func_name,
@@ -1268,6 +1275,7 @@ try
     testNotOnlyNull<Float64, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(20210201, {2021, 2, 1, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(20210000.1, {2021, 0, 0, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(101.1, {2000, 1, 1, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(1122.1, {2000, 11, 22, 0, 0, 0, 0}, 6);
@@ -1297,6 +1305,7 @@ try
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1111, 1), {2000, 1, 11, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11221, 1), {2000, 11, 22, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(31212111, 3), {2003, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(30000111, 3), {2003, 0, 0, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1212121111, 4), {2012, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1121212111111, 6), {112, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11121212111111, 6), {1112, 12, 12, 0, 0, 0, 0}, 6);
@@ -1988,6 +1997,12 @@ try
     {
         ASSERT_COLUMN_EQ(expect_date_column, vector_result);
     }
+
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{{2012, 0, 0, 0, 0, 0, 0}}}, 6),
+        executeFunction(func_name,
+                        {createColumn<Nullable<String>>({"20120000"}),
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
 }
 CATCH
 
