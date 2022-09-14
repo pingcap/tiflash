@@ -22,7 +22,7 @@ namespace
 template <typename A>
 struct BitCountImpl
 {
-    using ResultType = uint64_t;
+    using ResultType = int64_t;
     static ResultType apply(A a)
     {
         ResultType value;
