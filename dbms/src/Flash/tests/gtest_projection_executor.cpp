@@ -69,18 +69,6 @@ public:
         return context.scan(db_name, table_name).project(param).build(context);
     };
 
-    static const size_t max_concurrency_level = 10;
-
-    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; i += 2)
-        {
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-        }
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
-    }
-
     /// Prepare column data
     const ColDataString col0{"col0-0", "col0-1", "", "col0-2", {}, "col0-3", ""};
     const ColDataString col1{"col1-0", {}, "", "col1-1", "", "col1-2", "col1-3"};
@@ -111,29 +99,29 @@ try
 {
     /// Check single column
     auto request = buildDAGRequest<MockColumnNameVec>({col_names[4]});
-    executeWithConcurrency(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request, {toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Check multi columns
     request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[4]});
-    executeWithConcurrency(request,
-                           {
-                               toNullableVec<String>(col_names[0], col0_sorted_asc),
-                               toNullableVec<Int32>(col_names[4], col4_sorted_asc),
-                           });
+    executeAndAssertColumnsEqual(request,
+                                 {
+                                     toNullableVec<String>(col_names[0], col0_sorted_asc),
+                                     toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                                 });
 
     /// Check multi columns
     request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[1], col_names[4]});
-    executeWithConcurrency(request,
-                           {toNullableVec<String>(col_names[0], col0_sorted_asc),
-                            toNullableVec<String>(col_names[1], col1_sorted_asc),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<String>(col_names[0], col0_sorted_asc),
+                                  toNullableVec<String>(col_names[1], col1_sorted_asc),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Check duplicate columns
     request = buildDAGRequest<MockColumnNameVec>({col_names[4], col_names[4], col_names[4]});
-    executeWithConcurrency(request,
-                           {toNullableVec<Int32>(col_names[4], col4_sorted_asc),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     {
         /// Check large number of columns
@@ -149,7 +137,7 @@ try
         }
 
         request = buildDAGRequest<MockColumnNameVec>(projection_input);
-        executeWithConcurrency(request, columns);
+        executeAndAssertColumnsEqual(request, columns);
     }
 }
 CATCH
@@ -163,82 +151,82 @@ try
 
     /// Data type: TypeString
     request = buildDAGRequest<MockAstVec>({eq(col(col_names[0]), col(col_names[0])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     request = buildDAGRequest<MockAstVec>({eq(col(col_names[0]), col(col_names[1])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
     request = buildDAGRequest<MockAstVec>({eq(col(col_names[3]), col(col_names[4])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 1, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 1, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
 
     /// Test "greater" function
 
     /// Data type: TypeString
     request = buildDAGRequest<MockAstVec>({gt(col(col_names[0]), col(col_names[1])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 0, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 0, 0, 0, {}, 0, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     request = buildDAGRequest<MockAstVec>({gt(col(col_names[1]), col(col_names[0])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 1, 0, 1, {}, 1, 1}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 1, 0, 1, {}, 1, 1}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
     request = buildDAGRequest<MockAstVec>({gt(col(col_names[3]), col(col_names[4])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 0, 1, 1, {}, 0, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 0, 1, 1, {}, 0, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     request = buildDAGRequest<MockAstVec>({gt(col(col_names[4]), col(col_names[3])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 0, 1}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 0, 1}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
 
     /// Test "and" function
 
     /// Data type: TypeString
     request = buildDAGRequest<MockAstVec>({And(col(col_names[0]), col(col_names[0])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 0, 0, 0, 0, 0, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     request = buildDAGRequest<MockAstVec>({And(col(col_names[0]), col(col_names[1])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
     request = buildDAGRequest<MockAstVec>({And(col(col_names[3]), col(col_names[4])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 1, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 1, 0, 0, {}, 1, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Test "not" function
 
     /// Data type: TypeString
     request = buildDAGRequest<MockAstVec>({NOT(col(col_names[0])), NOT(col(col_names[1])), NOT(col(col_names[2])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
-                            toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
-                            toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, {}}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 1, 1, 1, 1, 1, 1}),
+                                  toNullableVec<UInt64>({1, 1, 1, 1, {}, 1, 1}),
+                                  toNullableVec<UInt64>({1, {}, 1, 1, 1, 1, {}}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Data type: TypeLong
     request = buildDAGRequest<MockAstVec>({NOT(col(col_names[3])), NOT(col(col_names[4])), col(col_names[4])});
-    executeWithConcurrency(request,
-                           {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 1}),
-                            toNullableVec<UInt64>({{}, 0, 0, 1, 0, 0, 0}),
-                            toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
+    executeAndAssertColumnsEqual(request,
+                                 {toNullableVec<UInt64>({{}, 0, 1, 0, {}, 0, 1}),
+                                  toNullableVec<UInt64>({{}, 0, 0, 1, 0, 0, 0}),
+                                  toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// TODO more functions...
 }
@@ -261,7 +249,7 @@ try
                        .scan("test_db", "test_table2")
                        .project({functions[index]})
                        .build(context);
-        executeWithConcurrency(req, {functions_result[index]});
+        executeAndAssertColumnsEqual(req, {functions_result[index]});
     };
     for (size_t i = 0; i < functions.size(); ++i)
         test_single_function(i);
@@ -295,8 +283,8 @@ try
                 fs.push_back(functions[k]);
                 fs_result.push_back(functions_result[k]);
 
-                executeWithConcurrency(multi_functions(fs), fs_result);
-                executeWithConcurrency(multi_functions_then_agg(fs), createColumns({toVec<UInt64>({5})}));
+                executeAndAssertColumnsEqual(multi_functions(fs), fs_result);
+                executeAndAssertColumnsEqual(multi_functions_then_agg(fs), createColumns({toVec<UInt64>({5})}));
 
                 fs.pop_back();
                 fs_result.pop_back();
@@ -314,10 +302,10 @@ try
                              plusInt(plusInt(col("s1"), col("s2")), col("s3")),
                              plusInt(plusInt(plusInt(col("s1"), col("s2")), col("s3")), col("s4"))})
                    .build(context);
-    executeWithConcurrency(req,
-                           {toNullableVec<Int64>({2, 2, 2, 2, 2}),
-                            toNullableVec<Int64>({3, 3, 3, 3, 3}),
-                            toNullableVec<Int64>({4, 4, 4, 4, 4})});
+    executeAndAssertColumnsEqual(req,
+                                 {toNullableVec<Int64>({2, 2, 2, 2, 2}),
+                                  toNullableVec<Int64>({3, 3, 3, 3, 3}),
+                                  toNullableVec<Int64>({4, 4, 4, 4, 4})});
 }
 CATCH
 
@@ -331,7 +319,7 @@ try
                    .project({col("s1"), col("s2")})
                    .project({col("s1")})
                    .build(context);
-    executeWithConcurrency(req, {toNullableVec<Int64>({1, 1, 1, 1, 1})});
+    executeAndAssertColumnsEqual(req, {toNullableVec<Int64>({1, 1, 1, 1, 1})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -339,24 +327,24 @@ try
               .project({col("s1"), col("s2"), col("s3"), col("s4"), plusInt(plusInt(col("s1"), col("s2")), col("s3"))})
               .project({plusInt(plusInt(plusInt(col("s1"), col("s2")), col("s3")), col("s4"))})
               .build(context);
-    executeWithConcurrency(req, {toNullableVec<Int64>({4, 4, 4, 4, 4})});
+    executeAndAssertColumnsEqual(req, {toNullableVec<Int64>({4, 4, 4, 4, 4})});
 
     req = context
               .scan("test_db", "test_table3")
               .project({col("s1"), col("s2"), col("s3"), col("s4")})
               .project({col("s1"), col("s2"), col("s3"), col("s4")})
               .build(context);
-    executeWithConcurrency(req,
-                           {toNullableVec<Int64>({1, 1, 1, 1, 1}),
-                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
-                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
-                            toNullableVec<Int64>({1, 1, 1, 1, 1})});
+    executeAndAssertColumnsEqual(req,
+                                 {toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                                  toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                                  toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                                  toNullableVec<Int64>({1, 1, 1, 1, 1})});
 
     req = context
               .scan("test_db", "test_table3")
               .project({lit(Field(String("a")))})
               .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -364,7 +352,7 @@ try
               .project(MockAstVec{})
               .project({lit(Field(String("a")))})
               .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -372,19 +360,19 @@ try
               .project(MockAstVec{})
               .project({lit(Field(String("a")))})
               .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
+    executeAndAssertColumnsEqual(req, {createColumns({toVec<String>({"a", "a", "a", "a", "a"})})});
 
     req = context
               .scan("test_db", "test_table3")
               .project({col("s1")})
               .project({col("s1"), col("s1"), col("s1"), col("s1"), col("s1")})
               .build(context);
-    executeWithConcurrency(req,
-                           {toNullableVec<Int64>({1, 1, 1, 1, 1}),
-                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
-                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
-                            toNullableVec<Int64>({1, 1, 1, 1, 1}),
-                            toNullableVec<Int64>({1, 1, 1, 1, 1})});
+    executeAndAssertColumnsEqual(req,
+                                 {toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                                  toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                                  toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                                  toNullableVec<Int64>({1, 1, 1, 1, 1}),
+                                  toNullableVec<Int64>({1, 1, 1, 1, 1})});
 }
 CATCH
 
@@ -396,7 +384,7 @@ try
                    .project({col("s1"), col("s2"), col("s3"), col("s4")})
                    .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
                    .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<UInt64>({5})})});
+    executeAndAssertColumnsEqual(req, {createColumns({toVec<UInt64>({5})})});
 
     req = context.scan("test_db", "test_table3")
               .project({col("s1"), col("s2"), col("s3"), col("s4")})
@@ -405,7 +393,7 @@ try
               .project({col("s1")})
               .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
               .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<UInt64>({5})})});
+    executeAndAssertColumnsEqual(req, {createColumns({toVec<UInt64>({5})})});
 
     req = context.scan("test_db", "test_table3")
               .project({col("s1"), col("s2"), col("s3"), col("s4"), plusInt(col("s1"), col("s2"))})
@@ -413,7 +401,7 @@ try
               .project({plusInt(plusInt(plusInt(col("s1"), col("s2")), col("s3")), col("s4"))})
               .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
               .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<UInt64>({5})})});
+    executeAndAssertColumnsEqual(req, {createColumns({toVec<UInt64>({5})})});
 
     req = context
               .scan("test_db", "test_table3")
@@ -422,18 +410,18 @@ try
                         plusInt(plusInt(plusInt(col("s1"), col("s2")), col("s3")), col("s4"))})
               .aggregation({Count(lit(Field(static_cast<UInt64>(1))))}, {})
               .build(context);
-    executeWithConcurrency(req, {createColumns({toVec<UInt64>({5})})});
+    executeAndAssertColumnsEqual(req, {createColumns({toVec<UInt64>({5})})});
 
     req = context
               .scan("test_db", "test_table3")
               .project({col("s1")})
               .aggregation({Count(col("s1")), Sum(col("s1")), Max(col("s1")), Min(col("s1"))}, {})
               .build(context);
-    executeWithConcurrency(req,
-                           {toVec<UInt64>({5}),
-                            toVec<UInt64>({5}),
-                            toNullableVec<Int64>({1}),
-                            toNullableVec<Int64>({1})});
+    executeAndAssertColumnsEqual(req,
+                                 {toVec<UInt64>({5}),
+                                  toVec<UInt64>({5}),
+                                  toNullableVec<Int64>({1}),
+                                  toNullableVec<Int64>({1})});
 }
 CATCH
 

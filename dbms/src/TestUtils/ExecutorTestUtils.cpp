@@ -24,6 +24,37 @@
 
 namespace DB::tests
 {
+namespace
+{
+Block mergeBlocks(Blocks blocks)
+{
+    if (blocks.empty())
+        return {};
+
+    Block sample_block = blocks.back();
+    std::vector<MutableColumnPtr> actual_cols;
+    for (const auto & column : sample_block.getColumnsWithTypeAndName())
+    {
+        actual_cols.push_back(column.type->createColumn());
+    }
+    for (const auto & block : blocks)
+    {
+        for (size_t i = 0; i < block.columns(); ++i)
+        {
+            for (size_t j = 0; j < block.rows(); ++j)
+            {
+                actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
+            }
+        }
+    }
+
+    ColumnsWithTypeAndName actual_columns;
+    for (size_t i = 0; i < actual_cols.size(); ++i)
+        actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
+    return Block(actual_columns);
+}
+} // namespace
+
 TiDB::TP dataTypeToTP(const DataTypePtr & type)
 {
     // TODO support more types.
@@ -104,36 +135,37 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
 }
 
-namespace
+void ExecutorTest::executeExecutor(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    std::function<void(const ColumnsWithTypeAndName &)> assert_func)
 {
-Block mergeBlocks(Blocks blocks)
-{
-    if (blocks.empty())
-        return {};
-
-    Block sample_block = blocks.back();
-    std::vector<MutableColumnPtr> actual_cols;
-    for (const auto & column : sample_block.getColumnsWithTypeAndName())
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+    std::vector<size_t> concurrencies{1, 2, 10};
+    for (auto concurrency : concurrencies)
     {
-        actual_cols.push_back(column.type->createColumn());
-    }
-    for (const auto & block : blocks)
-    {
-        for (size_t i = 0; i < block.columns(); ++i)
+        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        for (auto block_size : block_sizes)
         {
-            for (size_t j = 0; j < block.rows(); ++j)
-            {
-                actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
-            }
+            context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            assert_func(executeStreams(request, concurrency));
         }
     }
-
-    ColumnsWithTypeAndName actual_columns;
-    for (size_t i = 0; i < actual_cols.size(); ++i)
-        actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
-    return Block(actual_columns);
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
-} // namespace
+
+void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
+{
+    executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
+        ASSERT_COLUMNS_EQ_UR(expect_columns, res);
+    });
+}
+
+void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows)
+{
+    executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
+        ASSERT_EQ(expect_rows, Block(res).rows());
+    });
+}
 
 void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {

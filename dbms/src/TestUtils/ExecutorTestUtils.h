@@ -23,11 +23,11 @@
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 
+#include <functional>
+
 namespace DB::tests
 {
 TiDB::TP dataTypeToTP(const DataTypePtr & type);
-
-void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
 
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
@@ -68,6 +68,9 @@ public:
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
+    void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
+    void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
+
     enum SourceType
     {
         TableScan,
@@ -93,6 +96,11 @@ public:
     ColumnsWithTypeAndName executeStreams(
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
+
+private:
+    void executeExecutor(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        std::function<void(const ColumnsWithTypeAndName &)> assert_func);
 
 protected:
     MockDAGRequestContext context;
