@@ -13,16 +13,15 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/grpcpp.h>
 #include <coprocessor.pb.h>
 #include <fmt/core.h>
-#include <grpc++/grpc++.h>
 #include <kvproto/tikvpb.grpc.pb.h>
+using grpc::Channel;
 using grpc::Status;
-using grpc_impl::Channel;
 
 namespace DB
 {
-
 /// Send RPC Requests to FlashService
 /// TODO: Support more methods that FlashService serve.
 /// TODO: Support more config of RPC client.

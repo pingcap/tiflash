@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/BlobStore.h>
@@ -108,12 +110,14 @@ public:
 
 #ifndef NDEBUG
     // Just for tests, refactor them out later
+    // clang-format off
     DB::PageStorage::SnapshotPtr getSnapshot() { return getSnapshot(""); }
     DB::PageEntry getEntry(PageId page_id) { return getEntryImpl(TEST_NAMESPACE_ID, page_id, nullptr); }
     DB::Page read(PageId page_id) { return readImpl(TEST_NAMESPACE_ID, page_id, nullptr, nullptr, true); }
     PageMap read(const PageIds & page_ids) { return readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true); }
     PageIds read(const PageIds & page_ids, const PageHandler & handler) { return readImpl(TEST_NAMESPACE_ID, page_ids, handler, nullptr, nullptr, true); }
     PageMap read(const std::vector<PageReadFields> & page_fields) { return readImpl(TEST_NAMESPACE_ID, page_fields, nullptr, nullptr, true); }
+    // clang-format on
 #endif
 
     friend class PageDirectoryFactory;
@@ -121,6 +125,44 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+
+    enum class GCStageType
+    {
+        Unknown,
+        OnlyInMem,
+        FullGCNothingMoved,
+        FullGC,
+    };
+    struct GCTimeStatistics
+    {
+        GCStageType stage = GCStageType::Unknown;
+        bool executeNextImmediately() const { return stage == GCStageType::FullGC; };
+
+        UInt64 total_cost_ms = 0;
+
+        UInt64 dump_snapshots_ms = 0;
+        UInt64 gc_in_mem_entries_ms = 0;
+        UInt64 blobstore_remove_entries_ms = 0;
+        UInt64 blobstore_get_gc_stats_ms = 0;
+        // Full GC
+        UInt64 full_gc_get_entries_ms = 0;
+        UInt64 full_gc_blobstore_copy_ms = 0;
+        UInt64 full_gc_apply_ms = 0;
+
+        // GC external page
+        UInt64 clean_external_page_ms = 0;
+        UInt64 num_external_callbacks = 0;
+        // ms is usually too big for these operation, store by ns (10^-9)
+        UInt64 external_page_scan_ns = 0;
+        UInt64 external_page_get_alive_ns = 0;
+        UInt64 external_page_remove_ns = 0;
+
+        String toLogging() const;
+    };
+
+    GCTimeStatistics doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter);
+    void cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics & statistics);
+
     LoggerPtr log;
 
     PageDirectoryPtr page_directory;
@@ -132,7 +174,8 @@ private:
     const static String manifests_file_name;
 
     std::mutex callbacks_mutex;
-    using ExternalPageCallbacksContainer = std::unordered_map<NamespaceId, ExternalPageCallbacks>;
+    // Only std::map not std::unordered_map. We need insert/erase do not invalid other iterators.
+    using ExternalPageCallbacksContainer = std::map<NamespaceId, std::shared_ptr<ExternalPageCallbacks>>;
     ExternalPageCallbacksContainer callbacks_container;
 };
 

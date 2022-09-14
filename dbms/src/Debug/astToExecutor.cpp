@@ -123,6 +123,8 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
 namespace
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
+    {"plusint", tipb::ScalarFuncSig::PlusInt},
+    {"minusint", tipb::ScalarFuncSig::MinusInt},
     {"equals", tipb::ScalarFuncSig::EQInt},
     {"notEquals", tipb::ScalarFuncSig::NEInt},
     {"and", tipb::ScalarFuncSig::LogicalAnd},
@@ -197,6 +199,8 @@ std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
     {"RowNumber", tipb::ExprType::RowNumber},
     {"Rank", tipb::ExprType::Rank},
     {"DenseRank", tipb::ExprType::DenseRank},
+    {"Lead", tipb::ExprType::Lead},
+    {"Lag", tipb::ExprType::Lag},
 });
 
 DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
@@ -405,6 +409,22 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
                 *(expr->mutable_field_type()) = child->field_type();
         }
         return;
+    case tipb::ScalarFuncSig::PlusInt:
+    case tipb::ScalarFuncSig::MinusInt:
+    {
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            astToPB(input, child_ast, child, collator_id, context);
+        }
+        expr->set_sig(it_sig->second);
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(expr->children(0).field_type().tp());
+        ft->set_flag(expr->children(0).field_type().flag());
+        ft->set_collate(collator_id);
+        expr->set_tp(tipb::ExprType::ScalarFunc);
+        return;
+    }
     case tipb::ScalarFuncSig::LikeSig:
     {
         expr->set_sig(tipb::ScalarFuncSig::LikeSig);
@@ -639,6 +659,9 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
                     ci = child_ci;
             }
             return ci;
+        case tipb::ScalarFuncSig::PlusInt:
+        case tipb::ScalarFuncSig::MinusInt:
+            return compileExpr(input, func->arguments->children[0]);
         case tipb::ScalarFuncSig::LikeSig:
             ci.tp = TiDB::TypeLongLong;
             ci.flag = TiDB::ColumnFlagUnsigned;
@@ -824,13 +847,14 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         *exchange_sender->add_types() = tipb_type;
     }
 
+    int i = 0;
     for (auto task_id : mpp_info.sender_target_task_ids)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
-        meta.set_partition_id(mpp_info.partition_id);
-        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        meta.set_partition_id(i);
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[i++].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
 
         auto * meta_string = exchange_sender->add_encoded_task_meta();
@@ -855,6 +879,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
+
     for (auto & field : output_schema)
     {
         auto tipb_type = TiDB::columnInfoToFieldType(field.second);
@@ -863,6 +888,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         auto * field_type = exchange_receiver->add_field_types();
         *field_type = tipb_type;
     }
+
     auto it = mpp_info.receiver_source_task_ids_map.find(name);
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
@@ -874,7 +900,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[i].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);
@@ -1433,12 +1459,42 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id,
         auto window_sig = window_sig_it->second;
         window_expr->set_tp(window_sig);
         auto * ft = window_expr->mutable_field_type();
-        // TODO: Maybe more window functions with different field type.
-        ft->set_tp(TiDB::TypeLongLong);
-        ft->set_flag(TiDB::ColumnFlagBinary);
-        ft->set_collate(collator_id);
-        ft->set_flen(21);
-        ft->set_decimal(-1);
+        switch (window_sig)
+        {
+        case tipb::ExprType::Lead:
+        case tipb::ExprType::Lag:
+        {
+            // TODO handling complex situations
+            // like lead(col, offset, NULL), lead(data_type1, offset, data_type2)
+            assert(window_expr->children_size() >= 1 && window_expr->children_size() <= 3);
+            const auto first_arg_type = window_expr->children(0).field_type();
+            ft->set_tp(first_arg_type.tp());
+            if (window_expr->children_size() < 3)
+            {
+                auto field_type = TiDB::fieldTypeToColumnInfo(first_arg_type);
+                field_type.clearNotNullFlag();
+                ft->set_flag(field_type.flag);
+            }
+            else
+            {
+                const auto third_arg_type = window_expr->children(2).field_type();
+                assert(first_arg_type.tp() == third_arg_type.tp());
+                ft->set_flag(TiDB::fieldTypeToColumnInfo(first_arg_type).hasNotNullFlag()
+                                 ? third_arg_type.flag()
+                                 : first_arg_type.flag());
+            }
+            ft->set_collate(first_arg_type.collate());
+            ft->set_flen(first_arg_type.flen());
+            ft->set_decimal(first_arg_type.decimal());
+            break;
+        }
+        default:
+            ft->set_tp(TiDB::TypeLongLong);
+            ft->set_flag(TiDB::ColumnFlagBinary);
+            ft->set_collate(collator_id);
+            ft->set_flen(21);
+            ft->set_decimal(-1);
+        }
     }
 
     for (const auto & child : order_by_exprs)
@@ -1857,6 +1913,24 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             {
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagBinary;
+                break;
+            }
+            case tipb::ExprType::Lead:
+            case tipb::ExprType::Lag:
+            {
+                // TODO handling complex situations
+                // like lead(col, offset, NULL), lead(data_type1, offset, data_type2)
+                assert(children_ci.size() >= 1 && children_ci.size() <= 3);
+                if (children_ci.size() < 3)
+                {
+                    ci = children_ci[0];
+                    ci.clearNotNullFlag();
+                }
+                else
+                {
+                    assert(children_ci[0].tp == children_ci[2].tp);
+                    ci = children_ci[0].hasNotNullFlag() ? children_ci[2] : children_ci[0];
+                }
                 break;
             }
             default:

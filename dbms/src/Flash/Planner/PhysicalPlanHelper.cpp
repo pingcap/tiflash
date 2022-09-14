@@ -52,7 +52,7 @@ NamesAndTypes addSchemaProjectAction(
     {
         const auto & before_column_name = before_schema[i].name;
         String after_column_name = column_prefix + before_column_name;
-        /// Duplicate columns don‘t need to project.
+        /// Duplicate columns don't need to project.
         if (column_name_set.find(before_column_name) == column_name_set.end())
         {
             project_aliases.emplace_back(before_column_name, after_column_name);
@@ -62,5 +62,27 @@ NamesAndTypes addSchemaProjectAction(
     }
     expr_actions->add(ExpressionAction::project(project_aliases));
     return after_schema;
+}
+
+void addParentRequireProjectAction(
+    const ExpressionActionsPtr & expr_actions,
+    const Names & parent_require)
+{
+    assert(expr_actions);
+    NamesWithAliases project_aliases;
+    {
+        std::unordered_set<String> column_name_set;
+        for (const auto & col : parent_require)
+        {
+            /// Duplicate columns don't need to project.
+            if (column_name_set.find(col) == column_name_set.end())
+            {
+                project_aliases.emplace_back(col, col);
+                column_name_set.emplace(col);
+            }
+        }
+    }
+    if (expr_actions->getSampleBlock().columns() > project_aliases.size())
+        expr_actions->add(ExpressionAction::project(project_aliases));
 }
 } // namespace DB::PhysicalPlanHelper

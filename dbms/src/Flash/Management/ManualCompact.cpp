@@ -167,7 +167,7 @@ grpc::Status ManualCompactManager::doWork(const ::kvrpcpb::CompactRequest * requ
     // Repeatedly merge multiple segments as much as possible.
     while (true)
     {
-        auto compacted_range = dm_storage->mergeDeltaBySegment(global_context, start_key, DM::DeltaMergeStore::TaskRunThread::ForegroundRPC);
+        auto compacted_range = dm_storage->mergeDeltaBySegment(global_context, start_key);
 
         if (compacted_range == std::nullopt)
         {

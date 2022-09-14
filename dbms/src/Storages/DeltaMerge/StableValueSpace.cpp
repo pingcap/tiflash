@@ -330,17 +330,17 @@ StableValueSpace::Snapshot::getInputStream(
     UInt64 max_data_version,
     size_t expected_block_size,
     bool enable_handle_clean_read,
-    bool is_fast_mode,
+    bool is_fast_scan,
     bool enable_del_clean_read)
 {
-    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_mode, enable_del_clean_read);
+    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)
     {
         DMFileBlockInputStreamBuilder builder(context.db_context);
         builder
-            .enableCleanRead(enable_handle_clean_read, is_fast_mode, enable_del_clean_read, max_data_version)
+            .enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .setRSOperator(filter)
             .setColumnCache(column_caches[i])
             .setTracingID(context.tracing_id)
@@ -395,6 +395,40 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     size_t approx_rows = std::max(avg_pack_rows, total_match_rows - avg_pack_rows / 2);
     size_t approx_bytes = std::max(avg_pack_bytes, total_match_bytes - avg_pack_bytes / 2);
     return {approx_rows, approx_bytes};
+}
+
+std::pair<bool, bool> StableValueSpace::Snapshot::isFirstAndLastPackIncludedInRange(const DMContext & context, const RowKeyRange & range) const
+{
+    // Usually, this method will be called for some "cold" key ranges.
+    // Loading the index into cache may pollute the cache and make the hot index cache invalid.
+    // So don't refill the cache if the index does not exist.
+    bool first_pack_included = false;
+    bool last_pack_included = false;
+    for (size_t i = 0; i < stable->files.size(); i++)
+    {
+        const auto & file = stable->files[i];
+        auto filter = DMFilePackFilter::loadFrom(
+            file,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ false,
+            {range},
+            RSOperatorPtr{},
+            IdSetPtr{},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter(),
+            context.tracing_id);
+        const auto & use_packs = filter.getUsePacks();
+        if (i == 0)
+        {
+            first_pack_included = use_packs[0];
+        }
+        if (i == stable->files.size() - 1)
+        {
+            last_pack_included = use_packs[use_packs.size() - 1];
+        }
+    }
+
+    return std::make_pair(first_pack_included, last_pack_included);
 }
 
 } // namespace DM

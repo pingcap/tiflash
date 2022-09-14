@@ -25,13 +25,25 @@ namespace DB
 {
 inline size_t getReadTSOForLog(const String & line)
 {
-    auto sub_line = line.substr(line.find("read_tso="));
-    std::regex rx(R"((0|[1-9][0-9]*))");
-    std::smatch m;
-    if (regex_search(sub_line, m, rx))
-        return std::stoul(m[1]);
-    else
-        return 0;
+    try
+    {
+        std::regex rx(R"((0|[1-9][0-9]*))");
+        std::smatch m;
+        // Rely on that MPP task prefix "MPP<query:435802637197639681,task:1>"
+        auto pos = line.find("query:");
+        if (pos != std::string::npos && regex_search(line.cbegin() + pos, line.cend(), m, rx))
+        {
+            return std::stoul(m[1]);
+        }
+        else
+        {
+            return 0;
+        }
+    }
+    catch (std::exception & e)
+    {
+        throw Exception(fmt::format("Parse 'read tso' failed, exception: {}, line {}", e.what(), line));
+    }
 }
 
 // Usage example:
@@ -50,7 +62,7 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         throw Exception("Args not matched, should be: key, thread_hint", ErrorCodes::BAD_ARGUMENTS);
 
     auto key = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    // the candidate line must be printed by a thread which also print a line contains `thread_hint`
+    // the candidate line must be printed by a thread which also print a line contains `tso_hint`
     auto tso_hint = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     auto log_path = context.getConfigRef().getString("logger.log");
 
@@ -90,13 +102,24 @@ void dbgFuncSearchLogForKey(Context & context, const ASTs & args, DBGInvoker::Pr
         }
     }
     // try parse the first number following the key
-    auto sub_line = target_line.substr(target_line.find(key));
-    std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
-    std::smatch m;
-    if (regex_search(sub_line, m, rx))
-        output(m[1]);
-    else
-        output("Invalid");
+    try
+    {
+        std::regex rx(R"([+-]?([0-9]+([.][0-9]*)?|[.][0-9]+))");
+        std::smatch m;
+        auto pos = target_line.find(key);
+        if (pos != std::string::npos && regex_search(target_line.cbegin() + pos, target_line.cend(), m, rx))
+        {
+            output(m[1]);
+        }
+        else
+        {
+            output("Invalid");
+        }
+    }
+    catch (std::exception & e)
+    {
+        throw Exception(fmt::format("Parse 'RSFilter exclude rate' failed, exception: {}, target_line {}", e.what(), target_line));
+    }
 }
 
 void dbgFuncTriggerGlobalPageStorageGC(Context & context, const ASTs & /*args*/, DBGInvoker::Printer /*output*/)

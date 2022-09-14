@@ -14,33 +14,26 @@
 
 #pragma once
 
-#include <Core/Types.h>
-
-#include <mutex>
-
+#include <Common/ThreadFactory.h>
 namespace DB
 {
-namespace DM
-{
-namespace tests
-{
-class IDGenerator
+class CollectProcInfoBackgroundTask
 {
 public:
-    IDGenerator()
-        : id{0}
-    {}
-
-    UInt64 get()
+    CollectProcInfoBackgroundTask() = default;
+    ~CollectProcInfoBackgroundTask()
     {
-        std::lock_guard guard{mutex};
-        return id++;
+        end();
     }
+    void begin();
+
+    void end();
 
 private:
-    std::mutex mutex;
-    UInt64 id;
+    void memCheckJob();
+
+    std::mutex mu;
+    bool is_already_begin = false;
+    std::atomic<bool> end_syn{false}, end_fin{false};
 };
-} // namespace tests
-} // namespace DM
 } // namespace DB
