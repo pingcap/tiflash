@@ -175,7 +175,7 @@ protected:
 #define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
     do                                                                         \
     {                                                                          \
-        for (size_t i = 1; i <= serverNum(); ++i)                    \
+        for (size_t i = 1; i <= serverNum(); ++i)                              \
         {                                                                      \
             (properties).mpp_partition_num = i;                                \
             MockComputeServerManager::instance().resetMockMPPServerInfo(i);    \
