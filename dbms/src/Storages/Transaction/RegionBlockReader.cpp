@@ -19,10 +19,12 @@
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Types.h>
 
 namespace DB
 {
@@ -111,6 +113,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             raw_column->reserve(expected_rows);
         }
     }
+
     size_t index = 0;
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
@@ -140,16 +143,8 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             else
             {
                 // Parse column value from encoded value
-                if (schema_snapshot->pk_is_handle)
-                {
-                    if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, schema_snapshot->pk_column_ids[0], force_decode))
-                        return false;
-                }
-                else
-                {
-                    if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, InvalidColumnID, force_decode))
-                        return false;
-                }
+                if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot, force_decode))
+                    return false;
             }
         }
 
