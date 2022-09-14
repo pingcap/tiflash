@@ -258,7 +258,6 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         return op;
     }
 
-
     if (auto iter = FilterParser::scalar_func_rs_filter_map.find(expr.sig()); iter != FilterParser::scalar_func_rs_filter_map.end())
     {
         FilterParser::RSFilterType filter_type = iter->second;
@@ -309,6 +308,8 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         case FilterParser::RSFilterType::LessEqual:
             op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
             break;
+
+        case FilterParser::RSFilterType::IsNull:
 
         case FilterParser::RSFilterType::In:
         case FilterParser::RSFilterType::NotIn:
@@ -499,13 +500,13 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     {tipb::ScalarFuncSig::NEDuration, FilterParser::RSFilterType::NotEqual},
     {tipb::ScalarFuncSig::NEJson, FilterParser::RSFilterType::NotEqual},
 
-    //{tipb::ScalarFuncSig::NullEQInt, "cast"},
-    //{tipb::ScalarFuncSig::NullEQReal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQString, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDecimal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQTime, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDuration, "cast"},
-    //{tipb::ScalarFuncSig::NullEQJson, "cast"},
+    // {tipb::ScalarFuncSig::NullEQInt, "cast"},
+    // {tipb::ScalarFuncSig::NullEQReal, "cast"},
+    // {tipb::ScalarFuncSig::NullEQString, "cast"},
+    // {tipb::ScalarFuncSig::NullEQDecimal, "cast"},
+    // {tipb::ScalarFuncSig::NullEQTime, "cast"},
+    // {tipb::ScalarFuncSig::NullEQDuration, "cast"},
+    // {tipb::ScalarFuncSig::NullEQJson, "cast"},
 
     // {tipb::ScalarFuncSig::PlusReal, "plus"},
     // {tipb::ScalarFuncSig::PlusDecimal, "plus"},
@@ -595,13 +596,13 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     // {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
     // {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"},
 
-    // {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::DurationIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::RealIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::StringIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::TimeIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::IntIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::JsonIsNull, "isNull"},
+    {tipb::ScalarFuncSig::DecimalIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::DurationIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::RealIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::StringIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::TimeIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::IntIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::JsonIsNull, FilterParser::RSFilterType::IsNull},
 
     //{tipb::ScalarFuncSig::BitAndSig, "cast"},
     //{tipb::ScalarFuncSig::BitOrSig, "cast"},

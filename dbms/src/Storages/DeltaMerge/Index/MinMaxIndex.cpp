@@ -29,6 +29,9 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 
+#include "Storages/DeltaMerge/Index/RSResult.h"
+#include "common/types.h"
+
 namespace DB
 {
 namespace DM
@@ -58,12 +61,40 @@ inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVect
 
     return {batch_min_idx, batch_max_idx};
 }
+
+// minmax calculation for the nullable column
+inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVector<UInt8> * del_mark, const PaddedPODArray<UInt8> & null_mark, size_t offset, size_t limit)
+{
+    const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
+
+    size_t batch_min_idx = NONE_EXIST;
+    size_t batch_max_idx = NONE_EXIST;
+
+    for (size_t i = offset; i < offset + limit; ++i)
+    {
+        // (del_mark_data == nullptr || (del_mark_data != nullptr && (*del_mark_data)[i] != 0)) && (null_mark[i] == false)
+        if ((!del_mark_data || !(*del_mark_data)[i]) && (!null_mark[i]))
+        {
+            if (batch_min_idx == NONE_EXIST || column.compareAt(i, batch_min_idx, column, -1) < 0)
+                batch_min_idx = i;
+            if (batch_max_idx == NONE_EXIST || column.compareAt(batch_max_idx, i, column, -1) < 0)
+                batch_max_idx = i;
+        }
+    }
+
+    return {batch_min_idx, batch_max_idx};
+}
 } // namespace details
 
 void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * del_mark)
 {
     auto size = column.size();
     bool has_null = false;
+
+    size_t min_index;
+    size_t max_index;
+
+
     if (column.isColumnNullable())
     {
         const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
@@ -79,9 +110,22 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
                 break;
             }
         }
+
+        if (has_null)
+        {
+            auto min_max_pair = details::minmax(column, del_mark, null_mark_data, 0, column.size());
+            min_index = min_max_pair.first;
+            max_index = min_max_pair.second;
+        }
     }
 
-    auto [min_index, max_index] = details::minmax(column, del_mark, 0, column.size());
+    if (!has_null)
+    {
+        auto min_max_pair = details::minmax(column, del_mark, 0, column.size());
+        min_index = min_max_pair.first;
+        max_index = min_max_pair.second;
+    }
+
     if (min_index != NONE_EXIST)
     {
         has_null_marks->push_back(has_null);
@@ -177,7 +221,8 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
         const auto & minmaxes_data = toColumnVectorData<DataTypeDate::FieldType>(column_nullable.getNestedColumnPtr());
         auto min = minmaxes_data[pack_index * 2];
         auto max = minmaxes_data[pack_index * 2 + 1];
-        return RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
+        auto res = RoughCheck::checkEqual<DataTypeDate::FieldType>(value, type, min, max);
+        return res;
     }
     if (typeid_cast<const DataTypeDateTime *>(raw_type))
     {
@@ -214,11 +259,11 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
 
 RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type)
 {
-    if ((*has_null_marks)[pack_index] || value.isNull())
-        return RSResult::Some;
-    if (!(*has_value_marks)[pack_index])
+    // In normal cases, optimizer will not push down comparisons with null, because everything comparison with null will return null.
+    if (value.isNull() || !(*has_value_marks)[pack_index])
+    {
         return RSResult::None;
-
+    }
     // if minmaxes_data has null value, the value of minmaxes_data[i] is meaningless and maybe just some random value.
     // But we have checked the has_null_marks above and ensured that there is no null value in MinMax Indexes.
     const auto * raw_type = type.get();
@@ -333,10 +378,11 @@ RSResult MinMaxIndex::checkNullableGreater(size_t pack_index, const Field & valu
 
 RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    if ((*has_null_marks)[pack_index] || value.isNull())
-        return RSResult::Some;
-    if (!(*has_value_marks)[pack_index])
+    // In normal cases, optimizer will not push down comparisons with null, because everything comparison with null will return null.
+    if (value.isNull() || !(*has_value_marks)[pack_index])
+    {
         return RSResult::None;
+    }
 
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
@@ -450,10 +496,11 @@ RSResult MinMaxIndex::checkNullableGreaterEqual(size_t pack_index, const Field &
 
 RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    if ((*has_null_marks)[pack_index] || value.isNull())
-        return RSResult::Some;
-    if (!(*has_value_marks)[pack_index])
+    // In normal cases, optimizer will not push down comparisons with null, because everything comparison with null will return null.
+    if (value.isNull() || !(*has_value_marks)[pack_index])
+    {
         return RSResult::None;
+    }
 
     const auto * raw_type = type.get();
     if (typeid_cast<const DataTypeNullable *>(raw_type))
@@ -509,6 +556,19 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
     }
     return RSResult::Some;
 }
+
+RSResult MinMaxIndex::checkIsNull(size_t pack_index)
+{
+    if (!(*has_value_marks)[pack_index])
+    {
+        return RSResult::All;
+    }
+    else if ((*has_null_marks)[pack_index])
+        return RSResult::Some;
+    else
+        return RSResult::None;
+}
+
 
 String MinMaxIndex::toString()
 {

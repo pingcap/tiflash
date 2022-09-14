@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/Filter/Greater.h>
 #include <Storages/DeltaMerge/Filter/GreaterEqual.h>
 #include <Storages/DeltaMerge/Filter/In.h>
+#include <Storages/DeltaMerge/Filter/IsNull.h>
 #include <Storages/DeltaMerge/Filter/Less.h>
 #include <Storages/DeltaMerge/Filter/LessEqual.h>
 #include <Storages/DeltaMerge/Filter/Like.h>
@@ -46,6 +47,7 @@ RSOperatorPtr createNotEqual(const Attr & attr, const Field & value)            
 RSOperatorPtr createNotIn(const Attr & attr, const Fields & values)                             { return std::make_shared<NotIn>(attr, values); }
 RSOperatorPtr createNotLike(const Attr & attr, const Field & value)                             { return std::make_shared<NotLike>(attr, value); }
 RSOperatorPtr createOr(const RSOperators & children)                                            { return std::make_shared<Or>(children); }
+RSOperatorPtr createIsNull(const Attr & attr)                                                   { return std::make_shared<IsNull>(attr);}
 RSOperatorPtr createUnsupported(const String & content, const String & reason, bool is_not)     { return std::make_shared<Unsupported>(content, reason, is_not); }
 // clang-format on
 } // namespace DM
