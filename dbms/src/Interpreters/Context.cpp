@@ -1873,25 +1873,21 @@ bool Context::isTest() const
 
 void Context::setMockStorage(MockStorage & mock_storage_)
 {
-    auto lock = getLock();
     mock_storage = mock_storage_;
 }
 
 MockStorage Context::mockStorage() const
 {
-    auto lock = getLock();
     return mock_storage;
 }
 
 MockMPPServerInfo Context::mockMPPServerInfo() const
 {
-    auto lock = getLock();
     return mpp_server_info;
 }
 
 void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
-    auto lock = getLock();
     mpp_server_info = info;
 }
 
