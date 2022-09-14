@@ -1276,6 +1276,8 @@ try
     testNotOnlyNull<Float64, MyDateTime>(20210201, {2021, 2, 1, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(20210000.1, {2021, 0, 0, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(120012.1, {2012, 0, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(121200.1, {2012, 12, 00, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(101.1, {2000, 1, 1, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Float64, MyDateTime>(1122.1, {2000, 11, 22, 0, 0, 0, 0}, 6);
@@ -1310,7 +1312,6 @@ try
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1121212111111, 6), {112, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11121212111111, 6), {1112, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(999911111111111, 7), {9999, 11, 11, 0, 0, 0, 0}, 6);
-    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(2012121212121212345, 5), {2012, 12, 12, 12, 12, 12, 123450}, 5);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(2012121212121212345, 5), {2012, 12, 12, 12, 12, 12, 123450}, 5);
 }
 CATCH

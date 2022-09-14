@@ -1256,10 +1256,17 @@ bool MyTimeBase::isValid(bool allow_zero_in_date, bool allow_invalid_date) const
         static auto is_leap_year = [](UInt16 _year) {
             return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0);
         };
-        max_day = max_days_in_month[month - 1]; // NOLINT
-        if (month == 2 && is_leap_year(year))
+        if (allow_zero_in_date && month == 0)
         {
-            max_day = 29;
+            max_day = 31;
+        }
+        else
+        {
+            max_day = max_days_in_month[month - 1]; // NOLINT
+            if (month == 2 && is_leap_year(year))
+            {
+                max_day = 29;
+            }
         }
     }
     if (day > max_day)
