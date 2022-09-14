@@ -181,13 +181,13 @@ UInt64 ColumnVector<T>::get64(size_t n) const
 template <typename T>
 UInt64 ColumnVector<T>::getUInt(size_t n) const
 {
-    return UInt64(data[n]);
+    return static_cast<UInt64>(data[n]);
 }
 
 template <typename T>
 Int64 ColumnVector<T>::getInt(size_t n) const
 {
-    return Int64(data[n]);
+    return static_cast<Int64>(data[n]);
 }
 
 template <typename T>
@@ -369,8 +369,8 @@ void ColumnVector<T>::getExtremes(Field & min, Field & max) const
             cur_max = x;
     }
 
-    min = typename NearestFieldType<T>::Type(cur_min);
-    max = typename NearestFieldType<T>::Type(cur_max);
+    min = static_cast<typename NearestFieldType<T>::Type>(cur_min);
+    max = static_cast<typename NearestFieldType<T>::Type>(cur_max);
 }
 
 /// Explicit template instantiations - to avoid code bloat in headers.

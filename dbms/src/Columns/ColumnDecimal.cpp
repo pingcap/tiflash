@@ -253,8 +253,8 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
 template <typename T>
 bool ColumnDecimal<T>::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
 {
-    PrecType prec = raw_value[cursor++];
-    ScaleType scale = raw_value[cursor++];
+    PrecType prec = static_cast<uint8_t>(raw_value[cursor++]);
+    ScaleType scale = static_cast<uint8_t>(raw_value[cursor++]);
     auto type = createDecimal(prec, scale);
     if (unlikely(!checkDecimal<T>(*type)))
     {
