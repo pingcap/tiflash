@@ -34,50 +34,50 @@ class TestFunctionBitCount : public DB::tests::FunctionTest
 TEST_F(TestFunctionBitCount, Simple)
 try
 {
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({1, 2, 4, 8, 16, 32, 100}), createColumn<Nullable<UInt64>>({1, 1, 1, 1, 1, 1, 3}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({-1, -2, -4, -8, -16, -32, -100}), createColumn<Nullable<UInt64>>({64, 63, 62, 61, 60, 59, 60}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({1, 2, 4, 8, 16, 32, 100}), createColumn<Nullable<Int64>>({1, 1, 1, 1, 1, 1, 3}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({-1, -2, -4, -8, -16, -32, -100}), createColumn<Nullable<Int64>>({64, 63, 62, 61, 60, 59, 60}));
 }
 CATCH
 
 TEST_F(TestFunctionBitCount, Boundary)
 try
 {
-    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({0, INT64_MAX, INT64_MIN}), createColumn<Nullable<UInt64>>({0, 63, 1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({0, UINT64_MAX}), createColumn<Nullable<UInt64>>({0, 64}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int32>>({0, INT32_MAX, INT32_MIN}), createColumn<Nullable<UInt64>>({0, 31, 33}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt32>>({0, UINT32_MAX}), createColumn<Nullable<UInt64>>({0, 32}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int16>>({0, INT16_MAX, INT16_MIN}), createColumn<Nullable<UInt64>>({0, 15, 49}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt16>>({0, UINT16_MAX}), createColumn<Nullable<UInt64>>({0, 16}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int8>>({0, INT8_MAX, INT8_MIN}), createColumn<Nullable<UInt64>>({0, 7, 57}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt8>>({0, UINT8_MAX}), createColumn<Nullable<UInt64>>({0, 8}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({0, INT64_MAX, INT64_MIN}), createColumn<Nullable<Int64>>({0, 63, 1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({0, UINT64_MAX}), createColumn<Nullable<Int64>>({0, 64}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int32>>({0, INT32_MAX, INT32_MIN}), createColumn<Nullable<Int64>>({0, 31, 33}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt32>>({0, UINT32_MAX}), createColumn<Nullable<Int64>>({0, 32}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int16>>({0, INT16_MAX, INT16_MIN}), createColumn<Nullable<Int64>>({0, 15, 49}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt16>>({0, UINT16_MAX}), createColumn<Nullable<Int64>>({0, 16}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int8>>({0, INT8_MAX, INT8_MIN}), createColumn<Nullable<Int64>>({0, 7, 57}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt8>>({0, UINT8_MAX}), createColumn<Nullable<Int64>>({0, 8}));
 }
 CATCH
 
 TEST_F(TestFunctionBitCount, NullTest)
 try
 {
-    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int32>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int16>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int8>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt32>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt16>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt8>>({std::nullopt}), createColumn<Nullable<UInt64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int32>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int16>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int8>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt32>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt16>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt8>>({std::nullopt}), createColumn<Nullable<Int64>>({std::nullopt}));
 }
 CATCH
 
 TEST_F(TestFunctionBitCount, TypeTest)
 try
 {
-    ASSERT_BITCOUNT(createColumn<Nullable<Int8>>({1}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int16>>({1}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int32>>({1}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({1}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt16>>({1}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<UInt64>>({1}));
-    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({1}), createColumn<Nullable<UInt64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int8>>({1}), createColumn<Nullable<Int64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int16>>({1}), createColumn<Nullable<Int64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int32>>({1}), createColumn<Nullable<Int64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<Int64>>({1}), createColumn<Nullable<Int64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt8>>({1}), createColumn<Nullable<Int64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt16>>({1}), createColumn<Nullable<Int64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt32>>({1}), createColumn<Nullable<Int64>>({1}));
+    ASSERT_BITCOUNT(createColumn<Nullable<UInt64>>({1}), createColumn<Nullable<Int64>>({1}));
 }
 CATCH
 
