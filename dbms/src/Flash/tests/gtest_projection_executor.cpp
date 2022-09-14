@@ -103,11 +103,10 @@ try
 
     /// Check multi columns
     request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[4]});
-    executeAndAssertColumnsEqual(request,
-                                 {
-                                     toNullableVec<String>(col_names[0], col0_sorted_asc),
-                                     toNullableVec<Int32>(col_names[4], col4_sorted_asc),
-                                 });
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<String>(col_names[0], col0_sorted_asc),
+         toNullableVec<Int32>(col_names[4], col4_sorted_asc)});
 
     /// Check multi columns
     request = buildDAGRequest<MockColumnNameVec>({col_names[0], col_names[1], col_names[4]});

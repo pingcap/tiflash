@@ -24,37 +24,6 @@
 
 namespace DB::tests
 {
-namespace
-{
-Block mergeBlocks(Blocks blocks)
-{
-    if (blocks.empty())
-        return {};
-
-    Block sample_block = blocks.back();
-    std::vector<MutableColumnPtr> actual_cols;
-    for (const auto & column : sample_block.getColumnsWithTypeAndName())
-    {
-        actual_cols.push_back(column.type->createColumn());
-    }
-    for (const auto & block : blocks)
-    {
-        for (size_t i = 0; i < block.columns(); ++i)
-        {
-            for (size_t j = 0; j < block.rows(); ++j)
-            {
-                actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
-            }
-        }
-    }
-
-    ColumnsWithTypeAndName actual_columns;
-    for (size_t i = 0; i < actual_cols.size(); ++i)
-        actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
-    return Block(actual_columns);
-}
-} // namespace
-
 TiDB::TP dataTypeToTP(const DataTypePtr & type)
 {
     // TODO support more types.
@@ -166,6 +135,37 @@ void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequ
         ASSERT_EQ(expect_rows, Block(res).rows());
     });
 }
+
+namespace
+{
+Block mergeBlocks(Blocks blocks)
+{
+    if (blocks.empty())
+        return {};
+
+    Block sample_block = blocks.back();
+    std::vector<MutableColumnPtr> actual_cols;
+    for (const auto & column : sample_block.getColumnsWithTypeAndName())
+    {
+        actual_cols.push_back(column.type->createColumn());
+    }
+    for (const auto & block : blocks)
+    {
+        for (size_t i = 0; i < block.columns(); ++i)
+        {
+            for (size_t j = 0; j < block.rows(); ++j)
+            {
+                actual_cols[i]->insert((*(block.getColumnsWithTypeAndName())[i].column)[j]);
+            }
+        }
+    }
+
+    ColumnsWithTypeAndName actual_columns;
+    for (size_t i = 0; i < actual_cols.size(); ++i)
+        actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
+    return Block(actual_columns);
+}
+} // namespace
 
 void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {
