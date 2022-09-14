@@ -1070,12 +1070,12 @@ std::pair<std::optional<Segment::SplitInfo>, Segment::PrepareSplitLogicalStatus>
 
     LOG_FMT_DEBUG(log, "Split - SplitLogical - Finish prepare, segment={} split_point={}", info(), opt_split_point->toDebugString());
 
-    return { SplitInfo{
-                 .is_logical = true,
-                 .split_point = opt_split_point.value(),
-                 .my_stable = my_stable,
-                 .other_stable = other_stable},
-             PrepareSplitLogicalStatus::Success };
+    return {SplitInfo{
+                .is_logical = true,
+                .split_point = opt_split_point.value(),
+                .my_stable = my_stable,
+                .other_stable = other_stable},
+            PrepareSplitLogicalStatus::Success};
 }
 
 std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_context,
@@ -1091,7 +1091,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     auto read_info = getReadInfo(dm_context, *schema_snap, segment_snap, {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
 
     if (!opt_split_point.has_value())
-        opt_split_point = getSplitPointSlow(dm_context, read_info, segment_snap);;
+        opt_split_point = getSplitPointSlow(dm_context, read_info, segment_snap);
     if (!opt_split_point.has_value())
         return {};
 

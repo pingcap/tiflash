@@ -342,7 +342,6 @@ try
 CATCH
 
 
-
 TEST_F(SegmentOperationTest, SegmentLogicalSplit)
 try
 {
@@ -748,7 +747,7 @@ try
     ASSERT_EQ(segments.size(), 2);
     ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
     ASSERT_EQ(50, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(50+70, getSegmentRowNum(*new_seg_id_opt));
+    ASSERT_EQ(50 + 70, getSegmentRowNum(*new_seg_id_opt));
 }
 CATCH
 
@@ -952,7 +951,8 @@ try
 CATCH
 
 
-class SegmentSplitAtModeTest : public SegmentTestBasic, public testing::WithParamInterface<bool>
+class SegmentSplitAtModeTest : public SegmentTestBasic
+    , public testing::WithParamInterface<bool>
 {
 public:
     SegmentSplitAtModeTest()
@@ -963,6 +963,7 @@ public:
         else
             split_mode = Segment::SplitMode::Physical;
     }
+
 protected:
     Segment::SplitMode split_mode = Segment::SplitMode::Auto;
 };
@@ -1113,7 +1114,7 @@ try
         ASSERT_TRUE(right_id.has_value());
         ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *right_id}));
         ASSERT_EQ(50, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
-        ASSERT_EQ(40+20, getSegmentRowNumWithoutMVCC(*new_seg_id));
+        ASSERT_EQ(40 + 20, getSegmentRowNumWithoutMVCC(*new_seg_id));
         ASSERT_EQ(50, getSegmentRowNumWithoutMVCC(*right_id));
     }
 }

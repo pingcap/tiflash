@@ -74,7 +74,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    switch (reason) {
+    switch (reason)
+    {
     case SegmentSplitReason::ForegroundWrite:
         GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
         break;
@@ -88,7 +89,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
     Stopwatch watch_seg_split;
     SCOPE_EXIT({
-        switch (reason) {
+        switch (reason)
+        {
         case SegmentSplitReason::ForegroundWrite:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds());
             break;
