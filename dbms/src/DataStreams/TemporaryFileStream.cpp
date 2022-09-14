@@ -29,4 +29,4 @@ TemporaryFileStream::~TemporaryFileStream()
 {
     file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
 }
-}
+} // namespace DB

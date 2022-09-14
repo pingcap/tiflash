@@ -37,4 +37,4 @@ struct TemporaryFileStream
 };
 
 using TemporaryFileStreams = std::vector<std::unique_ptr<TemporaryFileStream>>;
-}
+} // namespace DB
