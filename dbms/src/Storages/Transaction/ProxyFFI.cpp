@@ -465,6 +465,7 @@ const char * IntoEncryptionMethodName(EncryptionMethod method)
         "Aes128Ctr",
         "Aes192Ctr",
         "Aes256Ctr",
+        "SM4Ctr",
     };
     return encryption_method_name[static_cast<uint8_t>(method)];
 }

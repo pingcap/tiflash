@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Flash/EstablishCall.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -125,70 +126,72 @@ struct MockTerminateLocalReader
 using MockTerminateLocalReaderPtr = std::shared_ptr<MockTerminateLocalReader>;
 
 
-class MockAsyncWriter : public PacketWriter
+class MockAsyncCallData : public IAsyncCallData
 {
 public:
-    explicit MockAsyncWriter() {}
+    MockAsyncCallData() = default;
 
-    bool write(const mpp::MPPDataPacket & packet) override
+    void attachAsyncTunnelSender(const std::shared_ptr<AsyncTunnelSender> & async_tunnel_sender_) override
     {
-        write_packet_vec.push_back(packet.data());
-        // Simulate the async process, write success then check if exist msg, then write again
-        if (async_sender->isSendQueueNextPopNonBlocking())
-        {
-            async_sender->sendOne();
-        }
-        return true;
+        async_tunnel_sender = async_tunnel_sender_;
     }
 
-    void tryFlushOne() override
+    grpc_call * grpcCall() override
     {
-        if (ready && async_sender->isSendQueueNextPopNonBlocking())
+        return nullptr;
+    }
+
+    std::optional<GRPCKickFunc> getKickFuncForTest() override
+    {
+        return [&](KickTag * tag) {
+            {
+                void * t;
+                bool s;
+                tag->FinalizeResult(&t, &s);
+                std::unique_lock<std::mutex> lock(mu);
+                has_msg = true;
+            }
+            cv.notify_one();
+            return grpc_call_error::GRPC_CALL_OK;
+        };
+    }
+
+    void run()
+    {
+        while (true)
         {
-            async_sender->sendOne();
+            TrackedMppDataPacketPtr res;
+            switch (async_tunnel_sender->pop(res, this))
+            {
+            case GRPCSendQueueRes::OK:
+                if (write_failed)
+                {
+                    async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
+                    return;
+                }
+                write_packet_vec.push_back(res->packet.data());
+                break;
+            case GRPCSendQueueRes::FINISHED:
+                async_tunnel_sender->consumerFinish("");
+                return;
+            case GRPCSendQueueRes::EMPTY:
+                std::unique_lock<std::mutex> lock(mu);
+                cv.wait(lock, [&] {
+                    return has_msg;
+                });
+                has_msg = false;
+                break;
+            }
         }
-        ready = true;
     }
-    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override
-    {
-        async_sender = async_tunnel_sender_;
-    }
-    AsyncTunnelSenderPtr async_sender;
+
+    std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::vector<String> write_packet_vec;
-    bool ready = false;
-};
 
-class MockFailedAsyncWriter : public PacketWriter
-{
-public:
-    explicit MockFailedAsyncWriter() {}
-    bool write(const mpp::MPPDataPacket & packet) override
-    {
-        write_packet_vec.push_back(packet.data());
-        // Simulate the async process, write success then check if exist msg, then write again
-        if (async_sender->isSendQueueNextPopNonBlocking())
-        {
-            async_sender->sendOne();
-        }
-        return false;
-    }
-
-    void tryFlushOne() override
-    {
-        if (ready && async_sender->isSendQueueNextPopNonBlocking())
-        {
-            async_sender->sendOne();
-        }
-        ready = true;
-    }
-
-    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_) override
-    {
-        async_sender = async_tunnel_sender_;
-    }
-    AsyncTunnelSenderPtr async_sender;
-    std::vector<String> write_packet_vec;
-    bool ready = false;
+    std::mutex mu;
+    std::condition_variable cv;
+    bool has_msg = false;
+    bool write_failed = false;
 };
 
 class TestMPPTunnel : public testing::Test
@@ -595,10 +598,12 @@ TEST_F(TestMPPTunnel, AsyncConnectWriteCancel)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
-    std::unique_ptr<PacketWriter> async_writer_ptr = std::make_unique<MockAsyncWriter>();
-    mpp_tunnel_ptr->connect(async_writer_ptr.get());
+    std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
+    mpp_tunnel_ptr->connectAsync(call_data.get());
 
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+
+    std::thread t(&MockAsyncCallData::run, call_data.get());
 
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
@@ -607,27 +612,35 @@ try
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->close("Cancel");
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec.size(), 3); //Third for err msg
-    GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec[0], "First");
-    GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec[1], "Second");
+
+    t.join();
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 3); //Third for err msg
+    GTEST_ASSERT_EQ(call_data->write_packet_vec[0], "First");
+    GTEST_ASSERT_EQ(call_data->write_packet_vec[1], "Second");
 }
 CATCH
 
-TEST_F(TestMPPTunnel, AsyncConnectWriteWriteDone)
+TEST_F(TestMPPTunnel, AsyncConnectWriteDone)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
-    std::unique_ptr<PacketWriter> async_writer_ptr = std::make_unique<MockAsyncWriter>();
-    mpp_tunnel_ptr->connect(async_writer_ptr.get());
+    std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
+    mpp_tunnel_ptr->connectAsync(call_data.get());
+
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+
+    std::thread t(&MockAsyncCallData::run, call_data.get());
 
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->writeDone();
+
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec.size(), 1);
-    GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec[0], "First");
+
+    t.join();
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(call_data->write_packet_vec[0], "First");
 }
 CATCH
 
@@ -635,16 +648,21 @@ TEST_F(TestMPPTunnel, AsyncConsumerFinish)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
-    std::unique_ptr<PacketWriter> async_writer_ptr = std::make_unique<MockAsyncWriter>();
-    mpp_tunnel_ptr->connect(async_writer_ptr.get());
+    std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
+    mpp_tunnel_ptr->connectAsync(call_data.get());
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+
+    std::thread t(&MockAsyncCallData::run, call_data.get());
 
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
     mpp_tunnel_ptr->getTunnelSender()->consumerFinish("");
     GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(mpp_tunnel_ptr->getTunnelSender()), true);
-    GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec.size(), 0);
+
+    t.join();
+    GTEST_ASSERT_EQ(call_data->write_packet_vec.size(), 1);
+    GTEST_ASSERT_EQ(call_data->write_packet_vec[0], "First");
 }
 CATCH
 
@@ -653,14 +671,18 @@ TEST_F(TestMPPTunnel, AsyncWriteError)
     try
     {
         auto mpp_tunnel_ptr = constructRemoteAsyncTunnel();
-        std::unique_ptr<PacketWriter> async_writer_ptr = std::make_unique<MockFailedAsyncWriter>();
-        mpp_tunnel_ptr->connect(async_writer_ptr.get());
+        std::unique_ptr<MockAsyncCallData> call_data = std::make_unique<MockAsyncCallData>();
+        call_data->write_failed = true;
+        mpp_tunnel_ptr->connectAsync(call_data.get());
+
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
+
+        std::thread t(&MockAsyncCallData::run, call_data.get());
+
         auto data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
         data_packet_ptr->set_data("First");
         mpp_tunnel_ptr->write(*data_packet_ptr);
-        data_packet_ptr->set_data("Second");
-        mpp_tunnel_ptr->write(*data_packet_ptr);
+        t.join();
         mpp_tunnel_ptr->waitForFinish();
         GTEST_FAIL();
     }
