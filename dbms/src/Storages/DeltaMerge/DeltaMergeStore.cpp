@@ -43,6 +43,7 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace ProfileEvents
@@ -126,15 +127,15 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
         light_tasks.push(task);
         break;
     default:
-        throw Exception(fmt::format("Unsupported task type: {}", toString(task.type)));
+        throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
     }
 
     LOG_FMT_DEBUG(
         log_,
         "Segment task add to background task pool, segment={} task={} by_whom={}",
         task.segment->simpleInfo(),
-        toString(task.type),
-        toString(whom));
+        magic_enum::enum_name(task.type),
+        magic_enum::enum_name(whom));
     return std::make_pair(true, is_heavy);
 }
 
@@ -148,7 +149,7 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
     auto task = tasks.front();
     tasks.pop();
 
-    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), toString(task.type));
+    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), magic_enum::enum_name(task.type));
 
     return task;
 }
@@ -1559,7 +1560,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
-        LOG_FMT_DEBUG(log, "Task {} GC safe point: {}", toString(task.type), task.dm_context->min_version);
+        LOG_FMT_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
     }
 
     SegmentPtr left, right;
@@ -1601,7 +1602,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
         default:
-            throw Exception(fmt::format("Unsupported task type: {}", toString(task.type)));
+            throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
         }
     }
     catch (const Exception & e)
@@ -1609,7 +1610,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         LOG_FMT_ERROR(
             log,
             "Execute task on segment failed, task={} segment={}{} err={}",
-            DeltaMergeStore::toString(task.type),
+            magic_enum::enum_name(task.type),
             task.segment->simpleInfo(),
             ((bool)task.next_segment ? (fmt::format(" next_segment={}", task.next_segment->simpleInfo())) : ""),
             e.message());

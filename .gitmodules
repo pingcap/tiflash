@@ -87,4 +87,4 @@
 	url = https://github.com/ARM-software/optimized-routines
 [submodule "contrib/magic_enum"]
 	path = contrib/magic_enum
-	url = https://github.com/Neargye/magic_enum.git
+	url = git@github.com:Neargye/magic_enum.git

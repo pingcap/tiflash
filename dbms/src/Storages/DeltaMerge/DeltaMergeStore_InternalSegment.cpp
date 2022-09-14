@@ -15,6 +15,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <magic_enum.hpp>
 
 namespace CurrentMetrics
 {
@@ -305,7 +306,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     const TaskRunThread run_thread,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_INFO(log, "MergeDelta - Begin, thread={} safe_point={} segment={}", toString(run_thread), dm_context.min_version, segment->info());
+    LOG_FMT_INFO(log, "MergeDelta - Begin, thread={} safe_point={} segment={}", magic_enum::enum_name(run_thread), dm_context.min_version, segment->info());
 
     ColumnDefinesPtr schema_snap;
 
