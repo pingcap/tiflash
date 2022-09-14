@@ -71,11 +71,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_mpp_hash_build)                                       \
     M(exception_before_drop_segment)                                  \
     M(exception_after_drop_segment)                                   \
-    M(exception_between_schema_change_in_the_same_diff)               \
-    /* try to use logical split, could fall back to physical split */ \
-    M(try_segment_logical_split)                                      \
-    /* must perform logical split, otherwise throw exception */       \
-    M(force_segment_logical_split)
+    M(exception_between_schema_change_in_the_same_diff)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \

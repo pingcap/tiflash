@@ -95,12 +95,6 @@ extern const int LOGICAL_ERROR;
 extern const int UNKNOWN_FORMAT_VERSION;
 } // namespace ErrorCodes
 
-namespace FailPoints
-{
-extern const char try_segment_logical_split[];
-extern const char force_segment_logical_split[];
-} // namespace FailPoints
-
 namespace DM
 {
 const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
@@ -745,7 +739,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
     EventRecorder recorder(ProfileEvents::DMSegmentGetSplitPoint, ProfileEvents::DMSegmentGetSplitPointNS);
     auto stable_rows = stable_snap->getRows();
     if (unlikely(!stable_rows))
-        throw Exception("No stable rows");
+        return {};
 
     size_t split_row_index = stable_rows / 2;
 
@@ -945,15 +939,26 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
     // We will only try either LogicalSplit or PhysicalSplit.
     if (split_mode == SplitMode::Auto)
     {
-        if (!dm_context.enable_logical_split //
-            || segment_snap->stable->getPacks() <= 3 //
-            || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+        if (opt_split_at.has_value())
         {
-            try_split_mode = SplitMode::Physical;
+            if (dm_context.enable_logical_split)
+                try_split_mode = SplitMode::Logical;
+            else
+                try_split_mode = SplitMode::Physical;
         }
         else
         {
-            try_split_mode = SplitMode::Logical;
+            // When split point is not specified, there are some preconditions in order to use logical split.
+            if (!dm_context.enable_logical_split //
+                || segment_snap->stable->getPacks() <= 3 //
+                || segment_snap->delta->getRows() > segment_snap->stable->getRows())
+            {
+                try_split_mode = SplitMode::Physical;
+            }
+            else
+            {
+                try_split_mode = SplitMode::Logical;
+            }
         }
     }
 

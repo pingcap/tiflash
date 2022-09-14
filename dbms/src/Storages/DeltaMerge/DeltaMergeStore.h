@@ -476,11 +476,15 @@ private:
     {
         /**
          * Split according to settings.
+         *
+         * If logical split is allowed in the settings, logical split will be tried first.
+         * Logical split may fall back to physical split when calculating split point failed.
          */
         Auto,
 
         /**
-         * Do logical split.
+         * Do logical split. If split point is not specified and cannot be calculated out,
+         * the split will fail.
          */
         Logical,
 
