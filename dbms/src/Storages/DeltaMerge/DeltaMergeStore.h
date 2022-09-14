@@ -411,7 +411,7 @@ public:
      * Try to merge delta in the current thread as the GC operation.
      * This function may be blocking, and should be called in the GC background thread.
      */
-    SegmentPtr gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, DB::Timestamp gc_safe_point);
+    SegmentPtr gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point);
 
     /**
      * Starting from the given base segment, find continuous segments that could be merged.

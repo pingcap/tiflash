@@ -156,6 +156,8 @@ public:
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
+        std::pair<bool, bool> isFirstAndLastPackIncludedInRange(const DMContext & context, const RowKeyRange & range) const;
+
     private:
         Poco::Logger * log;
     };
