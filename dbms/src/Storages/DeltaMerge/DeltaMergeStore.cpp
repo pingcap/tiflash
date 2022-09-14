@@ -862,13 +862,13 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
 
     for (auto & segment : all_segments)
     {
-        segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+        segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
     }
 
     LOG_FMT_INFO(log, "Finish table mergeDeltaAll");
 }
 
-std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key, const TaskRunThread run_thread)
+std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)
 {
     LOG_FMT_INFO(log, "Table mergeDeltaBySegment, start={}", start_key.toDebugString());
 
@@ -895,7 +895,7 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
 
         if (segment->flushCache(*dm_context))
         {
-            const auto new_segment = segmentMergeDelta(*dm_context, segment, run_thread);
+            const auto new_segment = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
             if (new_segment)
             {
                 const auto segment_end = new_segment->getRowKeyRange().end;
@@ -1412,7 +1412,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                     GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_delta_merge_by_delete_range).Observe(watch.elapsedSeconds());
             });
 
-            return segmentMergeDelta(*dm_context, segment, TaskRunThread::Foreground);
+            return segmentMergeDelta(*dm_context, segment, MergeDeltaReason::ForegroundWrite);
         }
         return {};
     };
@@ -1579,7 +1579,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         case TaskType::MergeDelta:
         {
             FAIL_POINT_PAUSE(FailPoints::pause_before_dt_background_delta_merge);
-            left = segmentMergeDelta(*task.dm_context, task.segment, TaskRunThread::BackgroundThreadPool);
+            left = segmentMergeDelta(*task.dm_context, task.segment, MergeDeltaReason::BackgroundThreadPool);
             type = ThreadType::BG_MergeDelta;
             // Wake up all waiting threads if failpoint is enabled
             FailPointHelper::disableFailPoint(FailPoints::pause_until_dt_background_delta_merge);
@@ -1786,7 +1786,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
             bool finish_gc_on_segment = false;
             if (should_compact)
             {
-                if (segment = segmentMergeDelta(*dm_context, segment, TaskRunThread::BackgroundGCThread, segment_snap); segment)
+                if (segment = segmentMergeDelta(*dm_context, segment, MergeDeltaReason::BackgroundGCThread, segment_snap); segment)
                 {
                     // Continue to check whether we need to apply more tasks on this segment
                     segment_snap = {};
