@@ -66,6 +66,10 @@ public:
     void addTask(MergedTaskPtr && task);
     bool isSegmentReader() const;
 
+    // Explicitly, release reader_pools and reader_ids.
+    // The destructor will do this automatically.
+    // This function is for unittests.
+    void stop();
 private:
     SegmentReaderPoolManager();
     std::vector<std::unique_ptr<SegmentReaderPool>> reader_pools;
