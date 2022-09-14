@@ -253,16 +253,16 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
 template <typename T>
 bool ColumnDecimal<T>::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
 {
-    PrecType prec = static_cast<uint8_t>(raw_value[cursor++]);
-    ScaleType scale = static_cast<uint8_t>(raw_value[cursor++]);
-    auto type = createDecimal(prec, scale);
-    if (unlikely(!checkDecimal<T>(*type)))
+    PrecType dec_prec = static_cast<uint8_t>(raw_value[cursor++]);
+    ScaleType dec_scale = static_cast<uint8_t>(raw_value[cursor++]);
+    auto dec_type = createDecimal(dec_prec, dec_scale);
+    if (unlikely(!checkDecimal<T>(*dec_type)))
     {
-        throw Exception("Detected unmatched decimal value type: Decimal( " + std::to_string(prec) + ", " + std::to_string(scale) + ") when decoding with column type " + this->getName(),
+        throw Exception("Detected unmatched decimal value type: Decimal( " + std::to_string(dec_prec) + ", " + std::to_string(dec_scale) + ") when decoding with column type " + this->getName(),
                         ErrorCodes::LOGICAL_ERROR);
     }
-    auto res = DecodeDecimalImpl<T>(cursor, raw_value, prec, scale);
-    data.push_back(DecimalField<T>(res, scale));
+    auto res = DecodeDecimalImpl<T>(cursor, raw_value, dec_prec, dec_scale);
+    data.push_back(DecimalField<T>(res, dec_scale));
     return true;
 }
 
