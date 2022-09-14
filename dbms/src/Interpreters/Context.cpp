@@ -1838,56 +1838,67 @@ size_t Context::getMaxStreams() const
 
 bool Context::isMPPTest() const
 {
+    auto lock = getLock();
     return test_mode == mpp_test || test_mode == cancel_test;
 }
 
 void Context::setMPPTest()
 {
+    auto lock = getLock();
     test_mode = mpp_test;
 }
 
 bool Context::isCancelTest() const
 {
+    auto lock = getLock();
     return test_mode == cancel_test;
 }
 
 void Context::setCancelTest()
 {
+    auto lock = getLock();
     test_mode = cancel_test;
 }
 
 bool Context::isExecutorTest() const
 {
+    auto lock = getLock();
     return test_mode == executor_test;
 }
 
 void Context::setExecutorTest()
 {
+    auto lock = getLock();
     test_mode = executor_test;
 }
 
 bool Context::isTest() const
 {
+    auto lock = getLock();
     return test_mode != non_test;
 }
 
 void Context::setMockStorage(MockStorage & mock_storage_)
 {
+    auto lock = getLock();
     mock_storage = mock_storage_;
 }
 
 MockStorage Context::mockStorage() const
 {
+    auto lock = getLock();
     return mock_storage;
 }
 
 MockMPPServerInfo Context::mockMPPServerInfo() const
 {
+    auto lock = getLock();
     return mpp_server_info;
 }
 
 void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
+    auto lock = getLock();
     mpp_server_info = info;
 }
 
