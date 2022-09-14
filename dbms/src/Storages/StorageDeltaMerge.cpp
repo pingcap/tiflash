@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
@@ -638,16 +639,12 @@ BlockInputStreams StorageDeltaMerge::read(
     }
 
     // Read with MVCC filtering
-    if (unlikely(!query_info.mvcc_query_info))
-        throw Exception("mvcc query info is null", ErrorCodes::LOGICAL_ERROR);
-
     TMTContext & tmt = context.getTMTContext();
-    if (unlikely(!tmt.isInitialized()))
-        throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    RUNTIME_CHECK(tmt.isInitialized());
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
-    auto req_id = fmt::format("{} read_tso={}", query_info.req_id, mvcc_query_info.read_tso);
-    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), req_id);
+    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
 
     LOG_FMT_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
@@ -757,7 +754,7 @@ BlockInputStreams StorageDeltaMerge::read(
         num_streams,
         /*max_version=*/mvcc_query_info.read_tso,
         rs_operator,
-        req_id,
+        query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
         max_block_size,
@@ -792,9 +789,9 @@ void StorageDeltaMerge::mergeDelta(const Context & context)
     getAndMaybeInitStore()->mergeDeltaAll(context);
 }
 
-std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread)
+std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key)
 {
-    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key, run_thread);
+    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key);
 }
 
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)

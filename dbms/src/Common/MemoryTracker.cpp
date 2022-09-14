@@ -69,20 +69,6 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
       *  we allow exception about memory limit exceeded to be thrown only on next allocation.
       * So, we allow over-allocations.
       */
-    Int64 current_amount = amount.load(std::memory_order_relaxed);
-    if (unlikely(!next.load(std::memory_order_relaxed) && accuracy_diff_for_test && real_rss > accuracy_diff_for_test + current_amount))
-    {
-        DB::FmtBuffer fmt_buf;
-        fmt_buf.append("Memory tracker accuracy ");
-        if (description)
-            fmt_buf.fmtAppend(" {}", description);
-
-        fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than tracked amount ({})",
-                          formatReadableSizeWithBinarySuffix(real_rss),
-                          formatReadableSizeWithBinarySuffix(current_amount));
-        throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
-    }
-
     Int64 will_be = size + amount.fetch_add(size, std::memory_order_relaxed);
 
     if (!next.load(std::memory_order_relaxed))
@@ -91,6 +77,19 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     if (check_memory_limit)
     {
         Int64 current_limit = limit.load(std::memory_order_relaxed);
+        Int64 current_accuracy_diff_for_test = accuracy_diff_for_test.load(std::memory_order_relaxed);
+        if (unlikely(!next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit && real_rss > current_accuracy_diff_for_test + current_limit))
+        {
+            DB::FmtBuffer fmt_buf;
+            fmt_buf.append("Memory tracker accuracy ");
+            if (description)
+                fmt_buf.fmtAppend(" {}", description);
+
+            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({})",
+                              formatReadableSizeWithBinarySuffix(real_rss),
+                              formatReadableSizeWithBinarySuffix(current_limit));
+            throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
+        }
 
         /// Using non-thread-safe random number generator. Joint distribution in different threads would not be uniform.
         /// In this case, it doesn't matter.
@@ -109,9 +108,10 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
+        Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
         bool is_rss_too_large = (!next.load(std::memory_order_relaxed) && current_limit
-                                 && real_rss > current_limit + bytes_rss_larger_than_limit
-                                 && will_be > current_limit - (real_rss - current_limit - bytes_rss_larger_than_limit));
+                                 && real_rss > current_limit + current_bytes_rss_larger_than_limit
+                                 && will_be > current_limit - (real_rss - current_limit - current_bytes_rss_larger_than_limit));
         if (is_rss_too_large
             || unlikely(current_limit && will_be > current_limit))
         {

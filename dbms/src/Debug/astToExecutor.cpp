@@ -123,6 +123,8 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
 namespace
 {
 std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
+    {"plusint", tipb::ScalarFuncSig::PlusInt},
+    {"minusint", tipb::ScalarFuncSig::MinusInt},
     {"equals", tipb::ScalarFuncSig::EQInt},
     {"notEquals", tipb::ScalarFuncSig::NEInt},
     {"and", tipb::ScalarFuncSig::LogicalAnd},
@@ -407,6 +409,22 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
                 *(expr->mutable_field_type()) = child->field_type();
         }
         return;
+    case tipb::ScalarFuncSig::PlusInt:
+    case tipb::ScalarFuncSig::MinusInt:
+    {
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            astToPB(input, child_ast, child, collator_id, context);
+        }
+        expr->set_sig(it_sig->second);
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(expr->children(0).field_type().tp());
+        ft->set_flag(expr->children(0).field_type().flag());
+        ft->set_collate(collator_id);
+        expr->set_tp(tipb::ExprType::ScalarFunc);
+        return;
+    }
     case tipb::ScalarFuncSig::LikeSig:
     {
         expr->set_sig(tipb::ScalarFuncSig::LikeSig);
@@ -641,6 +659,9 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
                     ci = child_ci;
             }
             return ci;
+        case tipb::ScalarFuncSig::PlusInt:
+        case tipb::ScalarFuncSig::MinusInt:
+            return compileExpr(input, func->arguments->children[0]);
         case tipb::ScalarFuncSig::LikeSig:
             ci.tp = TiDB::TypeLongLong;
             ci.flag = TiDB::ColumnFlagUnsigned;
@@ -826,13 +847,14 @@ bool ExchangeSender::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t coll
         *exchange_sender->add_types() = tipb_type;
     }
 
+    int i = 0;
     for (auto task_id : mpp_info.sender_target_task_ids)
     {
         mpp::TaskMeta meta;
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(task_id);
-        meta.set_partition_id(mpp_info.partition_id);
-        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        meta.set_partition_id(i);
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[i++].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
 
         auto * meta_string = exchange_sender->add_encoded_task_meta();
@@ -857,6 +879,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::ExchangeReceiver * exchange_receiver = tipb_executor->mutable_exchange_receiver();
+
     for (auto & field : output_schema)
     {
         auto tipb_type = TiDB::columnInfoToFieldType(field.second);
@@ -865,6 +888,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         auto * field_type = exchange_receiver->add_field_types();
         *field_type = tipb_type;
     }
+
     auto it = mpp_info.receiver_source_task_ids_map.find(name);
     if (it == mpp_info.receiver_source_task_ids_map.end())
         throw Exception("Can not found mpp receiver info");
@@ -876,7 +900,7 @@ bool ExchangeReceiver::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t co
         meta.set_start_ts(mpp_info.start_ts);
         meta.set_task_id(it->second[i]);
         meta.set_partition_id(i);
-        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[mpp_info.partition_id].addr : Debug::LOCAL_HOST;
+        auto addr = context.isMPPTest() ? MockComputeServerManager::instance().getServerConfigMap()[i].addr : Debug::LOCAL_HOST;
         meta.set_address(addr);
         auto * meta_string = exchange_receiver->add_encoded_task_meta();
         meta.AppendToString(meta_string);

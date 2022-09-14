@@ -195,59 +195,65 @@ public:
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareSplit` and `applySplit`.
+     */
+    [[nodiscard]] SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+
     std::optional<SplitInfo> prepareSplit(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
 
-    SegmentPair applySplit(
+    [[nodiscard]] SegmentPair applySplit(
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         SplitInfo & split_info) const;
 
-    static SegmentPtr merge(
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareMerge` and `applyMerge`.
+     */
+    [[nodiscard]] static SegmentPtr merge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
-        const SegmentPtr & left,
-        const SegmentPtr & right);
+        const std::vector<SegmentPtr> & ordered_segments);
+
     static StableValueSpacePtr prepareMerge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
-        const SegmentPtr & left,
-        const SegmentSnapshotPtr & left_snap,
-        const SegmentPtr & right,
-        const SegmentSnapshotPtr & right_snap,
+        const std::vector<SegmentPtr> & ordered_segments,
+        const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
         WriteBatches & wbs);
-    static SegmentPtr applyMerge(
+
+    [[nodiscard]] static SegmentPtr applyMerge(
         DMContext & dm_context,
-        const SegmentPtr & left,
-        const SegmentSnapshotPtr & left_snap,
-        const SegmentPtr & right,
-        const SegmentSnapshotPtr & right_snap,
+        const std::vector<SegmentPtr> & ordered_segments,
+        const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
         WriteBatches & wbs,
         const StableValueSpacePtr & merged_stable);
 
-    /// Merge the delta (major compaction) and return the new segment.
-    ///
-    /// Note: This is only a shortcut function used in tests.
-    /// Normally you should call `prepareMergeDelta`, `applyMergeDelta` instead.
-    SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareMergeDelta` and `applyMergeDelta`.
+     */
+    [[nodiscard]] SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
 
     StableValueSpacePtr prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
-    SegmentPtr applyMergeDelta(
+    [[nodiscard]] SegmentPtr applyMergeDelta(
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
-    SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
+    [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
@@ -270,8 +276,12 @@ public:
     const DeltaValueSpacePtr & getDelta() const { return delta; }
     const StableValueSpacePtr & getStable() const { return stable; }
 
+    String logId() const;
     String simpleInfo() const;
     String info() const;
+
+    static String simpleInfo(const std::vector<SegmentPtr> & segments);
+    static String info(const std::vector<SegmentPtr> & segments);
 
     using Lock = DeltaValueSpace::Lock;
     bool getUpdateLock(Lock & lock) const { return delta->getLock(lock); }
@@ -280,7 +290,7 @@ public:
     {
         Lock lock;
         if (!getUpdateLock(lock))
-            throw Exception("Segment [" + DB::toString(segmentId()) + "] get update lock failed", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Segment get update lock failed, segment={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
         return lock;
     }
 
@@ -289,16 +299,16 @@ public:
     /// The abandon state is usually triggered by the DeltaMergeStore.
     void abandon(DMContext & context)
     {
-        LOG_FMT_DEBUG(log, "Abandon segment [{}]", segment_id);
+        LOG_FMT_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);
     }
 
     /// Returns whether this segment has been marked as abandoned.
     /// Note: Segment member functions never abandon the segment itself.
     /// The abandon state is usually triggered by the DeltaMergeStore.
-    bool hasAbandoned() { return delta->hasAbandoned(); }
+    bool hasAbandoned() const { return delta->hasAbandoned(); }
 
-    bool isSplitForbidden() { return split_forbidden; }
+    bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
 
     void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
@@ -415,7 +425,7 @@ private:
 
     bool split_forbidden = false;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB::DM

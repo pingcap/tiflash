@@ -180,13 +180,12 @@ public:
         PlaceIndex,
     };
 
-    // TODO: Rename to MergeDeltaThreadType
-    enum TaskRunThread
+    enum MergeDeltaReason
     {
         BackgroundThreadPool,
-        Foreground,
-        ForegroundRPC,
         BackgroundGCThread,
+        ForegroundWrite,
+        Manual,
     };
 
     static std::string toString(ThreadType type)
@@ -237,16 +236,18 @@ public:
         }
     }
 
-    static std::string toString(TaskRunThread type)
+    static std::string toString(MergeDeltaReason type)
     {
         switch (type)
         {
         case BackgroundThreadPool:
             return "BackgroundThreadPool";
-        case Foreground:
-            return "Foreground";
         case BackgroundGCThread:
             return "BackgroundGCThread";
+        case ForegroundWrite:
+            return "ForegroundWrite";
+        case Manual:
+            return "Manual";
         default:
             return "Unknown";
         }
@@ -395,7 +396,7 @@ public:
     /// If there is no segment found by the start key, nullopt is returned.
     ///
     /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
-    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, TaskRunThread run_thread);
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key);
 
     /// Compact the delta layer, merging multiple fragmented delta files into larger ones.
     /// This is a minor compaction as it does not merge the delta into stable layer.
@@ -471,29 +472,39 @@ private:
 
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
-    /// Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
-    /// If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
-    /// See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
-    ///
-    /// This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
-    /// A `thread_type` should be specified indicating the type of the thread calling this function.
-    /// Depend on the thread type, the "update" to do may be varied.
+    /**
+     * Try to update the segment. "Update" means splitting the segment into two, merging two segments, merging the delta, etc.
+     * If an update is really performed, the segment will be abandoned (with `segment->hasAbandoned() == true`).
+     * See `segmentSplit`, `segmentMerge`, `segmentMergeDelta` for details.
+     *
+     * This may be called from multiple threads, e.g. at the foreground write moment, or in background threads.
+     * A `thread_type` should be specified indicating the type of the thread calling this function.
+     * Depend on the thread type, the "update" to do may be varied.
+     */
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
-    /// Split the segment into two.
-    /// After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
+    /**
+     * Split the segment into two.
+     * After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
+     */
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
 
-    /// Merge two segments into one.
-    /// After merging, both segments will be abandoned (with `segment->hasAbandoned() == true`).
-    void segmentMerge(DMContext & dm_context, const SegmentPtr & left, const SegmentPtr & right, bool is_foreground);
+    /**
+     * Merge multiple continuous segments (order by segment start key) into one.
+     * Throw exception if < 2 segments are given.
+     * Fail if given segments are not continuous or not valid.
+     * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
+     */
+    SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, bool is_foreground);
 
-    /// Merge the delta (major compaction) in the segment.
-    /// After delta-merging, the segment will be abandoned (with `segment->hasAbandoned() == true`) and a new segment will be returned.
+    /**
+     * Merge the delta (major compaction) in the segment.
+     * After delta-merging, the segment will be abandoned (with `segment->hasAbandoned() == true`) and a new segment will be returned.
+     */
     SegmentPtr segmentMergeDelta(
         DMContext & dm_context,
         const SegmentPtr & segment,
-        TaskRunThread thread,
+        MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
     bool updateGCSafePoint();
