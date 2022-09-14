@@ -196,22 +196,99 @@ public:
     /// split(), merge() and mergeDelta() are only used in test cases.
 
     /**
+     * Note: There is also DeltaMergeStore::SegmentSplitMode, which shadows this enum.
+     */
+    enum class SplitMode
+    {
+        /**
+         * Split according to settings.
+         */
+        Auto,
+
+        /**
+         * Do logical split.
+         */
+        Logical,
+
+        /**
+         * Do physical split.
+         */
+        Physical,
+    };
+
+    static std::string toString(SplitMode mode)
+    {
+        switch (mode)
+        {
+        case SplitMode::Auto:
+            return "Auto";
+        case SplitMode::Logical:
+            return "Logical";
+        case SplitMode::Physical:
+            return "Physical";
+        default:
+            return "Unknown";
+        }
+    }
+
+    /**
      * Only used in tests as a shortcut.
      * Normally you should use `prepareSplit` and `applySplit`.
      */
-    [[nodiscard]] SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    [[nodiscard]] SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, std::optional<RowKeyValue> opt_split_at = std::nullopt, SplitMode opt_split_mode = SplitMode::Auto) const;
 
     std::optional<SplitInfo> prepareSplit(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_at,
+        SplitMode split_mode,
         WriteBatches & wbs) const;
+
+    std::optional<SplitInfo> prepareSplit(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        const SegmentSnapshotPtr & segment_snap,
+        WriteBatches & wbs) const
+    {
+        return prepareSplit(dm_context, schema_snap, segment_snap, std::nullopt, SplitMode::Auto, wbs);
+    }
 
     [[nodiscard]] SegmentPair applySplit(
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         SplitInfo & split_info) const;
+
+    /// Merge delta & stable, and then take the middle one.
+    std::optional<RowKeyValue> getSplitPointSlow(
+        DMContext & dm_context,
+        const ReadInfo & read_info,
+        const SegmentSnapshotPtr & segment_snap) const;
+    /// Only look up in the stable vs.
+    std::optional<RowKeyValue> getSplitPointFast(
+        DMContext & dm_context,
+        const StableSnapshotPtr & stable_snap) const;
+
+    enum class PrepareSplitLogicalStatus
+    {
+        Success,
+        FailCalculateSplitPoint,
+        FailOther,
+    };
+
+    std::pair<std::optional<SplitInfo>, PrepareSplitLogicalStatus> prepareSplitLogical(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_point,
+        WriteBatches & wbs) const;
+    std::optional<SplitInfo> prepareSplitPhysical(
+        DMContext & dm_context,
+        const ColumnDefinesPtr & schema_snap,
+        const SegmentSnapshotPtr & segment_snap,
+        std::optional<RowKeyValue> opt_split_point,
+        WriteBatches & wbs) const;
 
     /**
      * Only used in tests as a shortcut.
@@ -350,29 +427,6 @@ private:
         const IndexIterator & delta_index_end,
         size_t expected_block_size,
         UInt64 max_version = std::numeric_limits<UInt64>::max());
-
-    /// Merge delta & stable, and then take the middle one.
-    std::optional<RowKeyValue> getSplitPointSlow(
-        DMContext & dm_context,
-        const ReadInfo & read_info,
-        const SegmentSnapshotPtr & segment_snap) const;
-    /// Only look up in the stable vs.
-    std::optional<RowKeyValue> getSplitPointFast(
-        DMContext & dm_context,
-        const StableSnapshotPtr & stable_snap) const;
-
-    std::optional<SplitInfo> prepareSplitLogical(
-        DMContext & dm_context,
-        const ColumnDefinesPtr & schema_snap,
-        const SegmentSnapshotPtr & segment_snap,
-        RowKeyValue & split_point,
-        WriteBatches & wbs) const;
-    std::optional<SplitInfo> prepareSplitPhysical(
-        DMContext & dm_context,
-        const ColumnDefinesPtr & schema_snap,
-        const SegmentSnapshotPtr & segment_snap,
-        WriteBatches & wbs) const;
-
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.

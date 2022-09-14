@@ -180,14 +180,6 @@ public:
         PlaceIndex,
     };
 
-    enum MergeDeltaReason
-    {
-        BackgroundThreadPool,
-        BackgroundGCThread,
-        ForegroundWrite,
-        Manual,
-    };
-
     static std::string toString(ThreadType type)
     {
         switch (type)
@@ -231,23 +223,6 @@ public:
             return "Flush";
         case PlaceIndex:
             return "PlaceIndex";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static std::string toString(MergeDeltaReason type)
-    {
-        switch (type)
-        {
-        case BackgroundThreadPool:
-            return "BackgroundThreadPool";
-        case BackgroundGCThread:
-            return "BackgroundGCThread";
-        case ForegroundWrite:
-            return "ForegroundWrite";
-        case Manual:
-            return "Manual";
         default:
             return "Unknown";
         }
@@ -483,11 +458,77 @@ private:
      */
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
+#pragma region Internal Segment Operations
+
+#pragma region Segment Split
+
+    enum class SegmentSplitReason
+    {
+        ForegroundWrite,
+        Background,
+        IngestBySplit,
+    };
+
+    /**
+     * Note: This enum simply shadows Segment::SplitMode without introducing the whole Segment into this header.
+     */
+    enum class SegmentSplitMode
+    {
+        /**
+         * Split according to settings.
+         */
+        Auto,
+
+        /**
+         * Do logical split.
+         */
+        Logical,
+
+        /**
+         * Do physical split.
+         */
+        Physical,
+    };
+
+    static std::string toString(SegmentSplitMode mode)
+    {
+        switch (mode)
+        {
+        case SegmentSplitMode::Auto:
+            return "Auto";
+        case SegmentSplitMode::Logical:
+            return "Logical";
+        case SegmentSplitMode::Physical:
+            return "Physical";
+        default:
+            return "Unknown";
+        }
+    }
+
+    static std::string toString(SegmentSplitReason reason)
+    {
+        switch (reason)
+        {
+        case SegmentSplitReason::ForegroundWrite:
+            return "ForegroundWrite";
+        case SegmentSplitReason::Background:
+            return "Background";
+        case SegmentSplitReason::IngestBySplit:
+            return "IngestBySplit";
+        default:
+            return "Unknown";
+        }
+    }
+
     /**
      * Split the segment into two.
      * After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
+     *
+     * When `opt_split_at` is not specified, this function will try to find a mid point for splitting, and may lead to failures.
      */
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
+
+#pragma endregion Segment Split
 
     /**
      * Merge multiple continuous segments (order by segment start key) into one.
@@ -496,6 +537,33 @@ private:
      * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
      */
     SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, bool is_foreground);
+
+#pragma region Segment Merge Delta
+
+    enum class MergeDeltaReason
+    {
+        BackgroundThreadPool,
+        BackgroundGCThread,
+        ForegroundWrite,
+        Manual,
+    };
+
+    static std::string toString(MergeDeltaReason type)
+    {
+        switch (type)
+        {
+        case MergeDeltaReason::BackgroundThreadPool:
+            return "BackgroundThreadPool";
+        case MergeDeltaReason::BackgroundGCThread:
+            return "BackgroundGCThread";
+        case MergeDeltaReason::ForegroundWrite:
+            return "ForegroundWrite";
+        case MergeDeltaReason::Manual:
+            return "Manual";
+        default:
+            return "Unknown";
+        }
+    }
 
     /**
      * Merge the delta (major compaction) in the segment.
@@ -507,9 +575,7 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
-    bool updateGCSafePoint();
-
-    bool handleBackgroundTask(bool heavy);
+#pragma endregion Segment Merge Delta
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
     inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
@@ -521,6 +587,12 @@ private:
         return doIsSegmentValid(segment);
     }
     bool doIsSegmentValid(const SegmentPtr & segment);
+
+#pragma endregion Internal Segment Operations
+
+    bool updateGCSafePoint();
+
+    bool handleBackgroundTask(bool heavy);
 
     void restoreStableFiles();
 
