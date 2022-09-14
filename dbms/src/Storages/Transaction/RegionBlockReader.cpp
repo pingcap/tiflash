@@ -139,6 +139,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             }
             else
             {
+                // Parse column value from encoded value
                 if (schema_snapshot->pk_is_handle)
                 {
                     if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot->column_infos, schema_snapshot->pk_column_ids[0], force_decode))
@@ -152,24 +153,27 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
             }
         }
 
-        /// set extra handle column and pk columns if need
+        /// set extra handle column and pk columns from encoded key if need
         if constexpr (pk_type != TMTPKType::STRING)
         {
-            // extra handle column's type is always Int64
+            // For non-common handle, extra handle column's type is always Int64.
+            // We need to copy the handle value from encoded key.
+            const auto handle_value = static_cast<Int64>(pk);
             auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
-            static_cast<ColumnInt64 *>(raw_extra_column)->getData().push_back(Int64(pk));
+            static_cast<ColumnInt64 *>(raw_extra_column)->getData().push_back(handle_value);
+            // For pk_is_handle == true, we need to decode the handle value from encoded key, and insert
+            // to the specify column
             if (!pk_column_ids.empty())
             {
                 auto * raw_pk_column = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
                 if constexpr (pk_type == TMTPKType::INT64)
-                    static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(Int64(pk));
+                    static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(handle_value);
                 else if constexpr (pk_type == TMTPKType::UINT64)
-                    static_cast<ColumnUInt64 *>(raw_pk_column)->getData().push_back(UInt64(pk));
+                    static_cast<ColumnUInt64 *>(raw_pk_column)->getData().push_back(UInt64(handle_value));
                 else
                 {
-                    // The pk_type must be Int32/Uint32 or more narrow type
+                    // The pk_type must be Int32/UInt32 or more narrow type
                     // so cannot tell its' exact type here, just use `insert(Field)`
-                    auto handle_value(static_cast<Int64>(pk));
                     raw_pk_column->insert(Field(handle_value));
                     if (unlikely(raw_pk_column->getInt(index) != handle_value))
                     {
@@ -179,7 +183,7 @@ bool RegionBlockReader::readImpl(Block & block, const RegionDataReadInfoList & d
                         }
                         else
                         {
-                            throw Exception("Detected overflow value when decoding pk column of type " + raw_pk_column->getName(),
+                            throw Exception(fmt::format("Detected overflow value when decoding pk column, type={} handle={}", raw_pk_column->getName(), handle_value),
                                             ErrorCodes::LOGICAL_ERROR);
                         }
                     }
