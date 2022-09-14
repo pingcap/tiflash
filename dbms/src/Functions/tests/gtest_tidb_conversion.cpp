@@ -105,7 +105,7 @@ public:
     template <typename Input, typename Output>
     typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const DecimalField<Decimal64> & input, const MyDateTime & output, int fraction)
     {
-        auto meta = std::make_tuple(input.getPrec(), input.getScale());
+            auto meta = std::make_tuple(19, input.getScale());
         auto inner_test = [&](bool is_const) {
             ASSERT_COLUMN_EQ(
                 is_const ? createDateTimeColumnConst(1, output, fraction) : createDateTimeColumn({output}, fraction),
