@@ -141,14 +141,14 @@ FLATTEN_INLINE_PURE static inline bool check_block32x4_eq(const char * a, const 
         auto all_ones = _mm256_set1_epi8(0xFF);
         Block32 data = all_ones;
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
-            data = _mm256_and_si256(data, _mm256_cmpeq_epi8(load_block32(b + i * BLOCK32_SIZE), load_block32(a + i * BLOCK32_SIZE)));
+            data = _mm256_and_si256(data, _mm256_cmpeq_epi8(load_block32(a + i * BLOCK32_SIZE), load_block32(b + i * BLOCK32_SIZE)));
         return 0 != _mm256_testc_si256(data, all_ones);
     }
     else
     {
         uint32_t mask = Block32Mask;
         for (size_t i = 0; i < AVX2_UNROLL_NUM; ++i)
-            mask &= get_block32_cmp_eq_mask(b + i * BLOCK32_SIZE, a + i * BLOCK32_SIZE);
+            mask &= get_block32_cmp_eq_mask(a + i * BLOCK32_SIZE, b + i * BLOCK32_SIZE);
         return mask == Block32Mask;
     }
 }
