@@ -150,13 +150,7 @@ struct MyDate : public MyTimeBase
     }
 };
 
-struct SqlMode
-{
-    bool allow_zero_in_date;
-    bool allow_invalid_date;
-};
-
-bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode);
+bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDate = true);
 
 struct MyDateTimeFormatter
 {
@@ -197,12 +191,11 @@ using CheckTimeFunc = std::function<bool(Int32, Int32, Int32, Int32, Int32, Int3
 
 static const int8_t DefaultFsp = 6;
 static bool DefaultIsFloat = false;
-static SqlMode DefaultSqlMode{false, false};
 static CheckTimeFunc DefaultCheckTimeFunc = noNeedCheckTime;
 
 Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
-Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, SqlMode sqlMode = DefaultSqlMode);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, bool isFloat = DefaultIsFloat, SqlMode sqlMode = DefaultSqlMode);
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, bool isFloat = DefaultIsFloat);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 

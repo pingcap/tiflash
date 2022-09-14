@@ -576,7 +576,7 @@ bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32)
 }
 
 // Return true if the time is invalid.
-inline bool getDatetime(const Int64 & num, MyDateTime & result, SqlMode sqlMode)
+inline bool getDatetime(const Int64 & num, MyDateTime & result)
 {
     UInt64 ymd = num / 1000000;
     UInt64 hms = num - ymd * 1000000;
@@ -595,18 +595,18 @@ inline bool getDatetime(const Int64 & num, MyDateTime & result, SqlMode sqlMode)
     {
         return true;
     }
-    return !result.isValid(sqlMode.allow_zero_in_date, sqlMode.allow_invalid_date);
+    return !result.isValid(true, false);
 }
 
 // Convert a integer number to DateTime and return true if the result is NULL.
 // If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
 // This function may throw exception.
-inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
+inline bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDate)
 {
     MyDateTime datetime(0);
     if (number == 0)
     {
-        if (sqlMode.allow_zero_in_date)
+        if (allowZeroDate)
         {
             result = datetime;
             return false;
@@ -617,7 +617,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
     // datetime type
     if (number >= 10000101000000)
     {
-        return getDatetime(number, result, sqlMode);
+        return getDatetime(number, result);
     }
 
     // check MMDD
@@ -630,7 +630,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
     if (number <= 69 * 10000 + 1231)
     {
         number = (number + 20000000) * 1000000;
-        return getDatetime(number, result, sqlMode);
+        return getDatetime(number, result);
     }
 
     if (number < 70 * 10000 + 101)
@@ -642,14 +642,14 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
     if (number <= 991231)
     {
         number = (number + 19000000) * 1000000;
-        return getDatetime(number, result, sqlMode);
+        return getDatetime(number, result);
     }
 
     // check hour/min/second
     if (number <= 99991231)
     {
         number *= 1000000;
-        return getDatetime(number, result, sqlMode);
+        return getDatetime(number, result);
     }
 
     // check MMDDHHMMSS
@@ -662,7 +662,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
     if (number <= 69 * 10000000000 + 1231235959)
     {
         number += 20000000000000;
-        return getDatetime(number, result, sqlMode);
+        return getDatetime(number, result);
     }
 
     // check YYYYMMDDhhmmss
@@ -675,13 +675,13 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, SqlMode sqlMode)
     if (number <= 991231235959)
     {
         number += 19000000000000;
-        return getDatetime(number, result, sqlMode);
+        return getDatetime(number, result);
     }
 
-    return getDatetime(number, result, sqlMode);
+    return getDatetime(number, result);
 }
 
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, bool isFloat, SqlMode sqlMode)
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, bool isFloat)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
@@ -741,16 +741,9 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
             MyDateTime date_time(0);
             if (seps[0] == "0")
             {
-                if (sqlMode.allow_zero_in_date)
-                {
-                    return {date_time.toPackedUInt(), is_date};
-                }
-                else
-                {
-                    return {Field(), is_date};
-                }
+                return {date_time.toPackedUInt(), is_date};
             }
-            if (numberToDateTime(std::stoll(seps[0]), date_time, sqlMode))
+            if (numberToDateTime(std::stoll(seps[0]), date_time))
             {
                 return {Field(), is_date};
             }
@@ -1017,9 +1010,9 @@ Field parseMyDateTime(const String & str, int8_t fsp, CheckTimeFunc checkTimeFun
     return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc).first;
 }
 
-Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, SqlMode sqlMode)
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc)
 {
-    return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc, true, sqlMode).first;
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc, true).first;
 }
 
 String MyDateTime::toString(int fsp) const

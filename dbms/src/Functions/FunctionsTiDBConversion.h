@@ -1307,7 +1307,7 @@ public:
         size_t result,
         bool,
         const tipb::FieldType &,
-        const Context & context)
+        const Context &)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         auto col_to = ColumnUInt64::create(size, 0);
@@ -1318,13 +1318,6 @@ public:
 
         const auto & col_with_type_and_name = block.getByPosition(arguments[0]);
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
-
-        SqlMode sql_mode{false, false};
-        if (context.getDAGContext())
-        {
-            sql_mode.allow_zero_in_date = context.getDAGContext()->allowZeroInDate();
-            sql_mode.allow_invalid_date = context.getDAGContext()->allowInvalidDate();
-        }
 
         int to_fsp [[maybe_unused]] = 0;
         if constexpr (std::is_same_v<ToDataType, DataTypeMyDateTime>)
@@ -1438,7 +1431,7 @@ public:
             for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
-                bool is_null = numberToDateTime(vec_from[i], datetime, sql_mode);
+                bool is_null = numberToDateTime(vec_from[i], datetime, false);
 
                 if (is_null)
                 {
@@ -1475,7 +1468,7 @@ public:
                 // Convert to string and then parse to time
                 String value_str = toString(value);
 
-                Field packed_uint_value = parseMyDateTimeFromFloat(value_str, to_fsp, checkTimeValid, sql_mode);
+                Field packed_uint_value = parseMyDateTimeFromFloat(value_str, to_fsp, noNeedCheckTime);
 
                 if (packed_uint_value.isNull())
                 {
@@ -1508,7 +1501,7 @@ public:
             {
                 String value_str = vec_from[i].toString(type.getScale());
 
-                Field value = parseMyDateTimeFromFloat(value_str, to_fsp, checkTimeValid, sql_mode);
+                Field value = parseMyDateTimeFromFloat(value_str, to_fsp, noNeedCheckTime);
 
                 if (value.getType() == Field::Types::Null)
                 {
