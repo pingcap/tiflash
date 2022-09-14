@@ -76,7 +76,7 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
         *   AggregateFunction(quantileTiming(0.5), UInt64)
         * into UInt16 - already finished result of `quantileTiming`.
         */
-    if (const AggregateFunctionState * function_state = typeid_cast<const AggregateFunctionState *>(function))
+    if (const auto * function_state = typeid_cast<const AggregateFunctionState *>(function))
     {
         auto res = createView();
         res->set(function_state->getNestedFunction());
@@ -96,7 +96,7 @@ MutableColumnPtr ColumnAggregateFunction::convertToValues() const
 
 void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start, size_t length)
 {
-    const ColumnAggregateFunction & from_concrete = static_cast<const ColumnAggregateFunction &>(from);
+    const auto & from_concrete = static_cast<const ColumnAggregateFunction &>(from);
 
     if (start + length > from_concrete.getData().size())
         throw Exception(
