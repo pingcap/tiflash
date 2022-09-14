@@ -195,59 +195,65 @@ public:
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
 
-    SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareSplit` and `applySplit`.
+     */
+    [[nodiscard]] SegmentPair split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+
     std::optional<SplitInfo> prepareSplit(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
 
-    SegmentPair applySplit(
+    [[nodiscard]] SegmentPair applySplit(
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         SplitInfo & split_info) const;
 
-    static SegmentPtr merge(
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareMerge` and `applyMerge`.
+     */
+    [[nodiscard]] static SegmentPtr merge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
-        const SegmentPtr & left,
-        const SegmentPtr & right);
+        const std::vector<SegmentPtr> & ordered_segments);
+
     static StableValueSpacePtr prepareMerge(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
-        const SegmentPtr & left,
-        const SegmentSnapshotPtr & left_snap,
-        const SegmentPtr & right,
-        const SegmentSnapshotPtr & right_snap,
+        const std::vector<SegmentPtr> & ordered_segments,
+        const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
         WriteBatches & wbs);
-    static SegmentPtr applyMerge(
+
+    [[nodiscard]] static SegmentPtr applyMerge(
         DMContext & dm_context,
-        const SegmentPtr & left,
-        const SegmentSnapshotPtr & left_snap,
-        const SegmentPtr & right,
-        const SegmentSnapshotPtr & right_snap,
+        const std::vector<SegmentPtr> & ordered_segments,
+        const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
         WriteBatches & wbs,
         const StableValueSpacePtr & merged_stable);
 
-    /// Merge the delta (major compaction) and return the new segment.
-    ///
-    /// Note: This is only a shortcut function used in tests.
-    /// Normally you should call `prepareMergeDelta`, `applyMergeDelta` instead.
-    SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `prepareMergeDelta` and `applyMergeDelta`.
+     */
+    [[nodiscard]] SegmentPtr mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const;
 
     StableValueSpacePtr prepareMergeDelta(
         DMContext & dm_context,
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
-    SegmentPtr applyMergeDelta(
+    [[nodiscard]] SegmentPtr applyMergeDelta(
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
-    SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
+    [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
@@ -273,6 +279,9 @@ public:
     String logId() const;
     String simpleInfo() const;
     String info() const;
+
+    static String simpleInfo(const std::vector<SegmentPtr> & segments);
+    static String info(const std::vector<SegmentPtr> & segments);
 
     using Lock = DeltaValueSpace::Lock;
     bool getUpdateLock(Lock & lock) const { return delta->getLock(lock); }
@@ -301,6 +310,9 @@ public:
 
     bool isSplitForbidden() const { return split_forbidden; }
     void forbidSplit() { split_forbidden = true; }
+
+    bool isValidDataRatioChecked() const { return check_valid_data_ratio.load(std::memory_order_relaxed); }
+    void setValidDataRatioChecked() { check_valid_data_ratio.store(true, std::memory_order_relaxed); }
 
     void drop(const FileProviderPtr & file_provider, WriteBatches & wbs);
 
@@ -415,6 +427,11 @@ private:
     const StableValueSpacePtr stable;
 
     bool split_forbidden = false;
+    // After logical split, it is very possible that only half of the data in the segment's DTFile is valid for this segment.
+    // So we want to do merge delta on this kind of segment to clean out the invalid data.
+    // This involves to check the valid data ratio in the background gc thread,
+    // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
+    std::atomic<bool> check_valid_data_ratio = false;
 
     LoggerPtr log;
 };
