@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-PY="python2"
-# PY="python3"
 
 function wait_table()
 {
@@ -140,6 +138,12 @@ function run_path()
 }
 
 set -e
+
+# Export the `PY` env so that it can be
+# used when the function `wait_table` is
+# called from subprocess.
+export PY="python2"
+# export PY="python3"
 
 target="$1"
 fullstack="$2"
