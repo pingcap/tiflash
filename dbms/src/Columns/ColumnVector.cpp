@@ -193,7 +193,7 @@ Int64 ColumnVector<T>::getInt(size_t n) const
 template <typename T>
 void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
-    const ColumnVector & src_vec = static_cast<const ColumnVector &>(src);
+    const auto & src_vec = static_cast<const ColumnVector &>(src);
 
     if (start + length > src_vec.data.size())
         throw Exception(
@@ -334,8 +334,8 @@ void ColumnVector<T>::getExtremes(Field & min, Field & max) const
 
     if (size == 0)
     {
-        min = typename NearestFieldType<T>::Type(0);
-        max = typename NearestFieldType<T>::Type(0);
+        min = static_cast<typename NearestFieldType<T>::Type>(0);
+        max = static_cast<typename NearestFieldType<T>::Type>(0);
         return;
     }
 

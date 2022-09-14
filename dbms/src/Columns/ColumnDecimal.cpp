@@ -95,7 +95,7 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
         size_t offset = 0;
         bool s = unalignedLoad<bool>(pos + offset);
         offset += sizeof(bool);
-        size_t limb_count = unalignedLoad<size_t>(pos + offset);
+        auto limb_count = unalignedLoad<size_t>(pos + offset);
         offset += sizeof(size_t);
 
         val.resize(limb_count, limb_count);
@@ -244,7 +244,7 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
     }
     else
     {
-        T tmp;
+        T tmp{};
         memcpy(&tmp, src, sizeof(T));
         data.emplace_back(tmp);
     }
@@ -253,23 +253,23 @@ void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*le
 template <typename T>
 bool ColumnDecimal<T>::decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t /* length */, bool /* force_decode */)
 {
-    PrecType prec_ = raw_value[cursor++];
-    ScaleType scale_ = raw_value[cursor++];
-    auto type = createDecimal(prec_, scale_);
+    PrecType prec = raw_value[cursor++];
+    ScaleType scale = raw_value[cursor++];
+    auto type = createDecimal(prec, scale);
     if (unlikely(!checkDecimal<T>(*type)))
     {
-        throw Exception("Detected unmatched decimal value type: Decimal( " + std::to_string(prec_) + ", " + std::to_string(scale_) + ") when decoding with column type " + this->getName(),
+        throw Exception("Detected unmatched decimal value type: Decimal( " + std::to_string(prec) + ", " + std::to_string(scale) + ") when decoding with column type " + this->getName(),
                         ErrorCodes::LOGICAL_ERROR);
     }
-    auto res = DecodeDecimalImpl<T>(cursor, raw_value, prec_, scale_);
-    data.push_back(DecimalField<T>(res, scale_));
+    auto res = DecodeDecimalImpl<T>(cursor, raw_value, prec, scale);
+    data.push_back(DecimalField<T>(res, scale));
     return true;
 }
 
 template <typename T>
 void ColumnDecimal<T>::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
-    const ColumnDecimal & src_vec = static_cast<const ColumnDecimal &>(src);
+    const auto & src_vec = static_cast<const ColumnDecimal &>(src);
 
     if (start + length > src_vec.data.size())
         throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length) + " are out of bound in ColumnDecimal<T>::insertRangeFrom method (data.size() = " + toString(src_vec.data.size()) + ").",
