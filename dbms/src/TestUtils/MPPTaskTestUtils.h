@@ -14,11 +14,12 @@
 
 #pragma once
 
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
+#include <Flash/Coprocessor/ExecutionSummary.h>
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
-#include <gtest/gtest.h>
 
 namespace DB::tests
 {
@@ -56,6 +57,31 @@ public:
 private:
     const Int64 port_upper_bound = 65536;
     std::atomic<Int64> port = 3931;
+};
+
+//
+class ExecutionSummaryCollector : public ext::Singleton<ExecutionSummaryCollector>
+{
+public:
+    void collect(std::vector<BlockInputStreamPtr> & streams)
+    {
+        for (size_t i = 0; i < streams.size(); ++i)
+        {
+            auto * exchange_receiver_stream = dynamic_cast<ExchangeReceiverInputStream *>(streams[i].get());
+            assert(exchange_receiver_stream);
+            for (size_t j = 0; j < exchange_receiver_stream->execution_summaries.size(); ++j)
+            {
+                for (auto kv : exchange_receiver_stream->execution_summaries[j])
+                {
+                    
+                    std::cout << "time processed: " << kv.second.time_processed_ns << ", num produced rows: " << kv.second.num_produced_rows << ", num_iterations: " << kv.second.num_iterations << ", concurrency: " << kv.second.concurrency << std::endl;
+                }
+            }
+        }
+    }
+
+private:
+    std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries{};
 };
 
 // Hold MPP test related infomation:
