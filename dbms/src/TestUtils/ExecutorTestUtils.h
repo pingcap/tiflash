@@ -34,9 +34,9 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
     std::vector<bool> bools{false, true}; \
-    for (auto flag : bools)               \
+    for (auto enable_planner : bools)     \
     {                                     \
-        enablePlanner(flag);
+        enablePlanner(enable_planner);
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_END }
 
@@ -100,7 +100,7 @@ public:
 private:
     void executeExecutor(
         const std::shared_ptr<tipb::DAGRequest> & request,
-        std::function<void(const ColumnsWithTypeAndName &)> assert_func);
+        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func);
 
 protected:
     MockDAGRequestContext context;
