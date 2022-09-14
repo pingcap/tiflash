@@ -253,6 +253,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr, enable_fine_grained_shuffle>::h
     if constexpr (send_exec_summary_at_last)
     {
         /// Sending the response to only one node, default the first one.
+        std::cout << "ywq test response: "; response.PrintDebugString();
         packets[0].serializeByResponse(response);
 
         // No need to send data when blocks are not empty,

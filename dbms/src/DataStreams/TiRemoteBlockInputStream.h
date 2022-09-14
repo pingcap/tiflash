@@ -53,8 +53,9 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     /// itself will not be modified, so DAGResponseWriter can read it safely, otherwise,
     /// DAGResponseWriter will just skip execution_summaries[index]
     std::vector<std::atomic<bool>> execution_summaries_inited;
-    std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
-
+public:  
+  std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
+private:
     const LoggerPtr log;
 
     uint64_t total_rows;
@@ -82,6 +83,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index, bool is_streaming_call)
     {
+        std::cout << "ywq test add remote execution summaries. resp.execution_summaries size: " << resp.execution_summaries_size() << std::endl;
         if (resp.execution_summaries_size() == 0)
             return;
         if (!execution_summaries_inited[index].load())

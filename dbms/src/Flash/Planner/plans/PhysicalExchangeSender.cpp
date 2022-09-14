@@ -60,7 +60,6 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
 
     int stream_id = 0;
-
     if (fine_grained_shuffle.enable())
     {
         pipeline.transform([&](auto & stream) {

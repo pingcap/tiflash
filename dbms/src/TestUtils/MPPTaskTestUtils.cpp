@@ -11,7 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <DataStreams/TiRemoteBlockInputStream.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+
+#include <cstddef>
 
 namespace DB::tests
 {
@@ -81,7 +84,21 @@ std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMP
 ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
-    return readBlocks(res);
+    auto cols = readBlocks(res);
+    auto * exchange_receiver_stream = dynamic_cast<ExchangeReceiverInputStream *>(res[0].get());
+    assert(exchange_receiver_stream);
+    std::cout << "ywq test summary..." << std::endl;
+    std::cout << "summary size:" << exchange_receiver_stream->execution_summaries.size() << std::endl;
+    for (size_t i = 0; i < exchange_receiver_stream->execution_summaries.size(); ++i)
+    {
+        for (auto kv : exchange_receiver_stream->execution_summaries[i])
+        {
+            std::cout << kv.first << std::endl;
+            std::cout << kv.second.time_processed_ns << ", num produced rows: " << kv.second.num_produced_rows << ", num_iterations: " << kv.second.num_iterations << ", concurrency: " << kv.second.concurrency << std::endl;
+        }
+    }
+    
+    return cols;
 }
 
 String MPPTaskTestUtils::queryInfo(size_t server_id)

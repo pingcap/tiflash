@@ -301,6 +301,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     bool is_root_mpp_task = false;
     const auto & exchange_sender = dag_req.root_executor().exchange_sender();
+    std::cout << "ywq test collect:" << dag_req.has_collect_execution_summaries() << ", real:" << dag_req.collect_execution_summaries() << std::endl;
     if (exchange_sender.encoded_task_meta_size() == 1)
     {
         /// root mpp task always has 1 task_meta because there is only one TiDB

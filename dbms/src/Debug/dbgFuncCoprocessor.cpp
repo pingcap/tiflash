@@ -58,6 +58,8 @@
 
 #include <utility>
 
+#include "Common/FmtUtils.h"
+
 namespace DB
 {
 namespace ErrorCodes
@@ -287,6 +289,7 @@ void prepareDispatchTaskRequestWithMultipleContext(QueryTask & task, std::shared
     tm->set_partition_id(task.partition_id);
     tm->set_address(addr);
     tm->set_task_id(task.task_id);
+    task.dag_request->set_collect_execution_summaries(true);
     auto * encoded_plan = req->mutable_encoded_plan();
     task.dag_request->AppendToString(encoded_plan);
     req->set_timeout(properties.mpp_timeout);
@@ -365,7 +368,10 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
 
         auto addr = server_config_map[task.partition_id].addr;
+
         prepareDispatchTaskRequestWithMultipleContext(task, req, properties, root_task_ids, root_task_partition_ids, root_task_schema, addr);
+
+        std::cout << "ywq test has collection:" << task.dag_request->has_collect_execution_summaries() << ", collection sum: " << task.dag_request->collect_execution_summaries() << std::endl;
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
         client.runDispatchMPPTask(req);
