@@ -58,8 +58,6 @@
 
 #include <utility>
 
-#include "Common/FmtUtils.h"
-
 namespace DB
 {
 namespace ErrorCodes
@@ -368,9 +366,7 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
         auto req = std::make_shared<mpp::DispatchTaskRequest>();
 
         auto addr = server_config_map[task.partition_id].addr;
-
         prepareDispatchTaskRequestWithMultipleContext(task, req, properties, root_task_ids, root_task_partition_ids, root_task_schema, addr);
-
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
         client.runDispatchMPPTask(req);

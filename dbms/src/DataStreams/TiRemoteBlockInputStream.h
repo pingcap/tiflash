@@ -55,7 +55,6 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     std::vector<std::atomic<bool>> execution_summaries_inited;
     std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries;
 
-private:
     const LoggerPtr log;
 
     uint64_t total_rows;

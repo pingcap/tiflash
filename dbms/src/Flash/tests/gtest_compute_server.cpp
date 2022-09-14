@@ -50,21 +50,6 @@ public:
 TEST_F(ComputeServerRunner, runAggTasks)
 try
 {
-    /*
-    exchange_sender_5
-15794000, num produced rows: 4, num_iterations: 4, concurrency: 4
-aggregation_4
-1076000, num produced rows: 4, num_iterations: 4, concurrency: 4
-exchange_receiver_6
-13836000, num produced rows: 1, num_iterations: 1, concurrency: 8
-aggregation_1
-18502000, num produced rows: 1, num_iterations: 1, concurrency: 8
-table_scan_0
-886000, num produced rows: 4, num_iterations: 4, concurrency: 4
-project_2
-18502000, num produced rows: 1, num_iterations: 1, concurrency: 8
-exchange_sender_3
-18528000, num produced rows: 1, num_iterations: 1, concurrency: 8*/
     startServers(4);
     {
         std::vector<String> expected_strings = {
