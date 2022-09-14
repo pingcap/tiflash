@@ -78,12 +78,14 @@ std::tuple<size_t, std::vector<BlockInputStreamPtr>> MPPTaskTestUtils::prepareMP
     return {properties.start_ts, res};
 }
 
-ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
+std::pair<ColumnsWithTypeAndName, bool> MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map)
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     auto cols = readBlocks(res);
-    ExecutionSummaryCollector::instance().collect(res);
-    return cols;
+    ExecutionSummaryCollector collector;
+    collector.collect(res);
+    // TODO: find a way to support more detailed execution summary tesing
+    return {cols, collector.empty()};
 }
 
 String MPPTaskTestUtils::queryInfo(size_t server_id)

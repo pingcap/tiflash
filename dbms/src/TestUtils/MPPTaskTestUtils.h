@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/FmtUtils.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
@@ -59,8 +60,8 @@ private:
     std::atomic<Int64> port = 3931;
 };
 
-//
-class ExecutionSummaryCollector : public ext::Singleton<ExecutionSummaryCollector>
+
+class ExecutionSummaryCollector
 {
 public:
     void collect(std::vector<BlockInputStreamPtr> & streams)
@@ -69,19 +70,59 @@ public:
         {
             auto * exchange_receiver_stream = dynamic_cast<ExchangeReceiverInputStream *>(streams[i].get());
             assert(exchange_receiver_stream);
-            for (size_t j = 0; j < exchange_receiver_stream->execution_summaries.size(); ++j)
+            for (size_t j = 0; j < exchange_receiver_stream->getSourceNum(); ++j)
             {
-                for (auto kv : exchange_receiver_stream->execution_summaries[j])
+                for (auto kv : *exchange_receiver_stream->getRemoteExecutionSummaries(j))
                 {
-                    
-                    std::cout << "time processed: " << kv.second.time_processed_ns << ", num produced rows: " << kv.second.num_produced_rows << ", num_iterations: " << kv.second.num_iterations << ", concurrency: " << kv.second.concurrency << std::endl;
+                    ExecutionSummary summary{kv.second.time_processed_ns, kv.second.num_produced_rows, kv.second.num_iterations, kv.second.concurrency};
+
+                    if (execution_summaries.find(kv.first) == execution_summaries.end())
+                    {
+                        execution_summaries[kv.first] = summary;
+                    }
+                    else
+                    {
+                        execution_summaries[kv.first].merge(summary, false);
+                    }
                 }
             }
         }
     }
 
+    auto toString() const -> std::string
+    {
+        FmtBuffer buf;
+        buf.joinStr(
+            execution_summaries.begin(),
+            execution_summaries.end(),
+            [&](const auto & summary, FmtBuffer &) {
+                buf.fmtAppend("executor id: {}, time_processed_ns: {}, num_produced_rows: {}, num_iterations: {}, concurrency: {}",
+                              summary.first,
+                              summary.second.time_processed_ns,
+                              summary.second.num_produced_rows,
+                              summary.second.num_iterations,
+                              summary.second.concurrency);
+            },
+            "\n");
+        return buf.toString();
+    }
+
+    bool empty()
+    {
+        if (execution_summaries.empty())
+            return true;
+
+        for (auto summary : execution_summaries)
+        {
+            if (summary.second.time_processed_ns == 0 || summary.second.num_produced_rows == 0 || summary.second.num_iterations == 0 || summary.second.concurrency == 0)
+                return true;
+        }
+
+        return false;
+    }
+
 private:
-    std::vector<std::unordered_map<String, ExecutionSummary>> execution_summaries{};
+    std::unordered_map<String, ExecutionSummary> execution_summaries{}; // <executor_id, ExecutionSummary>
 };
 
 // Hold MPP test related infomation:
@@ -108,7 +149,8 @@ public:
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
     std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
-    ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+    // return execution result cols, is_empty which indicate execution summaries contain info or not.
+    std::pair<ColumnsWithTypeAndName, bool> exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
     static ::testing::AssertionResult assertQueryCancelled(size_t start_ts);
     static ::testing::AssertionResult assertQueryActive(size_t start_ts);
     static String queryInfo(size_t server_id);
@@ -119,19 +161,21 @@ protected:
     static MPPTestMeta test_meta;
 };
 
-#define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                                \
-    do                                                                                                                                      \
-    {                                                                                                                                       \
-        TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                                    \
-        MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                                         \
-        ASSERT_COLUMNS_EQ_UR(exeucteMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()), expected_cols); \
+#define ASSERT_MPPTASK_EQUAL(tasks, properties, expect_cols)                                                                   \
+    do                                                                                                                         \
+    {                                                                                                                          \
+        TiFlashTestEnv::getGlobalContext().setMPPTest();                                                                       \
+        MockComputeServerManager::instance().setMockStorage(context.mockStorage());                                            \
+        auto [cols, is_empty] = exeucteMPPTasks(tasks, properties, MockComputeServerManager::instance().getServerConfigMap()); \
+        ASSERT_COLUMNS_EQ_UR(cols, expected_cols);                                                                             \
+        ASSERT_EQ(is_empty, false);                                                                                            \
     } while (0)
 
 
 #define ASSERT_MPPTASK_EQUAL_WITH_SERVER_NUM(builder, properties, expect_cols) \
     do                                                                         \
     {                                                                          \
-        for (size_t i = serverNum(); i <= serverNum(); ++i)                    \
+        for (size_t i = 1; i <= serverNum(); ++i)                    \
         {                                                                      \
             (properties).mpp_partition_num = i;                                \
             MockComputeServerManager::instance().resetMockMPPServerInfo(i);    \
@@ -159,3 +203,13 @@ protected:
     } while (0)
 
 } // namespace DB::tests
+
+template <>
+struct fmt::formatter<DB::tests::ExecutionSummaryCollector> : formatter<string_view>
+{
+    template <typename FormatContext>
+    auto format(const DB::tests::ExecutionSummaryCollector & c, FormatContext & ctx) const
+    {
+        return formatter<string_view>::format(c.toString(), ctx);
+    }
+};

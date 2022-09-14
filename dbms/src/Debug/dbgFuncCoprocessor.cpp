@@ -371,7 +371,6 @@ std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGPro
 
         prepareDispatchTaskRequestWithMultipleContext(task, req, properties, root_task_ids, root_task_partition_ids, root_task_schema, addr);
 
-        std::cout << "ywq test has collection:" << task.dag_request->has_collect_execution_summaries() << ", collection sum: " << task.dag_request->collect_execution_summaries() << std::endl;
         MockComputeClient client(
             grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
         client.runDispatchMPPTask(req);

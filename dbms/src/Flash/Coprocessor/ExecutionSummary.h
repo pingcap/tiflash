@@ -32,6 +32,13 @@ struct ExecutionSummary
         , concurrency(0)
     {}
 
+    ExecutionSummary(UInt64 time_processed_ns_, UInt64 num_produced_rows_, UInt64 num_iterations_, UInt64 concurrency_)
+        : time_processed_ns(time_processed_ns_)
+        , num_produced_rows(num_produced_rows_)
+        , num_iterations(num_iterations_)
+        , concurrency(concurrency_)
+    {}
+
     void merge(const ExecutionSummary & other, bool streaming_call)
     {
         if (streaming_call)
@@ -50,4 +57,4 @@ struct ExecutionSummary
         }
     }
 };
-}
+} // namespace DB

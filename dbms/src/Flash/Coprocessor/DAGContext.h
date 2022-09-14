@@ -134,8 +134,6 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        std::cout << "ywq test called 1" << std::endl;
-
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
 
@@ -157,7 +155,6 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        std::cout << "ywq test called 2" << std::endl;
         assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
         // only mpp task has join executor.
         initExecutorIdToJoinIdMap();
@@ -190,7 +187,6 @@ public:
         , warnings(max_recorded_error_count)
         , warning_count(0)
     {
-        std::cout << "ywq test called 3" << std::endl;
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
 
