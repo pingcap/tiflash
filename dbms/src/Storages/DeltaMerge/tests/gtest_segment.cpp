@@ -31,7 +31,6 @@ extern const Metric DT_SnapshotOfDeltaMerge;
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char try_segment_logical_split[];
@@ -42,7 +41,13 @@ namespace DM
 {
 namespace GC
 {
-bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const SegmentSnapshotPtr & snap, double invalid_data_ratio_threshold, const LoggerPtr & log);
+bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & context, //
+                                                         const SegmentPtr & seg,
+                                                         const SegmentSnapshotPtr & snap,
+                                                         const SegmentPtr & prev_seg,
+                                                         const SegmentPtr & next_seg,
+                                                         double invalid_data_ratio_threshold,
+                                                         const LoggerPtr & log);
 }
 namespace tests
 {
@@ -457,22 +462,51 @@ try
     {
         auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
         auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(snap, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, segment, snap, /* prev_seg */ nullptr, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
     }
 
     FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
     auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     ASSERT_TRUE(new_seg_id_opt.has_value());
-
+    auto left_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+    auto right_segment_id = new_seg_id_opt.value();
     {
-        auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
-        auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-        ASSERT_TRUE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(snap, invalid_data_ratio_threshold, log));
+        auto left_segment = segments[left_segment_id];
+        auto right_segment = segments[right_segment_id];
+        auto left_snap = left_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto right_snap = right_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, left_segment, left_snap, /* prev_seg */ nullptr, /* next_seg */ right_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, right_segment, right_snap, /* prev_seg */ left_segment, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
     }
+
+    FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
+    auto new_seg_id_opt2 = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_TRUE(new_seg_id_opt2.has_value());
+    auto middle_segment_id = new_seg_id_opt2.value();
     {
-        auto segment = segments[new_seg_id_opt.value()];
-        auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-        ASSERT_TRUE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(snap, invalid_data_ratio_threshold, log));
+        auto left_segment = segments[left_segment_id];
+        auto middle_segment = segments[middle_segment_id];
+        auto right_segment = segments[right_segment_id];
+        auto left_snap = left_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto middle_snap = middle_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto right_snap = right_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, left_segment, left_snap, /* prev_seg */ nullptr, /* next_seg */ middle_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, middle_segment, middle_snap, /* prev_seg */ left_segment, /* next_seg */ right_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, right_segment, right_snap, /* prev_seg */ middle_segment, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
+    }
+
+    // merge delta left segment and check again
+    mergeSegmentDelta(left_segment_id);
+    {
+        auto left_segment = segments[left_segment_id];
+        auto middle_segment = segments[middle_segment_id];
+        auto right_segment = segments[right_segment_id];
+        auto left_snap = left_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto middle_snap = middle_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto right_snap = right_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, left_segment, left_snap, /* prev_seg */ nullptr, /* next_seg */ middle_segment, invalid_data_ratio_threshold, log));
+        ASSERT_TRUE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, middle_segment, middle_snap, /* prev_seg */ left_segment, /* next_seg */ right_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, right_segment, right_snap, /* prev_seg */ middle_segment, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
     }
 }
 CATCH
