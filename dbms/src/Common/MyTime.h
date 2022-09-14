@@ -183,7 +183,6 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
-bool checkTimeValidAllowZeroMonthAndDay(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
 bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32);
 

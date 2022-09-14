@@ -552,15 +552,6 @@ const String & MyTimeBase::monthName() const
     return month_names[month - 1];
 }
 
-bool checkTimeValidAllowZeroMonthAndDay(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
-{
-    if (year > 9999 || month < 0 || month > 12 || day < 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
-    {
-        return false;
-    }
-    return day <= getLastDay(year, month);
-}
-
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
     if (year > 9999 || month <= 0 || month > 12 || day <= 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
