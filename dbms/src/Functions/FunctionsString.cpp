@@ -4450,7 +4450,6 @@ private:
     {
         auto & c0_col = block.getByPosition(arguments[0]);
 
-        Field res_field;
         auto c0_col_column = c0_col.column;
 
         size_t val_num = block.rows();
