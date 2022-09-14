@@ -64,7 +64,7 @@ private:
     UInt64 estimated_thread_usage;
     /// to prevent from too many queries just issue a part of tasks to occupy threads, in proportion to the hardware cores.
     size_t active_set_soft_limit;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 } // namespace DB
