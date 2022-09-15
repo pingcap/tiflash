@@ -173,6 +173,8 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
     // n <= 32
     if (likely(n <= BLOCK32_SIZE))
     {
+#if !defined(AVX2_MEM_CMP_NORMAL_IF_ELSE)
+
 #ifdef M
         static_assert(false, "`M` is defined");
 #else
@@ -211,8 +213,8 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
         }
 #undef M
 
-// an optional way to check small str
-#if defined(AVX2_MEM_CMP_NORMAL_IF_ELSE)
+#else
+        // an optional way to check small str
         if (unlikely(n < 2))
         {
             // 0~1
@@ -347,6 +349,8 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
     // n <= 32
     if (likely(n <= BLOCK32_SIZE))
     {
+#if !defined(AVX2_MEM_EQ_NORMAL_IF_ELSE)
+
 #ifdef M
         static_assert(false, "`M` is defined");
 #else
@@ -387,8 +391,8 @@ FLATTEN_INLINE_PURE static inline bool avx2_mem_equal(const char * p1, const cha
         }
 #undef M
 
-// an optional way to check small str
-#if defined(AVX2_MEM_EQ_NORMAL_IF_ELSE)
+#else
+        // an optional way to check small str
         if (unlikely(n < 2))
         {
             // 0~1
