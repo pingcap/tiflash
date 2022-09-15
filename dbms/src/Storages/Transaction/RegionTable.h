@@ -175,6 +175,7 @@ public:
         {
             return;
         }
+        std::lock_guard lock(mutex);
         self_safe_ts[region_id] = safe_ts;
     }
     void updateLeaderSafeTS(UInt64 region_id, UInt64 safe_ts)
@@ -183,6 +184,7 @@ public:
         {
             return;
         }
+        std::lock_guard lock(mutex);
         leader_safe_ts[region_id] = safe_ts;
     }
 
