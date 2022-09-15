@@ -564,6 +564,6 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
     RegionTable & region_table = server->tmt->getRegionTable();
     region_table.updateSelfSafeTS(region_id, self_safe_ts);
     region_table.updateLeaderSafeTS(region_id, leader_safe_ts);
-    LOG_FMT_TRACE(&Poco::Logger::get(__FUNCTION__), "update safe ts in region_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, leader_safe_ts, self_safe_ts);
+    LOG_FMT_TRACE(&Poco::Logger::get(__FUNCTION__), "update safe ts in region_id={}, leader_safe_ts={}, self_safe_ts={}", region_id, leader_safe_ts, self_safe_ts);
 }
 } // namespace DB
