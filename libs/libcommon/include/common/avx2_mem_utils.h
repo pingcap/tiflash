@@ -157,12 +157,12 @@ FLATTEN_INLINE_PURE static inline int cmp_block32x4(const char * a, const char *
 {
     if (likely(check_block32x4_eq(a, b)))
         return 0;
-    for (size_t i = 0; i < 3; ++i)
+    for (size_t i = 0; i < (AVX2_UNROLL_NUM - 1); ++i)
     {
         if (auto ret = cmp_block32(a + i * BLOCK32_SIZE, (b + i * BLOCK32_SIZE)); unlikely(ret))
             return ret;
     }
-    return cmp_block32<true>(a + 3 * BLOCK32_SIZE, (b + 3 * BLOCK32_SIZE));
+    return cmp_block32<true>(a + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE, (b + (AVX2_UNROLL_NUM - 1) * BLOCK32_SIZE));
 }
 
 // ref: https://github.com/lattera/glibc/blob/master/sysdeps/x86_64/multiarch/memcmp-avx2-movbe.S
@@ -176,10 +176,10 @@ FLATTEN_INLINE_PURE static inline int avx2_mem_cmp(const char * p1, const char *
 #ifdef M
         static_assert(false, "`M` is defined");
 #else
-#define M(x)                             \
-    case (x):                            \
-    {                                    \
-        return std::memcmp(p1, p2, (x)); \
+#define M(x)                                  \
+    case (x):                                 \
+    {                                         \
+        return __builtin_memcmp(p1, p2, (x)); \
     }
 #endif
         switch (n)
