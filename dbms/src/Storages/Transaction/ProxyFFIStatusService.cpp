@@ -66,7 +66,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
                 }
             }
             count = region_list.size();
-            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id:{}, tolal region count:{}, response region count:{}", table_id, regions.size(), count);
+            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}", table_id, regions.size(), count);
         });
     }
     ss << count << std::endl;
