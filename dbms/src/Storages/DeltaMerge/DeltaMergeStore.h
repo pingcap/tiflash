@@ -458,10 +458,6 @@ private:
      */
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
-#pragma region Internal Segment Operations
-
-#pragma region Segment Split
-
     enum class SegmentSplitReason
     {
         ForegroundWrite,
@@ -532,8 +528,6 @@ private:
      */
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
 
-#pragma endregion Segment Split
-
     /**
      * Merge multiple continuous segments (order by segment start key) into one.
      * Throw exception if < 2 segments are given.
@@ -541,8 +535,6 @@ private:
      * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
      */
     SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, bool is_foreground);
-
-#pragma region Segment Merge Delta
 
     enum class MergeDeltaReason
     {
@@ -579,8 +571,6 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
-#pragma endregion Segment Merge Delta
-
     // isSegmentValid should be protected by lock on `read_write_mutex`
     inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
@@ -591,8 +581,6 @@ private:
         return doIsSegmentValid(segment);
     }
     bool doIsSegmentValid(const SegmentPtr & segment);
-
-#pragma endregion Internal Segment Operations
 
     bool updateGCSafePoint();
 
