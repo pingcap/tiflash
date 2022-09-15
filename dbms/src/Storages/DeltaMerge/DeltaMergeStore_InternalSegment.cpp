@@ -118,7 +118,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        std::tie(new_left, new_right) = segment->applySplit(dm_context, segment_snap, wbs, split_info);
+        std::tie(new_left, new_right) = segment->applySplit(segment_lock, dm_context, segment_snap, wbs, split_info);
 
         wbs.writeMeta();
 
@@ -280,7 +280,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         for (const auto & seg : ordered_segments)
             locks.emplace_back(seg->mustGetUpdateLock());
 
-        merged = Segment::applyMerge(dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
+        merged = Segment::applyMerge(locks, dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
 
         wbs.writeMeta();
 
@@ -414,7 +414,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        new_segment = segment->applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
+        new_segment = segment->applyMergeDelta(segment_lock, dm_context, segment_snap, wbs, new_stable);
 
         wbs.writeMeta();
 
