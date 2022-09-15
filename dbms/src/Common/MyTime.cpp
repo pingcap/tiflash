@@ -677,6 +677,7 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDa
     return getDatetime(number, result);
 }
 
+// isFloat is true means that the input string is float format like "1212.111"
 std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, bool isFloat)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
@@ -732,7 +733,6 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     case 1:
     {
         size_t l = seps[0].size();
-        // isFloat is true means that the input string is float format like "1212.111"
         if (isFloat)
         {
             MyDateTime date_time(0);
