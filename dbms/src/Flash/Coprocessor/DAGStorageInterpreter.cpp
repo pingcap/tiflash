@@ -197,20 +197,46 @@ void setQuotaAndLimitsOnTableScan(Context & context, DAGPipeline & pipeline)
 }
 
 // add timezone cast for timestamp type, this is used to support session level timezone
-bool addExtraCastsAfterTs(
+// <has_cast, extra_cast, project_for_remote_read>
+std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterTs(
     DAGExpressionAnalyzer & analyzer,
     const std::vector<ExtraCastAfterTSMode> & need_cast_column,
-    ExpressionActionsChain & chain,
     const TiDBTableScan & table_scan)
 {
     bool has_need_cast_column = false;
     for (auto b : need_cast_column)
-    {
         has_need_cast_column |= (b != ExtraCastAfterTSMode::None);
-    }
     if (!has_need_cast_column)
-        return false;
-    return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
+        return {false, nullptr, nullptr};
+
+    auto original_source_columns = analyzer.getCurrentInputColumns();
+    ExpressionActionsChain chain;
+    analyzer.initChain(chain, original_source_columns);
+    // execute timezone cast or duration cast if needed for local table scan
+    if (analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan))
+    {
+        ExpressionActionsPtr extra_cast = chain.getLastActions();
+        assert(extra_cast);
+        chain.finalize();
+        chain.clear();
+
+        // After `analyzer.appendExtraCastsAfterTS`, analyzer.getCurrentInputColumns() has been modified.
+        // For remote read, `timezone cast and duration cast` had been pushed down, don't need to execute cast expressions.
+        // To keep the schema of local read streams and remote read streams the same, do project action for remote read streams.
+        NamesWithAliases project_for_remote_read;
+        const auto & after_cast_source_columns = analyzer.getCurrentInputColumns();
+        for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
+            project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
+        assert(!project_for_remote_read.empty());
+        ExpressionActionsPtr project_for_cop_read = std::make_shared<ExpressionActions>(original_source_columns, analyzer.getContext().getSettingsRef());
+        project_for_cop_read->add(ExpressionAction::project(project_for_remote_read));
+
+        return {true, extra_cast, project_for_cop_read};
+    }
+    else
+    {
+        return {false, nullptr, nullptr};
+    }
 }
 
 void injectFallPointForLoadRead(const SelectQueryInfo & query_info)
@@ -440,28 +466,10 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     size_t remote_read_streams_start_index,
     DAGPipeline & pipeline)
 {
-    auto original_source_columns = analyzer->getCurrentInputColumns();
-
-    ExpressionActionsChain chain;
-    analyzer->initChain(chain, original_source_columns);
-
     // execute timezone cast or duration cast if needed for local table scan
-    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, table_scan))
+    auto [has_cast, extra_cast, project_for_cop_read] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
+    if (has_cast)
     {
-        ExpressionActionsPtr extra_cast = chain.getLastActions();
-        chain.finalize();
-        chain.clear();
-
-        // After `addExtraCastsAfterTs`, analyzer->getCurrentInputColumns() has been modified.
-        // For remote read, `timezone cast and duration cast` had been pushed down, don't need to execute cast expressions.
-        // To keep the schema of local read streams and remote read streams the same, do project action for remote read streams.
-        NamesWithAliases project_for_remote_read;
-        const auto & after_cast_source_columns = analyzer->getCurrentInputColumns();
-        for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
-        {
-            project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
-        }
-        assert(!project_for_remote_read.empty());
         assert(pipeline.streams_with_non_joined_data.empty());
         assert(remote_read_streams_start_index <= pipeline.streams.size());
         size_t i = 0;
@@ -473,18 +481,11 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
             stream->setExtraInfo("cast after local tableScan");
         }
         // remote streams
-        if (i < pipeline.streams.size())
+        while (i < pipeline.streams.size())
         {
-            ExpressionActionsPtr project_for_cop_read = generateProjectExpressionActions(
-                pipeline.streams[i],
-                context,
-                project_for_remote_read);
-            while (i < pipeline.streams.size())
-            {
-                auto & stream = pipeline.streams[i++];
-                stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
-                stream->setExtraInfo("cast after remote tableScan");
-            }
+            auto & stream = pipeline.streams[i++];
+            stream = std::make_shared<ExpressionBlockInputStream>(stream, project_for_cop_read, log->identifier());
+            stream->setExtraInfo("cast after remote tableScan");
         }
     }
 }
