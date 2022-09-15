@@ -43,6 +43,7 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace ProfileEvents
@@ -122,15 +123,15 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
         light_tasks.push(task);
         break;
     default:
-        throw Exception(fmt::format("Unsupported task type: {}", toString(task.type)));
+        throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
     }
 
     LOG_FMT_DEBUG(
         log_,
         "Segment task add to background task pool, segment={} task={} by_whom={}",
         task.segment->simpleInfo(),
-        toString(task.type),
-        toString(whom));
+        magic_enum::enum_name(task.type),
+        magic_enum::enum_name(whom));
     return std::make_pair(true, is_heavy);
 }
 
@@ -144,7 +145,7 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
     auto task = tasks.front();
     tasks.pop();
 
-    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), toString(task.type));
+    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), magic_enum::enum_name(task.type));
 
     return task;
 }

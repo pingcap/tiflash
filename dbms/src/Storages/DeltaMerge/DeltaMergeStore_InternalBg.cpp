@@ -18,6 +18,8 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
 
+#include <magic_enum.hpp>
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfDeltaMerge;
@@ -220,7 +222,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
-        LOG_FMT_DEBUG(log, "Task {} GC safe point: {}", toString(task.type), task.dm_context->min_version);
+        LOG_FMT_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
     }
 
     SegmentPtr left, right;
@@ -258,7 +260,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             task.segment->placeDeltaIndex(*task.dm_context);
             break;
         default:
-            throw Exception(fmt::format("Unsupported task type: {}", toString(task.type)));
+            throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
         }
     }
     catch (const Exception & e)
@@ -266,7 +268,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         LOG_FMT_ERROR(
             log,
             "Execute task on segment failed, task={} segment={} err={}",
-            DeltaMergeStore::toString(task.type),
+            magic_enum::enum_name(task.type),
             task.segment->simpleInfo(),
             e.message());
         e.rethrow();
