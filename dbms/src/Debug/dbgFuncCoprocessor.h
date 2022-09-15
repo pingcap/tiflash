@@ -17,7 +17,6 @@
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockExecutor/astToExecutor.h>
-
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
 #include <Storages/Transaction/Types.h>

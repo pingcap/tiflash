@@ -14,7 +14,8 @@
 
 #include <Debug/MockExecutor/astToExecutorUtils.h>
 
-namespace DB {
+namespace DB
+{
 ColumnName splitQualifiedName(const String & s)
 {
     ColumnName ret;
@@ -70,4 +71,4 @@ void setServiceAddr(const std::string & addr)
     LOCAL_HOST = addr;
 }
 } // namespace Debug
-}
+} // namespace DB

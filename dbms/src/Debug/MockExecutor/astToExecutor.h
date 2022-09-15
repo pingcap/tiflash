@@ -16,9 +16,9 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockExecutor/astToExecutorUtils.h>
 #include <Debug/MockServerInfo.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/MockExecutor/astToExecutorUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTOrderByElement.h>
