@@ -458,7 +458,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
         return {};
     }
 
-    LOG_FMT_DEBUG(
+    LOG_FMT_INFO(
         log,
         "GC - Trigger Merge, segment={} table={}",
         segment->simpleInfo(),
