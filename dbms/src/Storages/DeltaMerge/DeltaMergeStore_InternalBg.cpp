@@ -232,7 +232,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         switch (task.type)
         {
         case TaskType::Split:
-            std::tie(left, right) = segmentSplit(*task.dm_context, task.segment, false);
+            std::tie(left, right) = segmentSplit(*task.dm_context, task.segment, SegmentSplitReason::Background);
             type = ThreadType::BG_Split;
             break;
         case TaskType::MergeDelta:
