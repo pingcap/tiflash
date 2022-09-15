@@ -712,6 +712,66 @@ SegmentPtr Segment::applyMergeDelta(const Segment::Lock &, //
     return new_me;
 }
 
+SegmentPtr Segment::dangerouslyReplaceDataForTest(
+                                                          DMContext & dm_context, //
+                                                          const DMFilePtr & new_stable_file) const
+{
+    WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
+
+    auto lock = mustGetUpdateLock();
+    auto new_segment = dangerouslyReplaceData(lock, dm_context, new_stable_file, wbs);
+
+    wbs.writeAll();
+    return new_segment;
+}
+
+SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
+                                           DMContext & dm_context,
+                                           const DMFilePtr & new_stable_file,
+                                           WriteBatches & wbs) const
+{
+    LOG_FMT_DEBUG(log, "ReplaceData - Begin");
+
+    auto & storage_pool = dm_context.storage_pool;
+    auto delegate = dm_context.path_pool.getStableDiskDelegator();
+
+    RUNTIME_CHECK(delegate.getDTFilePath(new_stable_file->fileId()) == new_stable_file->parentPath());
+
+    // Create a ref to the file.
+    auto new_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
+    // TODO: We could allow assigning multiple DMFiles in future.
+    auto ref_file = DMFile::restore(
+        dm_context.db_context.getFileProvider(),
+        new_stable_file->fileId(),
+        new_page_id,
+        new_stable_file->parentPath(),
+        DMFile::ReadMetaMode::all());
+    wbs.data.putRefPage(new_page_id, new_stable_file->pageId());
+
+    auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
+    new_stable->setFiles({ref_file}, rowkey_range, &dm_context);
+    new_stable->saveMeta(wbs.meta);
+
+    // Empty new delta
+    auto new_delta = std::make_shared<DeltaValueSpace>(delta->getId());
+    new_delta->saveMeta(wbs);
+
+    auto new_me = std::make_shared<Segment>(epoch + 1, //
+                                            rowkey_range,
+                                            segment_id,
+                                            next_segment_id,
+                                            new_delta,
+                                            new_stable);
+    new_me->serialize(wbs.meta);
+
+    delta->recordRemoveColumnFilesPages(wbs);
+    stable->recordRemovePacksPages(wbs);
+
+    LOG_FMT_DEBUG(log, "ReplaceData - Finish, old_me={} new_me={}", info(), new_me->info());
+
+    return new_me;
+}
+
 SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());

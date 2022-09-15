@@ -267,6 +267,27 @@ public:
         WriteBatches & wbs,
         const StableValueSpacePtr & new_stable) const;
 
+    /**
+     * Only used in tests as a shortcut.
+     * Normally you should use `dangerouslyReplaceData`.
+     */
+    [[nodiscard]] SegmentPtr dangerouslyReplaceDataForTest(DMContext & dm_context, const DMFilePtr & new_stable_file) const;
+
+    /**
+     * Discard all data in the current delta and stable layer, and use the specified DMFiles as the stable instead.
+     * This API does not have a prepare & apply pair, as it should be quick enough.
+     *
+     * Note 1: Should be protected behind the Segment update lock to ensure no new data will be appended to this
+     *         segment during the function call. Otherwise these new data will be lost in the new segment.
+     *
+     * Note 2: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
+     *         stable file for multiple segments. It is your own duty to enable GC later.
+     *
+     * Note 3: This API is subjected to be changed in future, as it relies on the knowledge that all current data
+     *         in this segment is useless, which is a pretty tough requirement.
+     */
+    [[nodiscard]] SegmentPtr dangerouslyReplaceData(const Lock &, DMContext & dm_context, const DMFilePtr & new_stable_file, WriteBatches & wbs) const;
+
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 
     /// Flush delta's cache packs.
@@ -425,7 +446,7 @@ private:
         bool relevant_place) const;
 
 private:
-    /// The version of this segment. After split / merge / merge delta, epoch got increased by 1.
+    /// The version of this segment. After split / merge / mergeDelta / dangerouslyReplaceData, epoch got increased by 1.
     const UInt64 epoch;
 
     RowKeyRange rowkey_range;

@@ -666,6 +666,42 @@ try
 CATCH
 
 
+class SegmentReplaceDataTest : public SegmentOperationTest
+{};
+
+
+TEST_F(SegmentReplaceDataTest, DMFileNotAddedInDelegator)
+try
+{
+
+}
+CATCH
+
+
+TEST_F(SegmentReplaceDataTest, TriggerDMFileGC)
+try
+{
+
+}
+CATCH
+
+
+TEST_F(SegmentReplaceDataTest, WriteDuringReplaceData)
+try
+{
+
+}
+CATCH
+
+
+TEST_F(SegmentReplaceDataTest, DMFileNotSetGC)
+try
+{
+
+}
+CATCH
+
+
 } // namespace tests
 } // namespace DM
 } // namespace DB
