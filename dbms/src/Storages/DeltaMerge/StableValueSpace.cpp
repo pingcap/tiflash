@@ -397,5 +397,39 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
     return {approx_rows, approx_bytes};
 }
 
+std::pair<bool, bool> StableValueSpace::Snapshot::isFirstAndLastPackIncludedInRange(const DMContext & context, const RowKeyRange & range) const
+{
+    // Usually, this method will be called for some "cold" key ranges.
+    // Loading the index into cache may pollute the cache and make the hot index cache invalid.
+    // So don't refill the cache if the index does not exist.
+    bool first_pack_included = false;
+    bool last_pack_included = false;
+    for (size_t i = 0; i < stable->files.size(); i++)
+    {
+        const auto & file = stable->files[i];
+        auto filter = DMFilePackFilter::loadFrom(
+            file,
+            context.db_context.getGlobalContext().getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ false,
+            {range},
+            RSOperatorPtr{},
+            IdSetPtr{},
+            context.db_context.getFileProvider(),
+            context.getReadLimiter(),
+            context.tracing_id);
+        const auto & use_packs = filter.getUsePacks();
+        if (i == 0)
+        {
+            first_pack_included = use_packs[0];
+        }
+        if (i == stable->files.size() - 1)
+        {
+            last_pack_included = use_packs[use_packs.size() - 1];
+        }
+    }
+
+    return std::make_pair(first_pack_included, last_pack_included);
+}
+
 } // namespace DM
 } // namespace DB
