@@ -11,7 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Common/FailPoint.h>
 #include <Storages/DeltaMerge/ReadThread/MergedTask.h>
+
+namespace DB::FailPoints
+{
+extern const char exception_in_merged_task_init[];
+} // namespace DB::FailPoints
+
+namespace DB::ErrorCodes
+{
+extern const int FAIL_POINT_ERROR;
+}
 
 namespace DB::DM
 {
@@ -37,6 +48,9 @@ void MergedTask::initOnce()
             continue;
         }
         stream = pool->buildInputStream(task);
+        fiu_do_on(FailPoints::exception_in_merged_task_init, {
+            throw Exception("Fail point exception_in_merged_task_init is triggered.", ErrorCodes::FAIL_POINT_ERROR);
+        });
     }
 
     inited = true;
