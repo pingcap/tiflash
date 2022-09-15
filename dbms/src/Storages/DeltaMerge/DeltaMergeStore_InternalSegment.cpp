@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -193,6 +194,8 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
             if (seg->flushCache(dm_context))
                 break;
+
+            SYNC_FOR("before_DeltaMergeStore::segmentMerge|retry_flush");
 
             // Else: retry. Flush could fail. Typical cases:
             // #1. The segment is abandoned (due to an update is finished)
