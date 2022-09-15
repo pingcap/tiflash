@@ -420,11 +420,11 @@ std::pair<bool, bool> StableValueSpace::Snapshot::isFirstAndLastPackIncludedInRa
         const auto & use_packs = filter.getUsePacks();
         if (i == 0)
         {
-            first_pack_included = use_packs[0];
+            first_pack_included = use_packs.empty() || use_packs[0];
         }
         if (i == stable->files.size() - 1)
         {
-            last_pack_included = use_packs[use_packs.size() - 1];
+            last_pack_included = use_packs.empty() || use_packs.back();
         }
     }
 

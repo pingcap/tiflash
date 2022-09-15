@@ -505,7 +505,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
                     gc_type = GC::Type::TooMuchOutOfRange;
                 }
             }
-            else if (!should_compact && (segment->getLastCheckGCSafePoint() < gc_safe_point))
+            if (!should_compact && (segment->getLastCheckGCSafePoint() < gc_safe_point))
             {
                 // Avoid recheck this segment when gc_safe_point doesn't change regardless whether we trigger this segment's DeltaMerge or not.
                 // Because after we calculate StableProperty and compare it with this gc_safe_point,
