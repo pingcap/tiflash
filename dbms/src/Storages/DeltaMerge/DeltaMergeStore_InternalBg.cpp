@@ -476,18 +476,25 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 {
     SegmentSnapshotPtr segment_snap;
     {
-        std::shared_lock lock(read_write_mutex); // TODO: Do we really need this lock?
-        segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
-    }
+        std::shared_lock lock(read_write_mutex);
 
-    if (segment->hasAbandoned() || !segment_snap)
-    {
-        LOG_FMT_TRACE(
-            log,
-            "GC - MergeDelta skipped because snapshot failed, segment={} table={}",
-            segment->simpleInfo(),
-            table_name);
-        return {};
+        // The segment we just retrieved may be dropped from the map. Let's verify it again before creating a snapshot.
+        if (!isSegmentValid(lock, segment))
+        {
+            LOG_FMT_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={} table={}", segment->simpleInfo(), table_name);
+            return {};
+        }
+
+        segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        if (!segment_snap)
+        {
+            LOG_FMT_TRACE(
+                log,
+                "GC - Skip checking MergeDelta because snapshot failed, segment={} table={}",
+                segment->simpleInfo(),
+                table_name);
+            return {};
+        }
     }
 
     RowKeyRange segment_range = segment->getRowKeyRange();
