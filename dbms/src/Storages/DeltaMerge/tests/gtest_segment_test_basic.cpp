@@ -25,6 +25,8 @@
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace DM
@@ -74,17 +76,17 @@ size_t SegmentTestBasic::getSegmentRowNum(PageId segment_id)
 
 std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, Segment::SplitMode split_mode, bool check_rows)
 {
-    LOG_FMT_INFO(logger_op, "splitSegment, segment_id={} split_mode={}", segment_id, Segment::toString(split_mode));
+    LOG_FMT_INFO(logger_op, "splitSegment, segment_id={} split_mode={}", segment_id, magic_enum::enum_name(split_mode));
 
     auto origin_segment = segments[segment_id];
     size_t origin_segment_row_num = getSegmentRowNum(segment_id);
 
-    LOG_FMT_DEBUG(logger, "begin split, segment_id={} split_mode={} rows={}", segment_id, Segment::toString(split_mode), origin_segment_row_num);
+    LOG_FMT_DEBUG(logger, "begin split, segment_id={} split_mode={} rows={}", segment_id, magic_enum::enum_name(split_mode), origin_segment_row_num);
 
     auto [left, right] = origin_segment->split(*dm_context, tableColumns(), /* use a calculated split point */ std::nullopt, split_mode);
     if (!left && !right)
     {
-        LOG_FMT_DEBUG(logger, "split not succeeded, segment_id={} split_mode={} rows={}", segment_id, Segment::toString(split_mode), origin_segment_row_num);
+        LOG_FMT_DEBUG(logger, "split not succeeded, segment_id={} split_mode={} rows={}", segment_id, magic_enum::enum_name(split_mode), origin_segment_row_num);
         return std::nullopt;
     }
 
@@ -100,14 +102,14 @@ std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, Segment:
         EXPECT_EQ(origin_segment_row_num, left_rows + right_rows);
 
     LOG_FMT_DEBUG(logger, "split finish, left_id={} left_rows={} right_id={} right_rows={}", left->segmentId(), left_rows, right->segmentId(), right_rows);
-    operation_statistics["split" + Segment::toString(split_mode)]++;
+    operation_statistics[fmt::format("split{}", magic_enum::enum_name(split_mode))]++;
 
     return right->segmentId();
 }
 
 std::optional<PageId> SegmentTestBasic::splitSegmentAt(PageId segment_id, Int64 split_at, Segment::SplitMode split_mode, bool check_rows)
 {
-    LOG_FMT_INFO(logger_op, "splitSegmentAt, segment_id={} split_at={} split_mode={}", segment_id, split_at, Segment::toString(split_mode));
+    LOG_FMT_INFO(logger_op, "splitSegmentAt, segment_id={} split_at={} split_mode={}", segment_id, split_at, magic_enum::enum_name(split_mode));
 
     RowKeyValue split_at_key;
     if (options.is_common_handle)
@@ -125,12 +127,12 @@ std::optional<PageId> SegmentTestBasic::splitSegmentAt(PageId segment_id, Int64 
     auto origin_segment = segments[segment_id];
     size_t origin_segment_row_num = getSegmentRowNum(segment_id);
 
-    LOG_FMT_DEBUG(logger, "begin splitAt, segment_id={} split_at={} split_at_key={} split_mode={} rows={}", segment_id, split_at, split_at_key.toDebugString(), Segment::toString(split_mode), origin_segment_row_num);
+    LOG_FMT_DEBUG(logger, "begin splitAt, segment_id={} split_at={} split_at_key={} split_mode={} rows={}", segment_id, split_at, split_at_key.toDebugString(), magic_enum::enum_name(split_mode), origin_segment_row_num);
 
     auto [left, right] = origin_segment->split(*dm_context, tableColumns(), split_at_key, split_mode);
     if (!left && !right)
     {
-        LOG_FMT_DEBUG(logger, "splitAt not succeeded, segment_id={} split_at={} split_mode={} rows={}", segment_id, split_at, Segment::toString(split_mode), origin_segment_row_num);
+        LOG_FMT_DEBUG(logger, "splitAt not succeeded, segment_id={} split_at={} split_mode={} rows={}", segment_id, split_at, magic_enum::enum_name(split_mode), origin_segment_row_num);
         return std::nullopt;
     }
 
@@ -146,7 +148,7 @@ std::optional<PageId> SegmentTestBasic::splitSegmentAt(PageId segment_id, Int64 
         EXPECT_EQ(origin_segment_row_num, left_rows + right_rows);
 
     LOG_FMT_DEBUG(logger, "splitAt finish, left_id={} left_rows={} right_id={} right_rows={}", left->segmentId(), left_rows, right->segmentId(), right_rows);
-    operation_statistics["splitAt" + Segment::toString(split_mode)]++;
+    operation_statistics[fmt::format("splitAt{}", magic_enum::enum_name(split_mode))]++;
 
     return right->segmentId();
 }

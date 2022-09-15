@@ -634,7 +634,7 @@ SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & 
     SYNC_FOR("before_Segment::applyMergeDelta"); // pause without holding the lock on the segment
 
     auto lock = mustGetUpdateLock();
-    auto new_segment = applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
+    auto new_segment = applyMergeDelta(lock, dm_context, segment_snap, wbs, new_stable);
 
     wbs.writeAll();
     return new_segment;
@@ -668,7 +668,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
     return new_stable;
 }
 
-SegmentPtr Segment::applyMergeDelta(DMContext & context,
+SegmentPtr Segment::applyMergeDelta(const Segment::Lock &, //
+                                    DMContext & context,
                                     const SegmentSnapshotPtr & segment_snap,
                                     WriteBatches & wbs,
                                     const StableValueSpacePtr & new_stable) const
@@ -725,7 +726,7 @@ SegmentPair Segment::split(DMContext & dm_context, const ColumnDefinesPtr & sche
     SYNC_FOR("before_Segment::applySplit"); // pause without holding the lock on the segment
 
     auto lock = mustGetUpdateLock();
-    auto segment_pair = applySplit(dm_context, segment_snap, wbs, split_info);
+    auto segment_pair = applySplit(lock, dm_context, segment_snap, wbs, split_info);
 
     wbs.writeAll();
 
@@ -1188,7 +1189,8 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
     };
 }
 
-SegmentPair Segment::applySplit(DMContext & dm_context, //
+SegmentPair Segment::applySplit(const Segment::Lock &, //
+                                DMContext & dm_context,
                                 const SegmentSnapshotPtr & segment_snap,
                                 WriteBatches & wbs,
                                 SplitInfo & split_info) const
@@ -1288,7 +1290,7 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     for (const auto & seg : ordered_segments)
         locks.emplace_back(seg->mustGetUpdateLock());
 
-    auto merged = applyMerge(dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
+    auto merged = applyMerge(locks, dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
 
     wbs.writeAll();
     return merged;
@@ -1373,7 +1375,8 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
     return merged_stable;
 }
 
-SegmentPtr Segment::applyMerge(DMContext & dm_context, //
+SegmentPtr Segment::applyMerge(const std::vector<Segment::Lock> &, //
+                               DMContext & dm_context,
                                const std::vector<SegmentPtr> & ordered_segments,
                                const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
                                WriteBatches & wbs,

@@ -173,60 +173,11 @@ public:
     enum TaskType
     {
         Split,
-        Merge,
         MergeDelta,
         Compact,
         Flush,
         PlaceIndex,
     };
-
-    static std::string toString(ThreadType type)
-    {
-        switch (type)
-        {
-        case Init:
-            return "Init";
-        case Write:
-            return "Write";
-        case Read:
-            return "Read";
-        case BG_Split:
-            return "BG_Split";
-        case BG_Merge:
-            return "BG_Merge";
-        case BG_MergeDelta:
-            return "BG_MergeDelta";
-        case BG_Compact:
-            return "BG_Compact";
-        case BG_Flush:
-            return "BG_Flush";
-        case BG_GC:
-            return "BG_GC";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static std::string toString(TaskType type)
-    {
-        switch (type)
-        {
-        case Split:
-            return "Split";
-        case Merge:
-            return "Merge";
-        case MergeDelta:
-            return "MergeDelta";
-        case Compact:
-            return "Compact";
-        case Flush:
-            return "Flush";
-        case PlaceIndex:
-            return "PlaceIndex";
-        default:
-            return "Unknown";
-        }
-    }
 
     struct BackgroundTask
     {
@@ -234,7 +185,6 @@ public:
 
         DMContextPtr dm_context;
         SegmentPtr segment;
-        SegmentPtr next_segment;
 
         explicit operator bool() const { return segment != nullptr; }
     };
@@ -380,6 +330,27 @@ public:
     /// Iterator over all segments and apply gc jobs.
     UInt64 onSyncGc(Int64 limit);
 
+    /**
+     * Try to merge the segment in the current thread as the GC operation.
+     * This function may be blocking, and should be called in the GC background thread.
+     */
+    SegmentPtr gcTrySegmentMerge(const DMContextPtr & dm_context, const SegmentPtr & segment);
+
+    /**
+     * Try to merge delta in the current thread as the GC operation.
+     * This function may be blocking, and should be called in the GC background thread.
+     */
+    SegmentPtr gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point);
+
+    /**
+     * Starting from the given base segment, find continuous segments that could be merged.
+     *
+     * When there are mergeable segments, the baseSegment is returned in index 0 and mergeable segments are then placed in order.
+     *   It is ensured that there are at least 2 elements in the returned vector.
+     * When there is no mergeable segment, the returned vector will be empty.
+     */
+    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
+
     /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands & commands, //
                      OptionTableInfoConstRef table_info,
@@ -490,36 +461,6 @@ private:
         Physical,
     };
 
-    static std::string toString(SegmentSplitMode mode)
-    {
-        switch (mode)
-        {
-        case SegmentSplitMode::Auto:
-            return "Auto";
-        case SegmentSplitMode::Logical:
-            return "Logical";
-        case SegmentSplitMode::Physical:
-            return "Physical";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static std::string toString(SegmentSplitReason reason)
-    {
-        switch (reason)
-        {
-        case SegmentSplitReason::ForegroundWrite:
-            return "ForegroundWrite";
-        case SegmentSplitReason::Background:
-            return "Background";
-        case SegmentSplitReason::IngestBySplit:
-            return "IngestBySplit";
-        default:
-            return "Unknown";
-        }
-    }
-
     /**
      * Split the segment into two.
      * After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
@@ -544,23 +485,6 @@ private:
         Manual,
     };
 
-    static std::string toString(MergeDeltaReason type)
-    {
-        switch (type)
-        {
-        case MergeDeltaReason::BackgroundThreadPool:
-            return "BackgroundThreadPool";
-        case MergeDeltaReason::BackgroundGCThread:
-            return "BackgroundGCThread";
-        case MergeDeltaReason::ForegroundWrite:
-            return "ForegroundWrite";
-        case MergeDeltaReason::Manual:
-            return "Manual";
-        default:
-            return "Unknown";
-        }
-    }
-
     /**
      * Merge the delta (major compaction) in the segment.
      * After delta-merging, the segment will be abandoned (with `segment->hasAbandoned() == true`) and a new segment will be returned.
@@ -572,11 +496,11 @@ private:
         SegmentSnapshotPtr segment_snap = nullptr);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
-    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    inline bool isSegmentValid(const std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }

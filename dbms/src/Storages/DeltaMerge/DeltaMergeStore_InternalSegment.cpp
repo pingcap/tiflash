@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+
+#include <magic_enum.hpp>
 
 namespace CurrentMetrics
 {
@@ -39,8 +42,8 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     LOG_FMT_INFO(
         log,
         "Split - Begin, mode={} reason={}{} safe_point={} segment={}",
-        toString(opt_split_mode),
-        toString(reason),
+        magic_enum::enum_name(opt_split_mode),
+        magic_enum::enum_name(reason),
         (opt_split_at.has_value() ? fmt::format(" force_split_at={}", opt_split_at->toDebugString()) : ""),
         dm_context.min_version,
         segment->info());
@@ -152,7 +155,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        std::tie(new_left, new_right) = segment->applySplit(dm_context, segment_snap, wbs, split_info);
+        std::tie(new_left, new_right) = segment->applySplit(segment_lock, dm_context, segment_snap, wbs, split_info);
 
         wbs.writeMeta();
 
@@ -227,6 +230,8 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
             if (seg->flushCache(dm_context))
                 break;
+
+            SYNC_FOR("before_DeltaMergeStore::segmentMerge|retry_flush");
 
             // Else: retry. Flush could fail. Typical cases:
             // #1. The segment is abandoned (due to an update is finished)
@@ -314,7 +319,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         for (const auto & seg : ordered_segments)
             locks.emplace_back(seg->mustGetUpdateLock());
 
-        merged = Segment::applyMerge(dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
+        merged = Segment::applyMerge(locks, dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
 
         wbs.writeMeta();
 
@@ -357,7 +362,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     const MergeDeltaReason reason,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_INFO(log, "MergeDelta - Begin, reason={} safe_point={} segment={}", toString(reason), dm_context.min_version, segment->info());
+    LOG_FMT_INFO(log, "MergeDelta - Begin, reason={} safe_point={} segment={}", magic_enum::enum_name(reason), dm_context.min_version, segment->info());
 
     ColumnDefinesPtr schema_snap;
 
@@ -448,7 +453,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        new_segment = segment->applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
+        new_segment = segment->applyMergeDelta(segment_lock, dm_context, segment_snap, wbs, new_stable);
 
         wbs.writeMeta();
 

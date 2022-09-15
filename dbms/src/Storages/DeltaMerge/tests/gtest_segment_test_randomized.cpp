@@ -15,6 +15,8 @@
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace DM
@@ -119,7 +121,7 @@ protected:
             return;
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
-        LOG_FMT_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, Segment::toString(split_mode), segments.size());
+        LOG_FMT_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, magic_enum::enum_name(split_mode), segments.size());
         splitSegment(segment_id, split_mode);
     }
 
@@ -133,7 +135,7 @@ protected:
         if (end - start <= 1)
             return;
         auto split_at = std::uniform_int_distribution<Int64>{start, end - 1}(random);
-        LOG_FMT_DEBUG(logger, "start random split at, segment_id={} split_at={} mode={} all_segments={}", segment_id, split_at, Segment::toString(split_mode), segments.size());
+        LOG_FMT_DEBUG(logger, "start random split at, segment_id={} split_at={} mode={} all_segments={}", segment_id, split_at, magic_enum::enum_name(split_mode), segments.size());
         splitSegmentAt(segment_id, split_at, split_mode);
     }
 
