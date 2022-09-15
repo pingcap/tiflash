@@ -733,9 +733,9 @@ bool DAGStorageInterpreter::retryForBatchCopOrMPP(
             buffer.toString(),
             e.message(),
             (regions_query_info.empty() ? "" : ", retry to read from local"));
-        if (unlikely(regions_query_info.empty()))
-            return false; // no available region in local, break retry loop
-        return true; // continue to retry read from local storage
+        // no available region in local, break retry loop
+        // otherwise continue to retry read from local storage
+        return !regions_query_info.empty();
     }
     else
     {
@@ -786,7 +786,7 @@ void DAGStorageInterpreter::buildLocalStreams(
             /// Recover from region exception for batchCop/MPP
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
-                if (retryForBatchCopOrMPP(table_id, query_info, e, num_allow_retry))
+                if (likely(retryForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
                     continue;
                 else
                     break;
