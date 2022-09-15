@@ -177,7 +177,7 @@ private:
     void reactor(const std::vector<Request> & async_requests);
 
     bool setEndState(ExchangeReceiverState new_state);
-    ExchangeReceiverState getState();
+    String getStatusString();
 
     DecodeDetail decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,
