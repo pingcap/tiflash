@@ -981,11 +981,12 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
     }
 }
 
-std::pair<std::optional<Segment::SplitInfo>, Segment::PrepareSplitLogicalStatus> Segment::prepareSplitLogical(DMContext & dm_context,
-                                                                                                              const ColumnDefinesPtr & /*schema_snap*/,
-                                                                                                              const SegmentSnapshotPtr & segment_snap,
-                                                                                                              std::optional<RowKeyValue> opt_split_point,
-                                                                                                              WriteBatches & wbs) const
+std::pair<std::optional<Segment::SplitInfo>, Segment::PrepareSplitLogicalStatus> //
+Segment::prepareSplitLogical(DMContext & dm_context, //
+                             const ColumnDefinesPtr & /*schema_snap*/,
+                             const SegmentSnapshotPtr & segment_snap,
+                             std::optional<RowKeyValue> opt_split_point,
+                             WriteBatches & wbs) const
 {
     LOG_FMT_DEBUG(log, "Split - SplitLogical - Begin prepare, opt_split_point={}", opt_split_point.has_value() ? opt_split_point->toDebugString() : "(null)");
 
