@@ -117,7 +117,7 @@ void ColumnTuple::insert(const Field & x)
 
 void ColumnTuple::insertFrom(const IColumn & src_, size_t n)
 {
-    const ColumnTuple & src = static_cast<const ColumnTuple &>(src_);
+    const auto & src = static_cast<const ColumnTuple &>(src_);
 
     const size_t tuple_size = columns.size();
     if (src.columns.size() != tuple_size)
