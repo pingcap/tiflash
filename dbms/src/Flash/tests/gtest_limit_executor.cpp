@@ -71,6 +71,8 @@ try
         WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
         ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols);
         WRAP_FOR_DIS_ENABLE_PLANNER_END
+
+        executeAndAssertRowsEqual(request, std::min(limit_num, col_data_num));
     }
 }
 CATCH
