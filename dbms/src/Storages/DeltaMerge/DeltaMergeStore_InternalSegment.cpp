@@ -16,6 +16,8 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
 
+#include <magic_enum.hpp>
+
 namespace CurrentMetrics
 {
 extern const Metric DT_DeltaMerge;
@@ -321,7 +323,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     const MergeDeltaReason reason,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_INFO(log, "MergeDelta - Begin, reason={} safe_point={} segment={}", toString(reason), dm_context.min_version, segment->info());
+    LOG_FMT_INFO(log, "MergeDelta - Begin, reason={} safe_point={} segment={}", magic_enum::enum_name(reason), dm_context.min_version, segment->info());
 
     ColumnDefinesPtr schema_snap;
 
