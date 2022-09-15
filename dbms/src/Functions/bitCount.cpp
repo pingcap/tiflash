@@ -23,6 +23,7 @@ template <typename A>
 struct BitCountImpl
 {
     using ResultType = int64_t;
+    using Type = typename NumberTraits::Construct<std::is_signed_v<A>, false, std::is_floating_point_v<A> ? 8 : sizeof(A)>::Type;
     static ResultType apply(A a)
     {
         ResultType value;
@@ -32,7 +33,7 @@ struct BitCountImpl
         }
         else
         {
-            value = static_cast<ResultType>(a);
+            value = static_cast<ResultType>(static_cast<Type>(a));
         }
         value = value - ((value >> 1) & 0x5555555555555555);
         value = (value & 0x3333333333333333) + ((value >> 2) & 0x3333333333333333);
