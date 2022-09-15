@@ -15,6 +15,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+
 #include <magic_enum.hpp>
 
 namespace CurrentMetrics

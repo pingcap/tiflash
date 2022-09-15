@@ -16,35 +16,44 @@
 #include <gtest/gtest.h>
 
 #include <magic_enum.hpp>
-using namespace magic_enum;
 
 namespace DB::tests
 {
 TEST(MagicEnumTest, EnumConversion)
 {
     using crc64::Mode;
-    constexpr auto mode_entries = magic_enum::enum_entries<Mode>();
     // mode_entries -> {{Mode::Table, "Table"}, {Mode::Auto, "Auto"}, {Mode::SIMD_128, "SIMD_128"}...}
     // mode_entries[0].first -> Mode::Table
     // mode_entries[0].second -> "Table"
+    constexpr auto mode_entries = magic_enum::enum_entries<Mode>();
+    ASSERT_EQ(mode_entries.size(), magic_enum::enum_names<Mode>().size());
+    ASSERT_EQ(mode_entries.size(), magic_enum::enum_values<Mode>().size());
+    ASSERT_EQ(mode_entries.size(), magic_enum::enum_count<Mode>());
+
     for (const auto & entry : mode_entries)
     {
         // enum value to string
         ASSERT_EQ(magic_enum::enum_name(entry.first), entry.second);
         // string to enum value
-        ASSERT_EQ(entry.first, magic_enum::enum_cast<Mode>(entry.second));
+        auto mode = magic_enum::enum_cast<Mode>(entry.second);
+        ASSERT_TRUE(mode.has_value());
+        ASSERT_EQ(entry.first, mode);
     }
 
     // enum value to integer
     int mode_integer = 2;
     auto mode_from_int = magic_enum::enum_cast<Mode>(mode_integer);
-    if (mode_from_int.has_value())
-    {
-        ASSERT_EQ(mode_from_int.value(), Mode::SIMD_128);
-    }
+    ASSERT_TRUE(mode_from_int.has_value());
+    ASSERT_EQ(mode_from_int.value(), Mode::SIMD_128);
 
     // indexed access to enum value
     std::size_t index = 1;
     ASSERT_EQ(magic_enum::enum_value<Mode>(index), Mode::Auto);
+
+    // edge cases
+    ASSERT_FALSE(magic_enum::enum_cast<Mode>("table").has_value());
+    ASSERT_FALSE(magic_enum::enum_cast<Mode>("auto").has_value());
+    ASSERT_FALSE(magic_enum::enum_cast<Mode>(-1).has_value());
+    ASSERT_FALSE(magic_enum::enum_cast<Mode>(99999).has_value());
 }
 } // namespace DB::tests
