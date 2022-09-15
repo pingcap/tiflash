@@ -84,7 +84,7 @@ public:
     /**
      * You must pass at least 2 segments. Checks whether all segments passed in are sharing the same stable.
      */
-    bool areSegmentsSharingStable(const std::vector<PageId> & segments_id);
+    [[nodiscard]] bool areSegmentsSharingStable(const std::vector<PageId> & segments_id);
 
     std::pair<Int64, Int64> getSegmentKeyRange(PageId segment_id);
 

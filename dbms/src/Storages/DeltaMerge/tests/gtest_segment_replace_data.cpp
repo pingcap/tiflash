@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
@@ -59,7 +60,8 @@ INSTANTIATE_TEST_CASE_P(
     testing::Values(0, 37)); // Note: some tests rely on the exact value of 37. Adding arbitrary values may break test.
 
 class SegmentReplaceDataBasicTest : public SegmentTestBasic
-{};
+{
+};
 
 TEST_F(SegmentReplaceDataBasicTest, ThrowWhenDMFileNotInDelegator)
 try
@@ -77,7 +79,8 @@ try
 
     ASSERT_THROW({
         replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
-    }, DB::Exception);
+    },
+                 DB::Exception);
 }
 CATCH
 
@@ -100,7 +103,8 @@ try
 
     ASSERT_THROW({
         replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
-    }, DB::Exception);
+    },
+                 DB::Exception);
 }
 CATCH
 
@@ -271,8 +275,8 @@ try
     }
 
     ASSERT_TRUE(seg_right_id.has_value());
-    replaceDataSegment({ *seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID }, block);
-    ASSERT_TRUE(areSegmentsSharingStable({ *seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID }));
+    replaceDataSegment({*seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+    ASSERT_TRUE(areSegmentsSharingStable({*seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID}));
 
     UInt64 expected_left_rows, expected_right_rows;
     if (replace_to_rows == 0)
@@ -297,18 +301,17 @@ try
     ASSERT_EQ(expected_right_rows, getSegmentRowNumWithoutMVCC(*seg_right_id));
     // Left is not affected
     ASSERT_EQ(expected_left_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_FALSE(areSegmentsSharingStable({ *seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID }));
+    ASSERT_FALSE(areSegmentsSharingStable({*seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID}));
 
     ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr);
     storage_pool->data_storage_v3->gc(/* not_skip */ true);
     auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
     ASSERT_EQ(2, stable_page_ids.size());
 
-    mergeSegment({ DELTA_MERGE_FIRST_SEGMENT_ID, *seg_right_id });
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *seg_right_id});
     storage_pool->data_storage_v3->gc(/* not_skip */ true);
     stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
     ASSERT_EQ(1, stable_page_ids.size());
-
 }
 CATCH
 
@@ -376,6 +379,112 @@ try
 CATCH
 
 
+/**
+ * The out of bound data introduced by replaceData should not be seen after the merge.
+ */
+TEST_F(SegmentReplaceDataBasicTest, ReplaceOutOfBoundAndMerge)
+try
+{
+    auto seg_right_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, Segment::SplitMode::Physical);
+    ASSERT_TRUE(seg_right_id.has_value());
+
+    writeSegment(*seg_right_id, 10);
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(10, getSegmentRowNumWithoutMVCC(*seg_right_id));
+
+    auto block = prepareWriteBlock(0, 300);
+    // Only replace this block to the left seg, whose range is [-∞, 100).
+    replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+    ASSERT_EQ(100, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(10, getSegmentRowNumWithoutMVCC(*seg_right_id));
+
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *seg_right_id});
+    ASSERT_EQ(110, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr);
+    storage_pool->log_storage_v3->gc(/* not_skip */ true);
+    storage_pool->data_storage_v3->gc(/* not_skip */ true);
+    ASSERT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
+    ASSERT_EQ(storage_pool->data_storage_v3->getNumberOfPages(), 1);
+    auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    ASSERT_EQ(1, stable_page_ids.size());
 }
+CATCH
+
+
+TEST_F(SegmentReplaceDataBasicTest, ReleaseExistingSharedDMFile)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 500, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    // Use logical split to create two segments sharing the same stable.
+    auto seg_right_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, Segment::SplitMode::Logical);
+    ASSERT_TRUE(seg_right_id.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *seg_right_id}));
+
+    ASSERT_EQ(100, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(400, getSegmentRowNumWithoutMVCC(*seg_right_id));
+
+    auto shared_dm_files = segments[*seg_right_id]->getStable()->getDMFiles();
+
+    // As stable is shared in logical split, we should only have 1 alive external file.
+    ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr);
+    storage_pool->data_storage_v3->gc(/* not_skip */ true);
+    auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+
+    // Now let's replace one segment.
+    auto block = prepareWriteBlock(0, 300);
+    replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+
+    ASSERT_EQ(100, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID)); // We should only see [0, 100)
+    ASSERT_EQ(400, getSegmentRowNumWithoutMVCC(*seg_right_id));
+
+    // The previously-shared stable should be still valid.
+    storage_pool->data_storage_v3->gc(/* not_skip */ true);
+    stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    ASSERT_EQ(2, stable_page_ids.size());
+    ASSERT_TRUE(stable_page_ids.count(shared_dm_files[0]->fileId()));
 }
+CATCH
+
+
+TEST_F(SegmentReplaceDataBasicTest, ReadSnapshotBeforeReplace)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400); // 400 in stable
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 41); // 41 in memtable
+
+    auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
+    auto in_stream = segment->getInputStreamRaw(*dm_context, *tableColumns());
+
+    // Now let's replace data.
+    auto block = prepareWriteBlock(0, 233);
+    replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+
+    // There is a snapshot alive, so we should have 2 stables.
+    storage_pool->data_storage_v3->gc(/* not_skip */ true);
+    auto stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    ASSERT_EQ(2, stable_page_ids.size());
+
+    // Continue the read
+    auto n_rows = DB::tests::getInputStreamNRows(in_stream);
+    ASSERT_EQ(441, n_rows);
+
+    ASSERT_EQ(233, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // Snapshot is dropped.
+    in_stream = {};
+    storage_pool->data_storage_v3->gc(/* not_skip */ true);
+    stable_page_ids = storage_pool->data_storage_v3->getAliveExternalPageIds(NAMESPACE_ID);
+    ASSERT_EQ(1, stable_page_ids.size());
 }
+CATCH
+
+
+} // namespace tests
+} // namespace DM
+} // namespace DB

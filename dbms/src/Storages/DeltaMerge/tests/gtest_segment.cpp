@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/PODArray.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/PODArray.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -49,12 +49,13 @@ namespace tests
 {
 
 class SegmentFrameworkTest : public SegmentTestBasic
-{};
+{
+};
 
 TEST_F(SegmentFrameworkTest, PrepareWriteBlock)
 try
 {
-    reloadWithOptions(SegmentTestOptions{ .is_common_handle = false });
+    reloadWithOptions(SegmentTestOptions{.is_common_handle = false});
 
     auto s1_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10);
     ASSERT_TRUE(s1_id.has_value());
@@ -95,9 +96,9 @@ try
         // start_key specified, end_key - start_key < write_rows
         auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 2, /* at */ 16);
         ASSERT_EQ(1, blocks.size());
-            const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
-            ASSERT_EQ(PaddedPODArray<Handle>({16, 17}), handle_data);
+        const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+        const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+        ASSERT_EQ(PaddedPODArray<Handle>({16, 17}), handle_data);
     }
     {
         auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 4, /* at */ 16);
@@ -154,8 +155,8 @@ try
             if (blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column->getInt(0) == 12)
                 start_from_12++;
         }
-        ASSERT_TRUE(start_from_12 > 0);   // We should hit at least 1 times in 100 iters.
-        ASSERT_TRUE(start_from_12 < 50);  // We should not hit 50 times in 100 iters :)
+        ASSERT_TRUE(start_from_12 > 0); // We should hit at least 1 times in 100 iters.
+        ASSERT_TRUE(start_from_12 < 50); // We should not hit 50 times in 100 iters :)
     }
 }
 CATCH
