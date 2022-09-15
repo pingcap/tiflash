@@ -18,6 +18,7 @@
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockServerInfo.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/MockExecutor/astToExecutorUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Parsers/ASTOrderByElement.h>
@@ -35,34 +36,6 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int BAD_ARGUMENTS;
-extern const int LOGICAL_ERROR;
-extern const int NO_SUCH_COLUMN_IN_TABLE;
-} // namespace ErrorCodes
-
-using DAGColumnInfo = std::pair<String, ColumnInfo>;
-using DAGSchema = std::vector<DAGColumnInfo>;
-
-namespace Debug
-{
-extern String LOCAL_HOST;
-void setServiceAddr(const std::string & addr);
-} // namespace Debug
-
-// We use qualified format like "db_name.table_name.column_name"
-// to identify one column of a table.
-// We can split the qualified format into the ColumnName struct.
-struct ColumnName
-{
-    String db_name;
-    String table_name;
-    String column_name;
-};
-
-ColumnName splitQualifiedName(const String & s);
-
 struct MPPCtx
 {
     Timestamp start_ts;
