@@ -78,7 +78,7 @@ try
         DMFileBlockOutputStream::Flags{});
 
     ASSERT_THROW({
-        replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
+        replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
     },
                  DB::Exception);
 }
@@ -102,7 +102,7 @@ try
     delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), dm_file->parentPath());
 
     ASSERT_THROW({
-        replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
+        replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
     },
                  DB::Exception);
 }
@@ -117,7 +117,7 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     {
         auto replace_block = prepareWriteBlock(/* from */ 0, /* to */ replace_to_rows);
-        replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, replace_block);
+        replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, replace_block);
     }
     ASSERT_EQ(replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
@@ -162,7 +162,7 @@ try
     // Now let's replace data again. Everything in the current stable will be discarded.
     {
         auto replace_block = prepareWriteBlock(/* from */ 0, /* to */ replace_to_rows);
-        replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, replace_block);
+        replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, replace_block);
     }
     ASSERT_EQ(replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     {
@@ -187,7 +187,7 @@ try
     ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
     {
         auto replace_block = prepareWriteBlock(/* from */ 0, /* to */ replace_to_rows);
-        replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, replace_block);
+        replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, replace_block);
     }
     ASSERT_EQ(replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
@@ -225,7 +225,7 @@ try
     ingest_wbs.writeLogAndData();
     delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), dm_file->parentPath());
 
-    replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
+    replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, dm_file);
     ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
     ingest_wbs.rollbackWrittenLogAndData();
@@ -275,7 +275,7 @@ try
     }
 
     ASSERT_TRUE(seg_right_id.has_value());
-    replaceDataSegment({*seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+    replaceSegmentData({*seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID}, block);
     ASSERT_TRUE(areSegmentsSharingStable({*seg_right_id, DELTA_MERGE_FIRST_SEGMENT_ID}));
 
     UInt64 expected_left_rows, expected_right_rows;
@@ -323,7 +323,7 @@ try
     {
         auto rows = std::uniform_int_distribution<>(1, 100)(random);
         auto block = prepareWriteBlock(0, rows);
-        replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+        replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
         ASSERT_EQ(rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
 
         // Write some rows doesn't affect our next replaceData
@@ -362,7 +362,7 @@ try
 
     for (size_t i = 0; i < 20; ++i)
     {
-        replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+        replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
         ASSERT_EQ(replace_to_rows, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
         // Write some rows doesn't affect our next replaceData
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -394,7 +394,7 @@ try
 
     auto block = prepareWriteBlock(0, 300);
     // Only replace this block to the left seg, whose range is [-∞, 100).
-    replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+    replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
     ASSERT_EQ(100, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
     ASSERT_EQ(10, getSegmentRowNumWithoutMVCC(*seg_right_id));
 
@@ -436,7 +436,7 @@ try
 
     // Now let's replace one segment.
     auto block = prepareWriteBlock(0, 300);
-    replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+    replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
 
     ASSERT_EQ(100, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID)); // We should only see [0, 100)
     ASSERT_EQ(400, getSegmentRowNumWithoutMVCC(*seg_right_id));
@@ -463,7 +463,7 @@ try
 
     // Now let's replace data.
     auto block = prepareWriteBlock(0, 233);
-    replaceDataSegment({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
+    replaceSegmentData({DELTA_MERGE_FIRST_SEGMENT_ID}, block);
 
     // There is a snapshot alive, so we should have 2 stables.
     storage_pool->data_storage_v3->gc(/* not_skip */ true);

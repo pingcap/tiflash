@@ -71,9 +71,10 @@ protected:
         {0.1, &SegmentRandomizedTest::deleteRangeRandomSegment},
         {1.0, &SegmentRandomizedTest::splitRandomSegment},
         {1.0, &SegmentRandomizedTest::splitAtRandomSegment},
-        {0.25, &SegmentRandomizedTest::mergeRandomSegment},
+        {0.25, &SegmentRandomizedTest::mergeRandomSegments},
         {1.0, &SegmentRandomizedTest::mergeDeltaRandomSegment},
         {1.0, &SegmentRandomizedTest::flushCacheRandomSegment},
+        {0.5, &SegmentRandomizedTest::replaceRandomSegmentsData},
         {0.25, &SegmentRandomizedTest::writeRandomSegmentWithDeletedPack}};
 
     /**
@@ -139,7 +140,7 @@ protected:
         splitSegmentAt(segment_id, split_at, split_mode);
     }
 
-    void mergeRandomSegment()
+    void mergeRandomSegments()
     {
         if (segments.size() < 2)
             return;
@@ -164,6 +165,68 @@ protected:
         PageId random_segment_id = getRandomSegmentId();
         LOG_FMT_DEBUG(logger, "start random flush cache, segment_id={} all_segments={}", random_segment_id, segments.size());
         flushSegmentCache(random_segment_id);
+    }
+
+    void replaceRandomSegmentsData()
+    {
+        if (segments.empty())
+            return;
+
+        auto segments_to_pick = std::uniform_int_distribution<size_t>{1, 5}(random);
+        std::vector<PageId> segments_list;
+        std::map<PageId, UInt64> expected_data_each_segment;
+        for (size_t i = 0; i < segments_to_pick; ++i)
+        {
+            auto id = getRandomSegmentId(); // allow duplicate
+            segments_list.emplace_back(id);
+            expected_data_each_segment[id] = 0;
+        }
+
+        auto [min_key, max_key] = getSegmentKeyRange(segments_list[0]);
+        for (size_t i = 1; i < segments_to_pick; ++i)
+        {
+            auto [new_min_key, new_max_key] = getSegmentKeyRange(segments_list[i]);
+            if (new_min_key < min_key)
+                min_key = new_min_key;
+            if (new_max_key > max_key)
+                max_key = new_max_key;
+        }
+
+        Block block{};
+        if (max_key > min_key)
+        {
+            // Now let's generate some data.
+            std::vector<size_t> n_rows_collection{0, 10, 50, 1000};
+            auto block_rows = n_rows_collection[std::uniform_int_distribution<size_t>{0, n_rows_collection.size() - 1}(random)];
+            if (block_rows > 0)
+            {
+                auto block_start_key = std::uniform_int_distribution<Int64>{min_key, max_key - 1}(random);
+                auto block_end_key = block_start_key + static_cast<Int64>(block_rows);
+                block = prepareWriteBlock(block_start_key, block_end_key);
+
+                // How many data will we have for each segment after replacing data? It should be BlockRange ∩ SegmentRange.
+                for (auto segment_id : segments_list)
+                {
+                    auto [seg_min_key, seg_max_key] = getSegmentKeyRange(segment_id);
+                    auto intersect_min = std::max(seg_min_key, block_start_key);
+                    auto intersect_max = std::min(seg_max_key, block_end_key);
+                    if (intersect_min <= intersect_max)
+                    {
+                        // There is an intersection
+                        expected_data_each_segment[segment_id] = static_cast<UInt64>(intersect_max - intersect_min);
+                    }
+                }
+            }
+        }
+
+        LOG_FMT_DEBUG(logger, "start random replace segment data, segments_id={} block_rows={} all_segments={}", fmt::join(segments_list, ","), block.rows(), segments.size());
+        replaceSegmentData({ segments_list }, block);
+
+        // Verify rows.
+        for (auto segment_id : segments_list)
+        {
+            EXPECT_EQ(getSegmentRowNum(segment_id), expected_data_each_segment[segment_id]);
+        }
     }
 
     Segment::SplitMode getRandomSplitMode()

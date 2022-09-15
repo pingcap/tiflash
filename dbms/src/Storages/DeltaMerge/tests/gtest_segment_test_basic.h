@@ -70,8 +70,8 @@ public:
     /**
      * This function does not check rows.
      */
-    void replaceDataSegment(const std::vector<PageId> & segments_id, const DMFilePtr & file);
-    void replaceDataSegment(const std::vector<PageId> & segments_id, const Block & block);
+    void replaceSegmentData(const std::vector<PageId> & segments_id, const DMFilePtr & file);
+    void replaceSegmentData(const std::vector<PageId> & segments_id, const Block & block);
 
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
     std::vector<Block> prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
