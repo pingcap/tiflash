@@ -263,10 +263,31 @@ std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageId segment_id)
     return {start_key, end_key};
 }
 
+Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+{
+    RUNTIME_CHECK(start_key <= end_key);
+    if (end_key == start_key)
+        return Block{};
+    version++;
+    return DMTestEnv::prepareSimpleWriteBlock(
+        start_key, //
+        end_key,
+        false,
+        version,
+        DMTestEnv::pk_name,
+        EXTRA_HANDLE_COLUMN_ID,
+        options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE,
+        options.is_common_handle,
+        1,
+        true,
+        is_deleted);
+}
+
 std::vector<Block> SegmentTestBasic::prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key, bool is_deleted)
 {
-    auto segment = segments[segment_id];
-    auto [segment_start_key, segment_end_key] = getSegmentKeyRange(segment);
+    RUNTIME_CHECK(total_write_rows < std::numeric_limits<Int64>::max());
+
+    auto [segment_start_key, segment_end_key] = getSegmentKeyRange(segment_id);
     auto segment_max_rows = static_cast<UInt64>(segment_end_key - segment_start_key);
 
     if (segment_max_rows == 0)
@@ -312,23 +333,9 @@ std::vector<Block> SegmentTestBasic::prepareWriteBlocksInSegmentRange(PageId seg
         Int64 write_end_key_this_round = *write_start_key + static_cast<Int64>(write_rows_this_round);
         RUNTIME_CHECK(write_end_key_this_round <= segment_end_key);
 
-        Block block = DMTestEnv::prepareSimpleWriteBlock(
-            *write_start_key, //
-            write_end_key_this_round,
-            false,
-            version,
-            DMTestEnv::pk_name,
-            EXTRA_HANDLE_COLUMN_ID,
-            options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE,
-            options.is_common_handle,
-            1,
-            true,
-            is_deleted);
-
+        Block block = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted);
         blocks.emplace_back(block);
-
         remaining_rows -= write_rows_this_round;
-        version++;
 
         LOG_FMT_DEBUG(logger, "Prepared block for write, block_range=[{}, {}) (rows={}), total_rows_to_write={} remain_rows={}", //
                       *write_start_key,
@@ -341,80 +348,36 @@ std::vector<Block> SegmentTestBasic::prepareWriteBlocksInSegmentRange(PageId seg
     return blocks;
 }
 
-void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> begin_key)
+void SegmentTestBasic::writeSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
-    LOG_FMT_INFO(logger_op, "writeSegment, segment_id={} rows={}", segment_id, write_rows);
+    LOG_FMT_INFO(logger_op, "writeSegment, segment_id={} write_rows={}", segment_id, write_rows);
 
     if (write_rows == 0)
         return;
-
-    RUNTIME_CHECK(write_rows > 0);
-    RUNTIME_CHECK(write_rows < std::numeric_limits<Int64>::max());
 
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
-
     LOG_FMT_DEBUG(logger, "write to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
-    auto segment_max_rows = static_cast<UInt64>(end_key - start_key);
-    if (segment_max_rows == 0)
-        return;
-    // If the length of segment key range is larger than `write_rows`, then
-    // write the new data with the same tso in one block.
-    // Otherwise create multiple block with increasing tso until the `remain_row_num`
-    // down to 0.
-    UInt64 remain_row_num = 0;
-    if (segment_max_rows > write_rows)
+    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+    for (const auto & block : blocks)
     {
-        if (begin_key.has_value())
-        {
-            RUNTIME_CHECK(begin_key >= start_key, *begin_key, start_key);
-            RUNTIME_CHECK(begin_key < end_key, *begin_key, end_key);
-            start_key = *begin_key;
-        }
-        else
-        {
-            // The segment range is large enough, let's randomly pick a start key:
-            //    Suppose we have segment range = [0, 11), which could contain at most 11 rows.
-            //    Now we want to write 10 rows -- The write start key could be randomized in [0, 1].
-            start_key = std::uniform_int_distribution<Int64>{start_key, end_key - static_cast<Int64>(write_rows)}(random);
-        }
-        end_key = start_key + write_rows;
+        segment->write(*dm_context, block, false);
     }
-    else
-    {
-        remain_row_num = write_rows - segment_max_rows;
-        RUNTIME_CHECK(!begin_key.has_value()); // Currently we don't support specifying start key when segment is small
-    }
-    {
-        // write to segment and not flush
-        LOG_FMT_DEBUG(logger, "write block to segment, block_range=[{}, {})", start_key, end_key);
-        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, end_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
-        segment->write(*dm_context, std::move(block), false);
-        version++;
-    }
-    while (remain_row_num > 0)
-    {
-        UInt64 write_num = std::min(remain_row_num, segment_max_rows);
-        LOG_FMT_DEBUG(logger, "write block to segment, block_range=[{}, {})", start_key, write_num + start_key);
-        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, write_num + start_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
-        segment->write(*dm_context, std::move(block), false);
-        remain_row_num -= write_num;
-        version++;
-    }
+
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["write"]++;
 }
 
-void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows)
+void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
-    LOG_FMT_INFO(logger_op, "ingestDTFileIntoSegment, segment_id={} rows={}", segment_id, write_rows);
+    LOG_FMT_INFO(logger_op, "ingestDTFileIntoSegment, segment_id={} write_rows={}", segment_id, write_rows);
 
     if (write_rows == 0)
         return;
 
-    auto write_data = [&](SegmentPtr segment, const Block & block) {
+    auto ingest_data = [&](SegmentPtr segment, const Block & block) {
         WriteBatches ingest_wbs(dm_context->storage_pool, dm_context->getWriteLimiter());
         auto delegator = storage_path_pool->getStableDiskDelegator();
         auto parent_path = delegator.choosePath();
@@ -448,85 +411,36 @@ void SegmentTestBasic::ingestDTFileIntoSegment(PageId segment_id, UInt64 write_r
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_FMT_DEBUG(logger, "ingest to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
-    auto segment_max_rows = static_cast<UInt64>(end_key - start_key);
-    if (segment_max_rows == 0)
-        return;
-    // If the length of segment key range is larger than `write_rows`, then
-    // write the new data with the same tso in one block.
-    // Otherwise create multiple block with increasing tso until the `remain_row_num`
-    // down to 0.
-    UInt64 remain_row_num = 0;
-    if (segment_max_rows > write_rows)
+    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+    for (const auto & block : blocks)
     {
-        start_key = std::uniform_int_distribution<Int64>{start_key, end_key - static_cast<Int64>(write_rows)}(random);
-        end_key = start_key + write_rows;
+        ingest_data(segment, block);
     }
-    else
-    {
-        remain_row_num = write_rows - segment_max_rows;
-    }
-    {
-        // write to segment and not flush
-        LOG_FMT_DEBUG(logger, "ingest block to segment, block_range=[{}, {})", start_key, end_key);
-        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, end_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
-        write_data(segment, block);
-        version++;
-    }
-    while (remain_row_num > 0)
-    {
-        UInt64 write_num = std::min(remain_row_num, segment_max_rows);
-        LOG_FMT_DEBUG(logger, "ingest block to segment, block_range=[{}, {})", start_key, write_num + start_key);
-        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, write_num + start_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle);
-        write_data(segment, block);
-        remain_row_num -= write_num;
-        version++;
-    }
+
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["ingest"]++;
 }
 
-void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows)
+void SegmentTestBasic::writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows, std::optional<Int64> start_at)
 {
-    LOG_FMT_INFO(logger_op, "writeSegmentWithDeletedPack, segment_id={}", segment_id);
+    LOG_FMT_INFO(logger_op, "writeSegmentWithDeletedPack, segment_id={} write_rows={}", segment_id, write_rows);
+
+    if (write_rows == 0)
+        return;
 
     auto segment = segments[segment_id];
     size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
     auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_FMT_DEBUG(logger, "write deleted pack to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
-    auto segment_max_rows = static_cast<UInt64>(end_key - start_key);
-    if (segment_max_rows == 0)
-        return;
-    // If the length of segment key range is larger than `write_rows`, then
-    // write the new data with the same tso in one block.
-    // Otherwise create multiple block with increasing tso until the `remain_row_num`
-    // down to 0.
-    UInt64 remain_row_num = 0;
-    if (segment_max_rows > write_rows)
+    auto blocks = prepareWriteBlocksInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ true);
+    for (const auto & block : blocks)
     {
-        start_key = std::uniform_int_distribution<Int64>{start_key, end_key - static_cast<Int64>(write_rows)}(random);
-        end_key = start_key + write_rows;
+        segment->write(*dm_context, block, false);
     }
-    else
-    {
-        remain_row_num = write_rows - segment_max_rows;
-    }
-    {
-        // write to segment and not flush
-        LOG_FMT_DEBUG(logger, "write block to segment, block_range=[{}, {})", start_key, end_key);
-        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, end_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle, 1, true, true);
-        segment->write(*dm_context, std::move(block), true);
-        version++;
-    }
-    while (remain_row_num > 0)
-    {
-        UInt64 write_num = std::min(remain_row_num, segment_max_rows);
-        LOG_FMT_DEBUG(logger, "write block to segment, block_range=[{}, {})", start_key, write_num + start_key);
-        Block block = DMTestEnv::prepareSimpleWriteBlock(start_key, write_num + start_key, false, version, DMTestEnv::pk_name, EXTRA_HANDLE_COLUMN_ID, options.is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE, options.is_common_handle, 1, true, true);
-        segment->write(*dm_context, std::move(block), true);
-        remain_row_num -= write_num;
-        version++;
-    }
+
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["writeDelete"]++;
 }
@@ -540,16 +454,10 @@ void SegmentTestBasic::deleteRangeSegment(PageId segment_id)
     EXPECT_EQ(getSegmentRowNum(segment_id), 0);
 }
 
-void SegmentTestBasic::replaceDataSegment(PageId segment_id, const DMFilePtr & file)
+void SegmentTestBasic::replaceDataSegment(const std::vector<PageId> & segments_id, const Block & block)
 {
-    auto segment = segments[segment_id];
-    auto new_segment = segment->dangerouslyReplaceDataForTest(dmContext(), file);
-    segments[new_segment->segmentId()] = new_segment;
-    EXPECT_EQ(file->getRows(), getSegmentRowNumWithoutMVCC(segment_id));
-}
+    LOG_FMT_DEBUG(logger, "replace data using block, segments_id={} block_rows={}", fmt::join(segments_id, ","), block.rows());
 
-void SegmentTestBasic::replaceDataSegment(PageId segment_id, const Block & block)
-{
     auto delegator = storage_path_pool->getStableDiskDelegator();
     auto parent_path = delegator.choosePath();
     auto file_provider = db_context->getFileProvider();
@@ -572,12 +480,23 @@ void SegmentTestBasic::replaceDataSegment(PageId segment_id, const Block & block
     ingest_wbs.writeLogAndData();
     delegator.addDTFile(file_id, dm_file->getBytesOnDisk(), parent_path);
 
-    replaceDataSegment(segment_id, dm_file);
+    replaceDataSegment(segments_id, dm_file);
 
     dm_file->enableGC();
     ingest_wbs.rollbackWrittenLogAndData();
+}
 
-    EXPECT_EQ(block.rows(), getSegmentRowNumWithoutMVCC(segment_id));
+void SegmentTestBasic::replaceDataSegment(const std::vector<PageId> & segments_id, const DMFilePtr & file)
+{
+    LOG_FMT_INFO(logger_op, "replaceDataSegment, segments_id={} file={}", fmt::join(segments_id, ","), file->path());
+
+    for (const auto segment_id : segments_id)
+    {
+        auto segment = segments[segment_id];
+        auto new_segment = segment->dangerouslyReplaceDataForTest(*dm_context, file);
+        segments[new_segment->segmentId()] = new_segment;
+    }
+    operation_statistics["replaceData"]++;
 }
 
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id)

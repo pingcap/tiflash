@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/PODArray.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
@@ -46,6 +47,120 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 }
 namespace tests
 {
+
+class SegmentFrameworkTest : public SegmentTestBasic
+{};
+
+TEST_F(SegmentFrameworkTest, PrepareWriteBlock)
+try
+{
+    reloadWithOptions(SegmentTestOptions{ .is_common_handle = false });
+
+    auto s1_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10);
+    ASSERT_TRUE(s1_id.has_value());
+    auto s2_id = splitSegmentAt(*s1_id, 20);
+    ASSERT_TRUE(s2_id.has_value());
+
+    // s1 has range [10, 20)
+    {
+        auto [begin, end] = getSegmentKeyRange(*s1_id);
+        ASSERT_EQ(10, begin);
+        ASSERT_EQ(20, end);
+    }
+
+    {
+        // write_rows == segment_rows, start_key not specified
+        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 10);
+        ASSERT_EQ(1, blocks.size());
+        auto handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+        const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+        ASSERT_EQ(PaddedPODArray<Handle>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}), handle_data);
+    }
+    {
+        // write_rows > segment_rows, start_key not specified
+        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 13);
+        ASSERT_EQ(2, blocks.size());
+        {
+            auto handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({10, 11, 12, 13, 14, 15, 16, 17, 18, 19}), handle_data);
+        }
+        {
+            auto handle_column = blocks[1].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({10, 11, 12}), handle_data);
+        }
+    }
+    {
+        // start_key specified, end_key - start_key < write_rows
+        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 2, /* at */ 16);
+        ASSERT_EQ(1, blocks.size());
+            const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({16, 17}), handle_data);
+    }
+    {
+        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 4, /* at */ 16);
+        ASSERT_EQ(1, blocks.size());
+        const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+        const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+        ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
+    }
+    {
+        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 5, /* at */ 16);
+        ASSERT_EQ(2, blocks.size());
+        {
+            const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
+        }
+        {
+            const auto & handle_column = blocks[1].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({16}), handle_data);
+        }
+    }
+    {
+        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 10, /* at */ 16);
+        ASSERT_EQ(3, blocks.size());
+        {
+            const auto & handle_column = blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
+        }
+        {
+            const auto & handle_column = blocks[1].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({16, 17, 18, 19}), handle_data);
+        }
+        {
+            const auto & handle_column = blocks[2].getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            const auto & handle_data = typeid_cast<const ColumnVector<Handle> &>(*handle_column).getData();
+            ASSERT_EQ(PaddedPODArray<Handle>({16, 17}), handle_data);
+        }
+    }
+    {
+        // write rows < segment rows, start key not specified, should choose a random start.
+        auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 3);
+        ASSERT_EQ(1, blocks.size());
+        ASSERT_EQ(3, blocks[0].rows());
+    }
+    {
+        // Let's check whether the generated handles will be starting from 12, for at least once.
+        auto start_from_12 = 0;
+        for (size_t i = 0; i < 100; i++)
+        {
+            auto blocks = prepareWriteBlocksInSegmentRange(*s1_id, 3);
+            if (blocks[0].getByName(EXTRA_HANDLE_COLUMN_NAME).column->getInt(0) == 12)
+                start_from_12++;
+        }
+        ASSERT_TRUE(start_from_12 > 0);   // We should hit at least 1 times in 100 iters.
+        ASSERT_TRUE(start_from_12 < 50);  // We should not hit 50 times in 100 iters :)
+    }
+}
+CATCH
+
+
 class SegmentOperationTest : public SegmentTestBasic
 {
 protected:

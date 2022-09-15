@@ -62,13 +62,18 @@ public:
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
      * written randomly in the segment range.
      */
-    void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> begin_key = std::nullopt);
-    void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100);
-    void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100);
+    void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
     void deleteRangeSegment(PageId segment_id);
-    void replaceDataSegment(PageId segment_id, const DMFilePtr & file);
-    void replaceDataSegment(PageId segment_id, const Block & block);
 
+    /**
+     * This function does not check rows.
+     */
+    void replaceDataSegment(const std::vector<PageId> & segments_id, const DMFilePtr & file);
+    void replaceDataSegment(const std::vector<PageId> & segments_id, const Block & block);
+
+    Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
     std::vector<Block> prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
 
     size_t getSegmentRowNumWithoutMVCC(PageId segment_id);
