@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/Field.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
@@ -75,18 +76,18 @@ protected:
         {
             if (table_info.is_common_handle || table_info.pk_is_handle)
             {
-                if (!table_info.columns[i].hasPriKeyFlag() && !fields[i].isNull())
+                if (!table_info.columns[i].hasPriKeyFlag())
                     value_encode_fields.emplace_back(fields[i]);
                 else
                     key_encode_fields.emplace_back(fields[i]);
             }
-            else if (!fields[i].isNull())
+            else
             {
                 value_encode_fields.emplace_back(fields[i]);
             }
         }
 
-        // create encoded key
+        // create the RawTiDBPK section of encoded key
         WriteBufferFromOwnString pk_buf;
         if (table_info.is_common_handle)
         {
@@ -272,6 +273,8 @@ TEST_F(RegionBlockReaderTest, PKIsNotHandle)
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     ASSERT_EQ(table_info.is_common_handle, false);
     ASSERT_EQ(table_info.pk_is_handle, false);
+    ASSERT_FALSE(table_info.getColumnInfo(2).hasPriKeyFlag());
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
@@ -283,6 +286,7 @@ TEST_F(RegionBlockReaderTest, PKIsHandle)
     ASSERT_EQ(table_info.is_common_handle, false);
     ASSERT_EQ(table_info.pk_is_handle, true);
     ASSERT_TRUE(table_info.getColumnInfo(2).hasPriKeyFlag());
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
@@ -296,6 +300,7 @@ TEST_F(RegionBlockReaderTest, CommonHandle)
     ASSERT_TRUE(table_info.getColumnInfo(2).hasPriKeyFlag());
     ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
     ASSERT_TRUE(table_info.getColumnInfo(4).hasPriKeyFlag());
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
@@ -366,14 +371,21 @@ TEST_F(RegionBlockReaderTest, OverflowColumnRowV1)
 }
 
 TEST_F(RegionBlockReaderTest, InvalidNULLRowV2)
+try
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    ASSERT_FALSE(table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is nullable
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+
     auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    ASSERT_TRUE(new_table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is not null
+
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
 }
+CATCH
 
 TEST_F(RegionBlockReaderTest, InvalidNULLRowV1)
 {
