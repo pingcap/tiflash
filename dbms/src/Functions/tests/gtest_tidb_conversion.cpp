@@ -1311,8 +1311,7 @@ try
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1212121111, 4), {2012, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1121212111111, 6), {112, 12, 12, 0, 0, 0, 0}, 6);
     testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11121212111111, 6), {1112, 12, 12, 0, 0, 0, 0}, 6);
-    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(999911111111111, 7), {9999, 11, 11, 0, 0, 0, 0}, 6);
-    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(2012121212121212345, 5), {2012, 12, 12, 12, 12, 12, 123450}, 5);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(99991111111111, 6), {9999, 11, 11, 0, 0, 0, 0}, 6);
 }
 CATCH
 

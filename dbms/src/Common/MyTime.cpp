@@ -554,11 +554,7 @@ const String & MyTimeBase::monthName() const
 
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
-    if (year > 9999 || month <= 0 || month > 12 || day <= 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
-    {
-        return false;
-    }
-    return day <= getLastDay(year, month);
+    return month != 0 && day != 0 && checkTimeValidAllowMonthAndDayZero(year, month, day, hour, minute, second);
 }
 
 bool checkTimeValidAllowMonthAndDayZero(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
@@ -736,6 +732,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     case 1:
     {
         size_t l = seps[0].size();
+        // isFloat is true means that the input string is float format like "1212.111"
         if (isFloat)
         {
             MyDateTime date_time(0);

@@ -1431,7 +1431,7 @@ public:
             for (size_t i = 0; i < size; ++i)
             {
                 MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
-                bool is_null = numberToDateTime(vec_from[i], datetime);
+                bool is_null = numberToDateTime(vec_from[i], datetime, false);
 
                 if (is_null)
                 {
