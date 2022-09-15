@@ -173,7 +173,6 @@ public:
     enum TaskType
     {
         Split,
-        Merge,
         MergeDelta,
         Compact,
         Flush,
@@ -194,7 +193,6 @@ public:
 
         DMContextPtr dm_context;
         SegmentPtr segment;
-        SegmentPtr next_segment;
 
         explicit operator bool() const { return segment != nullptr; }
     };
@@ -339,6 +337,27 @@ public:
 
     /// Iterator over all segments and apply gc jobs.
     UInt64 onSyncGc(Int64 limit);
+
+    /**
+     * Try to merge the segment in the current thread as the GC operation.
+     * This function may be blocking, and should be called in the GC background thread.
+     */
+    SegmentPtr gcTrySegmentMerge(const DMContextPtr & dm_context, const SegmentPtr & segment);
+
+    /**
+     * Try to merge delta in the current thread as the GC operation.
+     * This function may be blocking, and should be called in the GC background thread.
+     */
+    SegmentPtr gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point);
+
+    /**
+     * Starting from the given base segment, find continuous segments that could be merged.
+     *
+     * When there are mergeable segments, the baseSegment is returned in index 0 and mergeable segments are then placed in order.
+     *   It is ensured that there are at least 2 elements in the returned vector.
+     * When there is no mergeable segment, the returned vector will be empty.
+     */
+    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
 
     /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands & commands, //

@@ -106,7 +106,6 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
     switch (task.type)
     {
     case TaskType::Split:
-    case TaskType::Merge:
     case TaskType::MergeDelta:
         is_heavy = true;
         // reserve some task space for light tasks
@@ -1179,8 +1178,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                                 || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes))
         || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
-    bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
-
     // Don't do compact on starting up.
     bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
 
@@ -1237,7 +1234,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             {
                 delta_last_try_flush_rows = delta_rows;
                 delta_last_try_flush_bytes = delta_bytes;
-                try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+                try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment});
             }
         }
     }
@@ -1246,36 +1243,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     // give up adding more tasks on this version of delta.
     if (segment->getDelta()->isUpdating())
         return;
-
-    /// Now start trying structure update.
-
-    auto get_merge_sibling = [&]() -> SegmentPtr {
-        /// For complexity reason, currently we only try to merge with next segment. Normally it is good enough.
-
-        // The last segment cannot be merged.
-        if (segment->getRowKeyRange().isEndInfinite())
-            return {};
-        SegmentPtr next_segment;
-        {
-            std::shared_lock read_write_lock(read_write_mutex);
-
-            auto it = segments.find(segment->getRowKeyRange().getEnd());
-            // check legality
-            if (it == segments.end())
-                return {};
-            auto & cur_segment = it->second;
-            if (cur_segment.get() != segment.get())
-                return {};
-            ++it;
-            if (it == segments.end())
-                return {};
-            next_segment = it->second;
-            auto limit = dm_context->segment_limit_rows / 5;
-            if (next_segment->getEstimatedRows() >= limit)
-                return {};
-        }
-        return next_segment;
-    };
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
         // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
@@ -1304,7 +1271,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_background_merge_delta)
         {
             delta_last_try_merge_delta_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::MergeDelta, dm_context, segment, {}});
+            try_add_background_task(BackgroundTask{TaskType::MergeDelta, dm_context, segment});
             return true;
         }
         return false;
@@ -1314,12 +1281,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         {
             delta_last_try_split_rows = delta_rows;
             delta_last_try_split_bytes = delta_bytes;
-            try_add_background_task(BackgroundTask{TaskType::Split, dm_context, seg, {}});
+            try_add_background_task(BackgroundTask{TaskType::Split, dm_context, seg});
             return true;
         }
         return false;
     };
-    auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
+    auto try_fg_split = [&](const SegmentPtr & my_segment) {
         auto my_segment_size = my_segment->getEstimatedBytes();
         auto my_should_split = my_segment_size >= dm_context->segment_force_split_bytes;
         if (my_should_split && !my_segment->isSplitForbidden())
@@ -1335,15 +1302,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         }
         return false;
     };
-    auto try_bg_merge = [&]() {
-        SegmentPtr merge_sibling;
-        if (should_merge && (merge_sibling = get_merge_sibling()))
-        {
-            try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
-            return true;
-        }
-        return false;
-    };
     auto try_bg_compact = [&]() {
         /// Compact task should be a really low priority task.
         /// And if the segment is flushing,
@@ -1353,7 +1311,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_compact && !segment->isFlushing())
         {
             delta_last_try_compact_column_files = column_file_count;
-            try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment, {}});
+            try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment});
             return true;
         }
         return false;
@@ -1362,7 +1320,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_place_delta_index)
         {
             delta_last_try_place_delta_index_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}});
+            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment});
             return true;
         }
         return false;
@@ -1407,8 +1365,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (try_bg_merge_delta())
             return;
     }
-    if (try_bg_merge())
-        return;
     if (try_bg_compact())
         return;
     if (try_place_delta_index())
