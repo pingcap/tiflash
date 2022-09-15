@@ -99,7 +99,7 @@ protected:
         WriteBufferFromOwnString pk_buf;
         if (table_info.is_common_handle)
         {
-            auto & primary_index_info = table_info.getPrimaryIndexInfo();
+            const auto & primary_index_info = table_info.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
                 auto idx = column_name_columns_index_map[primary_index_info.idx_cols[i].name];
@@ -277,7 +277,6 @@ protected:
             ColumnIDValue(11, std::numeric_limits<UInt64>::min()));
         return table_info;
     }
-
 };
 
 String bytesFromHexString(std::string_view hex_str)
@@ -437,6 +436,9 @@ try
     ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
     ASSERT_FALSE(table_info.getColumnInfo(4).hasPriKeyFlag());
 
+    // FIXME: actually TiDB won't encode the "NULL" for column4 into value
+    // but now the `RowEncoderV2` does not support this, we use `RegionBlockReaderTest::ReadFromRegion`
+    // to test that.
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
 
     // Mock re-create the primary key index with "column4" that contains `NULL` value
@@ -454,11 +456,14 @@ try
     ASSERT_TRUE(new_table_info.getColumnInfo(4).hasPriKeyFlag());
 
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
-    // force_decode=false can not decode because there are
-    // missing value for column with primary key flag.
-    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
-    // force_decode=true, decode ok.
-    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+    // FIXME: actually we need to decode the block with force_decode=true, see the
+    // comments before `encodeColumns`
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+    // // force_decode=false can not decode because there are
+    // // missing value for column with primary key flag.
+    // EXPECT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    // // force_decode=true, decode ok.
+    // EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
 }
 CATCH
 
@@ -495,11 +500,7 @@ try
     ASSERT_TRUE(new_table_info.getColumnInfo(4).hasPriKeyFlag());
 
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
-    // force_decode=false can not decode because there are
-    // missing value for column with primary key flag.
-    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
-    // force_decode=true, decode ok.
-    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
 }
 CATCH
 
@@ -537,9 +538,9 @@ try
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     // force_decode=false can not decode because there are
     // missing value for column with primary key flag.
-    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    EXPECT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     // force_decode=true, decode ok.
-    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
 }
 CATCH
 
@@ -577,9 +578,9 @@ try
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     // force_decode=false can not decode because there are
     // missing value for column with primary key flag.
-    ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    EXPECT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     // force_decode=true, decode ok.
-    ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
 }
 CATCH
 
@@ -628,6 +629,9 @@ try
         auto reader = RegionBlockReader(decoding_schema);
         Block res_block = createBlockSortByColumnID(decoding_schema);
         EXPECT_TRUE(reader.read(res_block, *data_list_read, true));
+        res_block.checkNumberOfRows();
+        EXPECT_EQ(res_block.rows(), 4);
+        ASSERT_COLUMN_EQ(res_block.getByName("case_no"), createColumn<String>({"1", "2", "3", "4"}));
     }
 }
 CATCH

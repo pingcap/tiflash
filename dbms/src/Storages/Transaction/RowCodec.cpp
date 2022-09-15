@@ -370,7 +370,7 @@ inline bool addDefaultValueToColumnIfPossible(const ColumnInfo & column_info, Bl
         // Else non-clustered index, and not pk_is_handle, it could be a row encoded by older schema,
         // we need to fill the column wich has primary key flag with default value.
         // fallthrough to fill default value when force_decode
-        LOG_FMT_WARNING(Logger::get("RowCodec"), "fill default value for missing primary key column, column_name={}", column_info.name);
+        LOG_FMT_WARNING(Logger::get("RowCodec"), "fill default value for missing primary key column, column_id={} column_name={}", column_info.id, column_info.name);
     }
 
     if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
