@@ -987,17 +987,10 @@ try
                         {createColumn<Nullable<UInt32>>({MAX_UINT32}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
     ASSERT_COLUMN_EQ(
-        createDateTimeColumn({{{0, 0, 0, 0, 0, 0, 0}}}, 6),
+        createDateTimeColumn({{}}, 6),
         executeFunction(func_name,
                         {createColumn<Nullable<UInt64>>({0}),
                          createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-
-    ASSERT_COLUMN_EQ(
-        createDateTimeColumn({{{2012, 0, 0, 0, 0, 0, 0}}}, 6),
-        executeFunction(func_name,
-                        {createColumn<Nullable<UInt64>>({20120000}),
-                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
-
     ASSERT_COLUMN_EQ(
         createDateTimeColumn({{}, {}}, 6),
         executeFunction(func_name,
