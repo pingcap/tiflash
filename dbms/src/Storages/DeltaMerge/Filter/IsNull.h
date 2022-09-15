@@ -42,9 +42,7 @@ public:
 
     RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
     {
-        std::cout << " === hyy into IsNull rough check == " << std::endl;
         GET_RSINDEX_FROM_PARAM_NOT_FOUND_RETURN_SOME(param, attr, rsindex);
-        std::cout << " === hyy middle of IsNull rough check not return directly === " << std::endl;
         return rsindex.minmax->checkIsNull(pack_id);
     }
 };
