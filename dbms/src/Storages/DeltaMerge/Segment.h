@@ -271,11 +271,12 @@ public:
      * Only used in tests as a shortcut.
      * Normally you should use `dangerouslyReplaceData`.
      */
-    [[nodiscard]] SegmentPtr dangerouslyReplaceDataForTest(DMContext & dm_context, const DMFilePtr & new_stable_file) const;
+    [[nodiscard]] SegmentPtr dangerouslyReplaceDataForTest(DMContext & dm_context, const DMFilePtr & data_file) const;
 
     /**
-     * Discard all data in the current delta and stable layer, and use the specified DMFiles as the stable instead.
-     * This API does not have a prepare & apply pair, as it should be quick enough.
+     * Discard all data in the current delta and stable layer, and use the specified DMFile as the stable instead.
+     * This API does not have a prepare & apply pair, as it should be quick enough. The specified DMFile is safe
+     * to be shared for multiple segments.
      *
      * Note 1: Should be protected behind the Segment update lock to ensure no new data will be appended to this
      *         segment during the function call. Otherwise these new data will be lost in the new segment.
@@ -283,10 +284,13 @@ public:
      * Note 2: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
      *         stable file for multiple segments. It is your own duty to enable GC later.
      *
-     * Note 3: This API is subjected to be changed in future, as it relies on the knowledge that all current data
+     * Note 3: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
+     *         to the PageStorage's data. Otherwise there will be exceptions.
+     *
+     * Note 4: This API is subjected to be changed in future, as it relies on the knowledge that all current data
      *         in this segment is useless, which is a pretty tough requirement.
      */
-    [[nodiscard]] SegmentPtr dangerouslyReplaceData(const Lock &, DMContext & dm_context, const DMFilePtr & new_stable_file, WriteBatches & wbs) const;
+    [[nodiscard]] SegmentPtr dangerouslyReplaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs) const;
 
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
 

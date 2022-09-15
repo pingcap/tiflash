@@ -712,14 +712,13 @@ SegmentPtr Segment::applyMergeDelta(const Segment::Lock &, //
     return new_me;
 }
 
-SegmentPtr Segment::dangerouslyReplaceDataForTest(
-                                                          DMContext & dm_context, //
-                                                          const DMFilePtr & new_stable_file) const
+SegmentPtr Segment::dangerouslyReplaceDataForTest(DMContext & dm_context, //
+                                                  const DMFilePtr & data_file) const
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto lock = mustGetUpdateLock();
-    auto new_segment = dangerouslyReplaceData(lock, dm_context, new_stable_file, wbs);
+    auto new_segment = dangerouslyReplaceData(lock, dm_context, data_file, wbs);
 
     wbs.writeAll();
     return new_segment;
@@ -727,26 +726,26 @@ SegmentPtr Segment::dangerouslyReplaceDataForTest(
 
 SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
                                            DMContext & dm_context,
-                                           const DMFilePtr & new_stable_file,
+                                           const DMFilePtr & data_file,
                                            WriteBatches & wbs) const
 {
-    LOG_FMT_DEBUG(log, "ReplaceData - Begin");
+    LOG_FMT_DEBUG(log, "ReplaceData - Begin, data_file={}", data_file->path());
 
     auto & storage_pool = dm_context.storage_pool;
     auto delegate = dm_context.path_pool.getStableDiskDelegator();
 
-    RUNTIME_CHECK(delegate.getDTFilePath(new_stable_file->fileId()) == new_stable_file->parentPath());
+    RUNTIME_CHECK(delegate.getDTFilePath(data_file->fileId()) == data_file->parentPath());
 
-    // Create a ref to the file.
+    // Always create a ref to the file to allow `data_file` being shared.
     auto new_page_id = storage_pool.newDataPageIdForDTFile(delegate, __PRETTY_FUNCTION__);
     // TODO: We could allow assigning multiple DMFiles in future.
     auto ref_file = DMFile::restore(
         dm_context.db_context.getFileProvider(),
-        new_stable_file->fileId(),
+        data_file->fileId(),
         new_page_id,
-        new_stable_file->parentPath(),
+        data_file->parentPath(),
         DMFile::ReadMetaMode::all());
-    wbs.data.putRefPage(new_page_id, new_stable_file->pageId());
+    wbs.data.putRefPage(new_page_id, data_file->pageId());
 
     auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
     new_stable->setFiles({ref_file}, rowkey_range, &dm_context);

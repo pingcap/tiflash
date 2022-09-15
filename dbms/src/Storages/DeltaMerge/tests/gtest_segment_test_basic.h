@@ -53,6 +53,10 @@ public:
     void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100);
     void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100);
     void deleteRangeSegment(PageId segment_id);
+    void replaceDataSegment(PageId segment_id, const DMFilePtr & file);
+    void replaceDataSegment(PageId segment_id, const Block & block);
+
+    std::vector<Block> prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
 
 
     void writeRandomSegment();
@@ -113,6 +117,8 @@ protected:
     DMContext & dmContext() { return *dm_context; }
 
 protected:
+    inline static constexpr PageId NAMESPACE_ID = 100;
+
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool> storage_pool;
