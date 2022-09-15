@@ -220,7 +220,7 @@ protected:
         }
 
         LOG_FMT_DEBUG(logger, "start random replace segment data, segments_id={} block_rows={} all_segments={}", fmt::join(segments_list, ","), block.rows(), segments.size());
-        replaceSegmentData({ segments_list }, block);
+        replaceSegmentData({segments_list}, block);
 
         // Verify rows.
         for (auto segment_id : segments_list)

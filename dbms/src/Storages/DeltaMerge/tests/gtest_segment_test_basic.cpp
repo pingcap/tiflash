@@ -512,7 +512,7 @@ void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_i
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id)
 {
     RUNTIME_CHECK(segments_id.size() >= 2);
-    for (auto segment_id: segments_id)
+    for (auto segment_id : segments_id)
         RUNTIME_CHECK(segments.find(segment_id) != segments.end());
 
     auto base_stable = segments[segments_id[0]]->getStable()->getDMFilesString();
