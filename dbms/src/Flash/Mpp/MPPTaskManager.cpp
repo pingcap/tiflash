@@ -18,6 +18,7 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
 
+#include <magic_enum.hpp>
 #include <string>
 #include <unordered_map>
 
@@ -92,7 +93,7 @@ public:
 
 void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type)
 {
-    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}, reason: {}", query_id, abortTypeToString(abort_type), reason));
+    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}, reason: {}", query_id, magic_enum::enum_name(abort_type), reason));
     MPPQueryTaskSetPtr task_set;
     {
         /// abort task may take a long time, so first

@@ -45,7 +45,6 @@ enum class AbortType
     ONCANCELLATION,
     ONERROR,
 };
-String abortTypeToString(AbortType abort_type);
 
 class MPPTask : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
