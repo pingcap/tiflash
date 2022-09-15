@@ -95,13 +95,6 @@ private:
                 return;
             }
 
-            SCOPE_EXIT({
-                if (!merged_task->allStreamsFinished())
-                {
-                    SegmentReadTaskScheduler::instance().pushMergedTask(merged_task);
-                }
-            });
-
             int read_count = 0;
             while (!merged_task->allStreamsFinished() && !isStop())
             {
@@ -115,6 +108,11 @@ private:
             if (read_count <= 0)
             {
                 LOG_FMT_DEBUG(log, "All finished, pool_ids={} segment_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
+            }
+
+            if (!merged_task->allStreamsFinished())
+            {
+                SegmentReadTaskScheduler::instance().pushMergedTask(merged_task);
             }
         }
         catch (DB::Exception & e)

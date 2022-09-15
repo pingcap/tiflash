@@ -79,22 +79,11 @@ int MergedTask::readOneBlock()
 
 void MergedTask::setException(const DB::Exception & e)
 {
-    if (cur_idx >= 0 && cur_idx < static_cast<int>(units.size()))
+    for (auto & unit : units)
     {
-        auto & pool = units[cur_idx].pool;
-        if (pool != nullptr)
+        if (unit.pool != nullptr)
         {
-            pool->setException(e);
-        }
-    }
-    else
-    {
-        for (auto & unit : units)
-        {
-            if (unit.pool != nullptr)
-            {
-                unit.pool->setException(e);
-            }
+            unit.pool->setException(e);
         }
     }
 }
