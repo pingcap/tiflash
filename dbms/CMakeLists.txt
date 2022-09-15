@@ -193,6 +193,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
     cpptoml
+    magic_enum
     libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)

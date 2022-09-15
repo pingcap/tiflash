@@ -188,71 +188,6 @@ public:
         Manual,
     };
 
-    static std::string toString(ThreadType type)
-    {
-        switch (type)
-        {
-        case Init:
-            return "Init";
-        case Write:
-            return "Write";
-        case Read:
-            return "Read";
-        case BG_Split:
-            return "BG_Split";
-        case BG_Merge:
-            return "BG_Merge";
-        case BG_MergeDelta:
-            return "BG_MergeDelta";
-        case BG_Compact:
-            return "BG_Compact";
-        case BG_Flush:
-            return "BG_Flush";
-        case BG_GC:
-            return "BG_GC";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static std::string toString(TaskType type)
-    {
-        switch (type)
-        {
-        case Split:
-            return "Split";
-        case Merge:
-            return "Merge";
-        case MergeDelta:
-            return "MergeDelta";
-        case Compact:
-            return "Compact";
-        case Flush:
-            return "Flush";
-        case PlaceIndex:
-            return "PlaceIndex";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static std::string toString(MergeDeltaReason type)
-    {
-        switch (type)
-        {
-        case BackgroundThreadPool:
-            return "BackgroundThreadPool";
-        case BackgroundGCThread:
-            return "BackgroundGCThread";
-        case ForegroundWrite:
-            return "ForegroundWrite";
-        case Manual:
-            return "Manual";
-        default:
-            return "Unknown";
-        }
-    }
-
     struct BackgroundTask
     {
         TaskType type;
@@ -512,11 +447,11 @@ private:
     bool handleBackgroundTask(bool heavy);
 
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
-    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    inline bool isSegmentValid(const std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
