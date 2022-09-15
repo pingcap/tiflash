@@ -179,14 +179,6 @@ public:
         PlaceIndex,
     };
 
-    enum MergeDeltaReason
-    {
-        BackgroundThreadPool,
-        BackgroundGCThread,
-        ForegroundWrite,
-        Manual,
-    };
-
     struct BackgroundTask
     {
         TaskType type;
@@ -437,11 +429,45 @@ private:
      */
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
+    enum class SegmentSplitReason
+    {
+        ForegroundWrite,
+        Background,
+        IngestBySplit,
+    };
+
+    /**
+     * Note: This enum simply shadows Segment::SplitMode without introducing the whole Segment into this header.
+     */
+    enum class SegmentSplitMode
+    {
+        /**
+         * Split according to settings.
+         *
+         * If logical split is allowed in the settings, logical split will be tried first.
+         * Logical split may fall back to physical split when calculating split point failed.
+         */
+        Auto,
+
+        /**
+         * Do logical split. If split point is not specified and cannot be calculated out,
+         * the split will fail.
+         */
+        Logical,
+
+        /**
+         * Do physical split.
+         */
+        Physical,
+    };
+
     /**
      * Split the segment into two.
      * After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
+     *
+     * When `opt_split_at` is not specified, this function will try to find a mid point for splitting, and may lead to failures.
      */
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
 
     /**
      * Merge multiple continuous segments (order by segment start key) into one.
@@ -450,6 +476,14 @@ private:
      * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
      */
     SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, bool is_foreground);
+
+    enum class MergeDeltaReason
+    {
+        BackgroundThreadPool,
+        BackgroundGCThread,
+        ForegroundWrite,
+        Manual,
+    };
 
     /**
      * Merge the delta (major compaction) in the segment.
@@ -461,10 +495,6 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
-    bool updateGCSafePoint();
-
-    bool handleBackgroundTask(bool heavy);
-
     // isSegmentValid should be protected by lock on `read_write_mutex`
     inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
@@ -475,6 +505,10 @@ private:
         return doIsSegmentValid(segment);
     }
     bool doIsSegmentValid(const SegmentPtr & segment);
+
+    bool updateGCSafePoint();
+
+    bool handleBackgroundTask(bool heavy);
 
     void restoreStableFiles();
 

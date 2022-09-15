@@ -113,7 +113,9 @@ namespace DB
         F(type_delta_merge_manual, {"type", "delta_merge_manual"}),                                                                       \
         F(type_delta_compact, {"type", "delta_compact"}),                                                                                 \
         F(type_delta_flush, {"type", "delta_flush"}),                                                                                     \
-        F(type_seg_split, {"type", "seg_split"}), F(type_seg_split_fg, {"type", "seg_split_fg"}),                                         \
+        F(type_seg_split_bg, {"type", "seg_split_bg"}),                                                                                   \
+        F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                   \
+        F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                           \
         F(type_seg_merge, {"type", "seg_merge"}), F(type_seg_merge_fg, {"type", "seg_merge_fg"}),                                         \
         F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
@@ -123,8 +125,9 @@ namespace DB
         F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.001, 2, 20}),                                           \
         F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.001, 2, 20}),                                                     \
         F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.001, 2, 20}),                                                         \
-        F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+        F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                               \
         F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.001, 2, 20}),                                                             \
         F(type_seg_merge_fg, {{"type", "seg_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                           \
