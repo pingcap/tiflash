@@ -780,12 +780,11 @@ void DAGStorageInterpreter::buildLocalStreams(
         }
         catch (RegionException & e)
         {
-            // clean all streams from local because we are not sure the correctness of those streams
-            pipeline.streams.clear();
-
             /// Recover from region exception for batchCop/MPP
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
+                // clean all streams from local because we are not sure the correctness of those streams
+                pipeline.streams.clear();
                 if (likely(retryForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
                     continue;
                 else
