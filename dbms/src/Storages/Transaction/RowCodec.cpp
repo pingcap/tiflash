@@ -194,10 +194,18 @@ struct RowEncoderV2
         /// Cache encoded individual columns.
         for (size_t i_col = 0, i_val = 0; i_col < table_info.columns.size(); i_col++)
         {
+            if (i_val == fields.size())
+                break;
+
             const auto & column_info = table_info.columns[i_col];
             const auto & field = fields[i_val];
             if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
+            {
+                // for common handle/pk is handle table,
+                // the field with primary key flag is usually encoded to key instead of value
                 continue;
+            }
+
             if (column_info.id > std::numeric_limits<typename RowV2::Types<false>::ColumnIDType>::max())
                 is_big = true;
             if (!field.isNull())
@@ -213,9 +221,6 @@ struct RowEncoderV2
                 null_column_ids.emplace(column_info.id);
             }
             i_val++;
-
-            if (i_val == fields.size())
-                break;
         }
         is_big = is_big || value_length > std::numeric_limits<RowV2::Types<false>::ValueOffsetType>::max();
 
