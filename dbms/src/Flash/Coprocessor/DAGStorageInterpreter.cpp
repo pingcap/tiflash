@@ -212,6 +212,51 @@ bool addExtraCastsAfterTs(
         return false;
     return analyzer.appendExtraCastsAfterTS(chain, need_cast_column, table_scan);
 }
+
+void injectFallPointForLoadRead(const SelectQueryInfo & query_info)
+{
+    // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
+    // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
+    // may contain different data other than expected.
+
+    // Inject failpoint to throw RegionException for testing
+    fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
+        const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+        RegionException::UnavailableRegions region_ids;
+        for (const auto & info : regions_info)
+        {
+            if (random() % 100 > 50)
+                region_ids.insert(info.region_id);
+        }
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+    });
+    fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
+        const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
+        RegionException::UnavailableRegions region_ids;
+        for (const auto & info : regions_info)
+            region_ids.insert(info.region_id);
+        throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
+    });
+}
+
+String genErrMsgForLoadRead(
+    const ManageableStoragePtr & storage,
+    const TableID & table_id,
+    const TableID & logical_table_id)
+{
+    return table_id == logical_table_id
+        ? fmt::format(
+            "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
+            storage->getDatabaseName(),
+            storage->getTableName(),
+            table_id)
+        : fmt::format(
+            "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
+            storage->getDatabaseName(),
+            storage->getTableName(),
+            table_id,
+            logical_table_id);
+}
 } // namespace
 
 DAGStorageInterpreter::DAGStorageInterpreter(
@@ -718,54 +763,17 @@ void DAGStorageInterpreter::buildLocalStreams(
     if (region_num == 0)
         return;
 
-    QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
     assert(storages_with_structure_lock.find(table_id) != storages_with_structure_lock.end());
     auto & storage = storages_with_structure_lock[table_id].storage;
-
-    auto gen_err_msg = [&]() {
-        return table_id == logical_table_id
-            ? fmt::format(
-                "(while creating InputStreams from storage `{}`.`{}`, table_id: {})",
-                storage->getDatabaseName(),
-                storage->getTableName(),
-                table_id)
-            : fmt::format(
-                "(while creating InputStreams from storage `{}`.`{}`, table_id: {}, logical_table_id: {})",
-                storage->getDatabaseName(),
-                storage->getTableName(),
-                table_id,
-                logical_table_id);
-    };
 
     const DAGContext & dag_context = *context.getDAGContext();
     for (int num_allow_retry = 1; num_allow_retry >= 0; --num_allow_retry)
     {
         try
         {
+            QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-
-            // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
-            // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
-            // may contain different data other than expected.
-
-            // Inject failpoint to throw RegionException for testing
-            fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
-                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                RegionException::UnavailableRegions region_ids;
-                for (const auto & info : regions_info)
-                {
-                    if (random() % 100 > 50)
-                        region_ids.insert(info.region_id);
-                }
-                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
-            });
-            fiu_do_on(FailPoints::region_exception_after_read_from_storage_all_error, {
-                const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
-                RegionException::UnavailableRegions region_ids;
-                for (const auto & info : regions_info)
-                    region_ids.insert(info.region_id);
-                throw RegionException(std::move(region_ids), RegionException::RegionReadStatus::NOT_FOUND);
-            });
+            injectFallPointForLoadRead(query_info);
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
         }
@@ -774,7 +782,7 @@ void DAGStorageInterpreter::buildLocalStreams(
             // clean all streams from local because we are not sure the correctness of those streams
             pipeline.streams.clear();
 
-            /// Recover from region exception when super batch is enable
+            /// Recover from region exception for batchCop/MPP
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
                 if (retryForBatchCopOrMPP(table_id, query_info, e, num_allow_retry))
@@ -785,14 +793,14 @@ void DAGStorageInterpreter::buildLocalStreams(
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(gen_err_msg());
+                e.addMessage(genErrMsgForLoadRead(storage, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(gen_err_msg());
+            e.addMessage(genErrMsgForLoadRead(storage, table_id, logical_table_id));
             throw;
         }
     }
