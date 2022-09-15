@@ -383,7 +383,8 @@ bool appendRowV2ToBlockImpl(
             is_null = idx_null < null_column_ids.size();
 
         auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
-        if (column_ids_iter->first > next_datum_column_id)
+        const auto next_column_id = column_ids_iter->first;
+        if (next_column_id > next_datum_column_id)
         {
             // The next column id to read is bigger than the column id of next datum in encoded row.
             // It means this is the datum of extra column. May happen when reading after dropping
@@ -396,7 +397,7 @@ bool appendRowV2ToBlockImpl(
             else
                 idx_not_null++;
         }
-        else if (column_ids_iter->first < next_datum_column_id)
+        else if (next_column_id < next_datum_column_id)
         {
             // The next column id to read is less than the column id of next datum in encoded row.
             // It means this is the datum of missing column. May happen when reading after adding
@@ -412,7 +413,7 @@ bool appendRowV2ToBlockImpl(
         {
             // If pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
             // we can just ignore the pk value encoded in value part
-            if (unlikely(column_ids_iter->first == pk_handle_id))
+            if (unlikely(next_column_id == pk_handle_id))
             {
                 column_ids_iter++;
                 block_column_pos++;
