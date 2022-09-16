@@ -695,7 +695,7 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
             }
         }
         cache_written_size = dataSize() - ori_cache_size;
-        approx_mem_getLatestCommitIndexcache_rows += cmd_write_cf_cnt;
+        approx_mem_cache_rows += cmd_write_cf_cnt;
         approx_mem_cache_bytes += cache_written_size;
     };
 
