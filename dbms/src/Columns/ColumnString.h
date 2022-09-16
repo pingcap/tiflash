@@ -278,16 +278,7 @@ public:
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int /*nan_direction_hint*/) const override
     {
         const auto & rhs = static_cast<const ColumnString &>(rhs_);
-
-        const size_t size = sizeAt(n);
-        const size_t rhs_size = rhs.sizeAt(m);
-
-        int cmp = memcmp(&chars[offsetAt(n)], &rhs.chars[rhs.offsetAt(m)], std::min(size, rhs_size));
-
-        if (cmp != 0)
-            return cmp;
-        else
-            return size > rhs_size ? 1 : (size < rhs_size ? -1 : 0);
+        return getDataAtWithTerminatingZero(n).compare(rhs.getDataAtWithTerminatingZero(m));
     }
 
     int compareAt(size_t n, size_t m, const IColumn & rhs_, int, const ICollator & collator) const override

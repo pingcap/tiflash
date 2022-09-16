@@ -316,12 +316,10 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
 {
     const auto & rhs = static_cast<const ColumnString &>(rhs_);
 
-    return collator.compare(
-        reinterpret_cast<const char *>(&chars[offsetAt(n)]),
-        sizeAt(n) - 1, // Skip last zero byte.
-        reinterpret_cast<const char *>(&rhs.chars[rhs.offsetAt(m)]),
-        rhs.sizeAt(m) - 1 // Skip last zero byte.
-    );
+    auto a = getDataAt(n);
+    auto b = rhs.getDataAt(m);
+
+    return collator.compare(a.data, a.size, b.data, b.size);
 }
 
 // Derived must implement function `int compare(const char *, size_t, const char *, size_t)`.
