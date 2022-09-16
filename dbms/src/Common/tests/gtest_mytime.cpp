@@ -57,19 +57,23 @@ public:
         }
     }
 
-    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error, DAGContext * ctx)
+    static void checkNumberToMyDateTime(const Int64 & input, const MyDateTime & expected, bool expect_error, DAGContext *)
     {
         if (expect_error)
         {
             MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
+<<<<<<< HEAD
             EXPECT_THROW({ numberToDateTime(input, datetime, ctx); }, TiFlashException) << "Original time number: " << input;
+=======
+            EXPECT_TRUE(numberToDateTime(input, datetime));
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
             return;
         }
 
         try
         {
             MyDateTime source(0, 0, 0, 0, 0, 0, 0);
-            numberToDateTime(input, source, ctx);
+            numberToDateTime(input, source);
             EXPECT_EQ(source.year, expected.year) << "Original time number: " << input;
             EXPECT_EQ(source.month, expected.month) << "Original time number: " << input;
             EXPECT_EQ(source.day, expected.day) << "Original time number: " << input;

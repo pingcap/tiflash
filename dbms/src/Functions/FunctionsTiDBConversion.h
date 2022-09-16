@@ -1240,7 +1240,7 @@ struct TiDBConvertToTime
         size_t result,
         bool,
         const tipb::FieldType &,
-        const Context & context)
+        const Context &)
     {
         size_t size = block.getByPosition(arguments[0]).column->size();
         auto col_to = ColumnUInt64::create(size, 0);
@@ -1280,7 +1280,14 @@ struct TiDBConvertToTime
                 size_t string_size = next_offset - current_offset - 1;
                 StringRef string_ref(&(*chars)[current_offset], string_size);
                 String string_value = string_ref.toString();
+<<<<<<< HEAD
                 try
+=======
+
+                Field packed_uint_value = parseMyDateTime(string_value, to_fsp, checkTimeValidAllowMonthAndDayZero);
+
+                if (packed_uint_value.isNull())
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
                 {
                     Field packed_uint_value = parseMyDateTime(string_value, to_fsp);
                     UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
@@ -1361,7 +1368,14 @@ struct TiDBConvertToTime
 
             for (size_t i = 0; i < size; i++)
             {
+<<<<<<< HEAD
                 try
+=======
+                MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
+                bool is_null = numberToDateTime(vec_from[i], datetime, false);
+
+                if (is_null)
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
                 {
                     MyDateTime datetime(0, 0, 0, 0, 0, 0, 0);
                     bool is_null = numberToDateTime(vec_from[i], datetime, context.getDAGContext());
@@ -1402,9 +1416,13 @@ struct TiDBConvertToTime
                 // Convert to string and then parse to time
                 String value_str = toString(value);
 
-                if (value_str == "0")
+                Field packed_uint_value = parseMyDateTimeFromFloat(value_str, to_fsp, noNeedCheckTime);
+
+                if (packed_uint_value.isNull())
                 {
+                    // Fill NULL if cannot parse
                     (*vec_null_map_to)[i] = 1;
+<<<<<<< HEAD
                 }
                 else
                 {
@@ -1429,6 +1447,22 @@ struct TiDBConvertToTime
                         (*vec_null_map_to)[i] = 1;
                         context.getDAGContext()->handleInvalidTime("Invalid time value: '" + value_str + "'", Errors::Types::WrongValue);
                     }
+=======
+                    vec_to[i] = 0;
+                    continue;
+                }
+
+                UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
+                MyDateTime datetime(packed_uint);
+                if constexpr (std::is_same_v<ToDataType, DataTypeMyDate>)
+                {
+                    MyDate date(datetime.year, datetime.month, datetime.day);
+                    vec_to[i] = date.toPackedUInt();
+                }
+                else
+                {
+                    vec_to[i] = packed_uint;
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
                 }
             }
         }
@@ -1441,7 +1475,14 @@ struct TiDBConvertToTime
             for (size_t i = 0; i < size; i++)
             {
                 String value_str = vec_from[i].toString(type.getScale());
+<<<<<<< HEAD
                 try
+=======
+
+                Field value = parseMyDateTimeFromFloat(value_str, to_fsp, noNeedCheckTime);
+
+                if (value.getType() == Field::Types::Null)
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
                 {
                     Field value = parseMyDateTime(value_str, to_fsp);
                     MyDateTime datetime(value.template safeGet<UInt64>());
@@ -1553,6 +1594,7 @@ struct TiDBConvertToDuration
     }
 };
 
+<<<<<<< HEAD
 inline bool getDatetime(const Int64 & num, MyDateTime & result, DAGContext * ctx)
 {
     UInt64 ymd = num / 1000000;
@@ -1662,6 +1704,9 @@ inline bool numberToDateTime(Int64 number, MyDateTime & result, DAGContext * ctx
     return getDatetime(number, result, ctx);
 }
 
+=======
+template <typename...>
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
 class ExecutableFunctionTiDBCast : public IExecutableFunction
 {
 public:
