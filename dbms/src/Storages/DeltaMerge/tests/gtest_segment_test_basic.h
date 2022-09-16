@@ -62,10 +62,19 @@ public:
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
      * written randomly in the segment range.
      */
-    void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> begin_key = std::nullopt);
-    void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100);
-    void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100);
+    void writeSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void ingestDTFileIntoSegment(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void writeSegmentWithDeletedPack(PageId segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
     void deleteRangeSegment(PageId segment_id);
+
+    /**
+     * This function does not check rows.
+     */
+    void replaceSegmentData(const std::vector<PageId> & segments_id, const DMFilePtr & file);
+    void replaceSegmentData(const std::vector<PageId> & segments_id, const Block & block);
+
+    Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
+    std::vector<Block> prepareWriteBlocksInSegmentRange(PageId segment_id, UInt64 total_write_rows, std::optional<Int64> write_start_key = std::nullopt, bool is_deleted = false);
 
     size_t getSegmentRowNumWithoutMVCC(PageId segment_id);
     size_t getSegmentRowNum(PageId segment_id);
@@ -75,7 +84,7 @@ public:
     /**
      * You must pass at least 2 segments. Checks whether all segments passed in are sharing the same stable.
      */
-    bool areSegmentsSharingStable(const std::vector<PageId> & segments_id);
+    [[nodiscard]] bool areSegmentsSharingStable(const std::vector<PageId> & segments_id);
 
     std::pair<Int64, Int64> getSegmentKeyRange(PageId segment_id);
 
@@ -104,6 +113,8 @@ protected:
     void reloadDMContext();
 
 protected:
+    inline static constexpr PageId NAMESPACE_ID = 100;
+
     /// all these var lives as ref in dm_context
     std::unique_ptr<StoragePathPool> storage_path_pool;
     std::unique_ptr<StoragePool> storage_pool;
