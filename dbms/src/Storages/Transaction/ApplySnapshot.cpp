@@ -296,7 +296,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     {
         // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
         // the latest schema. Or we will get trouble in `BoundedSSTFilesToBlockInputStream`.
-        std::shared_ptr<DM::SSTFilesToDTFilesOutputStream> stream;
+        std::shared_ptr<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>> stream;
         try
         {
             // Get storage schema atomically, will do schema sync if the storage does not exists.
@@ -328,13 +328,15 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 tmt,
                 expected_block_size);
             auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
-            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream>(
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
                 bounded_stream,
                 storage,
                 schema_snap,
                 snapshot_apply_method,
                 job_type,
-                tmt);
+                /* split_after_rows */ 0,
+                /* split_after_size */ 0,
+                tmt.getContext());
 
             stream->writePrefix();
             stream->write();
