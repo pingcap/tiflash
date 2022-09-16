@@ -2,6 +2,12 @@
 
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+<<<<<<< HEAD
+=======
+#include <Storages/TableLockHolder.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/RegionDataRead.h>
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -11,6 +17,7 @@ class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
 
+<<<<<<< HEAD
 /**
  * A snapshot of the table structure of a DeltaTree storage. We use it to decode Raft snapshot
  * data with a consistent table structure.
@@ -38,6 +45,11 @@ struct DecodingStorageSchemaSnapshot
 };
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshot> //
+=======
+std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region);
+
+std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
 
 Block GenRegionBlockDataWithSchema(const RegionPtr & region, //

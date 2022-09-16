@@ -1,14 +1,21 @@
 #include <Columns/ColumnsNumber.h>
+<<<<<<< HEAD
 #include <Core/TMTPKType.h>
+=======
+#include <Common/typeid_cast.h>
+#include <Core/Names.h>
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 #include <Storages/ColumnsDescription.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Datum.h>
 #include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
 #include <Storages/Transaction/RowCodec.h>
 #include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/Types.h>
 
 #include <Storages/Transaction/RegionBlockReaderHelper.hpp>
 
@@ -159,6 +166,7 @@ void setPKVersionDel(ColumnUInt8 & delmark_col,
         else
             column_map.getMutableColumnPtr(pk_column_ids[0])->insert(Field(static_cast<Int64>(pk)));
     }
+<<<<<<< HEAD
 }
 
 template <TMTPKType pk_type>
@@ -183,6 +191,9 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
 
     DecodedRecordData decoded_data(visible_column_to_read_lut.size());
     std::unique_ptr<const DecodedRow> tmp_row; // decode row into Field list here for temporary use if necessary.
+=======
+
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
     size_t index = 0;
     for (const auto & [pk, write_type, commit_ts, value_ptr] : data_list)
     {
@@ -228,6 +239,7 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
             }
             else
             {
+<<<<<<< HEAD
                 const TiKVValue & value = *value_ptr;
                 const DecodedRow * row = nullptr;
                 {
@@ -260,6 +272,37 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
                     const auto & column_info = table_info.columns[id_to_idx.second];
 
                     if (auto it = findByColumnID(id_to_idx.first, unknown_fields); it != unknown_fields.end())
+=======
+                // Parse column value from encoded value
+                if (!appendRowToBlock(*value_ptr, column_ids_iter, read_column_ids.end(), block, next_column_pos, schema_snapshot, force_decode))
+                    return false;
+            }
+        }
+
+        /// set extra handle column and pk columns from encoded key if need
+        if constexpr (pk_type != TMTPKType::STRING)
+        {
+            // For non-common handle, extra handle column's type is always Int64.
+            // We need to copy the handle value from encoded key.
+            const auto handle_value = static_cast<Int64>(pk);
+            auto * raw_extra_column = const_cast<IColumn *>((block.getByPosition(extra_handle_column_pos)).column.get());
+            static_cast<ColumnInt64 *>(raw_extra_column)->getData().push_back(handle_value);
+            // For pk_is_handle == true, we need to decode the handle value from encoded key, and insert
+            // to the specify column
+            if (!pk_column_ids.empty())
+            {
+                auto * raw_pk_column = const_cast<IColumn *>((block.getByPosition(pk_pos_map.at(pk_column_ids[0]))).column.get());
+                if constexpr (pk_type == TMTPKType::INT64)
+                    static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(handle_value);
+                else if constexpr (pk_type == TMTPKType::UINT64)
+                    static_cast<ColumnUInt64 *>(raw_pk_column)->getData().push_back(UInt64(handle_value));
+                else
+                {
+                    // The pk_type must be Int32/UInt32 or more narrow type
+                    // so cannot tell its' exact type here, just use `insert(Field)`
+                    raw_pk_column->insert(Field(handle_value));
+                    if (unlikely(raw_pk_column->getInt(index) != handle_value))
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
                     {
                         if (!row->unknown_fields.with_codec_flag)
                         {
@@ -268,7 +311,12 @@ bool setColumnValues(ColumnUInt8 & delmark_col,
                         }
                         else
                         {
+<<<<<<< HEAD
                             decoded_data.push_back(it);
+=======
+                            throw Exception(fmt::format("Detected overflow value when decoding pk column, type={} handle={}", raw_pk_column->getName(), handle_value),
+                                            ErrorCodes::LOGICAL_ERROR);
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
                         }
                         continue;
                     }

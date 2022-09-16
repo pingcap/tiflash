@@ -8,6 +8,7 @@
 
 namespace DB
 {
+<<<<<<< HEAD
 
 using TiDB::ColumnInfo;
 using TiDB::TableInfo;
@@ -31,5 +32,20 @@ Field decodeUnknownColumnV2(const Field & unknown, const ColumnInfo & column_inf
 /// The following two encode functions are used for testing.
 void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+=======
+/// The following two encode functions are used for testing.
+void encodeRowV1(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+
+bool appendRowToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot,
+    bool force_decode);
+
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 
 } // namespace DB
