@@ -32,8 +32,13 @@ public:
 protected:
     void consumeBytes(Int64 bytes) override
     {
+<<<<<<< HEAD
         // Need soft limit here.
         WriteLimiter::consumeBytes(bytes);
+=======
+        alloc_bytes += std::min(available_balance, bytes);
+        available_balance -= bytes;
+>>>>>>> b232bcd66c (Fix `alloc_bytes` of ReadLimiter (#5852))
     }
 };
 
