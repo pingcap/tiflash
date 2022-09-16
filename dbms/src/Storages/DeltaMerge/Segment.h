@@ -69,6 +69,7 @@ class Segment : private boost::noncopyable
 {
 public:
     using DeltaTree = DefaultDeltaTree;
+    using Lock = DeltaValueSpace::Lock;
 
     struct ReadInfo
     {
@@ -207,7 +208,11 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
 
+    /**
+     * Should be protected behind the Segment update lock.
+     */
     [[nodiscard]] SegmentPair applySplit(
+        const Lock &,
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
@@ -229,7 +234,11 @@ public:
         const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
         WriteBatches & wbs);
 
+    /**
+     * Should be protected behind the update lock for all related segments.
+     */
     [[nodiscard]] static SegmentPtr applyMerge(
+        const std::vector<Lock> &,
         DMContext & dm_context,
         const std::vector<SegmentPtr> & ordered_segments,
         const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
@@ -247,7 +256,12 @@ public:
         const ColumnDefinesPtr & schema_snap,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs) const;
+
+    /**
+     * Should be protected behind the Segment update lock.
+     */
     [[nodiscard]] SegmentPtr applyMergeDelta(
+        const Lock &,
         DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         WriteBatches & wbs,
@@ -283,7 +297,6 @@ public:
     static String simpleInfo(const std::vector<SegmentPtr> & segments);
     static String info(const std::vector<SegmentPtr> & segments);
 
-    using Lock = DeltaValueSpace::Lock;
     bool getUpdateLock(Lock & lock) const { return delta->getLock(lock); }
 
     Lock mustGetUpdateLock() const
