@@ -48,6 +48,7 @@ struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
+struct ExternalDTFileInfo;
 
 inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
@@ -263,17 +264,17 @@ public:
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
-                     const PageIds & file_ids,
+                     const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const PageIds & file_ids,
+                     const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
-        return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
+        return ingestFiles(dm_context, range, external_files, clear_data_in_range);
     }
 
     /// Read all rows without MVCC filtering
@@ -525,6 +526,29 @@ private:
         return doIsSegmentValid(segment);
     }
     bool doIsSegmentValid(const SegmentPtr & segment);
+
+    /**
+     * Ingest DTFiles directly into the stable layer by splitting segments.
+     * This strategy can be used only when the destination range is cleared before ingesting.
+     */
+    std::vector<SegmentPtr> ingestDTFilesUsingSplit(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & range,
+        const std::vector<ExternalDTFileInfo> & external_files,
+        const std::vector<DMFilePtr> & files,
+        bool clear_data_in_range);
+
+    std::vector<SegmentPtr> ingestDTFilesUsingColumnFile(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & range,
+        const std::vector<DMFilePtr> & files,
+        bool clear_data_in_range);
+
+    bool ingestDTFileIntoSegmentUsingSplit(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const RowKeyRange & ingest_range,
+        const DMFilePtr & file);
 
     bool updateGCSafePoint();
 

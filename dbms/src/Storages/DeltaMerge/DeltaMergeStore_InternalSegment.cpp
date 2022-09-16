@@ -61,9 +61,15 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
 
         segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
-        if (!segment_snap || !segment_snap->getRows())
+        if (!segment_snap)
         {
-            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because snapshot failed or no row, segment={}", segment->simpleInfo());
+            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because snapshot failed, segment={}", segment->simpleInfo());
+            return {};
+        }
+        if (!opt_split_at.has_value() && !segment_snap->getRows())
+        {
+            // When opt_split_at is not specified, we skip split for empty segments.
+            LOG_FMT_DEBUG(log, "Split - Give up auto segmentSplit because no row, segment={}", segment->simpleInfo());
             return {};
         }
         schema_snap = store_columns;

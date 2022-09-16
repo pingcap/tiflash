@@ -1274,10 +1274,8 @@ try
     // The ingest range is [32, 256)
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-
-        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, /*file_ids*/ {}, /*clear_data_in_range*/ true);
     }
 
 
