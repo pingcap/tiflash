@@ -102,6 +102,22 @@ public:
     }
 
     template <typename Input, typename Output>
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const DecimalField<Decimal64> & input, const MyDateTime & output, int fraction)
+    {
+        auto meta = std::make_tuple(19, input.getScale());
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createDateTimeColumnConst(1, output, fraction) : createDateTimeColumn({output}, fraction),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(meta, 1, input) : createColumn<Nullable<Input>>(meta, {input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
     typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testNotOnlyNull(const Input & input, const MyDateTime & output, int fraction)
     {
         auto inner_test = [&](bool is_const) {
@@ -163,6 +179,39 @@ public:
     }
 
     template <typename Input, typename Output>
+<<<<<<< HEAD
+=======
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testReturnNull(const Input & input, int fraction)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createDateTimeColumnConst(1, {}, fraction) : createDateTimeColumn({{}}, fraction),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(1, input) : createColumn<Nullable<Input>>({input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+    typename std::enable_if<std::is_same_v<Output, MyDateTime>, void>::type testReturnNull(const DecimalField<Input> & input, const std::tuple<UInt32, UInt32> & meta, int fraction)
+    {
+        auto inner_test = [&](bool is_const) {
+            ASSERT_COLUMN_EQ(
+                is_const ? createDateTimeColumnConst(1, {}, fraction) : createDateTimeColumn({{}}, fraction),
+                executeFunction(
+                    func_name,
+                    {is_const ? createConstColumn<Nullable<Input>>(meta, 1, input) : createColumn<Nullable<Input>>(meta, {input}),
+                     createCastTypeConstColumn(fmt::format("Nullable(MyDateTime({}))", fraction))}));
+        };
+        inner_test(true);
+        inner_test(false);
+    }
+
+    template <typename Input, typename Output>
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
     void testOnlyNull()
     {
         std::vector<ColumnWithTypeAndName> nulls = {
@@ -1191,6 +1240,7 @@ try
     testOnlyNull<Float64, MyDateTime>();
 
     // TODO add tests after non-expected results fixed
+<<<<<<< HEAD
 
     // mysql: null, warning.
     // tiflash: null, no warning.
@@ -1223,10 +1273,74 @@ try
     // mysql: 2000-01-11 00:00:00
     // tiflash / tidb: null, warnings
     // testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+=======
+    testReturnNull<Float32, MyDateTime>(12.213, 6);
+    testReturnNull<Float32, MyDateTime>(-12.213, 6);
+    testReturnNull<Float32, MyDateTime>(MAX_FLOAT32, 6);
+    testReturnNull<Float32, MyDateTime>(MIN_FLOAT32, 6);
+
+    testNotOnlyNull<Float32, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float32, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testReturnNull<Float32, MyDateTime>(-111, 6);
+    testNotOnlyNull<Float32, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+
+    testReturnNull<Float64, MyDateTime>(12.213, 6);
+    testReturnNull<Float64, MyDateTime>(-12.213, 6);
+    testReturnNull<Float64, MyDateTime>(MAX_FLOAT64, 6);
+    testReturnNull<Float64, MyDateTime>(MIN_FLOAT64, 6);
+    testReturnNull<Float64, MyDateTime>(1.1, 6);
+    testReturnNull<Float64, MyDateTime>(48.1, 6);
+    testReturnNull<Float64, MyDateTime>(100.1, 6);
+    testReturnNull<Float64, MyDateTime>(1301.11, 6);
+    testReturnNull<Float64, MyDateTime>(1131.111, 6);
+    testReturnNull<Float64, MyDateTime>(100001111.111, 6);
+    testReturnNull<Float64, MyDateTime>(20121212121260.1111111, 6);
+    testReturnNull<Float64, MyDateTime>(20121212126012.1111111, 6);
+    testReturnNull<Float64, MyDateTime>(20121212241212.1111111, 6);
+    testNotOnlyNull<Float64, MyDateTime>(111, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testReturnNull<Float64, MyDateTime>(-111, 6);
+
+    testNotOnlyNull<Float64, MyDateTime>(0, {0, 0, 0, 0, 0, 0, 0}, 6);
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
     testNotOnlyNull<Float64, MyDateTime>(20210201, {2021, 2, 1, 0, 0, 0, 0}, 6);
-    // mysql: 2021-02-01 00:00:00
-    // tiflash / tidb: 2021-02-01 01:00:00
-    // testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(20210201.1, {2021, 2, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(20210000.1, {2021, 0, 0, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(120012.1, {2012, 0, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(121200.1, {2012, 12, 00, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(101.1, {2000, 1, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(111.1, {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(1122.1, {2000, 11, 22, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(31212.111, {2003, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(121212.1111, {2012, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(1121212.111111, {112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(11121212.111111, {1112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(99991111.1111111, {9999, 11, 11, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Float64, MyDateTime>(1212121212.111111, {2000, 12, 12, 12, 12, 12, 111111}, 6);
+}
+CATCH
+
+TEST_F(TestTidbConversion, castDecimalAsReal)
+try
+{
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(11, 1), std::make_tuple(19, 1), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(481, 1), std::make_tuple(19, 1), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(1001, 1), std::make_tuple(19, 1), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(130111, 2), std::make_tuple(19, 2), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(1131111, 3), std::make_tuple(19, 3), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(100001111111, 3), std::make_tuple(19, 3), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(12121212126011111, 5), std::make_tuple(19, 6), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(121212126012111111, 5), std::make_tuple(19, 4), 6);
+    testReturnNull<Decimal64, MyDateTime>(DecimalField64(12121224121211111, 5), std::make_tuple(19, 4), 6);
+
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1011, 1), {2000, 1, 1, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1111, 1), {2000, 1, 11, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11221, 1), {2000, 11, 22, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(31212111, 3), {2003, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(30000111, 3), {2003, 0, 0, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1212121111, 4), {2012, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(1121212111111, 6), {112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(11121212111111, 6), {1112, 12, 12, 0, 0, 0, 0}, 6);
+    testNotOnlyNull<Decimal64, MyDateTime>(DecimalField64(99991111111111, 6), {9999, 11, 11, 0, 0, 0, 0}, 6);
 }
 CATCH
 
@@ -1749,5 +1863,180 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+TEST_F(TestTidbConversion, castTimeAsDuration)
+try
+{
+    const auto to_type_1 = std::make_shared<DataTypeMyDuration>(5); // from_fsp <  to_fsp
+    const auto to_type_2 = std::make_shared<DataTypeMyDuration>(4); // from_fsp == to_fsp
+    const auto to_type_3 = std::make_shared<DataTypeMyDuration>(2); // from_fsp >  to_fsp
+    // cast datetime to duration
+    const auto datetime_type_ptr = std::make_shared<DataTypeMyDateTime>(4);
+    MyDateTime date(2021, 10, 26, 0, 0, 0, 0);
+    MyDateTime datetime(2021, 10, 26, 11, 11, 11, 0);
+    MyDateTime datetime_frac1(2021, 10, 26, 11, 11, 11, 111100);
+    MyDateTime datetime_frac2(2021, 10, 26, 11, 11, 11, 123500);
+    MyDateTime datetime_frac3(2021, 10, 26, 11, 11, 11, 999900);
+
+    auto col_datetime = ColumnUInt64::create();
+    col_datetime->insert(Field(date.toPackedUInt()));
+    col_datetime->insert(Field(datetime.toPackedUInt()));
+    col_datetime->insert(Field(datetime_frac1.toPackedUInt()));
+    col_datetime->insert(Field(datetime_frac2.toPackedUInt()));
+    col_datetime->insert(Field(datetime_frac3.toPackedUInt()));
+
+    auto ctn_datetime = ColumnWithTypeAndName(std::move(col_datetime), datetime_type_ptr, "datetime");
+    ColumnWithTypeAndName datetime_output1(
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        to_type_1,
+        "datetime_output1");
+    ColumnWithTypeAndName datetime_output2(
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        to_type_2,
+        "datetime_output2");
+
+    ColumnWithTypeAndName datetime_output3(
+        createColumn<DataTypeMyDuration::FieldType>({(0 * 3600 + 0 * 60 + 0) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 000000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 110000000L,
+                                                     (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L,
+                                                     (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L})
+            .column,
+        to_type_3,
+        "datetime_output3");
+
+
+    ASSERT_COLUMN_EQ(datetime_output1, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(datetime_output2, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(datetime_output3, executeFunction(func_name, {ctn_datetime, createCastTypeConstColumn(to_type_3->getName())}));
+
+
+    // Test Const
+    ColumnWithTypeAndName input_const(createConstColumn<DataTypeMyDateTime::FieldType>(1, datetime_frac2.toPackedUInt()).column, datetime_type_ptr, "input_const");
+    ColumnWithTypeAndName output1_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L).column, to_type_1, "output1_const");
+    ColumnWithTypeAndName output2_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L).column, to_type_2, "output2_const");
+    ColumnWithTypeAndName output3_const(createConstColumn<DataTypeMyDuration::FieldType>(1, (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L).column, to_type_3, "output3_const");
+
+    ASSERT_COLUMN_EQ(output1_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_1->getName())}));
+    ASSERT_COLUMN_EQ(output2_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_2->getName())}));
+    ASSERT_COLUMN_EQ(output3_const, executeFunction(func_name, {input_const, createCastTypeConstColumn(to_type_3->getName())}));
+
+    // Test Nullable
+    ColumnWithTypeAndName input_nullable(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({datetime_frac1.toPackedUInt(),
+                                                               {},
+                                                               datetime_frac2.toPackedUInt(),
+                                                               {},
+                                                               datetime_frac3.toPackedUInt()})
+            .column,
+        makeNullable(datetime_type_ptr),
+        "input_nullable");
+    ColumnWithTypeAndName output1_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        makeNullable(to_type_1),
+        "output1_output");
+    ColumnWithTypeAndName output2_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 111100000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 123500000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 999900000L})
+            .column,
+        makeNullable(to_type_2),
+        "output2_output");
+    ColumnWithTypeAndName output3_nullable(
+        createColumn<Nullable<DataTypeMyDuration::FieldType>>({(11 * 3600 + 11 * 60 + 11) * 1000000000L + 110000000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 11) * 1000000000L + 120000000L,
+                                                               {},
+                                                               (11 * 3600 + 11 * 60 + 12) * 1000000000L + 000000000L})
+            .column,
+        makeNullable(to_type_3),
+        "output3_output");
+
+    ASSERT_COLUMN_EQ(output1_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_1)->getName())}));
+    ASSERT_COLUMN_EQ(output2_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_2)->getName())}));
+    ASSERT_COLUMN_EQ(output3_nullable, executeFunction(func_name, {input_nullable, createCastTypeConstColumn(makeNullable(to_type_3)->getName())}));
+}
+CATCH
+
+// for https://github.com/pingcap/tics/issues/3595
+TEST_F(TestTidbConversion, castStringAsDateTime3595)
+try
+{
+    DAGContext * dag_context = context.getDAGContext();
+    dag_context->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
+    auto to_datetime_column = createConstColumn<String>(1, "Nullable(MyDateTime(6))");
+    ColumnWithTypeAndName expect_datetime_column(
+        createColumn<Nullable<DataTypeMyDateTime::FieldType>>({{}}).column,
+        makeNullable(std::make_shared<DataTypeMyDateTime>(6)),
+        "result");
+    auto to_date_column = createConstColumn<String>(1, "Nullable(MyDate)");
+    ColumnWithTypeAndName expect_date_column(
+        createColumn<Nullable<DataTypeMyDate::FieldType>>({{}}).column,
+        makeNullable(std::make_shared<DataTypeMyDate>()),
+        "result");
+
+    auto from_column = createColumn<String>({"08:45:16"});
+    auto vector_result = executeFunction("tidb_cast", {from_column, to_datetime_column});
+    for (size_t i = 0; i < from_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_column, to_date_column});
+    for (size_t i = 0; i < from_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+
+    auto from_decimal_column = createColumn<Decimal32>(std::make_tuple(9, 3), {"102310.023"});
+    vector_result = executeFunction("tidb_cast", {from_decimal_column, to_datetime_column});
+    for (size_t i = 0; i < from_decimal_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_decimal_column, to_date_column});
+    for (size_t i = 0; i < from_decimal_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+
+    auto from_float_column = createColumn<DataTypeFloat64::FieldType>({102310.023});
+    vector_result = executeFunction("tidb_cast", {from_float_column, to_datetime_column});
+    for (size_t i = 0; i < from_float_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_datetime_column, vector_result);
+    }
+    vector_result = executeFunction("tidb_cast", {from_float_column, to_date_column});
+    for (size_t i = 0; i < from_float_column.column->size(); i++)
+    {
+        ASSERT_COLUMN_EQ(expect_date_column, vector_result);
+    }
+
+    ASSERT_COLUMN_EQ(
+        createDateTimeColumn({{{2012, 0, 0, 0, 0, 0, 0}}}, 6),
+        executeFunction(func_name,
+                        {createColumn<Nullable<String>>({"20120000"}),
+                         createCastTypeConstColumn("Nullable(MyDateTime(6))")}));
+}
+CATCH
+
+>>>>>>> 720bfc1787 (fix that the result of expression cast(Real/Decimal)AsTime is inconsistent with TiDB (#5799))
 } // namespace
 } // namespace DB::tests
