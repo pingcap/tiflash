@@ -365,7 +365,7 @@ void MockRaftStoreProxy::normalWrite(
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
     }
-    normalWrite(kvs, tmt, cond, region_id, keys, vals, cmd_types, cmd_cf, index, term);
+    normalWrite(kvs, tmt, cond, region_id, std::move(keys), std::move(vals), std::move(cmd_types), std::move(cmd_cf), index, term);
 }
 
 void MockRaftStoreProxy::normalWrite(
