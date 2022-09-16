@@ -15,8 +15,8 @@
 #include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Mpp/HashParitionWriter.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
+#include <Flash/Mpp/HashParitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 

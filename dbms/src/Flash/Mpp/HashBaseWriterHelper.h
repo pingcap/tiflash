@@ -29,4 +29,4 @@ void computeHash(const Block & input_block,
                  std::vector<String> & partition_key_containers,
                  const std::vector<Int64> & partition_col_ids,
                  std::vector<std::vector<MutableColumnPtr>> & result_columns);
-} // namespace DB
+} // namespace DB::HashBaseWriterHelper

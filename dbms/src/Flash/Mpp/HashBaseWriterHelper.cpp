@@ -75,4 +75,4 @@ void computeHash(const Block & input_block,
         }
     }
 }
-} // namespace DB
+} // namespace DB::HashBaseWriterHelper

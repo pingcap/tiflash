@@ -104,7 +104,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(const st
         return;
     }
 
-    if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock) 
+    if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         /// passthrough data to a non-TiFlash node, like sending data to TiSpark
         for (const auto & block : input_blocks)

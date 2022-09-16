@@ -44,8 +44,8 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
-#include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>

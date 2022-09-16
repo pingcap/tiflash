@@ -15,9 +15,9 @@
 #include <Flash/tests/bench_exchange.h>
 #include <fmt/core.h>
 
-#include <Flash/Mpp/HashParitionWriter.cpp> // to include the implementation of HashParitionWriter
-#include <Flash/Mpp/FineGrainedShuffleWriter.cpp> // to include the implementation of FineGrainedShuffleWriter
 #include <Flash/Mpp/ExchangeReceiver.cpp> // to include the implementation of ExchangeReceiver
+#include <Flash/Mpp/FineGrainedShuffleWriter.cpp> // to include the implementation of FineGrainedShuffleWriter
+#include <Flash/Mpp/HashParitionWriter.cpp> // to include the implementation of HashParitionWriter
 #include <Flash/Mpp/MPPTunnel.cpp> // to include the implementation of MPPTunnel
 #include <Flash/Mpp/MPPTunnelSet.cpp> // to include the implementation of MPPTunnelSet
 #include <atomic>
