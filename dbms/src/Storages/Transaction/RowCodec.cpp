@@ -194,10 +194,18 @@ struct RowEncoderV2
         /// Cache encoded individual columns.
         for (size_t i_col = 0, i_val = 0; i_col < table_info.columns.size(); i_col++)
         {
+            if (i_val == fields.size())
+                break;
+
             const auto & column_info = table_info.columns[i_col];
             const auto & field = fields[i_val];
             if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
+            {
+                // for common handle/pk is handle table,
+                // the field with primary key flag is usually encoded to key instead of value
                 continue;
+            }
+
             if (column_info.id > std::numeric_limits<typename RowV2::Types<false>::ColumnIDType>::max())
                 is_big = true;
             if (!field.isNull())
@@ -213,9 +221,6 @@ struct RowEncoderV2
                 null_column_ids.emplace(column_info.id);
             }
             i_val++;
-
-            if (i_val == fields.size())
-                break;
         }
         is_big = is_big || value_length > std::numeric_limits<RowV2::Types<false>::ValueOffsetType>::max();
 
@@ -378,7 +383,8 @@ bool appendRowV2ToBlockImpl(
             is_null = idx_null < null_column_ids.size();
 
         auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
-        if (column_ids_iter->first > next_datum_column_id)
+        const auto next_column_id = column_ids_iter->first;
+        if (next_column_id > next_datum_column_id)
         {
             // The next column id to read is bigger than the column id of next datum in encoded row.
             // It means this is the datum of extra column. May happen when reading after dropping
@@ -391,7 +397,7 @@ bool appendRowV2ToBlockImpl(
             else
                 idx_not_null++;
         }
-        else if (column_ids_iter->first < next_datum_column_id)
+        else if (next_column_id < next_datum_column_id)
         {
             // The next column id to read is less than the column id of next datum in encoded row.
             // It means this is the datum of missing column. May happen when reading after adding
@@ -407,7 +413,7 @@ bool appendRowV2ToBlockImpl(
         {
             // If pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
             // we can just ignore the pk value encoded in value part
-            if (unlikely(column_ids_iter->first == pk_handle_id))
+            if (unlikely(next_column_id == pk_handle_id))
             {
                 column_ids_iter++;
                 block_column_pos++;
