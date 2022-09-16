@@ -57,6 +57,11 @@ struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 
+namespace DM
+{
+struct ExternalDTFileInfo;
+}
+
 using SafeTS = UInt64;
 enum : SafeTS
 {
@@ -290,10 +295,9 @@ struct RegionPtrWithSnapshotFiles
     using Base = RegionPtr;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<UInt64> ids_ = {})
-        : base(base_)
-        , ingest_ids(std::move(ids_))
-    {}
+    RegionPtrWithSnapshotFiles(
+        const Base & base_,
+        std::vector<DM::ExternalDTFileInfo> && external_files_ = {});
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }
@@ -303,7 +307,7 @@ struct RegionPtrWithSnapshotFiles
     operator const Base &() const { return base; }
 
     const Base & base;
-    const std::vector<UInt64> ingest_ids;
+    const std::vector<DM::ExternalDTFileInfo> external_files;
 };
 
 } // namespace DB

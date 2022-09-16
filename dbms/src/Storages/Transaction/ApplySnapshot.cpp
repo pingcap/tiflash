@@ -174,7 +174,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
                 {
                     // Call `ingestFiles` to delete data for range and ingest external DTFiles.
-                    dm_storage->ingestFiles(new_key_range, new_region_wrap.ingest_ids, /*clear_data_in_range=*/true, context.getSettingsRef());
+                    dm_storage->ingestFiles(new_key_range, new_region_wrap.external_files, /*clear_data_in_range=*/true, context.getSettingsRef());
                 }
                 else
                 {
@@ -261,7 +261,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
 extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
 
-std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
+std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
     uint64_t index,
@@ -273,7 +273,7 @@ std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
 
 /// `preHandleSSTsToDTFiles` read data from SSTFiles and generate DTFile(s) for commited data
 /// return the ids of DTFile(s), the uncommited data will be inserted to `new_region`
-std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
+std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
     RegionPtr new_region,
     const SSTViewVec snaps,
     uint64_t /*index*/,
@@ -291,7 +291,8 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
-    PageIds ids;
+    std::vector<DM::ExternalDTFileInfo> ret;
+
     while (true)
     {
         // If any schema changes is detected during decoding SSTs to DTFiles, we need to cancel and recreate DTFiles with
@@ -341,7 +342,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
             stream->writePrefix();
             stream->write();
             stream->writeSuffix();
-            ids = stream->ingestIds();
+            ret = stream->outputFiles();
 
             (void)table_drop_lock; // the table should not be dropped during ingesting file
             break;
@@ -388,7 +389,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
         }
     }
 
-    return ids;
+    return ret;
 }
 
 template <typename RegionPtrWrap>
@@ -539,11 +540,11 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
     }
 
     // Decode the KV pairs in ingesting SST into DTFiles
-    PageIds ingest_ids = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
+    auto external_files = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
 
-    // If `ingest_ids` is empty, ingest SST won't write delete_range for ingest region, it is safe to
+    // If `external_files` is empty, ingest SST won't write delete_range for ingest region, it is safe to
     // ignore the step of calling `ingestFiles`
-    if (!ingest_ids.empty())
+    if (!external_files.empty())
     {
         auto table_id = region->getMappedTableID();
         if (auto storage = tmt.getStorages().get(table_id); storage)
@@ -562,7 +563,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTVi
                 // Call `ingestFiles` to ingest external DTFiles.
                 // Note that ingest sst won't remove the data in the key range
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
-                dm_storage->ingestFiles(key_range, ingest_ids, /*clear_data_in_range=*/false, context.getSettingsRef());
+                dm_storage->ingestFiles(key_range, external_files, /*clear_data_in_range=*/false, context.getSettingsRef());
             }
             catch (DB::Exception & e)
             {
