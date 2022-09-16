@@ -121,17 +121,6 @@ public:
         return context.scan(src.first, src.second).aggregation(agg_funcs, group_by_exprs).project(proj).build(context);
     }
 
-    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency; i += step)
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
-    }
-
-    static const size_t max_concurrency = 10;
-    static const size_t step = 2;
-
     const String db_name{"test_db"};
 
     /// Prepare some data and names for tests of group by
@@ -199,7 +188,7 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            executeWithConcurrency(request, expect_cols[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
 
@@ -232,7 +221,7 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            executeWithConcurrency(request, expect_cols[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
 
@@ -264,7 +253,7 @@ try
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), agg_funcs[i], group_by_exprs[i], projections[i]);
-        executeWithConcurrency(request, expect_cols[i]);
+        executeAndAssertColumnsEqual(request, expect_cols[i]);
     }
 
     /// Min function tests
@@ -283,7 +272,7 @@ try
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), agg_funcs[i], group_by_exprs[i], projections[i]);
-        executeWithConcurrency(request, expect_cols[i]);
+        executeAndAssertColumnsEqual(request, expect_cols[i]);
     }
 }
 CATCH
@@ -322,7 +311,7 @@ try
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), {agg_funcs[i]}, group_by_exprs[i], projections[i]);
-        executeWithConcurrency(request, expect_cols[i]);
+        executeAndAssertColumnsEqual(request, expect_cols[i]);
     }
 }
 CATCH
@@ -334,13 +323,13 @@ try
                        .scan("aggnull_test", "t1")
                        .aggregation({Max(col("s1"))}, {})
                        .build(context);
-    executeWithConcurrency(request, {{toNullableVec<String>({"banana"})}});
+    executeAndAssertColumnsEqual(request, {{toNullableVec<String>({"banana"})}});
 
     request = context
                   .scan("aggnull_test", "t1")
                   .aggregation({}, {col("s1")})
                   .build(context);
-    executeWithConcurrency(request, {{toNullableVec<String>("s1", {{}, "banana"})}});
+    executeAndAssertColumnsEqual(request, {{toNullableVec<String>("s1", {{}, "banana"})}});
 }
 CATCH
 
@@ -352,7 +341,7 @@ try
                        .scan("test_db", "test_table")
                        .aggregation({Max(col("s1")), Max(col("s1"))}, {})
                        .build(context);
-    executeWithConcurrency(
+    executeAndAssertColumnsEqual(
         request,
         {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}});
 
@@ -361,7 +350,7 @@ try
                   .scan("test_db", "test_table")
                   .aggregation({Max(col("s1")), Max(col("s1")), Sum(col("s2"))}, {})
                   .build(context);
-    executeWithConcurrency(
+    executeAndAssertColumnsEqual(
         request,
         {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}, {toVec<UInt64>({6})}});
 }

@@ -173,85 +173,11 @@ public:
     enum TaskType
     {
         Split,
-        Merge,
         MergeDelta,
         Compact,
         Flush,
         PlaceIndex,
     };
-
-    enum MergeDeltaReason
-    {
-        BackgroundThreadPool,
-        BackgroundGCThread,
-        ForegroundWrite,
-        Manual,
-    };
-
-    static std::string toString(ThreadType type)
-    {
-        switch (type)
-        {
-        case Init:
-            return "Init";
-        case Write:
-            return "Write";
-        case Read:
-            return "Read";
-        case BG_Split:
-            return "BG_Split";
-        case BG_Merge:
-            return "BG_Merge";
-        case BG_MergeDelta:
-            return "BG_MergeDelta";
-        case BG_Compact:
-            return "BG_Compact";
-        case BG_Flush:
-            return "BG_Flush";
-        case BG_GC:
-            return "BG_GC";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static std::string toString(TaskType type)
-    {
-        switch (type)
-        {
-        case Split:
-            return "Split";
-        case Merge:
-            return "Merge";
-        case MergeDelta:
-            return "MergeDelta";
-        case Compact:
-            return "Compact";
-        case Flush:
-            return "Flush";
-        case PlaceIndex:
-            return "PlaceIndex";
-        default:
-            return "Unknown";
-        }
-    }
-
-    static std::string toString(MergeDeltaReason type)
-    {
-        switch (type)
-        {
-        case BackgroundThreadPool:
-            return "BackgroundThreadPool";
-        case BackgroundGCThread:
-            return "BackgroundGCThread";
-        case ForegroundWrite:
-            return "ForegroundWrite";
-        case Manual:
-            return "Manual";
-        default:
-            return "Unknown";
-        }
-    }
 
     struct BackgroundTask
     {
@@ -259,7 +185,6 @@ public:
 
         DMContextPtr dm_context;
         SegmentPtr segment;
-        SegmentPtr next_segment;
 
         explicit operator bool() const { return segment != nullptr; }
     };
@@ -405,6 +330,27 @@ public:
     /// Iterator over all segments and apply gc jobs.
     UInt64 onSyncGc(Int64 limit);
 
+    /**
+     * Try to merge the segment in the current thread as the GC operation.
+     * This function may be blocking, and should be called in the GC background thread.
+     */
+    SegmentPtr gcTrySegmentMerge(const DMContextPtr & dm_context, const SegmentPtr & segment);
+
+    /**
+     * Try to merge delta in the current thread as the GC operation.
+     * This function may be blocking, and should be called in the GC background thread.
+     */
+    SegmentPtr gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point);
+
+    /**
+     * Starting from the given base segment, find continuous segments that could be merged.
+     *
+     * When there are mergeable segments, the baseSegment is returned in index 0 and mergeable segments are then placed in order.
+     *   It is ensured that there are at least 2 elements in the returned vector.
+     * When there is no mergeable segment, the returned vector will be empty.
+     */
+    std::vector<SegmentPtr> getMergeableSegments(const DMContextPtr & context, const SegmentPtr & baseSegment);
+
     /// Apply DDL `commands` on `table_columns`
     void applyAlters(const AlterCommands & commands, //
                      OptionTableInfoConstRef table_info,
@@ -483,11 +429,45 @@ private:
      */
     void checkSegmentUpdate(const DMContextPtr & context, const SegmentPtr & segment, ThreadType thread_type);
 
+    enum class SegmentSplitReason
+    {
+        ForegroundWrite,
+        Background,
+        IngestBySplit,
+    };
+
+    /**
+     * Note: This enum simply shadows Segment::SplitMode without introducing the whole Segment into this header.
+     */
+    enum class SegmentSplitMode
+    {
+        /**
+         * Split according to settings.
+         *
+         * If logical split is allowed in the settings, logical split will be tried first.
+         * Logical split may fall back to physical split when calculating split point failed.
+         */
+        Auto,
+
+        /**
+         * Do logical split. If split point is not specified and cannot be calculated out,
+         * the split will fail.
+         */
+        Logical,
+
+        /**
+         * Do physical split.
+         */
+        Physical,
+    };
+
     /**
      * Split the segment into two.
      * After splitting, the segment will be abandoned (with `segment->hasAbandoned() == true`) and the new two segments will be returned.
+     *
+     * When `opt_split_at` is not specified, this function will try to find a mid point for splitting, and may lead to failures.
      */
-    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground);
+    SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
 
     /**
      * Merge multiple continuous segments (order by segment start key) into one.
@@ -496,6 +476,14 @@ private:
      * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
      */
     SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, bool is_foreground);
+
+    enum class MergeDeltaReason
+    {
+        BackgroundThreadPool,
+        BackgroundGCThread,
+        ForegroundWrite,
+        Manual,
+    };
 
     /**
      * Merge the delta (major compaction) in the segment.
@@ -507,20 +495,20 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
-    bool updateGCSafePoint();
-
-    bool handleBackgroundTask(bool heavy);
-
     // isSegmentValid should be protected by lock on `read_write_mutex`
-    inline bool isSegmentValid(std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
-    inline bool isSegmentValid(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
+    inline bool isSegmentValid(const std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
         return doIsSegmentValid(segment);
     }
     bool doIsSegmentValid(const SegmentPtr & segment);
+
+    bool updateGCSafePoint();
+
+    bool handleBackgroundTask(bool heavy);
 
     void restoreStableFiles();
 
