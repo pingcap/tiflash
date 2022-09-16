@@ -238,22 +238,20 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     return std::move(data_list_read);
 }
 
-std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
+std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
 {
     auto scanner = region->createCommittedScanner(lock_region);
 
     /// Some sanity checks for region meta.
-    {
-        if (region->isPendingRemove())
-            return std::nullopt;
-    }
+    if (region->isPendingRemove())
+        return std::nullopt;
 
     /// Read raw KVs from region cache.
-    {
-        // Shortcut for empty region.
-        if (!scanner.hasNext())
-            return std::nullopt;
+    // Shortcut for empty region.
+    if (!scanner.hasNext())
+        return std::nullopt;
 
+<<<<<<< HEAD
         RegionDataReadInfoList data_list_read;
         data_list_read.reserve(scanner.writeMapSize());
 
@@ -263,6 +261,15 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
         } while (scanner.hasNext());
         return std::move(data_list_read);
     }
+=======
+    RegionDataReadInfoList data_list_read;
+    data_list_read.reserve(scanner.writeMapSize());
+    do
+    {
+        data_list_read.emplace_back(scanner.next());
+    } while (scanner.hasNext());
+    return data_list_read;
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 }
 
 void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true)
@@ -401,7 +408,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     try
     {
-        data_list_read = ReadRegionCommitCache(region);
+        data_list_read = ReadRegionCommitCache(region, true);
         if (!data_list_read)
             return nullptr;
     }
@@ -567,10 +574,17 @@ static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & sch
 /// The return value is a block that store the committed data scanned and removed from `region`.
 /// The columns of returned block is sorted by `schema_snap`.
 Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
+<<<<<<< HEAD
     const DecodingStorageSchemaSnapshot & schema_snap,
     Timestamp gc_safepoint,
     bool force_decode,
     TMTContext & tmt)
+=======
+                                   const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
+                                   Timestamp gc_safepoint,
+                                   bool force_decode,
+                                   TMTContext & /* */)
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
@@ -578,17 +592,19 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
         { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
-    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
-    data_list_read = ReadRegionCommitCache(region);
+    std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
 
     Block res_block;
     // No committed data, just return
     if (!data_list_read)
         return res_block;
 
+<<<<<<< HEAD
     auto context = tmt.getContext();
     auto metrics = context.getTiFlashMetrics();
 
+=======
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
     {
         Stopwatch watch;
         // Compare schema_snap with current schema, throw exception if changed.
