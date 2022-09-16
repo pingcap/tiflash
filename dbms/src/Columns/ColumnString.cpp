@@ -18,6 +18,7 @@
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Storages/Transaction/CollatorUtils.h>
+#include <common/memcpy.h>
 #include <fmt/core.h>
 
 
@@ -99,7 +100,7 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
 
     size_t old_chars_size = chars.size();
     chars.resize(old_chars_size + nested_length);
-    memcpy(&chars[old_chars_size], &src_concrete.chars[nested_offset], nested_length);
+    inline_memcpy(&chars[old_chars_size], &src_concrete.chars[nested_offset], nested_length);
 
     if (start == 0 && offsets.empty())
     {
@@ -320,12 +321,10 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
 {
     const auto & rhs = static_cast<const ColumnString &>(rhs_);
 
-    return collator.compare(
-        reinterpret_cast<const char *>(&chars[offsetAt(n)]),
-        sizeAt(n) - 1, // Skip last zero byte.
-        reinterpret_cast<const char *>(&rhs.chars[rhs.offsetAt(m)]),
-        rhs.sizeAt(m) - 1 // Skip last zero byte.
-    );
+    auto a = getDataAt(n);
+    auto b = rhs.getDataAt(m);
+
+    return collator.compare(a.data, a.size, b.data, b.size);
 }
 
 // Derived must implement function `int compare(const char *, size_t, const char *, size_t)`.
