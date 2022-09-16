@@ -37,7 +37,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include "tipb/expression.pb.h"
 
 
 namespace DB
