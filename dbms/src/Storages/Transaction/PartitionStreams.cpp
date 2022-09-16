@@ -234,22 +234,20 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     return std::move(data_list_read);
 }
 
-std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
+std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
 {
     auto scanner = region->createCommittedScanner(lock_region);
 
     /// Some sanity checks for region meta.
-    {
-        if (region->isPendingRemove())
-            return std::nullopt;
-    }
+    if (region->isPendingRemove())
+        return std::nullopt;
 
     /// Read raw KVs from region cache.
-    {
-        // Shortcut for empty region.
-        if (!scanner.hasNext())
-            return std::nullopt;
+    // Shortcut for empty region.
+    if (!scanner.hasNext())
+        return std::nullopt;
 
+<<<<<<< HEAD
         RegionDataReadInfoList data_list_read;
         data_list_read.reserve(scanner.writeMapSize());
 
@@ -259,6 +257,15 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
         } while (scanner.hasNext());
         return std::move(data_list_read);
     }
+=======
+    RegionDataReadInfoList data_list_read;
+    data_list_read.reserve(scanner.writeMapSize());
+    do
+    {
+        data_list_read.emplace_back(scanner.next());
+    } while (scanner.hasNext());
+    return data_list_read;
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 }
 
 void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true)
@@ -397,7 +404,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     try
     {
-        data_list_read = ReadRegionCommitCache(region);
+        data_list_read = ReadRegionCommitCache(region, true);
         if (!data_list_read)
             return nullptr;
     }
@@ -475,4 +482,122 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     return std::make_unique<RegionPreDecodeBlockData>(std::move(res_block), schema_version, std::move(*data_list_read));
 }
 
+<<<<<<< HEAD
+=======
+std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
+AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
+{
+    TableLockHolder drop_lock = nullptr;
+    std::shared_ptr<StorageDeltaMerge> dm_storage;
+    DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
+
+    auto table_id = region->getMappedTableID();
+    LOG_FMT_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
+    auto context = tmt.getContext();
+    const auto atomic_get = [&](bool force_decode) -> bool {
+        auto storage = tmt.getStorages().get(table_id);
+        if (storage == nullptr)
+        {
+            if (!force_decode)
+                return false;
+            if (storage == nullptr) // Table must have just been GC-ed
+                return true;
+        }
+        // Get a structure read lock. It will throw exception if the table has been dropped,
+        // the caller should handle this situation.
+        auto table_lock = storage->lockStructureForShare(getThreadName());
+        dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        // only dt storage engine support `getSchemaSnapshotAndBlockForDecoding`, other engine will throw exception
+        std::tie(schema_snapshot, std::ignore) = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
+        std::tie(std::ignore, drop_lock) = std::move(table_lock).release();
+        return true;
+    };
+
+    if (!atomic_get(false))
+    {
+        GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
+        tmt.getSchemaSyncer()->syncSchemas(context);
+
+        if (!atomic_get(true))
+            throw Exception("Get " + region->toString() + " belonging table " + DB::toString(table_id) + " is_command_handle fail",
+                            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return {std::move(drop_lock), std::move(dm_storage), std::move(schema_snapshot)};
+}
+
+static Block sortColumnsBySchemaSnap(Block && ori, const DM::ColumnDefines & schema)
+{
+#ifndef NDEBUG
+    // Some trival check to ensure the input is legal
+    if (ori.columns() != schema.size())
+    {
+        throw Exception("Try to sortColumnsBySchemaSnap with different column size [block_columns=" + DB::toString(ori.columns())
+                        + "] [schema_columns=" + DB::toString(schema.size()) + "]");
+    }
+#endif
+
+    std::map<DB::ColumnID, size_t> index_by_cid;
+    for (size_t i = 0; i < ori.columns(); ++i)
+    {
+        const ColumnWithTypeAndName & c = ori.getByPosition(i);
+        index_by_cid[c.column_id] = i;
+    }
+
+    Block res;
+    for (const auto & cd : schema)
+    {
+        res.insert(ori.getByPosition(index_by_cid[cd.id]));
+    }
+#ifndef NDEBUG
+    assertBlocksHaveEqualStructure(res, DM::toEmptyBlock(schema), "sortColumnsBySchemaSnap");
+#endif
+
+    return res;
+}
+
+/// Decode region data into block and belonging schema snapshot, remove committed data from `region`
+/// The return value is a block that store the committed data scanned and removed from `region`.
+/// The columns of returned block is sorted by `schema_snap`.
+Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
+                                   const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
+                                   Timestamp gc_safepoint,
+                                   bool force_decode,
+                                   TMTContext & /* */)
+{
+    // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
+    // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
+    fiu_do_on(FailPoints::force_set_safepoint_when_decode_block,
+              { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
+    region->tryCompactionFilter(gc_safepoint);
+
+    std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
+
+    Block res_block;
+    // No committed data, just return
+    if (!data_list_read)
+        return res_block;
+
+    {
+        Stopwatch watch;
+        {
+            // Compare schema_snap with current schema, throw exception if changed.
+            auto reader = RegionBlockReader(schema_snap);
+            res_block = createBlockSortByColumnID(schema_snap);
+            if (unlikely(!reader.read(res_block, *data_list_read, force_decode)))
+                throw Exception("RegionBlockReader decode error", ErrorCodes::REGION_DATA_SCHEMA_UPDATED);
+        }
+
+        GET_METRIC(tiflash_raft_write_data_to_storage_duration_seconds, type_decode).Observe(watch.elapsedSeconds());
+    }
+
+    res_block = sortColumnsBySchemaSnap(std::move(res_block), *(schema_snap->column_defines));
+
+    // Remove committed data
+    RemoveRegionCommitCache(region, *data_list_read);
+
+    return res_block;
+}
+
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 } // namespace DB

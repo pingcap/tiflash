@@ -14,6 +14,11 @@
 #include <Storages/Transaction/RegionDataMover.h>
 #include <Storages/Transaction/SSTReader.h>
 #include <Storages/Transaction/TMTContext.h>
+<<<<<<< HEAD
+=======
+#include <Storages/Transaction/Types.h>
+#include <TiDB/Schema/SchemaSyncer.h>
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 
 #include <ext/scope_guard.h>
 
@@ -235,8 +240,30 @@ void KVStore::onSnapshot(const RegionPtrWithBlock & new_region_wrap, RegionPtr o
     }
 }
 
+<<<<<<< HEAD
 
 extern RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr &, Context &);
+=======
+std::vector<UInt64> KVStore::preHandleSnapshotToFiles(
+    RegionPtr new_region,
+    const SSTViewVec snaps,
+    uint64_t index,
+    uint64_t term,
+    TMTContext & tmt)
+{
+    std::vector<UInt64> ingest_ids;
+    try
+    {
+        ingest_ids = preHandleSSTsToDTFiles(new_region, snaps, index, term, DM::FileConvertJobType::ApplySnapshot, tmt);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
+        e.rethrow();
+    }
+    return ingest_ids;
+}
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 
 RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, const SSTViewVec snaps, TMTContext & tmt)
 {
@@ -257,6 +284,12 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
     SCOPE_EXIT(
         { GET_METRIC(metrics, tiflash_raft_command_duration_seconds, type_apply_snapshot_predecode).Observe(watch.elapsedSeconds()); });
 
+<<<<<<< HEAD
+=======
+    PageIds generated_ingest_ids;
+    TableID physical_table_id = InvalidTableID;
+    while (true)
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
     {
         LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " with " << snaps.len << " TiKV sst files");
         // Iterator over all SST files and insert key-values into `new_region`
@@ -274,12 +307,44 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
                 ++kv_size;
                 sst_reader.next();
             }
+            physical_table_id = storage->getTableInfo().id;
 
+<<<<<<< HEAD
             LOG_INFO(log,
                 "Decode " << std::string_view(snapshot.path.data, snapshot.path.len) << " got [cf: " << CFToName(snapshot.type)
                           << ", kv size: " << kv_size << "]");
             // Note that number of keys in different cf will be aggregated into one metrics
             GET_METRIC(metrics, tiflash_raft_process_keys, type_apply_snapshot).Increment(kv_size);
+=======
+            // Read from SSTs and refine the boundary of blocks output to DTFiles
+            auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
+                new_region,
+                snaps,
+                proxy_helper,
+                schema_snap,
+                gc_safepoint,
+                force_decode,
+                tmt,
+                expected_block_size);
+            auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
+            stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
+                bounded_stream,
+                storage,
+                schema_snap,
+                snapshot_apply_method,
+                job_type,
+                /* split_after_rows */ 0,
+                /* split_after_size */ 0,
+                tmt.getContext());
+
+            stream->writePrefix();
+            stream->write();
+            stream->writeSuffix();
+            generated_ingest_ids = stream->ingestIds();
+
+            (void)table_drop_lock; // the table should not be dropped during ingesting file
+            break;
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
         }
         {
             LOG_INFO(log, "Start to pre-decode " << new_region->toString() << " into block");
@@ -287,14 +352,26 @@ RegionPreDecodeBlockDataPtr KVStore::preHandleSnapshot(RegionPtr new_region, con
             if (block_cache)
                 LOG_INFO(log, "Got pre-decode block cache"; block_cache->toString(oss_internal_rare));
             else
+<<<<<<< HEAD
                 LOG_INFO(log, "Got empty pre-decode block cache");
 
             cache = std::move(block_cache);
+=======
+            {
+                // Other unrecoverable error, throw
+                e.addMessage(fmt::format("physical_table_id={}", physical_table_id));
+                throw;
+            }
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
         }
         LOG_INFO(log, "Pre-handle snapshot " << new_region->toString(false) << " cost " << watch.elapsedMilliseconds() << "ms");
     }
 
+<<<<<<< HEAD
     return cache;
+=======
+    return generated_ingest_ids;
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 }
 
 void KVStore::handlePreApplySnapshot(const RegionPtrWithBlock & new_region, TMTContext & tmt)
@@ -402,4 +479,70 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     }
 }
 
+<<<<<<< HEAD
+=======
+RegionPtr KVStore::handleIngestSSTByDTFile(const RegionPtr & region, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
+{
+    if (index <= region->appliedIndex())
+        return nullptr;
+
+    // Create a tmp region to store uncommitted data
+    RegionPtr tmp_region;
+    {
+        auto meta_region = region->getMetaRegion();
+        auto meta_snap = region->dumpRegionMetaSnapshot();
+        auto peer_id = meta_snap.peer.id();
+        tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term);
+    }
+
+    // Decode the KV pairs in ingesting SST into DTFiles
+    PageIds ingest_ids;
+    try
+    {
+        ingest_ids = preHandleSSTsToDTFiles(tmp_region, snaps, index, term, DM::FileConvertJobType::IngestSST, tmt);
+    }
+    catch (DB::Exception & e)
+    {
+        e.addMessage(fmt::format("(while handleIngestSST region_id={}, index={}, term={})", tmp_region->id(), index, term));
+        e.rethrow();
+    }
+
+    // If `ingest_ids` is empty, ingest SST won't write delete_range for ingest region, it is safe to
+    // ignore the step of calling `ingestFiles`
+    if (!ingest_ids.empty())
+    {
+        auto table_id = region->getMappedTableID();
+        if (auto storage = tmt.getStorages().get(table_id); storage)
+        {
+            // Ingest DTFiles into DeltaMerge storage
+            auto & context = tmt.getContext();
+            try
+            {
+                // Acquire `drop_lock` so that no other threads can drop the storage. `alter_lock` is not required.
+                auto table_lock = storage->lockForShare(getThreadName());
+                auto key_range = DM::RowKeyRange::fromRegionRange(
+                    region->getRange(),
+                    table_id,
+                    storage->isCommonHandle(),
+                    storage->getRowKeyColumnSize());
+                // Call `ingestFiles` to ingest external DTFiles.
+                // Note that ingest sst won't remove the data in the key range
+                auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+                dm_storage->ingestFiles(key_range, ingest_ids, /*clear_data_in_range=*/false, context.getSettingsRef());
+            }
+            catch (DB::Exception & e)
+            {
+                // We can ignore if storage is dropped.
+                if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
+                    return nullptr;
+                else
+                    throw;
+            }
+        }
+    }
+
+    return tmp_region;
+}
+
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 } // namespace DB
