@@ -1357,7 +1357,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
             // Proxy shall replay from handle 35.
-            r1->replay();
+            proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, kvr1->appliedIndex());
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
             proxy_instance->normalWrite(kvs, ctx.getTMTContext(), cond, region_id, {36}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);
