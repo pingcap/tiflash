@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -36,12 +37,14 @@ namespace DB
 namespace DM
 {
 
-SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
+SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at, SegmentSplitMode opt_split_mode)
 {
     LOG_FMT_INFO(
         log,
-        "Split - Begin, is_foreground={} safe_point={} segment={}",
-        is_foreground,
+        "Split - Begin, mode={} reason={}{} safe_point={} segment={}",
+        magic_enum::enum_name(opt_split_mode),
+        magic_enum::enum_name(reason),
+        (opt_split_at.has_value() ? fmt::format(" force_split_at={}", opt_split_at->toDebugString()) : ""),
         dm_context.min_version,
         segment->info());
 
@@ -74,28 +77,62 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    if (is_foreground)
+    switch (reason)
+    {
+    case SegmentSplitReason::ForegroundWrite:
         GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
-    else
-        GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+        break;
+    case SegmentSplitReason::Background:
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_bg).Increment();
+        break;
+    case SegmentSplitReason::IngestBySplit:
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_ingest).Increment();
+        break;
+    }
+
     Stopwatch watch_seg_split;
     SCOPE_EXIT({
-        if (is_foreground)
+        switch (reason)
+        {
+        case SegmentSplitReason::ForegroundWrite:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds());
-        else
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
+            break;
+        case SegmentSplitReason::Background:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_bg).Observe(watch_seg_split.elapsedSeconds());
+            break;
+        case SegmentSplitReason::IngestBySplit:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_ingest).Observe(watch_seg_split.elapsedSeconds());
+            break;
+        }
     });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
+    Segment::SplitMode seg_split_mode;
+    switch (opt_split_mode)
+    {
+    case SegmentSplitMode::Auto:
+        seg_split_mode = Segment::SplitMode::Auto;
+        break;
+    case SegmentSplitMode::Logical:
+        seg_split_mode = Segment::SplitMode::Logical;
+        break;
+    case SegmentSplitMode::Physical:
+        seg_split_mode = Segment::SplitMode::Physical;
+        break;
+    default:
+        seg_split_mode = Segment::SplitMode::Auto;
+        break;
+    }
+
     auto range = segment->getRowKeyRange();
-    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs);
+    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, opt_split_at, seg_split_mode, wbs);
 
     if (!split_info_opt.has_value())
     {
         // Likely we can not find an appropriate split point for this segment later, forbid the split until this segment get updated through applying delta-merge. Or it will slow down the write a lot.
         segment->forbidSplit();
-        LOG_FMT_WARNING(log, "Split - Give up segmentSplit and forbid later split because of prepare split failed, segment={}", segment->simpleInfo());
+        LOG_FMT_WARNING(log, "Split - Give up segmentSplit and forbid later auto split because prepare split failed, segment={}", segment->simpleInfo());
         return {};
     }
 
@@ -193,6 +230,8 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
             if (seg->flushCache(dm_context))
                 break;
+
+            SYNC_FOR("before_DeltaMergeStore::segmentMerge|retry_flush");
 
             // Else: retry. Flush could fail. Typical cases:
             // #1. The segment is abandoned (due to an update is finished)

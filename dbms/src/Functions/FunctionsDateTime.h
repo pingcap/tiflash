@@ -899,7 +899,7 @@ struct AddSecondsImpl
     // TODO: need do these in vector mode in the future
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
-        Field packed_uint_value = parseMyDateTime(str, 6, true, false);
+        Field packed_uint_value = parseMyDateTime(str, 6, checkTimeValid);
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
         UInt64 result = AddSecondsImpl::execute(packed_uint, delta, time_zone);
         MyDateTime myDateTime(result);
@@ -983,7 +983,7 @@ struct AddDaysImpl
 
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
-        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, true, false);
+        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, checkTimeValid);
         Field packed_uint_value = value_and_is_date.first;
         bool is_date = value_and_is_date.second;
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
@@ -1051,7 +1051,7 @@ struct AddMonthsImpl
 
     static inline String execute(String str, Int64 delta, const DateLUTImpl & time_zone)
     {
-        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, true, false);
+        auto value_and_is_date = parseMyDateTimeAndJudgeIsDate(str, 6, checkTimeValid);
         Field packed_uint_value = value_and_is_date.first;
         bool is_date = value_and_is_date.second;
         UInt64 packed_uint = packed_uint_value.template safeGet<UInt64>();
