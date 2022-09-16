@@ -19,7 +19,7 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
+#include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <iostream>
 
 namespace DB
@@ -119,11 +119,6 @@ try
     const uint32_t fine_grained_shuffle_stream_count = 8;
     const Int64 fine_grained_shuffle_batch_size = 4096;
 
-    // Set these to 1, because when fine grained shuffle is enabled,
-    // batchWriteFineGrainedShuffle() only check fine_grained_shuffle_batch_size.
-    // records_per_chunk and batch_send_min_limit are useless.
-    const Int64 records_per_chunk = 1;
-    const Int64 batch_send_min_limit = 1;
     const bool should_send_exec_summary_at_last = true;
 
     // 1. Build Block.
@@ -146,13 +141,10 @@ try
     auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>, /*enable_fine_grained_shuffle=*/true>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
-        tipb::ExchangeType::Hash,
-        records_per_chunk,
-        batch_send_min_limit,
         should_send_exec_summary_at_last,
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,

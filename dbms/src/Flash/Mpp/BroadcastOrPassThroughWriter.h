@@ -20,20 +20,20 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
-#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/logger_useful.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 
 namespace DB
 {
-/// Serializes the stream of blocks and sends them to TiDB with different serialization paths.
+/// Serializes the stream of blocks and sends them to TiDB or TiFlash with different serialization paths.
 /// When sending data to TiDB, blocks with extra info are written into tipb::SelectResponse, then the whole tipb::SelectResponse is further serialized into mpp::MPPDataPacket.data.
+/// Differently when sending data to TiFlash, blocks with only tuples are directly serialized into mpp::MPPDataPacket.chunks, but for the last block, its extra info (like execution summaries) is written into tipb::SelectResponse, then further serialized into mpp::MPPDataPacket.data.
 template <class StreamWriterPtr>
-class StreamingDAGResponseWriter : public DAGResponseWriter
+class BroadcastOrPassThroughWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(
+    BroadcastOrPassThroughWriter(
         StreamWriterPtr writer_,
-        Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
@@ -48,7 +48,7 @@ private:
     void encodeThenWriteBlocks(const std::vector<Block> & input_blocks);
 
     Int64 batch_send_min_limit;
-    bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
+    bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
