@@ -92,7 +92,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)                   \
-    M(unblock_query_init_after_write)
+    M(unblock_query_init_after_write)                        \
+    M(exception_in_merged_task_init)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
