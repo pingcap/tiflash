@@ -72,7 +72,7 @@ ALWAYS_INLINE static inline bool NeedCollation(const IColumn * column, const Sor
     M(Int64)              \
     M(StringBinPadding)   \
     M(StringBinNoPadding) \
-    M(StringWithCollatorGenetic)
+    M(StringWithCollatorGeneric)
 
 #define CONCAT(x, y) x##y
 
@@ -141,7 +141,7 @@ using ColumnCompareUInt64 = ColumnVecCompare<UInt64>;
 using ColumnCompareInt64 = ColumnVecCompare<Int64>;
 using ColumnCompareStringBinPadding = ColumnStringCompare<FastPathType::StringBinPadding>;
 using ColumnCompareStringBinNoPadding = ColumnStringCompare<FastPathType::StringBinNoPadding>;
-using ColumnCompareStringWithCollatorGenetic = ColumnStringCompare<FastPathType::StringWithCollatorGenetic>;
+using ColumnCompareStringWithCollatorGeneric = ColumnStringCompare<FastPathType::StringWithCollatorGeneric>;
 
 // only for uint64, int64, string
 template <typename ColumnCmpA, typename ColumnCmpB>
@@ -240,7 +240,7 @@ struct CollatorDesc : boost::noncopyable
                         }
                         default:
                         {
-                            addFastPathType(FastPathType::StringWithCollatorGenetic);
+                            addFastPathType(FastPathType::StringWithCollatorGeneric);
                             break;
                         }
                         }
