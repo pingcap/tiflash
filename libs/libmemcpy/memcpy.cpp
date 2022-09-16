@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#ifndef NO_TIFLASH_INTERNAL_MEMCPY
+
 #if defined(__SSE2__)
 
 #include <common/sse2_memcpy.h>
@@ -22,5 +24,7 @@ extern "C" __attribute__((visibility("default"))) void * memcpy(void * __restric
 {
     return sse2_inline_memcpy(dst, src, size);
 }
+
+#endif
 
 #endif
