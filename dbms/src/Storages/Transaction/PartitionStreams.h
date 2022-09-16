@@ -24,6 +24,7 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
+class TMTContext;
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
