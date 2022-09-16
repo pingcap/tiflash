@@ -169,12 +169,13 @@ void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_
     const ColumnFixedString & src_concrete = static_cast<const ColumnFixedString &>(src);
 
     if (start + length > src_concrete.size())
-        throw Exception("Parameters start = "
-                            + toString(start) + ", length = "
-                            + toString(length) + " are out of bound in ColumnFixedString::insertRangeFrom method"
-                                                 " (size() = "
-                            + toString(src_concrete.size()) + ").",
-                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception(
+            fmt::format(
+                "Parameters are out of bound in ColumnFixedString::insertRangeFrom method, start={}, length={}, src.size()={}",
+                start,
+                length,
+                src_concrete.size()),
+            ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = chars.size();
     chars.resize(old_size + length * n);
