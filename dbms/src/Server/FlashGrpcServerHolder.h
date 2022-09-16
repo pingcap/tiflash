@@ -16,7 +16,7 @@
 #include <Common/BackgroundTask.h>
 #include <Common/ThreadManager.h>
 #include <Common/assert_cast.h>
-#include <Debug/MockExecutor/AstToExecutor.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>

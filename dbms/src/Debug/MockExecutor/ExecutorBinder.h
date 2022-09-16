@@ -16,7 +16,7 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/MockComputeServerManager.h>
-#include <Debug/MockExecutor/AstToExecutor.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockExecutor/AstToExecutorUtils.h>
 
 
