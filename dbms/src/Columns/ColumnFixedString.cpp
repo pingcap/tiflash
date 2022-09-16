@@ -142,10 +142,19 @@ void ColumnFixedString::insertRangeFrom(const IColumn & src, size_t start, size_
     const ColumnFixedString & src_concrete = static_cast<const ColumnFixedString &>(src);
 
     if (start + length > src_concrete.size())
+<<<<<<< HEAD
         throw Exception("Parameters start = "
             + toString(start) + ", length = "
             + toString(length) + " are out of bound in ColumnFixedString::insertRangeFrom method"
             " (size() = " + toString(src_concrete.size()) + ").",
+=======
+        throw Exception(
+            fmt::format(
+                "Parameters are out of bound in ColumnFixedString::insertRangeFrom method, start={}, length={}, src.size()={}",
+                start,
+                length,
+                src_concrete.size()),
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
             ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t old_size = chars.size();

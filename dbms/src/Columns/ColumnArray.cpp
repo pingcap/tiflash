@@ -368,7 +368,16 @@ void ColumnArray::insertRangeFrom(const IColumn & src, size_t start, size_t leng
     const ColumnArray & src_concrete = static_cast<const ColumnArray &>(src);
 
     if (start + length > src_concrete.getOffsets().size())
+<<<<<<< HEAD
         throw Exception("Parameter out of bound in ColumnArray::insertRangeFrom method.",
+=======
+        throw Exception(
+            fmt::format(
+                "Parameters are out of bound in ColumnArray::insertRangeFrom method, start={}, length={}, src.size()={}",
+                start,
+                length,
+                src_concrete.getOffsets().size()),
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
             ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t nested_offset = src_concrete.offsetAt(start);
