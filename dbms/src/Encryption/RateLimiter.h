@@ -93,7 +93,10 @@ public:
     void request(Int64 bytes);
 
     // just for test purpose
-    inline UInt64 getTotalBytesThrough() const { return alloc_bytes; }
+    inline UInt64 getTotalBytesThrough() const
+    {
+        return available_balance < 0 ? alloc_bytes - available_balance : alloc_bytes;
+    }
 
     LimiterStat getStat();
 
@@ -153,6 +156,7 @@ protected:
 
     Stopwatch stat_stop_watch;
     UInt64 alloc_bytes;
+    LoggerPtr log;
 };
 
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
@@ -194,7 +198,7 @@ private:
 
     std::function<Int64()> get_read_bytes;
     Int64 last_stat_bytes;
-    LoggerPtr log;
+    std::chrono::time_point<std::chrono::system_clock> last_refill_time;
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
