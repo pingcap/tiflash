@@ -38,6 +38,7 @@
 
 #include <chrono>
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 #include <map>
 
 namespace DB
@@ -53,21 +54,6 @@ extern const char exception_during_mpp_write_err_to_tunnel[];
 extern const char force_no_local_region_for_mpp_task[];
 extern const char random_task_lifecycle_failpoint[];
 } // namespace FailPoints
-
-String abortTypeToString(AbortType abort_type)
-{
-    String ret;
-    switch (abort_type)
-    {
-    case AbortType::ONCANCELLATION:
-        ret = "ONCANCELLATION";
-        break;
-    case AbortType::ONERROR:
-        ret = "ONERROR";
-        break;
-    }
-    return ret;
-}
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : context(context_)
@@ -201,7 +187,8 @@ void MPPTask::initExchangeReceivers()
                 context->getMaxStreams(),
                 log->identifier(),
                 executor_id,
-                executor.fine_grained_shuffle_stream_count());
+                executor.fine_grained_shuffle_stream_count(),
+                true);
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
@@ -412,7 +399,11 @@ void MPPTask::runImpl()
         while (from->read())
             continue;
 
+        // finish DataStream
         from->readSuffix();
+        // finish receiver
+        receiver_set->close();
+        // finish MPPTunnel
         finishWrite();
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
@@ -433,7 +424,7 @@ void MPPTask::runImpl()
         if (switchStatus(RUNNING, FINISHED))
             LOG_INFO(log, "finish task");
         else
-            LOG_FMT_WARNING(log, "finish task which is in {} state", taskStatusToString(status));
+            LOG_FMT_WARNING(log, "finish task which is in {} state", magic_enum::enum_name(status.load()));
         if (status == FINISHED)
         {
             // todo when error happens, should try to update the metrics if it is available
@@ -497,7 +488,7 @@ void MPPTask::handleError(const String & error_msg)
 
 void MPPTask::abort(const String & message, AbortType abort_type)
 {
-    String abort_type_string = abortTypeToString(abort_type);
+    auto abort_type_string = magic_enum::enum_name(abort_type);
     TaskStatus next_task_status;
     switch (abort_type)
     {
@@ -514,7 +505,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         auto previous_status = status.load();
         if (previous_status == FINISHED || previous_status == CANCELLED || previous_status == FAILED)
         {
-            LOG_FMT_WARNING(log, "task already in {} state", taskStatusToString(previous_status));
+            LOG_FMT_WARNING(log, "task already in {} state", magic_enum::enum_name(previous_status));
             return;
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))

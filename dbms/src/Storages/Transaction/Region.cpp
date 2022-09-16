@@ -738,7 +738,7 @@ void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term
         meta.setApplied(index, term);
     }
     LOG_FMT_INFO(log,
-                 "{} finish to ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
+                 "{} finish ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
                  this->toString(false),
                  data.write_cf.getSize(),
                  data.default_cf.getSize(),

@@ -55,7 +55,7 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::condition_variable cv;
 
@@ -65,6 +65,8 @@ public:
     ~MPPTaskManager() = default;
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
+
+    MPPQueryTaskSetPtr getQueryTaskSet(UInt64 query_id);
 
     std::pair<bool, String> registerTask(MPPTaskPtr task);
 

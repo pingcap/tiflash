@@ -91,9 +91,9 @@
 #include <memory>
 
 #if Poco_NetSSL_FOUND
+#include <Common/grpcpp.h>
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
-#include <grpc++/grpc++.h>
 #endif
 
 #if USE_JEMALLOC
@@ -1158,9 +1158,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+    DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
-    DM::DMFileReaderPool::instance();
 
     {
         // Note that this must do before initialize schema sync service.
@@ -1222,6 +1223,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
           *  table engines could use Context on destroy.
           */
         LOG_FMT_INFO(log, "Shutting down storages.");
+        // `SegmentReader` threads may hold a segment and its delta-index for read.
+        // `Context::shutdown()` will destroy `DeltaIndexManager`.
+        // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
+        DB::DM::SegmentReaderPoolManager::instance().stop();
         global_context->shutdown();
         LOG_FMT_DEBUG(log, "Shutted down storages.");
     });

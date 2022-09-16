@@ -103,27 +103,33 @@ namespace DB
         F(type_raft_wait_index_duration, {{"type", "tmt_raft_wait_index_duration"}}, ExpBuckets{0.001, 2, 20}))                           \
     M(tiflash_syncing_data_freshness, "The freshness of tiflash data with tikv data", Histogram,                                          \
         F(type_syncing_data_freshness, {{"type", "data_freshness"}}, ExpBuckets{0.001, 2, 20}))                                           \
-    M(tiflash_storage_write_amplification, "The data write amplification in storage engine", Gauge)                                       \
     M(tiflash_storage_read_tasks_count, "Total number of storage engine read tasks", Counter)                                             \
     M(tiflash_storage_command_count, "Total number of storage's command, such as delete range / shutdown /startup", Counter,              \
         F(type_delete_range, {"type", "delete_range"}), F(type_ingest, {"type", "ingest"}))                                               \
-    M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter, F(type_delta_merge, {"type", "delta_merge"}),         \
-        F(type_delta_merge_fg, {"type", "delta_merge_fg"}),                                                                               \
-        F(type_delta_merge_fg_rpc, {"type", "delta_merge_fg_rpc"}),                                                                       \
+    M(tiflash_storage_subtask_count, "Total number of storage's sub task", Counter,                                                       \
+        F(type_delta_merge_bg, {"type", "delta_merge_bg"}),                                                                               \
         F(type_delta_merge_bg_gc, {"type", "delta_merge_bg_gc"}),                                                                         \
-        F(type_delta_compact, {"type", "delta_compact"}), F(type_delta_flush, {"type", "delta_flush"}),                                   \
-        F(type_seg_split, {"type", "seg_split"}), F(type_seg_split_fg, {"type", "seg_split_fg"}),                                         \
-        F(type_seg_merge, {"type", "seg_merge"}), F(type_place_index_update, {"type", "place_index_update"}))                             \
+        F(type_delta_merge_fg, {"type", "delta_merge_fg"}),                                                                               \
+        F(type_delta_merge_manual, {"type", "delta_merge_manual"}),                                                                       \
+        F(type_delta_compact, {"type", "delta_compact"}),                                                                                 \
+        F(type_delta_flush, {"type", "delta_flush"}),                                                                                     \
+        F(type_seg_split_bg, {"type", "seg_split_bg"}),                                                                                   \
+        F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                   \
+        F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                           \
+        F(type_seg_merge, {"type", "seg_merge"}), F(type_seg_merge_fg, {"type", "seg_merge_fg"}),                                         \
+        F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
-        F(type_delta_merge, {{"type", "delta_merge"}}, ExpBuckets{0.001, 2, 20}),                                                         \
-        F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
-        F(type_delta_merge_fg_rpc, {{"type", "delta_merge_fg_rpc"}}, ExpBuckets{0.001, 2, 20}),                                           \
+        F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
         F(type_delta_merge_bg_gc, {{"type", "delta_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                             \
+        F(type_delta_merge_fg, {{"type", "delta_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
+        F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.001, 2, 20}),                                           \
         F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.001, 2, 20}),                                                     \
         F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.001, 2, 20}),                                                         \
-        F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+        F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                               \
         F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_seg_merge_fg, {{"type", "seg_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                           \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
@@ -137,9 +143,12 @@ namespace DB
         F(type_delta_merge, {"type", "delta_merge"}),                                                             /**/                    \
         F(type_split, {"type", "split"}),                                                                         /**/                    \
         F(type_merge, {"type", "merge"}))                                                                         /**/                    \
-    M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram, /**/                    \
-        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}),                                             /**/                    \
-        F(type_delete_range, {{"type", "delete_range"}}, ExpBuckets{0.001, 2, 20}))                               /**/                    \
+    M(tiflash_storage_write_stall_duration_seconds, "The write stall duration of storage, in seconds", Histogram,                         \
+        F(type_write, {{"type", "write"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_delta_merge_by_write, {{"type", "delta_merge_by_write"}}, ExpBuckets{0.001, 2, 20}),                                       \
+        F(type_delta_merge_by_delete_range, {{"type", "delta_merge_by_delete_range"}}, ExpBuckets{0.001, 2, 20}),                         \
+        F(type_flush, {{"type", "flush"}}, ExpBuckets{0.001, 2, 20}),                                                                     \
+        F(type_split, {{"type", "split"}}, ExpBuckets{0.001, 2, 20}))                                                                     \
     M(tiflash_storage_page_gc_count, "Total number of page's gc execution.", Counter,                                                     \
         F(type_exec, {"type", "exec"}),                                                                                                   \
         F(type_low_write, {"type", "low_write"}),                                                                                         \

@@ -66,6 +66,7 @@ add_headers_and_sources(dbms src/DataStreams)
 add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
+add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
@@ -97,6 +98,7 @@ add_headers_and_sources(dbms src/Storages/Page/V3)
 add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
 add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
 add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
+add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
@@ -191,6 +193,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
     cpptoml
+    magic_enum
     libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
@@ -302,6 +305,7 @@ if (ENABLE_TESTS)
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
+    target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
     target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib)
 
@@ -362,7 +366,11 @@ endif ()
 
 # dbms
 add_target_pch("pch-dbms.h" dbms flash_service)
-add_target_pch("pch-common.h" clickhouse_common_io clickhouse_functions clickhouse_aggregate_functions)
+add_target_pch("pch-common.h" clickhouse_common_io clickhouse_aggregate_functions)
+
+# disable PCH for `clickhouse_functions` temporarily because some source files need to use specific cxx flags
+# add_target_pch("pch-common.h" clickhouse_functions)
+
 add_target_pch("pch-common.h" clickhouse_parsers clickhouse_storages_system dt-workload-lib clickhouse-server-lib)
 
 # common

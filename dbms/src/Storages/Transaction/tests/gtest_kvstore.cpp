@@ -1593,20 +1593,6 @@ TEST_F(RegionKVStoreTest, Basic)
     {
         test_mergeresult();
     }
-    {
-        raft_cmdpb::AdminResponse response;
-        response.mutable_split()->mutable_left()->add_peers()->set_id(123);
-        RegionState region_state;
-        region_state.getMutRegion().add_peers()->set_id(456);
-        try
-        {
-            CheckRegionForMergeCmd(response, region_state);
-        }
-        catch (Exception & e)
-        {
-            ASSERT_EQ(e.message(), "CheckRegionForMergeCmd: current region meta: peers { id: 456 }, expect: peers { id: 123 }");
-        }
-    }
 }
 
 } // namespace tests
