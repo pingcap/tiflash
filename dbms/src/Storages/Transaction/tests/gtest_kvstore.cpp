@@ -1356,7 +1356,6 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
-            auto term = r1->getLatestCommitTerm();
             // Proxy shall replay from handle 35.
             r1->replay();
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
