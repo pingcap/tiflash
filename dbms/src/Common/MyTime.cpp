@@ -745,7 +745,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
                 return {Field(), is_date};
             }
             std::tie(year, month, day, hour, minute, second) = std::tuple(date_time.year, date_time.month, date_time.day, date_time.hour, date_time.minute, date_time.second);
-            if (seps[0] == "0" || (l >= 9 && l <= 14))
+            if (l >= 9 && l <= 14)
             {
                 hhmmss = true;
             }
@@ -818,10 +818,6 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         if (l == 5 || l == 6 || l == 8)
         {
-            if (isFloat)
-            {
-                break;
-            }
             // YYMMDD or YYYYMMDD
             // We must handle float => string => datetime, the difference is that fractional
             // part of float type is discarded directly, while fractional part of string type
