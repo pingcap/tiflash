@@ -160,6 +160,8 @@ void MockProxyRegion::updateAppliedIndex(uint64_t index)
 {
     auto _ = genLockGuard();
     this->apply.set_applied_index(index);
+    // TODO We should remove (0, index] here, it is enough to remove exactly index now.
+    this->commands.erase(index);
 }
 
 uint64_t MockProxyRegion::getLatestAppliedIndex()
@@ -187,6 +189,11 @@ void MockProxyRegion::setSate(raft_serverpb::RegionLocalState s)
 {
     auto _ = genLockGuard();
     this->state = s;
+}
+
+void MockProxyRegion::replay()
+{
+    auto _ = genLockGuard();
 }
 
 MockProxyRegion::MockProxyRegion(uint64_t id_)
@@ -364,6 +371,14 @@ void MockRaftStoreProxy::normalWrite(
         term = region->getLatestCommitTerm();
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
+        // We record them, as persisted raft log, for potential recovery.
+        region->commands[index] = {
+            term,
+            keys,
+            vals,
+            cmd_types,
+            cmd_cf,
+        };
     }
     normalWrite(kvs, tmt, cond, region_id, std::move(keys), std::move(vals), std::move(cmd_types), std::move(cmd_cf), index, term);
 }

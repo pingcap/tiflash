@@ -35,11 +35,21 @@ struct MockProxyRegion : MutexLockWrap
     uint64_t getLatestCommitIndex();
     void updateCommitIndex(uint64_t index);
     void setSate(raft_serverpb::RegionLocalState);
+    void replay();
     explicit MockProxyRegion(uint64_t id);
+
+    struct CachedCommand {
+        uint64_t term;
+        std::vector<HandleID> keys;
+        std::vector<std::string> vals;
+        std::vector<WriteCmdType> cmd_types;
+        std::vector<ColumnFamilyType> cmd_cf;
+    };
 
     const uint64_t id;
     raft_serverpb::RegionLocalState state;
     raft_serverpb::RaftApplyState apply;
+    std::map<uint64_t, CachedCommand> commands;
 };
 
 using MockProxyRegionPtr = std::shared_ptr<MockProxyRegion>;
@@ -141,6 +151,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<ColumnFamilyType> && cmd_cf,
         uint64_t index,
         uint64_t term);
+
 
     void compactLog(UInt64 region_id, UInt64 index);
 
