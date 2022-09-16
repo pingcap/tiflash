@@ -12,19 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Core/Field.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/Transaction/DatumCodec.h>
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
 #include <Storages/Transaction/RegionBlockReader.h>
-#include <gtest/gtest.h>
-
-#include "RowCodecTestUtils.h"
+#include <Storages/Transaction/tests/RowCodecTestUtils.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
+#include <common/defines.h>
 
 using TableInfo = TiDB::TableInfo;
 
 namespace DB::tests
 {
 using ColumnIDs = std::vector<ColumnID>;
-class RegionBlockReaderTestFixture : public ::testing::Test
+class RegionBlockReaderTest : public ::testing::Test
 {
+public:
+    RegionBlockReaderTest()
+        : logger(Logger::get("RegionBlockReaderTest"))
+    {}
+
 protected:
     Int64 handle_value_ = 100;
     UInt8 del_mark_value_ = 0;
@@ -33,6 +42,8 @@ protected:
 
     RegionDataReadInfoList data_list_read_;
     std::unordered_map<ColumnID, Field> fields_map_;
+
+    LoggerPtr logger;
 
     enum RowEncodeVersion
     {
@@ -49,31 +60,43 @@ protected:
 
     void TearDown() override {}
 
-    void encodeColumns(TableInfo & table_info, std::vector<Field> & fields, RowEncodeVersion row_version)
+    void encodeColumns(const TableInfo & table_info, const std::vector<Field> & fields, RowEncodeVersion row_version)
     {
         // for later check
         for (size_t i = 0; i < table_info.columns.size(); i++)
             fields_map_.emplace(table_info.columns[i].id, fields[i]);
 
-        std::vector<Field> value_fields;
-        std::vector<Field> pk_fields;
+        std::vector<Field> value_encode_fields;
+        std::vector<Field> key_encode_fields;
         for (size_t i = 0; i < table_info.columns.size(); i++)
         {
-            if (!table_info.columns[i].hasPriKeyFlag())
-                value_fields.emplace_back(fields[i]);
+            if (table_info.is_common_handle || table_info.pk_is_handle)
+            {
+                if (!table_info.columns[i].hasPriKeyFlag())
+                    value_encode_fields.emplace_back(fields[i]);
+                else
+                    key_encode_fields.emplace_back(fields[i]);
+            }
             else
-                pk_fields.emplace_back(fields[i]);
+            {
+                value_encode_fields.emplace_back(fields[i]);
+            }
         }
 
-        // create PK
+        // create the RawTiDBPK section of encoded key
         WriteBufferFromOwnString pk_buf;
         if (table_info.is_common_handle)
         {
             auto & primary_index_info = table_info.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
+<<<<<<< HEAD
                 size_t pk_offset = primary_index_info.idx_cols[i].offset;
                 EncodeDatum(pk_fields[i], table_info.columns[pk_offset].getCodecFlag(), pk_buf);
+=======
+                auto idx = column_name_columns_index_map[primary_index_info.idx_cols[i].name];
+                EncodeDatum(key_encode_fields[i], table_info.columns[idx].getCodecFlag(), pk_buf);
+>>>>>>> aae88b120d (tests: Fix RegionBlockReaderTest helper functions (#5899))
             }
         }
         else
@@ -81,23 +104,30 @@ protected:
             DB::EncodeInt64(handle_value_, pk_buf);
         }
         RawTiDBPK pk{std::make_shared<String>(pk_buf.releaseStr())};
-        // create value
+
+        // create encoded value
         WriteBufferFromOwnString value_buf;
         if (row_version == RowEncodeVersion::RowV1)
         {
-            encodeRowV1(table_info, value_fields, value_buf);
+            encodeRowV1(table_info, value_encode_fields, value_buf);
         }
         else if (row_version == RowEncodeVersion::RowV2)
         {
-            encodeRowV2(table_info, value_fields, value_buf);
+            encodeRowV2(table_info, value_encode_fields, value_buf);
         }
         else
         {
             throw Exception("Unknown row format " + std::to_string(row_version), ErrorCodes::LOGICAL_ERROR);
         }
+<<<<<<< HEAD
         auto row_value = std::make_shared<const TiKVValue>(std::move(value_buf.str()));
         for (size_t i = 0; i < rows_; i++)
             data_list_read_.emplace_back(pk, del_mark_value_, version_value_, row_value);
+=======
+        auto row_value = std::make_shared<const TiKVValue>(value_buf.releaseStr());
+        for (size_t i = 0; i < rows; i++)
+            data_list_read.emplace_back(pk, del_mark_value, version_value, row_value);
+>>>>>>> aae88b120d (tests: Fix RegionBlockReaderTest helper functions (#5899))
     }
 
     void checkBlock(DecodingStorageSchemaSnapshotConstPtr decoding_schema, const Block & block) const
@@ -107,7 +137,19 @@ protected:
         {
             for (size_t pos = 0; pos < block.columns(); pos++)
             {
+<<<<<<< HEAD
                 auto & column_element = block.getByPosition(pos);
+=======
+                const auto & column_element = block.getByPosition(pos);
+                auto gen_error_log = [&]() {
+                    return fmt::format(
+                        "  when checking column\n    id={}, name={}, nrow={}\n  decoded block is:\n{}\n",
+                        column_element.column_id,
+                        column_element.name,
+                        row,
+                        getColumnsContent(block.getColumnsWithTypeAndName()));
+                };
+>>>>>>> aae88b120d (tests: Fix RegionBlockReaderTest helper functions (#5899))
                 if (row == 0)
                 {
                     ASSERT_EQ(column_element.column->size(), rows_);
@@ -116,15 +158,24 @@ protected:
                 {
                     if (decoding_schema->is_common_handle)
                     {
+<<<<<<< HEAD
                         ASSERT_EQ((*column_element.column)[row], Field(*std::get<0>(data_list_read_[row])));
                     }
                     else
                     {
                         ASSERT_EQ((*column_element.column)[row], Field(handle_value_));
+=======
+                        ASSERT_FIELD_EQ((*column_element.column)[row], Field(*std::get<0>(data_list_read[row]))) << gen_error_log();
+                    }
+                    else
+                    {
+                        ASSERT_FIELD_EQ((*column_element.column)[row], Field(handle_value)) << gen_error_log();
+>>>>>>> aae88b120d (tests: Fix RegionBlockReaderTest helper functions (#5899))
                     }
                 }
                 else if (column_element.name == VERSION_COLUMN_NAME)
                 {
+<<<<<<< HEAD
                     ASSERT_EQ((*column_element.column)[row], Field(version_value_));
                 }
                 else if (column_element.name == TAG_COLUMN_NAME)
@@ -134,6 +185,17 @@ protected:
                 else
                 {
                     ASSERT_EQ((*column_element.column)[row], fields_map_.at(column_element.column_id));
+=======
+                    ASSERT_FIELD_EQ((*column_element.column)[row], Field(version_value)) << gen_error_log();
+                }
+                else if (column_element.name == TAG_COLUMN_NAME)
+                {
+                    ASSERT_FIELD_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value))) << gen_error_log();
+                }
+                else
+                {
+                    ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id)) << gen_error_log();
+>>>>>>> aae88b120d (tests: Fix RegionBlockReaderTest helper functions (#5899))
                 }
             }
         }
@@ -150,10 +212,10 @@ protected:
         return true;
     }
 
-    std::pair<TableInfo, std::vector<Field>> getNormalTableInfoFields(const ColumnIDs & handle_ids, bool is_common_handle) const
+    std::pair<TableInfo, std::vector<Field>> getNormalTableInfoFields(const ColumnIDs & pk_col_ids, bool is_common_handle) const
     {
         return getTableInfoAndFields(
-            handle_ids,
+            pk_col_ids,
             is_common_handle,
             ColumnIDValue(2, handle_value_),
             ColumnIDValue(3, std::numeric_limits<UInt64>::max()),
@@ -237,31 +299,45 @@ protected:
     }
 };
 
-TEST_F(RegionBlockReaderTestFixture, PKIsNotHandle)
+TEST_F(RegionBlockReaderTest, PKIsNotHandle)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    ASSERT_EQ(table_info.is_common_handle, false);
+    ASSERT_EQ(table_info.pk_is_handle, false);
+    ASSERT_FALSE(table_info.getColumnInfo(2).hasPriKeyFlag());
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
 }
 
-TEST_F(RegionBlockReaderTestFixture, PKIsHandle)
+TEST_F(RegionBlockReaderTest, PKIsHandle)
 {
     auto [table_info, fields] = getNormalTableInfoFields({2}, false);
+    ASSERT_EQ(table_info.is_common_handle, false);
+    ASSERT_EQ(table_info.pk_is_handle, true);
+    ASSERT_TRUE(table_info.getColumnInfo(2).hasPriKeyFlag());
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
 }
 
-TEST_F(RegionBlockReaderTestFixture, CommonHandle)
+TEST_F(RegionBlockReaderTest, CommonHandle)
 {
     auto [table_info, fields] = getNormalTableInfoFields({2, 3, 4}, true);
+    ASSERT_EQ(table_info.is_common_handle, true);
+    ASSERT_EQ(table_info.pk_is_handle, false);
+    ASSERT_TRUE(table_info.getColumnInfo(2).hasPriKeyFlag());
+    ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_TRUE(table_info.getColumnInfo(4).hasPriKeyFlag());
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
 }
 
-TEST_F(RegionBlockReaderTestFixture, MissingColumnRowV2)
+TEST_F(RegionBlockReaderTest, MissingColumnRowV2)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
@@ -270,7 +346,7 @@ TEST_F(RegionBlockReaderTestFixture, MissingColumnRowV2)
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
 }
 
-TEST_F(RegionBlockReaderTestFixture, MissingColumnRowV1)
+TEST_F(RegionBlockReaderTest, MissingColumnRowV1)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
@@ -279,7 +355,7 @@ TEST_F(RegionBlockReaderTestFixture, MissingColumnRowV1)
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
 }
 
-TEST_F(RegionBlockReaderTestFixture, ExtraColumnRowV2)
+TEST_F(RegionBlockReaderTest, ExtraColumnRowV2)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
@@ -289,7 +365,7 @@ TEST_F(RegionBlockReaderTestFixture, ExtraColumnRowV2)
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
 }
 
-TEST_F(RegionBlockReaderTestFixture, ExtraColumnRowV1)
+TEST_F(RegionBlockReaderTest, ExtraColumnRowV1)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
@@ -299,7 +375,7 @@ TEST_F(RegionBlockReaderTestFixture, ExtraColumnRowV1)
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
 }
 
-TEST_F(RegionBlockReaderTestFixture, OverflowColumnRowV2)
+TEST_F(RegionBlockReaderTest, OverflowColumnRowV2)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
@@ -312,7 +388,7 @@ TEST_F(RegionBlockReaderTestFixture, OverflowColumnRowV2)
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
 }
 
-TEST_F(RegionBlockReaderTestFixture, OverflowColumnRowV1)
+TEST_F(RegionBlockReaderTest, OverflowColumnRowV1)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
@@ -325,17 +401,24 @@ TEST_F(RegionBlockReaderTestFixture, OverflowColumnRowV1)
     ASSERT_TRUE(decodeAndCheckColumns(decoding_schema, true));
 }
 
-TEST_F(RegionBlockReaderTestFixture, InvalidNULLRowV2)
+TEST_F(RegionBlockReaderTest, InvalidNULLRowV2)
+try
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    ASSERT_FALSE(table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is nullable
+
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+
     auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    ASSERT_TRUE(new_table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is not null
+
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
 }
+CATCH
 
-TEST_F(RegionBlockReaderTestFixture, InvalidNULLRowV1)
+TEST_F(RegionBlockReaderTest, InvalidNULLRowV1)
 {
     auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
