@@ -16,6 +16,17 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
+#include <Debug/MockExecutor/AggBinder.h>
+#include <Debug/MockExecutor/ExchangeBinder.h>
+#include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Debug/MockExecutor/JoinBinder.h>
+#include <Debug/MockExecutor/LimitBinder.h>
+#include <Debug/MockExecutor/ProjectBinder.h>
+#include <Debug/MockExecutor/SelectionBinder.h>
+#include <Debug/MockExecutor/SortBinder.h>
+#include <Debug/MockExecutor/TableScanBinder.h>
+#include <Debug/MockExecutor/TopNBinder.h>
+#include <Debug/MockExecutor/WindowBinder.h>
 #include <Debug/MockExecutor/astToExecutor.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
@@ -80,7 +91,7 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
 
 QueryTasks queryPlanToQueryTasks(
     const DAGProperties & properties,
-    ExecutorPtr root_executor,
+    mock::ExecutorBinderPtr root_executor,
     size_t & executor_index,
     const Context & context);
 
