@@ -12,19 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NO_TIFLASH_INTERNAL_MEMCPY
+#pragma once
+
+#include <common/defines.h>
+
+#include <cstring>
 
 #if defined(__SSE2__)
-
 #include <common/sse2_memcpy.h>
+#endif
 
-/// This is needed to generate an object file for linking.
-
-extern "C" __attribute__((visibility("default"))) void * memcpy(void * __restrict dst, const void * __restrict src, size_t size)
+ALWAYS_INLINE static inline void * inline_memcpy(void * __restrict dst, const void * __restrict src, size_t size)
 {
+#if defined(__SSE2__)
     return sse2_inline_memcpy(dst, src, size);
+#else
+    return std::memcpy(dst, src, size);
+#endif
 }
-
-#endif
-
-#endif
