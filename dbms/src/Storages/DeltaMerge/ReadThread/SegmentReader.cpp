@@ -237,4 +237,10 @@ bool SegmentReaderPoolManager::isSegmentReader() const
 {
     return reader_ids.find(std::this_thread::get_id()) != reader_ids.end();
 }
+
+void SegmentReaderPoolManager::stop()
+{
+    reader_pools.clear();
+    reader_ids.clear();
+}
 } // namespace DB::DM
