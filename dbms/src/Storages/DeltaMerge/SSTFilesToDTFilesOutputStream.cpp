@@ -42,7 +42,7 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     FileConvertJobType job_type_,
     UInt64 split_after_rows_,
     UInt64 split_after_size_,
-    TMTContext & tmt_)
+    Context & context_)
     : child(std::move(child_))
     , storage(std::move(storage_))
     , schema_snap(std::move(schema_snap_))
@@ -50,7 +50,7 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     , job_type(job_type_)
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
-    , tmt(tmt_)
+    , context(context_)
     , log(Logger::get("SSTFilesToDTFilesOutputStream"))
 {
 }
@@ -137,7 +137,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
     }
 
     auto dt_file = DMFile::create(file_id, parent_path, flags.isSingleFile(), storage->createChecksumConfig(flags.isSingleFile()));
-    dt_stream = std::make_unique<DMFileBlockOutputStream>(tmt.getContext(), dt_file, *(schema_snap->column_defines), flags);
+    dt_stream = std::make_unique<DMFileBlockOutputStream>(context, dt_file, *(schema_snap->column_defines), flags);
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
     committed_rows_this_dt_file = 0;
@@ -290,7 +290,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::cancel()
 }
 
 template class SSTFilesToDTFilesOutputStream<BoundedSSTFilesToBlockInputStreamPtr>;
-template class SSTFilesToDTFilesOutputStream<std::shared_ptr<MockSSTFilesToDTFilesOutputStreamChild>>;
+template class SSTFilesToDTFilesOutputStream<MockSSTFilesToDTFilesOutputStreamChildPtr>;
 
 } // namespace DM
 } // namespace DB

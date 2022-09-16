@@ -22,11 +22,6 @@
 #include <memory>
 #include <string_view>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 class TMTContext;
@@ -56,7 +51,6 @@ enum class FileConvertJobType
     IngestSST,
 };
 
-
 // This class is tightly coupling with BoundedSSTFilesToBlockInputStream
 // to get some info of the decoding process.
 template <typename ChildStream>
@@ -81,7 +75,7 @@ public:
                                   FileConvertJobType job_type_,
                                   UInt64 split_after_rows_,
                                   UInt64 split_after_size_,
-                                  TMTContext & tmt_);
+                                  Context & context);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
@@ -115,7 +109,7 @@ private:
     const FileConvertJobType job_type;
     const UInt64 split_after_rows;
     const UInt64 split_after_size;
-    TMTContext & tmt;
+    Context & context;
     LoggerPtr log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
@@ -140,33 +134,47 @@ private:
 class MockSSTFilesToDTFilesOutputStreamChild : private boost::noncopyable
 {
 public:
-    MockSSTFilesToDTFilesOutputStreamChild()
+    MockSSTFilesToDTFilesOutputStreamChild(BlockInputStreamPtr mock_data_, RegionPtr mock_region_) //
+        : mock_data(mock_data_)
+        , mock_region(mock_region_)
     {}
 
-    void readPrefix() {}
+    void readPrefix()
+    {
+        mock_data->readPrefix();
+    }
 
-    void readSuffix() {}
+    void readSuffix()
+    {
+        mock_data->readSuffix();
+    }
 
     RegionPtr getRegion() const
     {
-        throw Exception("unimplemented");
+        return mock_region;
     }
 
     Block read()
     {
-        throw Exception("unimplemented");
+        return mock_data->read();
     }
 
     std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() const
     {
-        throw Exception("unimplemented");
+        return {};
     }
 
     SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const
     {
-        throw Exception("unimplemented");
+        return {};
     }
+
+protected:
+    BlockInputStreamPtr mock_data;
+    RegionPtr mock_region;
 };
+
+using MockSSTFilesToDTFilesOutputStreamChildPtr = std::shared_ptr<MockSSTFilesToDTFilesOutputStreamChild>;
 
 
 } // namespace DM

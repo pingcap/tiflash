@@ -336,7 +336,7 @@ std::vector<UInt64> KVStore::preHandleSSTsToDTFiles(
                 job_type,
                 /* split_after_rows */ 0,
                 /* split_after_size */ 0,
-                tmt);
+                tmt.getContext());
 
             stream->writePrefix();
             stream->write();

@@ -17,6 +17,7 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
