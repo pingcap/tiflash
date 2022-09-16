@@ -29,15 +29,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
-#include <Core/Field.h>
-#include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/Transaction/DatumCodec.h>
-#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/RegionBlockReader.h>
-#include <Storages/Transaction/tests/RowCodecTestUtils.h>
-#include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <common/defines.h>
 
 using TableInfo = TiDB::TableInfo;
 
