@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -22,7 +23,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <magic_enum.hpp>
-#include <DataStreams/BlocksListBlockInputStream.h>
 
 namespace DB
 {
@@ -98,7 +98,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, OutputSingleDTFile)
     auto table_lock = storage->lockStructureForShare("foo_query_id");
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
-    auto mock_stream = std::make_shared<DM::MockSSTFilesToDTFilesOutputStreamChild>(prepareBlocks(50, 100, /*block_size=*/ 5), mock_region);
+    auto mock_stream = std::make_shared<DM::MockSSTFilesToDTFilesOutputStreamChild>(prepareBlocks(50, 100, /*block_size=*/5), mock_region);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         mock_stream,
         storage,
@@ -122,7 +122,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, OutputSingleDTFileWithOneBlock)
     auto table_lock = storage->lockStructureForShare("foo_query_id");
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
-    auto mock_stream = std::make_shared<DM::MockSSTFilesToDTFilesOutputStreamChild>(prepareBlocks(50, 100, /*block_size=*/ 1000), mock_region);
+    auto mock_stream = std::make_shared<DM::MockSSTFilesToDTFilesOutputStreamChild>(prepareBlocks(50, 100, /*block_size=*/1000), mock_region);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         mock_stream,
         storage,
@@ -148,7 +148,7 @@ TEST_F(SSTFilesToDTFilesOutputStreamTest, OutputMultipleDTFile)
     auto table_lock = storage->lockStructureForShare("foo_query_id");
     auto [schema_snapshot, unused] = storage->getSchemaSnapshotAndBlockForDecoding(table_lock, false);
 
-    auto mock_stream = std::make_shared<DM::MockSSTFilesToDTFilesOutputStreamChild>(prepareBlocks(50, 100, /*block_size=*/ 1), mock_region);
+    auto mock_stream = std::make_shared<DM::MockSSTFilesToDTFilesOutputStreamChild>(prepareBlocks(50, 100, /*block_size=*/1), mock_region);
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
         mock_stream,
         storage,
