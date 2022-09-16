@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Debug/MockComputeServerManager.h>
-#include <Debug/astToExecutor.h>
+#include <Debug/MockExecutor/astToExecutor.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>

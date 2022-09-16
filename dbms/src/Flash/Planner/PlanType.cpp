@@ -12,35 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/TiFlashException.h>
 #include <Flash/Planner/PlanType.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
 String PlanType::toString() const
 {
-    switch (enum_value)
-    {
-#define M(t) \
-    case t:  \
-        return #t;
-        M(Limit)
-        M(TopN)
-        M(Filter)
-        M(Aggregation)
-        M(ExchangeSender)
-        M(MockExchangeSender)
-        M(ExchangeReceiver)
-        M(MockExchangeReceiver)
-        M(Projection)
-        M(Window)
-        M(WindowSort)
-        M(TableScan)
-        M(MockTableScan)
-        M(Join)
-#undef M
-    default:
-        throw TiFlashException("Unknown PlanType", Errors::Planner::Internal);
-    }
+    return String(magic_enum::enum_name(enum_value));
 }
 } // namespace DB
