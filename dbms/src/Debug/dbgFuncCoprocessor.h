@@ -16,7 +16,7 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
-#include <Debug/MockExecutor/AggBinder.h>
+#include <Debug/MockExecutor/AggregationBinder.h>
 #include <Debug/MockExecutor/ExchangeBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/JoinBinder.h>

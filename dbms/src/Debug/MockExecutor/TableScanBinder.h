@@ -15,9 +15,11 @@
 #pragma once
 
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <Storages/Transaction/TiDB.h>
 
 namespace DB::mock
 {
+using TableInfo = TiDB::TableInfo;
 class TableScanBinder : public ExecutorBinder
 {
 public:
@@ -26,53 +28,21 @@ public:
         , table_info(table_info_)
     {}
 
-    void columnPrune(std::unordered_set<String> & used_columns) override
-    {
-        DAGSchema new_schema;
-        for (const auto & col : output_schema)
-        {
-            for (const auto & used_col : used_columns)
-            {
-                if (splitQualifiedName(used_col).column_name == splitQualifiedName(col.first).column_name && splitQualifiedName(used_col).table_name == splitQualifiedName(col.first).table_name)
-                {
-                    new_schema.push_back({used_col, col.second});
-                }
-            }
-        }
+    void columnPrune(std::unordered_set<String> & used_columns) override;
 
-        output_schema = new_schema;
-    }
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &) override;
+
     void toMPPSubPlan(size_t &, const DAGProperties &, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> &) override
     {}
 
-    void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const
-    {
-        auto names = splitQualifiedName(dag_column_info.first);
-        if (names.column_name == MutableSupport::tidb_pk_column_name)
-            ci->set_column_id(-1);
-        else
-            ci->set_column_id(table_info.getColumnID(names.column_name));
-        ci->set_tp(dag_column_info.second.tp);
-        ci->set_flag(dag_column_info.second.flag);
-        ci->set_columnlen(dag_column_info.second.flen);
-        ci->set_decimal(dag_column_info.second.decimal);
-        if (!dag_column_info.second.elems.empty())
-        {
-            for (const auto & pair : dag_column_info.second.elems)
-            {
-                ci->add_elems(pair.first);
-            }
-        }
-    }
-
-    TableID getTableId() const
-    {
-        return table_info.id;
-    }
+    TableID getTableId() const;
 
 private:
     TableInfo table_info; /// used by column pruner
+
+private:
+    void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const;
 };
 
 ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column);

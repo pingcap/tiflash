@@ -15,39 +15,23 @@
 #pragma once
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <DataTypes/FieldToDataType.h>
-#include <Debug/DAGProperties.h>
-#include <Debug/DBGInvoker.h>
 #include <Debug/MockExecutor/astToExecutorUtils.h>
 #include <Debug/MockExecutor/funcSigs.h>
-#include <Debug/MockServerInfo.h>
-#include <Debug/MockTiDB.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/convertFieldToType.h>
-#include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTOrderByElement.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/IAST.h>
-#include <Parsers/ParserSelectQuery.h>
-#include <Parsers/parseQuery.h>
-#include <Poco/StringTokenizer.h>
-#include <Storages/IManageableStorage.h>
-#include <Storages/MutableSupport.h>
+#include <Storages/Transaction/TypeMapping.h>
 #include <Storages/Transaction/Types.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
-
-#include <optional>
 
 namespace DB
 {

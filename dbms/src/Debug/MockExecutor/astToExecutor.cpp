@@ -196,7 +196,7 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
     }
     else
     {
-        throw Exception("Unsupported expression " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Unsupported expression: " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -215,7 +215,7 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
     }
     if (AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
     {
-        throw Exception("No such column " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+        throw Exception("No such column: " + func->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
     }
     String func_name_lowercase = Poco::toLower(func->name);
     // TODO: Support more functions.
@@ -424,7 +424,7 @@ void identifierToPB(const DAGSchema & input, ASTIdentifier * id, tipb::Expr * ex
 {
     auto ft = checkSchema(input, id->getColumnName());
     if (ft == input.end())
-        throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+        throw Exception("No such column: " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
     expr->set_tp(tipb::ColumnRef);
     *(expr->mutable_field_type()) = columnInfoToFieldType((*ft).second);
     expr->mutable_field_type()->set_collate(collator_id);
@@ -478,175 +478,190 @@ void collectUsedColumnsFromExpr(const DAGSchema & input, ASTPtr ast, std::unorde
     }
 }
 
-TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
+TiDB::ColumnInfo compileIdentifier(const DAGSchema & input, ASTIdentifier * id)
 {
     TiDB::ColumnInfo ci;
-    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
+
+    /// check column
+    auto ft = checkSchema(input, id->getColumnName());
+    if (ft == input.end())
+        throw Exception("No such column: " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
+    ci = ft->second;
+
+    return ci;
+}
+
+TiDB::ColumnInfo compilerFunction(const DAGSchema & input, ASTFunction * func)
+{
+    TiDB::ColumnInfo ci;
+    /// check function
+    String func_name_lowercase = Poco::toLower(func->name);
+    const auto it_sig = tests::func_name_to_sig.find(func_name_lowercase);
+    if (it_sig == tests::func_name_to_sig.end())
     {
-        /// check column
-        auto ft = checkSchema(input, id->getColumnName());
-        if (ft == input.end())
-            throw Exception("No such column " + id->getColumnName(), ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
-        ci = ft->second;
+        throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
     }
-    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
+    switch (it_sig->second)
     {
-        /// check function
-        String func_name_lowercase = Poco::toLower(func->name);
-        const auto it_sig = tests::func_name_to_sig.find(func_name_lowercase);
-        if (it_sig == tests::func_name_to_sig.end())
+    case tipb::ScalarFuncSig::InInt:
+        ci.tp = TiDB::TypeLongLong;
+        ci.flag = TiDB::ColumnFlagUnsigned;
+        for (const auto & child_ast : func->arguments->children)
         {
-            throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
-        }
-        switch (it_sig->second)
-        {
-        case tipb::ScalarFuncSig::InInt:
-            ci.tp = TiDB::TypeLongLong;
-            ci.flag = TiDB::ColumnFlagUnsigned;
-            for (const auto & child_ast : func->arguments->children)
+            auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
+            if (tuple_func != nullptr && tuple_func->name == "tuple")
             {
-                auto * tuple_func = typeid_cast<ASTFunction *>(child_ast.get());
-                if (tuple_func != nullptr && tuple_func->name == "tuple")
+                // flatten tuple elements
+                for (const auto & c : tuple_func->arguments->children)
                 {
-                    // flatten tuple elements
-                    for (const auto & c : tuple_func->arguments->children)
-                    {
-                        compileExpr(input, c);
-                    }
-                }
-                else
-                {
-                    compileExpr(input, child_ast);
+                    compileExpr(input, c);
                 }
             }
-            return ci;
-        case tipb::ScalarFuncSig::IfInt:
-        case tipb::ScalarFuncSig::BitAndSig:
-        case tipb::ScalarFuncSig::BitOrSig:
-        case tipb::ScalarFuncSig::BitXorSig:
-        case tipb::ScalarFuncSig::BitNegSig:
-            for (size_t i = 0; i < func->arguments->children.size(); i++)
-            {
-                const auto & child_ast = func->arguments->children[i];
-                auto child_ci = compileExpr(input, child_ast);
-                // todo should infer the return type based on all input types
-                if ((it_sig->second == tipb::ScalarFuncSig::IfInt && i == 1)
-                    || (it_sig->second != tipb::ScalarFuncSig::IfInt && i == 0))
-                    ci = child_ci;
-            }
-            return ci;
-        case tipb::ScalarFuncSig::PlusInt:
-        case tipb::ScalarFuncSig::MinusInt:
-            return compileExpr(input, func->arguments->children[0]);
-        case tipb::ScalarFuncSig::LikeSig:
-            ci.tp = TiDB::TypeLongLong;
-            ci.flag = TiDB::ColumnFlagUnsigned;
-            for (const auto & child_ast : func->arguments->children)
+            else
             {
                 compileExpr(input, child_ast);
             }
-            return ci;
-        case tipb::ScalarFuncSig::FromUnixTime2Arg:
-            if (func->arguments->children.size() == 1)
-            {
-                ci.tp = TiDB::TypeDatetime;
-                ci.decimal = 6;
-            }
-            else
-            {
-                ci.tp = TiDB::TypeString;
-            }
-            break;
-        case tipb::ScalarFuncSig::DateFormatSig:
-            ci.tp = TiDB::TypeString;
-            break;
-        case tipb::ScalarFuncSig::CastIntAsTime:
-        case tipb::ScalarFuncSig::CastRealAsTime:
-        case tipb::ScalarFuncSig::CastTimeAsTime:
-        case tipb::ScalarFuncSig::CastDecimalAsTime:
-        case tipb::ScalarFuncSig::CastStringAsTime:
-            if (it_sig->first.find("datetime"))
-            {
-                ci.tp = TiDB::TypeDatetime;
-            }
-            else
-            {
-                ci.tp = TiDB::TypeDate;
-            }
-            break;
-        case tipb::ScalarFuncSig::CastIntAsReal:
-        case tipb::ScalarFuncSig::CastRealAsReal:
+        }
+        return ci;
+    case tipb::ScalarFuncSig::IfInt:
+    case tipb::ScalarFuncSig::BitAndSig:
+    case tipb::ScalarFuncSig::BitOrSig:
+    case tipb::ScalarFuncSig::BitXorSig:
+    case tipb::ScalarFuncSig::BitNegSig:
+        for (size_t i = 0; i < func->arguments->children.size(); i++)
         {
-            ci.tp = TiDB::TypeDouble;
-            break;
+            const auto & child_ast = func->arguments->children[i];
+            auto child_ci = compileExpr(input, child_ast);
+            // todo should infer the return type based on all input types
+            if ((it_sig->second == tipb::ScalarFuncSig::IfInt && i == 1)
+                || (it_sig->second != tipb::ScalarFuncSig::IfInt && i == 0))
+                ci = child_ci;
         }
-        case tipb::ScalarFuncSig::RoundInt:
-        case tipb::ScalarFuncSig::RoundWithFracInt:
-        {
-            ci.tp = TiDB::TypeLongLong;
-            if (it_sig->first.find("uint") != std::string::npos)
-                ci.flag = TiDB::ColumnFlagUnsigned;
-            break;
-        }
-        case tipb::ScalarFuncSig::RoundDec:
-        case tipb::ScalarFuncSig::RoundWithFracDec:
-        {
-            ci.tp = TiDB::TypeNewDecimal;
-            break;
-        }
-        case tipb::ScalarFuncSig::RoundReal:
-        case tipb::ScalarFuncSig::RoundWithFracReal:
-        {
-            ci.tp = TiDB::TypeDouble;
-            break;
-        }
-        default:
-            ci.tp = TiDB::TypeLongLong;
-            ci.flag = TiDB::ColumnFlagUnsigned;
-            break;
-        }
+        return ci;
+    case tipb::ScalarFuncSig::PlusInt:
+    case tipb::ScalarFuncSig::MinusInt:
+        return compileExpr(input, func->arguments->children[0]);
+    case tipb::ScalarFuncSig::LikeSig:
+        ci.tp = TiDB::TypeLongLong;
+        ci.flag = TiDB::ColumnFlagUnsigned;
         for (const auto & child_ast : func->arguments->children)
         {
             compileExpr(input, child_ast);
         }
-    }
-    else if (auto * lit = typeid_cast<ASTLiteral *>(ast.get()))
-    {
-        switch (lit->value.getType())
+        return ci;
+    case tipb::ScalarFuncSig::FromUnixTime2Arg:
+        if (func->arguments->children.size() == 1)
         {
-        case Field::Types::Which::Null:
-            ci.tp = TiDB::TypeNull;
-            // Null literal expr doesn't need value.
-            break;
-        case Field::Types::Which::UInt64:
-            ci.tp = TiDB::TypeLongLong;
-            ci.flag = TiDB::ColumnFlagUnsigned;
-            break;
-        case Field::Types::Which::Int64:
-            ci.tp = TiDB::TypeLongLong;
-            break;
-        case Field::Types::Which::Float64:
-            ci.tp = TiDB::TypeDouble;
-            break;
-        case Field::Types::Which::Decimal32:
-        case Field::Types::Which::Decimal64:
-        case Field::Types::Which::Decimal128:
-        case Field::Types::Which::Decimal256:
-            ci.tp = TiDB::TypeNewDecimal;
-            break;
-        case Field::Types::Which::String:
-            ci.tp = TiDB::TypeString;
-            break;
-        default:
-            throw Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
+            ci.tp = TiDB::TypeDatetime;
+            ci.decimal = 6;
         }
+        else
+        {
+            ci.tp = TiDB::TypeString;
+        }
+        break;
+    case tipb::ScalarFuncSig::DateFormatSig:
+        ci.tp = TiDB::TypeString;
+        break;
+    case tipb::ScalarFuncSig::CastIntAsTime:
+    case tipb::ScalarFuncSig::CastRealAsTime:
+    case tipb::ScalarFuncSig::CastTimeAsTime:
+    case tipb::ScalarFuncSig::CastDecimalAsTime:
+    case tipb::ScalarFuncSig::CastStringAsTime:
+        if (it_sig->first.find("datetime"))
+        {
+            ci.tp = TiDB::TypeDatetime;
+        }
+        else
+        {
+            ci.tp = TiDB::TypeDate;
+        }
+        break;
+    case tipb::ScalarFuncSig::CastIntAsReal:
+    case tipb::ScalarFuncSig::CastRealAsReal:
+    {
+        ci.tp = TiDB::TypeDouble;
+        break;
     }
+    case tipb::ScalarFuncSig::RoundInt:
+    case tipb::ScalarFuncSig::RoundWithFracInt:
+    {
+        ci.tp = TiDB::TypeLongLong;
+        if (it_sig->first.find("uint") != std::string::npos)
+            ci.flag = TiDB::ColumnFlagUnsigned;
+        break;
+    }
+    case tipb::ScalarFuncSig::RoundDec:
+    case tipb::ScalarFuncSig::RoundWithFracDec:
+    {
+        ci.tp = TiDB::TypeNewDecimal;
+        break;
+    }
+    case tipb::ScalarFuncSig::RoundReal:
+    case tipb::ScalarFuncSig::RoundWithFracReal:
+    {
+        ci.tp = TiDB::TypeDouble;
+        break;
+    }
+    default:
+        ci.tp = TiDB::TypeLongLong;
+        ci.flag = TiDB::ColumnFlagUnsigned;
+        break;
+    }
+    for (const auto & child_ast : func->arguments->children)
+    {
+        compileExpr(input, child_ast);
+    }
+    return ci;
+}
+
+TiDB::ColumnInfo compilerLiteral(ASTLiteral * lit)
+{
+    TiDB::ColumnInfo ci;
+    switch (lit->value.getType())
+    {
+    case Field::Types::Which::Null:
+        ci.tp = TiDB::TypeNull;
+        // Null literal expr doesn't need value.
+        break;
+    case Field::Types::Which::UInt64:
+        ci.tp = TiDB::TypeLongLong;
+        ci.flag = TiDB::ColumnFlagUnsigned;
+        break;
+    case Field::Types::Which::Int64:
+        ci.tp = TiDB::TypeLongLong;
+        break;
+    case Field::Types::Which::Float64:
+        ci.tp = TiDB::TypeDouble;
+        break;
+    case Field::Types::Which::Decimal32:
+    case Field::Types::Which::Decimal64:
+    case Field::Types::Which::Decimal128:
+    case Field::Types::Which::Decimal256:
+        ci.tp = TiDB::TypeNewDecimal;
+        break;
+    case Field::Types::Which::String:
+        ci.tp = TiDB::TypeString;
+        break;
+    default:
+        throw Exception(String("Unsupported literal type: ") + lit->value.getTypeName(), ErrorCodes::LOGICAL_ERROR);
+    }
+    return ci;
+}
+
+TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
+{
+    if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
+        return compileIdentifier(input, id);
+    else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
+        return compilerFunction(input, func);
+    else if (auto * lit = typeid_cast<ASTLiteral *>(ast.get()))
+        return compilerLiteral(lit);
     else
     {
         /// not supported unless this is a literal
-        throw Exception("Unsupported expression " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Unsupported expression: " + ast->getColumnName(), ErrorCodes::LOGICAL_ERROR);
     }
-    return ci;
 }
 
 void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & conditions)

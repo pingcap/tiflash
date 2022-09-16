@@ -21,6 +21,8 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Server/RaftConfigParser.h>
+#include <Storages/Transaction/PDTiKVClient.h>
+
 
 namespace DB
 {

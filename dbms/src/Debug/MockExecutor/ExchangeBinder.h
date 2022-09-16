@@ -26,13 +26,12 @@ public:
         , type(type_)
         , partition_keys(partition_keys_)
     {}
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+
     void columnPrune(std::unordered_set<String> &) override {}
 
-    tipb::ExchangeType getType() const
-    {
-        return type;
-    }
+    tipb::ExchangeType getType() const;
 
 private:
     tipb::ExchangeType type;
@@ -47,7 +46,9 @@ public:
         : ExecutorBinder(index, "exchange_receiver_" + std::to_string(index), output)
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
+
     void columnPrune(std::unordered_set<String> &) override {}
 
 private:

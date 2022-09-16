@@ -26,11 +26,12 @@ public:
         , by_exprs(by_exprs_)
         , is_partial_sort(is_partial_sort_)
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
-    {
-    }
+    {}
+
     // Currently only use Sort Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
 private:
@@ -40,5 +41,4 @@ private:
 };
 
 ExecutorBinderPtr compileSort(ExecutorBinderPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count);
-
 } // namespace DB::mock

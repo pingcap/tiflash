@@ -31,24 +31,18 @@ public:
         , gby_exprs(std::move(gby_exprs_))
         , is_final_mode(is_final_mode_)
     {}
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+
     void columnPrune(std::unordered_set<String> & used_columns) override;
+
     void toMPPSubPlan(size_t & executor_index, const DAGProperties & properties, std::unordered_map<String, std::pair<std::shared_ptr<ExchangeReceiverBinder>, std::shared_ptr<ExchangeSenderBinder>>> & exchange_map) override;
 
-    bool needAppendProject() const
-    {
-        return need_append_project;
-    }
+    bool needAppendProject() const;
 
-    size_t exprSize() const
-    {
-        return agg_exprs.size() + gby_exprs.size();
-    }
+    size_t exprSize() const;
 
-    bool hasUniqRawRes() const
-    {
-        return has_uniq_raw_res;
-    }
+    bool hasUniqRawRes() const;
 
 protected:
     bool has_uniq_raw_res;

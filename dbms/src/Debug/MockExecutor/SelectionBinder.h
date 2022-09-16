@@ -26,7 +26,9 @@ public:
         : ExecutorBinder(index_, "selection_" + std::to_string(index_), output_schema_)
         , conditions(std::move(conditions_))
     {}
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+
     void columnPrune(std::unordered_set<String> & used_columns) override;
 
 protected:
@@ -34,5 +36,4 @@ protected:
 };
 
 ExecutorBinderPtr compileSelection(ExecutorBinderPtr input, size_t & executor_index, ASTPtr filter);
-
 } // namespace DB::mock

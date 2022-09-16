@@ -47,5 +47,4 @@ ExecutorBinderPtr compileSelection(ExecutorBinderPtr input, size_t & executor_in
     selection->children.push_back(input);
     return selection;
 }
-
 } // namespace DB::mock

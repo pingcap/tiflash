@@ -14,6 +14,7 @@
 
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/SortBinder.h>
+#include <Parsers/ASTOrderByElement.h>
 
 namespace DB::mock
 {
@@ -58,5 +59,4 @@ ExecutorBinderPtr compileSort(ExecutorBinderPtr input, size_t & executor_index, 
     sort->children.push_back(input);
     return sort;
 }
-
 } // namespace DB::mock

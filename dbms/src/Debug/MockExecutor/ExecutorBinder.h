@@ -14,9 +14,11 @@
 
 #pragma once
 
+#include <Debug/DAGProperties.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockExecutor/astToExecutor.h>
 #include <Debug/MockExecutor/astToExecutorUtils.h>
+
 
 namespace DB::mock
 {

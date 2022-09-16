@@ -15,8 +15,7 @@
 #pragma once
 
 #include <Debug/MockExecutor/ExecutorBinder.h>
-
-#include "Parsers/ASTFunction.h"
+#include <Parsers/ASTOrderByElement.h>
 
 namespace DB::mock
 {
@@ -32,11 +31,12 @@ public:
         , order_by_exprs(order_by_exprs_)
         , frame(frame_)
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
-    {
-    }
+    {}
+
     // Currently only use Window Executor in Unit Test which don't call columnPrume.
     // TODO: call columnPrune in unit test and further benchmark test to eliminate compute process.
     void columnPrune(std::unordered_set<String> &) override { throw Exception("Should not reach here"); }
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
 
 private:

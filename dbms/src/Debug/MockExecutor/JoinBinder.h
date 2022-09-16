@@ -69,6 +69,4 @@ ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, E
 /// it is hard to fully test join executor. New framework aims to directly construct DAGRequest, so new framework APIs for join should
 /// avoid using ASTTableJoin.
 ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, ExecutorBinderPtr right, ASTPtr params);
-
-
 } // namespace DB::mock

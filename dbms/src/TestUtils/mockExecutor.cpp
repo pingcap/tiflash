@@ -21,6 +21,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
+#include <Storages/Transaction/TiDB.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
@@ -29,6 +30,8 @@
 
 namespace DB::tests
 {
+using TableInfo = TiDB::TableInfo;
+
 ASTPtr buildColumn(const String & column_name)
 {
     return std::make_shared<ASTIdentifier>(column_name);

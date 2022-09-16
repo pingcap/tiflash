@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockExecutor/AggBinder.h>
+#include <AggregateFunctions/AggregateFunctionUniq.h>
+#include <Debug/MockExecutor/AggregationBinder.h>
 #include <Debug/MockExecutor/ExchangeBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
-
 
 namespace DB::mock
 {
@@ -40,7 +40,7 @@ bool AggregationBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t c
         }
         auto agg_sig_it = tests::agg_func_name_to_sig.find(func->name);
         if (agg_sig_it == tests::agg_func_name_to_sig.end())
-            throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+            throw Exception("Unsupported agg function: " + func->name, ErrorCodes::LOGICAL_ERROR);
         auto agg_sig = agg_sig_it->second;
         agg_func->set_tp(agg_sig);
 
@@ -166,6 +166,21 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
     children[0] = exchange_receiver;
 }
 
+bool AggregationBinder::needAppendProject() const
+{
+    return need_append_project;
+}
+
+size_t AggregationBinder::exprSize() const
+{
+    return agg_exprs.size() + gby_exprs.size();
+}
+
+bool AggregationBinder::hasUniqRawRes() const
+{
+    return has_uniq_raw_res;
+}
+
 ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs)
 {
     std::vector<ASTPtr> agg_exprs;
@@ -212,7 +227,7 @@ ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_
             // TODO: Other agg func.
             else
             {
-                throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Unsupported agg function: " + func->name, ErrorCodes::LOGICAL_ERROR);
             }
 
             output_schema.emplace_back(std::make_pair(func->getColumnName(), ci));
@@ -240,5 +255,4 @@ ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_
     aggregation->children.push_back(input);
     return aggregation;
 }
-
 } // namespace DB::mock

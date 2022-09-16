@@ -14,6 +14,7 @@
 
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/ProjectBinder.h>
+#include <Parsers/ASTAsterisk.h>
 
 namespace DB::mock
 {
@@ -117,5 +118,4 @@ ExecutorBinderPtr compileProject(ExecutorBinderPtr input, size_t & executor_inde
     project->children.push_back(input);
     return project;
 }
-
 } // namespace DB::mock

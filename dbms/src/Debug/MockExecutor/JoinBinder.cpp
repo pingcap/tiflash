@@ -15,6 +15,7 @@
 #include <Debug/MockExecutor/ExchangeBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/JoinBinder.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
 namespace DB::mock
 {
@@ -333,6 +334,4 @@ ExecutorBinderPtr compileJoin(size_t & executor_index, ExecutorBinderPtr left, E
     }
     return compileJoin(executor_index, left, right, tp, join_cols);
 }
-
-
 } // namespace DB::mock

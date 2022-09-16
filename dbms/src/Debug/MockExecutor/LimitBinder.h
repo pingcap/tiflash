@@ -25,7 +25,9 @@ public:
         : ExecutorBinder(index_, "limit_" + std::to_string(index_), output_schema_)
         , limit(limit_)
     {}
+
     bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context) override;
+
     void columnPrune(std::unordered_set<String> & used_columns) override;
 
 private:

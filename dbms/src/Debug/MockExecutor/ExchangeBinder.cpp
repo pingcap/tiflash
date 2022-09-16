@@ -62,6 +62,11 @@ bool ExchangeSenderBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
 
+tipb::ExchangeType ExchangeSenderBinder::getType() const
+{
+    return type;
+}
+
 bool ExchangeReceiverBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context & context)
 {
     tipb_executor->set_tp(tipb::ExecType::TypeExchangeReceiver);
