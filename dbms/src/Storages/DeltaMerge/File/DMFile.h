@@ -268,11 +268,16 @@ public:
     bool isColumnExist(ColId col_id) const { return column_stats.find(col_id) != column_stats.end(); }
     bool isSingleFileMode() const { return mode == Mode::SINGLE_FILE; }
 
-    String toString() const
-    {
-        return "{DMFile, packs: " + DB::toString(getPacks()) + ", rows: " + DB::toString(getRows()) + ", bytes: " + DB::toString(getBytes())
-            + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
-    }
+    /*
+     * TODO: This function is currently unused. We could use it when:
+     *   1. The content is polished (e.g. including at least file ID, and use a format easy for grep).
+     *   2. Unify the place where we are currently printing out DMFile's `path` or `file_id`.
+     */
+    // String toString() const
+    // {
+    //     return "{DMFile, packs: " + DB::toString(getPacks()) + ", rows: " + DB::toString(getRows()) + ", bytes: " + DB::toString(getBytes())
+    //         + ", file size: " + DB::toString(getBytesOnDisk()) + "}";
+    // }
 
     DMConfigurationOpt & getConfiguration() { return configuration; }
 

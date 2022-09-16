@@ -38,12 +38,12 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
 
     if (column.isColumnConst())
     {
-        const ColumnConst & column_const = static_cast<const ColumnConst &>(column);
+        const auto & column_const = static_cast<const ColumnConst &>(column);
         const IColumn & column_nested = column_const.getDataColumn();
 
         if (!typeid_cast<const ColumnUInt8 *>(&column_nested))
         {
-            const ColumnNullable * column_nested_nullable = typeid_cast<const ColumnNullable *>(&column_nested);
+            const auto * column_nested_nullable = typeid_cast<const ColumnNullable *>(&column_nested);
             if (!column_nested_nullable || !typeid_cast<const ColumnUInt8 *>(&column_nested_nullable->getNestedColumn()))
             {
                 throw Exception(
@@ -63,18 +63,18 @@ ConstantFilterDescription::ConstantFilterDescription(const IColumn & column)
 
 FilterDescription::FilterDescription(const IColumn & column)
 {
-    if (const ColumnUInt8 * concrete_column = typeid_cast<const ColumnUInt8 *>(&column))
+    if (const auto * concrete_column = typeid_cast<const ColumnUInt8 *>(&column))
     {
         data = &concrete_column->getData();
         return;
     }
 
-    if (const ColumnNullable * nullable_column = typeid_cast<const ColumnNullable *>(&column))
+    if (const auto * nullable_column = typeid_cast<const ColumnNullable *>(&column))
     {
         ColumnPtr nested_column = nullable_column->getNestedColumnPtr();
         MutableColumnPtr mutable_holder = (*std::move(nested_column)).mutate();
 
-        ColumnUInt8 * concrete_column = typeid_cast<ColumnUInt8 *>(mutable_holder.get());
+        auto * concrete_column = typeid_cast<ColumnUInt8 *>(mutable_holder.get());
         if (!concrete_column)
             throw Exception(
                 fmt::format("Illegal type {} of column for filter. Must be UInt8 or Nullable(UInt8).", column.getName()),
