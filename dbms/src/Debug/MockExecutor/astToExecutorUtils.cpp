@@ -42,7 +42,7 @@ ColumnName splitQualifiedName(const String & s)
 }
 
 
-std::__wrap_iter<const std::pair<std::string, TiDB::ColumnInfo> *> checkSchema(const DAGSchema & input, String checked_column)
+DAGSchema::const_iterator checkSchema(const DAGSchema & input, String checked_column)
 {
     auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
         auto [checked_db_name, checked_table_name, checked_column_name] = splitQualifiedName(checked_column);
