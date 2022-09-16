@@ -4,6 +4,8 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
+#include <gtest/internal/gtest-internal.h>
 
 namespace DB::tests
 {
@@ -43,6 +45,7 @@ void TiFlashTestEnv::initializeGlobalContext()
     global_context->getTMTContext().restore();
 }
 
+<<<<<<< HEAD
 Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testdata_path)
 {
     Context context = *global_context;
@@ -118,6 +121,17 @@ void TiFlashTestBase::assertColumnEqual(
 
     assertDataTypeEqual(actual.type, expect.type);
     assertColumnEqual(actual.column, expect.column);
+=======
+::testing::AssertionResult fieldCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const Field & lhs,
+    const Field & rhs)
+{
+    if (lhs == rhs)
+        return ::testing::AssertionSuccess();
+    return ::testing::internal::EqFailure(lhs_expr, rhs_expr, lhs.toString(), rhs.toString(), false);
+>>>>>>> aae88b120d (tests: Fix RegionBlockReaderTest helper functions (#5899))
 }
 
 } // namespace DB::tests
