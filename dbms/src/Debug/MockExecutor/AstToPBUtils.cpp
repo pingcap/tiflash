@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockExecutor/AstToExecutorUtils.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
 
 namespace DB
 {
