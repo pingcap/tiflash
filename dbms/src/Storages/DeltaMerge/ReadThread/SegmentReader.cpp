@@ -109,7 +109,9 @@ private:
             {
                 LOG_FMT_DEBUG(log, "All finished, pool_ids={} segment_id={} read_count={}", merged_task->getPoolIds(), merged_task->getSegmentId(), read_count);
             }
-
+            // If `merged_task` is pushed back to `MergedTaskPool`, it can be accessed by another read thread if it is scheduled.
+            // So do not push back to `MergedTaskPool` when exception happened since current read thread can still access to this `merged_task` object and set exception message to it.
+            // If exception happens, `merged_task` will be released by `shared_ptr` automatically.
             if (!merged_task->allStreamsFinished())
             {
                 SegmentReadTaskScheduler::instance().pushMergedTask(merged_task);
