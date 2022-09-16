@@ -507,14 +507,16 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
 
         auto segment_lock = segment->mustGetUpdateLock();
         new_segment = segment->dangerouslyReplaceData(segment_lock, dm_context, data_file, wbs);
+
+        RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
+        RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
+
         wbs.writeLogAndData();
         wbs.writeMeta();
 
         segment->abandon(dm_context);
         segments[segment->getRowKeyRange().getEnd()] = new_segment;
         id_to_segment[segment->segmentId()] = new_segment;
-        RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
-        RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
 
         LOG_FMT_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
     }
