@@ -73,6 +73,11 @@ struct StringRef
 
     explicit operator std::string() const { return toString(); }
     constexpr explicit operator std::string_view() const { return {data, size}; }
+
+    ALWAYS_INLINE inline int compare(const StringRef & tar) const
+    {
+        return mem_utils::CompareStrView({*this}, {tar});
+    }
 };
 
 /// Here constexpr doesn't implicate inline, see https://www.viva64.com/en/w/v1043/
@@ -85,7 +90,7 @@ using StringRefs = std::vector<StringRef>;
 
 // According to https://github.com/pingcap/tiflash/pull/5658
 // - if size of memory area is bigger than 1M, instructions about avx512 may begin to get better results
-// - otherwise, use `std::string_view == std::string_view` or `mem_utils::avx2_mem_equal`(under x86-64 with avx2)
+// - otherwise, use `mem_utils::avx2_mem_equal`(under x86-64 with avx2)
 inline bool operator==(StringRef lhs, StringRef rhs)
 {
     return mem_utils::IsStrViewEqual({lhs}, {rhs});
@@ -98,12 +103,12 @@ inline bool operator!=(StringRef lhs, StringRef rhs)
 
 inline bool operator<(StringRef lhs, StringRef rhs)
 {
-    return mem_utils::CompareStrView({lhs}, {rhs}) < 0;
+    return lhs.compare(rhs) < 0;
 }
 
 inline bool operator>(StringRef lhs, StringRef rhs)
 {
-    return mem_utils::CompareStrView({lhs}, {rhs}) > 0;
+    return lhs.compare(rhs) > 0;
 }
 
 

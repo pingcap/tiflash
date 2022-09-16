@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Columns/Collator.h>
-#include <Storages/Transaction/CollatorUtils.h>
+#include <Storages/Transaction/CollatorCompare.h>
 #include <common/StringRef.h>
 
 #include <memory>
@@ -101,7 +101,7 @@ public:
     bool isBinary() const;
     bool isCI() const;
 
-    ALWAYS_INLINE inline bool isPaddingBinary() const
+    ALWAYS_INLINE static inline bool isPaddingBinary(CollatorType collator_type)
     {
         switch (collator_type)
         {
@@ -117,6 +117,11 @@ public:
             break;
         }
         return false;
+    }
+
+    ALWAYS_INLINE inline bool isPaddingBinary() const
+    {
+        return isPaddingBinary(getCollatorType());
     }
 
     ALWAYS_INLINE inline StringRef sortKeyFastPath(const char * s, size_t length, std::string & container) const
