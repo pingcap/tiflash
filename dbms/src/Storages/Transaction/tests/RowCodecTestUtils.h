@@ -198,7 +198,8 @@ void getTableInfoFieldsInternal(OrderedColumnInfoFields & column_info_fields, Ty
         else
         {
             column_info_fields.emplace(column_id_value.id,
-                                       std::make_tuple(getColumnInfo<ValueType>(column_id_value.id), static_cast<NearestType>(std::move(column_id_value.value))));
+                                       std::make_tuple(getColumnInfo<ValueType>(column_id_value.id),
+                                                       static_cast<NearestType>(std::move(column_id_value.value))));
         }
     }
 }
@@ -309,10 +310,7 @@ inline Block decodeRowToBlock(const String & row_value, DecodingStorageSchemaSna
         iter++;
 
     Block block = createBlockSortByColumnID(decoding_schema);
-    if (decoding_schema->pk_is_handle)
-        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, decoding_schema->pk_column_ids[0], true);
-    else
-        appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema->column_infos, InvalidColumnID, true);
+    appendRowToBlock(row_value, iter, sorted_column_id_with_pos.end(), block, value_column_num, decoding_schema, true);
 
     // remove first three column
     for (size_t i = 0; i < value_column_num; i++)
