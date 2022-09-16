@@ -30,7 +30,7 @@ namespace tests
         types_col_name[a], types_col_name[b] \
     }
 
-class ExecutorAggTestRunner : public DB::tests::ExecutorTest
+class ExecutorAggTestRunner : public ExecutorTest
 {
 public:
     using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -56,6 +56,8 @@ public:
     using ColumnWithNullableMyDateTime = std::vector<ColMyDateTimeNullableType>;
     using ColumnWithNullableDecimal = std::vector<ColDecimalNullableType>;
     using ColumnWithUInt64 = std::vector<ColUInt64Type>;
+
+    virtual ~ExecutorAggTestRunner() = default;
 
     void initializeContext() override
     {
@@ -94,12 +96,14 @@ public:
                              {{col_name[0], TiDB::TP::TypeLong},
                               {col_name[1], TiDB::TP::TypeString},
                               {col_name[2], TiDB::TP::TypeString},
-                              {col_name[3], TiDB::TP::TypeDouble}},
+                              {col_name[3], TiDB::TP::TypeDouble},
+                              {col_name[4], TiDB::TP::TypeLong}},
                              /* columns= */
                              {toNullableVec<Int32>(col_name[0], col_age),
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
-                              toNullableVec<Float64>(col_name[3], col_salary)});
+                              toNullableVec<Float64>(col_name[3], col_salary),
+                              toVec<UInt64>(col_name[4], col_pr)});
 
         context.addMockTable({"aggnull_test", "t1"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
@@ -138,7 +142,7 @@ public:
 
     /// Prepare some data and names for aggregation functions
     const String table_name{"clerk"};
-    const std::vector<String> col_name{"age", "gender", "country", "salary"};
+    const std::vector<String> col_name{"age", "gender", "country", "salary", "pr"};
     ColumnWithNullableInt32 col_age{30, {}, 27, 32, 25, 36, {}, 22, 34};
     ColumnWithNullableString col_gender{
         "male",
@@ -153,6 +157,7 @@ public:
     };
     ColumnWithNullableString col_country{"russia", "korea", "usa", "usa", "usa", "china", "china", "china", "china"};
     ColumnWithNullableFloat64 col_salary{1000.1, 1300.2, 0.3, {}, -200.4, 900.5, -999.6, 2000.7, -300.8};
+    ColumnWithUInt64 col_pr{1, 2, 0, 3290124, 968933, 3125, 31236, 4327, 80000};
 };
 
 /// Guarantee the correctness of group by
@@ -282,17 +287,30 @@ try
     std::shared_ptr<tipb::DAGRequest> request;
     auto agg_func0 = Count(col(col_name[0])); /// select count(age) from clerk group by country;
     auto agg_func1 = Count(col(col_name[1])); /// select count(gender) from clerk group by country, gender;
-    std::vector<MockAstVec> agg_funcs = {{agg_func0}, {agg_func1}};
+    auto agg_func2 = Count(lit(Field(static_cast<UInt64>(1)))); /// select count(1) from clerk;
+    auto agg_func3 = Count(lit(Field())); /// select count(NULL) from clerk;
+    auto agg_func4 = Count(lit(Field(static_cast<UInt64>(1)))); /// select count(1) from clerk group by country;
+    auto agg_func5 = Count(lit(Field())); /// select count(NULL) from clerk group by country;
+    auto agg_func6 = Count(col(col_name[4])); /// select count(pr) from clerk group by country;
+    std::vector<MockAstVec> agg_funcs = {{agg_func0}, {agg_func1}, {agg_func2}, {agg_func3}, {agg_func4}, {agg_func5}, {agg_func6}};
 
     auto group_by_expr0 = col(col_name[2]);
     auto group_by_expr10 = col(col_name[2]);
     auto group_by_expr11 = col(col_name[1]);
+    auto group_by_expr4 = col(col_name[2]);
+    auto group_by_expr5 = col(col_name[2]);
+    auto group_by_expr6 = col(col_name[2]);
 
     std::vector<ColumnsWithTypeAndName> expect_cols{
         {toVec<UInt64>("count(age)", ColumnWithUInt64{3, 3, 1, 0})},
-        {toVec<UInt64>("count(gender)", ColumnWithUInt64{2, 2, 2, 1, 1, 1})}};
-    std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}};
-    std::vector<MockColumnNameVec> projections{{"count(age)"}, {"count(gender)"}};
+        {toVec<UInt64>("count(gender)", ColumnWithUInt64{2, 2, 2, 1, 1, 1})},
+        {toVec<UInt64>("count(1)", ColumnWithUInt64{9})},
+        {toVec<UInt64>("count(NULL)", ColumnWithUInt64{0})},
+        {toVec<UInt64>("count(1)", ColumnWithUInt64{4, 3, 1, 1})},
+        {toVec<UInt64>("count(NULL)", ColumnWithUInt64{0, 0, 0, 0})},
+        {toVec<UInt64>("count(pr)", ColumnWithUInt64{4, 3, 1, 1})}};
+    std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}, {}, {}, {group_by_expr4}, {group_by_expr5}, {group_by_expr6}};
+    std::vector<MockColumnNameVec> projections{{"count(age)"}, {"count(gender)"}, {"count(1)"}, {"count(NULL)"}, {"count(1)"}, {"count(NULL)"}, {"count(pr)"}};
     size_t test_num = expect_cols.size();
 
     /// Start to test
