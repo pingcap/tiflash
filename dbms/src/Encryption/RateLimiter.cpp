@@ -194,7 +194,7 @@ void WriteLimiter::request(Int64 bytes)
             }
         }
     }
-    LOG_FMT_DEBUG(log, "pending_us {} wait_times {} pending_count {} rate_limit_per_sec {}", sw_pending.elapsed() / 1000, wait_times, req_queue.size(), refill_balance_per_period * 1000 / refill_period_ms);
+    LOG_FMT_TRACE(log, "pending_us {} wait_times {} pending_count {} rate_limit_per_sec {}", sw_pending.elapsed() / 1000, wait_times, req_queue.size(), refill_balance_per_period * 1000 / refill_period_ms);
 }
 
 size_t WriteLimiter::setStop()
