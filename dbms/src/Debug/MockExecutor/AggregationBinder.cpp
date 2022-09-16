@@ -14,7 +14,8 @@
 
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Debug/MockExecutor/AggregationBinder.h>
-#include <Debug/MockExecutor/ExchangeBinder.h>
+#include <Debug/MockExecutor/ExchangeReceiverBinder.h>
+#include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 
 namespace DB::mock

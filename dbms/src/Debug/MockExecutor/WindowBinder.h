@@ -19,6 +19,15 @@
 
 namespace DB::mock
 {
+using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
+struct MockWindowFrame
+{
+    std::optional<tipb::WindowFrameType> type;
+    std::optional<MockWindowFrameBound> start;
+    std::optional<MockWindowFrameBound> end;
+    // TODO: support calcFuncs
+};
+
 using ASTPartitionByElement = ASTOrderByElement;
 
 class WindowBinder : public ExecutorBinder

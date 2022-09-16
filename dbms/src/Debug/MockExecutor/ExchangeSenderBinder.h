@@ -39,23 +39,5 @@ private:
     std::vector<size_t> partition_keys;
 };
 
-class ExchangeReceiverBinder : public ExecutorBinder
-{
-public:
-    ExchangeReceiverBinder(size_t & index, const DAGSchema & output, uint64_t fine_grained_shuffle_stream_count_ = 0)
-        : ExecutorBinder(index, "exchange_receiver_" + std::to_string(index), output)
-        , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
-    {}
-
-    bool toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id, const MPPInfo & mpp_info, const Context &) override;
-
-    void columnPrune(std::unordered_set<String> &) override {}
-
-private:
-    TaskMetas task_metas;
-    uint64_t fine_grained_shuffle_stream_count;
-};
-
 ExecutorBinderPtr compileExchangeSender(ExecutorBinderPtr input, size_t & executor_index, tipb::ExchangeType exchange_type);
-ExecutorBinderPtr compileExchangeReceiver(size_t & executor_index, DAGSchema schema, uint64_t fine_grained_shuffle_stream_count);
 } // namespace DB::mock

@@ -25,6 +25,9 @@ namespace DB::mock
 class ExchangeSenderBinder;
 class ExchangeReceiverBinder;
 
+
+// Convert CH AST to tipb::Executor
+// Used in integration test framework and Unit test framework.
 class ExecutorBinder
 {
 public:
@@ -54,16 +57,6 @@ public:
         children[0]->toMPPSubPlan(executor_index, properties, exchange_map);
     }
     virtual ~ExecutorBinder() = default;
-};
-
-using MockWindowFrameBound = std::tuple<tipb::WindowBoundType, bool, UInt64>;
-
-struct MockWindowFrame
-{
-    std::optional<tipb::WindowFrameType> type;
-    std::optional<MockWindowFrameBound> start;
-    std::optional<MockWindowFrameBound> end;
-    // TODO: support calcFuncs
 };
 
 using ExecutorBinderPtr = std::shared_ptr<mock::ExecutorBinder>;
