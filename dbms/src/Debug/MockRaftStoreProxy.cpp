@@ -431,7 +431,7 @@ void MockRaftStoreProxy::replay(
     auto region = getRegion(region_id);
     assert(region != nullptr);
     FailCond cond;
-    for (uint64_t i = region->apply.get_applied_index() + 1; i <= to; i++) {
+    for (uint64_t i = region->apply.applied_index() + 1; i <= to; i++) {
         doApply(kvs, tmt, cond, region_id, i);
     }
 }
