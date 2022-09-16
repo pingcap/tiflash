@@ -280,7 +280,7 @@ struct CollatorDesc : boost::noncopyable
     {
         const auto & column = columns_with_sort_desc[col_index];
 
-        if (likely(!need_collations[col_index]))
+        if (!need_collations[col_index])
         {
             return column.second.direction * column.first->compareAt(a, b, *column.first, column.second.nulls_direction);
         }
