@@ -17,7 +17,6 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -25,6 +24,7 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
+class TMTContext;
 
 std::tuple<TableLockHolder, std::shared_ptr<StorageDeltaMerge>, DecodingStorageSchemaSnapshotConstPtr> //
 AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt);
