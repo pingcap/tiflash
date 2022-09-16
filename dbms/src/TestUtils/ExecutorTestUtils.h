@@ -23,19 +23,20 @@
 #include <TestUtils/mockExecutor.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 
+#include <functional>
+
 namespace DB::tests
 {
-void executeInterpreter(const std::shared_ptr<tipb::DAGRequest> & request, Context & context);
-
-::testing::AssertionResult check_columns_equality(const ColumnsWithTypeAndName & expected, const ColumnsWithTypeAndName & actual, bool _restrict);
+TiDB::TP dataTypeToTP(const DataTypePtr & type);
 
 DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
+DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
     std::vector<bool> bools{false, true}; \
-    for (auto flag : bools)               \
+    for (auto enable_planner : bools)     \
     {                                     \
-        enablePlanner(flag);
+        enablePlanner(enable_planner);
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_END }
 
@@ -67,6 +68,9 @@ public:
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
 
+    void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
+    void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
+
     enum SourceType
     {
         TableScan,
@@ -93,7 +97,10 @@ public:
         const std::shared_ptr<tipb::DAGRequest> & request,
         size_t concurrency = 1);
 
-    ColumnsWithTypeAndName executeMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+private:
+    void executeExecutor(
+        const std::shared_ptr<tipb::DAGRequest> & request,
+        std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func);
 
 protected:
     MockDAGRequestContext context;

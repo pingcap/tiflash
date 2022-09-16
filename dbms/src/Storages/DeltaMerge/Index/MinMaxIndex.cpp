@@ -46,6 +46,7 @@ inline std::pair<size_t, size_t> minmax(const IColumn & column, const ColumnVect
 
     for (size_t i = offset; i < offset + limit; ++i)
     {
+        // del_mark_data == nullptr || (del_mark_data != nullptr && (*del_mark_data)[i] != 0)
         if (!del_mark_data || !(*del_mark_data)[i])
         {
             if (batch_min_idx == NONE_EXIST || column.compareAt(i, batch_min_idx, column, -1) < 0)

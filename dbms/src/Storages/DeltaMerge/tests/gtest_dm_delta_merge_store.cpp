@@ -17,23 +17,31 @@
 #include <Common/MyTime.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <TestUtils/TiFlashTestEnv.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 
 #include <algorithm>
 #include <future>
 #include <iterator>
 
+#include "Storages/DeltaMerge/RowKeyRange.h"
+
 namespace DB
 {
 namespace FailPoints
 {
+extern const char gc_skip_update_safe_point[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];
@@ -84,8 +92,126 @@ try
         // check column structure of store
         const auto & cols = store->getTableColumns();
         // version & tag column added
-        ASSERT_EQ(cols.size(), 3UL);
+        ASSERT_EQ(cols.size(), 3);
     }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, DroppedInMiddleDTFileGC)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    {
+        // check column structure of store
+        const auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3);
+    }
+
+    // drop table in the middle of page storage gc
+    store->shutdown();
+    store = nullptr;
+
+    sp_gc.next(); // continue the page storage gc
+    th_gc.wait();
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, DroppedInMiddleDTFileRemoveCallback)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before removing dtfiles
+    auto sp_gc = SyncPointCtl::enableInScope("before_DeltaMergeStore::callbacks_remover_remove");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    {
+        // check column structure of store
+        const auto & cols = store->getTableColumns();
+        // version & tag column added
+        ASSERT_EQ(cols.size(), 3);
+    }
+
+    // drop table and files in the middle of page storage gc
+    store->drop();
+    store = nullptr;
+
+    sp_gc.next(); // continue removing dtfiles
+    th_gc.wait();
+}
+CATCH
+
+TEST_F(DeltaMergeStoreTest, CreateInMiddleDTFileGC)
+try
+{
+    // create table
+    ASSERT_NE(store, nullptr);
+
+    auto global_page_storage = TiFlashTestEnv::getGlobalContext().getGlobalStoragePool();
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        if (global_page_storage)
+            global_page_storage->gc();
+    });
+    sp_gc.waitAndPause();
+
+    DeltaMergeStorePtr new_store;
+    ColumnDefinesPtr new_cols;
+    {
+        new_cols = DMTestEnv::getDefaultColumns();
+        ColumnDefine handle_column_define = (*new_cols)[0];
+        new_store = std::make_shared<DeltaMergeStore>(*db_context,
+                                                      false,
+                                                      "test",
+                                                      "t_200",
+                                                      200,
+                                                      *new_cols,
+                                                      handle_column_define,
+                                                      false,
+                                                      1,
+                                                      DeltaMergeStore::Settings());
+        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 100, false);
+        new_store->write(*db_context, db_context->getSettingsRef(), block);
+        new_store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
+    }
+
+    sp_gc.next(); // continue the page storage gc
+    th_gc.wait();
+
+    BlockInputStreamPtr in = new_store->read(*db_context,
+                                             db_context->getSettingsRef(),
+                                             *new_cols,
+                                             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+                                             /* num_streams= */ 1,
+                                             /* max_version= */ std::numeric_limits<UInt64>::max(),
+                                             EMPTY_FILTER,
+                                             "",
+                                             /* keep_order= */ false,
+                                             /* is_fast_mode= */ false,
+                                             /* expected_block_size= */ 1024)[0];
+    ASSERT_INPUTSTREAM_NROWS(in, 100);
 }
 CATCH
 
@@ -259,9 +385,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
             createColumns({
@@ -275,7 +401,7 @@ try
         // test readRaw
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->readRaw(*db_context, db_context->getSettingsRef(), columns, 1, /* keep_order= */ false)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
             createColumns({
@@ -358,7 +484,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, 0);
     }
@@ -437,9 +563,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_str_define.name, col_i8_define.name}),
             createColumns({
@@ -486,9 +612,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -513,9 +639,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -588,9 +714,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -663,9 +789,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -680,13 +806,13 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -729,9 +855,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -759,9 +885,9 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -802,7 +928,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -821,7 +947,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -840,7 +966,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -859,7 +985,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -916,11 +1042,11 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -942,11 +1068,11 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -968,7 +1094,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -987,7 +1113,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1008,7 +1134,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1035,7 +1161,7 @@ try
 
         SegmentPtr seg;
         std::tie(std::ignore, seg) = *store->segments.begin();
-        store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+        store->segmentSplit(*dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
     }
 
     const UInt64 tso2 = 10;
@@ -1065,11 +1191,11 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -1091,11 +1217,11 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -1117,7 +1243,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1169,11 +1295,11 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
             createColumns({
@@ -1195,7 +1321,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1277,13 +1403,13 @@ try
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
-                                                /* is_fast_mode= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({
@@ -1366,7 +1492,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1378,7 +1504,7 @@ try
             ASSERT_EQ(col.column_id, col_id_ddl);
             ASSERT_TRUE(col.type->equals(*col_type_after_ddl));
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_ddl}),
             createColumns({
@@ -1455,7 +1581,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1463,7 +1589,7 @@ try
             const Block head = in->getHeader();
             ASSERT_FALSE(head.has(col_name_to_drop));
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -1531,7 +1657,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -1551,7 +1677,7 @@ try
                 ASSERT_TRUE(col.type->equals(*col_type_to_add));
             }
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_c1, col_name_to_add}),
             createColumns({
@@ -1615,10 +1741,10 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1681,10 +1807,10 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1747,9 +1873,9 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1812,9 +1938,9 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1877,10 +2003,10 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -1941,14 +2067,14 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         std::vector<DataTypeMyDateTime::FieldType> datetime_data(
             num_rows_write,
             MyDateTime(1999, 9, 9, 12, 34, 56, 0).toPackedUInt());
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2011,9 +2137,9 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2091,7 +2217,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2106,7 +2232,7 @@ try
             ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
         }
 
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_after_ddl}),
             createColumns({
@@ -2208,7 +2334,7 @@ try
                                             EMPTY_FILTER,
                                             TRACING_NAME,
                                             /* keep_order= */ false,
-                                            /* is_fast_mode= */ false,
+                                            /* is_fast_scan= */ false,
                                             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2222,7 +2348,7 @@ try
             // check old col name is not exist
             ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
         }
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({col_name_after_ddl}),
             createColumns({
@@ -2256,7 +2382,7 @@ try
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
-                                                /* is_fast_mode= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
@@ -2270,7 +2396,7 @@ try
                 // check old col name is not exist
                 ASSERT_THROW(head.getByName(col_name_before_ddl), ::DB::Exception);
             }
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({col_name_after_ddl}),
                 createColumns({
@@ -2342,9 +2468,9 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2384,11 +2510,11 @@ try
                               EMPTY_FILTER,
                               TRACING_NAME,
                               /* keep_order= */ false,
-                              /* is_fast_mode= */ false,
+                              /* is_fast_scan= */ false,
                               /* expected_block_size= */ 1024)[0];
 
         // FIXME!!!
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_name_to_add}),
             createColumns({
@@ -2495,7 +2621,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
 
         // mock common handle
@@ -2505,7 +2631,7 @@ try
             std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
             createColumns({
@@ -2526,7 +2652,7 @@ try
             std::transform(tmp.begin(), tmp.end(), std::back_inserter(res), [](Int64 v) { return genMockCommonHandle(v, rowkey_column_size); });
             return res;
         }();
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name, col_i8_define.name, col_str_define.name}),
             createColumns({
@@ -2597,7 +2723,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2607,7 +2733,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2669,7 +2795,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2679,7 +2805,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 3 * num_write_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2694,11 +2820,11 @@ try
                                              columns,
                                              {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
                                              /* num_streams= */ 1,
-                                             /* max_version= */ UInt64(1),
+                                             /* max_version= */ static_cast<UInt64>(1),
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2708,7 +2834,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), 2 * num_write_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2754,7 +2880,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -2764,7 +2890,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), num_rows_write);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2791,7 +2917,7 @@ try
                                              EMPTY_FILTER,
                                              TRACING_NAME,
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
         // mock common handle, data range after deletion is [64, 128)
         auto common_handle_coldata = []() {
@@ -2801,7 +2927,7 @@ try
             return res;
         }();
         ASSERT_EQ(common_handle_coldata.size(), num_rows_write - num_deleted_rows);
-        ASSERT_INPUTSTREAM_COLS_UR(
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
@@ -2858,14 +2984,14 @@ try
                                                 EMPTY_FILTER,
                                                 TRACING_NAME,
                                                 /* keep_order= */ false,
-                                                /* is_fast_mode= */ false,
+                                                /* is_fast_scan= */ false,
                                                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
             LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({
@@ -2970,13 +3096,13 @@ try
     if (store->isCommonHandle())
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     else
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     std::optional<RowKeyRange> result_1;
@@ -2984,11 +3110,11 @@ try
         // Specifies MIN_KEY. In this case, the first segment should be processed.
         if (store->isCommonHandle())
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
         }
         else
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
         }
         // The returned range is the same as first segment's range.
         ASSERT_NE(result_1, std::nullopt);
@@ -3000,7 +3126,7 @@ try
     }
     {
         // Compact the first segment again, nothing should change.
-        auto result = store->mergeDeltaBySegment(*db_context, result_1->start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, result_1->start);
         ASSERT_EQ(*result, *result_1);
 
         helper->verifyExpectedRowsForAllSegments();
@@ -3008,7 +3134,7 @@ try
     std::optional<RowKeyRange> result_2;
     {
         // Compact again using the end key just returned. The second segment should be processed.
-        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end, DeltaMergeStore::TaskRunThread::Foreground);
+        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end);
         ASSERT_NE(result_2, std::nullopt);
         ASSERT_EQ(*result_2, std::next(store->segments.begin())->second->getRowKeyRange());
 
@@ -3026,12 +3152,12 @@ TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, InvalidKey)
         if (store->isCommonHandle())
         {
             // For common handle, give int handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
         }
         else
         {
             // For int handle, give common handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
         }
     });
 }
@@ -3047,13 +3173,13 @@ try
         ASSERT_NE(it, store->segments.end());
         auto seg = it->second;
 
-        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
     {
         // As we are the last segment, compact "next segment" should result in failure. A nullopt is returned.
-        auto result2 = store->mergeDeltaBySegment(*db_context, result->end, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result2 = store->mergeDeltaBySegment(*db_context, result->end);
         ASSERT_EQ(result2, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
@@ -3082,7 +3208,7 @@ try
         auto range = std::next(store->segments.begin())->second->getRowKeyRange();
         auto compact_key = range.start.toPrefixNext();
 
-        auto result = store->mergeDeltaBySegment(*db_context, compact_key, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, compact_key);
         ASSERT_NE(result, std::nullopt);
 
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
@@ -3126,7 +3252,7 @@ try
     }
     {
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
 
         segment1 = std::next(store->segments.begin())->second;
@@ -3174,7 +3300,7 @@ try
     // Start a mergeDelta. It should hit retry immediately due to a flush is in progress.
     auto th_merge_delta = std::async([&]() {
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
         // All rows in the delta layer should be merged into the stable layer.
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
@@ -3209,7 +3335,7 @@ try
         // Split segment1 into 2.
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->segmentSplit(*dm_context, segment1, /*is_foreground*/ true);
+        auto result = store->segmentSplit(*dm_context, segment1, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
         ASSERT_NE(result.second, nullptr);
 
         helper->resetExpectedRows();
@@ -3225,7 +3351,7 @@ try
     auto th_merge_delta = std::async([&] {
         // mergeDeltaBySegment for segment1
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
 
         // Although original segment1 has been split into 2, we still expect only segment1's delta
@@ -3255,6 +3381,162 @@ try
     // This time the retry should succeed without any future retries.
     sp_merge_delta_retry.next();
     th_merge_delta.wait();
+}
+CATCH
+
+
+class DeltaMergeStoreBackgroundTest
+    : public DB::base::TiFlashStorageTestBasic
+{
+public:
+    void SetUp() override
+    {
+        FailPointHelper::enableFailPoint(FailPoints::gc_skip_update_safe_point);
+
+        try
+        {
+            TiFlashStorageTestBasic::SetUp();
+            setupDMStore();
+            // Split into 4 segments.
+            helper = std::make_unique<MultiSegmentTestUtil>(*db_context);
+            helper->prepareSegments(store, 50, DMTestEnv::PkType::CommonHandle);
+        }
+        CATCH
+    }
+
+    void TearDown() override
+    {
+        TiFlashStorageTestBasic::TearDown();
+        FailPointHelper::disableFailPoint(FailPoints::gc_skip_update_safe_point);
+    }
+
+    void setupDMStore()
+    {
+        auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
+        store = std::make_shared<DeltaMergeStore>(*db_context,
+                                                  false,
+                                                  "test",
+                                                  DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                                  101,
+                                                  *cols,
+                                                  (*cols)[0],
+                                                  true,
+                                                  1,
+                                                  DeltaMergeStore::Settings());
+        dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+    }
+
+protected:
+    std::unique_ptr<MultiSegmentTestUtil> helper{};
+    DeltaMergeStorePtr store;
+    DMContextPtr dm_context;
+};
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCWillMergeMultipleSegments)
+try
+{
+    ASSERT_EQ(store->segments.size(), 4);
+    auto gc_n = store->onSyncGc(1);
+    ASSERT_EQ(store->segments.size(), 1);
+    ASSERT_EQ(gc_n, 1);
+}
+CATCH
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCOnlyMergeSmallSegments)
+try
+{
+    UInt64 gc_n = 0;
+
+    // Note: initially we have 4 segments, each segment contains 50 rows.
+
+    ASSERT_EQ(store->segments.size(), 4);
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 10;
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 4);
+    ASSERT_EQ(gc_n, 0);
+
+    // In this case, merge two segments will exceed small_segment_rows, so no merge will happen
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 55 * 3;
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 4);
+    ASSERT_EQ(gc_n, 0);
+
+    // In this case, we will only merge two segments and then stop.
+    // [50, 50,    50, 50] => [100,   100]
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 105 * 3;
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 2);
+    ASSERT_EQ(gc_n, 2);
+    helper->resetExpectedRows();
+    ASSERT_EQ(helper->rows_by_segments[0], 100);
+    ASSERT_EQ(helper->rows_by_segments[1], 100);
+
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 2);
+    ASSERT_EQ(gc_n, 0);
+    helper->verifyExpectedRowsForAllSegments();
+}
+CATCH
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCMergeAndStop)
+try
+{
+    UInt64 gc_n = 0;
+
+    // Note: initially we have 4 segments, each segment contains 50 rows.
+
+    ASSERT_EQ(store->segments.size(), 4);
+
+    // In this case, we will only merge two segments and then stop.
+    // [50, 50,    50, 50] => [100,   50, 50]
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 105 * 3;
+    gc_n = store->onSyncGc(1);
+    ASSERT_EQ(store->segments.size(), 3);
+    ASSERT_EQ(gc_n, 1);
+    helper->resetExpectedRows();
+    ASSERT_EQ(helper->rows_by_segments[0], 100);
+    ASSERT_EQ(helper->rows_by_segments[1], 50);
+    ASSERT_EQ(helper->rows_by_segments[2], 50);
+}
+CATCH
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCMergeWhileFlushing)
+try
+{
+    ASSERT_EQ(store->segments.size(), 4);
+
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 500, false, DMTestEnv::PkType::CommonHandle, 10 /* new tso */);
+    store->write(*db_context, db_context->getSettingsRef(), block);
+
+    // Currently, when there is a flush in progress, the segment merge in GC thread will be blocked.
+
+    auto sp_flush_commit = SyncPointCtl::enableInScope("before_ColumnFileFlushTask::commit");
+    auto sp_merge_flush_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::segmentMerge|retry_flush");
+
+    auto th_flush = std::async([&]() {
+        auto result = store->segments.begin()->second->flushCache(*dm_context);
+        ASSERT_TRUE(result);
+    });
+
+    sp_flush_commit.waitAndPause();
+
+    auto th_gc = std::async([&]() {
+        auto gc_n = store->onSyncGc(1);
+        ASSERT_EQ(gc_n, 1);
+        ASSERT_EQ(store->segments.size(), 1);
+    });
+
+    // Expect merge triggered by GC is retrying... because there is a flush in progress.
+    sp_merge_flush_retry.waitAndPause();
+
+    // Finish the flush.
+    sp_flush_commit.next();
+    sp_flush_commit.disable();
+    th_flush.wait();
+
+    // The merge in GC should continue without any further retries.
+    sp_merge_flush_retry.next();
+    th_gc.wait();
 }
 CATCH
 

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
@@ -24,38 +25,36 @@
 
 #include <future>
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfDeltaMerge;
+} // namespace CurrentMetrics
+
 namespace DB
 {
-
-namespace FailPoints
-{
-extern const char try_segment_logical_split[];
-extern const char force_segment_logical_split[];
-} // namespace FailPoints
-
 namespace DM
 {
+namespace GC
+{
+bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & context, //
+                                                         const SegmentPtr & seg,
+                                                         const SegmentSnapshotPtr & snap,
+                                                         const SegmentPtr & prev_seg,
+                                                         const SegmentPtr & next_seg,
+                                                         double invalid_data_ratio_threshold,
+                                                         const LoggerPtr & log);
+}
 namespace tests
 {
 class SegmentOperationTest : public SegmentTestBasic
 {
 protected:
-    static void SetUpTestCase() {}
-
-    void SetUp() override
-    {
-        log = DB::Logger::get("SegmentOperationTest");
-    }
-
-    DB::LoggerPtr log;
+    DB::LoggerPtr log = DB::Logger::get("SegmentOperationTest");
 };
 
 TEST_F(SegmentOperationTest, Issue4956)
 try
 {
-    SegmentTestOptions options;
-    reloadWithOptions(options);
-
     // flush data, make the segment can be split.
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -65,15 +64,13 @@ try
     auto segment_id = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     ASSERT_TRUE(segment_id.has_value());
 
-    mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id);
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id});
 }
 CATCH
 
 TEST_F(SegmentOperationTest, TestSegment)
 try
 {
-    SegmentTestOptions options;
-    reloadWithOptions(options);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -86,28 +83,91 @@ try
     flushSegmentCache(*segment_id);
     deleteRangeSegment(*segment_id);
     writeSegmentWithDeletedPack(*segment_id);
-    mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id);
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id});
 
     EXPECT_EQ(getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID), origin_rows);
 }
 CATCH
 
-TEST_F(SegmentOperationTest, TestSegmentRandom)
+TEST_F(SegmentOperationTest, TestSegmentMergeTwo)
 try
 {
-    srand(time(nullptr));
-    SegmentTestOptions options;
-    options.is_common_handle = true;
-    reloadWithOptions(options);
-    randomSegmentTest(100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto segment_id_2nd = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID, segment_id_2nd }
+    ASSERT_TRUE(segment_id_2nd.has_value());
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 50);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 50);
+    ASSERT_EQ(segments.size(), 2);
+
+    auto segment_id_3rd = splitSegment(*segment_id_2nd);
+    // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID, segment_id_2nd, segment_id_3rd }
+    ASSERT_TRUE(segment_id_3rd.has_value());
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_3rd), 25);
+    ASSERT_EQ(segments.size(), 3);
+
+    writeSegment(*segment_id_2nd, 7);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25 + 7);
+    mergeSegment({*segment_id_2nd, *segment_id_3rd});
+    // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID, segment_id_2nd }
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 50 + 7);
+    ASSERT_TRUE(segments.find(*segment_id_3rd) == segments.end());
+    ASSERT_EQ(segments.size(), 2);
 }
 CATCH
+
+TEST_F(SegmentOperationTest, TestSegmentMergeThree)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto segment_id_2nd = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto segment_id_3rd = splitSegment(*segment_id_2nd);
+    // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID, segment_id_2nd, segment_id_3rd }
+    ASSERT_EQ(segments.size(), 3);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 50);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_3rd), 25);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 11);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 50 + 11);
+    writeSegment(*segment_id_2nd, 7);
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(*segment_id_2nd), 25 + 7);
+    mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id_2nd, *segment_id_3rd});
+    // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID }
+    ASSERT_EQ(getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID), 100 + 11 + 7);
+    ASSERT_TRUE(segments.find(*segment_id_2nd) == segments.end());
+    ASSERT_TRUE(segments.find(*segment_id_3rd) == segments.end());
+    ASSERT_EQ(segments.size(), 1);
+}
+CATCH
+
+TEST_F(SegmentOperationTest, TestSegmentMergeInvalid)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto segment_id_2nd = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto segment_id_3rd = splitSegment(*segment_id_2nd);
+    // now we have segments = { DELTA_MERGE_FIRST_SEGMENT_ID, segment_id_2nd, segment_id_3rd }
+
+    ASSERT_THROW({ mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, /* omit segment_id_2nd */ *segment_id_3rd}); }, DB::Exception);
+}
+CATCH
+
 
 TEST_F(SegmentOperationTest, WriteDuringSegmentMergeDelta)
 try
 {
-    SegmentTestOptions options;
-    reloadWithOptions(options);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -164,8 +224,6 @@ CATCH
 TEST_F(SegmentOperationTest, WriteDuringSegmentSplit)
 try
 {
-    SegmentTestOptions options;
-    reloadWithOptions(options);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -177,7 +235,7 @@ try
         auto sp_seg_split_apply = SyncPointCtl::enableInScope("before_Segment::applySplit");
         PageId new_seg_id;
         auto th_seg_split = std::async([&]() {
-            auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, /* check_rows */ false);
+            auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto, /* check_rows */ false);
             ASSERT_TRUE(new_seg_id_opt.has_value());
             new_seg_id = new_seg_id_opt.value();
         });
@@ -192,7 +250,7 @@ try
         th_seg_split.wait();
 
         LOG_DEBUG(log, "finishApplySplit");
-        mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id);
+        mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id});
     }
 
     for (const auto & [seg_id, seg] : segments)
@@ -226,8 +284,6 @@ CATCH
 TEST_F(SegmentOperationTest, WriteDuringSegmentMerge)
 try
 {
-    SegmentTestOptions options;
-    reloadWithOptions(options);
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
@@ -242,7 +298,7 @@ try
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
         auto th_seg_merge = std::async([&]() {
-            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /* check_rows */ false);
+            mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id}, /* check_rows */ false);
         });
         sp_seg_merge_apply.waitAndPause();
 
@@ -285,17 +341,6 @@ try
 }
 CATCH
 
-// run in CI weekly
-TEST_F(SegmentOperationTest, DISABLED_TestSegmentRandomForCI)
-try
-{
-    srand(time(nullptr));
-    SegmentTestOptions options;
-    options.is_common_handle = true;
-    reloadWithOptions(options);
-    randomSegmentTest(10000);
-}
-CATCH
 
 TEST_F(SegmentOperationTest, SegmentLogicalSplit)
 try
@@ -303,22 +348,21 @@ try
     {
         SegmentTestOptions options;
         options.db_settings.dt_segment_stable_pack_rows = 100;
+        options.db_settings.dt_enable_logical_split = true;
         reloadWithOptions(options);
     }
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 400, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
     // non flushed pack before split, should be ref in new splitted segments
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-    FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
-    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 10);
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
     ASSERT_TRUE(new_seg_id_opt.has_value());
-
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+    ASSERT_EQ(300, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(200, getSegmentRowNumWithoutMVCC(*new_seg_id_opt));
 
     for (size_t test_round = 0; test_round < 20; ++test_round)
     {
@@ -328,12 +372,81 @@ try
         LOG_FMT_TRACE(&Poco::Logger::root(), "test_round={} seg={} nrows={}", test_round, rand_seg_id, seg_nrows);
         writeSegment(rand_seg_id, 150);
         flushSegmentCache(rand_seg_id);
-
-        FailPointHelper::enableFailPoint(FailPoints::try_segment_logical_split);
-        splitSegment(rand_seg_id);
+        splitSegment(rand_seg_id, Segment::SplitMode::Auto);
     }
 }
 CATCH
+
+
+TEST_F(SegmentOperationTest, GCCheckAfterSegmentLogicalSplit)
+try
+{
+    {
+        SegmentTestOptions options;
+        options.db_settings.dt_segment_stable_pack_rows = 100;
+        reloadWithOptions(options);
+    }
+
+    auto invalid_data_ratio_threshold = dm_context->db_context.getSettingsRef().dt_bg_gc_delta_delete_ratio_to_trigger_gc;
+    {
+        auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
+        auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, segment, snap, /* prev_seg */ nullptr, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
+    }
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    {
+        auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
+        auto snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, segment, snap, /* prev_seg */ nullptr, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
+    }
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    auto left_segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
+    auto right_segment_id = new_seg_id_opt.value();
+    {
+        auto left_segment = segments[left_segment_id];
+        auto right_segment = segments[right_segment_id];
+        auto left_snap = left_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto right_snap = right_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, left_segment, left_snap, /* prev_seg */ nullptr, /* next_seg */ right_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, right_segment, right_snap, /* prev_seg */ left_segment, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
+    }
+
+    auto new_seg_id_opt2 = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt2.has_value());
+    auto middle_segment_id = new_seg_id_opt2.value();
+    {
+        auto left_segment = segments[left_segment_id];
+        auto middle_segment = segments[middle_segment_id];
+        auto right_segment = segments[right_segment_id];
+        auto left_snap = left_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto middle_snap = middle_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto right_snap = right_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, left_segment, left_snap, /* prev_seg */ nullptr, /* next_seg */ middle_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, middle_segment, middle_snap, /* prev_seg */ left_segment, /* next_seg */ right_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, right_segment, right_snap, /* prev_seg */ middle_segment, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
+    }
+
+    // merge delta left segment and check again
+    mergeSegmentDelta(left_segment_id);
+    {
+        auto left_segment = segments[left_segment_id];
+        auto middle_segment = segments[middle_segment_id];
+        auto right_segment = segments[right_segment_id];
+        auto left_snap = left_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto middle_snap = middle_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        auto right_snap = right_segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, left_segment, left_snap, /* prev_seg */ nullptr, /* next_seg */ middle_segment, invalid_data_ratio_threshold, log));
+        ASSERT_TRUE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, middle_segment, middle_snap, /* prev_seg */ left_segment, /* next_seg */ right_segment, invalid_data_ratio_threshold, log));
+        ASSERT_FALSE(GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(*dm_context, right_segment, right_snap, /* prev_seg */ middle_segment, /* next_seg */ nullptr, invalid_data_ratio_threshold, log));
+    }
+}
+CATCH
+
 
 TEST_F(SegmentOperationTest, Issue5570)
 try
@@ -345,14 +458,13 @@ try
         reloadWithOptions(options);
     }
 
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
-    FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
-    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
     ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
     auto new_seg_id = new_seg_id_opt.value();
 
     LOG_DEBUG(log, "beginSegmentMerge");
@@ -360,7 +472,7 @@ try
     // Start a segment merge and suspend it before applyMerge
     auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
     auto th_seg_merge = std::async([&]() {
-        mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /*check_rows=*/false);
+        mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id}, /*check_rows=*/false);
     });
     sp_seg_merge_apply.waitAndPause();
     LOG_DEBUG(log, "pausedBeforeApplyMerge");
@@ -376,36 +488,36 @@ try
     LOG_DEBUG(log, "finishApplyMerge");
 
     // logical split
-    FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
-    auto new_seg_id2_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto new_seg_id2_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
     ASSERT_TRUE(new_seg_id2_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id2_opt}));
     auto new_seg_id2 = new_seg_id2_opt.value();
 
     {
         // further logical split on the left
-        FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
-        auto further_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+        auto further_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
         ASSERT_TRUE(further_seg_id_opt.has_value());
+        ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *further_seg_id_opt}));
     }
 
     {
         // further logical split on the right(it fall back to physical split cause by current
         // implement of getSplitPointFast)
-        FailPointHelper::enableFailPoint(FailPoints::try_segment_logical_split);
-        auto further_seg_id_opt = splitSegment(new_seg_id2);
-        ASSERT_TRUE(further_seg_id_opt.has_value());
+        auto further_seg_id_opt = splitSegment(new_seg_id2, Segment::SplitMode::Logical);
+        ASSERT_FALSE(further_seg_id_opt.has_value());
     }
 }
 CATCH
 
 
-TEST_F(SegmentOperationTest, Issue5570Case2)
+TEST_F(SegmentOperationTest, DeltaPagesAfterDeltaMerge)
 try
 {
     {
         SegmentTestOptions options;
         // a smaller pack rows for logical split
         options.db_settings.dt_segment_stable_pack_rows = 100;
+        options.db_settings.dt_enable_logical_split = true;
         reloadWithOptions(options);
     }
 
@@ -414,12 +526,15 @@ try
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
 
-    FailPointHelper::enableFailPoint(FailPoints::force_segment_logical_split);
-    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
     ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
     auto new_seg_id = new_seg_id_opt.value();
 
-    const auto storage_pool = db_context->getGlobalContext().getGlobalStoragePool();
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(0, 5);
+
     for (size_t round = 0; round < 50; ++round)
     {
         LOG_DEBUG(log, "beginSegmentMerge");
@@ -427,14 +542,17 @@ try
         // Start a segment merge and suspend it before applyMerge
         auto sp_seg_merge_apply = SyncPointCtl::enableInScope("before_Segment::applyMerge");
         auto th_seg_merge = std::async([&]() {
-            mergeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id, /*check_rows=*/false);
+            mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id}, /*check_rows=*/false);
         });
         sp_seg_merge_apply.waitAndPause();
         LOG_DEBUG(log, "pausedBeforeApplyMerge");
 
-        // non-flushed pack
+        // randomly flushed or non flushed column file
         writeSegment(new_seg_id, 100);
-        // flushSegmentCache(new_seg_id); // do not flush
+        if (auto r = distrib(gen); r > 0)
+        {
+            flushSegmentCache(new_seg_id);
+        }
 
         // Finish the segment merge
         LOG_DEBUG(log, "continueApplyMerge");
@@ -443,14 +561,14 @@ try
         LOG_DEBUG(log, "finishApplyMerge");
 
         // logical split
-        FailPointHelper::enableFailPoint(FailPoints::try_segment_logical_split);
         auto new_seg_id2_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
         ASSERT_TRUE(new_seg_id2_opt.has_value());
         new_seg_id = new_seg_id2_opt.value();
 
-        const auto file_usage = storage_pool->getLogFileUsage();
-        LOG_DEBUG(log, "log valid size: {}", file_usage.total_valid_size);
+        const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
+        LOG_FMT_DEBUG(log, "log valid size on disk: {}", file_usage.total_valid_size);
     }
+    // apply delete range && flush && delta-merge on all segments
     for (const auto & [seg_id, seg] : segments)
     {
         UNUSED(seg);
@@ -458,9 +576,594 @@ try
         flushSegmentCache(seg_id);
         mergeSegmentDelta(seg_id);
     }
-    storage_pool->gc();
-    const auto file_usage = storage_pool->getLogFileUsage();
-    LOG_DEBUG(log, "all removed, file usage: {}", file_usage.total_valid_size); // should be 0
+
+    {
+        /// make sure all column file in delta value space is deleted
+        ASSERT_TRUE(storage_pool->log_storage_v3 != nullptr || storage_pool->log_storage_v2 != nullptr);
+        if (storage_pool->log_storage_v3)
+        {
+            storage_pool->log_storage_v3->gc(/* not_skip */ true);
+            storage_pool->data_storage_v3->gc(/* not_skip */ true);
+            EXPECT_EQ(storage_pool->log_storage_v3->getNumberOfPages(), 0);
+        }
+        if (storage_pool->log_storage_v2)
+        {
+            storage_pool->log_storage_v2->gc(/* not_skip */ true);
+            storage_pool->data_storage_v2->gc(/* not_skip */ true);
+            EXPECT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
+        }
+
+        const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
+        LOG_FMT_DEBUG(log, "All delta-merged, log valid size on disk: {}", file_usage.total_valid_size);
+        EXPECT_EQ(file_usage.total_valid_size, 0);
+    }
+}
+CATCH
+
+
+class SegmentEnableLogicalSplitTest : public SegmentOperationTest
+{
+protected:
+    void SetUp() override
+    {
+        SegmentOperationTest::SetUp();
+        SegmentTestOptions options;
+        options.db_settings.dt_segment_stable_pack_rows = 100;
+        options.db_settings.dt_enable_logical_split = true;
+        reloadWithOptions(options);
+        ASSERT_TRUE(dm_context->enable_logical_split);
+    }
+};
+
+
+TEST_F(SegmentEnableLogicalSplitTest, AutoModeLogicalSplit)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+TEST_F(SegmentEnableLogicalSplitTest, AutoModePhysicalSplitWhenStableIsEmpty)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+TEST_F(SegmentEnableLogicalSplitTest, AutoModePhysicalSplitWhenStablePacksAreFew)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 200);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+TEST_F(SegmentEnableLogicalSplitTest, AutoModePhysicalSplitWhenDeltaIsLarger)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 2000);
+    // Note: If we don't flush, then there will be logical split because mem table is not counted
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+class SegmentSplitTest : public SegmentTestBasic
+{
+};
+
+
+TEST_F(SegmentSplitTest, AutoModePhycialSplitByDefault)
+try
+{
+    SegmentTestOptions options;
+    options.db_settings.dt_segment_stable_pack_rows = 100;
+    reloadWithOptions(options);
+    ASSERT_FALSE(dm_context->enable_logical_split);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Auto);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, PhysicalSplitMode)
+try
+{
+    SegmentTestOptions options;
+    options.db_settings.dt_segment_stable_pack_rows = 100;
+    // Even if we explicitly set enable_logical_split, we will still do physical split in SplitMode::Physical.
+    options.db_settings.dt_enable_logical_split = true;
+    reloadWithOptions(options);
+    ASSERT_TRUE(dm_context->enable_logical_split);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Physical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, LogicalSplitWithMemTableData)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 5000, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 10); // Write data without flush
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_EQ(segments.size(), 2);
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+    ASSERT_EQ(2600, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(2500, getSegmentRowNumWithoutMVCC(*new_seg_id_opt));
+    ASSERT_EQ(2500, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(2500, getSegmentRowNum(*new_seg_id_opt));
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, PhysicalSplitWithMemTableData)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 70, /* at */ 300); // Write data without flush
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Physical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_EQ(segments.size(), 2);
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+    ASSERT_EQ(50, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(50 + 70, getSegmentRowNum(*new_seg_id_opt));
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, LogicalSplitModeDoesLogicalSplit)
+try
+{
+    SegmentTestOptions options;
+    options.db_settings.dt_segment_stable_pack_rows = 100;
+    reloadWithOptions(options);
+    // Logical split will be performed if we use logical split mode, even when enable_logical_split is false.
+    ASSERT_FALSE(dm_context->enable_logical_split);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, LogicalSplitModeDoesNotFallbackWhenNoStable)
+try
+{
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_FALSE(new_seg_id_opt.has_value());
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 50);
+    new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_FALSE(new_seg_id_opt.has_value());
+
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_FALSE(new_seg_id_opt.has_value());
+
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, LogicalSplitModeOnePackInStable)
+try
+{
+    SegmentTestOptions options;
+    options.db_settings.dt_segment_stable_pack_rows = 100;
+    reloadWithOptions(options);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 50);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+    ASSERT_EQ(25, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(25, getSegmentRowNumWithoutMVCC(*new_seg_id_opt));
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, LogicalSplitModeOnePackWithHoleInStable)
+try
+{
+    SegmentTestOptions options;
+    options.db_settings.dt_segment_stable_pack_rows = 100;
+    reloadWithOptions(options);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 0);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 90);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+
+    //                                 Calculated Split Point
+    //                                 │
+    //                                 │ new_seg
+    //                                 │ ↓     ↓
+    // Pack: [0~10  .... (Empty) ....  ↓ 90~100]
+    //       ↑   ↑
+    //       DELTA_MERGE_FIRST_SEGMENT
+    ASSERT_EQ(10, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(10, getSegmentRowNumWithoutMVCC(*new_seg_id_opt));
+
+    // Now, let's split them again! We will still get the same split point (which is invalid).
+    {
+        auto seg_2 = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+        ASSERT_FALSE(seg_2.has_value());
+    }
+    {
+        auto seg_2 = splitSegment(*new_seg_id_opt, Segment::SplitMode::Logical);
+        ASSERT_FALSE(seg_2.has_value());
+    }
+}
+CATCH
+
+
+TEST_F(SegmentSplitTest, LogicalSplitModeOneRowInStable)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id_opt = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id_opt.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(1, getSegmentRowNumWithoutMVCC(*new_seg_id_opt));
+}
+CATCH
+
+class SegmentSplitAtTest : public SegmentTestBasic
+{
+};
+
+
+TEST_F(SegmentSplitAtTest, AutoModeDisableLogicalSplit)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    ASSERT_FALSE(dm_context->enable_logical_split);
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 25, Segment::SplitMode::Auto);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(25, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(75, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_F(SegmentSplitAtTest, AutoModeEnableLogicalSplit)
+try
+{
+    SegmentTestOptions options;
+    options.db_settings.dt_enable_logical_split = true;
+    reloadWithOptions(options);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    ASSERT_TRUE(dm_context->enable_logical_split);
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 25, Segment::SplitMode::Auto);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(25, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(75, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_F(SegmentSplitAtTest, LogicalSplitMode)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    // We will do logical split even if enable_logical_split == false when SplitMode is specified as LogicalSplit.
+    ASSERT_FALSE(dm_context->enable_logical_split);
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 25, Segment::SplitMode::Logical);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_TRUE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(25, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(75, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_F(SegmentSplitAtTest, PhysicalSplitMode)
+try
+{
+    SegmentTestOptions options;
+    options.db_settings.dt_enable_logical_split = true;
+    reloadWithOptions(options);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    // We will do physical split even if enable_logical_split == true when SplitMode is specified as PhysicalSplit.
+    ASSERT_TRUE(dm_context->enable_logical_split);
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 25, Segment::SplitMode::Physical);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(25, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(75, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+class SegmentSplitAtModeTest : public SegmentTestBasic
+    , public testing::WithParamInterface<bool>
+{
+public:
+    SegmentSplitAtModeTest()
+    {
+        auto is_logical_split = GetParam();
+        if (is_logical_split)
+            split_mode = Segment::SplitMode::Logical;
+        else
+            split_mode = Segment::SplitMode::Physical;
+    }
+
+protected:
+    Segment::SplitMode split_mode = Segment::SplitMode::Auto;
+};
+
+INSTANTIATE_TEST_CASE_P(
+    IsLogicalSplit,
+    SegmentSplitAtModeTest,
+    testing::Bool());
+
+TEST_P(SegmentSplitAtModeTest, EmptySegment)
+try
+{
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, SplitAtBoundary)
+try
+{
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    {
+        auto r = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, split_mode);
+        ASSERT_FALSE(r.has_value());
+    }
+    {
+        auto r = splitSegmentAt(*new_seg_id, 100, split_mode);
+        ASSERT_FALSE(r.has_value());
+    }
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, SplitAtMemTableKey)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 30, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(30, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(70, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, SplitAtDeltaKey)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 30, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(30, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(70, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, SplitAtStableKey)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 30, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(30, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(70, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, SplitAtEmptyKey)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 150, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(100, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(*new_seg_id));
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, StableWithMemTable)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 60, /* at */ -30);
+
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(50, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(110, getSegmentRowNumWithoutMVCC(*new_seg_id));
+    ASSERT_EQ(40, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(90, getSegmentRowNum(*new_seg_id));
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, FlushMemTableAfterSplit)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 60, /* at */ -30);
+
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 10, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(50, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(110, getSegmentRowNumWithoutMVCC(*new_seg_id));
+    ASSERT_EQ(40, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(90, getSegmentRowNum(*new_seg_id));
+
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(50, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(110, getSegmentRowNumWithoutMVCC(*new_seg_id));
+    ASSERT_EQ(40, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(90, getSegmentRowNum(*new_seg_id));
+
+    // Split again at 50.
+    {
+        auto right_id = splitSegmentAt(*new_seg_id, 50, split_mode);
+        ASSERT_TRUE(right_id.has_value());
+        ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *right_id}));
+        ASSERT_EQ(50, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+        ASSERT_EQ(40 + 20, getSegmentRowNumWithoutMVCC(*new_seg_id));
+        ASSERT_EQ(50, getSegmentRowNumWithoutMVCC(*right_id));
+    }
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, EmptySegmentSplitMultipleTimes)
+try
+{
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    for (Int64 split_at = 99; split_at > -10; --split_at)
+    {
+        auto right_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, split_at, split_mode);
+        ASSERT_TRUE(right_id.has_value());
+        ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *right_id}));
+    }
+}
+CATCH
+
+
+TEST_P(SegmentSplitAtModeTest, MemTableSplitMultipleTimes)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 300, /* at */ 0);
+
+    auto new_seg_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 100, split_mode);
+    ASSERT_TRUE(new_seg_id.has_value());
+    ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id}));
+    ASSERT_EQ(100, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(200, getSegmentRowNumWithoutMVCC(*new_seg_id));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(200, getSegmentRowNum(*new_seg_id));
+
+    for (Int64 split_at = 99; split_at >= 0; --split_at)
+    {
+        auto right_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, split_at, split_mode);
+        ASSERT_TRUE(right_id.has_value());
+        ASSERT_EQ(split_mode == Segment::SplitMode::Logical, areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *right_id}));
+        ASSERT_EQ(1, getSegmentRowNumWithoutMVCC(*right_id));
+        ASSERT_EQ(1, getSegmentRowNum(*right_id));
+    }
 }
 CATCH
 

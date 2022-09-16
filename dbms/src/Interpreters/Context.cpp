@@ -205,6 +205,7 @@ struct ContextShared
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
     {
         /// TODO: make it singleton (?)
+#ifndef MULTIPLE_CONTEXT_GTEST
         static std::atomic<size_t> num_calls{0};
         if (++num_calls > 1)
         {
@@ -213,6 +214,7 @@ struct ContextShared
             std::cerr.flush();
             std::terminate();
         }
+#endif
 
         initialize();
     }
@@ -1364,7 +1366,7 @@ BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
     if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
+        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-");
     return *shared->background_pool;
 }
 
@@ -1378,7 +1380,7 @@ BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 poo
 {
     auto lock = getLock();
     if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-block-");
     return *shared->blockable_background_pool;
 }
 
@@ -1836,12 +1838,22 @@ size_t Context::getMaxStreams() const
 
 bool Context::isMPPTest() const
 {
-    return test_mode == mpp_test;
+    return test_mode == mpp_test || test_mode == cancel_test;
 }
 
 void Context::setMPPTest()
 {
     test_mode = mpp_test;
+}
+
+bool Context::isCancelTest() const
+{
+    return test_mode == cancel_test;
+}
+
+void Context::setCancelTest()
+{
+    test_mode = cancel_test;
 }
 
 bool Context::isExecutorTest() const

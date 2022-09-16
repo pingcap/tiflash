@@ -150,10 +150,13 @@ public:
                                                     const RSOperatorPtr & filter,
                                                     UInt64 max_data_version,
                                                     size_t expected_block_size,
-                                                    bool enable_clean_read,
-                                                    bool is_fast_mode = false);
+                                                    bool enable_handle_clean_read,
+                                                    bool is_fast_scan = false,
+                                                    bool enable_del_clean_read = false);
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
+
+        std::pair<bool, bool> isFirstAndLastPackIncludedInRange(const DMContext & context, const RowKeyRange & range) const;
 
     private:
         Poco::Logger * log;

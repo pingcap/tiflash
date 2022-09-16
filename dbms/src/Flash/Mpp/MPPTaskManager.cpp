@@ -18,6 +18,7 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
 
+#include <magic_enum.hpp>
 #include <string>
 #include <unordered_map>
 
@@ -30,7 +31,7 @@ extern const char random_task_manager_find_task_failure_failpoint[];
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
-    , log(&Poco::Logger::get("TaskManager"))
+    , log(Logger::get("TaskManager"))
 {}
 
 std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout)
@@ -92,7 +93,7 @@ public:
 
 void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type)
 {
-    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}", query_id, abortTypeToString(abort_type)));
+    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}, reason: {}", query_id, magic_enum::enum_name(abort_type), reason));
     MPPQueryTaskSetPtr task_set;
     {
         /// abort task may take a long time, so first
@@ -243,6 +244,12 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithoutLock(UInt64 query_id)
 {
     auto it = mpp_query_map.find(query_id);
     return it == mpp_query_map.end() ? nullptr : it->second;
+}
+
+MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
+{
+    std::lock_guard lock(mu);
+    return getQueryTaskSetWithoutLock(query_id);
 }
 
 bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
