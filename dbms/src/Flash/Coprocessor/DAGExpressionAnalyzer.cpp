@@ -37,6 +37,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+#include "tipb/expression.pb.h"
 
 
 namespace DB
@@ -335,13 +336,16 @@ void DAGExpressionAnalyzer::buildCommonAggFunc(
     DataTypes arg_types;
     TiDB::TiDBCollators arg_collators;
 
-    // if count(not null const), just remove the argument.
-    if (!(expr.tp() == tipb::ExprType::Count && child_size == 1 && isLiteralExpr(expr.children(0)) &&  expr.children(0).tp() != tipb::Null))
+    for (Int32 i = 0; i < child_size; ++i)
     {
-        for (Int32 i = 0; i < child_size; ++i)
-        {
-            fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
-        }
+        fillArgumentDetail(actions, expr.children(i), arg_names, arg_types, arg_collators);
+    }
+    // For count(not null column), we can transform it to count() to avoid the cost of convertToFullColumn.
+    if (expr.tp() == tipb::ExprType::Count && !expr.has_distinct() && child_size == 1 && !arg_types[0]->isNullable())
+    {
+        arg_names.clear();
+        arg_types.clear();
+        arg_collators.clear();
     }
     appendAggDescription(arg_names, arg_types, arg_collators, agg_func_name, aggregate_descriptions, aggregated_columns, empty_input_as_null);
 }
