@@ -191,11 +191,6 @@ void MockProxyRegion::setSate(raft_serverpb::RegionLocalState s)
     this->state = s;
 }
 
-void MockProxyRegion::replay()
-{
-    auto _ = genLockGuard();
-}
-
 MockProxyRegion::MockProxyRegion(uint64_t id_)
     : id(id_)
 {
@@ -380,25 +375,25 @@ void MockRaftStoreProxy::normalWrite(
             cmd_cf,
         };
     }
-    normalWrite(kvs, tmt, cond, region_id, std::move(keys), std::move(vals), std::move(cmd_types), std::move(cmd_cf), index, term);
+    doApply(kvs, tmt, cond, region_id, index);
 }
 
-void MockRaftStoreProxy::normalWrite(
+void MockRaftStoreProxy::doApply(
     KVStore & kvs,
     TMTContext & tmt,
     const FailCond & cond,
     UInt64 region_id,
-    std::vector<HandleID> && keys,
-    std::vector<std::string> && vals,
-    std::vector<WriteCmdType> && cmd_types,
-    std::vector<ColumnFamilyType> && cmd_cf,
-    uint64_t index,
-    uint64_t term)
+    uint64_t index)
 {
     auto region = getRegion(region_id);
     assert(region != nullptr);
     // We apply this committed entry.
     raft_cmdpb::RaftCmdRequest request;
+    auto & keys = region->commands[index].keys;
+    auto & vals = region->commands[index].vals;
+    auto & cmd_types = region->commands[index].cmd_types;
+    auto & cmd_cf = region->commands[index].cmd_cf;
+    auto term = region->commands[index].term;
     size_t n = keys.size();
     assert(n == vals.size());
     assert(n == cmd_types.size());
@@ -428,6 +423,17 @@ void MockRaftStoreProxy::normalWrite(
     // Proxy advance
     if (cond.fail_before_proxy_advance) return;
     region->updateAppliedIndex(index);
+}
+
+void MockRaftStoreProxy::replay(
+    KVStore & kvs,
+    TMTContext & tmt,uint64_t region_id, uint64_t to) {
+    auto region = getRegion(region_id);
+    assert(region != nullptr);
+    FailCond cond;
+    for (uint64_t i = region->apply.get_applied_index() + 1; i <= to; i++) {
+        doApply(kvs, tmt, cond, region_id, i);
+    }
 }
 
 void GCMonitor::add(RawObjType type, int64_t diff)
