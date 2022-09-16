@@ -59,7 +59,7 @@ void PhysicalExchangeSender::transformImpl(DAGPipeline & pipeline, Context & con
 
     RUNTIME_ASSERT(dag_context.isMPPTask() && dag_context.tunnel_set != nullptr, log, "exchange_sender only run in MPP");
 
-    String extra_info = "";
+    String extra_info;
     if (fine_grained_shuffle.enable())
     {
         extra_info = String(enableFineGrainedShuffleExtraInfo);

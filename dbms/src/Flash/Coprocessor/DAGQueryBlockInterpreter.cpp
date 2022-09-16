@@ -739,7 +739,7 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     const uint64_t batch_size = query_block.exchange_sender->fine_grained_shuffle_batch_size();
 
     auto enable_fine_grained_shuffle = enableFineGrainedShuffle(stream_count);
-    String extra_info = "";
+    String extra_info;
     if (enable_fine_grained_shuffle)
     {
         extra_info = String(enableFineGrainedShuffleExtraInfo);
