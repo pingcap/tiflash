@@ -173,11 +173,12 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
 
     LOG_FMT_INFO(
         log,
-        "Finished writing DTFile from snapshot data, region={} file_idx={} file_rows={} file_bytes={} file_bytes_on_disk={} file={}",
+        "Finished writing DTFile from snapshot data, region={} file_idx={} file_rows={} file_bytes={} data_range={} file_bytes_on_disk={} file={}",
         child->getRegion()->toString(true),
         ingest_files.size() - 1,
         committed_rows_this_dt_file,
         committed_bytes_this_dt_file,
+        ingest_files_range.back().has_value() ? ingest_files_range.back()->toDebugString() : "(null)",
         bytes_written,
         dt_file->path());
 
@@ -324,7 +325,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::updateRangeFromNonEmptyBlock(Bl
                                .toRowKeyValue()
                                .toPrefixNext(); // because range is right-open.
 
-    // TODO: what if there are a lof of versions, exceeding a block size? Will our checks fail?
+    // Note: The underlying stream ensures that one row key will not fall into two blocks (when there are multiple versions).
+    // So we will never have overlapped range.
     RUNTIME_CHECK(compare(block_start, block_end.toRowKeyValueRef()) < 0);
 
     if (!current_file_range.has_value())
