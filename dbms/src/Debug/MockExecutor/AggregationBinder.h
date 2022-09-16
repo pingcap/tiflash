@@ -51,6 +51,11 @@ protected:
     std::vector<ASTPtr> gby_exprs;
     bool is_final_mode;
     DAGSchema output_schema_for_partial_agg;
+
+private:
+    void buildGroupBy(tipb::Aggregation * agg, int32_t collator_id, const Context & context) const;
+    void buildAggExpr(tipb::Aggregation * agg, int32_t collator_id, const Context & context) const;
+    void buildAggFunc(tipb::Expr * agg_func, const ASTFunction * func, int32_t collator_id) const;
 };
 
 ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs);

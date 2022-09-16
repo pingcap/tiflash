@@ -17,6 +17,7 @@
 #include <Debug/MockExecutor/ExchangeReceiverBinder.h>
 #include <Debug/MockExecutor/ExchangeSenderBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
+#include <fmt/core.h>
 
 namespace DB::mock
 {
@@ -25,65 +26,8 @@ bool AggregationBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t c
     tipb_executor->set_tp(tipb::ExecType::TypeAggregation);
     tipb_executor->set_executor_id(name);
     auto * agg = tipb_executor->mutable_aggregation();
-    auto & input_schema = children[0]->output_schema;
-    for (const auto & expr : agg_exprs)
-    {
-        const auto * func = typeid_cast<const ASTFunction *>(expr.get());
-        if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
-            throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
-
-        tipb::Expr * agg_func = agg->add_agg_func();
-
-        for (const auto & arg : func->arguments->children)
-        {
-            tipb::Expr * arg_expr = agg_func->add_children();
-            astToPB(input_schema, arg, arg_expr, collator_id, context);
-        }
-        auto agg_sig_it = tests::agg_func_name_to_sig.find(func->name);
-        if (agg_sig_it == tests::agg_func_name_to_sig.end())
-            throw Exception("Unsupported agg function: " + func->name, ErrorCodes::LOGICAL_ERROR);
-        auto agg_sig = agg_sig_it->second;
-        agg_func->set_tp(agg_sig);
-
-        if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
-        {
-            auto * ft = agg_func->mutable_field_type();
-            ft->set_tp(TiDB::TypeLongLong);
-            ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
-        }
-        else if (agg_sig == tipb::ExprType::Min || agg_sig == tipb::ExprType::Max || agg_sig == tipb::ExprType::First)
-        {
-            if (agg_func->children_size() != 1)
-                throw Exception("udaf " + func->name + " only accept 1 argument");
-            auto * ft = agg_func->mutable_field_type();
-            ft->set_tp(agg_func->children(0).field_type().tp());
-            ft->set_decimal(agg_func->children(0).field_type().decimal());
-            ft->set_flag(agg_func->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
-            ft->set_collate(collator_id);
-        }
-        else if (agg_sig == tipb::ExprType::ApproxCountDistinct)
-        {
-            auto * ft = agg_func->mutable_field_type();
-            ft->set_tp(TiDB::TypeString);
-            ft->set_flag(1);
-        }
-        else if (agg_sig == tipb::ExprType::GroupConcat)
-        {
-            auto * ft = agg_func->mutable_field_type();
-            ft->set_tp(TiDB::TypeString);
-        }
-        if (is_final_mode)
-            agg_func->set_aggfuncmode(tipb::AggFunctionMode::FinalMode);
-        else
-            agg_func->set_aggfuncmode(tipb::AggFunctionMode::Partial1Mode);
-    }
-
-    for (const auto & child : gby_exprs)
-    {
-        tipb::Expr * gby = agg->add_group_by();
-        astToPB(input_schema, child, gby, collator_id, context);
-    }
-
+    buildAggExpr(agg, collator_id, context);
+    buildGroupBy(agg, collator_id, context);
     auto * child_executor = agg->mutable_child();
     return children[0]->toTiPBExecutor(child_executor, collator_id, mpp_info, context);
 }
@@ -141,6 +85,7 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
     {
         partition_keys.push_back(i + agg_func_num);
     }
+
     std::shared_ptr<ExchangeSenderBinder> exchange_sender
         = std::make_shared<ExchangeSenderBinder>(executor_index, output_schema_for_partial_agg, partition_keys.empty() ? tipb::PassThrough : tipb::Hash, partition_keys);
     exchange_sender->children.push_back(partial_agg);
@@ -148,6 +93,7 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
     std::shared_ptr<ExchangeReceiverBinder> exchange_receiver
         = std::make_shared<ExchangeReceiverBinder>(executor_index, output_schema_for_partial_agg);
     exchange_map[exchange_receiver->name] = std::make_pair(exchange_receiver, exchange_sender);
+
     /// re-construct agg_exprs and gby_exprs in final_agg
     for (size_t i = 0; i < partial_agg->agg_exprs.size(); ++i)
     {
@@ -180,6 +126,81 @@ size_t AggregationBinder::exprSize() const
 bool AggregationBinder::hasUniqRawRes() const
 {
     return has_uniq_raw_res;
+}
+
+void AggregationBinder::buildGroupBy(tipb::Aggregation * agg, int32_t collator_id, const Context & context) const
+{
+    auto & input_schema = children[0]->output_schema;
+    for (const auto & child : gby_exprs)
+    {
+        tipb::Expr * gby = agg->add_group_by();
+        astToPB(input_schema, child, gby, collator_id, context);
+    }
+}
+
+void AggregationBinder::buildAggExpr(tipb::Aggregation * agg, int32_t collator_id, const Context & context) const
+{
+    auto & input_schema = children[0]->output_schema;
+
+    for (const auto & expr : agg_exprs)
+    {
+        const auto * func = typeid_cast<const ASTFunction *>(expr.get());
+        if (!func || !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+            throw Exception("Only agg function is allowed in select for a query with aggregation", ErrorCodes::LOGICAL_ERROR);
+
+        tipb::Expr * agg_func = agg->add_agg_func();
+
+        for (const auto & arg : func->arguments->children)
+        {
+            tipb::Expr * arg_expr = agg_func->add_children();
+            astToPB(input_schema, arg, arg_expr, collator_id, context);
+        }
+
+        buildAggFunc(agg_func, func, collator_id);
+    }
+}
+
+void AggregationBinder::buildAggFunc(tipb::Expr * agg_func, const ASTFunction * func, int32_t collator_id) const
+{
+    auto agg_sig_it = tests::agg_func_name_to_sig.find(func->name);
+    if (agg_sig_it == tests::agg_func_name_to_sig.end())
+        throw Exception("Unsupported agg function: " + func->name, ErrorCodes::LOGICAL_ERROR);
+
+    auto agg_sig = agg_sig_it->second;
+    agg_func->set_tp(agg_sig);
+
+    if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
+    {
+        auto * ft = agg_func->mutable_field_type();
+        ft->set_tp(TiDB::TypeLongLong);
+        ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
+    }
+    else if (agg_sig == tipb::ExprType::Min || agg_sig == tipb::ExprType::Max || agg_sig == tipb::ExprType::First)
+    {
+        if (agg_func->children_size() != 1)
+            throw Exception(fmt::format("Agg function({}) only accept 1 argument", func->name));
+
+        auto * ft = agg_func->mutable_field_type();
+        ft->set_tp(agg_func->children(0).field_type().tp());
+        ft->set_decimal(agg_func->children(0).field_type().decimal());
+        ft->set_flag(agg_func->children(0).field_type().flag() & (~TiDB::ColumnFlagNotNull));
+        ft->set_collate(collator_id);
+    }
+    else if (agg_sig == tipb::ExprType::ApproxCountDistinct)
+    {
+        auto * ft = agg_func->mutable_field_type();
+        ft->set_tp(TiDB::TypeString);
+        ft->set_flag(1);
+    }
+    else if (agg_sig == tipb::ExprType::GroupConcat)
+    {
+        auto * ft = agg_func->mutable_field_type();
+        ft->set_tp(TiDB::TypeString);
+    }
+    if (is_final_mode)
+        agg_func->set_aggfuncmode(tipb::AggFunctionMode::FinalMode);
+    else
+        agg_func->set_aggfuncmode(tipb::AggFunctionMode::Partial1Mode);
 }
 
 ExecutorBinderPtr compileAggregation(ExecutorBinderPtr input, size_t & executor_index, ASTPtr agg_funcs, ASTPtr group_by_exprs)

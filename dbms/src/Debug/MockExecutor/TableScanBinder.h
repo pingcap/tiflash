@@ -43,6 +43,8 @@ private:
 
 private:
     void setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnInfo & dag_column_info) const;
+    void buildPartionTable(tipb::Executor * tipb_executor);
+    void buildTable(tipb::Executor * tipb_executor);
 };
 
 ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column);

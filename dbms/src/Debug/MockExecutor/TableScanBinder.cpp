@@ -21,25 +21,10 @@ namespace DB::mock
 bool TableScanBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t, const MPPInfo &, const Context &)
 {
     if (table_info.is_partition_table)
-    {
-        tipb_executor->set_tp(tipb::ExecType::TypePartitionTableScan);
-        tipb_executor->set_executor_id(name);
-        auto * partition_ts = tipb_executor->mutable_partition_table_scan();
-        partition_ts->set_table_id(table_info.id);
-        for (const auto & info : output_schema)
-            setTipbColumnInfo(partition_ts->add_columns(), info);
-        for (const auto & partition : table_info.partition.definitions)
-            partition_ts->add_partition_ids(partition.id);
-    }
+        buildPartionTable(tipb_executor);
     else
-    {
-        tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
-        tipb_executor->set_executor_id(name);
-        auto * ts = tipb_executor->mutable_tbl_scan();
-        ts->set_table_id(table_info.id);
-        for (const auto & info : output_schema)
-            setTipbColumnInfo(ts->add_columns(), info);
-    }
+        buildTable(tipb_executor);
+
     return true;
 }
 
@@ -83,6 +68,28 @@ void TableScanBinder::setTipbColumnInfo(tipb::ColumnInfo * ci, const DAGColumnIn
             ci->add_elems(pair.first);
         }
     }
+}
+
+void TableScanBinder::buildPartionTable(tipb::Executor * tipb_executor)
+{
+    tipb_executor->set_tp(tipb::ExecType::TypePartitionTableScan);
+    tipb_executor->set_executor_id(name);
+    auto * partition_ts = tipb_executor->mutable_partition_table_scan();
+    partition_ts->set_table_id(table_info.id);
+    for (const auto & info : output_schema)
+        setTipbColumnInfo(partition_ts->add_columns(), info);
+    for (const auto & partition : table_info.partition.definitions)
+        partition_ts->add_partition_ids(partition.id);
+}
+
+void TableScanBinder::buildTable(tipb::Executor * tipb_executor)
+{
+    tipb_executor->set_tp(tipb::ExecType::TypeTableScan);
+    tipb_executor->set_executor_id(name);
+    auto * ts = tipb_executor->mutable_tbl_scan();
+    ts->set_table_id(table_info.id);
+    for (const auto & info : output_schema)
+        setTipbColumnInfo(ts->add_columns(), info);
 }
 
 ExecutorBinderPtr compileTableScan(size_t & executor_index, TableInfo & table_info, const String & db, const String & table_name, bool append_pk_column)
