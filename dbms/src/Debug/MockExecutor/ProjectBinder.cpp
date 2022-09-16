@@ -29,7 +29,7 @@ bool ProjectBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t colla
         if (typeid_cast<ASTAsterisk *>(child.get()))
         {
             /// special case, select *
-            for (size_t i = 0; i < input_schema.size(); i++)
+            for (size_t i = 0; i < input_schema.size(); ++i)
             {
                 tipb::Expr * expr = proj->add_exprs();
                 expr->set_tp(tipb::ColumnRef);

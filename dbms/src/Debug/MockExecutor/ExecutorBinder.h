@@ -16,8 +16,8 @@
 
 #include <Debug/DAGProperties.h>
 #include <Debug/MockComputeServerManager.h>
-#include <Debug/MockExecutor/astToExecutor.h>
-#include <Debug/MockExecutor/astToExecutorUtils.h>
+#include <Debug/MockExecutor/AstToExecutor.h>
+#include <Debug/MockExecutor/AstToExecutorUtils.h>
 
 
 namespace DB::mock

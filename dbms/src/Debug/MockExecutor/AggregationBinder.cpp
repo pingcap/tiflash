@@ -136,7 +136,7 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
     partial_agg->children.push_back(children[0]);
     std::vector<size_t> partition_keys;
     size_t agg_func_num = partial_agg->agg_exprs.size();
-    for (size_t i = 0; i < partial_agg->gby_exprs.size(); i++)
+    for (size_t i = 0; i < partial_agg->gby_exprs.size(); ++i)
     {
         partition_keys.push_back(i + agg_func_num);
     }
@@ -148,7 +148,7 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
         = std::make_shared<ExchangeReceiverBinder>(executor_index, output_schema_for_partial_agg);
     exchange_map[exchange_receiver->name] = std::make_pair(exchange_receiver, exchange_sender);
     /// re-construct agg_exprs and gby_exprs in final_agg
-    for (size_t i = 0; i < partial_agg->agg_exprs.size(); i++)
+    for (size_t i = 0; i < partial_agg->agg_exprs.size(); ++i)
     {
         const auto * agg_func = typeid_cast<const ASTFunction *>(partial_agg->agg_exprs[i].get());
         ASTPtr update_agg_expr = agg_func->clone();
@@ -159,7 +159,7 @@ void AggregationBinder::toMPPSubPlan(size_t & executor_index, const DAGPropertie
         update_agg_func->arguments->children.push_back(std::make_shared<ASTIdentifier>(output_schema_for_partial_agg[i].first));
         agg_exprs.push_back(update_agg_expr);
     }
-    for (size_t i = 0; i < partial_agg->gby_exprs.size(); i++)
+    for (size_t i = 0; i < partial_agg->gby_exprs.size(); ++i)
     {
         gby_exprs.push_back(std::make_shared<ASTIdentifier>(output_schema_for_partial_agg[agg_func_num + i].first));
     }

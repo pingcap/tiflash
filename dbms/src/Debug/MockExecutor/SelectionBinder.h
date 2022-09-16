@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Debug/MockExecutor/AstToExecutor.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
-#include <Debug/MockExecutor/astToExecutor.h>
 
 namespace DB::mock
 {

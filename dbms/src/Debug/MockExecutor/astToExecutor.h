@@ -16,8 +16,8 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/FieldToDataType.h>
-#include <Debug/MockExecutor/astToExecutorUtils.h>
-#include <Debug/MockExecutor/funcSigs.h>
+#include <Debug/MockExecutor/AstToExecutorUtils.h>
+#include <Debug/MockExecutor/FuncSigs.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Functions/FunctionFactory.h>

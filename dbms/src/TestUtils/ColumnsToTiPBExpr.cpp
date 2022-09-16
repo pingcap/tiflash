@@ -14,7 +14,7 @@
 
 #include <Columns/ColumnNullable.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <Debug/MockExecutor/astToExecutor.h>
+#include <Debug/MockExecutor/AstToExecutor.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <TestUtils/ColumnsToTiPBExpr.h>

@@ -17,6 +17,7 @@
 #include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockExecutor/AggregationBinder.h>
+#include <Debug/MockExecutor/AstToExecutor.h>
 #include <Debug/MockExecutor/ExchangeBinder.h>
 #include <Debug/MockExecutor/ExecutorBinder.h>
 #include <Debug/MockExecutor/JoinBinder.h>
@@ -27,7 +28,6 @@
 #include <Debug/MockExecutor/TableScanBinder.h>
 #include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/MockExecutor/WindowBinder.h>
-#include <Debug/MockExecutor/astToExecutor.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
 #include <Storages/Transaction/Types.h>
