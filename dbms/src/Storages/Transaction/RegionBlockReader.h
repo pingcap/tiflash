@@ -1,5 +1,6 @@
 #pragma once
 
+<<<<<<< HEAD
 #include <Core/Names.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Transaction/RegionDataRead.h>
@@ -16,6 +17,13 @@ class IManageableStorage;
 using ManageableStoragePtr = std::shared_ptr<IManageableStorage>;
 
 struct ColumnsDescription;
+=======
+#include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/RegionDataRead.h>
+
+namespace DB
+{
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 class Block;
 
 class RegionScanFilter
@@ -110,13 +118,23 @@ public:
 
     /// Read `data_list` as a block.
     ///
-    /// On decode error, i.e. column number/type mismatch, will do force apply schema,
+    /// On decode error, i.e. column number/type mismatch, caller should trigger a schema-sync and retry with `force_decode=True`,
     /// i.e. add/remove/cast unknown/missing/type-mismatch column if force_decode is true, otherwise return empty block and false.
     /// Moreover, exception will be thrown if we see fatal decode error meanwhile `force_decode` is true.
     ///
+<<<<<<< HEAD
     /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of TXN engine (Delta-Tree, TXN-MergeTree),
     /// each of which will use carefully adjusted 'start_ts' and 'force_decode' with appropriate error handling/retry to get what they want.
     std::tuple<Block, bool> read(const Names & column_names_to_read, RegionDataReadInfoList & data_list, bool force_decode);
+=======
+    /// `RegionBlockReader::read` is the common routine used by both 'flush' and 'read' processes of Delta-Tree engine,
+    /// which will use carefully adjusted 'force_decode' with appropriate error handling/retry to get what they want.
+    bool read(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
+
+private:
+    template <TMTPKType pk_type>
+    bool readImpl(Block & block, const RegionDataReadInfoList & data_list, bool force_decode);
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 
     ///  Read all columns from `data_list` as a block.
     inline std::tuple<Block, bool> read(RegionDataReadInfoList & data_list, bool force_decode)

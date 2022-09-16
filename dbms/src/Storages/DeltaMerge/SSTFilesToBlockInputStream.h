@@ -41,6 +41,7 @@ using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBl
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
+<<<<<<< HEAD
     SSTFilesToBlockInputStream(RegionPtr                             region_,
                                const SSTViewVec &                    snaps_,
                                const TiFlashRaftProxyHelper *        proxy_helper_,
@@ -50,6 +51,17 @@ public:
                                TMTContext &                          tmt_,
                                size_t                                expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream();
+=======
+    SSTFilesToBlockInputStream(RegionPtr region_,
+                               const SSTViewVec & snaps_,
+                               const TiFlashRaftProxyHelper * proxy_helper_,
+                               DecodingStorageSchemaSnapshotConstPtr schema_snap_,
+                               Timestamp gc_safepoint_,
+                               bool force_decode_,
+                               TMTContext & tmt_,
+                               size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
+    ~SSTFilesToBlockInputStream() override;
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 

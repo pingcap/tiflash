@@ -84,11 +84,20 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
     const ColumnAggregateFunction & from_concrete = static_cast<const ColumnAggregateFunction &>(from);
 
     if (start + length > from_concrete.getData().size())
+<<<<<<< HEAD
         throw Exception("Parameters start = " + toString(start) + ", length = " + toString(length)
                 + " are out of bound in ColumnAggregateFunction::insertRangeFrom method"
                   " (data.size() = "
                 + toString(from_concrete.getData().size())
                 + ").",
+=======
+        throw Exception(
+            fmt::format(
+                "Parameters are out of bound in ColumnAggregateFunction::insertRangeFrom method, start={}, length={}, from.size()={}",
+                start,
+                length,
+                from_concrete.getData().size()),
+>>>>>>> 8e411ae86b (Fix decode error when "NULL" value in the column with "primary key" flag (#5879))
             ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     if (!empty() && src.get() != &from_concrete)
