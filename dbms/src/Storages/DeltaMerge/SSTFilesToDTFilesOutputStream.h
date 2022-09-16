@@ -59,14 +59,28 @@ enum class FileConvertJobType
 
 // This class is tightly coupling with BoundedSSTFilesToBlockInputStream
 // to get some info of the decoding process.
+template <typename ChildStream>
 class SSTFilesToDTFilesOutputStream : private boost::noncopyable
 {
 public:
-    SSTFilesToDTFilesOutputStream(BoundedSSTFilesToBlockInputStreamPtr child_,
+    /**
+     * When `split_after_rows` or `split_after_size` are > 0, multiple DTFiles will be produced.
+     * When `0` is specified for both parameters, only one DTFile will be produced.
+     *
+     * As the stream is processed by blocks, each DTFile is not ensured truncated at the specified
+     * rows or size: it is possible that one DTFile is significantly large, if a large Block
+     * is produced by the `child`.
+     *
+     * @param split_after_rows_ Split for a new DTFile when reaching specified rows.
+     * @param split_after_size_ Split for a new DTFile when reaching specified bytes.
+     */
+    SSTFilesToDTFilesOutputStream(ChildStream child_,
                                   StorageDeltaMergePtr storage_,
                                   DecodingStorageSchemaSnapshotConstPtr schema_snap_,
                                   TiDB::SnapshotApplyMethod method_,
                                   FileConvertJobType job_type_,
+                                  UInt64 split_after_rows_,
+                                  UInt64 split_after_size_,
                                   TMTContext & tmt_);
     ~SSTFilesToDTFilesOutputStream();
 
@@ -74,34 +88,86 @@ public:
     void writeSuffix();
     void write();
 
+    /**
+     * The DTFile page ids that can be ingested.
+     * The returned vector is ensured to be ordered in ascending order.
+     */
     PageIds ingestIds() const;
 
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
 
 private:
+    /**
+     * Generate a DMFilePtr and its DMFileBlockOutputStream.
+     */
     bool newDTFileStream();
-
-    // Stop the process for decoding committed data into DTFiles
-    void stop();
+    /**
+     * Close the current DMFile stream.
+     */
+    bool finalizeDTFileStream();
 
 private:
-    BoundedSSTFilesToBlockInputStreamPtr child;
+    ChildStream child;
     StorageDeltaMergePtr storage;
     DecodingStorageSchemaSnapshotConstPtr schema_snap;
     const TiDB::SnapshotApplyMethod method;
     const FileConvertJobType job_type;
+    const UInt64 split_after_rows;
+    const UInt64 split_after_size;
     TMTContext & tmt;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
     std::vector<DMFilePtr> ingest_files;
 
-    size_t schema_sync_trigger_count = 0;
-    size_t commit_rows = 0;
+    /**
+     * How many rows has been committed to the current DTFile.
+     */
+    size_t committed_rows_this_dt_file = 0;
+    size_t committed_bytes_this_dt_file = 0;
+
+    /**
+     * How many rows has been committed so far.
+     */
+    size_t total_committed_rows = 0;
+    size_t total_committed_bytes = 0;
+
     Stopwatch watch;
 };
+
+class MockSSTFilesToDTFilesOutputStreamChild : private boost::noncopyable
+{
+public:
+    MockSSTFilesToDTFilesOutputStreamChild()
+    {}
+
+    void readPrefix() {}
+
+    void readSuffix() {}
+
+    RegionPtr getRegion() const
+    {
+        throw Exception("unimplemented");
+    }
+
+    Block read()
+    {
+        throw Exception("unimplemented");
+    }
+
+    std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() const
+    {
+        throw Exception("unimplemented");
+    }
+
+    SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const
+    {
+        throw Exception("unimplemented");
+    }
+};
+
 
 } // namespace DM
 } // namespace DB
