@@ -14,6 +14,7 @@
 
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PartitionStreams.h>

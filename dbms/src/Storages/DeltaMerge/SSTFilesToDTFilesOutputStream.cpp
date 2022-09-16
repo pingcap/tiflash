@@ -140,6 +140,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
     dt_stream = std::make_unique<DMFileBlockOutputStream>(context, dt_file, *(schema_snap->column_defines), flags);
     dt_stream->writePrefix();
     ingest_files.emplace_back(dt_file);
+    ingest_files_range.emplace_back(std::nullopt);
     committed_rows_this_dt_file = 0;
     committed_bytes_this_dt_file = 0;
 
@@ -172,11 +173,12 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
 
     LOG_FMT_INFO(
         log,
-        "Finished writing DTFile from snapshot data, region={} file_idx={} file_rows={} file_bytes={} file_bytes_on_disk={} file={}",
+        "Finished writing DTFile from snapshot data, region={} file_idx={} file_rows={} file_bytes={} data_range={} file_bytes_on_disk={} file={}",
         child->getRegion()->toString(true),
         ingest_files.size() - 1,
         committed_rows_this_dt_file,
         committed_bytes_this_dt_file,
+        ingest_files_range.back().has_value() ? ingest_files_range.back()->toDebugString() : "(null)",
         bytes_written,
         dt_file->path());
 
@@ -213,6 +215,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
             SortDescription sort;
             sort.emplace_back(MutableSupport::tidb_pk_column_name, 1, 0);
             sort.emplace_back(MutableSupport::version_column_name, 1, 0);
+
             if (unlikely(block.rows() > 1 && !isAlreadySorted(block, sort)))
             {
                 const String error_msg
@@ -235,6 +238,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
                 throw Exception(error_msg);
             }
         }
+
+        updateRangeFromNonEmptyBlock(block); // We have checked block is not empty previously.
 
         // Write block to the output stream
         DMFileBlockOutputStream::BlockProperty property;
@@ -262,14 +267,28 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
 }
 
 template <typename ChildStream>
-PageIds SSTFilesToDTFilesOutputStream<ChildStream>::ingestIds() const
+std::vector<ExternalDTFileInfo> SSTFilesToDTFilesOutputStream<ChildStream>::outputFiles() const
 {
-    PageIds ids;
-    for (const auto & file : ingest_files)
+    RUNTIME_CHECK(
+        ingest_files.size() == ingest_files_range.size(),
+        ingest_files.size(),
+        ingest_files_range.size());
+
+    auto files = std::vector<ExternalDTFileInfo>{};
+    files.reserve(ingest_files.size());
+    for (size_t i = 0; i < ingest_files.size(); i++)
     {
-        ids.emplace_back(file->fileId());
+        // We should never have empty DTFile and empty DTFile ranges.
+        RUNTIME_CHECK(ingest_files_range[i].has_value());
+
+        auto external_file = ExternalDTFileInfo{
+            .id = ingest_files[i]->fileId(),
+            .range = ingest_files_range[i].value(),
+        };
+        files.emplace_back(external_file);
     }
-    return ids;
+
+    return files;
 }
 
 template <typename ChildStream>
@@ -287,6 +306,43 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::cancel()
             tryLogCurrentException(log, fmt::format("ignore exception while canceling SST files to DeltaTree files stream [file={}]", file->path()));
         }
     }
+}
+
+template <typename ChildStream>
+void SSTFilesToDTFilesOutputStream<ChildStream>::updateRangeFromNonEmptyBlock(Block & block)
+{
+    // TODO: Now we update the rangeEnd for every block. We can update the rangeEnd only once,
+    //  just before a new DTFile is going to be created.
+
+    RUNTIME_CHECK(block.rows() > 0);
+
+    const auto & pk_col = block.getByName(MutableSupport::tidb_pk_column_name);
+    const auto rowkey_column = RowKeyColumnContainer(pk_col.column, schema_snap->is_common_handle);
+    auto & current_file_range = ingest_files_range.back();
+
+    auto const block_start = rowkey_column.getRowKeyValue(0);
+    auto const block_end = rowkey_column.getRowKeyValue(pk_col.column->size() - 1) //
+                               .toRowKeyValue()
+                               .toPrefixNext(); // because range is right-open.
+
+    // Note: The underlying stream ensures that one row key will not fall into two blocks (when there are multiple versions).
+    // So we will never have overlapped range.
+    RUNTIME_CHECK(compare(block_start, block_end.toRowKeyValueRef()) < 0);
+
+    if (!current_file_range.has_value())
+    {
+        current_file_range = RowKeyRange( //
+            block_start.toRowKeyValue(),
+            block_end,
+            schema_snap->is_common_handle,
+            schema_snap->rowkey_column_size);
+    }
+    else
+    {
+        RUNTIME_CHECK(compare(block_start, current_file_range->getStart()) > 0);
+        current_file_range->setEnd(block_end);
+    }
+    RUNTIME_CHECK(!current_file_range->none());
 }
 
 template class SSTFilesToDTFilesOutputStream<BoundedSSTFilesToBlockInputStreamPtr>;
