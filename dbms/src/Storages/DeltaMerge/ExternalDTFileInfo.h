@@ -12,19 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef NO_TIFLASH_INTERNAL_MEMCPY
+#pragma once
 
-#if defined(__SSE2__)
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/Page/PageDefines.h>
+#include <fmt/core.h>
 
-#include <common/sse2_memcpy.h>
-
-/// This is needed to generate an object file for linking.
-
-extern "C" __attribute__((visibility("default"))) void * memcpy(void * __restrict dst, const void * __restrict src, size_t size)
+namespace DB::DM
 {
-    return sse2_inline_memcpy(dst, src, size);
-}
 
-#endif
+struct ExternalDTFileInfo
+{
+    /**
+     * The allocated PageId of the file.
+     */
+    PageId id;
 
-#endif
+    /**
+     * The handle range of contained data.
+     */
+    RowKeyRange range;
+
+    std::string toString() const
+    {
+        return fmt::format(
+            "<file=dmf_{} range={}>",
+            id,
+            range.toDebugString());
+    }
+};
+
+} // namespace DB::DM

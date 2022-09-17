@@ -16,6 +16,7 @@
 
 #include <Common/Stopwatch.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/SSTFilesToBlockInputStream.h>
 #include <Storages/Page/PageDefines.h>
 
@@ -83,10 +84,9 @@ public:
     void write();
 
     /**
-     * The DTFile page ids that can be ingested.
-     * The returned vector is ensured to be ordered in ascending order.
+     * The DTFiles that can be ingested. The returned vector is ensured to be sorted by the file range in ascending order.
      */
-    PageIds ingestIds() const;
+    std::vector<ExternalDTFileInfo> outputFiles() const;
 
     // Try to cleanup the files in `ingest_files` quickly.
     void cancel();
@@ -100,6 +100,11 @@ private:
      * Close the current DMFile stream.
      */
     bool finalizeDTFileStream();
+
+    /**
+     * Update the range for the current DTFile.
+     */
+    void updateRangeFromNonEmptyBlock(Block & block);
 
 private:
     ChildStream child;
@@ -115,6 +120,7 @@ private:
     std::unique_ptr<DMFileBlockOutputStream> dt_stream;
 
     std::vector<DMFilePtr> ingest_files;
+    std::vector<std::optional<RowKeyRange>> ingest_files_range;
 
     /**
      * How many rows has been committed to the current DTFile.
