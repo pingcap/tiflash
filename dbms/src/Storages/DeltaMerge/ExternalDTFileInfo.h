@@ -12,28 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/RateLimiter.h>
+#pragma once
 
-namespace DB
-{
-class MockReadLimiter final : public ReadLimiter
-{
-public:
-    MockReadLimiter(
-        std::function<Int64()> getIOStatistic_,
-        Int64 rate_limit_per_sec_,
-        LimiterType type_ = LimiterType::UNKNOW,
-        UInt64 refill_period_ms_ = 100)
-        : ReadLimiter(getIOStatistic_, rate_limit_per_sec_, type_, refill_period_ms_)
-    {
-    }
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/Page/PageDefines.h>
+#include <fmt/core.h>
 
-protected:
-    void consumeBytes(Int64 bytes) override
+namespace DB::DM
+{
+
+struct ExternalDTFileInfo
+{
+    /**
+     * The allocated PageId of the file.
+     */
+    PageId id;
+
+    /**
+     * The handle range of contained data.
+     */
+    RowKeyRange range;
+
+    std::string toString() const
     {
-        alloc_bytes += std::min(available_balance, bytes);
-        available_balance -= bytes;
+        return fmt::format(
+            "<file=dmf_{} range={}>",
+            id,
+            range.toDebugString());
     }
 };
 
-} // namespace DB
+} // namespace DB::DM

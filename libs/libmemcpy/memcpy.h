@@ -18,6 +18,9 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace legacy
+{
+
 /** Custom memcpy implementation for ClickHouse.
   * It has the following benefits over using glibc's implementation:
   * 1. Avoiding dependency on specific version of glibc's symbol, like memcpy@@GLIBC_2.14 for portability.
@@ -226,3 +229,4 @@ tail:
     }
     return ret;
 }
+} // namespace legacy
