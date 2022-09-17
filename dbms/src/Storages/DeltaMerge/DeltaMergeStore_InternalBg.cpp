@@ -565,7 +565,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
         compact_reason = GC::MergeDeltaReason::TooManyDeleteRange;
     }
 
-    if (!should_compact && segment->isValidDataRatioChecked())
+    if (!should_compact && !segment->isValidDataRatioChecked())
     {
         if (GC::shouldCompactStableWithTooMuchDataOutOfSegmentRange(
                 *dm_context,
