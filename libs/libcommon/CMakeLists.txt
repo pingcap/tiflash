@@ -160,7 +160,7 @@ endif ()
 if (TIFLASH_ENABLE_AVX_SUPPORT)
     # https://gcc.gnu.org/onlinedocs/gcc/x86-Options.html
     set_source_files_properties(src/mem_utils_avx2.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
-    set_source_files_properties(src/avx2_mem_utils_impl.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
+    set_source_files_properties(src/avx2_mem_utils_impl.cpp APPEND COMPILE_FLAGS "-mavx -mavx2 ${COMPILER_MOVBE_FLAG} -fomit-frame-pointer")
     if (TIFLASH_COMPILER_VPCLMULQDQ_SUPPORT)
         set_source_files_properties(src/crc64_avx2.cpp
                 APPEND COMPILE_FLAGS "-mavx2 -mpclmul -mvpclmulqdq -Wno-ignored-attributes")

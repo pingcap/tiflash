@@ -203,7 +203,6 @@ CATCH
 TEST_F(ExecutorTopNTestRunner, TopN)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     std::shared_ptr<tipb::DAGRequest> request;
     std::vector<ColumnsWithTypeAndName> expect_cols;
 
@@ -229,10 +228,7 @@ try
                 else
                     expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.begin() + limit_num))});
 
-                ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 2), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 4), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 8), expect_cols[0]);
+                executeAndAssertColumnsEqual(request, expect_cols.back());
             }
         }
     }
@@ -265,10 +261,9 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(table_name, order_by_items[i], 100);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 
@@ -286,7 +281,6 @@ try
     ASTPtr col3_ast = col(col_name[3]);
     ASTPtr func_ast;
 
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     {
         /// "and" function
         expect_cols = {{toNullableVec<Int32>(col_name[0], ColumnWithInt32{{}, {}, 32, 27, 36, 34}),
@@ -301,7 +295,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 
@@ -319,7 +313,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 
@@ -337,12 +331,11 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 
     /// TODO more functions...
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 CATCH
 

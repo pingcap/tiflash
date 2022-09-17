@@ -12,27 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
-#include <Flash/Mpp/TaskStatus.h>
+#include <Common/ClickHouseRevision.h>
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/TemporaryFileStream.h>
 
 namespace DB
 {
-StringRef taskStatusToString(const TaskStatus & status)
+TemporaryFileStream::TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_)
+    : file_provider{file_provider_}
+    , file_in(file_provider, path, EncryptionPath(path, ""))
+    , compressed_in(file_in)
+    , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get()))
+{}
+
+TemporaryFileStream::~TemporaryFileStream()
 {
-    switch (status)
-    {
-    case INITIALIZING:
-        return "INITIALIZING";
-    case RUNNING:
-        return "RUNNING";
-    case FINISHED:
-        return "FINISHED";
-    case CANCELLED:
-        return "CANCELLED";
-    case FAILED:
-        return "FAILED";
-    default:
-        throw Exception("Unknown TaskStatus");
-    }
+    file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
 }
 } // namespace DB

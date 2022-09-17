@@ -16,6 +16,8 @@
 #include <common/config_common.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <openssl/opensslconf.h>
+#include <openssl/opensslv.h>
 
 #include <ostream>
 #include <string>
@@ -51,15 +53,21 @@ std::string getUTCBuildTime()
 {
     return TIFLASH_UTC_BUILD_TIME;
 }
+// clang-format off
 std::string getEnabledFeatures()
 {
     std::vector<std::string> features
     {
 // allocator
 #if USE_JEMALLOC
-        "jemalloc",
+            "jemalloc",
 #elif USE_MIMALLOC
-        "mimalloc",
+            "mimalloc",
+#endif
+
+// sm4
+#if OPENSSL_VERSION_NUMBER >= 0x1010100fL && !defined(OPENSSL_NO_SM4)
+            "sm4",
 #endif
 
 // mem-profiling
@@ -119,6 +127,7 @@ std::string getEnabledFeatures()
     };
     return fmt::format("{}", fmt::join(features.begin(), features.end(), " "));
 }
+// clang-format on
 std::string getProfile()
 {
     return TIFLASH_PROFILE;
