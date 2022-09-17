@@ -14,6 +14,17 @@
 
 #include <Functions/FunctionUnaryArithmetic.h>
 
+inline long long bit_count(long long value) {
+    value = value - ((value >> 1) & 0x5555555555555555);
+    value = (value & 0x3333333333333333) + ((value >> 2) & 0x3333333333333333);
+    value = (value & 0x0f0f0f0f0f0f0f0f) + ((value >> 4) & 0x0f0f0f0f0f0f0f0f);
+    value = value + (value >> 8);
+    value = value + (value >> 16);
+    value = value + (value >> 32);
+    value = value & 0x7f;
+    return value;
+}
+
 namespace DB
 {
 namespace
@@ -22,27 +33,22 @@ namespace
 template <typename A>
 struct BitCountImpl
 {
-    using ResultType = int64_t;
-    using Type = typename NumberTraits::Construct<std::is_signed_v<A>, false, std::is_floating_point_v<A> ? 8 : sizeof(A)>::Type;
+    using ResultType = UInt64;
+
     static ResultType apply(A a)
     {
-        ResultType value;
-        if constexpr (IsDecimal<A>)
-        {
-            value = static_cast<ResultType>(a.value);
-        }
-        else
-        {
-            value = static_cast<ResultType>(static_cast<Type>(a));
-        }
-        value = value - ((value >> 1) & 0x5555555555555555);
-        value = (value & 0x3333333333333333) + ((value >> 2) & 0x3333333333333333);
-        value = (value & 0x0f0f0f0f0f0f0f0f) + ((value >> 4) & 0x0f0f0f0f0f0f0f0f);
-        value = value + (value >> 8);
-        value = value + (value >> 16);
-        value = value + (value >> 32);
-        value = value & 0x7f;
-        return value;
+        return bit_count(a);
+    }
+};
+
+template <typename A>
+struct BitCountImpl<Decimal<A>>
+{
+    using ResultType = UInt64;
+
+    static ResultType apply(Decimal<A> a)
+    {
+        return bit_count(a);
     }
 };
 
@@ -73,3 +79,4 @@ void registerFunctionBitCount(FunctionFactory & factory)
 }
 
 } // namespace DB
+
