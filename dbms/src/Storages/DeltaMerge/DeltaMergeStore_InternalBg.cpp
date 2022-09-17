@@ -336,7 +336,7 @@ bool shouldCompactStableWithTooManyInvalidVersion(const SegmentPtr & seg, DB::Ti
     return false;
 }
 
-bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double invalid_data_ratio_threshold, const LoggerPtr & log)
+bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentPtr & segment, const SegmentSnapshotPtr & snap, const RowKeyRange & segment_range, double invalid_data_ratio_threshold, const LoggerPtr & log)
 {
     auto actual_delete_range = snap->delta->getSquashDeleteRange().shrink(segment_range);
     if (actual_delete_range.none())
@@ -347,8 +347,6 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     auto stable_rows = snap->stable->getRows();
     auto stable_bytes = snap->stable->getBytes();
 
-    LOG_FMT_TRACE(log, "delete range rows [{}], delete_bytes [{}] stable_rows [{}] stable_bytes [{}]", delete_rows, delete_bytes, stable_rows, stable_bytes);
-
     // 1. for small tables, the data may just reside in delta and stable_rows may be 0,
     //   so the `=` in `>=` is needed to cover the scenario when set tiflash replica of small tables to 0.
     //   (i.e. `actual_delete_range` is not none, but `delete_rows` and `stable_rows` are both 0).
@@ -356,7 +354,20 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentSnapsh
     //   because before write apply snapshot file, it will write a delete range first, and will meet the following gc criteria.
     //   But the cost should be really minor because merge delta on an empty segment should be very fast.
     //   What's more, we can ignore this kind of delete range in future to avoid this extra gc.
-    return (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
+    auto check_result = (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
+
+    LOG_FMT_TRACE(
+        log,
+        "GC - Checking shouldCompactDeltaWithStable, "
+        "check_result={} delete_rows={}, delete_bytes={} stable_rows={} stable_bytes={} segment={}",
+        check_result,
+        delete_rows,
+        delete_bytes,
+        stable_rows,
+        stable_bytes,
+        segment->simpleInfo());
+
+    return check_result;
 }
 
 std::unordered_set<UInt64> getDMFileIDs(const SegmentPtr & seg)
@@ -385,15 +396,20 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
                                                          double invalid_data_ratio_threshold,
                                                          const LoggerPtr & log)
 {
-    std::unordered_set<UInt64> prev_segment_file_ids = getDMFileIDs(prev_seg);
-    std::unordered_set<UInt64> next_segment_file_ids = getDMFileIDs(next_seg);
     auto [first_pack_included, last_pack_included] = snap->stable->isFirstAndLastPackIncludedInRange(context, seg->getRowKeyRange());
     // Do a quick check about whether the DTFile is completely included in the segment range
     if (first_pack_included && last_pack_included)
     {
+        LOG_FMT_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange marking "
+                           "segment as valid data ratio checked because all packs are included, segment={}",
+                      seg->info());
         seg->setValidDataRatioChecked();
         return false;
     }
+
+    std::unordered_set<UInt64> prev_segment_file_ids = getDMFileIDs(prev_seg);
+    std::unordered_set<UInt64> next_segment_file_ids = getDMFileIDs(next_seg);
+
     bool contains_invalid_data = false;
     const auto & dt_files = snap->stable->getDMFiles();
     if (!first_pack_included)
@@ -415,6 +431,26 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     // Only try to compact the segment when there is data out of this segment range and is also not shared by neighbor segments.
     if (!contains_invalid_data)
     {
+        LOG_FMT_TRACE(
+            log,
+            "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange checked false because no invalid data, "
+            "segment={} first_pack_included={} last_pack_included={} prev_seg_files=[{}] next_seg_files=[{}] my_files=[{}]",
+            seg->simpleInfo(),
+            first_pack_included,
+            last_pack_included,
+            fmt::join(prev_segment_file_ids, ","),
+            fmt::join(next_segment_file_ids, ","),
+            [&] {
+                FmtBuffer fmt_buf;
+                fmt_buf.joinStr(
+                    dt_files.begin(),
+                    dt_files.end(),
+                    [](const DMFilePtr & dt_file, FmtBuffer & fb) {
+                        fb.fmtAppend("{}", dt_file->fileId());
+                    },
+                    ",");
+                return fmt_buf.toString();
+            }());
         return false;
     }
 
@@ -428,9 +464,18 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     auto valid_rows = snap->stable->getRows();
     auto valid_bytes = snap->stable->getBytes();
 
-    LOG_FMT_TRACE(log, "valid_rows [{}], valid_bytes [{}] total_rows [{}] total_bytes [{}]", valid_rows, valid_bytes, total_rows, total_bytes);
+    auto check_result = (valid_rows < total_rows * (1 - invalid_data_ratio_threshold)) || (valid_bytes < total_bytes * (1 - invalid_data_ratio_threshold));
+    LOG_FMT_TRACE(
+        log,
+        "GC - Checking shouldCompactStableWithTooMuchDataOutOfSegmentRange, "
+        "check_result={} valid_rows={} valid_bytes={} file_rows={} file_bytes={}",
+        check_result,
+        valid_rows,
+        valid_bytes,
+        total_rows,
+        total_bytes);
     seg->setValidDataRatioChecked();
-    return (valid_rows < total_rows * (1 - invalid_data_ratio_threshold)) || (valid_bytes < total_bytes * (1 - invalid_data_ratio_threshold));
+    return check_result;
 }
 
 } // namespace GC
@@ -510,6 +555,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 
     if (GC::shouldCompactDeltaWithStable(
             *dm_context,
+            segment,
             segment_snap,
             segment_range,
             invalid_data_ratio_threshold,
