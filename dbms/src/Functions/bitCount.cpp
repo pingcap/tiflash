@@ -14,7 +14,8 @@
 
 #include <Functions/FunctionUnaryArithmetic.h>
 
-inline long long bit_count(long long value) {
+inline long long bit_count(long long value)
+{
     value = value - ((value >> 1) & 0x5555555555555555);
     value = (value & 0x3333333333333333) + ((value >> 2) & 0x3333333333333333);
     value = (value & 0x0f0f0f0f0f0f0f0f) + ((value >> 4) & 0x0f0f0f0f0f0f0f0f);
@@ -79,4 +80,3 @@ void registerFunctionBitCount(FunctionFactory & factory)
 }
 
 } // namespace DB
-
