@@ -465,7 +465,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
         "GC - Trigger Merge, segment={} table={}",
         segment->simpleInfo(),
         table_name);
-    auto new_segment = segmentMerge(*dm_context, segments_to_merge, false);
+    auto new_segment = segmentMerge(*dm_context, segments_to_merge, SegmentMergeReason::BackgroundGCThread);
     if (new_segment)
     {
         checkSegmentUpdate(dm_context, segment, ThreadType::BG_GC);

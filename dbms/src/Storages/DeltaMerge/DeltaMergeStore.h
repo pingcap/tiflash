@@ -471,13 +471,18 @@ private:
      */
     SegmentPair segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at = std::nullopt, SegmentSplitMode opt_split_mode = SegmentSplitMode::Auto);
 
+    enum class SegmentMergeReason
+    {
+        BackgroundGCThread,
+    };
+
     /**
      * Merge multiple continuous segments (order by segment start key) into one.
      * Throw exception if < 2 segments are given.
      * Fail if given segments are not continuous or not valid.
      * After merging, all specified segments will be abandoned (with `segment->hasAbandoned() == true`).
      */
-    SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, bool is_foreground);
+    SegmentPtr segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, SegmentMergeReason reason);
 
     enum class MergeDeltaReason
     {
