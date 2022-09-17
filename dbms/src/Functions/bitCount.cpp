@@ -14,7 +14,7 @@
 
 #include <Functions/FunctionUnaryArithmetic.h>
 
-inline long long bit_count(long long value)
+inline Int64 bit_count(Int64 value)
 {
     value = value - ((value >> 1) & 0x5555555555555555);
     value = (value & 0x3333333333333333) + ((value >> 2) & 0x3333333333333333);
