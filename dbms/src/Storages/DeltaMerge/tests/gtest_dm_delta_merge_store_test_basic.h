@@ -21,6 +21,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/MultiSegmentTestUtil.h>
@@ -145,7 +146,7 @@ public:
         return s;
     }
 
-    std::pair<RowKeyRange, PageIds> genDMFile(DMContext & context, const Block & block)
+    std::pair<RowKeyRange, std::vector<ExternalDTFileInfo>> genDMFile(DMContext & context, const Block & block)
     {
         auto input_stream = std::make_shared<OneBlockInputStream>(block);
         auto [store_path, file_id] = store->preAllocateIngestFile();
@@ -161,15 +162,15 @@ public:
             store_path,
             flags);
 
-
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 
         const auto & pk_column = block.getByPosition(0).column;
         auto min_pk = pk_column->getInt(0);
         auto max_pk = pk_column->getInt(block.rows() - 1);
         HandleRange range(min_pk, max_pk + 1);
-
-        return {RowKeyRange::fromHandleRange(range), {file_id}};
+        auto handle_range = RowKeyRange::fromHandleRange(range);
+        auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
+        return {handle_range, {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
     }
 
 protected:

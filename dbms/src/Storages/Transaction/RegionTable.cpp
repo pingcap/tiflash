@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -185,7 +186,11 @@ void RegionTable::removeTable(TableID table_id)
 
     // Remove from region list.
     for (const auto & region_info : table.regions)
+    {
         regions.erase(region_info.first);
+        leader_safe_ts.erase(region_info.first);
+        self_safe_ts.erase(region_info.first);
+    }
 
     // Remove from table map.
     tables.erase(it);
@@ -263,6 +268,8 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         handle_range = internal_region_it->second.range_in_table;
 
         regions.erase(it);
+        leader_safe_ts.erase(region_id);
+        self_safe_ts.erase(region_id);
         table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {
@@ -470,5 +477,12 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         LOG_FMT_INFO(log, "table {} insert internal region {}", table_id, region_id);
     }
 }
+
+RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
+    const Base & base_,
+    std::vector<DM::ExternalDTFileInfo> && external_files_)
+    : base(base_)
+    , external_files(std::move(external_files_))
+{}
 
 } // namespace DB
