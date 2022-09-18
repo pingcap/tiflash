@@ -76,12 +76,12 @@ ALWAYS_INLINE static inline bool NeedCollation(const IColumn * column, const Sor
 
 #define CONCAT(x, y) x##y
 
-#define M(NAME) NAME,
 enum class FastPathType
 {
+#define M(NAME) NAME,
     APPLY_FOR_TYPE(M)
-};
 #undef M
+};
 
 constexpr size_t max_fast_path_num = 2;
 
@@ -344,43 +344,56 @@ ALWAYS_INLINE static inline void PermutationSort(IColumn::Permutation & perm, si
         std::sort(perm.begin(), perm.end(), fn_cmp);
 }
 
-template <typename A, typename B>
-void FastPathPermutationSort_P2(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit)
+template <size_t N>
+struct FastPathPermutationSort
 {
-    MultiColumnSortFastPath<A, B> cmp{desc.columns_with_sort_desc};
-    return PermutationSort(perm, limit, cmp);
-}
+};
 
-template <typename A>
-ALWAYS_INLINE inline void FastPathPermutationSort_P1(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit)
+template <>
+struct FastPathPermutationSort<2>
 {
+    template <typename A, typename B>
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P2(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit)
+    {
+        MultiColumnSortFastPath<A, B> cmp{desc.columns_with_sort_desc};
+        return PermutationSort(perm, limit, cmp);
+    }
+
+    template <typename A>
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P1(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit)
+    {
+        constexpr size_t index = 1;
+
 #define M(NAME)                                                                               \
     case FastPathType::NAME:                                                                  \
     {                                                                                         \
         return FastPathPermutationSort_P2<A, CONCAT(ColumnCompare, NAME)>(desc, perm, limit); \
     }
 
-    switch (desc.type_for_fast_path[1])
-    {
-        APPLY_FOR_TYPE(M)
-    }
+        switch (desc.type_for_fast_path[index])
+        {
+            APPLY_FOR_TYPE(M)
+        }
 #undef M
-}
+    }
 
-ALWAYS_INLINE inline void FastPathPermutationSort(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit)
-{
+    void operator()(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit) const
+    {
+        constexpr size_t index = 0;
+
 #define M(NAME)                                                                            \
     case FastPathType::NAME:                                                               \
     {                                                                                      \
         return FastPathPermutationSort_P1<CONCAT(ColumnCompare, NAME)>(desc, perm, limit); \
     }
 
-    switch (desc.type_for_fast_path[0])
-    {
-        APPLY_FOR_TYPE(M)
-    }
+        switch (desc.type_for_fast_path[index])
+        {
+            APPLY_FOR_TYPE(M)
+        }
 #undef M
-} // namespace DB
+    }
+};
 
 void sortBlock(Block & block, const SortDescription & description, size_t limit)
 {
@@ -422,7 +435,9 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
         {
             assert(collator_desc.fast_path_cnt == max_fast_path_num);
 
-            FastPathPermutationSort(collator_desc, perm, limit);
+            FastPathPermutationSort<max_fast_path_num>{}(collator_desc, perm, limit);
+
+            // TODO: optimize for other cases
         }
         else if (collator_desc.has_collation)
         {
