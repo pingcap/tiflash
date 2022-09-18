@@ -560,7 +560,7 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
-// just a dummy function to avoid poxy fn_handle_safe_ts_update.is_some() panic.
+// just a dummy function to avoid proxy fn_handle_safe_ts_update.is_some() panic.
 void HandleSafeTSUpdate(EngineStoreServerWrap *, uint64_t, uint64_t, uint64_t)
 {
 }
