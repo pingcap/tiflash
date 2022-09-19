@@ -162,10 +162,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         UInt64 region_id);
 
     /// normal write to a region
-    void normalWrite(
-        KVStore & kvs,
-        TMTContext & tmt,
-        const FailCond & cond,
+    uint64_t normalWrite(
         UInt64 region_id,
         std::vector<HandleID> && keys,
         std::vector<std::string> && vals,

@@ -347,10 +347,7 @@ void MockRaftStoreProxy::bootstrap(
 }
 
 
-void MockRaftStoreProxy::normalWrite(
-    KVStore & kvs,
-    TMTContext & tmt,
-    const FailCond & cond,
+uint64_t MockRaftStoreProxy::normalWrite(
     UInt64 region_id,
     std::vector<HandleID> && keys,
     std::vector<std::string> && vals,
@@ -377,7 +374,7 @@ void MockRaftStoreProxy::normalWrite(
                 cmd_cf,
             }};
     }
-    doApply(kvs, tmt, cond, region_id, index);
+    return index;
 }
 
 void MockRaftStoreProxy::doApply(
