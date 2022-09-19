@@ -392,6 +392,7 @@ void MockRaftStoreProxy::doApply(
     // We apply this committed entry.
     raft_cmdpb::RaftCmdRequest request;
     auto & cmd = region->commands[index];
+    auto term = cmd.term;
     if (cmd.has_write_request())
     {
         auto & c = cmd.write();
@@ -399,7 +400,6 @@ void MockRaftStoreProxy::doApply(
         auto & vals = c.vals;
         auto & cmd_types = c.cmd_types;
         auto & cmd_cf = c.cmd_cf;
-        auto term = cmd.term;
         size_t n = keys.size();
 
         assert(n == vals.size());
