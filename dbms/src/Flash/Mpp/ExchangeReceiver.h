@@ -192,6 +192,12 @@ private:
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
 
+    ExchangeReceiverResult toDecodeResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        const std::shared_ptr<ReceivedMessage> & recv_msg);
+
+private:
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;
