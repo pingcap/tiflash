@@ -61,9 +61,15 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
 
         segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
-        if (!segment_snap || !segment_snap->getRows())
+        if (!segment_snap)
         {
-            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because snapshot failed or no row, segment={}", segment->simpleInfo());
+            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because snapshot failed, segment={}", segment->simpleInfo());
+            return {};
+        }
+        if (!opt_split_at.has_value() && !segment_snap->getRows())
+        {
+            // When opt_split_at is not specified, we skip split for empty segments.
+            LOG_FMT_DEBUG(log, "Split - Give up auto segmentSplit because no row, segment={}", segment->simpleInfo());
             return {};
         }
         schema_snap = store_columns;
@@ -480,6 +486,48 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
     GET_METRIC(tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
     GET_METRIC(tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
+
+    if constexpr (DM_RUN_CHECK)
+        check(dm_context.db_context);
+
+    return new_segment;
+}
+
+SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
+    DMContext & dm_context,
+    const SegmentPtr & segment,
+    const DMFilePtr & data_file)
+{
+    LOG_FMT_INFO(log, "ReplaceData - Begin, segment={} data_file={}", segment->info(), data_file->path());
+
+    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+
+    SegmentPtr new_segment;
+    {
+        std::unique_lock lock(read_write_mutex);
+        if (!isSegmentValid(lock, segment))
+        {
+            LOG_FMT_DEBUG(log, "ReplaceData - Give up segment replace data because segment not valid, segment={} data_file={}", segment->simpleInfo(), data_file->path());
+            return {};
+        }
+
+        auto segment_lock = segment->mustGetUpdateLock();
+        new_segment = segment->dangerouslyReplaceData(segment_lock, dm_context, data_file, wbs);
+
+        RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
+        RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
+
+        wbs.writeLogAndData();
+        wbs.writeMeta();
+
+        segment->abandon(dm_context);
+        segments[segment->getRowKeyRange().getEnd()] = new_segment;
+        id_to_segment[segment->segmentId()] = new_segment;
+
+        LOG_FMT_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
+    }
+
+    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

@@ -20,7 +20,7 @@ add_headers_and_sources(clickhouse_functions ./Conditional)
 add_headers_and_sources(clickhouse_functions ${TiFlash_BINARY_DIR}/dbms/src/Functions)
 
 if (TIFLASH_ENABLE_AVX_SUPPORT)
-    set_source_files_properties(CollationStringOptimized.cpp APPEND COMPILE_FLAGS "-mavx -mavx2")
+    set_source_files_properties(CollationStringOptimized.cpp APPEND COMPILE_FLAGS "-mavx -mavx2 ${COMPILER_MOVBE_FLAG}")
 endif ()
 
 list(REMOVE_ITEM clickhouse_functions_sources IFunction.cpp FunctionFactory.cpp FunctionHelpers.cpp)

@@ -12,28 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Encryption/RateLimiter.h>
+#pragma once
 
-namespace DB
+#include <common/defines.h>
+
+#include <cstring>
+
+#if defined(__SSE2__)
+#include <common/sse2_memcpy.h>
+#endif
+
+ALWAYS_INLINE static inline void * inline_memcpy(void * __restrict dst, const void * __restrict src, size_t size)
 {
-class MockReadLimiter final : public ReadLimiter
-{
-public:
-    MockReadLimiter(
-        std::function<Int64()> getIOStatistic_,
-        Int64 rate_limit_per_sec_,
-        LimiterType type_ = LimiterType::UNKNOW,
-        UInt64 refill_period_ms_ = 100)
-        : ReadLimiter(getIOStatistic_, rate_limit_per_sec_, type_, refill_period_ms_)
-    {
-    }
-
-protected:
-    void consumeBytes(Int64 bytes) override
-    {
-        alloc_bytes += std::min(available_balance, bytes);
-        available_balance -= bytes;
-    }
-};
-
-} // namespace DB
+#if defined(__SSE2__)
+    return sse2_inline_memcpy(dst, src, size);
+#else
+    return std::memcpy(dst, src, size);
+#endif
+}

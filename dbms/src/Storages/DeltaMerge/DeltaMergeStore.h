@@ -37,6 +37,8 @@ using LoggerPtr = std::shared_ptr<Logger>;
 
 namespace DM
 {
+class DMFile;
+using DMFilePtr = std::shared_ptr<DMFile>;
 class Segment;
 using SegmentPtr = std::shared_ptr<Segment>;
 using SegmentPair = std::pair<SegmentPtr, SegmentPtr>;
@@ -46,6 +48,7 @@ struct DMContext;
 using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
+struct ExternalDTFileInfo;
 
 inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
@@ -261,17 +264,17 @@ public:
 
     void ingestFiles(const DMContextPtr & dm_context, //
                      const RowKeyRange & range,
-                     const PageIds & file_ids,
+                     const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range);
 
     void ingestFiles(const Context & db_context, //
                      const DB::Settings & db_settings,
                      const RowKeyRange & range,
-                     const PageIds & file_ids,
+                     const std::vector<DM::ExternalDTFileInfo> & external_files,
                      bool clear_data_in_range)
     {
         auto dm_context = newDMContext(db_context, db_settings);
-        return ingestFiles(dm_context, range, file_ids, clear_data_in_range);
+        return ingestFiles(dm_context, range, external_files, clear_data_in_range);
     }
 
     /// Read all rows without MVCC filtering
@@ -495,6 +498,24 @@ private:
         MergeDeltaReason reason,
         SegmentSnapshotPtr segment_snap = nullptr);
 
+    /**
+     * Discard all data in the segment, and use the specified DMFile as the stable instead.
+     * The specified DMFile is safe to be shared for multiple segments.
+     *
+     * Note 1: This function will not enable GC for the new_stable_file for you, in case of you may want to share the same
+     *         stable file for multiple segments. It is your own duty to enable GC later.
+     *
+     * Note 2: You must ensure the specified new_stable_file has been managed by the storage pool, and has been written
+     *         to the PageStorage's data. Otherwise there will be exceptions.
+     *
+     * Note 3: This API is subjected to be changed in future, as it relies on the knowledge that all current data
+     *         in this segment is useless, which is a pretty tough requirement.
+     */
+    SegmentPtr segmentDangerouslyReplaceData(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const DMFilePtr & data_file);
+
     // isSegmentValid should be protected by lock on `read_write_mutex`
     inline bool isSegmentValid(const std::shared_lock<std::shared_mutex> &, const SegmentPtr & segment)
     {
@@ -505,6 +526,29 @@ private:
         return doIsSegmentValid(segment);
     }
     bool doIsSegmentValid(const SegmentPtr & segment);
+
+    /**
+     * Ingest DTFiles directly into the stable layer by splitting segments.
+     * This strategy can be used only when the destination range is cleared before ingesting.
+     */
+    std::vector<SegmentPtr> ingestDTFilesUsingSplit(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & range,
+        const std::vector<ExternalDTFileInfo> & external_files,
+        const std::vector<DMFilePtr> & files,
+        bool clear_data_in_range);
+
+    std::vector<SegmentPtr> ingestDTFilesUsingColumnFile(
+        const DMContextPtr & dm_context,
+        const RowKeyRange & range,
+        const std::vector<DMFilePtr> & files,
+        bool clear_data_in_range);
+
+    bool ingestDTFileIntoSegmentUsingSplit(
+        DMContext & dm_context,
+        const SegmentPtr & segment,
+        const RowKeyRange & ingest_range,
+        const DMFilePtr & file);
 
     bool updateGCSafePoint();
 
