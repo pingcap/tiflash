@@ -1,7 +1,10 @@
 #pragma once
 
 #include <Storages/Transaction/Types.h>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <kvproto/kvrpcpb.pb.h>
+#pragma GCC diagnostic pop
 
 namespace DB
 {
