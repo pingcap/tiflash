@@ -1,6 +1,4 @@
 #include <TestUtils/TiFlashTestBasic.h>
-#include <gtest/gtest.h>
-#include <gtest/internal/gtest-internal.h>
 
 namespace DB::tests
 {

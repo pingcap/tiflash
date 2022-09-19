@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 // Copyright 2022 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +13,6 @@
 // limitations under the License.
 
 #include <Core/Field.h>
->>>>>>> aae88b120d (tests: Fix RegionBlockReaderTest helper functions (#5899))
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
