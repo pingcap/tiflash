@@ -14,16 +14,16 @@
 
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Interpreters/Context.h>
+#include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Flash/Coprocessor/ArrowChunkCodec.h>
+#include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <iostream>
 
 namespace DB
@@ -84,8 +84,8 @@ public:
                 int64_col->insert(Field(r));
             }
             block.insert(ColumnWithTypeAndName{std::move(int64_col),
-                                                nullable_int64_data_type,
-                                                String("col") + std::to_string(i)});
+                                               nullable_int64_data_type,
+                                               String("col") + std::to_string(i)});
         }
         return block;
     }
@@ -117,8 +117,8 @@ TEST_F(TestStreamingWriter, testStreamingWriter)
 try
 {
     std::vector<tipb::EncodeType> encode_types{
-        tipb::EncodeType::TypeDefault, 
-        tipb::EncodeType::TypeChunk, 
+        tipb::EncodeType::TypeDefault,
+        tipb::EncodeType::TypeChunk,
         tipb::EncodeType::TypeCHBlock};
     for (const auto & encode_type : encode_types)
     {
@@ -127,9 +127,9 @@ try
         const size_t block_rows = 64;
         const size_t block_num = 64;
         const size_t batch_send_min_limit = 108;
-    
+
         const bool should_send_exec_summary_at_last = true;
-    
+
         // 1. Build Blocks.
         std::vector<Int64> uniform_data_set;
         for (size_t i = 0; i < block_rows; ++i)
@@ -138,7 +138,7 @@ try
         for (size_t i = 0; i < block_num; ++i)
             blocks.emplace_back(prepareBlock(uniform_data_set));
         Block header = blocks.back();
-    
+
         // 2. Build MockStreamWriter.
         std::vector<tipb::SelectResponse> write_report;
         auto checker = [&write_report](tipb::SelectResponse & response, uint16_t part_id) {
@@ -146,7 +146,7 @@ try
             write_report.emplace_back(std::move(response));
         };
         auto mock_writer = std::make_shared<MockStreamWriter>(checker);
-    
+
         // 3. Start to write.
         auto dag_writer = std::make_shared<StreamingDAGResponseWriter<std::shared_ptr<MockStreamWriter>>>(
             mock_writer,
@@ -157,7 +157,7 @@ try
         for (const auto & block : blocks)
             dag_writer->write(block);
         dag_writer->finishWrite();
-    
+
         // 4. Start to check write_report.
         size_t expect_rows = block_rows * block_num;
         size_t decoded_block_rows = 0;

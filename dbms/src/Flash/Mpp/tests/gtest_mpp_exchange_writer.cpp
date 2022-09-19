@@ -15,13 +15,13 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
-#include <Flash/Mpp/HashPartitionWriter.cpp>
-#include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
+#include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
+#include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
+#include <Flash/Mpp/HashPartitionWriter.cpp>
 #include <iostream>
 
 namespace DB
