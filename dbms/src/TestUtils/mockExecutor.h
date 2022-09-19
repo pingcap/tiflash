@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Debug/MockExecutor/astToExecutor.h>
 #include <Debug/MockStorage.h>
-#include <Debug/astToExecutor.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
@@ -211,6 +211,8 @@ MockWindowFrame buildDefaultRowsFrame();
 #define col(name) buildColumn((name))
 #define lit(field) buildLiteral((field))
 #define concat(expr1, expr2) makeASTFunction("concat", (expr1), (expr2))
+#define plusInt(expr1, expr2) makeASTFunction("plusint", (expr1), (expr2))
+#define minusInt(expr1, expr2) makeASTFunction("minusint", (expr1), (expr2))
 #define eq(expr1, expr2) makeASTFunction("equals", (expr1), (expr2))
 #define Not_eq(expr1, expr2) makeASTFunction("notEquals", (expr1), (expr2))
 #define lt(expr1, expr2) makeASTFunction("less", (expr1), (expr2))

@@ -1366,7 +1366,7 @@ BackgroundProcessingPool & Context::initializeBackgroundPool(UInt16 pool_size)
 {
     auto lock = getLock();
     if (!shared->background_pool)
-        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
+        shared->background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-");
     return *shared->background_pool;
 }
 
@@ -1380,7 +1380,7 @@ BackgroundProcessingPool & Context::initializeBlockableBackgroundPool(UInt16 poo
 {
     auto lock = getLock();
     if (!shared->blockable_background_pool)
-        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size);
+        shared->blockable_background_pool = std::make_shared<BackgroundProcessingPool>(pool_size, "bg-block-");
     return *shared->blockable_background_pool;
 }
 

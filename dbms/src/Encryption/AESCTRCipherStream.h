@@ -50,6 +50,13 @@ struct EncryptionPath;
 
 #endif
 
+// TODO: OpenSSL Lib does not export SM4_BLOCK_SIZE by now.
+// Need to remove SM4_BLOCK_SIZE once Openssl lib support the definition.
+// SM4 uses 128-bit block size as AES.
+// Ref:
+// https://github.com/openssl/openssl/blob/OpenSSL_1_1_1-stable/include/crypto/sm4.h#L24
+#define SM4_BLOCK_SIZE 16
+
 struct FileEncryptionInfo;
 
 class AESCTRCipherStream : public BlockAccessCipherStream
@@ -66,6 +73,13 @@ public:
 
     size_t blockSize() override
     {
+        // Openssl support SM4 after 1.1.1 release version.
+#if OPENSSL_VERSION_NUMBER >= 0x1010100fL && !defined(OPENSSL_NO_SM4)
+        if (EVP_CIPHER_nid(cipher_) == NID_sm4_ctr)
+        {
+            return SM4_BLOCK_SIZE;
+        }
+#endif
         return AES_BLOCK_SIZE; // 16
     }
 

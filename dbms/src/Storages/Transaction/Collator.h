@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Columns/Collator.h>
+#include <Storages/Transaction/CollatorCompare.h>
 #include <common/StringRef.h>
 
 #include <memory>
@@ -83,12 +84,54 @@ public:
     ~ITiDBCollator() override = default;
 
     int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override = 0;
+
+    ALWAYS_INLINE inline int compareFastPath(const char * s1, size_t length1, const char * s2, size_t length2) const
+    {
+        if (likely(isPaddingBinary()))
+        {
+            return DB::BinCollatorCompare<true>(s1, length1, s2, length2);
+        }
+        return compare(s1, length1, s2, length2);
+    }
+
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
     CollatorType getCollatorType() const { return collator_type; }
     bool isBinary() const;
     bool isCI() const;
+
+    ALWAYS_INLINE static inline bool isPaddingBinary(CollatorType collator_type)
+    {
+        switch (collator_type)
+        {
+        case CollatorType::UTF8MB4_BIN:
+        case CollatorType::UTF8_BIN:
+        case CollatorType::LATIN1_BIN:
+        case CollatorType::ASCII_BIN:
+        {
+            // collator_type < 4
+            return true;
+        }
+        default:
+            break;
+        }
+        return false;
+    }
+
+    ALWAYS_INLINE inline bool isPaddingBinary() const
+    {
+        return isPaddingBinary(getCollatorType());
+    }
+
+    ALWAYS_INLINE inline StringRef sortKeyFastPath(const char * s, size_t length, std::string & container) const
+    {
+        if (likely(isPaddingBinary()))
+        {
+            return DB::BinCollatorSortKey<true>(s, length);
+        }
+        return sortKey(s, length, container);
+    }
 
 protected:
     explicit ITiDBCollator(int32_t collator_id_);
