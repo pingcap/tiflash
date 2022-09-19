@@ -37,7 +37,8 @@ struct MockProxyRegion : MutexLockWrap
     void setSate(raft_serverpb::RegionLocalState);
     explicit MockProxyRegion(uint64_t id);
 
-    struct CachedCommand {
+    struct CachedCommand
+    {
         uint64_t term;
         std::vector<HandleID> keys;
         std::vector<std::string> vals;
@@ -115,7 +116,8 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
     /// Mutation funcs.
-    struct FailCond {
+    struct FailCond
+    {
         bool fail_before_kvstore_write = false;
         bool fail_before_proxy_advance = false;
         bool fail_before_kvstore_advance = false;
@@ -148,7 +150,9 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     void replay(
         KVStore & kvs,
-        TMTContext & tmt,uint64_t region_id, uint64_t to);
+        TMTContext & tmt,
+        uint64_t region_id,
+        uint64_t to);
     void compactLog(UInt64 region_id, UInt64 index);
 
     std::unordered_set<uint64_t> region_id_to_drop;

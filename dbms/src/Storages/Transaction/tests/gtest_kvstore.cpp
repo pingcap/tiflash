@@ -43,7 +43,6 @@ extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_le
 
 namespace tests
 {
-
 // TODO: Use another way to workaround calling the private methods on KVStore
 class RegionKVStoreTest : public ::testing::Test
 {
@@ -68,8 +67,10 @@ public:
         kvstore->restore(*path_pool, proxy_helper.get());
     }
 
-    void init(bool create_regions = true) {
-        if (create_regions) {
+    void init(bool create_regions = true)
+    {
+        if (create_regions)
+        {
             proxy_instance->init(100);
         }
         {
@@ -1270,7 +1271,8 @@ TEST_F(RegionKVStoreTest, KVStore)
     }
 }
 
-TEST_F(RegionKVStoreTest, KVStoreFailRecovery) {
+TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
+{
     init(false);
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {

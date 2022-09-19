@@ -14,10 +14,10 @@
 
 #include <Common/Exception.h>
 #include <Debug/MockRaftStoreProxy.h>
+#include <Interpreters/Context.h>
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/RegionMeta.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Interpreters/Context.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
 
@@ -355,7 +355,8 @@ void MockRaftStoreProxy::normalWrite(
     std::vector<HandleID> && keys,
     std::vector<std::string> && vals,
     std::vector<WriteCmdType> && cmd_types,
-    std::vector<ColumnFamilyType> && cmd_cf){
+    std::vector<ColumnFamilyType> && cmd_cf)
+{
     uint64_t index = 0;
     uint64_t term = 0;
     {
@@ -415,23 +416,29 @@ void MockRaftStoreProxy::doApply(
         }
     }
 
-    if (cond.fail_before_kvstore_write) return;
+    if (cond.fail_before_kvstore_write)
+        return;
 
     // TiFlash write
     kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
 
     // Proxy advance
-    if (cond.fail_before_proxy_advance) return;
+    if (cond.fail_before_proxy_advance)
+        return;
     region->updateAppliedIndex(index);
 }
 
 void MockRaftStoreProxy::replay(
     KVStore & kvs,
-    TMTContext & tmt,uint64_t region_id, uint64_t to) {
+    TMTContext & tmt,
+    uint64_t region_id,
+    uint64_t to)
+{
     auto region = getRegion(region_id);
     assert(region != nullptr);
     FailCond cond;
-    for (uint64_t i = region->apply.applied_index() + 1; i <= to; i++) {
+    for (uint64_t i = region->apply.applied_index() + 1; i <= to; i++)
+    {
         doApply(kvs, tmt, cond, region_id, i);
     }
 }
