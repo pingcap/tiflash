@@ -16,7 +16,8 @@
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <DataTypes/FieldToDataType.h>
 #include <Debug/MockComputeServerManager.h>
-#include <Debug/astToExecutor.h>
+#include <Debug/MockExecutor/astToExecutor.h>
+#include <Debug/MockExecutor/funcSigs.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
@@ -31,8 +32,16 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+extern const int LOGICAL_ERROR;
+extern const int NO_SUCH_COLUMN_IN_TABLE;
+} // namespace ErrorCodes
+
 using ASTPartitionByElement = ASTOrderByElement;
 using MockComputeServerManager = tests::MockComputeServerManager;
+
 void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb::Expr * expr, Int32 collator_id)
 {
     *(expr->mutable_field_type()) = columnInfoToFieldType(ci);
@@ -118,94 +127,6 @@ void literalFieldToTiPBExpr(const ColumnInfo & ci, const Field & val_field, tipb
     {
         expr->set_tp(tipb::ExprType::Null);
     }
-}
-
-namespace
-{
-std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
-    {"equals", tipb::ScalarFuncSig::EQInt},
-    {"notEquals", tipb::ScalarFuncSig::NEInt},
-    {"and", tipb::ScalarFuncSig::LogicalAnd},
-    {"or", tipb::ScalarFuncSig::LogicalOr},
-    {"xor", tipb::ScalarFuncSig::LogicalXor},
-    {"not", tipb::ScalarFuncSig::UnaryNotInt},
-    {"greater", tipb::ScalarFuncSig::GTInt},
-    {"greaterorequals", tipb::ScalarFuncSig::GEInt},
-    {"less", tipb::ScalarFuncSig::LTInt},
-    {"lessorequals", tipb::ScalarFuncSig::LEInt},
-    {"in", tipb::ScalarFuncSig::InInt},
-    {"notin", tipb::ScalarFuncSig::InInt},
-    {"date_format", tipb::ScalarFuncSig::DateFormatSig},
-    {"if", tipb::ScalarFuncSig::IfInt},
-    {"from_unixtime", tipb::ScalarFuncSig::FromUnixTime2Arg},
-    /// bit_and/bit_or/bit_xor is aggregated function in clickhouse/mysql
-    {"bitand", tipb::ScalarFuncSig::BitAndSig},
-    {"bitor", tipb::ScalarFuncSig::BitOrSig},
-    {"bitxor", tipb::ScalarFuncSig::BitXorSig},
-    {"bitnot", tipb::ScalarFuncSig::BitNegSig},
-    {"notequals", tipb::ScalarFuncSig::NEInt},
-    {"like", tipb::ScalarFuncSig::LikeSig},
-    {"cast_int_int", tipb::ScalarFuncSig::CastIntAsInt},
-    {"cast_int_real", tipb::ScalarFuncSig::CastIntAsReal},
-    {"cast_real_int", tipb::ScalarFuncSig::CastRealAsInt},
-    {"cast_real_real", tipb::ScalarFuncSig::CastRealAsReal},
-    {"cast_decimal_int", tipb::ScalarFuncSig::CastDecimalAsInt},
-    {"cast_time_int", tipb::ScalarFuncSig::CastTimeAsInt},
-    {"cast_string_int", tipb::ScalarFuncSig::CastStringAsInt},
-    {"cast_int_decimal", tipb::ScalarFuncSig::CastIntAsDecimal},
-    {"cast_real_decimal", tipb::ScalarFuncSig::CastRealAsDecimal},
-    {"cast_decimal_decimal", tipb::ScalarFuncSig::CastDecimalAsDecimal},
-    {"cast_time_decimal", tipb::ScalarFuncSig::CastTimeAsDecimal},
-    {"cast_string_decimal", tipb::ScalarFuncSig::CastStringAsDecimal},
-    {"cast_int_string", tipb::ScalarFuncSig::CastIntAsString},
-    {"cast_real_string", tipb::ScalarFuncSig::CastRealAsString},
-    {"cast_decimal_string", tipb::ScalarFuncSig::CastDecimalAsString},
-    {"cast_time_string", tipb::ScalarFuncSig::CastTimeAsString},
-    {"cast_string_string", tipb::ScalarFuncSig::CastStringAsString},
-    {"cast_int_date", tipb::ScalarFuncSig::CastIntAsTime},
-    {"cast_real_date", tipb::ScalarFuncSig::CastRealAsTime},
-    {"cast_decimal_date", tipb::ScalarFuncSig::CastDecimalAsTime},
-    {"cast_time_date", tipb::ScalarFuncSig::CastTimeAsTime},
-    {"cast_string_date", tipb::ScalarFuncSig::CastStringAsTime},
-    {"cast_int_datetime", tipb::ScalarFuncSig::CastIntAsTime},
-    {"cast_real_datetime", tipb::ScalarFuncSig::CastRealAsTime},
-    {"cast_decimal_datetime", tipb::ScalarFuncSig::CastDecimalAsTime},
-    {"cast_time_datetime", tipb::ScalarFuncSig::CastTimeAsTime},
-    {"cast_string_datetime", tipb::ScalarFuncSig::CastStringAsTime},
-    {"concat", tipb::ScalarFuncSig::Concat},
-    {"round_int", tipb::ScalarFuncSig::RoundInt},
-    {"round_uint", tipb::ScalarFuncSig::RoundInt},
-    {"round_dec", tipb::ScalarFuncSig::RoundDec},
-    {"round_real", tipb::ScalarFuncSig::RoundReal},
-    {"round_with_frac_int", tipb::ScalarFuncSig::RoundWithFracInt},
-    {"round_with_frac_uint", tipb::ScalarFuncSig::RoundWithFracInt},
-    {"round_with_frac_dec", tipb::ScalarFuncSig::RoundWithFracDec},
-    {"round_with_frac_real", tipb::ScalarFuncSig::RoundWithFracReal},
-});
-
-std::unordered_map<String, tipb::ExprType> agg_func_name_to_sig({
-    {"min", tipb::ExprType::Min},
-    {"max", tipb::ExprType::Max},
-    {"count", tipb::ExprType::Count},
-    {"sum", tipb::ExprType::Sum},
-    {"first_row", tipb::ExprType::First},
-    {"uniqRawRes", tipb::ExprType::ApproxCountDistinct},
-    {"group_concat", tipb::ExprType::GroupConcat},
-});
-
-std::unordered_map<String, tipb::ExprType> window_func_name_to_sig({
-    {"RowNumber", tipb::ExprType::RowNumber},
-    {"Rank", tipb::ExprType::Rank},
-    {"DenseRank", tipb::ExprType::DenseRank},
-    {"Lead", tipb::ExprType::Lead},
-    {"Lag", tipb::ExprType::Lag},
-});
-
-DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input)
-{
-    DAGColumnInfo output = input;
-    output.second.clearNotNullFlag();
-    return output;
 }
 
 void literalToPB(tipb::Expr * expr, const Field & value, int32_t collator_id)
@@ -309,19 +230,6 @@ void astToPB(const DAGSchema & input, ASTPtr ast, tipb::Expr * expr, int32_t col
     }
 }
 
-auto checkSchema(const DAGSchema & input, String checked_column)
-{
-    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
-        auto [checked_db_name, checked_table_name, checked_column_name] = splitQualifiedName(checked_column);
-        auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
-        if (checked_table_name.empty())
-            return column_name == checked_column_name;
-        else
-            return table_name == checked_table_name && column_name == checked_column_name;
-    });
-    return ft;
-}
-
 void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr, int32_t collator_id, const Context & context)
 {
     /// aggregation function is handled in Aggregation, so just treated as a column
@@ -343,8 +251,8 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
     // TODO: Support more functions.
     // TODO: Support type inference.
 
-    const auto it_sig = func_name_to_sig.find(func_name_lowercase);
-    if (it_sig == func_name_to_sig.end())
+    const auto it_sig = tests::func_name_to_sig.find(func_name_lowercase);
+    if (it_sig == tests::func_name_to_sig.end())
     {
         throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
     }
@@ -407,6 +315,22 @@ void functionToPB(const DAGSchema & input, ASTFunction * func, tipb::Expr * expr
                 *(expr->mutable_field_type()) = child->field_type();
         }
         return;
+    case tipb::ScalarFuncSig::PlusInt:
+    case tipb::ScalarFuncSig::MinusInt:
+    {
+        for (const auto & child_ast : func->arguments->children)
+        {
+            tipb::Expr * child = expr->add_children();
+            astToPB(input, child_ast, child, collator_id, context);
+        }
+        expr->set_sig(it_sig->second);
+        auto * ft = expr->mutable_field_type();
+        ft->set_tp(expr->children(0).field_type().tp());
+        ft->set_flag(expr->children(0).field_type().flag());
+        ft->set_collate(collator_id);
+        expr->set_tp(tipb::ExprType::ScalarFunc);
+        return;
+    }
     case tipb::ScalarFuncSig::LikeSig:
     {
         expr->set_sig(tipb::ScalarFuncSig::LikeSig);
@@ -599,8 +523,8 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
     {
         /// check function
         String func_name_lowercase = Poco::toLower(func->name);
-        const auto it_sig = func_name_to_sig.find(func_name_lowercase);
-        if (it_sig == func_name_to_sig.end())
+        const auto it_sig = tests::func_name_to_sig.find(func_name_lowercase);
+        if (it_sig == tests::func_name_to_sig.end())
         {
             throw Exception("Unsupported function: " + func_name_lowercase, ErrorCodes::LOGICAL_ERROR);
         }
@@ -641,6 +565,9 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
                     ci = child_ci;
             }
             return ci;
+        case tipb::ScalarFuncSig::PlusInt:
+        case tipb::ScalarFuncSig::MinusInt:
+            return compileExpr(input, func->arguments->children[0]);
         case tipb::ScalarFuncSig::LikeSig:
             ci.tp = TiDB::TypeLongLong;
             ci.flag = TiDB::ColumnFlagUnsigned;
@@ -767,42 +694,6 @@ void compileFilter(const DAGSchema & input, ASTPtr ast, std::vector<ASTPtr> & co
     }
     conditions.push_back(ast);
     compileExpr(input, ast);
-}
-} // namespace
-
-namespace Debug
-{
-String LOCAL_HOST = "127.0.0.1:3930";
-
-void setServiceAddr(const std::string & addr)
-{
-    LOCAL_HOST = addr;
-}
-} // namespace Debug
-
-ColumnName splitQualifiedName(const String & s)
-{
-    ColumnName ret;
-    Poco::StringTokenizer string_tokens(s, ".");
-
-    switch (string_tokens.count())
-    {
-    case 1:
-        ret.column_name = s;
-        break;
-    case 2:
-        ret.table_name = string_tokens[0];
-        ret.column_name = string_tokens[1];
-        break;
-    case 3:
-        ret.db_name = string_tokens[0];
-        ret.table_name = string_tokens[1];
-        ret.column_name = string_tokens[2];
-        break;
-    default:
-        throw Exception("Invalid identifier name " + s);
-    }
-    return ret;
 }
 
 namespace mock
@@ -1017,8 +908,8 @@ bool Aggregation::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collato
             tipb::Expr * arg_expr = agg_func->add_children();
             astToPB(input_schema, arg, arg_expr, collator_id, context);
         }
-        auto agg_sig_it = agg_func_name_to_sig.find(func->name);
-        if (agg_sig_it == agg_func_name_to_sig.end())
+        auto agg_sig_it = tests::agg_func_name_to_sig.find(func->name);
+        if (agg_sig_it == tests::agg_func_name_to_sig.end())
             throw Exception("Unsupported agg function " + func->name, ErrorCodes::LOGICAL_ERROR);
         auto agg_sig = agg_sig_it->second;
         agg_func->set_tp(agg_sig);
@@ -1432,8 +1323,8 @@ bool Window::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator_id,
             tipb::Expr * func = window_expr->add_children();
             astToPB(input_schema, arg, func, collator_id, context);
         }
-        auto window_sig_it = window_func_name_to_sig.find(window_func->name);
-        if (window_sig_it == window_func_name_to_sig.end())
+        auto window_sig_it = tests::window_func_name_to_sig.find(window_func->name);
+        if (window_sig_it == tests::window_func_name_to_sig.end())
             throw Exception(fmt::format("Unsupported window function {}", window_func->name), ErrorCodes::LOGICAL_ERROR);
         auto window_sig = window_sig_it->second;
         window_expr->set_tp(window_sig);
@@ -1884,7 +1775,7 @@ ExecutorPtr compileWindow(ExecutorPtr input, size_t & executor_index, ASTPtr fun
             }
             // TODO: add more window functions
             TiDB::ColumnInfo ci;
-            switch (window_func_name_to_sig[func->name])
+            switch (tests::window_func_name_to_sig[func->name])
             {
             case tipb::ExprType::RowNumber:
             case tipb::ExprType::Rank:

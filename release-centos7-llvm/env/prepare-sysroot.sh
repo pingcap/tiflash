@@ -24,6 +24,7 @@ LLVM_VERSION="13.0.0"
 CCACHE_VERSION="4.5.1"
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P )"
 SYSROOT="$SCRIPTPATH/sysroot"
+OPENSSL_VERSION="1_1_1l"
 
 function install_cmake() {
     wget https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-linux-$ARCH.sh
@@ -62,6 +63,28 @@ function install_llvm() {
     rm -rf llvm-project
 }
 
+function install_openssl() {
+    wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_${OPENSSL_VERSION}.tar.gz
+    tar xvf OpenSSL_${OPENSSL_VERSION}.tar.gz
+    cd openssl-OpenSSL_${OPENSSL_VERSION}
+
+    ./config                                \
+        -fPIC                               \
+        no-shared                           \
+        no-afalgeng                         \
+        --prefix="$SYSROOT"                 \
+        --openssldir="$SYSROOT"             \
+        -static
+
+     NPROC=${NPROC:-$(nproc || grep -c ^processor /proc/cpuinfo)}
+     make -j ${NPROC}
+     make install_sw install_ssldirs
+
+     cd ..
+     rm -rf openssl-OpenSSL_${OPENSSL_VERSION}
+     rm -rf OpenSSL_${OPENSSL_VERSION}.tar.gz
+}
+
 function install_go() {
     wget https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz 
     tar -C "$SYSROOT" -xzvf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
@@ -89,6 +112,7 @@ mkdir -p $SYSROOT
 
 install_cmake 
 install_llvm
+install_openssl
 install_go
 install_ccache
 
