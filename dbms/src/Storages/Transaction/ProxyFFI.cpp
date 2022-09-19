@@ -560,11 +560,8 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
-void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
+// just a dummy function to avoid proxy fn_handle_safe_ts_update.is_some() panic.
+void HandleSafeTSUpdate(EngineStoreServerWrap *, uint64_t, uint64_t, uint64_t)
 {
-    RegionTable & region_table = server->tmt->getRegionTable();
-    region_table.updateSelfSafeTS(region_id, self_safe_ts);
-    region_table.updateLeaderSafeTS(region_id, leader_safe_ts);
-    LOG_FMT_TRACE(&Poco::Logger::get(__FUNCTION__), "update safe ts in region_id={}, leader_safe_ts={}, self_safe_ts={}", region_id, leader_safe_ts, self_safe_ts);
 }
 } // namespace DB
