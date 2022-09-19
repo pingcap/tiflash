@@ -74,8 +74,6 @@ public:
 
     std::pair<UInt64, UInt64> getUInt64MinMax(size_t pack_index);
 
-    // TODO: Use has_null and value.isNull to check.
-
     RSResult checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type);
     RSResult checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
     RSResult checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int nan_direction);
