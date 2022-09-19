@@ -18,10 +18,10 @@
 #include <IO/WriteHelpers.h>
 #include <Poco/Channel.h>
 #include <Poco/Ext/ThreadNumber.h>
+#include <boost_wrapper/string.h>
 #include <fmt/core.h>
 #include <sys/time.h>
 
-#include <boost/algorithm/string.hpp>
 #include <chrono>
 #include <cstring>
 #include <sstream>
