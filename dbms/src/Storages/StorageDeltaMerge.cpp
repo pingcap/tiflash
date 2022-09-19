@@ -789,9 +789,9 @@ void StorageDeltaMerge::mergeDelta(const Context & context)
     getAndMaybeInitStore()->mergeDeltaAll(context);
 }
 
-std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread)
+std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key)
 {
-    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key, run_thread);
+    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key);
 }
 
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
@@ -802,7 +802,7 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
 
 void StorageDeltaMerge::ingestFiles(
     const DM::RowKeyRange & range,
-    const std::vector<UInt64> & file_ids,
+    const std::vector<DM::ExternalDTFileInfo> & external_files,
     bool clear_data_in_range,
     const Settings & settings)
 {
@@ -811,7 +811,7 @@ void StorageDeltaMerge::ingestFiles(
         global_context,
         settings,
         range,
-        file_ids,
+        external_files,
         clear_data_in_range);
 }
 
