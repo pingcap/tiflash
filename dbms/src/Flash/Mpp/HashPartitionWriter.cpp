@@ -25,7 +25,7 @@
 namespace DB
 {
 template <class StreamWriterPtr>
-HashParitionWriter<StreamWriterPtr>::HashParitionWriter(
+HashPartitionWriter<StreamWriterPtr>::HashPartitionWriter(
     StreamWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
@@ -46,7 +46,7 @@ HashParitionWriter<StreamWriterPtr>::HashParitionWriter(
 }
 
 template <class StreamWriterPtr>
-void HashParitionWriter<StreamWriterPtr>::finishWrite()
+void HashPartitionWriter<StreamWriterPtr>::finishWrite()
 {
     if (should_send_exec_summary_at_last)
     {
@@ -59,7 +59,7 @@ void HashParitionWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
-void HashParitionWriter<StreamWriterPtr>::write(const Block & block)
+void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
 {
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
@@ -76,7 +76,7 @@ void HashParitionWriter<StreamWriterPtr>::write(const Block & block)
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void HashParitionWriter<StreamWriterPtr>::batchWrite()
+void HashPartitionWriter<StreamWriterPtr>::batchWrite()
 {
     partitionAndEncodeThenWriteBlocks<send_exec_summary_at_last>(blocks);
     blocks.clear();
@@ -85,7 +85,7 @@ void HashParitionWriter<StreamWriterPtr>::batchWrite()
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void HashParitionWriter<StreamWriterPtr>::handleExecSummary(
+void HashPartitionWriter<StreamWriterPtr>::handleExecSummary(
     const std::vector<Block> & input_blocks,
     std::vector<TrackedMppDataPacket> & packets)
 {
@@ -111,7 +111,7 @@ void HashParitionWriter<StreamWriterPtr>::handleExecSummary(
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void HashParitionWriter<StreamWriterPtr>::writePackets(
+void HashPartitionWriter<StreamWriterPtr>::writePackets(
     const std::vector<size_t> & responses_row_count,
     std::vector<TrackedMppDataPacket> & packets)
 {
@@ -131,7 +131,7 @@ void HashParitionWriter<StreamWriterPtr>::writePackets(
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void HashParitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks)
+void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks)
 {
     std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
     handleExecSummary<send_exec_summary_at_last>(input_blocks, tracked_packets);
@@ -162,6 +162,6 @@ void HashParitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(std:
     writePackets<send_exec_summary_at_last>(responses_row_count, tracked_packets);
 }
 
-template class HashParitionWriter<MPPTunnelSetPtr>;
+template class HashPartitionWriter<MPPTunnelSetPtr>;
 
 } // namespace DB

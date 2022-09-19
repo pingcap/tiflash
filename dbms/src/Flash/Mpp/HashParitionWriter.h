@@ -26,10 +26,10 @@
 namespace DB
 {
 template <class StreamWriterPtr>
-class HashParitionWriter : public DAGResponseWriter
+class HashPartitionWriter : public DAGResponseWriter
 {
 public:
-    HashParitionWriter(
+    HashPartitionWriter(
         StreamWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,

@@ -15,11 +15,13 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
+#include <Flash/Mpp/HashPartitionWriter.cpp>
+#include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
-#include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <iostream>
 
 namespace DB
@@ -28,7 +30,7 @@ namespace tests
 {
 
 using BlockPtr = std::shared_ptr<Block>;
-class TestStreamingDAGResponseWriter : public testing::Test
+class TestMPPExchangeWriter : public testing::Test
 {
 protected:
     void SetUp() override
@@ -42,7 +44,7 @@ protected:
     }
 
 public:
-    TestStreamingDAGResponseWriter()
+    TestMPPExchangeWriter()
         : context(TiFlashTestEnv::getContext())
         , part_col_ids{0}
         , part_col_collators{
@@ -97,7 +99,7 @@ struct MockStreamWriter
         , part_num(part_num_)
     {}
 
-    void write(mpp::MPPDataPacket &) { FAIL() << "cannot reach here, because we only expect hash partition"; }
+    void write(mpp::MPPDataPacket & packet) { checker(packet, 0); }
     void write(mpp::MPPDataPacket & packet, uint16_t part_id) { checker(packet, part_id); }
     void write(tipb::SelectResponse &, uint16_t) { FAIL() << "cannot reach here, only consider CH Block format"; }
     void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
@@ -111,7 +113,7 @@ private:
 // Input block data is distributed uniform.
 // partition_num: 4
 // fine_grained_shuffle_stream_count: 8
-TEST_F(TestStreamingDAGResponseWriter, testBatchWriteFineGrainedShuffle)
+TEST_F(TestMPPExchangeWriter, testBatchWriteFineGrainedShuffle)
 try
 {
     const size_t block_rows = 1024;
@@ -169,6 +171,114 @@ try
     {
         ASSERT_EQ(block.rows(), block_rows / (fine_grained_shuffle_stream_count * part_num));
     }
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, testHashPartitionWriter)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = 108;
+    const uint16_t part_num = 4;
+
+    const bool should_send_exec_summary_at_last = true;
+
+    // 1. Build Blocks.
+    std::vector<Int64> uniform_data_set;
+    for (size_t i = 0; i < block_rows; ++i)
+        uniform_data_set.push_back(i);
+    std::vector<Block> blocks;
+    for (size_t i = 0; i < block_num; ++i)
+        blocks.emplace_back(*prepareBlock(uniform_data_set));
+    Block header = blocks.back();
+
+    // 2. Build MockStreamWriter.
+    std::unordered_map<uint16_t, std::vector<mpp::MPPDataPacket>> write_report;
+    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(std::move(packet));
+    };
+    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+
+    // 3. Start to write.
+    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockStreamWriter>>>(
+        mock_writer,
+        part_col_ids,
+        part_col_collators,
+        batch_send_min_limit,
+        should_send_exec_summary_at_last,
+        *dag_context_ptr);
+    for (const auto & block : blocks)
+        dag_writer->write(block);
+    dag_writer->finishWrite();
+
+    // 4. Start to check write_report.
+    size_t per_part_rows = block_rows * block_num / part_num;
+    ASSERT_EQ(write_report.size(), part_num);
+    for (const auto & ele : write_report)
+    {
+        size_t decoded_block_rows = 0;
+        for (const auto & packet : ele.second)
+        {
+            for (int i = 0; i < packet.chunks_size(); ++i)
+            {
+                auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+                decoded_block_rows += decoded_block.rows();
+            }
+        }
+        ASSERT_EQ(decoded_block_rows, per_part_rows);
+    }
+}
+CATCH
+
+TEST_F(TestMPPExchangeWriter, testBroadcastOrPassThroughWriter)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const size_t batch_send_min_limit = 108;
+
+    const bool should_send_exec_summary_at_last = true;
+
+    // 1. Build Blocks.
+    std::vector<Int64> uniform_data_set;
+    for (size_t i = 0; i < block_rows; ++i)
+        uniform_data_set.push_back(i);
+    std::vector<Block> blocks;
+    for (size_t i = 0; i < block_num; ++i)
+        blocks.emplace_back(*prepareBlock(uniform_data_set));
+    Block header = blocks.back();
+
+    // 2. Build MockStreamWriter.
+    std::vector<mpp::MPPDataPacket> write_report;
+    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+        ASSERT_EQ(part_id, 0);
+        write_report.emplace_back(std::move(packet));
+    };
+    auto mock_writer = std::make_shared<MockStreamWriter>(checker, 1);
+
+    // 3. Start to write.
+    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockStreamWriter>>>(
+        mock_writer,
+        batch_send_min_limit,
+        should_send_exec_summary_at_last,
+        *dag_context_ptr);
+    for (const auto & block : blocks)
+        dag_writer->write(block);
+    dag_writer->finishWrite();
+
+    // 4. Start to check write_report.
+    size_t expect_rows = block_rows * block_num;
+    size_t decoded_block_rows = 0;
+    for (const auto & packet : write_report)
+    {
+        for (int i = 0; i < packet.chunks_size(); ++i)
+        {
+            auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+            decoded_block_rows += decoded_block.rows();
+        }
+    }
+    ASSERT_EQ(decoded_block_rows, expect_rows);
 }
 CATCH
 

@@ -64,7 +64,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             }
             else
             {
-                return std::make_unique<HashParitionWriter<MPPTunnelSetPtr>>(
+                return std::make_unique<HashPartitionWriter<MPPTunnelSetPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
