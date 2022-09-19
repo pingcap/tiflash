@@ -16,14 +16,25 @@
 
 # Executable path
 
-if [ `uname` == "Darwin" ]; then
-    export build_dir="../../build_clang"
-else
-    export build_dir="../../build"
-fi
-# export build_dir="../cmake-build-debug"
+# Try with some common build
+TIFLASH_PATH="dbms/src/Server/tiflash"
 
-export storage_bin="$build_dir/dbms/src/Server/tiflash"
+if [ -z ${storage_bin+x} ]; then
+  if [ -f "../cmake-build-debug/${TIFLASH_PATH}" ]; then
+    build_dir="../cmake-build-debug"
+  elif [ -f "../../build_clang/${TIFLASH_PATH}" ]; then
+    # Used in CI
+    build_dir="../../build_clang"
+  elif [ -f "../../build/${TIFLASH_PATH}" ]; then
+    # Used in CI
+    build_dir="../../build"
+  else
+    echo 'Error: Cannot find TiFlash binary. Specify via: export storage_bin=xxx' >&2
+    exit 1
+  fi
+
+  export storage_bin="$build_dir/dbms/src/Server/tiflash"
+fi
 
 # Server address for connecting
 export storage_server="127.0.0.1"

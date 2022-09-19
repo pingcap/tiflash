@@ -78,11 +78,13 @@ sudo apt install -y cmake
 
 **If you are facing "ld.lld: error: duplicate symbol: ssl3_cbc_digest_record":**
 
-It is likely caused by you have an pre-installed libssl3 where TiFlash prefers libssl1. TiFlash has vendored libssl1, so that you can simply remove the one in the system to make compiling work:
+It is likely because you have a pre-installed libssl3 where TiFlash prefers libssl1. TiFlash has vendored libssl1, so that you can simply remove the one in the system to make compiling work:
 
 ```shell
 sudo apt remove libssl-dev
 ```
+
+If this doesn't work, please [file an issue](https://github.com/pingcap/tiflash/issues/new?assignees=&labels=type%2Fquestion&template=general-question.md).
 
 </details>
 
@@ -137,24 +139,24 @@ To build TiFlash for development:
 
 ```shell
 # In the TiFlash repository root:
-mkdir cmake-build  # The directory name can be customized
-cd cmake-build
+mkdir cmake-build-debug  # The directory name can be customized
+cd cmake-build-debug
 
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
 
 ninja tiflash
 ```
 
-Note: In Linux, usually you need to specify using LLVM instead of the default GCC:
+Note: In Linux, usually you need to explicitly specify to use LLVM. Otherwise, the default compiler will be GCC:
 
 ```shell
-# In cmake-build directory:
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON \
+# In cmake-build-debug directory:
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG \
   -DCMAKE_C_COMPILER=/usr/bin/clang-14 \
   -DCMAKE_CXX_COMPILER=/usr/bin/clang++-14
 ```
 
-After building, you can get TiFlash binary under `tiflash/cmake-build/dbms/src/Server/tiflash`.
+After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `cmake-build-debug` directory.
 
 ### Build Options
 
@@ -163,9 +165,9 @@ TiFlash has several CMake build options to tweak for development purposes. These
 To tweat options, pass one or multiple `-D...=...` args when invoking CMake, for example:
 
 ```shell
-# In cmake-build directory:
-cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE
-                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+cd cmake-build-debug
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
+                                          ^^^^^^^^^
 ```
 
 - **Build Type**:
@@ -176,11 +178,13 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE
 
   - `-DCMAKE_BUILD_TYPE=RELEASE`: Release build
 
+  Usually you may want to use different build directories for different build types, e.g. a new build directory named `cmake-build-release` for the release build, so that compile unit cache will not be invalidated when you switch between different build types.
+
 - **Build with Unit Tests**:
 
-  - `-DENABLE_TESTS=ON`
+  - `-DENABLE_TESTS=ON`: Enable unit tests (enabled by default in debug profile)
 
-  - `-DENABLE_TESTS=OFF`: Default
+  - `-DENABLE_TESTS=OFF`: Disable unit tests (default in release profile)
 
 - **Build using GNU Make instead of ninja-build**:
 
@@ -190,15 +194,14 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE
   To use GNU Make, simply don't pass `-GNinja` to cmake:
 
   ```shell
-  # In cmake-build directory:
-  cmake .. -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
+  cd cmake-build-debug
+  cmake .. -DCMAKE_BUILD_TYPE=DEBUG
   make tiflash -j
   ```
 
   > **NOTE**: Option `-j` (defaults to your system CPU core count, otherwise you can optionally specify a number) is used to control the build parallelism. Higher parallelism consumes more memory. If you encounter compiler OOM or hang, try to lower the parallelism by specifying a reasonable number, e.g., half of your system CPU core count or even smaller, after `-j`, depending on the available memory in your system.
 
-</details>
-
+  </details>
 
 - **Build with System Libraries**:
 
@@ -215,7 +218,7 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE
   You can view these options along with their descriptions by running:
 
   ```shell
-  # In cmake-build directory:
+  cd cmake-build-debug
   cmake -LH | grep "USE_INTERNAL" -A3
   ```
 
@@ -241,29 +244,38 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE
 
 ## Run Unit Tests
 
-To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON`:
+Unit tests are automatically enabled in debug profile. To build these unit tests:
 
 ```shell
-# In cmake-build directory:
-cmake .. -GNinja \
-  -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
+cd cmake-build-debug
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
 ninja gtests_dbms       # Most TiFlash unit tests
 ninja gtests_libdaemon  # Settings related tests
 ninja gtests_libcommon
 ```
 
-And the unit-test executables are at `cmake-build/dbms/gtests_dbms`, `cmake-build/libs/libdaemon/src/tests/gtests_libdaemon` and `cmake-build/libs/libcommon/src/tests/gtests_libcommon`.
+Then, to run these unit tests:
+
+```shell
+cd cmake-build-debug
+./dbms/gtests_dbms
+./libs/libdaemon/src/tests/gtests_libdaemon
+./libs/libcommon/src/tests/gtests_libcommon
+```
+
+More usages are available via `./dbms/gtests_dbms --help`.
 
 ## Run Sanitizer Tests
 
 TiFlash supports testing with thread sanitizer and address sanitizer.
 
-To generate unit test executables with sanitizer enabled:
+To build unit test executables with sanitizer enabled:
 
 ```shell
-# In cmake-build directory:
-cmake .. -GNinja \
-  -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
+# In the TiFlash repository root:
+mkdir cmake-build-sanitizer
+cd cmake-build-sanitizer
+cmake .. -GNinja -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
 ninja gtests_dbms
 ninja gtests_libdaemon
 ninja gtests_libcommon
@@ -277,36 +289,70 @@ LSAN_OPTIONS=suppressions=test/sanitize/asan.suppression
 
 ## Run Integration Tests
 
-1. Build your own TiFlash binary with `-DCMAKE_BUILD_TYPE=DEBUG`:
+1. Build your own TiFlash binary using debug profile:
 
    ```shell
-   # In cmake-build directory:
+   cd cmake-build-debug
    cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
    ninja tiflash
    ```
 
-2. Run TiDB cluster locally with your own TiFlash binary using TiUP Playground:
+2. Start a local TiDB cluster with your own TiFlash binary using TiUP:
 
    ```shell
-   # In cmake-build directory:
-   tiup playground nightly --tiflash.binpath dbms/src/Server/tiflash
+   cd cmake-build-debug
+   tiup playground nightly --tiflash.binpath ./dbms/src/Server/tiflash
+
+   # Or using a more stable cluster version:
+   # tiup playground v6.1.0 --tiflash.binpath dbms/src/Server/tiflash
    ```
 
-3. Check `tests/_env.sh` to make the port and build dir right.
+   [TiUP](https://tiup.io) is the TiDB component manager. If you don't have one, you can install it via:
 
-4. Run your integration tests using commands like "./run-test.sh fullstack-test2/ddl" under $WORKSPACE/tests dir
+   ```shell
+   curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+   ```
+
+   If you are not running the cluster using the default port (for example, you run multiple clusters), make sure that the port and build directory in `tests/_env.sh` are correct.
+
+3. Run integration tests:
+
+   ```shell
+   # In the TiFlash repository root:
+   cd tests
+   ./run-test.sh
+
+   # Or run specific integration test:
+   # ./run-test.sh fullstack-test2/ddl
+   ```
+
+Note: some integration tests (namely, tests under `delta-merge-test`) requires a standalone TiFlash service without a TiDB cluster, otherwise they will fail.
+
+To run these integration tests: TBD
 
 ## Run MicroBenchmark Tests
 
-To run micro benchmark tests, you need to build with -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON:
+To build micro benchmark tests, you need release profile and tests enabled:
 
 ```shell
-cd $BUILD
-cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
+# In the TiFlash repository root:
+mkdir cmake-build-release
+cd cmake-build-release
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
 ninja bench_dbms
 ```
 
-And the microbenchmark-test executables are at `$BUILD/dbms/bench_dbms`, you can run it with `./bench_dbms` or `./bench_dbms --benchmark_filter=xxx` . More usage please check with `./bench_dbms --help`.
+Then, to run these micro benchmarks:
+
+```shell
+cd cmake-build-release
+./dbms/bench_dbms
+
+# Or run with filter:
+# ./dbms/bench_dbms --benchmark_filter=xxx
+```
+
+More usages are available via `./dbms/bench_dbms --help`.
 
 ## Generate LLVM Coverage Report
 
