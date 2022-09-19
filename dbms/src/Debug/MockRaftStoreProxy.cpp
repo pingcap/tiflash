@@ -370,13 +370,12 @@ void MockRaftStoreProxy::normalWrite(
         // We record them, as persisted raft log, for potential recovery.
         region->commands[index] = {
             term,
-            MockProxyRegion::NormalWrite {
+            MockProxyRegion::NormalWrite{
                 keys,
                 vals,
                 cmd_types,
                 cmd_cf,
-            }
-        };
+            }};
     }
     doApply(kvs, tmt, cond, region_id, index);
 }
@@ -392,37 +391,49 @@ void MockRaftStoreProxy::doApply(
     assert(region != nullptr);
     // We apply this committed entry.
     raft_cmdpb::RaftCmdRequest request;
-    auto & keys = region->commands[index].keys;
-    auto & vals = region->commands[index].vals;
-    auto & cmd_types = region->commands[index].cmd_types;
-    auto & cmd_cf = region->commands[index].cmd_cf;
-    auto term = region->commands[index].term;
-    size_t n = keys.size();
-    assert(n == vals.size());
-    assert(n == cmd_types.size());
-    assert(n == cmd_cf.size());
-    for (size_t i = 0; i < n; i++)
+    auto & cmd = region->commands[index];
+    if (cmd.has_write_request())
     {
-        if (cmd_types[i] == WriteCmdType::Put)
+        auto & c = cmd.write();
+        auto & keys = c.keys;
+        auto & vals = c.vals;
+        auto & cmd_types = c.cmd_types;
+        auto & cmd_cf = c.cmd_cf;
+        auto term = cmd.term;
+        size_t n = keys.size();
+
+        assert(n == vals.size());
+        assert(n == cmd_types.size());
+        assert(n == cmd_cf.size());
+        for (size_t i = 0; i < n; i++)
         {
-            auto cf_name = CFToName(cmd_cf[i]);
-            auto key = RecordKVFormat::genKey(1, keys[i], 1);
-            TiKVValue value = std::move(vals[i]);
-            RegionBench::setupPutRequest(request.add_requests(), cf_name, key, value);
+            if (cmd_types[i] == WriteCmdType::Put)
+            {
+                auto cf_name = CFToName(cmd_cf[i]);
+                auto key = RecordKVFormat::genKey(1, keys[i], 1);
+                TiKVValue value = std::move(vals[i]);
+                RegionBench::setupPutRequest(request.add_requests(), cf_name, key, value);
+            }
+            else
+            {
+                auto cf_name = CFToName(cmd_cf[i]);
+                auto key = RecordKVFormat::genKey(1, keys[i], 1);
+                RegionBench::setupDelRequest(request.add_requests(), cf_name, key);
+            }
         }
-        else
-        {
-            auto cf_name = CFToName(cmd_cf[i]);
-            auto key = RecordKVFormat::genKey(1, keys[i], 1);
-            RegionBench::setupDelRequest(request.add_requests(), cf_name, key);
-        }
+    }
+    else if (cmd.has_admin_request())
+    {
     }
 
     if (cond.fail_before_kvstore_write)
         return;
 
-    // TiFlash write
-    kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
+    if (cmd.has_write_request())
+    {
+        // TiFlash write
+        kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
+    }
 
     // Proxy advance
     if (cond.fail_before_proxy_advance)
