@@ -328,6 +328,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             }
             physical_table_id = storage->getTableInfo().id;
 
+            auto & global_settings = context.getGlobalContext().getSettingsRef();
+
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 new_region,
@@ -345,9 +347,9 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 schema_snap,
                 snapshot_apply_method,
                 job_type,
-                /* split_after_rows */ 0,
-                /* split_after_size */ 0,
-                tmt.getContext());
+                /* split_after_rows */ global_settings.dt_segment_limit_rows,
+                /* split_after_size */ global_settings.dt_segment_limit_size,
+                context);
 
             stream->writePrefix();
             stream->write();
