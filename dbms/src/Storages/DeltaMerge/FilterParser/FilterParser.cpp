@@ -310,6 +310,39 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
             break;
 
         case FilterParser::RSFilterType::IsNull:
+        {
+            if (unlikely(expr.children_size() != 1))
+            {
+                op = createUnsupported(
+                    expr.ShortDebugString(),
+                    "is null with " + DB::toString(expr.children_size()) + " children",
+                    false);
+            }
+            else
+            {
+                const auto & child = expr.children(0);
+                if (likely(isColumnExpr(child)))
+                {
+                    auto field_type = child.field_type().tp();
+                    if (!isRoughSetFilterSupportType(field_type))
+                        op = createUnsupported(
+                            expr.ShortDebugString(),
+                            "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
+                            false);
+                    else
+                    {
+                        ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
+                        Attr attr = creator(id);
+                        op = createIsNull(attr);
+                    }
+                }
+                else
+                {
+                    op = createUnsupported(child.ShortDebugString(), "child of is null is not column", false);
+                }
+            }
+        }
+        break;
 
         case FilterParser::RSFilterType::In:
         case FilterParser::RSFilterType::NotIn:
