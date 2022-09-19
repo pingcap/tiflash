@@ -326,9 +326,7 @@ LSAN_OPTIONS=suppressions=test/sanitize/asan.suppression
    # ./run-test.sh fullstack-test2/ddl
    ```
 
-Note: some integration tests (namely, tests under `delta-merge-test`) requires a standalone TiFlash service without a TiDB cluster, otherwise they will fail.
-
-To run these integration tests: TBD
+Note: some integration tests (namely, tests under `delta-merge-test`) requires a standalone TiFlash service without a TiDB cluster, otherwise they will fail. To run these integration tests: TBD
 
 ## Run MicroBenchmark Tests
 

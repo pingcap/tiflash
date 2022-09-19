@@ -149,8 +149,8 @@ elif [ -x "$(command -v python2)" ]; then
 elif [ -x "$(command -v python)" ]; then
 	export PY="python"
 else
-  echo 'Error: python not found in PATH.' >&2
-  exit 1
+	echo 'Error: python not found in PATH.' >&2
+	exit 1
 fi
 
 target="$1"
@@ -208,13 +208,13 @@ fi
 mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
 
 if [ "$fullstack" = true ]; then
-    mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
-    sleep 10
-    if [ $? != 0 ]; then
-        echo "create database '"$tidb_db"' failed" >&2
-        exit 1
-    fi
-    ${PY} generate-fullstack-test.py "$tidb_db" "$tidb_table"
+	mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
+	sleep 10
+	if [ $? != 0 ]; then
+		echo "create database '"$tidb_db"' failed" >&2
+		exit 1
+	fi
+	${PY} generate-fullstack-test.py "$tidb_db" "$tidb_table"
 fi
 
 run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
