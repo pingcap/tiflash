@@ -368,7 +368,7 @@ void MockRaftStoreProxy::normalWrite(
         // The new entry is committed on Proxy's side.
         region->updateCommitIndex(index);
         // We record them, as persisted raft log, for potential recovery.
-        region->commands[index] = {
+        region->commands[index] = MockProxyRegion::NormalWrite {
             term,
             keys,
             vals,
