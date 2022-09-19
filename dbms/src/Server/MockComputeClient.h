@@ -17,6 +17,7 @@
 #include <coprocessor.pb.h>
 #include <fmt/core.h>
 #include <kvproto/tikvpb.grpc.pb.h>
+
 using grpc::Channel;
 using grpc::Status;
 
@@ -40,6 +41,17 @@ public:
         if (!status.ok())
         {
             throw Exception(fmt::format("Meet error while dispatch mpp task, error code = {}, message = {}", status.error_code(), status.error_message()));
+        }
+    }
+
+    void runCoprocessor(std::shared_ptr<coprocessor::Request> request)
+    {
+        coprocessor::Response response;
+        grpc::ClientContext context;
+        Status status = stub->Coprocessor(&context, *request, &response);
+        if (!status.ok())
+        {
+            throw Exception(fmt::format("Meet error while run coprocessor task, error code = {}, message = {}", status.error_code(), status.error_message()));
         }
     }
 

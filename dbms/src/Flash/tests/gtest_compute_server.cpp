@@ -381,5 +381,18 @@ try
     }
 }
 CATCH
+
+TEST_F(ComputeServerRunner, runCoprocessor)
+try
+{
+    startServers(1);
+    {
+        auto request = context
+                           .scan("test_db", "l_table")
+                           .build(context);
+        executeCoprocessorTask(request);
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB

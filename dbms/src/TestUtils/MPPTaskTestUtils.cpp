@@ -84,6 +84,20 @@ ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, con
     return readBlocks(res);
 }
 
+void MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)
+{
+    assert(server_num == 1);
+    auto req = std::make_shared<coprocessor::Request>();
+    req->set_tp(103);
+    auto * data = req->mutable_data();
+    dag_request->AppendToString(data);
+
+    auto addr = MockComputeServerManager::instance().getServerConfigMap()[0].addr;
+    MockComputeClient client(
+        grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
+    client.runCoprocessor(req);
+}
+
 String MPPTaskTestUtils::queryInfo(size_t server_id)
 {
     FmtBuffer buf;
