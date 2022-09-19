@@ -22,9 +22,9 @@ See [Quick Start with HTAP](https://docs.pingcap.com/tidb/stable/quick-start-wit
 
 ## Build TiFlash
 
-TiFlash supports building on the following hardware architectures:
+TiFlash can be built on the following hardware architectures:
 
-- x86-64/amd64
+- x86-64 / amd64
 - aarch64
 
 And the following operating systems:
@@ -32,116 +32,129 @@ And the following operating systems:
 - Linux
 - MacOS
 
-### 1. Checkout Source Code
+### 1. Prepare Prerequisites
 
-Assume `$WORKSPACE` to be the directory under which the TiFlash repo is placed.
-
-```shell
-cd $WORKSPACE
-git clone https://github.com/pingcap/tiflash.git --recursive -j 20
-```
-
-### 2. Prepare Prerequisites
-
-The following packages are needed for all platforms:
+The following packages are required:
 
 - CMake 3.21.0+
-
-- Rust: Recommended to use [rustup](https://rustup.rs) to install:
-
-  ```shell
-  curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain nightly
-  source $HOME/.cargo/env
-  ```
-
+- Clang 13.0.0+
+- Rust
 - Python 3.0+
+- Ninja-Build or GNU Make
 
-- Ninja or GNU Make
-
-The following are platform-specific prerequisites. Click to expand details:
+Detailed steps for each platform are listed below.
 
 <details>
-<summary><b>Linux specific prerequisites</b></summary>
+<summary><b>Ubuntu / Debian</b></summary>
 
-TiFlash can be built using either LLVM or GCC toolchain on Linux. LLVM toolchain is our official one for releasing.
+```shell
+sudo apt update
 
-> But for GCC, only GCC 7.x is supported as far, and is not planned to be a long term support. So it may get broken some day, silently.
+# Install Rust toolchain, see https://rustup.rs for details
+curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
+source $HOME/.cargo/env
 
-- LLVM 13.0.0+
+# Install LLVM, see https://apt.llvm.org for details
+# Clang will be available as /usr/bin/clang++-14
+wget https://apt.llvm.org/llvm.sh
+chmod +x llvm.sh
+sudo ./llvm.sh 14 all
 
-  TiFlash compiles using full LLVM toolchain (`clang/compiler-rt/libc++/libc++abi`) by default. You can use a system-wise toolchain if `clang/compiler-rt/libc++/libc++abi` can be installed in your environment.
+# Install other dependencies
+sudo apt install -y cmake ninja-build zlib1g-dev libcurl4-openssl-dev
+```
 
-  Click sections below to see detailed instructions:
+**Note for Ubuntu 18.04 and Ubuntu 20.04:**
 
-  <details>
-  <summary><b>Set up LLVM via package managers in Debian/Ubuntu</b></summary>
+The default installed cmake may be not recent enough. You can install a newer cmake from the [Kitware APT Repository](https://apt.kitware.com):
 
-  ```shell
-  # add LLVM repo key
-  wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
+```shell
+sudo apt install -y software-properties-common lsb-release
+wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
+sudo apt update
+sudo apt install -y cmake
+```
 
-  # install LLVM packages, and can find more detailed instructions in https://apt.llvm.org/ when failed
-  apt-get install clang-13 lldb-13 lld-13 clang-tools-13 clang-13-doc libclang-common-13-dev libclang-13-dev libclang1-13 clang-format-13 clangd-13 clang-tidy-13 libc++-13-dev libc++abi-13-dev libomp-13-dev llvm-13-dev libfuzzer-13-dev
+**If you are facing "ld.lld: error: duplicate symbol: ssl3_cbc_digest_record":**
 
-  # install other dependencies
-  apt-get install lcov cmake ninja-build libssl-dev zlib1g-dev libcurl4-openssl-dev
-  ```
+It is likely caused by you have an pre-installed libssl3 where TiFlash prefers libssl1. TiFlash has vendored libssl1, so that you can simply remove the one in the system to make compiling work:
 
-  </details>
-
-  <details>
-  <summary><b>Set up LLVM via package managers in Archlinux</b></summary>
-
-  ```shell
-  # install compilers and dependencies
-  sudo pacman -S clang libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
-  ```
-
-  </details>
-
-- GCC 7.x
-
-  > **WARNING**: This support may not be maintained in the future.
-
-  TiFlash compiles on GCC 7.x (no older, nor newer) only because it hasn't been broken. If you have GCC 7.x, you are probably fine, for now.
+```shell
+sudo apt remove libssl-dev
+```
 
 </details>
 
 <details>
-  <summary><b>MacOS specific prerequisites</b></summary>
+<summary><b>Archlinux</b></summary>
 
-- Apple Clang 12.0.0+
-- OpenSSL 1.1
+```shell
+# Install Rust toolchain, see https://rustup.rs for details
+curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
+source $HOME/.cargo/env
 
-  ```shell
-  brew install openssl@1.1
-  ```
+# Install compilers and dependencies
+sudo pacman -S clang libc++ libc++abi compiler-rt openmp lcov cmake ninja curl openssl zlib
+```
 
 </details>
+
+<details>
+<summary><b>CentOS 7</b></summary>
+
+Please refer to [release-centos7-llvm/env/prepare-sysroot.sh](./release-centos7-llvm/env/prepare-sysroot.sh)
+
+</details>
+
+<details>
+<summary><b>MacOS</b></summary>
+
+```shell
+# Install Rust toolchain, see https://rustup.rs for details
+curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain none
+source $HOME/.cargo/env
+
+# Install compilers
+xcode-select --install
+
+# Install other dependencies
+brew install ninja cmake openssl@1.1
+```
+
+</details>
+
+### 2. Checkout Source Code
+
+```shell
+git clone https://github.com/pingcap/tiflash.git --recursive -j 20
+cd tiflash
+```
 
 ### 3. Build
 
-Assume `$BUILD` to be the directory under which you want to build TiFlash.
-
-For Ninja:
+To build TiFlash for development:
 
 ```shell
-cd $BUILD
-cmake $WORKSPACE/tiflash -GNinja
+# In the TiFlash repository root:
+mkdir cmake-build  # The directory name can be customized
+cd cmake-build
+
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
+
 ninja tiflash
 ```
 
-For GNU Make:
+Note: In Linux, usually you need to specify using LLVM instead of the default GCC:
 
 ```shell
-cd $BUILD
-cmake $WORKSPACE/tiflash
-make tiflash -j
+# In cmake-build directory:
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON \
+  -DCMAKE_C_COMPILER=/usr/bin/clang-14 \
+  -DCMAKE_CXX_COMPILER=/usr/bin/clang++-14
 ```
 
-> **NOTE**: Option `-j` (defaults to your system CPU core count, otherwise you can optionally specify a number) is used to control the build parallelism. Higher parallelism consumes more memory. If you encounter compiler OOM or hang, try to lower the parallelism by specifying a reasonable number, e.g., half of your system CPU core count or even smaller, after `-j`, depending on the available memory in your system.
-
-After building, you can get TiFlash binary under `$BUILD/dbms/src/Server/tiflash`.
+After building, you can get TiFlash binary under `tiflash/cmake-build/dbms/src/Server/tiflash`.
 
 ### Build Options
 
@@ -150,7 +163,9 @@ TiFlash has several CMake build options to tweak for development purposes. These
 To tweat options, pass one or multiple `-D...=...` args when invoking CMake, for example:
 
 ```shell
-cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
+# In cmake-build directory:
+cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 ```
 
 - **Build Type**:
@@ -163,9 +178,27 @@ cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
 
 - **Build with Unit Tests**:
 
+  - `-DENABLE_TESTS=ON`
+
   - `-DENABLE_TESTS=OFF`: Default
 
-  - `-DENABLE_TESTS=ON`
+- **Build using GNU Make instead of ninja-build**:
+
+  <details>
+  <summary>Click to expand instructions</summary>
+
+  To use GNU Make, simply don't pass `-GNinja` to cmake:
+
+  ```shell
+  # In cmake-build directory:
+  cmake .. -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
+  make tiflash -j
+  ```
+
+  > **NOTE**: Option `-j` (defaults to your system CPU core count, otherwise you can optionally specify a number) is used to control the build parallelism. Higher parallelism consumes more memory. If you encounter compiler OOM or hang, try to lower the parallelism by specifying a reasonable number, e.g., half of your system CPU core count or even smaller, after `-j`, depending on the available memory in your system.
+
+</details>
+
 
 - **Build with System Libraries**:
 
@@ -182,7 +215,7 @@ cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
   You can view these options along with their descriptions by running:
 
   ```shell
-  cd $BUILD
+  # In cmake-build directory:
   cmake -LH | grep "USE_INTERNAL" -A3
   ```
 
@@ -208,17 +241,18 @@ cmake $WORKSPACE/tiflash -DCMAKE_BUILD_TYPE=DEBUG
 
 ## Run Unit Tests
 
-To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG`:
+To run unit tests, you need to build with `-DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON`:
 
 ```shell
-cd $BUILD
-cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
+# In cmake-build directory:
+cmake .. -GNinja \
+  -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_TESTS=ON
 ninja gtests_dbms       # Most TiFlash unit tests
 ninja gtests_libdaemon  # Settings related tests
 ninja gtests_libcommon
 ```
 
-And the unit-test executables are at `$BUILD/dbms/gtests_dbms`, `$BUILD/libs/libdaemon/src/tests/gtests_libdaemon` and `$BUILD/libs/libcommon/src/tests/gtests_libcommon`.
+And the unit-test executables are at `cmake-build/dbms/gtests_dbms`, `cmake-build/libs/libdaemon/src/tests/gtests_libdaemon` and `cmake-build/libs/libcommon/src/tests/gtests_libcommon`.
 
 ## Run Sanitizer Tests
 
@@ -227,8 +261,9 @@ TiFlash supports testing with thread sanitizer and address sanitizer.
 To generate unit test executables with sanitizer enabled:
 
 ```shell
-cd $BUILD
-cmake $WORKSPACE/tiflash -GNinja -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
+# In cmake-build directory:
+cmake .. -GNinja \
+  -DENABLE_TESTS=ON -DCMAKE_BUILD_TYPE=ASan # or TSan
 ninja gtests_dbms
 ninja gtests_libdaemon
 ninja gtests_libcommon
@@ -237,22 +272,28 @@ ninja gtests_libcommon
 There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
 
 ```shell
-LSAN_OPTIONS=suppressions=$WORKSPACE/tiflash/test/sanitize/asan.suppression
+LSAN_OPTIONS=suppressions=test/sanitize/asan.suppression
 ```
 
 ## Run Integration Tests
 
-1. Build your own tiflash binary in $BUILD with `-DCMAKE_BUILD_TYPE=DEBUG`.
-```
-cd $BUILD
-cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=DEBUG
-ninja tiflash
-```
-2. Run tidb cluster locally using tiup playgroud or other tools. 
-```
-tiup playground nightly --tiflash.binpath $BUILD/dbms/src/Server/tiflash
-```
-3. Check $WORKSPACE/tests/_env.sh to make the port and build dir right.
+1. Build your own TiFlash binary with `-DCMAKE_BUILD_TYPE=DEBUG`:
+
+   ```shell
+   # In cmake-build directory:
+   cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
+   ninja tiflash
+   ```
+
+2. Run TiDB cluster locally with your own TiFlash binary using TiUP Playground:
+
+   ```shell
+   # In cmake-build directory:
+   tiup playground nightly --tiflash.binpath dbms/src/Server/tiflash
+   ```
+
+3. Check `tests/_env.sh` to make the port and build dir right.
+
 4. Run your integration tests using commands like "./run-test.sh fullstack-test2/ddl" under $WORKSPACE/tests dir
 
 ## Run MicroBenchmark Tests
@@ -262,7 +303,7 @@ To run micro benchmark tests, you need to build with -DCMAKE_BUILD_TYPE=RELEASE 
 ```shell
 cd $BUILD
 cmake $WORKSPACE/tiflash -GNinja -DCMAKE_BUILD_TYPE=RELEASE -DENABLE_TESTS=ON
-ninja bench_dbms       
+ninja bench_dbms
 ```
 
 And the microbenchmark-test executables are at `$BUILD/dbms/bench_dbms`, you can run it with `./bench_dbms` or `./bench_dbms --benchmark_filter=xxx` . More usage please check with `./bench_dbms --help`.
@@ -282,8 +323,8 @@ Before submitting a pull request, please use [format-diff.py](format-diff.py) to
 > **NOTE**: It is required to use clang-format 12.0.0+.
 
 ```shell
-cd $WORKSPACE/tiflash
-python3 format-diff.py --diff_from `git merge-base ${TARGET_REMOTE_BRANCH} HEAD`
+# In the TiFlash repository root:
+python3 format-diff.py --diff_from `git merge-base origin/master HEAD`
 ```
 
 ## License
