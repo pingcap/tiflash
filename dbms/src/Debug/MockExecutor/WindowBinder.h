@@ -33,7 +33,7 @@ using ASTPartitionByElement = ASTOrderByElement;
 class WindowBinder : public ExecutorBinder
 {
 public:
-    WindowBinder(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> func_descs_, std::vector<ASTPtr> partition_by_exprs_, std::vector<ASTPtr> order_by_exprs_, MockWindowFrame frame_, uint64_t fine_grained_shuffle_stream_count_ = 0)
+    WindowBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && func_descs_, ASTs && partition_by_exprs_, ASTs && order_by_exprs_, MockWindowFrame frame_, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : ExecutorBinder(index_, "window_" + std::to_string(index_), output_schema_)
         , func_descs(std::move(func_descs_))
         , partition_by_exprs(std::move(partition_by_exprs_))

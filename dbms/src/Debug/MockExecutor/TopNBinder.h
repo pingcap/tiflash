@@ -21,7 +21,7 @@ namespace DB::mock
 class TopNBinder : public ExecutorBinder
 {
 public:
-    TopNBinder(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> order_columns_, size_t limit_)
+    TopNBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && order_columns_, size_t limit_)
         : ExecutorBinder(index_, "topn_" + std::to_string(index_), output_schema_)
         , order_columns(std::move(order_columns_))
         , limit(limit_)

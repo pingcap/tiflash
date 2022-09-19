@@ -21,7 +21,7 @@ namespace DB::mock
 class ProjectBinder : public ExecutorBinder
 {
 public:
-    ProjectBinder(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> && exprs_)
+    ProjectBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && exprs_)
         : ExecutorBinder(index_, "project_" + std::to_string(index_), output_schema_)
         , exprs(std::move(exprs_))
     {}

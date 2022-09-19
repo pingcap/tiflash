@@ -22,7 +22,7 @@ namespace DB::mock
 class SelectionBinder : public ExecutorBinder
 {
 public:
-    SelectionBinder(size_t & index_, const DAGSchema & output_schema_, std::vector<ASTPtr> conditions_)
+    SelectionBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && conditions_)
         : ExecutorBinder(index_, "selection_" + std::to_string(index_), output_schema_)
         , conditions(std::move(conditions_))
     {}

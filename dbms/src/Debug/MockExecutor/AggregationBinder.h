@@ -23,7 +23,7 @@ namespace DB::mock
 class AggregationBinder : public ExecutorBinder
 {
 public:
-    AggregationBinder(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_, std::vector<ASTPtr> agg_exprs_, std::vector<ASTPtr> gby_exprs_, bool is_final_mode_)
+    AggregationBinder(size_t & index_, const DAGSchema & output_schema_, bool has_uniq_raw_res_, bool need_append_project_, ASTs && agg_exprs_, ASTs && gby_exprs_, bool is_final_mode_)
         : ExecutorBinder(index_, "aggregation_" + std::to_string(index_), output_schema_)
         , has_uniq_raw_res(has_uniq_raw_res_)
         , need_append_project(need_append_project_)

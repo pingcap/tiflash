@@ -209,7 +209,7 @@ ExecutorBinderPtr compileWindow(ExecutorBinderPtr input, size_t & executor_index
     ExecutorBinderPtr window = std::make_shared<WindowBinder>(
         executor_index,
         output_schema,
-        window_exprs,
+        std::move(window_exprs),
         std::move(partition_columns),
         std::move(order_columns),
         frame,
