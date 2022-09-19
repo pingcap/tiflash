@@ -37,7 +37,7 @@ struct ColumnName
 
 ColumnName splitQualifiedName(const String & s);
 
-DAGSchema::const_iterator checkSchema(const DAGSchema & input, String checked_column);
+DAGSchema::const_iterator checkSchema(const DAGSchema & input, const String & checked_column);
 
 DAGColumnInfo toNullableDAGColumnInfo(const DAGColumnInfo & input);
 

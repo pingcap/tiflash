@@ -12,27 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
-#include <Flash/Mpp/TaskStatus.h>
+#pragma once
 
-namespace DB
+#include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/Page/PageDefines.h>
+#include <fmt/core.h>
+
+namespace DB::DM
 {
-StringRef taskStatusToString(const TaskStatus & status)
+
+struct ExternalDTFileInfo
 {
-    switch (status)
+    /**
+     * The allocated PageId of the file.
+     */
+    PageId id;
+
+    /**
+     * The handle range of contained data.
+     */
+    RowKeyRange range;
+
+    std::string toString() const
     {
-    case INITIALIZING:
-        return "INITIALIZING";
-    case RUNNING:
-        return "RUNNING";
-    case FINISHED:
-        return "FINISHED";
-    case CANCELLED:
-        return "CANCELLED";
-    case FAILED:
-        return "FAILED";
-    default:
-        throw Exception("Unknown TaskStatus");
+        return fmt::format(
+            "<file=dmf_{} range={}>",
+            id,
+            range.toDebugString());
     }
-}
-} // namespace DB
+};
+
+} // namespace DB::DM
