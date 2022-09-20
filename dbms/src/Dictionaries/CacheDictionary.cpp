@@ -57,7 +57,7 @@ CacheDictionary::CacheDictionary(const std::string & name, const DictionaryStruc
     , dict_struct(dict_struct)
     , source_ptr{std::move(source_ptr)}
     , dict_lifetime(dict_lifetime)
-    , size{roundUpToPowerOfTwoOrZero(std::max(size, size_t(max_collision_length)))}
+    , size{roundUpToPowerOfTwoOrZero(std::max(size, max_collision_length))}
     , size_overlap_mask{this->size - 1}
     , cells{this->size}
     , rnd_engine(randomSeed())
@@ -810,6 +810,7 @@ void CacheDictionary::update(
         {
             continue;
         }
+
         const auto id = id_found_pair.first;
 
         const auto find_result = findCellIdx(id, now);

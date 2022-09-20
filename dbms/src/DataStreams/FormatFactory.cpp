@@ -55,12 +55,22 @@ extern const int UNKNOWN_FORMAT;
 } // namespace ErrorCodes
 
 
-BlockInputStreamPtr FormatFactory::getInput(const String & name, ReadBuffer & buf, const Block & sample, const Context & context, size_t max_block_size) const
+BlockInputStreamPtr FormatFactory::getInput(
+    const String & name,
+    ReadBuffer & buf,
+    const Block & sample,
+    const Context & context,
+    size_t max_block_size)
 {
     const Settings & settings = context.getSettingsRef();
 
     auto wrap_row_stream = [&](auto && row_stream) {
-        return std::make_shared<BlockInputStreamFromRowInputStream>(std::move(row_stream), sample, max_block_size, settings.input_format_allow_errors_num, settings.input_format_allow_errors_ratio);
+        return std::make_shared<BlockInputStreamFromRowInputStream>(
+            std::forward<decltype(row_stream)>(row_stream),
+            sample,
+            max_block_size,
+            settings.input_format_allow_errors_num,
+            settings.input_format_allow_errors_ratio);
     };
 
     if (name == "Native")
@@ -210,7 +220,7 @@ static BlockOutputStreamPtr getOutputImpl(const String & name, WriteBuffer & buf
         throw Exception("Unknown format " + name, ErrorCodes::UNKNOWN_FORMAT);
 }
 
-BlockOutputStreamPtr FormatFactory::getOutput(const String & name, WriteBuffer & buf, const Block & sample, const Context & context) const
+BlockOutputStreamPtr FormatFactory::getOutput(const String & name, WriteBuffer & buf, const Block & sample, const Context & context)
 {
     /** Materialization is needed, because formats can use the functions `IDataType`,
       *  which only work with full columns.

@@ -106,7 +106,7 @@ std::string UnifiedLogPatternFormatter::getTimestamp()
     auto time_point = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(time_point);
 
-    std::tm buf_tm;
+    std::tm buf_tm{};
     std::tm * local_tm = localtime_r(&tt, &buf_tm);
     if (unlikely(!local_tm))
         return "1970/01/01 00:00:00.000 +00:00";

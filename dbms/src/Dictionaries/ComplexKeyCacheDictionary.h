@@ -492,7 +492,7 @@ private:
         for (const auto row : ext::range(0, ext::size(keys_array)))
         {
             const StringRef key = keys_array[row];
-            const auto it = map.find(key);
+            auto * const it = map.find(key);
             const auto string_ref = it != std::end(map) ? it->getMapped() : get_default(row);
             out->insertData(string_ref.data, string_ref.size);
         }

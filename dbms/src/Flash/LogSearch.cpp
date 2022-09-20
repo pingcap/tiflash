@@ -374,7 +374,7 @@ int64_t readApproxiTimestamp(const char * start, const char * date_format)
         return -1;
     }
 
-    std::tm time;
+    std::tm time{};
     time.tm_year = year - 1900;
     time.tm_mon = month - 1;
     time.tm_mday = day;
