@@ -15,6 +15,7 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
 
@@ -175,6 +176,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
         auto ptr = std::make_shared<MPPQueryTaskSet>();
         ptr->task_map.emplace(task->id, task);
         mpp_query_map.insert({task->id.start_ts, ptr});
+        GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     }
     else
     {
@@ -220,6 +222,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(MPPTask * task)
                 /// remove query task map if the task is the last one
                 scheduler->deleteQuery(task->id.start_ts, *this, false);
                 mpp_query_map.erase(it);
+                GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
             }
             cv.notify_all();
             return {true, ""};
