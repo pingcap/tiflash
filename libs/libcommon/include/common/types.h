@@ -17,8 +17,8 @@
 #include <cstdint>
 #include <string>
 
-/// import UInt128 and UInt256
 #include <boost_wrapper/cpp_int.h>
+/// import UInt128 and UInt256
 #include <common/UInt128.h>
 
 using Int8 = int8_t;
