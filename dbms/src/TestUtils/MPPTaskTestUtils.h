@@ -136,3 +136,4 @@ protected:
     } while (0)
 
 } // namespace DB::tests
+

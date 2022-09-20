@@ -434,7 +434,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         Poco::Net::SocketAddress client_address(client_ip);
 
         // For MPP or Cop test, we don't care about security config.
-        if (!(context->isMPPTest() || context->isCopTest()))
+        if (likely(!(context->isMPPTest() || context->isCopTest())))
             tmp_context->setUser(user, password, client_address, quota_key);
 
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");

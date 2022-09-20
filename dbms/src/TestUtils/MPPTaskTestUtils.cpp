@@ -100,7 +100,7 @@ ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<
 {
     assert(server_num == 1);
     auto req = std::make_shared<coprocessor::Request>();
-    req->set_tp(103);
+    req->set_tp(103); // 103 is COP_REQ_TYPE_DAG
     auto * data = req->mutable_data();
     dag_request->AppendToString(data);
 
@@ -111,12 +111,12 @@ ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<
 
     MockComputeServerManager::instance().setMockStorage(context.mockStorage());
 
-    auto addr = MockComputeServerManager::instance().getServerConfigMap()[test_meta.context_idx - 1].addr;
+    auto addr = MockComputeServerManager::instance().getServerConfigMap()[0].addr; // Since we only have started 1 server currently.
     MockComputeClient client(
         grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
     auto resp = client.runCoprocessor(req);
     auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-    if (!resp_ptr->ParseFromString(resp.data()))
+    if (unlikely(!resp_ptr->ParseFromString(resp.data())))
     {
         throw Exception("Incorrect json response data from Coprocessor.", ErrorCodes::BAD_ARGUMENTS);
     }
