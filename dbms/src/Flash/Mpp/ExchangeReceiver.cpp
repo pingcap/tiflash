@@ -756,7 +756,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
         {
             auto result = ExchangeReceiverResult::newOk(select_resp, recv_msg->source_index, recv_msg->req_info);
             /// If mocking TiFlash as TiDB, here should decode chunks from select_resp.
-            if (unlikey(!result.resp->chunks().empty()))
+            if (unlikely(!result.resp->chunks().empty()))
             {
                 assert(recv_msg->chunks.empty());
                 // Fine grained shuffle should only be enabled when sending data to TiFlash node.
