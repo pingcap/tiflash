@@ -57,7 +57,7 @@ CacheDictionary::CacheDictionary(const std::string & name, const DictionaryStruc
     , dict_struct(dict_struct)
     , source_ptr{std::move(source_ptr)}
     , dict_lifetime(dict_lifetime)
-    , size{roundUpToPowerOfTwoOrZero(std::max(size, size_t(max_collision_length)))}
+    , size{roundUpToPowerOfTwoOrZero(std::max(size, max_collision_length))}
     , size_overlap_mask{this->size - 1}
     , cells{this->size}
     , rnd_engine(randomSeed())
@@ -380,8 +380,6 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
     /// Mapping: <id> -> { all indices `i` of `ids` such that `ids[i]` = <id> }
     std::unordered_map<Key, std::vector<size_t>> outdated_ids;
 
-    size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
-
     const auto rows = ext::size(ids);
     {
         const auto now = std::chrono::system_clock::now();
@@ -394,14 +392,9 @@ void CacheDictionary::has(const PaddedPODArray<Key> & ids, PaddedPODArray<UInt8>
             if (!find_result.valid)
             {
                 outdated_ids[id].push_back(row);
-                if (find_result.outdated)
-                    ++cache_expired;
-                else
-                    ++cache_not_found;
             }
             else
             {
-                ++cache_hit;
                 const auto & cell = cells[cell_idx];
                 out[row] = !cell.isDefault();
             }
@@ -568,8 +561,6 @@ void CacheDictionary::getItemsNumberImpl(
     auto & attribute_array = std::get<ContainerPtrType<AttributeType>>(attribute.arrays);
     const auto rows = ext::size(ids);
 
-    size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
-
     {
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, decide which ones require update
@@ -586,14 +577,9 @@ void CacheDictionary::getItemsNumberImpl(
             if (!find_result.valid)
             {
                 outdated_ids[id].push_back(row);
-                if (find_result.outdated)
-                    ++cache_expired;
-                else
-                    ++cache_not_found;
             }
             else
             {
-                ++cache_hit;
                 const auto & cell_idx = find_result.cell_idx;
                 const auto & cell = cells[cell_idx];
                 out[row] = cell.isDefault() ? get_default(row) : static_cast<OutputType>(attribute_array[cell_idx]);
@@ -683,7 +669,6 @@ void CacheDictionary::getItemsString(
     std::unordered_map<Key, String> map;
 
     size_t total_length = 0;
-    size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
     {
         const auto now = std::chrono::system_clock::now();
         for (const auto row : ext::range(0, ids.size()))
@@ -694,14 +679,9 @@ void CacheDictionary::getItemsString(
             if (!find_result.valid)
             {
                 outdated_ids[id].push_back(row);
-                if (find_result.outdated)
-                    ++cache_expired;
-                else
-                    ++cache_not_found;
             }
             else
             {
-                ++cache_hit;
                 const auto & cell_idx = find_result.cell_idx;
                 const auto & cell = cells[cell_idx];
                 const auto string_ref = cell.isDefault() ? get_default(row) : attribute_array[cell_idx];
@@ -822,18 +802,14 @@ void CacheDictionary::update(
         stream->readSuffix();
     }
 
-    size_t not_found_num = 0, found_num = 0;
-
     const auto now = std::chrono::system_clock::now();
     /// Check which ids have not been found and require setting null_value
     for (const auto & id_found_pair : remaining_ids)
     {
         if (id_found_pair.second)
         {
-            ++found_num;
             continue;
         }
-        ++not_found_num;
 
         const auto id = id_found_pair.first;
 
