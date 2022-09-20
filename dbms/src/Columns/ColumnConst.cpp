@@ -97,6 +97,11 @@ MutableColumns ColumnConst::scatter(ColumnIndex num_columns, const Selector & se
     return res;
 }
 
+void ColumnConst::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]]) const
+{
+    throw TiFlashException("ColumnConst does not support scatterTo", Errors::Coprocessor::Unimplemented);
+}
+
 void ColumnConst::getPermutation(bool /*reverse*/, size_t /*limit*/, int /*nan_direction_hint*/, Permutation & res) const
 {
     res.resize(s);

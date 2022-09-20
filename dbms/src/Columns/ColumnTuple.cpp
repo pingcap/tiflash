@@ -243,6 +243,11 @@ MutableColumns ColumnTuple::scatter(ColumnIndex num_columns, const Selector & se
     return res;
 }
 
+void ColumnTuple::scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]]) const
+{
+    throw TiFlashException("ColumnTuple does not support scatterTo", Errors::Coprocessor::Unimplemented);
+}
+
 int ColumnTuple::compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const
 {
     const size_t tuple_size = columns.size();

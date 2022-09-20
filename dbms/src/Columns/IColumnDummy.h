@@ -144,6 +144,11 @@ public:
         return res;
     }
 
+    void scatterTo(ScatterColumns & columns [[maybe_unused]], const Selector & selector [[maybe_unused]]) const override
+    {
+        throw TiFlashException("IColumnDummy does not support scatterTo", Errors::Coprocessor::Unimplemented);
+    }
+
     void gather(ColumnGathererStream &) override
     {
         throw Exception("Method gather is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
