@@ -56,6 +56,12 @@ public:
         return nullptr;
     }
 
+    size_t size() const
+    {
+        return l.size();
+    }
+
+    // `count` is for test
     std::pair<int64_t, int64_t> count(int64_t table_id) const
     {
         int64_t valid = 0;
