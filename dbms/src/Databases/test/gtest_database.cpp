@@ -650,7 +650,7 @@ try
     {
         /// Create table
         ParserCreateQuery parser;
-        const String stmt = fmt::format("CREATE TABLE `{}`.`{}` ", db_name, tbl_name) +
+        const String stmt = "CREATE TABLE `" + db_name + "`.`" + tbl_name + "` " +
             R"stmt( 
                 (`id` Int32,`b` String) Engine = DeltaMerge((`id`),
                     '{
