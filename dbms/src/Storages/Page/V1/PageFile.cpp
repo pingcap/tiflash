@@ -91,8 +91,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
     meta_write_bytes += sizeof(Checksum);
 
-    char * meta_buffer = (char *)page_file.alloc(meta_write_bytes);
-    char * data_buffer = (char *)page_file.alloc(data_write_bytes);
+    char * meta_buffer = static_cast<char *>(page_file.alloc(meta_write_bytes));
+    char * data_buffer = static_cast<char *>(page_file.alloc(data_write_bytes));
 
     char * meta_pos = meta_buffer;
     char * data_pos = data_buffer;
@@ -127,17 +127,17 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
             else if (write.type == WriteBatch::WriteType::UPSERT)
                 edit.upsertPage(write.page_id, pc);
 
-            PageUtil::put(meta_pos, (PageId)write.page_id);
-            PageUtil::put(meta_pos, (PageTag)write.tag);
-            PageUtil::put(meta_pos, (PageOffset)page_data_file_off);
-            PageUtil::put(meta_pos, (PageSize)write.size);
-            PageUtil::put(meta_pos, (Checksum)page_checksum);
+            PageUtil::put(meta_pos, write.page_id);
+            PageUtil::put(meta_pos, static_cast<PageTag>(write.tag));
+            PageUtil::put(meta_pos, page_data_file_off);
+            PageUtil::put(meta_pos, write.size);
+            PageUtil::put(meta_pos, page_checksum);
 
             page_data_file_off += write.size;
             break;
         }
         case WriteBatch::WriteType::DEL:
-            PageUtil::put(meta_pos, (PageId)write.page_id);
+            PageUtil::put(meta_pos, write.page_id);
 
             edit.del(write.page_id);
             break;
@@ -338,7 +338,7 @@ PageMap PageFile::Reader::read(PageIdAndEntries & to_read)
     // 2. Pages with small gaps between them can also read together.
     // 3. Refactor this function to support iterator mode, and then use hint to do data pre-read.
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     char * pos = data_buf;
@@ -385,7 +385,7 @@ void PageFile::Reader::read(PageIdAndEntries & to_read, const PageHandler & hand
     for (const auto & p : to_read)
         buf_size = std::max(buf_size, p.second.size);
 
-    char * data_buf = (char *)alloc(buf_size);
+    char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
 
@@ -545,7 +545,7 @@ void PageFile::readAndSetPageMetas(PageEntriesEdit & edit)
     const size_t file_size = file.getSize();
     auto meta_file = file_provider->newRandomAccessFile(path, EncryptionPath(path, ""));
 
-    char * meta_data = (char *)alloc(file_size);
+    char * meta_data = static_cast<char *>(alloc(file_size));
     SCOPE_EXIT({ free(meta_data, file_size); });
     meta_file->pread(meta_data, file_size, 0);
 
