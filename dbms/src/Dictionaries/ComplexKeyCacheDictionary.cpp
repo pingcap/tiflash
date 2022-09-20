@@ -371,7 +371,7 @@ StringRef ComplexKeyCacheDictionary::copyKey(const StringRef key) const
 
 bool ComplexKeyCacheDictionary::isEmptyCell(const UInt64 idx) const
 {
-    return (cells[idx].key == StringRef{} &&(idx != zero_cell_idx || cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t())));
+    return (cells[idx].key == StringRef{} && (idx != zero_cell_idx || cells[idx].data == ext::safe_bit_cast<CellMetadata::time_point_urep_t>(CellMetadata::time_point_t())));
 }
 
 BlockInputStreamPtr ComplexKeyCacheDictionary::getBlockInputStream(const Names & column_names, size_t max_block_size) const
