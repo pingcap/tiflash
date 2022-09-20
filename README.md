@@ -162,7 +162,7 @@ After building, you can get TiFlash binary in `dbms/src/Server/tiflash` in the `
 
 TiFlash has several CMake build options to tweak for development purposes. These options SHOULD NOT be changed for production usage, as they may introduce unexpected build errors and unpredictable runtime behaviors.
 
-To tweat options, pass one or multiple `-D...=...` args when invoking CMake, for example:
+To tweak options, pass one or multiple `-D...=...` args when invoking CMake, for example:
 
 ```shell
 cd cmake-build-debug
@@ -304,7 +304,7 @@ LSAN_OPTIONS=suppressions=test/sanitize/asan.suppression
    tiup playground nightly --tiflash.binpath ./dbms/src/Server/tiflash
 
    # Or using a more stable cluster version:
-   # tiup playground v6.1.0 --tiflash.binpath dbms/src/Server/tiflash
+   # tiup playground v6.1.0 --tiflash.binpath ./dbms/src/Server/tiflash
    ```
 
    [TiUP](https://tiup.io) is the TiDB component manager. If you don't have one, you can install it via:

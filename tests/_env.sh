@@ -26,7 +26,7 @@ if [ -z ${storage_bin+x} ]; then
 		echo 'Error: Cannot find TiFlash binary. Specify via: export storage_bin=xxx' >&2
 		exit 1
 	fi
-	export storage_bin="$build_dir/dbms/src/Server/tiflash"
+	export storage_bin="${build_dir}/${TIFLASH_PATH}"
 fi
 
 # Server address for connecting
