@@ -560,8 +560,9 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
-// just a dummy function to avoid proxy fn_handle_safe_ts_update.is_some() panic.
-void HandleSafeTSUpdate(EngineStoreServerWrap *, uint64_t, uint64_t, uint64_t)
+void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
 {
+    RegionTable & region_table = server->tmt->getRegionTable();
+    region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
 }
 } // namespace DB
