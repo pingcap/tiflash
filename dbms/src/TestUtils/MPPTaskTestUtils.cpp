@@ -11,7 +11,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Server/MockComputeClient.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+
+#include <memory>
+
+#include "Core/ColumnsWithTypeAndName.h"
+#include "Flash/Coprocessor/ChunkCodec.h"
+#include "Flash/Coprocessor/DAGUtils.h"
+#include "TestUtils/ExecutorTestUtils.h"
+#include "TestUtils/FunctionTestUtils.h"
+#include "tipb/select.pb.h"
 
 namespace DB::tests
 {
@@ -84,6 +94,46 @@ ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, con
     return readBlocks(res);
 }
 
+DAGSchema getSelectSchema(Context & context)
+{
+    DAGSchema schema;
+    auto * dag_context = context.getDAGContext();
+    auto result_field_types = dag_context->result_field_types;
+    for (int i = 0; i < static_cast<int>(result_field_types.size()); ++i)
+    {
+        ColumnInfo info = TiDB::fieldTypeToColumnInfo(result_field_types[i]);
+        String col_name = "col_" + std::to_string(i);
+        schema.push_back(std::make_pair(col_name, info));
+    }
+    return schema;
+}
+
+std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
+{
+    switch (encode_type)
+    {
+    case tipb::EncodeType::TypeDefault:
+        return std::make_unique<DefaultChunkCodec>();
+    case tipb::EncodeType::TypeChunk:
+        return std::make_unique<ArrowChunkCodec>();
+    case tipb::EncodeType::TypeCHBlock:
+        return std::make_unique<CHBlockChunkCodec>();
+    default:
+        throw Exception("Unsupported encode type", ErrorCodes::BAD_ARGUMENTS);
+    }
+}
+
+ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<tipb::SelectResponse> & dag_response)
+{
+    auto codec = getCodec(dag_response->encode_type());
+    Blocks blocks;
+    auto schema = getSelectSchema(context);
+    for (const auto & chunk : dag_response->chunks())
+        blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
+    
+    return mergeBlocks(blocks).getColumnsWithTypeAndName();
+}
+
 void MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)
 {
     assert(server_num == 1);
@@ -92,10 +142,29 @@ void MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> 
     auto * data = req->mutable_data();
     dag_request->AppendToString(data);
 
-    auto addr = MockComputeServerManager::instance().getServerConfigMap()[0].addr;
+    DAGContext dag_context(*dag_request);
+
+    TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setDAGContext(&dag_context);
+
+    auto addr = MockComputeServerManager::instance().getServerConfigMap()[test_meta.context_idx - 1].addr;
+    std::cout << "ywq test addr: " << addr << ", index: " << test_meta.context_idx << std::endl;
     MockComputeClient client(
-        grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
-    client.runCoprocessor(req);
+        grpc::CreateChannel("0.0.0.0:3931", grpc::InsecureChannelCredentials()));
+    auto resp = client.runCoprocessor(req);
+    // ref to dbgfuncCoprocessor:517s
+
+    auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+    // bool unequal_flag = false;
+    String unequal_msg;
+    if (!resp_ptr->ParseFromString(resp.data()))
+    {
+        throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
+    }
+    else
+    {
+        auto columns = extractColumns(TiFlashTestEnv::getGlobalContext(test_meta.context_idx), resp_ptr);
+        std::cout << "ywq test res: " << getColumnsContent(columns) << std::endl;
+    }
 }
 
 String MPPTaskTestUtils::queryInfo(size_t server_id)

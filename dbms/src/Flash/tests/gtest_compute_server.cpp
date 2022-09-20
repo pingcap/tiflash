@@ -390,6 +390,9 @@ try
         auto request = context
                            .scan("test_db", "l_table")
                            .build(context);
+        // ywq test not set mpp test.
+        for (int i = 0; i < TiFlashTestEnv::globalContextSize(); ++i)
+            TiFlashTestEnv::getGlobalContext(i).setMPPTest();
         executeCoprocessorTask(request);
     }
 }

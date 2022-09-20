@@ -105,7 +105,8 @@ grpc::Status FlashService::Coprocessor(
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
-    if (!security_config->checkGrpcContext(grpc_context))
+    // For test, we don't care about security config.
+    if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }

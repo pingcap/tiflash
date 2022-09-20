@@ -44,7 +44,7 @@ public:
         }
     }
 
-    void runCoprocessor(std::shared_ptr<coprocessor::Request> request)
+    coprocessor::Response runCoprocessor(std::shared_ptr<coprocessor::Request> request)
     {
         coprocessor::Response response;
         grpc::ClientContext context;
@@ -53,6 +53,8 @@ public:
         {
             throw Exception(fmt::format("Meet error while run coprocessor task, error code = {}, message = {}", status.error_code(), status.error_message()));
         }
+
+        return response;
     }
 
 private:
