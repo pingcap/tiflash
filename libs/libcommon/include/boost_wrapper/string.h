@@ -14,13 +14,13 @@
 
 #pragma once
 
-#if defined(__clang__)
+#if defined(__clang__) && __clang_major__ >= 15
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-builtins"
 #endif
 
 #include <boost/algorithm/string.hpp>
 
-#if defined(__clang__)
+#if defined(__clang__) && __clang_major__ >= 15
 #pragma GCC diagnostic pop
 #endif

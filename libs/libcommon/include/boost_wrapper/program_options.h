@@ -19,7 +19,7 @@
 #pragma GCC diagnostic ignored "-Wdeprecated-builtins"
 #endif
 
-#include <boost/lockfree/queue.hpp>
+#include <boost/program_options.hpp>
 
 #if defined(__clang__) && __clang_major__ >= 15
 #pragma GCC diagnostic pop

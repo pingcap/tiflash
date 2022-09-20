@@ -16,10 +16,10 @@
 
 /// Warning in boost::geometry during template strategy substitution.
 #pragma GCC diagnostic push
-#if defined(__clang__)
+#if defined(__clang__) && __clang_major__ >= 15
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-builtins"
-#else
+#elif !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 #pragma GCC diagnostic ignored "-Wpragmas"
