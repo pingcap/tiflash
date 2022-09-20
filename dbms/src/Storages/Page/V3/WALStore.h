@@ -20,7 +20,7 @@
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
-#include <Storages/Page/WALRecoveryMode.h>
+#include <Storages/Page/V3/WAL/WALConfig.h>
 #include <common/types.h>
 
 #include <memory>
@@ -36,7 +36,6 @@ using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 namespace PS::V3
 {
 
-
 class WALStore;
 using WALStorePtr = std::unique_ptr<WALStore>;
 
@@ -46,33 +45,6 @@ using WALStoreReaderPtr = std::shared_ptr<WALStoreReader>;
 class WALStore
 {
 public:
-    struct Config
-    {
-        SettingUInt64 roll_size = PAGE_META_ROLL_SIZE;
-        SettingUInt64 max_persisted_log_files = MAX_PERSISTED_LOG_FILES;
-
-    private:
-        SettingUInt64 wal_recover_mode = 0;
-
-    public:
-        void setRecoverMode(UInt64 recover_mode)
-        {
-            if (unlikely(recover_mode != static_cast<UInt64>(WALRecoveryMode::TolerateCorruptedTailRecords)
-                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::AbsoluteConsistency)
-                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::PointInTimeRecovery)
-                         && recover_mode != static_cast<UInt64>(WALRecoveryMode::SkipAnyCorruptedRecords)))
-            {
-                throw Exception("Unknow recover mode [num={}]", recover_mode);
-            }
-            wal_recover_mode = recover_mode;
-        }
-
-        WALRecoveryMode getRecoverMode()
-        {
-            return static_cast<WALRecoveryMode>(wal_recover_mode.get());
-        }
-    };
-
     constexpr static const char * wal_folder_prefix = "/wal";
 
     static std::pair<WALStorePtr, WALStoreReaderPtr>
@@ -80,16 +52,15 @@ public:
         String storage_name_,
         FileProviderPtr & provider,
         PSDiskDelegatorPtr & delegator,
-        WALStore::Config config);
+        WALConfig config);
 
     WALStoreReaderPtr createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter);
 
-    void apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter = nullptr);
-    void apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter = nullptr);
+    void apply(String && serialized_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     struct FilesSnapshot
     {
-        Format::LogNumberType current_writting_log_num;
+        Format::LogNumberType current_writing_log_num;
         // The log files to generate snapshot from. Sorted by <log number, log level>.
         // If the WAL log file is not inited, it is an empty set.
         LogFilenameSet persisted_log_files;
@@ -107,7 +78,8 @@ public:
 
     bool saveSnapshot(
         FilesSnapshot && files_snap,
-        PageEntriesEdit && directory_snap,
+        String && serialized_snap,
+        size_t num_records,
         const WriteLimiterPtr & write_limiter = nullptr);
 
     const String & name() { return storage_name; }
@@ -118,7 +90,7 @@ private:
         const PSDiskDelegatorPtr & delegator_,
         const FileProviderPtr & provider_,
         Format::LogNumberType last_log_num_,
-        WALStore::Config config);
+        WALConfig config);
 
     std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
@@ -137,7 +109,7 @@ private:
 
     LoggerPtr logger;
 
-    WALStore::Config config;
+    WALConfig config;
 };
 
 } // namespace PS::V3

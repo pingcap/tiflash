@@ -283,51 +283,25 @@ public:
 
     SnapshotsStatistics getSnapshotsStat() const;
 
-    PageIDAndEntryV3 get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
-    PageIDAndEntryV3 get(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    PageIDAndEntryV3 getByID(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true);
+        return getByIDImpl(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true);
     }
-    PageIDAndEntryV3 getOrNull(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
+    PageIDAndEntryV3 getByIDOrNull(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return get(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
-    }
-
-    std::pair<PageIDAndEntriesV3, PageIds> get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist = true) const;
-    PageIDAndEntriesV3 get(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
-    {
-        return std::get<0>(get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true));
-    }
-    std::pair<PageIDAndEntriesV3, PageIds> getOrNull(PageIdV3Internals page_ids, const DB::PageStorageSnapshotPtr & snap) const
-    {
-        return get(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
+        return getByIDImpl(page_id, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
-    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const;
-    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap, bool throw_on_not_exist) const
+    PageIDAndEntriesV3 getByIDs(const PageIdV3Internals & page_ids, const DB::PageStorageSnapshotPtr & snap) const
     {
-        return getNormalPageId(page_id, toConcreteSnapshot(snap), throw_on_not_exist);
+        return std::get<0>(getByIDsImpl(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/true));
+    }
+    std::pair<PageIDAndEntriesV3, PageIds> getByIDsOrNull(PageIdV3Internals page_ids, const DB::PageStorageSnapshotPtr & snap) const
+    {
+        return getByIDsImpl(page_ids, toConcreteSnapshot(snap), /*throw_on_not_exist=*/false);
     }
 
-#ifndef NDEBUG
-    // Just for tests, refactor them out later
-    PageIDAndEntryV3 get(PageId page_id, const PageDirectorySnapshotPtr & snap) const
-    {
-        return get(buildV3Id(TEST_NAMESPACE_ID, page_id), snap);
-    }
-    PageIDAndEntryV3 get(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
-    {
-        return get(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap));
-    }
-    PageIdV3Internal getNormalPageId(PageId page_id, const PageDirectorySnapshotPtr & snap) const
-    {
-        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), snap, /*throw_on_not_exist*/ true);
-    }
-    PageIdV3Internal getNormalPageId(PageId page_id, const DB::PageStorageSnapshotPtr & snap) const
-    {
-        return getNormalPageId(buildV3Id(TEST_NAMESPACE_ID, page_id), toConcreteSnapshot(snap), /*throw_on_not_exist*/ true);
-    }
-#endif
+    PageIdV3Internal getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap_, bool throw_on_not_exist) const;
 
     PageId getMaxId() const;
 
@@ -378,6 +352,11 @@ public:
 
     friend class PageDirectoryFactory;
     friend class PageStorageControlV3;
+
+private:
+    PageIDAndEntryV3 getByIDImpl(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const;
+    std::pair<PageIDAndEntriesV3, PageIds>
+    getByIDsImpl(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const;
 
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
