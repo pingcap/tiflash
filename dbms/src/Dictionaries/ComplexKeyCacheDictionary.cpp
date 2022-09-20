@@ -176,7 +176,6 @@ void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes
     Arena temporary_keys_pool;
     PODArray<StringRef> keys_array(rows_num);
 
-    size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
     {
         const auto now = std::chrono::system_clock::now();
         /// fetch up-to-date values, decide which ones require update
@@ -193,14 +192,9 @@ void ComplexKeyCacheDictionary::has(const Columns & key_columns, const DataTypes
             if (!find_result.valid)
             {
                 outdated_keys[key].push_back(row);
-                if (find_result.outdated)
-                    ++cache_expired;
-                else
-                    ++cache_not_found;
             }
             else
             {
-                ++cache_hit;
                 const auto & cell = cells[cell_idx];
                 out[row] = !cell.isDefault();
             }
