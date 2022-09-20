@@ -93,23 +93,23 @@ public:
 
     std::tuple<size_t, double, unsigned> getSnapshotsStat() const override;
 
-    void write(DB::WriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) override;
+    void write(DB::WriteBatch && wb, const WriteLimiterPtr & write_limiter = nullptr) override; // NOLINT(google-default-arguments)
 
-    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {}) override;
+    DB::PageEntry getEntry(PageId page_id, SnapshotPtr snapshot = {}) override; // NOLINT(google-default-arguments)
 
-    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    DB::Page read(PageId page_id, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override; // NOLINT(google-default-arguments)
 
-    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    PageMap read(const std::vector<PageId> & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override; // NOLINT(google-default-arguments)
 
-    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    void read(const std::vector<PageId> & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override; // NOLINT(google-default-arguments)
 
-    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override;
+    PageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {}) override; // NOLINT(google-default-arguments)
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) override;
+    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {}) override; // NOLINT(google-default-arguments)
 
     void traversePageEntries(const std::function<void(PageId page_id, const DB::PageEntry & page)> & acceptor, SnapshotPtr snapshot) override;
 
-    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) override;
+    bool gc(bool not_skip = false, const WriteLimiterPtr & write_limiter = nullptr, const ReadLimiterPtr & read_limiter = nullptr) override; // NOLINT(google-default-arguments)
 
     void registerExternalPagesCallbacks(ExternalPagesScanner scanner, ExternalPagesRemover remover) override;
 
@@ -241,7 +241,8 @@ private:
 
 private:
     WriterPtr checkAndRenewWriter(
-        WritingPageFile & page_file,
+        WritingPageFile & writing_file,
+        PageFileIdAndLevel max_page_file_id_lvl_hint,
         const String & parent_path_hint,
         WriterPtr && old_writer = nullptr,
         const String & logging_msg = "");
