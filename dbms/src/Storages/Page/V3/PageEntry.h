@@ -37,7 +37,7 @@ public:
     BlobFileOffset offset = 0; // The offset of page data in file
     UInt64 checksum = 0; // The checksum of whole page data
 
-    // The offset to the begining of specify field.
+    // The offset to the beginning of specify field.
     PageFieldOffsetChecksums field_offsets{};
 
 public:
