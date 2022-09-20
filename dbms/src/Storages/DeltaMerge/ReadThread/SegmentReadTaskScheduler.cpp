@@ -47,15 +47,12 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         }
     }
     auto block_slots = pool->getFreeBlockSlots();
-    auto [unexpired, expired] = read_pools.count(pool->tableId());
-    LOG_FMT_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} segments={} unexpired_pool={} expired_pool={}", //
+    LOG_FMT_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} segments={}", //
                   pool->poolId(),
                   pool->tableId(),
                   block_slots,
                   seg_ids.size(),
-                  seg_ids,
-                  unexpired,
-                  expired);
+                  seg_ids);
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
@@ -125,8 +122,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<
 
 SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlock()
 {
-    auto [valid, invalid] = read_pools.count(0);
-    auto pool_count = valid + invalid; // Invalid read task pool also need to be scheduled for clean MergedTaskPool.
+    int64_t pool_count = read_pools.size(); // All read task pool need to be scheduled, include invalid read task pool.
     for (int64_t i = 0; i < pool_count; i++)
     {
         auto pool = read_pools.next();
@@ -150,8 +146,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
 
 std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool)
 {
-    auto [unexpired, expired] = read_pools.count(pool->tableId());
-    auto expected_merge_seg_count = std::min(unexpired, 2);
+    auto expected_merge_seg_count = std::min(read_pools.size(), 2);  // Not accurate.
     auto itr = merging_segments.find(pool->tableId());
     if (itr == merging_segments.end())
     {
