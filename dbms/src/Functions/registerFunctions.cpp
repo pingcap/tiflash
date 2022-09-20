@@ -34,7 +34,6 @@ void registerFunctionsExternalModels(FunctionFactory &);
 void registerFunctionsFormatting(FunctionFactory &);
 void registerFunctionsHashing(FunctionFactory &);
 void registerFunctionsConsistentHashing(FunctionFactory &);
-void registerFunctionsHigherOrder(FunctionFactory &);
 void registerFunctionsLogical(FunctionFactory &);
 void registerFunctionsMiscellaneous(FunctionFactory &);
 void registerFunctionsRandom(FunctionFactory &);
@@ -72,7 +71,6 @@ void registerFunctions()
     registerFunctionsFormatting(factory);
     registerFunctionsHashing(factory);
     registerFunctionsConsistentHashing(factory);
-    registerFunctionsHigherOrder(factory);
     registerFunctionsLogical(factory);
     registerFunctionsMiscellaneous(factory);
     registerFunctionsRandom(factory);
