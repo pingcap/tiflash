@@ -74,23 +74,24 @@ template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
 void HashPartitionWriter<StreamWriterPtr>::writePackets(std::vector<TrackedMppDataPacket> & packets)
 {
+    size_t part_id = 0;
+
     if constexpr (send_exec_summary_at_last)
     {
         tipb::SelectResponse response;
         addExecuteSummaries(response, /*delta_mode=*/false);
         /// Sending the response to only one node, default the first one.
+        assert(!packets.empty());
         packets[0].serializeByResponse(response);
-        for (size_t part_id = 0; part_id < packets.size(); ++part_id)
-            writer->write(packets[part_id].getPacket(), part_id);
+        writer->write(packets[0].getPacket(), 0);
+        part_id = 1;
     }
-    else
+
+    for (; part_id < packets.size(); ++part_id)
     {
-        for (size_t part_id = 0; part_id < packets.size(); ++part_id)
-        {
-            auto & packet = packets[part_id].getPacket();
-            if (packet.chunks_size() > 0)
-                writer->write(packet, part_id);
-        }
+        auto & packet = packets[part_id].getPacket();
+        if (packet.chunks_size() > 0)
+            writer->write(packet, part_id);
     }
 }
 
