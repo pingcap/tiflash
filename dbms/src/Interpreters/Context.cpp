@@ -1866,6 +1866,16 @@ void Context::setExecutorTest()
     test_mode = executor_test;
 }
 
+bool Context::isCopTest() const
+{
+    return test_mode == cop_test;
+}
+
+void Context::setCopTest()
+{
+    test_mode = cop_test;
+}
+
 bool Context::isTest() const
 {
     return test_mode != non_test;

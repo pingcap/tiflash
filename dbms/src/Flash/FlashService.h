@@ -18,9 +18,9 @@
 #include <Interpreters/Context.h>
 #include <common/ThreadPool.h>
 #include <common/logger_useful.h>
+#include <grpcpp/support/status.h>
 
 #include <boost/noncopyable.hpp>
-#include <grpcpp/support/status.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wnon-virtual-dtor"

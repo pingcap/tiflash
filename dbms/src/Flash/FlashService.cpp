@@ -105,8 +105,8 @@ grpc::Status FlashService::Coprocessor(
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
-    // For test, we don't care about security config.
-    if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
+    // For coprocessor test, we don't care about security config.
+    if (!context->isCopTest() && !security_config->checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
@@ -119,6 +119,8 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
+
+    context->setMockStorage(mock_storage);
 
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
         auto [db_context, status] = createDBContext(grpc_context);
@@ -431,8 +433,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         std::string client_ip = peer.substr(pos + 1);
         Poco::Net::SocketAddress client_address(client_ip);
 
-        // For MPP test, we don't care about security config.
-        if (!context->isMPPTest())
+        // For MPP or Cop test, we don't care about security config.
+        if (!(context->isMPPTest() || context->isCopTest()))
             tmp_context->setUser(user, password, client_address, quota_key);
 
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");

@@ -36,7 +36,6 @@ void MockComputeServerManager::addServer(String addr)
             addr);
     }
     config.partition_id = server_config_map.size();
-    std::cout << "ywq test partition id: " << config.partition_id << ", addr: " << addr << std::endl;
     config.addr = addr;
     server_config_map[config.partition_id] = config;
 }

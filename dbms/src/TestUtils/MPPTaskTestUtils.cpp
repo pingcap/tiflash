@@ -130,11 +130,10 @@ ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<t
     auto schema = getSelectSchema(context);
     for (const auto & chunk : dag_response->chunks())
         blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
-    
     return mergeBlocks(blocks).getColumnsWithTypeAndName();
 }
 
-void MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)
+ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)
 {
     assert(server_num == 1);
     auto req = std::make_shared<coprocessor::Request>();
@@ -145,25 +144,22 @@ void MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> 
     DAGContext dag_context(*dag_request);
 
     TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setDAGContext(&dag_context);
+    TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setCopTest();
+
+    MockComputeServerManager::instance().setMockStorage(context.mockStorage());
 
     auto addr = MockComputeServerManager::instance().getServerConfigMap()[test_meta.context_idx - 1].addr;
-    std::cout << "ywq test addr: " << addr << ", index: " << test_meta.context_idx << std::endl;
     MockComputeClient client(
-        grpc::CreateChannel("0.0.0.0:3931", grpc::InsecureChannelCredentials()));
+        grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
     auto resp = client.runCoprocessor(req);
-    // ref to dbgfuncCoprocessor:517s
-
     auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-    // bool unequal_flag = false;
-    String unequal_msg;
     if (!resp_ptr->ParseFromString(resp.data()))
     {
-        throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("Incorrect json response data from Coprocessor.", ErrorCodes::BAD_ARGUMENTS);
     }
     else
     {
-        auto columns = extractColumns(TiFlashTestEnv::getGlobalContext(test_meta.context_idx), resp_ptr);
-        std::cout << "ywq test res: " << getColumnsContent(columns) << std::endl;
+        return extractColumns(TiFlashTestEnv::getGlobalContext(test_meta.context_idx), resp_ptr);
     }
 }
 

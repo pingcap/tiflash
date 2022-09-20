@@ -84,7 +84,7 @@ public:
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
 
-    void executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
+    ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
 
     static ::testing::AssertionResult assertQueryCancelled(size_t start_ts);
     static ::testing::AssertionResult assertQueryActive(size_t start_ts);
