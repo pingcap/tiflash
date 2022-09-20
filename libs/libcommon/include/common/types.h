@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <boost_wrapper/cpp_int.h>
+
 #include <cstdint>
 #include <string>
-
-#include <boost_wrapper/cpp_int.h>
 /// import UInt128 and UInt256
 #include <common/UInt128.h>
 
