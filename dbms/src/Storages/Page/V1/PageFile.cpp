@@ -462,7 +462,7 @@ std::pair<PageFile, PageFile::Type> PageFile::recover(const String & parent_path
         return {{}, Type::Invalid};
     }
     std::vector<std::string> ss;
-    boost::split(ss, page_file_name, boost::is_any_of("_"));
+    boost::split(ss, page_file_name, boost::is_any_of("_")); // NOLINT
     if (ss.size() != 3)
     {
         LOG_INFO(log, "Unrecognized file, ignored: " + page_file_name);
