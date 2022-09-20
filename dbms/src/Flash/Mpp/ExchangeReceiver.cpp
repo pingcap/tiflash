@@ -755,7 +755,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
         else
         {
             auto result = ExchangeReceiverResult::newOk(select_resp, recv_msg->source_index, recv_msg->req_info);
-            /// If mocking TiFlash as TiDB, here should decode chunks from select_resp.
+            /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
             if (unlikely(!result.resp->chunks().empty()))
             {
                 assert(recv_msg->chunks.empty());
