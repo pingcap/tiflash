@@ -93,8 +93,7 @@ FLATTEN_INLINE_PURE static inline int CompareStrView(const std::string_view & lh
 
     if (ret == 0)
     {
-        auto a = lhs.size(), b = rhs.size();
-        ret = (a == b) ? 0 : (a < b ? -1 : 1);
+        ret = (lhs.size() == rhs.size()) ? 0 : (lhs.size() < rhs.size() ? -1 : 1);
     }
     return ret;
 #else

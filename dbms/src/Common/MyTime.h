@@ -150,6 +150,8 @@ struct MyDate : public MyTimeBase
     }
 };
 
+bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDate = true);
+
 struct MyDateTimeFormatter
 {
     std::vector<std::function<void(const MyTimeBase & datetime, String & result)>> formatters;
@@ -181,12 +183,19 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
-static const int8_t DefaultFsp = 6;
-static const bool DefaultNeedCheckTimeValid = false;
-static const bool DefaultIgnoreZeroDate = true;
+bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
+bool checkTimeValidAllowMonthAndDayZero(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
+bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32);
 
-Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, bool need_check_time_valid = DefaultNeedCheckTimeValid, bool ignore_zero_date = DefaultIgnoreZeroDate);
+using CheckTimeFunc = std::function<bool(Int32, Int32, Int32, Int32, Int32, Int32)>;
+
+static const int8_t DefaultFsp = 6;
+static bool DefaultIsFloat = false;
+static CheckTimeFunc DefaultCheckTimeFunc = noNeedCheckTime;
+
+Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, bool isFloat = DefaultIsFloat);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 

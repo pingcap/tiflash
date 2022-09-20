@@ -14,8 +14,9 @@
 #pragma once
 
 #include <Common/BackgroundTask.h>
+#include <Common/ThreadManager.h>
 #include <Common/assert_cast.h>
-#include <Debug/astToExecutor.h>
+#include <Debug/MockExecutor/astToExecutor.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>

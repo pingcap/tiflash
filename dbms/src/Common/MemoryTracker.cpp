@@ -77,8 +77,8 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
     if (check_memory_limit)
     {
         Int64 current_limit = limit.load(std::memory_order_relaxed);
-
-        if (unlikely(!next.load(std::memory_order_relaxed) && accuracy_diff_for_test && current_limit && real_rss > accuracy_diff_for_test + current_limit))
+        Int64 current_accuracy_diff_for_test = accuracy_diff_for_test.load(std::memory_order_relaxed);
+        if (unlikely(!next.load(std::memory_order_relaxed) && current_accuracy_diff_for_test && current_limit && real_rss > current_accuracy_diff_for_test + current_limit))
         {
             DB::FmtBuffer fmt_buf;
             fmt_buf.append("Memory tracker accuracy ");
@@ -108,9 +108,10 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
 
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
+        Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
         bool is_rss_too_large = (!next.load(std::memory_order_relaxed) && current_limit
-                                 && real_rss > current_limit + bytes_rss_larger_than_limit
-                                 && will_be > current_limit - (real_rss - current_limit - bytes_rss_larger_than_limit));
+                                 && real_rss > current_limit + current_bytes_rss_larger_than_limit
+                                 && will_be > current_limit - (real_rss - current_limit - current_bytes_rss_larger_than_limit));
         if (is_rss_too_large
             || unlikely(current_limit && will_be > current_limit))
         {

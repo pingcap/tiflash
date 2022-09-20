@@ -41,6 +41,7 @@ namespace DB
 {
 namespace FailPoints
 {
+extern const char gc_skip_update_safe_point[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];
@@ -1160,7 +1161,7 @@ try
 
         SegmentPtr seg;
         std::tie(std::ignore, seg) = *store->segments.begin();
-        store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+        store->segmentSplit(*dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
     }
 
     const UInt64 tso2 = 10;
@@ -1273,10 +1274,8 @@ try
     // The ingest range is [32, 256)
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-
-        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, /*file_ids*/ {}, /*clear_data_in_range*/ true);
     }
 
 
@@ -3095,13 +3094,13 @@ try
     if (store->isCommonHandle())
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     else
     {
         // Specifies MAX_KEY. nullopt should be returned.
-        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MAX_KEY);
         ASSERT_EQ(result, std::nullopt);
     }
     std::optional<RowKeyRange> result_1;
@@ -3109,11 +3108,11 @@ try
         // Specifies MIN_KEY. In this case, the first segment should be processed.
         if (store->isCommonHandle())
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
         }
         else
         {
-            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            result_1 = store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
         }
         // The returned range is the same as first segment's range.
         ASSERT_NE(result_1, std::nullopt);
@@ -3125,7 +3124,7 @@ try
     }
     {
         // Compact the first segment again, nothing should change.
-        auto result = store->mergeDeltaBySegment(*db_context, result_1->start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, result_1->start);
         ASSERT_EQ(*result, *result_1);
 
         helper->verifyExpectedRowsForAllSegments();
@@ -3133,7 +3132,7 @@ try
     std::optional<RowKeyRange> result_2;
     {
         // Compact again using the end key just returned. The second segment should be processed.
-        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end, DeltaMergeStore::TaskRunThread::Foreground);
+        result_2 = store->mergeDeltaBySegment(*db_context, result_1->end);
         ASSERT_NE(result_2, std::nullopt);
         ASSERT_EQ(*result_2, std::next(store->segments.begin())->second->getRowKeyRange());
 
@@ -3151,12 +3150,12 @@ TEST_P(DeltaMergeStoreMergeDeltaBySegmentTest, InvalidKey)
         if (store->isCommonHandle())
         {
             // For common handle, give int handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::INT_HANDLE_MIN_KEY);
         }
         else
         {
             // For int handle, give common handle key and have a try
-            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY, DeltaMergeStore::TaskRunThread::Foreground);
+            store->mergeDeltaBySegment(*db_context, RowKeyValue::COMMON_HANDLE_MIN_KEY);
         }
     });
 }
@@ -3172,13 +3171,13 @@ try
         ASSERT_NE(it, store->segments.end());
         auto seg = it->second;
 
-        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        result = store->mergeDeltaBySegment(*db_context, seg->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
     {
         // As we are the last segment, compact "next segment" should result in failure. A nullopt is returned.
-        auto result2 = store->mergeDeltaBySegment(*db_context, result->end, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result2 = store->mergeDeltaBySegment(*db_context, result->end);
         ASSERT_EQ(result2, std::nullopt);
         helper->verifyExpectedRowsForAllSegments();
     }
@@ -3207,7 +3206,7 @@ try
         auto range = std::next(store->segments.begin())->second->getRowKeyRange();
         auto compact_key = range.start.toPrefixNext();
 
-        auto result = store->mergeDeltaBySegment(*db_context, compact_key, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, compact_key);
         ASSERT_NE(result, std::nullopt);
 
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
@@ -3251,7 +3250,7 @@ try
     }
     {
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
 
         segment1 = std::next(store->segments.begin())->second;
@@ -3299,7 +3298,7 @@ try
     // Start a mergeDelta. It should hit retry immediately due to a flush is in progress.
     auto th_merge_delta = std::async([&]() {
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
         // All rows in the delta layer should be merged into the stable layer.
         helper->expected_stable_rows[1] += helper->expected_delta_rows[1];
@@ -3334,7 +3333,7 @@ try
         // Split segment1 into 2.
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->segmentSplit(*dm_context, segment1, /*is_foreground*/ true);
+        auto result = store->segmentSplit(*dm_context, segment1, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
         ASSERT_NE(result.second, nullptr);
 
         helper->resetExpectedRows();
@@ -3350,7 +3349,7 @@ try
     auto th_merge_delta = std::async([&] {
         // mergeDeltaBySegment for segment1
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start, DeltaMergeStore::TaskRunThread::Foreground);
+        auto result = store->mergeDeltaBySegment(*db_context, segment1->getRowKeyRange().start);
         ASSERT_NE(result, std::nullopt);
 
         // Although original segment1 has been split into 2, we still expect only segment1's delta
@@ -3380,6 +3379,162 @@ try
     // This time the retry should succeed without any future retries.
     sp_merge_delta_retry.next();
     th_merge_delta.wait();
+}
+CATCH
+
+
+class DeltaMergeStoreBackgroundTest
+    : public DB::base::TiFlashStorageTestBasic
+{
+public:
+    void SetUp() override
+    {
+        FailPointHelper::enableFailPoint(FailPoints::gc_skip_update_safe_point);
+
+        try
+        {
+            TiFlashStorageTestBasic::SetUp();
+            setupDMStore();
+            // Split into 4 segments.
+            helper = std::make_unique<MultiSegmentTestUtil>(*db_context);
+            helper->prepareSegments(store, 50, DMTestEnv::PkType::CommonHandle);
+        }
+        CATCH
+    }
+
+    void TearDown() override
+    {
+        TiFlashStorageTestBasic::TearDown();
+        FailPointHelper::disableFailPoint(FailPoints::gc_skip_update_safe_point);
+    }
+
+    void setupDMStore()
+    {
+        auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
+        store = std::make_shared<DeltaMergeStore>(*db_context,
+                                                  false,
+                                                  "test",
+                                                  DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
+                                                  101,
+                                                  *cols,
+                                                  (*cols)[0],
+                                                  true,
+                                                  1,
+                                                  DeltaMergeStore::Settings());
+        dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+    }
+
+protected:
+    std::unique_ptr<MultiSegmentTestUtil> helper{};
+    DeltaMergeStorePtr store;
+    DMContextPtr dm_context;
+};
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCWillMergeMultipleSegments)
+try
+{
+    ASSERT_EQ(store->segments.size(), 4);
+    auto gc_n = store->onSyncGc(1);
+    ASSERT_EQ(store->segments.size(), 1);
+    ASSERT_EQ(gc_n, 1);
+}
+CATCH
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCOnlyMergeSmallSegments)
+try
+{
+    UInt64 gc_n = 0;
+
+    // Note: initially we have 4 segments, each segment contains 50 rows.
+
+    ASSERT_EQ(store->segments.size(), 4);
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 10;
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 4);
+    ASSERT_EQ(gc_n, 0);
+
+    // In this case, merge two segments will exceed small_segment_rows, so no merge will happen
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 55 * 3;
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 4);
+    ASSERT_EQ(gc_n, 0);
+
+    // In this case, we will only merge two segments and then stop.
+    // [50, 50,    50, 50] => [100,   100]
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 105 * 3;
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 2);
+    ASSERT_EQ(gc_n, 2);
+    helper->resetExpectedRows();
+    ASSERT_EQ(helper->rows_by_segments[0], 100);
+    ASSERT_EQ(helper->rows_by_segments[1], 100);
+
+    gc_n = store->onSyncGc(100);
+    ASSERT_EQ(store->segments.size(), 2);
+    ASSERT_EQ(gc_n, 0);
+    helper->verifyExpectedRowsForAllSegments();
+}
+CATCH
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCMergeAndStop)
+try
+{
+    UInt64 gc_n = 0;
+
+    // Note: initially we have 4 segments, each segment contains 50 rows.
+
+    ASSERT_EQ(store->segments.size(), 4);
+
+    // In this case, we will only merge two segments and then stop.
+    // [50, 50,    50, 50] => [100,   50, 50]
+    db_context->getGlobalContext().getSettingsRef().dt_segment_limit_rows = 105 * 3;
+    gc_n = store->onSyncGc(1);
+    ASSERT_EQ(store->segments.size(), 3);
+    ASSERT_EQ(gc_n, 1);
+    helper->resetExpectedRows();
+    ASSERT_EQ(helper->rows_by_segments[0], 100);
+    ASSERT_EQ(helper->rows_by_segments[1], 50);
+    ASSERT_EQ(helper->rows_by_segments[2], 50);
+}
+CATCH
+
+TEST_F(DeltaMergeStoreBackgroundTest, GCMergeWhileFlushing)
+try
+{
+    ASSERT_EQ(store->segments.size(), 4);
+
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, 500, false, DMTestEnv::PkType::CommonHandle, 10 /* new tso */);
+    store->write(*db_context, db_context->getSettingsRef(), block);
+
+    // Currently, when there is a flush in progress, the segment merge in GC thread will be blocked.
+
+    auto sp_flush_commit = SyncPointCtl::enableInScope("before_ColumnFileFlushTask::commit");
+    auto sp_merge_flush_retry = SyncPointCtl::enableInScope("before_DeltaMergeStore::segmentMerge|retry_flush");
+
+    auto th_flush = std::async([&]() {
+        auto result = store->segments.begin()->second->flushCache(*dm_context);
+        ASSERT_TRUE(result);
+    });
+
+    sp_flush_commit.waitAndPause();
+
+    auto th_gc = std::async([&]() {
+        auto gc_n = store->onSyncGc(1);
+        ASSERT_EQ(gc_n, 1);
+        ASSERT_EQ(store->segments.size(), 1);
+    });
+
+    // Expect merge triggered by GC is retrying... because there is a flush in progress.
+    sp_merge_flush_retry.waitAndPause();
+
+    // Finish the flush.
+    sp_flush_commit.next();
+    sp_flush_commit.disable();
+    th_flush.wait();
+
+    // The merge in GC should continue without any further retries.
+    sp_merge_flush_retry.next();
+    th_gc.wait();
 }
 CATCH
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/setThreadName.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/StorageDeltaMergeHelpers.h>
@@ -470,5 +471,12 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         LOG_FMT_INFO(log, "table {} insert internal region {}", table_id, region_id);
     }
 }
+
+RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
+    const Base & base_,
+    std::vector<DM::ExternalDTFileInfo> && external_files_)
+    : base(base_)
+    , external_files(std::move(external_files_))
+{}
 
 } // namespace DB
