@@ -31,7 +31,7 @@ class RegionBlockReaderTest : public ::testing::Test
 {
 public:
     RegionBlockReaderTest()
-        : logger(Logger::get("RegionBlockReaderTest"))
+        : logger(&Poco::Logger::get("RegionBlockReaderTest"))
     {}
 
 protected:
@@ -43,7 +43,7 @@ protected:
     RegionDataReadInfoList data_list_read;
     std::unordered_map<ColumnID, Field> fields_map;
 
-    LoggerPtr logger;
+    Poco::Logger * logger;
 
     enum RowEncodeVersion
     {
