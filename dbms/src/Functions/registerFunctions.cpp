@@ -30,7 +30,6 @@ void registerFunctionsConditional(FunctionFactory &);
 void registerFunctionsConversion(FunctionFactory &);
 void registerFunctionsTiDBConversion(FunctionFactory &);
 void registerFunctionsDateTime(FunctionFactory &);
-void registerFunctionsExternalModels(FunctionFactory &);
 void registerFunctionsFormatting(FunctionFactory &);
 void registerFunctionsHashing(FunctionFactory &);
 void registerFunctionsConsistentHashing(FunctionFactory &);
@@ -49,7 +48,6 @@ void registerFunctionsTransform(FunctionFactory &);
 void registerFunctionsGeo(FunctionFactory &);
 void registerFunctionsCharset(FunctionFactory &);
 void registerFunctionsNull(FunctionFactory &);
-void registerFunctionsFindCluster(FunctionFactory &);
 void registerFunctionsStringMath(FunctionFactory &);
 void registerFunctionsDuration(FunctionFactory &);
 
@@ -67,7 +65,6 @@ void registerFunctions()
     registerFunctionsConversion(factory);
     registerFunctionsTiDBConversion(factory);
     registerFunctionsDateTime(factory);
-    registerFunctionsExternalModels(factory);
     registerFunctionsFormatting(factory);
     registerFunctionsHashing(factory);
     registerFunctionsConsistentHashing(factory);
@@ -86,7 +83,6 @@ void registerFunctions()
     registerFunctionsGeo(factory);
     registerFunctionsCharset(factory);
     registerFunctionsNull(factory);
-    registerFunctionsFindCluster(factory);
     registerFunctionsStringMath(factory);
     registerFunctionsDuration(factory);
 }
