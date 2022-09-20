@@ -154,6 +154,7 @@ void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, Abort
         /// just to double check the query still exists
         if (it != mpp_query_map.end())
             mpp_query_map.erase(it);
+        GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
         cv.notify_all();
     }
     LOG_WARNING(log, "Finish abort query: " + std::to_string(query_id));
