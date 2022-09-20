@@ -12,13 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
-
-#include <iostream>
 
 namespace DB
 {
@@ -43,11 +40,11 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
 {
     if (should_send_exec_summary_at_last)
     {
-        batchWrite<true>();
+        encodeThenWriteBlocks<true>();
     }
     else
     {
-        batchWrite<false>();
+        encodeThenWriteBlocks<false>();
     }
 }
 
@@ -64,12 +61,12 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        batchWrite<false>();
+        encodeThenWriteBlocks<false>();
 }
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks(const std::vector<Block> & input_blocks)
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
     TrackedMppDataPacket tracked_packet(current_memory_tracker);
     if constexpr (send_exec_summary_at_last)
@@ -78,7 +75,7 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks(const 
         addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
         tracked_packet.serializeByResponse(response.getResponse());
     }
-    if (input_blocks.empty())
+    if (blocks.empty())
     {
         if constexpr (send_exec_summary_at_last)
         {
@@ -86,22 +83,15 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks(const 
         }
         return;
     }
-    for (const auto & block : input_blocks)
+    for (const auto & block : blocks)
     {
         chunk_codec_stream->encode(block, 0, block.rows());
         tracked_packet.addChunk(chunk_codec_stream->getString());
         chunk_codec_stream->clear();
     }
-    writer->write(tracked_packet.getPacket());
-}
-
-template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::batchWrite()
-{
-    encodeThenWriteBlocks<send_exec_summary_at_last>(blocks);
     blocks.clear();
     rows_in_blocks = 0;
+    writer->write(tracked_packet.getPacket());
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;

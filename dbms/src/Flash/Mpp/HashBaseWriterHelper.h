@@ -19,9 +19,9 @@
 
 namespace DB::HashBaseWriterHelper
 {
-void initInputBlocks(std::vector<Block> & input_blocks);
+void materializeBlocks(std::vector<Block> & input_blocks);
 
-void initDestColumns(const Block & input_block, std::vector<MutableColumns> & dest_tbl_cols);
+std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t num);
 
 void computeHash(const Block & input_block,
                  uint32_t bucket_num,

@@ -12,15 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Logger.h>
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
 #include <Flash/Mpp/HashParitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
-#include <Flash/Mpp/TrackedMppDataPacket.h>
-
-#include <iostream>
 
 namespace DB
 {
@@ -50,11 +46,11 @@ void HashPartitionWriter<StreamWriterPtr>::finishWrite()
 {
     if (should_send_exec_summary_at_last)
     {
-        batchWrite<true>();
+        partitionAndEncodeThenWriteBlocks<true>();
     }
     else
     {
-        batchWrite<false>();
+        partitionAndEncodeThenWriteBlocks<false>();
     }
 }
 
@@ -71,95 +67,69 @@ void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        batchWrite<false>();
+        partitionAndEncodeThenWriteBlocks<false>();
 }
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void HashPartitionWriter<StreamWriterPtr>::batchWrite()
-{
-    partitionAndEncodeThenWriteBlocks<send_exec_summary_at_last>(blocks);
-    blocks.clear();
-    rows_in_blocks = 0;
-}
-
-template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
-void HashPartitionWriter<StreamWriterPtr>::handleExecSummary(
-    const std::vector<Block> & input_blocks,
-    std::vector<TrackedMppDataPacket> & packets)
+void HashPartitionWriter<StreamWriterPtr>::writePackets(std::vector<TrackedMppDataPacket> & packets)
 {
     if constexpr (send_exec_summary_at_last)
     {
-        TrackedSelectResp response;
-        addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
-
+        tipb::SelectResponse response;
+        addExecuteSummaries(response, /*delta_mode=*/false);
         /// Sending the response to only one node, default the first one.
-        packets[0].serializeByResponse(response.getResponse());
-
-        // No need to send data when blocks are not empty,
-        // because exec_summary will be sent together with blocks.
-        if (input_blocks.empty())
-        {
-            for (auto part_id = 0; part_id < partition_num; ++part_id)
-            {
-                writer->write(packets[part_id].getPacket(), part_id);
-            }
-        }
-    }
-}
-
-template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
-void HashPartitionWriter<StreamWriterPtr>::writePackets(
-    const std::vector<size_t> & responses_row_count,
-    std::vector<TrackedMppDataPacket> & packets)
-{
-    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
-    {
-        if constexpr (send_exec_summary_at_last)
-        {
+        packets[0].serializeByResponse(response);
+        for (size_t part_id = 0; part_id < packets.size(); ++part_id)
             writer->write(packets[part_id].getPacket(), part_id);
-        }
-        else
+    }
+    else
+    {
+        for (size_t part_id = 0; part_id < packets.size(); ++part_id)
         {
-            if (responses_row_count[part_id] > 0)
-                writer->write(packets[part_id].getPacket(), part_id);
+            auto & packet = packets[part_id].getPacket();
+            if (packet.chunks_size() > 0)
+                writer->write(packet, part_id);
         }
     }
 }
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks(std::vector<Block> & input_blocks)
+void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
     std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
-    handleExecSummary<send_exec_summary_at_last>(input_blocks, tracked_packets);
-    if (input_blocks.empty())
-        return;
 
-    std::vector<size_t> responses_row_count(partition_num);
-    HashBaseWriterHelper::initInputBlocks(input_blocks);
-    Block dest_block = input_blocks[0].cloneEmpty();
-    std::vector<String> partition_key_containers(collators.size());
-    for (const auto & block : input_blocks)
+    if (!blocks.empty())
     {
-        std::vector<MutableColumns> dest_tbl_cols(partition_num);
-        HashBaseWriterHelper::initDestColumns(block, dest_tbl_cols);
+        assert(rows_in_blocks > 0);
 
-        HashBaseWriterHelper::computeHash(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
-
-        for (size_t part_id = 0; part_id < partition_num; ++part_id)
+        HashBaseWriterHelper::materializeBlocks(blocks);
+        Block dest_block = blocks[0].cloneEmpty();
+        std::vector<String> partition_key_containers(collators.size());
+        for (const auto & block : blocks)
         {
-            dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
-            responses_row_count[part_id] += dest_block.rows();
-            chunk_codec_stream->encode(dest_block, 0, dest_block.rows());
-            tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
-            chunk_codec_stream->clear();
+            auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
+            HashBaseWriterHelper::computeHash(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+
+            for (size_t part_id = 0; part_id < partition_num; ++part_id)
+            {
+                dest_block.setColumns(std::move(dest_tbl_cols[part_id]));
+                size_t dest_block_rows = dest_block.rows();
+                if (dest_block_rows > 0)
+                {
+                    chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
+                    tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
+                    chunk_codec_stream->clear();
+                }
+            }
         }
+
+        blocks.clear();
+        rows_in_blocks = 0;
     }
 
-    writePackets<send_exec_summary_at_last>(responses_row_count, tracked_packets);
+    writePackets<send_exec_summary_at_last>(tracked_packets);
 }
 
 template class HashPartitionWriter<MPPTunnelSetPtr>;

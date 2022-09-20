@@ -14,14 +14,11 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Core/Types.h>
-#include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -45,10 +42,7 @@ private:
     void batchWriteFineGrainedShuffle();
 
     template <bool send_exec_summary_at_last>
-    void handleExecSummary(const std::vector<Block> & input_blocks,
-                           std::vector<TrackedMppDataPacket> & packet);
-    template <bool send_exec_summary_at_last>
-    void writePackets(const std::vector<size_t> & responses_row_count, std::vector<TrackedMppDataPacket> & packets);
+    void writePackets(std::vector<TrackedMppDataPacket> & packets);
 
     bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;

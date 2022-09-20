@@ -14,14 +14,11 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Core/Types.h>
-#include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -42,10 +39,7 @@ public:
 
 private:
     template <bool send_exec_summary_at_last>
-    void batchWrite();
-
-    template <bool send_exec_summary_at_last>
-    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks);
+    void encodeThenWriteBlocks();
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;

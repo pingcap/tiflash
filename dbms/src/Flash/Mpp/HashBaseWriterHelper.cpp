@@ -16,24 +16,26 @@
 
 namespace DB::HashBaseWriterHelper
 {
-void initInputBlocks(std::vector<Block> & input_blocks)
+void materializeBlocks(std::vector<Block> & blocks)
 {
-    for (auto & input_block : input_blocks)
+    for (auto & block : blocks)
     {
-        for (size_t i = 0; i < input_block.columns(); ++i)
+        for (size_t i = 0; i < block.columns(); ++i)
         {
-            if (ColumnPtr converted = input_block.getByPosition(i).column->convertToFullColumnIfConst())
-                input_block.getByPosition(i).column = converted;
+            auto & element = block.getByPosition(i);
+            auto & src = element.column;
+            if (ColumnPtr converted = src->convertToFullColumnIfConst())
+                src = converted;
         }
     }
 }
 
-void initDestColumns(const Block & input_block, std::vector<MutableColumns> & dest_tbl_cols)
+std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t num)
 {
+    std::vector<MutableColumns> dest_tbl_cols(num);
     for (auto & cols : dest_tbl_cols)
-    {
-        cols = input_block.cloneEmptyColumns();
-    }
+        cols = sample_block.cloneEmptyColumns();
+    return dest_tbl_cols;
 }
 
 void computeHash(const Block & input_block,

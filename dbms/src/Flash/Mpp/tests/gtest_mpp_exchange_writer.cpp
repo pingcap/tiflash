@@ -15,6 +15,8 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Storages/Transaction/TiDB.h>
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
@@ -22,14 +24,11 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
 #include <Flash/Mpp/FineGrainedShuffleWriter.cpp>
 #include <Flash/Mpp/HashPartitionWriter.cpp>
-#include <iostream>
 
 namespace DB
 {
 namespace tests
 {
-
-using BlockPtr = std::shared_ptr<Block>;
 class TestMPPExchangeWriter : public testing::Test
 {
 protected:
@@ -58,26 +57,48 @@ public:
         for (int i = 0; i < 10; ++i)
         {
             fields[i].set_tp(TiDB::TypeLongLong);
+            fields[i].set_flag(TiDB::ColumnFlagNotNull);
         }
         return fields;
     }
 
     // Return a block with **rows** and 10 Int64 column.
-    static BlockPtr prepareBlock(const std::vector<Int64> & rows)
+    static Block prepareUniformBlock(size_t rows)
     {
-        BlockPtr block = std::make_shared<Block>();
+        std::vector<Int64> uniform_data_set;
+        for (size_t i = 0; i < rows; ++i)
+        {
+            uniform_data_set.push_back(i);
+        }
+        Block block;
         for (int i = 0; i < 10; ++i)
         {
             DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
-            DataTypePtr nullable_int64_data_type = std::make_shared<DataTypeNullable>(int64_data_type);
-            MutableColumnPtr int64_col = nullable_int64_data_type->createColumn();
-            for (Int64 r : rows)
+            MutableColumnPtr int64_col = int64_data_type->createColumn();
+            for (Int64 r : uniform_data_set)
             {
                 int64_col->insert(Field(r));
             }
-            block->insert(ColumnWithTypeAndName{std::move(int64_col),
-                                                nullable_int64_data_type,
-                                                String("col") + std::to_string(i)});
+            block.insert(ColumnWithTypeAndName{
+                std::move(int64_col),
+                int64_data_type,
+                String("col") + std::to_string(i)});
+        }
+        return block;
+    }
+
+    // Return a block with **rows** and 10 Int64 column.
+    static Block prepareRandomBlock(size_t rows)
+    {
+        Block block;
+        for (size_t i = 0; i < 10; ++i)
+        {
+            DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
+            auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
+            block.insert(ColumnWithTypeAndName{
+                std::move(int64_column),
+                int64_data_type,
+                String("col") + std::to_string(i)});
         }
         return block;
     }
@@ -124,12 +145,7 @@ try
     const bool should_send_exec_summary_at_last = true;
 
     // 1. Build Block.
-    std::vector<Int64> uniform_data_set;
-    for (size_t i = 0; i < block_rows; ++i)
-    {
-        uniform_data_set.push_back(i);
-    }
-    BlockPtr block = prepareBlock(uniform_data_set);
+    auto block = prepareUniformBlock(block_rows);
 
     // 2. Build MockStreamWriter.
     std::unordered_map<uint16_t, mpp::MPPDataPacket> write_report;
@@ -151,7 +167,7 @@ try
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size);
-    dag_writer->write(*block);
+    dag_writer->write(block);
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -163,7 +179,7 @@ try
         ASSERT_EQ(packet.chunks_size(), packet.stream_ids_size());
         for (int i = 0; i < packet.chunks_size(); ++i)
         {
-            decoded_blocks.push_back(CHBlockChunkCodec::decode(packet.chunks(i), *block));
+            decoded_blocks.push_back(CHBlockChunkCodec::decode(packet.chunks(i), block));
         }
     }
     ASSERT_EQ(decoded_blocks.size(), fine_grained_shuffle_stream_count * part_num);
@@ -185,12 +201,9 @@ try
     const bool should_send_exec_summary_at_last = true;
 
     // 1. Build Blocks.
-    std::vector<Int64> uniform_data_set;
-    for (size_t i = 0; i < block_rows; ++i)
-        uniform_data_set.push_back(i);
     std::vector<Block> blocks;
     for (size_t i = 0; i < block_num; ++i)
-        blocks.emplace_back(*prepareBlock(uniform_data_set));
+        blocks.emplace_back(prepareUniformBlock(block_rows));
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
@@ -241,12 +254,9 @@ try
     const bool should_send_exec_summary_at_last = true;
 
     // 1. Build Blocks.
-    std::vector<Int64> uniform_data_set;
-    for (size_t i = 0; i < block_rows; ++i)
-        uniform_data_set.push_back(i);
     std::vector<Block> blocks;
     for (size_t i = 0; i < block_num; ++i)
-        blocks.emplace_back(*prepareBlock(uniform_data_set));
+        blocks.emplace_back(prepareRandomBlock(block_rows));
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.

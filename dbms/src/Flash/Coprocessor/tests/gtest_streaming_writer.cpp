@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
+#include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
-#include <iostream>
 
 namespace DB
 {
@@ -54,6 +53,7 @@ public:
         for (int i = 0; i < 10; ++i)
         {
             fields[i].set_tp(TiDB::TypeLongLong);
+            fields[i].set_flag(TiDB::ColumnFlagNotNull);
         }
         return fields;
     }
@@ -71,21 +71,17 @@ public:
     }
 
     // Return a block with **rows** and 10 Int64 column.
-    static Block prepareBlock(const std::vector<Int64> & rows)
+    static Block prepareBlock(size_t rows)
     {
         Block block;
-        for (int i = 0; i < 10; ++i)
+        for (size_t i = 0; i < 10; ++i)
         {
             DataTypePtr int64_data_type = std::make_shared<DataTypeInt64>();
-            DataTypePtr nullable_int64_data_type = std::make_shared<DataTypeNullable>(int64_data_type);
-            MutableColumnPtr int64_col = nullable_int64_data_type->createColumn();
-            for (Int64 r : rows)
-            {
-                int64_col->insert(Field(r));
-            }
-            block.insert(ColumnWithTypeAndName{std::move(int64_col),
-                                               nullable_int64_data_type,
-                                               String("col") + std::to_string(i)});
+            auto int64_column = ColumnGenerator::instance().generate({rows, "Int64", RANDOM}).column;
+            block.insert(ColumnWithTypeAndName{
+                std::move(int64_column),
+                int64_data_type,
+                String("col") + std::to_string(i)});
         }
         return block;
     }
@@ -131,12 +127,9 @@ try
         const bool should_send_exec_summary_at_last = true;
 
         // 1. Build Blocks.
-        std::vector<Int64> uniform_data_set;
-        for (size_t i = 0; i < block_rows; ++i)
-            uniform_data_set.push_back(i);
         std::vector<Block> blocks;
         for (size_t i = 0; i < block_num; ++i)
-            blocks.emplace_back(prepareBlock(uniform_data_set));
+            blocks.emplace_back(prepareBlock(block_rows));
         Block header = blocks.back();
 
         // 2. Build MockStreamWriter.
