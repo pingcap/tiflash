@@ -138,7 +138,6 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
 BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
 
-
 DAGProperties getDAGProperties(const String & prop_string)
 {
     DAGProperties ret;
