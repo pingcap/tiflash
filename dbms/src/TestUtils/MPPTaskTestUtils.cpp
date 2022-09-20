@@ -13,15 +13,9 @@
 // limitations under the License.
 #include <Server/MockComputeClient.h>
 #include <TestUtils/MPPTaskTestUtils.h>
+#include <Debug/dbgFuncCoprocessor.h>
 
 #include <memory>
-
-#include "Core/ColumnsWithTypeAndName.h"
-#include "Flash/Coprocessor/ChunkCodec.h"
-#include "Flash/Coprocessor/DAGUtils.h"
-#include "TestUtils/ExecutorTestUtils.h"
-#include "TestUtils/FunctionTestUtils.h"
-#include "tipb/select.pb.h"
 
 namespace DB::tests
 {
@@ -92,35 +86,6 @@ ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, con
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     return readBlocks(res);
-}
-
-DAGSchema getSelectSchema(Context & context)
-{
-    DAGSchema schema;
-    auto * dag_context = context.getDAGContext();
-    auto result_field_types = dag_context->result_field_types;
-    for (int i = 0; i < static_cast<int>(result_field_types.size()); ++i)
-    {
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(result_field_types[i]);
-        String col_name = "col_" + std::to_string(i);
-        schema.push_back(std::make_pair(col_name, info));
-    }
-    return schema;
-}
-
-std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
-{
-    switch (encode_type)
-    {
-    case tipb::EncodeType::TypeDefault:
-        return std::make_unique<DefaultChunkCodec>();
-    case tipb::EncodeType::TypeChunk:
-        return std::make_unique<ArrowChunkCodec>();
-    case tipb::EncodeType::TypeCHBlock:
-        return std::make_unique<CHBlockChunkCodec>();
-    default:
-        throw Exception("Unsupported encode type", ErrorCodes::BAD_ARGUMENTS);
-    }
 }
 
 ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<tipb::SelectResponse> & dag_response)

@@ -17,7 +17,6 @@
 #include <coprocessor.pb.h>
 #include <fmt/core.h>
 #include <kvproto/tikvpb.grpc.pb.h>
-
 using grpc::Channel;
 using grpc::Status;
 
