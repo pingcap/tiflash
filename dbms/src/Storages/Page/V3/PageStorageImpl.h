@@ -38,9 +38,9 @@ public:
 
     ~PageStorageImpl() override;
 
-    static BlobStore::Config parseBlobConfig(const Config & config)
+    static BlobConfig parseBlobConfig(const Config & config)
     {
-        BlobStore::Config blob_config;
+        BlobConfig blob_config;
 
         blob_config.file_limit_size = config.blob_file_limit_size;
         blob_config.cached_fd_size = config.blob_cached_fd_size;
@@ -51,9 +51,9 @@ public:
         return blob_config;
     }
 
-    static WALStore::Config parseWALConfig(const Config & config)
+    static WALConfig parseWALConfig(const Config & config)
     {
-        WALStore::Config wal_config;
+        WALConfig wal_config;
 
         wal_config.roll_size = config.wal_roll_size;
         wal_config.max_persisted_log_files = config.wal_max_persisted_log_files;

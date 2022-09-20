@@ -62,11 +62,17 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     po::options_description desc("Allowed options");
     desc.add_options()("help,h", "produce help message") //
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
-        ("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n 2 is display all of stored page and version chaim(will be very long),\n 3 is display all blobs(in disk) data distribution. \n 4 is check every data is valid.") //
+        ("display_mode,D", value<int>()->default_value(1), "Display Mode: 1 is summary information,\n"
+                                                           " 2 is display all of stored page and version chain(will be very long),\n"
+                                                           " 3 is display all blobs(in disk) data distribution. \n"
+                                                           " 4 is check every data is valid.") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
-        ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.")("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
-        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chaim.") //
-        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.")("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)")("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
+        ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.") //
+        ("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
+        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
+        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
+        ("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)") //
+        ("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
 
 
     static_assert(sizeof(DB::PageId) == sizeof(UInt64));
@@ -177,7 +183,7 @@ private:
         {
             file_provider_ptr = context.getFileProvider();
         }
-        BlobStore::Config blob_config;
+        BlobConfig blob_config;
 
         PageStorage::Config config;
         PageStorageImpl ps_v3("PageStorageControlV3", delegator, config, file_provider_ptr);
@@ -209,7 +215,7 @@ private:
             }
             else
             {
-                std::cout << checkAllDatasCrc(mvcc_table_directory, ps_v3.blob_store, options.enable_fo_check) << std::endl;
+                std::cout << checkAllDataCrc(mvcc_table_directory, ps_v3.blob_store, options.enable_fo_check) << std::endl;
             }
             break;
         }
@@ -222,7 +228,7 @@ private:
 
     static String getBlobsInfo(BlobStore & blob_store, UInt32 blob_id)
     {
-        auto stat_info = [](const BlobStore::BlobStats::BlobStatPtr & stat, const String & path) {
+        auto stat_info = [](const BlobStats::BlobStatPtr & stat, const String & path) {
             FmtBuffer stat_str;
             stat_str.fmtAppend("    stat id: {}\n"
                                "     path: {}\n"
@@ -438,7 +444,7 @@ private:
         return error_msg.toString();
     }
 
-    static String checkAllDatasCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
+    static String checkAllDataCrc(PageDirectory::MVCCMapType & mvcc_table_directory, BlobStore & blob_store, bool enable_fo_check)
     {
         size_t total_pages = mvcc_table_directory.size();
         size_t cut_index = 0;

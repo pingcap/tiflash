@@ -55,18 +55,11 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     // if storage is not created in ch, flash replica should not be available.
     if (tmt.getStorages().get(table_id))
     {
-        RegionTable & region_table = tmt.getRegionTable();
-        region_table.handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
+        tmt.getRegionTable().handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
+            count = regions.size();
             region_list.reserve(regions.size());
             for (const auto & region : regions)
-            {
-                if (!region_table.isSafeTSLag(region.first))
-                {
-                    region_list.push_back(region.first);
-                }
-            }
-            count = region_list.size();
-            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}", table_id, regions.size(), count);
+                region_list.push_back(region.first);
         });
     }
     ss << count << std::endl;
