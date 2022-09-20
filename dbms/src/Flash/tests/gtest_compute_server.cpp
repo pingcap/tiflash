@@ -385,7 +385,7 @@ CATCH
 TEST_F(ComputeServerRunner, runCoprocessor)
 try
 {
-    // In cop, we only need to start 1 server.
+    // In coprocessor test, we only need to start 1 server.
     startServers(1);
     {
         auto request = context
