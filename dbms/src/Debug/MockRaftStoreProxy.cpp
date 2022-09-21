@@ -346,7 +346,6 @@ void MockRaftStoreProxy::bootstrap(
     }
 }
 
-
 uint64_t MockRaftStoreProxy::normalWrite(
     UInt64 region_id,
     std::vector<HandleID> && keys,
@@ -375,6 +374,10 @@ uint64_t MockRaftStoreProxy::normalWrite(
             }};
     }
     return index;
+}
+
+void compactLog(UInt64 region_id, UInt64 index) {
+
 }
 
 void MockRaftStoreProxy::doApply(
@@ -426,10 +429,17 @@ void MockRaftStoreProxy::doApply(
     if (cond.fail_before_kvstore_write)
         return;
 
+    auto old_applied = kvs.getRegion(region_id)->appliedIndex();
+    auto old_applied_term = kvs.getRegion(region_id)->appliedIndexTerm();
     if (cmd.has_write_request())
     {
         // TiFlash write
         kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
+    }
+
+    if (cond.fail_before_kvstore_advance) {
+        kvs.getRegion(region_id)->setApplied(old_applied, old_applied_term);
+        return;
     }
 
     // Proxy advance

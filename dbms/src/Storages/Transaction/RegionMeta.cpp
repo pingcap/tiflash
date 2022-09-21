@@ -106,6 +106,12 @@ UInt64 RegionMeta::appliedIndex() const
     return apply_state.applied_index();
 }
 
+UInt64 RegionMeta::appliedIndexTerm() const
+{
+    std::lock_guard lock(mutex);
+    return applied_term;
+}
+
 RegionMeta::RegionMeta(RegionMeta && rhs)
     : region_id(rhs.regionId())
 {

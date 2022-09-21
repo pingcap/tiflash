@@ -1319,24 +1319,61 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
             applied_index = r1->getLatestAppliedIndex();
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
             auto index = proxy_instance->normalWrite(region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            // KVStore failed before write and advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             kvs.tryPersist(region_id);
         }
         {
-            const KVStore & kvs = reloadKVSFromDisk();
+            KVStore & kvs = reloadKVSFromDisk();
             auto kvr1 = kvs.getRegion(region_id);
             auto r1 = proxy_instance->getRegion(region_id);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
+            proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, kvr1->appliedIndex());
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
         }
     }
 
     {
         auto applied_index = 0;
         auto region_id = 3;
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            MockRaftStoreProxy::FailCond cond;
+            cond.fail_before_kvstore_advance = true;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            applied_index = r1->getLatestAppliedIndex();
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            auto index = proxy_instance->normalWrite(region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            // KVStore failed before advance.
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+            kvs.tryPersist(region_id);
+        }
+        {
+            KVStore & kvs = reloadKVSFromDisk();
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
+            proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, kvr1->appliedIndex());
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+        }
+    }
+
+    {
+        auto applied_index = 0;
+        auto region_id = 4;
         {
             KVStore & kvs = getKVS();
             proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
@@ -1349,6 +1386,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
             LOG_FMT_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
             auto index = proxy_instance->normalWrite(region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            // KVStore succeed. Proxy failed before advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
