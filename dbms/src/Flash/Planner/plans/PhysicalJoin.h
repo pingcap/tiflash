@@ -30,7 +30,8 @@ public:
         const LoggerPtr & log,
         const tipb::Join & join,
         const PhysicalPlanNodePtr & left,
-        const PhysicalPlanNodePtr & right);
+        const PhysicalPlanNodePtr & right,
+        const FineGrainedShuffle & fine_grained_shuffle);
 
     PhysicalJoin(
         const String & executor_id_,
@@ -43,7 +44,8 @@ public:
         const ExpressionActionsPtr & probe_side_prepare_actions_,
         const ExpressionActionsPtr & build_side_prepare_actions_,
         bool has_non_joined_,
-        const Block & sample_block_)
+        const Block & sample_block_,
+        const FineGrainedShuffle & fine_grained_shuffle_)
         : PhysicalBinary(executor_id_, PlanType::Join, schema_, req_id, probe_, build_)
         , join_ptr(join_ptr_)
         , columns_added_by_join(columns_added_by_join_)
@@ -51,6 +53,7 @@ public:
         , build_side_prepare_actions(build_side_prepare_actions_)
         , has_non_joined(has_non_joined_)
         , sample_block(sample_block_)
+        , fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -81,5 +84,6 @@ private:
     bool has_non_joined;
 
     Block sample_block;
+    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

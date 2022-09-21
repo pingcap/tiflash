@@ -35,6 +35,7 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
     const String & executor_id,
     const LoggerPtr & log,
     const tipb::Aggregation & aggregation,
+    const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
     assert(child);
@@ -81,7 +82,8 @@ PhysicalPlanNodePtr PhysicalAggregation::build(
         collators,
         AggregationInterpreterHelper::isFinalAgg(aggregation),
         aggregate_descriptions,
-        expr_after_agg_actions);
+        expr_after_agg_actions,
+        fine_grained_shuffle);
     return physical_agg;
 }
 
@@ -102,9 +104,21 @@ void PhysicalAggregation::transformImpl(DAGPipeline & pipeline, Context & contex
         aggregate_descriptions,
         is_final_agg);
 
-    /// If there are several sources, then we perform parallel aggregation
-    if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
+    if (fine_grained_shuffle.enable())
     {
+        /// For fine_grained_shuffle, just do aggregation in streams independently
+        pipeline.transform([&](auto & stream) {
+            stream = std::make_shared<AggregatingBlockInputStream>(
+                stream,
+                params,
+                context.getFileProvider(),
+                true,
+                log->identifier());
+        });
+    }
+    else if (pipeline.streams.size() > 1 || pipeline.streams_with_non_joined_data.size() > 1)
+    {
+        /// If there are several sources, then we perform parallel aggregation
         const Settings & settings = context.getSettingsRef();
         BlockInputStreamPtr stream = std::make_shared<ParallelAggregatingBlockInputStream>(
             pipeline.streams,

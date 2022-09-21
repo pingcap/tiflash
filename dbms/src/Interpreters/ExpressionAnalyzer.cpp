@@ -2200,7 +2200,9 @@ bool ExpressionAnalyzer::appendJoin(ExpressionActionsChain & chain, bool only_ty
             settings.join_use_nulls,
             join_params.kind,
             join_params.strictness,
-            /*req_id=*/"");
+            /*req_id=*/"",
+            false,
+            0);
 
         Names required_joined_columns(join_key_names_right.begin(), join_key_names_right.end());
         for (const auto & name_type : columns_added_by_join)

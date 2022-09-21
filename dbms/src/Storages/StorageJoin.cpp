@@ -51,7 +51,7 @@ StorageJoin::StorageJoin(
 
     /// NOTE StorageJoin doesn't use join_use_nulls setting.
 
-    join = std::make_shared<Join>(key_names, key_names, false /* use_nulls */, kind, strictness, /*req_id=*/"");
+    join = std::make_shared<Join>(key_names, key_names, false /* use_nulls */, kind, strictness, /*req_id=*/"", false, 0);
     join->init(getSampleBlock().sortColumns());
     restore();
 }

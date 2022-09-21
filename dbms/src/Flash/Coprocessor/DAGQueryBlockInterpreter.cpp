@@ -189,7 +189,7 @@ void DAGQueryBlockInterpreter::handleTableScan(const TiDBTableScan & table_scan,
     analyzer = std::move(storage_interpreter.analyzer);
 }
 
-void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query)
+void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline & pipeline, SubqueryForSet & right_query, size_t fine_grained_shuffle_count)
 {
     if (unlikely(input_streams_vec.size() != 2))
     {
@@ -253,6 +253,8 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
+        enableFineGrainedShuffle(fine_grained_shuffle_count),
+        fine_grained_shuffle_count,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
@@ -589,7 +591,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     if (query_block.source->tp() == tipb::ExecType::TypeJoin)
     {
         SubqueryForSet right_query;
-        handleJoin(query_block.source->join(), pipeline, right_query);
+        handleJoin(query_block.source->join(), pipeline, right_query, query_block.source->fine_grained_shuffle_stream_count());
         recordProfileStreams(pipeline, query_block.source_name);
         dagContext().addSubquery(query_block.source_name, std::move(right_query));
     }

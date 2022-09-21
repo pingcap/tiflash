@@ -84,7 +84,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
     const LoggerPtr & log,
     const tipb::Join & join,
     const PhysicalPlanNodePtr & left,
-    const PhysicalPlanNodePtr & right)
+    const PhysicalPlanNodePtr & right,
+    const FineGrainedShuffle & fine_grained_shuffle)
 {
     assert(left);
     assert(right);
@@ -149,6 +150,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
+        fine_grained_shuffle.enable(),
+        fine_grained_shuffle.stream_count,
         tiflash_join.join_key_collators,
         probe_filter_column_name,
         build_filter_column_name,
@@ -171,7 +174,8 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_side_prepare_actions,
         build_side_prepare_actions,
         is_tiflash_right_join,
-        Block(join_output_schema));
+        Block(join_output_schema),
+        fine_grained_shuffle);
     return physical_join;
 }
 
