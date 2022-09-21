@@ -93,31 +93,49 @@ try
         executeAndAssertColumnsEqual(request, {});
     }
 
-    auto test_func = [&](const ASTPtr & a, const ASTPtr & b, const ColumnsWithTypeAndName & expect_columns) {
-        auto request = context.receive("exchange1")
-                           .filter(And(a, b))
-                           .build(context);
-        executeAndAssertColumnsEqual(request, expect_columns);
-    };
     auto column_not_null_true = eq(col("s1"), col("s1"));
     auto column_false = eq(col("s1"), lit(Field(String("0"))));
     auto column_other = eq(col("s1"), col("s2"));
 
-    test_func(const_true, column_not_null_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
-    test_func(const_true, column_false, {});
-    test_func(const_true, column_other, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
+    auto test_and = [&](const ASTPtr & a, const ASTPtr & b, const ColumnsWithTypeAndName & expect_columns) {
+        auto request = context.receive("exchange1")
+                           .filter(And(a, b))
+                           .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
 
-    test_func(column_not_null_true, const_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
-    test_func(column_false, const_true, {});
-    test_func(column_other, const_true, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
+        request = context.receive("exchange1")
+                      .filter(And(b, a))
+                      .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+    };
 
-    test_func(const_false, column_not_null_true, {});
-    test_func(const_false, column_false, {});
-    test_func(const_false, column_other, {});
+    test_and(const_true, column_not_null_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+    test_and(const_true, column_false, {});
+    test_and(const_true, column_other, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
 
-    test_func(column_not_null_true, const_false, {});
-    test_func(column_false, const_false, {});
-    test_func(column_other, const_false, {});
+    test_and(const_false, column_not_null_true, {});
+    test_and(const_false, column_false, {});
+    test_and(const_false, column_other, {});
+
+    auto test_or = [&](const ASTPtr & a, const ASTPtr & b, const ColumnsWithTypeAndName & expect_columns) {
+        auto request = context.receive("exchange1")
+                           .filter(Or(a, b))
+                           .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+
+        request = context.receive("exchange1")
+                      .filter(Or(b, a))
+                      .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+    };
+
+    test_or(const_true, column_not_null_true, {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
+    test_or(const_true, column_false, {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
+    test_or(const_true, column_other, {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
+
+    test_or(const_false, column_not_null_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+    test_or(const_false, column_false, {});
+    test_or(const_false, column_other, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
 }
 CATCH
 
