@@ -344,7 +344,7 @@ void MockRaftStoreProxy::bootstrap(
     }
 }
 
-uint64_t MockRaftStoreProxy::normalWrite(
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
     UInt64 region_id,
     std::vector<HandleID> && keys,
     std::vector<std::string> && vals,
@@ -371,7 +371,7 @@ uint64_t MockRaftStoreProxy::normalWrite(
                 cmd_cf,
             }};
     }
-    return index;
+    return std::make_tuple(index, term);
 }
 
 uint64_t MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index) {
@@ -402,7 +402,7 @@ uint64_t MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index) 
                 response,
             }};
     }
-    return index;
+    return std::make_tuple(index, term);
 }
 
 void MockRaftStoreProxy::doApply(

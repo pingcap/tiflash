@@ -169,12 +169,14 @@ struct MockRaftStoreProxy : MutexLockWrap
         UInt64 region_id);
 
     /// normal write to a region
-    uint64_t normalWrite(
+    std::tuple<uint64_t, uint64_t> normalWrite(
         UInt64 region_id,
         std::vector<HandleID> && keys,
         std::vector<std::string> && vals,
         std::vector<WriteCmdType> && cmd_types,
         std::vector<ColumnFamilyType> && cmd_cf);
+
+    std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
 
     void doApply(
         KVStore & kvs,
@@ -189,7 +191,6 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t region_id,
         uint64_t to);
 
-    uint64_t compactLog(UInt64 region_id, UInt64 compact_index);
 
     std::unordered_set<uint64_t> region_id_to_drop;
     std::unordered_set<uint64_t> region_id_to_error;
