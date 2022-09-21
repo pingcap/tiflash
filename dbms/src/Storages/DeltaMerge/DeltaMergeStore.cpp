@@ -1030,10 +1030,6 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         }
         res.push_back(stream);
     }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
-    }
     LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
 
     return res;
