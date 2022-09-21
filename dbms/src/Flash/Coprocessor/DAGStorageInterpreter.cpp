@@ -239,7 +239,7 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     }
 }
 
-void injectFallPointForLoadRead(const SelectQueryInfo & query_info)
+void injectFallPointForLocalRead(const SelectQueryInfo & query_info)
 {
     // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
     // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
@@ -265,7 +265,7 @@ void injectFallPointForLoadRead(const SelectQueryInfo & query_info)
     });
 }
 
-String genErrMsgForLoadRead(
+String genErrMsgForLocalRead(
     const ManageableStoragePtr & storage,
     const TableID & table_id,
     const TableID & logical_table_id)
@@ -694,7 +694,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     return ret;
 }
 
-bool DAGStorageInterpreter::retryForBatchCopOrMPP(
+bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
     const TableID & table_id,
     const SelectQueryInfo & query_info,
     const RegionException & e,
@@ -754,7 +754,7 @@ bool DAGStorageInterpreter::retryForBatchCopOrMPP(
     }
 }
 
-void DAGStorageInterpreter::buildLocalStreams(
+void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
     const TableID & table_id,
     const SelectQueryInfo & query_info,
     DAGPipeline & pipeline,
@@ -774,7 +774,7 @@ void DAGStorageInterpreter::buildLocalStreams(
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-            injectFallPointForLoadRead(query_info);
+            injectFallPointForLocalRead(query_info);
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
         }
@@ -785,7 +785,7 @@ void DAGStorageInterpreter::buildLocalStreams(
             {
                 // clean all streams from local because we are not sure the correctness of those streams
                 pipeline.streams.clear();
-                if (likely(retryForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
+                if (likely(checkRetriableForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
                     continue;
                 else
                     break;
@@ -793,14 +793,14 @@ void DAGStorageInterpreter::buildLocalStreams(
             else
             {
                 // Throw an exception for TiDB / TiSpark to retry
-                e.addMessage(genErrMsgForLoadRead(storage, table_id, logical_table_id));
+                e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
                 throw;
             }
         }
         catch (DB::Exception & e)
         {
             /// Other unknown exceptions
-            e.addMessage(genErrMsgForLoadRead(storage, table_id, logical_table_id));
+            e.addMessage(genErrMsgForLocalRead(storage, table_id, logical_table_id));
             throw;
         }
     }
@@ -821,7 +821,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         DAGPipeline current_pipeline;
         const TableID table_id = table_query_info.first;
         const SelectQueryInfo & query_info = table_query_info.second;
-        buildLocalStreams(table_id, query_info, current_pipeline, max_block_size);
+        buildLocalStreamsForPhysicalTable(table_id, query_info, current_pipeline, max_block_size);
         if (has_multiple_partitions)
             stream_pool->addPartitionStreams(current_pipeline.streams);
         else

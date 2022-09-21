@@ -65,12 +65,12 @@ private:
 
     LearnerReadSnapshot doBatchCopLearnerRead();
 
-    bool retryForBatchCopOrMPP(
+    bool checkRetriableForBatchCopOrMPP(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         const RegionException & e,
         int num_allow_retry);
-    void buildLocalStreams(
+    void buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
