@@ -160,8 +160,6 @@ void MockProxyRegion::updateAppliedIndex(uint64_t index)
 {
     auto _ = genLockGuard();
     this->apply.set_applied_index(index);
-    // TODO We should remove (0, index] here, it is enough to remove exactly index now.
-    this->commands.erase(index);
 }
 
 uint64_t MockProxyRegion::getLatestAppliedIndex()
@@ -392,6 +390,11 @@ uint64_t MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index) 
         raft_cmdpb::AdminResponse response;
         request.mutable_compact_log();
         request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
+        request.mutable_compact_log()->set_compact_index(compact_index);
+        // Find compact term, otherwise log must have been compacted.
+        if (region->commands.count(compact_index)) {
+            request.mutable_compact_log()->set_compact_term(region->commands[index].term);
+        }
         region->commands[index] = {
             term,
             MockProxyRegion::AdminCommand{
@@ -446,6 +449,10 @@ void MockRaftStoreProxy::doApply(
     }
     else if (cmd.has_admin_request())
     {
+        if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog ) {
+            // TODO We should remove (0, index] here, it is enough to remove exactly index now.
+            region->commands.erase(index);
+        }
     }
 
     if (cond.fail_before_kvstore_write)
