@@ -86,7 +86,14 @@ MPPTunnel::~MPPTunnel()
     SCOPE_EXIT({
         GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Decrement();
     });
-    close("", true);
+    try
+    {
+        close("", true);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
+    }
     LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
@@ -334,8 +341,9 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
             }
         }
         /// write the last error packet if needed
-        if (result == MPMCQueueResult::CANCELLED && !send_queue.getCancelReason().empty())
+        if (result == MPMCQueueResult::CANCELLED)
         {
+            RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
             if (!writer->write(getPacketWithError(send_queue.getCancelReason())))
             {
                 err_msg = "grpc writes failed.";
@@ -376,7 +384,8 @@ std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
     }
     else if (result == MPMCQueueResult::CANCELLED)
     {
-        if (!send_cancel_reason && !send_queue.getCancelReason().empty())
+        RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
+        if (!send_cancel_reason)
         {
             send_cancel_reason = true;
             res = std::make_shared<TrackedMppDataPacket>(getPacketWithError(send_queue.getCancelReason()), current_memory_tracker);

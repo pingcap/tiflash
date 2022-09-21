@@ -208,14 +208,8 @@ void EstablishCallData::trySendOneMsg()
         writeDone("", grpc::Status::OK);
         return;
     case GRPCSendQueueRes::CANCELLED:
-        if (async_tunnel_sender->getCancelReason().empty())
-        {
-            writeDone("", grpc::Status::OK);
-        }
-        else
-        {
-            writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
-        }
+        RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
+        writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case GRPCSendQueueRes::EMPTY:
         // No new message.
