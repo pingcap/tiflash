@@ -65,6 +65,6 @@ DMFileReader * DMFileReaderPool::get(const std::string & name)
 {
     std::lock_guard lock(mtx);
     auto itr = readers.find(name);
-    return itr == readers.end() ? nullptr : *(itr->second.begin());
+    return itr != readers.end() && !itr->second.empty() ? *(itr->second.begin()) : nullptr;
 }
 } // namespace DB::DM
