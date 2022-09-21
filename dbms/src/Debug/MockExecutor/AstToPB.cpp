@@ -491,7 +491,7 @@ TiDB::ColumnInfo compileIdentifier(const DAGSchema & input, ASTIdentifier * id)
     return ci;
 }
 
-TiDB::ColumnInfo compilerFunction(const DAGSchema & input, ASTFunction * func)
+TiDB::ColumnInfo compileFunction(const DAGSchema & input, ASTFunction * func)
 {
     TiDB::ColumnInfo ci;
     /// check function
@@ -615,7 +615,7 @@ TiDB::ColumnInfo compilerFunction(const DAGSchema & input, ASTFunction * func)
     return ci;
 }
 
-TiDB::ColumnInfo compilerLiteral(ASTLiteral * lit)
+TiDB::ColumnInfo compileLiteral(ASTLiteral * lit)
 {
     TiDB::ColumnInfo ci;
     switch (lit->value.getType())
@@ -654,9 +654,9 @@ TiDB::ColumnInfo compileExpr(const DAGSchema & input, ASTPtr ast)
     if (auto * id = typeid_cast<ASTIdentifier *>(ast.get()))
         return compileIdentifier(input, id);
     else if (auto * func = typeid_cast<ASTFunction *>(ast.get()))
-        return compilerFunction(input, func);
+        return compileFunction(input, func);
     else if (auto * lit = typeid_cast<ASTLiteral *>(ast.get()))
-        return compilerLiteral(lit);
+        return compileLiteral(lit);
     else
     {
         /// not supported unless this is a literal
