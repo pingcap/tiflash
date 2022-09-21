@@ -23,10 +23,10 @@
 #include <Storages/Page/PageUtil.h>
 #include <Storages/Page/V2/PageFile.h>
 #include <Storages/Page/WriteBatch.h>
+#include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 
 #ifndef __APPLE__

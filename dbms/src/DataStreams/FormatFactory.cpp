@@ -43,8 +43,7 @@
 #include <DataStreams/XMLRowOutputStream.h>
 #include <DataTypes/FormatSettingsJSON.h>
 #include <Interpreters/Context.h>
-
-#include <boost/algorithm/string.hpp>
+#include <boost_wrapper/string.h>
 
 namespace DB
 {
