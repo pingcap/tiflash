@@ -27,8 +27,10 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
+#include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>

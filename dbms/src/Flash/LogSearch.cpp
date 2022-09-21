@@ -15,8 +15,8 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Flash/LogSearch.h>
 #include <Poco/InflatingStream.h>
+#include <boost_wrapper/string.h>
 
-#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 
 namespace DB
