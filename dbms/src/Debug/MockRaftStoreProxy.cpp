@@ -467,6 +467,7 @@ void MockRaftStoreProxy::doApply(
     }
 
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_ADVANCE)
+    {
         kvs.getRegion(region_id)->setApplied(old_applied, old_applied_term);
         return;
     }
