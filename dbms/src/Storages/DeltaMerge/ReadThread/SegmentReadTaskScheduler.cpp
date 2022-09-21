@@ -197,15 +197,19 @@ bool SegmentReadTaskScheduler::schedule()
     Stopwatch sw_sche_all;
     std::lock_guard lock(mtx);
     Stopwatch sw_do_sche_all;
+    static constexpr size_t max_sche_count = 64;
     auto pool_count = read_pools.size();
+    auto sche_count = std::min(pool_count, max_sche_count);
     bool run_sche = false;
-    for (size_t i = 0; i < pool_count; i++)  // Try to schedule every pool in this loop.
+    size_t count = 0;
+    while (count < sche_count)
     {
         Stopwatch sw_sche_once;
         MergedTaskPtr merged_task;
         std::tie(merged_task, run_sche) = scheduleMergedTask();
         if (merged_task != nullptr)
         {
+            count++;
             auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
             if (elapsed_ms >= 5)
             {
@@ -213,11 +217,15 @@ bool SegmentReadTaskScheduler::schedule()
             }
             SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
         }
+        if (!run_sche)
+        {
+            break;
+        }
     }
     auto sche_all_elapsed_ms = sw_sche_all.elapsedMilliseconds();
     if (sche_all_elapsed_ms >= 100)
     {
-        LOG_FMT_DEBUG(log, "schedule pool_count={} cost={}ms do_sche_cost={}ms", pool_count, sche_all_elapsed_ms, sw_do_sche_all.elapsedMilliseconds());
+        LOG_FMT_DEBUG(log, "schedule pool_count={} count={} cost={}ms do_sche_cost={}ms", pool_count, count, sche_all_elapsed_ms, sw_do_sche_all.elapsedMilliseconds());
     }
     return run_sche;
 }

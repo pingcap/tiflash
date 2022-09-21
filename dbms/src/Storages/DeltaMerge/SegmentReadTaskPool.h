@@ -196,6 +196,10 @@ public:
     void setException(const DB::Exception & e);
     SegmentReadTaskPtr getTask(uint64_t seg_id);
 
+    std::once_flag & addToSchedulerFlag()
+    {
+        return add_to_scheduler;
+    }
 private:
     int64_t getFreeActiveSegmentCountUnlock();
     bool exceptionHappened() const;
@@ -226,6 +230,8 @@ private:
 
     // The memory tracker of MPPTask.
     MemoryTrackerPtr mem_tracker;
+
+    std::once_flag add_to_scheduler;
 
     inline static std::atomic<uint64_t> pool_id_gen{1};
     inline static BlockStat global_blk_stat;
