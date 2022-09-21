@@ -48,10 +48,10 @@ void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_column, con
     const auto * type_ptr = &(*type);
     size_t size = handle_column.size();
 
-#define APPEND(SHIFT, MARK, DATA_VECTOR)           \
-    for (size_t i = 0; i < size; ++i)              \
-    {                                              \
-        handle_column[i] <<= (SHIFT);                \
+#define APPEND(SHIFT, MARK, DATA_VECTOR)               \
+    for (size_t i = 0; i < size; ++i)                  \
+    {                                                  \
+        handle_column[i] <<= (SHIFT);                  \
         handle_column[i] |= (MARK) & (DATA_VECTOR)[i]; \
     }
 
