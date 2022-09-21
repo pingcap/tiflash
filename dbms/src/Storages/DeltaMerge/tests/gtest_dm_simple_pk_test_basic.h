@@ -56,7 +56,6 @@ public:
     size_t getRowsN(Int64 start_key, Int64 end_key);
 
 public:
-
     SegmentPtr getSegmentAt(Int64 key) const;
 
     /**

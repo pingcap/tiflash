@@ -219,7 +219,7 @@ size_t SimplePKTestBasic::getRowsN()
         EMPTY_FILTER,
         "",
         /* keep_order= */ false,
-        /* is_fast_mode= */ false,
+        /* is_fast_scan= */ false,
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
 }
@@ -237,7 +237,7 @@ size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key)
         EMPTY_FILTER,
         "",
         /* keep_order= */ false,
-        /* is_fast_mode= */ false,
+        /* is_fast_scan= */ false,
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
 }
