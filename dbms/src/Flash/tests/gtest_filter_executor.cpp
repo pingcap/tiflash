@@ -55,6 +55,69 @@ try
         request,
         {toNullableVec<String>({"banana"}),
          toNullableVec<String>({"banana"})});
+
+    request = context.receive("exchange1")
+                  .filter(eq(col("s1"), col("s1")))
+                  .build(context);
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"})});
+
+    request = context.receive("exchange1")
+                  .filter(eq(col("s1"), lit(Field(String("0")))))
+                  .build(context);
+    executeAndAssertColumnsEqual(request, {});
+}
+CATCH
+
+TEST_F(FilterExecutorTestRunner, const_bool)
+try
+{
+    auto const_true = lit(Field(static_cast<UInt64>(1)));
+    {
+        auto request = context.receive("exchange1")
+                           .filter(const_true)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", {}, "banana"}),
+             toNullableVec<String>({"apple", {}, "banana"})});
+    }
+
+    auto const_false = lit(Field(static_cast<UInt64>(0)));
+    {
+        auto request = context.receive("exchange1")
+                           .filter(const_false)
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {});
+    }
+
+    auto test_func = [&](const ASTPtr & a, const ASTPtr & b, const ColumnsWithTypeAndName & expect_columns) {
+        auto request = context.receive("exchange1")
+                           .filter(And(a, b))
+                           .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+    };
+    auto column_not_null_true = eq(col("s1"), col("s1"));
+    auto column_false = eq(col("s1"), lit(Field(String("0"))));
+    auto column_other = eq(col("s1"), col("s2"));
+
+    test_func(const_true, column_not_null_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+    test_func(const_true, column_false, {});
+    test_func(const_true, column_other, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
+
+    test_func(column_not_null_true, const_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+    test_func(column_false, const_true, {});
+    test_func(column_other, const_true, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
+
+    test_func(const_false, column_not_null_true, {});
+    test_func(const_false, column_false, {});
+    test_func(const_false, column_other, {});
+
+    test_func(column_not_null_true, const_false, {});
+    test_func(column_false, const_false, {});
+    test_func(column_other, const_false, {});
 }
 CATCH
 
