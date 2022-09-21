@@ -155,8 +155,7 @@ void MPPTunnel::writeDone()
         if (tunnel_sender == nullptr)
             throw Exception(fmt::format("write to tunnel which is already closed."));
     }
-    if (!tunnel_sender->finish())
-        throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
+    tunnel_sender->finish();
     waitForSenderFinish(/*allow_throw=*/true);
 }
 

@@ -48,13 +48,13 @@ extern const char exception_before_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char exception_before_mpp_register_tunnel_for_root_mpp_task[];
 extern const char exception_during_mpp_register_tunnel_for_non_root_mpp_task[];
 extern const char force_no_local_region_for_mpp_task[];
-extern const char random_task_lifecycle_failpoint[];
 } // namespace FailPoints
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     : context(context_)
     , meta(meta_)
     , id(meta.start_ts(), meta.task_id())
+    , manager(context_->getTMTContext().getMPPTaskManager().get())
     , log(Logger::get("MPPTask", id.toString()))
     , mpp_task_statistics(id, meta.address())
     , needed_threads(0)
@@ -72,7 +72,7 @@ MPPTask::~MPPTask()
     {
         /// the threads of this task are not fully freed now, since the BlockIO and DAGContext are not destructed
         /// TODO: finish all threads before here, except the current one.
-        manager.load()->releaseThreadsFromScheduler(needed_threads);
+        manager->releaseThreadsFromScheduler(needed_threads);
         schedule_state = ScheduleState::COMPLETED;
     }
     LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
@@ -217,19 +217,11 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
 
 void MPPTask::unregisterTask()
 {
-    auto * manager_ptr = manager.load();
-    if (manager_ptr != nullptr)
-    {
-        auto [result, reason] = manager_ptr->unregisterTask(this);
-        if (result)
-            LOG_FMT_DEBUG(log, "task unregistered");
-        else
-            LOG_FMT_WARNING(log, "task failed to unregister, reason: {}", reason);
-    }
+    auto [result, reason] = manager->unregisterTask(this);
+    if (result)
+        LOG_FMT_DEBUG(log, "task unregistered");
     else
-    {
-        LOG_ERROR(log, "task manager is unset");
-    }
+        LOG_FMT_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -347,6 +339,7 @@ void MPPTask::runImpl()
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
+        unregisterTask();
         return;
     }
     Stopwatch stopwatch;
@@ -437,36 +430,19 @@ void MPPTask::runImpl()
             }
         }
     }
-    LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
-    // unregister flag is only for FailPoint usage, to produce the situation that MPPTask is destructed
-    // by grpc CancelMPPTask thread;
-    bool unregister = true;
-    fiu_do_on(FailPoints::random_task_lifecycle_failpoint, {
-        if (!err_msg.empty())
-            unregister = false;
-    });
-    if (unregister)
-        unregisterTask();
-
     mpp_task_statistics.end(status.load(), err_string);
     mpp_task_statistics.logTracingJson();
+
+    LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
+    unregisterTask();
 }
 
 void MPPTask::handleError(const String & error_msg)
 {
-    auto * manager_ptr = manager.load();
-    if (manager_ptr != nullptr)
-    {
-        auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
-        /// task already been registered in TaskManager, use task manager to abort the whole query in this node
-        newThreadManager()->scheduleThenDetach(true, "MPPTaskManagerAbortQuery", [manager_ptr, updated_msg, query_id = id.start_ts] {
-            CPUAffinityManager::getInstance().bindSelfQueryThread();
-            manager_ptr->abortMPPQuery(query_id, updated_msg, AbortType::ONERROR);
-        });
-        /// need to wait until query abort starts, otherwise, the error may be lost
-        manager_ptr->waitUntilQueryStartsAbort(id.start_ts);
-    }
-    else
+    auto updated_msg = fmt::format("From {}: {}", id.toString(), error_msg);
+    manager->abortMPPQuery(id.start_ts, updated_msg, AbortType::ONERROR);
+    if (!registered)
+        // if the task is not registered, need to cancel it explicitly
         abort(error_msg, AbortType::ONERROR);
 }
 
@@ -498,7 +474,6 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// if the task is in initializing state, mpp task can return error to TiDB directly,
             /// so just close all tunnels here
             abortTunnels("", false);
-            unregisterTask();
             LOG_WARNING(log, "Finish abort task from uninitialized");
             return;
         }
@@ -526,7 +501,7 @@ bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
 
 void MPPTask::scheduleOrWait()
 {
-    if (!manager.load()->tryToScheduleTask(shared_from_this()))
+    if (!manager->tryToScheduleTask(shared_from_this()))
     {
         LOG_FMT_INFO(log, "task waits for schedule");
         Stopwatch stopwatch;
