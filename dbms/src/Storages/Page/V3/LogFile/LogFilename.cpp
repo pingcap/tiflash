@@ -24,11 +24,9 @@
 
 namespace DB::PS::V3
 {
-LogFilename
-LogFilename::parseFrom(const String & parent_path, const String & filename, LoggerPtr log)
+LogFilename LogFilename::parseFrom(const String & parent_path, const String & filename, LoggerPtr log)
 {
-    if (!startsWith(filename, LOG_FILE_PREFIX_TEMP)
-        && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
+    if (!startsWith(filename, LOG_FILE_PREFIX_TEMP) && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
     {
         LOG_FMT_INFO(log, "Ignore not log file [dir={}] [file={}]", parent_path, filename);
         return {LogFileStage::Invalid, 0, 0, ""};
