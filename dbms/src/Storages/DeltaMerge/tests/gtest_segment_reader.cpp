@@ -182,7 +182,7 @@ try
     // Check DMFile
     const auto & dmfiles = store->id_to_segment.begin()->second->getStable()->getDMFiles();
     ASSERT_EQ(dmfiles.size(), 1);
-    const auto & dmfile = dmfiles.front();
+    auto dmfile = dmfiles.front();
     auto readable_path = DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
     ASSERT_EQ(dmfile->path(), readable_path);
     ASSERT_EQ(DMFileReaderPool::instance().get(readable_path), nullptr);
