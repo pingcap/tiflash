@@ -27,6 +27,8 @@ if(CMAKE_PREFIX_PATH)
             "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
 endif()
 
+include (cmake/find_rust.cmake)
+
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Require at least gcc 7
