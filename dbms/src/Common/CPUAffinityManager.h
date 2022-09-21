@@ -123,8 +123,8 @@ private:
     static std::string getShortFilename(const std::string & path);
     bool isQueryThread(const std::string & name) const;
 
-    cpu_set_t query_cpu_set;
-    cpu_set_t other_cpu_set;
+    cpu_set_t query_cpu_set{};
+    cpu_set_t other_cpu_set{};
 #endif
 
     // unused except Linux
