@@ -374,7 +374,7 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
     return std::make_tuple(index, term);
 }
 
-uint64_t MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index) {
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index) {
     uint64_t index = 0;
     uint64_t term = 0;
     {
