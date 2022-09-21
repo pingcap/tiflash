@@ -32,8 +32,9 @@ SegmentReadTaskScheduler::~SegmentReadTaskScheduler()
 
 void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
 {
+    Stopwatch sw_add;
     std::lock_guard lock(mtx);
-
+    Stopwatch sw_do_add;
     read_pools.add(pool);
 
     std::unordered_set<uint64_t> seg_ids;
@@ -47,18 +48,19 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
         }
     }
     auto block_slots = pool->getFreeBlockSlots();
-    LOG_FMT_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} segments={} pool_count={}", //
+    LOG_FMT_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} segments={} pool_count={} cost={}ns do_add_cost={}ns", //
                   pool->poolId(),
                   pool->tableId(),
                   block_slots,
                   seg_ids.size(),
                   seg_ids,
-                  read_pools.size());
+                  read_pools.size(),
+                  sw_add.elapsed(),
+                  sw_do_add.elapsed());
 }
 
 std::pair<MergedTaskPtr, bool> SegmentReadTaskScheduler::scheduleMergedTask()
 {
-    std::lock_guard lock(mtx);
     auto pool = scheduleSegmentReadTaskPoolUnlock();
     if (pool == nullptr)
     {
@@ -192,16 +194,30 @@ bool SegmentReadTaskScheduler::isStop() const
 
 bool SegmentReadTaskScheduler::schedule()
 {
-    Stopwatch sw;
-    auto [merged_task, run_sche] = scheduleMergedTask();
-    if (merged_task != nullptr)
+    Stopwatch sw_sche_all;
+    std::lock_guard lock(mtx);
+    Stopwatch sw_do_sche_all;
+    auto pool_count = read_pools.size();
+    bool run_sche = false;
+    for (size_t i = 0; i < pool_count; i++)  // Try to schedule every pool in this loop.
     {
-        auto elapsed_ms = sw.elapsedMilliseconds();
-        if (elapsed_ms >= 5)
+        Stopwatch sw_sche_once;
+        MergedTaskPtr merged_task;
+        std::tie(merged_task, run_sche) = scheduleMergedTask();
+        if (merged_task != nullptr)
         {
-            LOG_FMT_DEBUG(log, "scheduleMergedTask segment_id={} pool_ids={} cost={}ms", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms);
+            auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
+            if (elapsed_ms >= 5)
+            {
+                LOG_FMT_DEBUG(log, "scheduleMergedTask segment_id={} pool_ids={} cost={}ms pool_count={}", merged_task->getSegmentId(), merged_task->getPoolIds(), elapsed_ms, pool_count);
+            }
+            SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
         }
-        SegmentReaderPoolManager::instance().addTask(std::move(merged_task));
+    }
+    auto sche_all_elapsed_ms = sw_sche_all.elapsedMilliseconds();
+    if (sche_all_elapsed_ms >= 100)
+    {
+        LOG_FMT_DEBUG(log, "schedule pool_count={} cost={}ms do_sche_cost={}ms", pool_count, sche_all_elapsed_ms, sw_do_sche_all.elapsedMilliseconds());
     }
     return run_sche;
 }
