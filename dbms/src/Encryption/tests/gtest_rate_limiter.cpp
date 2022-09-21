@@ -191,9 +191,9 @@ TEST(ReadLimiterTest, GetIOStatPeroid200ms)
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
+    TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     ReadLimiter limiter(get_stat, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
 
-    TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     // Refill 20 every 20ms.
     ASSERT_EQ(limiter.getAvailableBalance(), 20);
     request(limiter, 1);
