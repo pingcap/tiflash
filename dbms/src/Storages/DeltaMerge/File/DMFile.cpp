@@ -24,10 +24,10 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <boost_wrapper/string_split.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <utility>
 
 namespace DB

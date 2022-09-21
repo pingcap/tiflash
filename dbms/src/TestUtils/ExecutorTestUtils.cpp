@@ -164,8 +164,6 @@ void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequ
     });
 }
 
-namespace
-{
 Block mergeBlocks(Blocks blocks)
 {
     if (blocks.empty())
@@ -193,7 +191,6 @@ Block mergeBlocks(Blocks blocks)
         actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
     return Block(actual_columns);
 }
-} // namespace
 
 void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {
