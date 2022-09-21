@@ -1365,9 +1365,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index);
             ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
-            proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, r1->getLatestCommitIndex());
-            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
-            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+            EXPECT_THROW(proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, r1->getLatestCommitIndex()), Exception);
         }
     }
 
