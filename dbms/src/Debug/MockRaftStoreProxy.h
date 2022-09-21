@@ -152,9 +152,13 @@ struct MockRaftStoreProxy : MutexLockWrap
     /// Mutation funcs.
     struct FailCond
     {
-        bool fail_before_kvstore_write = false;
-        bool fail_before_proxy_advance = false;
-        bool fail_before_kvstore_advance = false;
+        enum Type {
+            NORMAL,
+            BEFORE_KVSTORE_WRITE,
+            BEFORE_KVSTORE_ADVANCE,
+            BEFORE_PROXY_ADVANCE,
+        };
+        Type type = NORMAL;
     };
 
     /// We assume that we generate one command, and immediately commit.

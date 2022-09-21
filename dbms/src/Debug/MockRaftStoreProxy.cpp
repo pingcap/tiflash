@@ -449,13 +449,10 @@ void MockRaftStoreProxy::doApply(
     }
     else if (cmd.has_admin_request())
     {
-        if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog ) {
-            // TODO We should remove (0, index] here, it is enough to remove exactly index now.
-            region->commands.erase(index);
-        }
+
     }
 
-    if (cond.fail_before_kvstore_write)
+    if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE)
         return;
 
     auto old_applied = kvs.getRegion(region_id)->appliedIndex();
@@ -465,14 +462,25 @@ void MockRaftStoreProxy::doApply(
         // TiFlash write
         kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
     }
+    if (cmd.has_admin_request()) {
+        kvs.handleAdminRaftCmd(std::move(cmd.admin().request), std::move(cmd.admin().response), region_id, index, term, tmt);
+    }
 
-    if (cond.fail_before_kvstore_advance) {
+    if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_ADVANCE)
         kvs.getRegion(region_id)->setApplied(old_applied, old_applied_term);
         return;
     }
 
+    if (cmd.has_admin_request()) {
+        if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog) {
+            auto i = cmd.admin().request.compact_log().compact_index();
+            // TODO We should remove (0, index] here, it is enough to remove exactly index now.
+            region->commands.erase(i);
+        }
+    }
+
     // Proxy advance
-    if (cond.fail_before_proxy_advance)
+    if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_ADVANCE)
         return;
     region->updateAppliedIndex(index);
 }
