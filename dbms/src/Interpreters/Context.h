@@ -161,6 +161,7 @@ private:
     {
         non_test,
         mpp_test,
+        cop_test,
         executor_test,
         cancel_test
     };
@@ -478,6 +479,8 @@ public:
     void setCancelTest();
     bool isExecutorTest() const;
     void setExecutorTest();
+    void setCopTest();
+    bool isCopTest() const;
     bool isTest() const;
 
     void setMockStorage(MockStorage & mock_storage_);
