@@ -381,5 +381,23 @@ try
     }
 }
 CATCH
+
+TEST_F(ComputeServerRunner, runCoprocessor)
+try
+{
+    // In coprocessor test, we only need to start 1 server.
+    startServers(1);
+    {
+        auto request = context
+                           .scan("test_db", "l_table")
+                           .build(context);
+
+        auto expected_cols = {
+            toNullableVec<String>({{"banana", {}, "banana"}}),
+            toNullableVec<String>({{"apple", {}, "banana"}})};
+        ASSERT_COLUMNS_EQ_UR(expected_cols, executeCoprocessorTask(request));
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB
