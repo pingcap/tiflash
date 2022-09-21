@@ -49,6 +49,9 @@ struct MockProxyRegion : MutexLockWrap
     {
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
+        raft_cmdpb::AdminCmdType cmd_type() const {
+            return request.cmd_type();
+        }
     };
 
     struct CachedCommand
@@ -181,7 +184,8 @@ struct MockRaftStoreProxy : MutexLockWrap
         TMTContext & tmt,
         uint64_t region_id,
         uint64_t to);
-    void compactLog(UInt64 region_id, UInt64 index);
+
+    uint64_t compactLog(UInt64 region_id, UInt64 compact_index);
 
     std::unordered_set<uint64_t> region_id_to_drop;
     std::unordered_set<uint64_t> region_id_to_error;

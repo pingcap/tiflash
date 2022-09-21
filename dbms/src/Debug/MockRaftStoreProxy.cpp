@@ -376,8 +376,30 @@ uint64_t MockRaftStoreProxy::normalWrite(
     return index;
 }
 
-void compactLog(UInt64 region_id, UInt64 index) {
-
+uint64_t MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index) {
+    uint64_t index = 0;
+    uint64_t term = 0;
+    {
+        auto region = getRegion(region_id);
+        assert(region != nullptr);
+        // We have a new entry.
+        index = region->getLatestCommitIndex() + 1;
+        term = region->getLatestCommitTerm();
+        // The new entry is committed on Proxy's side.
+        region->updateCommitIndex(index);
+        // We record them, as persisted raft log, for potential recovery.
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        request.mutable_compact_log();
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
+        region->commands[index] = {
+            term,
+            MockProxyRegion::AdminCommand{
+                request,
+                response,
+            }};
+    }
+    return index;
 }
 
 void MockRaftStoreProxy::doApply(
