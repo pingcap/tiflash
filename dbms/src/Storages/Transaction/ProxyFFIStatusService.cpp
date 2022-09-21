@@ -52,21 +52,32 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     std::vector<RegionID> region_list;
     size_t count = 0;
 
+    const size_t MAX_PRINT_REGION = 30;
     // if storage is not created in ch, flash replica should not be available.
     if (tmt.getStorages().get(table_id))
     {
         RegionTable & region_table = tmt.getRegionTable();
         region_table.handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
             region_list.reserve(regions.size());
+            bool can_log = region_table.canPrintLog();
+            String lag_regions;
+            size_t print_count = 0;
             for (const auto & region : regions)
             {
-                if (!region_table.isSafeTSLag(region.first))
+                UInt64 leader_safe_ts;
+                UInt64 self_safe_ts;
+                if (!region_table.isSafeTSLag(region.first, &leader_safe_ts, &self_safe_ts))
                 {
                     region_list.push_back(region.first);
+                    if (can_log && print_count < MAX_PRINT_REGION)
+                    {
+                        lag_regions += fmt::format("lag_region_id: {}, leader_safe_ts: {}, self_safe_ts: {}; ", region.first, leader_safe_ts, self_safe_ts);
+                        print_count++;
+                    }
                 }
             }
             count = region_list.size();
-            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}", table_id, regions.size(), count);
+            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}, lag_region_info={}", table_id, regions.size(), count, lag_regions);
         });
     }
     ss << count << std::endl;

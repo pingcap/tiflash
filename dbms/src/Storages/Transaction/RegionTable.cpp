@@ -482,10 +482,15 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     }
 }
 
-bool RegionTable::isSafeTSLag(UInt64 region_id)
+RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
+    const Base & base_,
+    std::vector<DM::ExternalDTFileInfo> && external_files_)
+    : base(base_)
+    , external_files(std::move(external_files_))
+{}
+
+bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts)
 {
-    UInt64 leader_safe_ts;
-    UInt64 self_safe_ts;
     {
         std::shared_lock lock(rw_lock);
         auto it = safe_ts_map.find(region_id);
@@ -493,11 +498,11 @@ bool RegionTable::isSafeTSLag(UInt64 region_id)
         {
             return false;
         }
-        leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
-        self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
+        *leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
+        *self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
     }
-    LOG_FMT_TRACE(log, "region_id:{}, table_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, regions[region_id], leader_safe_ts, self_safe_ts);
-    return (leader_safe_ts > self_safe_ts) && (leader_safe_ts - self_safe_ts > SafeTsDiffThreshold);
+    LOG_FMT_TRACE(log, "region_id:{}, table_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
+    return (*leader_safe_ts > *self_safe_ts) && (*leader_safe_ts - *self_safe_ts > SafeTsDiffThreshold);
 }
 
 void RegionTable::updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts)
