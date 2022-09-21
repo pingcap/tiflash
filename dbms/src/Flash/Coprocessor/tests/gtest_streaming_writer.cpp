@@ -212,7 +212,8 @@ try
         dag_writer->finishWrite();
 
         // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
-        ASSERT_TRUE(write_report.size() == 1);
+        ASSERT_EQ(write_report.size(), 1);
+        ASSERT_EQ(write_report.back().chunks_size(), 0);
     }
 }
 CATCH
