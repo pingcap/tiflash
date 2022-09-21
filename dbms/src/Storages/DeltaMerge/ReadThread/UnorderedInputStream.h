@@ -79,10 +79,10 @@ protected:
         {
             return {};
         }
+        addReadTaskPoolToScheduler();
         while (true)
         {
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
-            addReadTaskPoolToScheduler();
             Block res;
             task_pool->popBlock(res);
             if (res)
