@@ -32,10 +32,13 @@ target_compile_definitions (boost_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
 
 target_compile_definitions (boost_internal PUBLIC BOOST_NO_CXX98_FUNCTION_BASE)
 
+target_compile_definitions (boost_internal PUBLIC BOOST_BIND_GLOBAL_PLACEHOLDERS)
+
 if (COMPILER_CLANG)
     target_compile_options (boost_internal PRIVATE "-Wno-unused-but-set-variable")
     if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15)
         target_compile_options (boost_internal PRIVATE "-Wno-deprecated-builtins")
+        target_compile_options (boost_internal PRIVATE "-Wno-non-virtual-dtor")
     endif()
 endif()
 
