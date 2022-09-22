@@ -1006,12 +1006,14 @@ ASTPtr Context::getCreateDatabaseQuery(const String & database_name) const
 
 void Context::checkIsConfigLoaded() const
 {
-    if (!is_config_loaded)
+    if (shared->application_type == ApplicationType::SERVER && !is_config_loaded)
+    {
 #ifndef NDEBUG
         LOG_ERROR(shared->log, "Configuration are used before load from configure file tiflash.toml, so the user config may not take effect. There are must be some bugs. Please open an issue in https://github.com/pingcap/tiflash.");
 #else
         throw Exception("Configuration are used before load from configure file tiflash.toml, so the user config may not take effect.", ErrorCodes::LOGICAL_ERROR);
 #endif
+    }
 }
 
 Settings Context::getSettings() const
