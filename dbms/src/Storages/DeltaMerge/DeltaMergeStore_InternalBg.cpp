@@ -471,6 +471,30 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     size_t file_rows = snap->stable->getDMFilesRows();
     size_t file_bytes = snap->stable->getDMFilesBytes();
 
+    // We use at_least_rows|bytes, instead of stable_rows|bytes. The difference is that, at_least_rows|bytes only count packs
+    // that are fully contained in the segment range, while stable_rows|bytes count packs that are intersected with the segment
+    // range.
+    //
+    // Consider the following case, where segment only contain one pack:
+    //     │*****              ******│   DTFile only contains 1 pack
+    //             │<------>│            Segment
+    // This kind of data layout may be produced by logical split. In this case, ratio calculated using at_least_rows would be 0%,
+    // but ratio calculated using stable_rows would be 100%.
+    // We definitely want such DTFile to be reclaimed, because this segment is not containing any real rows at all!.
+    //
+    // Of course there are false positives, consider the following case:
+    //     │*************************│   DTFile only contains 1 pack
+    //       │<------------------->│     Segment
+    // The segment is containing most of the data in the DTFile and not much space can be reclaimed after merging the delta.
+    // We are just wasting the disk IO when doing the GC.
+    // This is currently acceptable, considering that:
+    // 1) The cost of rewriting the stable of 1 pack is small
+    // 2) After rewriting, the segment will not need to be rewritten again, as it will look like:
+    //       │*********************│     DTFile only contains 1 pack
+    //       │<------------------->│     Segment
+    //
+    // See https://github.com/pingcap/tiflash/pull/6010 for more details.
+
     auto check_result = (at_least_result.rows < file_rows * (1 - invalid_data_ratio_threshold)) //
         || (at_least_result.bytes < file_bytes * (1 - invalid_data_ratio_threshold));
     LOG_FMT_TRACE(
