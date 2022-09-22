@@ -369,6 +369,7 @@ Before submitting a pull request, please use [format-diff.py](format-diff.py) to
 ```shell
 # In the TiFlash repository root:
 python3 format-diff.py --diff_from `git merge-base upstream/master HEAD`
+# Need to finish compiling TiFlash before running this script.
 merge_base=$(git merge-base upstream/master HEAD)
 python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only` # if there are too much errors, you can try `-fix`
 ```
