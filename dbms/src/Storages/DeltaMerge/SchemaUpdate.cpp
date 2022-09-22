@@ -50,14 +50,14 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
             }
             else if (value.getType() == Field::Types::Decimal32)
             {
-                DecimalField<Decimal32> dec = safeGet<DecimalField<Decimal32>>(value);
-                Float64 res = dec.getValue().toFloat<Float64>(dec.getScale());
+                auto dec = safeGet<DecimalField<Decimal32>>(value);
+                auto res = dec.getValue().toFloat<Float64>(dec.getScale());
                 return toField(res);
             }
             else if (value.getType() == Field::Types::Decimal64)
             {
-                DecimalField<Decimal64> dec = safeGet<DecimalField<Decimal64>>(value);
-                Float64 res = dec.getValue().toFloat<Float64>(dec.getScale());
+                auto dec = safeGet<DecimalField<Decimal64>>(value);
+                auto res = dec.getValue().toFloat<Float64>(dec.getScale());
                 return toField(res);
             }
             else
@@ -68,7 +68,7 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
         case TypeIndex::String:
         case TypeIndex::FixedString:
         {
-            String res = get<String>(value);
+            auto res = get<String>(value);
             return toField(res);
         }
         case TypeIndex::Int8:
