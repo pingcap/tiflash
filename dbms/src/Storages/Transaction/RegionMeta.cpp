@@ -253,7 +253,7 @@ RegionMergeResult MetaRaftCommandDelegate::computeRegionMergeResult(
     const metapb::Region & source_region,
     const metapb::Region & target_region)
 {
-    RegionMergeResult res;
+    RegionMergeResult res{};
 
     res.version = std::max(source_region.region_epoch().version(), target_region.region_epoch().version()) + 1;
 
