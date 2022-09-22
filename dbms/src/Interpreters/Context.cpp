@@ -1004,10 +1004,15 @@ ASTPtr Context::getCreateDatabaseQuery(const String & database_name) const
     return shared->databases[db]->getCreateDatabaseQuery(*this);
 }
 
-Settings Context::getSettings() const
+void Context::checkIsConfigLoaded() const
 {
     if (!is_config_loaded)
-        LOG_ERROR(shared->log, "Configuration are not loaded");
+        LOG_ERROR(shared->log, "Configuration are used before load from configure file tiflash.toml, so the user config may not take effect. There are must be some bugs. Please open an issue in https://github.com/pingcap/tiflash.");
+}
+
+Settings Context::getSettings() const
+{
+    checkIsConfigLoaded();
     return settings;
 }
 
@@ -1171,17 +1176,15 @@ Context & Context::getGlobalContext()
     return *global_context;
 }
 
-const Settings & Context::getSettingsRef() const 
+const Settings & Context::getSettingsRef() const
 {
-    if (!is_config_loaded)
-        LOG_ERROR(shared->log, "Configuration are used before load from configure file tiflash.toml, so the user config may not take effect. There are must be some bugs. Please open an issue in https://github.com/pingcap/tiflash.");
+    checkIsConfigLoaded();
     return settings;
 }
 
 Settings & Context::getSettingsRef()
 {
-    if (!is_config_loaded)
-        LOG_ERROR(shared->log, "Configuration are used before load from configure file tiflash.toml, so the user config may not take effect. There are must be some bugs. Please open an issue in https://github.com/pingcap/tiflash.");
+    checkIsConfigLoaded();
     return settings;
 }
 

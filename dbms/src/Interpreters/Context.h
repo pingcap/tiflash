@@ -497,6 +497,8 @@ private:
 
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
+
+    void checkIsConfigLoaded() const;
 };
 
 using ContextPtr = std::shared_ptr<Context>;
