@@ -149,7 +149,7 @@ SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlo
 
 std::optional<std::pair<uint64_t, std::vector<uint64_t>>> SegmentReadTaskScheduler::scheduleSegmentUnlock(const SegmentReadTaskPoolPtr & pool)
 {
-    auto expected_merge_seg_count = std::min(read_pools.size(), 2);  // Not accurate.
+    auto expected_merge_seg_count = std::min(read_pools.size(), 2); // Not accurate.
     auto itr = merging_segments.find(pool->tableId());
     if (itr == merging_segments.end())
     {

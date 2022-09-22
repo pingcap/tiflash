@@ -200,6 +200,7 @@ public:
     {
         return add_to_scheduler;
     }
+
 private:
     int64_t getFreeActiveSegmentCountUnlock();
     bool exceptionHappened() const;
