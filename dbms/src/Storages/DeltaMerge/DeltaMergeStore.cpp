@@ -939,10 +939,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         }
         res.push_back(stream);
     }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
-    }
     return res;
 }
 
