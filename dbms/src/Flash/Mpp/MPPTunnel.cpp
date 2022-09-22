@@ -24,7 +24,6 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char exception_during_mpp_close_tunnel[];
 extern const char random_tunnel_wait_timeout_failpoint[];
 } // namespace FailPoints
 
@@ -70,6 +69,7 @@ MPPTunnel::~MPPTunnel()
     });
     try
     {
+<<<<<<< HEAD
         {
             std::unique_lock lock(*mu);
             if (status == TunnelStatus::Finished)
@@ -84,6 +84,9 @@ MPPTunnel::~MPPTunnel()
         }
         LOG_FMT_TRACE(log, "waiting consumer finish!");
         waitForSenderFinish(/*allow_throw=*/false);
+=======
+        close("", true);
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     }
     catch (...)
     {
@@ -92,6 +95,7 @@ MPPTunnel::~MPPTunnel()
     LOG_FMT_TRACE(log, "destructed tunnel obj!");
 }
 
+<<<<<<< HEAD
 void MPPTunnel::finishSendQueue()
 {
     bool flag = send_queue->finish();
@@ -101,8 +105,10 @@ void MPPTunnel::finishSendQueue()
     }
 }
 
+=======
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
 /// exit abnormally, such as being cancelled.
-void MPPTunnel::close(const String & reason)
+void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 {
     {
         std::unique_lock lk(*mu);
@@ -113,9 +119,11 @@ void MPPTunnel::close(const String & reason)
             cv_for_status_changed.notify_all();
             return;
         case TunnelStatus::Connected:
+        case TunnelStatus::WaitingForSenderFinish:
         {
             if (!reason.empty())
             {
+<<<<<<< HEAD
                 try
                 {
                     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_during_mpp_close_tunnel);
@@ -127,26 +135,32 @@ void MPPTunnel::close(const String & reason)
                 {
                     tryLogCurrentException(log, "Failed to close tunnel: " + tunnel_id);
                 }
+=======
+                tunnel_sender->cancelWith(reason);
             }
-            finishSendQueue();
+            else
+            {
+                tunnel_sender->finish();
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
+            }
             break;
         }
-        case TunnelStatus::WaitingForSenderFinish:
-            break;
         case TunnelStatus::Finished:
             return;
         default:
             RUNTIME_ASSERT(false, log, "Unsupported tunnel status: {}", status);
         }
     }
-    waitForSenderFinish(/*allow_throw=*/false);
+    if (wait_sender_finish)
+        waitForSenderFinish(false);
 }
 
 // TODO: consider to hold a buffer
-void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
+void MPPTunnel::write(const mpp::MPPDataPacket & data)
 {
     LOG_FMT_TRACE(log, "ready to write");
     {
+<<<<<<< HEAD
         /// Should keep this lock to protect async_tunnel_sender's tryFlushOne method,
         /// because the GRPC async thread's might release the GRPC writer while flush method might still use the GRPC writer
         std::unique_lock lk(*mu);
@@ -167,9 +181,21 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data, bool close_after_write)
             }
             return;
         }
+=======
+        std::unique_lock lk(mu);
+        waitUntilConnectedOrFinished(lk);
+        if (tunnel_sender == nullptr)
+            throw Exception(fmt::format("write to tunnel which is already closed."));
     }
-    // push failed, wait consumer for the final state
-    waitForSenderFinish(/*allow_throw=*/true);
+
+    if (tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(data, getMemTracker())))
+    {
+        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.packets += 1;
+        return;
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
+    }
+    throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender->isConsumerFinished() ? tunnel_sender->getConsumerFinishMsg() : ""));
 }
 
 /// done normally and being called exactly once after writing all packets
@@ -177,13 +203,19 @@ void MPPTunnel::writeDone()
 {
     LOG_FMT_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
     {
+<<<<<<< HEAD
         std::unique_lock lk(*mu);
         if (status == TunnelStatus::Finished)
             throw Exception(fmt::format("write to tunnel which is already closed,{}", tunnel_sender ? tunnel_sender->getConsumerFinishMsg() : ""));
+=======
+        std::unique_lock lk(mu);
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
         /// make sure to finish the tunnel after it is connected
         waitUntilConnectedOrFinished(lk);
-        finishSendQueue();
+        if (tunnel_sender == nullptr)
+            throw Exception(fmt::format("write to tunnel which is already closed."));
     }
+    tunnel_sender->finish();
     waitForSenderFinish(/*allow_throw=*/true);
 }
 
@@ -325,6 +357,15 @@ void SyncTunnelSender::sendJob()
                 break;
             }
         }
+        /// write the last error packet if needed
+        if (send_queue.getStatus() == MPMCQueueStatus::CANCELLED)
+        {
+            RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
+            if (!writer->write(getPacketWithError(send_queue.getCancelReason())))
+            {
+                err_msg = "grpc writes failed.";
+            }
+        }
     }
     catch (...)
     {
@@ -358,6 +399,7 @@ void AsyncTunnelSender::consumerFinishWithLock(const String & msg)
 
 void AsyncTunnelSender::tryFlushOne()
 {
+<<<<<<< HEAD
     // When consumer finished, sending work is done already, just return
     if (consumer_state.msgHasSet())
         return;
@@ -373,6 +415,11 @@ void AsyncTunnelSender::sendOne(bool use_lock)
     String err_msg;
     bool queue_empty_flag = false;
     try
+=======
+    TrackedMppDataPacketPtr res;
+    auto result = send_queue.pop(res);
+    if (result == MPMCQueueResult::OK)
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     {
         MPPDataPacketPtr res;
         queue_empty_flag = !send_queue->pop(res);
@@ -394,6 +441,7 @@ void AsyncTunnelSender::sendOne(bool use_lock)
         LOG_ERROR(log, err_msg);
         trimStackTrace(err_msg);
     }
+<<<<<<< HEAD
     if (!err_msg.empty() || queue_empty_flag)
     {
         if (!use_lock)
@@ -413,6 +461,18 @@ LocalTunnelSender::MPPDataPacketPtr LocalTunnelSender::readForLocal()
     MPPDataPacketPtr res;
     if (send_queue->pop(res))
         return res;
+=======
+    else if (result == MPMCQueueResult::CANCELLED)
+    {
+        RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
+        if (!cancel_reason_sent)
+        {
+            cancel_reason_sent = true;
+            res = std::make_shared<TrackedMppDataPacket>(getPacketWithError(send_queue.getCancelReason()), current_memory_tracker);
+            return res;
+        }
+    }
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     consumerFinish("");
     return nullptr;
 }

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/SimpleIntrusiveNode.h>
 #include <Common/nocopyable.h>
 #include <common/defines.h>
@@ -70,9 +71,13 @@ public:
 
     ~MPMCQueue()
     {
+<<<<<<< HEAD
         std::unique_lock lock(mu);
         for (; read_pos < write_pos; ++read_pos)
             destruct(getObj(read_pos));
+=======
+        drain();
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     }
 
     // Cannot to use copy/move constructor,
@@ -208,7 +213,11 @@ public:
         return write_pos - read_pos < capacity || !isNormal();
     }
 
+<<<<<<< HEAD
     MPMCQueueStatus getStatus() const
+=======
+    const String & getCancelReason() const
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     {
         std::unique_lock lock(mu);
         return status;

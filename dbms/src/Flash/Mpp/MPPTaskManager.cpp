@@ -46,7 +46,11 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
         {
             return false;
         }
+<<<<<<< HEAD
         else if (query_it->second->to_be_cancelled)
+=======
+        else if (!query_it->second->isInNormalState())
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
         {
             /// if the query is cancelled, return true to stop waiting timeout.
             LOG_WARNING(log, fmt::format("Query {} is cancelled, all its tasks are invalid.", id.start_ts));
@@ -70,8 +74,14 @@ MPPTaskPtr MPPTaskManager::findTaskWithTimeout(const mpp::TaskMeta & meta, std::
     return it->second;
 }
 
+<<<<<<< HEAD
 void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
 {
+=======
+void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type)
+{
+    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}, reason: {}", query_id, magic_enum::enum_name(abort_type), reason));
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     MPPQueryTaskSetPtr task_set;
     {
         /// cancel task may take a long time, so first
@@ -84,16 +94,26 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
             LOG_WARNING(log, fmt::format("{} does not found in task manager, skip cancel", query_id));
             return;
         }
+<<<<<<< HEAD
         else if (it->second->to_be_cancelled)
+=======
+        else if (!it->second->isInNormalState())
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
         {
             LOG_WARNING(log, fmt::format("{} already in cancel process, skip cancel", query_id));
             return;
         }
+<<<<<<< HEAD
         it->second->to_be_cancelled = true;
+=======
+        it->second->state = MPPQueryTaskSet::Aborting;
+        it->second->error_message = reason;
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
         task_set = it->second;
         scheduler->deleteQuery(query_id, *this, true);
         cv.notify_all();
     }
+<<<<<<< HEAD
     LOG_WARNING(log, fmt::format("Begin cancel query: {}", query_id));
     FmtBuffer fmt_buf;
     fmt_buf.fmtAppend("Remaining task in query {} are: ", query_id);
@@ -106,14 +126,30 @@ void MPPTaskManager::cancelMPPQuery(UInt64 query_id, const String & reason)
         it = task_set->task_map.erase(it);
         thread_manager->schedule(false, "CancelMPPTask", [task = std::move(current_task), &reason] { task->cancel(reason); });
     }
+=======
+
+    FmtBuffer fmt_buf;
+    fmt_buf.fmtAppend("Remaining task in query {} are: ", query_id);
+    for (auto & it : task_set->task_map)
+        fmt_buf.fmtAppend("{} ", it.first.toString());
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     LOG_WARNING(log, fmt_buf.toString());
-    thread_manager->wait();
+
+    for (auto & it : task_set->task_map)
+        it.second->abort(reason, abort_type);
+
     {
         std::lock_guard lock(mu);
         auto it = mpp_query_map.find(query_id);
+<<<<<<< HEAD
         /// just to double check the query still exists
         if (it != mpp_query_map.end())
             mpp_query_map.erase(it);
+=======
+        RUNTIME_ASSERT(it != mpp_query_map.end(), log, "MPPTaskQuerySet {} should remaining in MPPTaskManager", query_id);
+        it->second->state = MPPQueryTaskSet::Aborted;
+        cv.notify_all();
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     }
     LOG_WARNING(log, "Finish cancel query: " + std::to_string(query_id));
 }
@@ -122,11 +158,17 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
 {
     std::unique_lock lock(mu);
     const auto & it = mpp_query_map.find(task->id.start_ts);
+<<<<<<< HEAD
     if (it != mpp_query_map.end() && it->second->to_be_cancelled)
     {
         LOG_WARNING(log, "Do not register task: " + task->id.toString() + " because the query is to be cancelled.");
         cv.notify_all();
         return false;
+=======
+    if (it != mpp_query_map.end() && !it->second->isInNormalState())
+    {
+        return {false, fmt::format("query is being aborted, error message = {}", it->second->error_message)};
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     }
     if (it != mpp_query_map.end() && it->second->task_map.find(task->id) != it->second->task_map.end())
     {
@@ -142,11 +184,12 @@ bool MPPTaskManager::registerTask(MPPTaskPtr task)
     {
         mpp_query_map[task->id.start_ts]->task_map.emplace(task->id, task);
     }
-    task->manager = this;
+    task->registered = true;
     cv.notify_all();
     return true;
 }
 
+<<<<<<< HEAD
 bool MPPTaskManager::isQueryToBeCancelled(UInt64 query_id)
 {
     std::unique_lock lock(mu);
@@ -163,18 +206,32 @@ void MPPTaskManager::unregisterTask(MPPTask * task)
         if (it->second->to_be_cancelled)
             return;
         auto task_it = it->second->task_map.find(task->id);
+=======
+std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
+{
+    std::unique_lock lock(mu);
+    auto it = mpp_query_map.end();
+    cv.wait(lock, [&] {
+        it = mpp_query_map.find(id.start_ts);
+        return it == mpp_query_map.end() || it->second->allowUnregisterTask();
+    });
+    if (it != mpp_query_map.end())
+    {
+        auto task_it = it->second->task_map.find(id);
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
         if (task_it != it->second->task_map.end())
         {
             it->second->task_map.erase(task_it);
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                scheduler->deleteQuery(task->id.start_ts, *this, false);
+                scheduler->deleteQuery(id.start_ts, *this, false);
                 mpp_query_map.erase(it);
             }
             return;
         }
     }
+<<<<<<< HEAD
     LOG_ERROR(log, "The task " + task->id.toString() + " cannot be found and fail to unregister");
 }
 
@@ -199,6 +256,10 @@ std::vector<MPPTaskPtr> MPPTaskManager::getCurrentTasksForQuery(UInt64 query_id)
     for (const auto & task_it : it->second->task_map)
         ret.push_back(task_it.second);
     return ret;
+=======
+    cv.notify_all();
+    return {false, "task can not be found, maybe not registered yet"};
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
 }
 
 String MPPTaskManager::toString()

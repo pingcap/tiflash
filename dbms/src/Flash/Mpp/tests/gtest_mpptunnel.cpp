@@ -30,7 +30,7 @@ class MockWriter : public PacketWriter
 {
     bool write(const mpp::MPPDataPacket & packet) override
     {
-        write_packet_vec.push_back(packet.data());
+        write_packet_vec.push_back(packet.data().empty() ? packet.error().msg() : packet.data());
         return true;
     }
 
@@ -81,7 +81,11 @@ struct MockLocalReader
             bool success = tmp_packet != nullptr;
             if (success)
             {
+<<<<<<< HEAD
                 write_packet_vec.push_back(tmp_packet->data());
+=======
+                write_packet_vec.push_back(tmp_packet->packet.data().empty() ? tmp_packet->packet.error().msg() : tmp_packet->packet.data());
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
             }
             else
             {
@@ -177,7 +181,42 @@ public:
     {
         if (ready && async_sender->isSendQueueNextPopNonBlocking())
         {
+<<<<<<< HEAD
             async_sender->sendOne();
+=======
+            TrackedMppDataPacketPtr res;
+            switch (async_tunnel_sender->pop(res, this))
+            {
+            case GRPCSendQueueRes::OK:
+                if (write_failed)
+                {
+                    async_tunnel_sender->consumerFinish(fmt::format("{} meet error: grpc writes failed.", async_tunnel_sender->getTunnelId()));
+                    return;
+                }
+                write_packet_vec.push_back(res->packet.data());
+                break;
+            case GRPCSendQueueRes::FINISHED:
+                async_tunnel_sender->consumerFinish("");
+                return;
+            case GRPCSendQueueRes::CANCELLED:
+                assert(!async_tunnel_sender->getCancelReason().empty());
+                if (write_failed)
+                {
+                    async_tunnel_sender->consumerFinish(fmt::format("{} meet error: {}.", async_tunnel_sender->getTunnelId(), async_tunnel_sender->getCancelReason()));
+                    return;
+                }
+                write_packet_vec.push_back(async_tunnel_sender->getCancelReason());
+                async_tunnel_sender->consumerFinish("");
+                return;
+            case GRPCSendQueueRes::EMPTY:
+                std::unique_lock<std::mutex> lock(mu);
+                cv.wait(lock, [&] {
+                    return has_msg;
+                });
+                has_msg = false;
+                break;
+            }
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
         }
         ready = true;
     }
@@ -284,7 +323,7 @@ TEST_F(TestMPPTunnel, CloseBeforeConnect)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Canceled", false);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), false);
 }
@@ -294,9 +333,9 @@ TEST_F(TestMPPTunnel, CloseAfterClose)
 try
 {
     auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Canceled", false);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Canceled", false);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
 }
 CATCH
@@ -314,7 +353,7 @@ TEST_F(TestMPPTunnel, WriteAfterUnconnectFinished)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed.");
     }
 }
 
@@ -329,7 +368,7 @@ TEST_F(TestMPPTunnel, WriteDoneAfterUnconnectFinished)
     }
     catch (Exception & e)
     {
-        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
+        GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed.");
     }
 }
 
@@ -343,27 +382,13 @@ try
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    mpp_tunnel_ptr->close("Cancel");
+    mpp_tunnel_ptr->close("Cancel", true);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec.size(), 2); //Second for err msg
-    GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec[0], "First");
-}
-CATCH
-
-TEST_F(TestMPPTunnel, ConnectWriteWithCloseFlag)
-try
-{
-    auto mpp_tunnel_ptr = constructRemoteSyncTunnel();
-    std::unique_ptr<PacketWriter> writer_ptr = std::make_unique<MockWriter>();
-    mpp_tunnel_ptr->connect(writer_ptr.get());
-    GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-    std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
-    data_packet_ptr->set_data("First");
-    mpp_tunnel_ptr->write(*data_packet_ptr, true);
-    mpp_tunnel_ptr->waitForFinish();
-    GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec.size(), 1);
-    GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec[0], "First");
+    auto result_size = dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec.size();
+    // close will cancel the MPMCQueue, so there is no guarantee that all the message will be consumed, only the last error packet
+    // must to be consumed
+    GTEST_ASSERT_EQ(result_size >= 1 && result_size <= 2, true);
+    GTEST_ASSERT_EQ(dynamic_cast<MockWriter *>(writer_ptr.get())->write_packet_vec[result_size - 1], "Cancel");
 }
 CATCH
 
@@ -431,7 +456,7 @@ TEST_F(TestMPPTunnel, WriteAfterFinished)
         std::unique_ptr<PacketWriter> writer_ptr = std::make_unique<MockWriter>();
         mpp_tunnel_ptr->connect(writer_ptr.get());
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-        mpp_tunnel_ptr->close("Canceled");
+        mpp_tunnel_ptr->close("Canceled", false);
         auto data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
         data_packet_ptr->set_data("First");
         mpp_tunnel_ptr->write(*data_packet_ptr);
@@ -478,7 +503,7 @@ TEST_F(TestMPPTunnel, LocalCloseBeforeConnect)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Canceled", false);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
     GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), false);
 }
@@ -488,9 +513,9 @@ TEST_F(TestMPPTunnel, LocalCloseAfterClose)
 try
 {
     auto mpp_tunnel_ptr = constructLocalSyncTunnel();
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Canceled", false);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
-    mpp_tunnel_ptr->close("Canceled");
+    mpp_tunnel_ptr->close("Canceled", false);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
 }
 CATCH
@@ -505,11 +530,12 @@ try
     std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
     data_packet_ptr->set_data("First");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    mpp_tunnel_ptr->close("Cancel");
+    mpp_tunnel_ptr->close("Cancel", false);
     local_reader_ptr->thread_manager->wait(); // Join local read thread
     GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(mpp_tunnel_ptr->getTunnelSender()), true);
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 2); //Second for err msg
-    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
+    auto result_size = local_reader_ptr->write_packet_vec.size();
+    GTEST_ASSERT_EQ(result_size == 1 || result_size == 2, true); //Second for err msg
+    GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[result_size - 1], "Cancel");
 }
 CATCH
 
@@ -577,7 +603,7 @@ TEST_F(TestMPPTunnel, LocalWriteAfterFinished)
         auto mpp_tunnel_ptr = constructLocalSyncTunnel();
         auto local_reader_ptr = connectLocalSyncTunnel(mpp_tunnel_ptr);
         GTEST_ASSERT_EQ(getTunnelConnectedFlag(mpp_tunnel_ptr), true);
-        mpp_tunnel_ptr->close("");
+        mpp_tunnel_ptr->close("", false);
         std::unique_ptr<mpp::MPPDataPacket> data_packet_ptr = std::make_unique<mpp::MPPDataPacket>();
         data_packet_ptr->set_data("First");
         mpp_tunnel_ptr->write(*data_packet_ptr);
@@ -605,11 +631,19 @@ try
     mpp_tunnel_ptr->write(*data_packet_ptr);
     data_packet_ptr->set_data("Second");
     mpp_tunnel_ptr->write(*data_packet_ptr);
-    mpp_tunnel_ptr->close("Cancel");
+    mpp_tunnel_ptr->close("Cancel", true);
     GTEST_ASSERT_EQ(getTunnelFinishedFlag(mpp_tunnel_ptr), true);
+<<<<<<< HEAD
     GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec.size(), 3); //Third for err msg
     GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec[0], "First");
     GTEST_ASSERT_EQ(dynamic_cast<MockAsyncWriter *>(async_writer_ptr.get())->write_packet_vec[1], "Second");
+=======
+
+    t.join();
+    auto result_size = call_data->write_packet_vec.size();
+    GTEST_ASSERT_EQ(result_size >= 1 && result_size <= 3, true); //Third for err msg
+    GTEST_ASSERT_EQ(call_data->write_packet_vec[result_size - 1], "Cancel");
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
 }
 CATCH
 

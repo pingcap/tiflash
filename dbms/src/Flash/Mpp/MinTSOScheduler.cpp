@@ -73,7 +73,11 @@ bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & ta
     }
     const auto & id = task->getId();
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.start_ts);
+<<<<<<< HEAD
     if (nullptr == query_task_set || query_task_set->to_be_cancelled)
+=======
+    if (nullptr == query_task_set || !query_task_set->isInNormalState())
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
     {
         LOG_FMT_WARNING(log, "{} is scheduled with miss or cancellation.", id.toString());
         return true;

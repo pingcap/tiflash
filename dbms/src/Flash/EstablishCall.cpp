@@ -161,6 +161,7 @@ void EstablishCallData::proceed()
 {
     if (state == NEW_REQUEST)
     {
+<<<<<<< HEAD
         state = PROCESSING;
 
         spawn(service, cq, notify_cq, is_shutdown);
@@ -196,6 +197,20 @@ void EstablishCallData::proceed()
         // Once in the FINISH state, deallocate ourselves (EstablishCallData).
         // That't the way GRPC official examples do. link: https://github.com/grpc/grpc/blob/master/examples/cpp/helloworld/greeter_async_server.cc
         delete this;
+=======
+    case GRPCSendQueueRes::OK:
+        write(res->packet);
+        return;
+    case GRPCSendQueueRes::FINISHED:
+        writeDone("", grpc::Status::OK);
+        return;
+    case GRPCSendQueueRes::CANCELLED:
+        RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
+        writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
+        return;
+    case GRPCSendQueueRes::EMPTY:
+        // No new message.
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
         return;
     }
 }

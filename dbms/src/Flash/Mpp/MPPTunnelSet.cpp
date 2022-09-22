@@ -20,12 +20,9 @@
 
 namespace DB
 {
-namespace FailPoints
-{
-extern const char exception_during_mpp_write_err_to_tunnel[];
-} // namespace FailPoints
 namespace
 {
+<<<<<<< HEAD
 inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & response)
 {
     mpp::MPPDataPacket packet;
@@ -34,6 +31,8 @@ inline mpp::MPPDataPacket serializeToPacket(const tipb::SelectResponse & respons
     return packet;
 }
 
+=======
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
 void checkPacketSize(size_t size)
 {
     static constexpr size_t max_packet_size = 1u << 31;
@@ -115,6 +114,7 @@ void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partit
 }
 
 template <typename Tunnel>
+<<<<<<< HEAD
 void MPPTunnelSetBase<Tunnel>::writeError(const String & msg)
 {
     for (auto & tunnel : tunnels)
@@ -133,6 +133,8 @@ void MPPTunnelSetBase<Tunnel>::writeError(const String & msg)
 }
 
 template <typename Tunnel>
+=======
+>>>>>>> 988cde9cfa (Do not use extra threads when cancel mpp query (#5966))
 void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id, const TunnelPtr & tunnel)
 {
     if (receiver_task_id_to_index_map.find(receiver_task_id) != receiver_task_id_to_index_map.end())
@@ -147,10 +149,10 @@ void MPPTunnelSetBase<Tunnel>::registerTunnel(const MPPTaskId & receiver_task_id
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::close(const String & reason)
+void MPPTunnelSetBase<Tunnel>::close(const String & reason, bool wait_sender_finish)
 {
     for (auto & tunnel : tunnels)
-        tunnel->close(reason);
+        tunnel->close(reason, wait_sender_finish);
 }
 
 template <typename Tunnel>
