@@ -151,6 +151,7 @@ private:
     Context * session_context = nullptr; /// Session context or nullptr. Could be equal to this.
     Context * global_context = nullptr; /// Global context or nullptr. Could be equal to this.
     SystemLogsPtr system_logs; /// Used to log queries and operations on parts
+    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
@@ -332,8 +333,8 @@ public:
     void setQueryContext(Context & context_) { query_context = &context_; }
     void setSessionContext(Context & context_) { session_context = &context_; }
     void setGlobalContext(Context & context_) { global_context = &context_; }
-    const Settings & getSettingsRef() const { return settings; };
-    Settings & getSettingsRef() { return settings; };
+    const Settings & getSettingsRef() const;
+    Settings & getSettingsRef();
 
 
     void setProgressCallback(ProgressCallback callback);
