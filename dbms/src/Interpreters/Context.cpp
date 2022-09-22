@@ -21,6 +21,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
+#include <Common/randomSeed.h>
 #include <Common/setThreadName.h>
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
@@ -32,7 +33,6 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ExternalModels.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
@@ -121,7 +121,6 @@ struct ContextShared
     /// Separate mutex for access of dictionaries. Separate mutex to avoid locks when server doing request to itself.
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
-    mutable std::mutex external_models_mutex;
 
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
@@ -132,7 +131,6 @@ struct ContextShared
 
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
-    mutable std::shared_ptr<ExternalModels> external_models;
     String default_profile_name; /// Default profile name used for default values.
     String system_profile_name; /// Profile used by system processes
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
@@ -1170,42 +1168,6 @@ Context & Context::getGlobalContext()
         throw Exception("Logical error: there is no global context", ErrorCodes::LOGICAL_ERROR);
     return *global_context;
 }
-
-const ExternalModels & Context::getExternalModels() const
-{
-    return getExternalModelsImpl(false);
-}
-
-ExternalModels & Context::getExternalModels()
-{
-    return getExternalModelsImpl(false);
-}
-
-ExternalModels & Context::getExternalModelsImpl(bool throw_on_error) const
-{
-    std::lock_guard lock(shared->external_models_mutex);
-
-    if (!shared->external_models)
-    {
-        if (!this->global_context)
-            throw Exception("Logical error: there is no global context", ErrorCodes::LOGICAL_ERROR);
-
-        auto config_repository = runtime_components_factory->createExternalModelsConfigRepository();
-
-        shared->external_models = std::make_shared<ExternalModels>(
-            std::move(config_repository),
-            *this->global_context,
-            throw_on_error);
-    }
-
-    return *shared->external_models;
-}
-
-void Context::tryCreateExternalModels() const
-{
-    static_cast<void>(getExternalModelsImpl(true));
-}
-
 
 void Context::setProgressCallback(ProgressCallback callback)
 {

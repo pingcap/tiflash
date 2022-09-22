@@ -126,51 +126,54 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     bool fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
-        if (result.meet_error)
+        while (true)
         {
-            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
-            throw Exception(result.error_msg);
-        }
-        if (result.eof)
-            return false;
-        if (result.resp != nullptr && result.resp->has_error())
-        {
-            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
-            throw Exception(result.resp->error().DebugString());
-        }
-        /// only the last response contains execution summaries
-        if (result.resp != nullptr)
-        {
+            auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
+            if (result.meet_error)
+            {
+                LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
+                throw Exception(result.error_msg);
+            }
+            if (result.eof)
+                return false;
+            if (result.resp != nullptr && result.resp->has_error())
+            {
+                LOG_FMT_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
+                throw Exception(result.resp->error().DebugString());
+            }
+            /// only the last response contains execution summaries
+            if (result.resp != nullptr)
+            {
+                if constexpr (is_streaming_reader)
+                {
+                    addRemoteExecutionSummaries(*result.resp, result.call_index, true);
+                }
+                else
+                {
+                    addRemoteExecutionSummaries(*result.resp, 0, false);
+                }
+            }
+
+            const auto & decode_detail = result.decode_detail;
+
+            size_t index = 0;
             if constexpr (is_streaming_reader)
-            {
-                addRemoteExecutionSummaries(*result.resp, result.call_index, true);
-            }
-            else
-            {
-                addRemoteExecutionSummaries(*result.resp, 0, false);
-            }
+                index = result.call_index;
+
+            ++connection_profile_infos[index].packets;
+            connection_profile_infos[index].bytes += decode_detail.packet_bytes;
+
+            total_rows += decode_detail.rows;
+            LOG_FMT_TRACE(
+                log,
+                "recv {} rows from remote for {}, total recv row num: {}",
+                decode_detail.rows,
+                result.req_info,
+                total_rows);
+            if (decode_detail.rows > 0)
+                return true;
+            // else continue
         }
-
-        const auto & decode_detail = result.decode_detail;
-
-        size_t index = 0;
-        if constexpr (is_streaming_reader)
-            index = result.call_index;
-
-        ++connection_profile_infos[index].packets;
-        connection_profile_infos[index].bytes += decode_detail.packet_bytes;
-
-        total_rows += decode_detail.rows;
-        LOG_FMT_TRACE(
-            log,
-            "recv {} rows from remote for {}, total recv row num: {}",
-            decode_detail.rows,
-            result.req_info,
-            total_rows);
-        if (decode_detail.rows == 0)
-            return fetchRemoteResult();
-        return true;
     }
 
 public:
