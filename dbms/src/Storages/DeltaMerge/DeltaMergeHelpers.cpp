@@ -45,67 +45,67 @@ void convertColumn(Block & block, size_t pos, const DataTypePtr & to_type, const
 
 void appendIntoHandleColumn(ColumnVector<Handle>::Container & handle_column, const DataTypePtr & type, const ColumnPtr & data)
 {
-    auto * type_ptr = &(*type);
+    const auto * type_ptr = &(*type);
     size_t size = handle_column.size();
 
-#define APPEND(SHIFT, MARK, DATA_VECTOR)           \
-    for (size_t i = 0; i < size; ++i)              \
-    {                                              \
-        handle_column[i] <<= SHIFT;                \
-        handle_column[i] |= MARK & DATA_VECTOR[i]; \
+#define APPEND(SHIFT, MARK, DATA_VECTOR)               \
+    for (size_t i = 0; i < size; ++i)                  \
+    {                                                  \
+        handle_column[i] <<= (SHIFT);                  \
+        handle_column[i] |= (MARK) & (DATA_VECTOR)[i]; \
     }
 
     if (checkDataType<DataTypeUInt8>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<UInt8> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<UInt8> &>(*data).getData();
         APPEND(8, 0xFF, data_vector)
     }
     else if (checkDataType<DataTypeUInt16>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<UInt16> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<UInt16> &>(*data).getData();
         APPEND(16, 0xFFFF, data_vector)
     }
     else if (checkDataType<DataTypeUInt32>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<UInt32> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<UInt32> &>(*data).getData();
         APPEND(32, 0xFFFFFFFF, data_vector)
     }
     else if (checkDataType<DataTypeUInt64>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<UInt64> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<UInt64> &>(*data).getData();
         for (size_t i = 0; i < size; ++i)
             handle_column[i] |= data_vector[i];
     }
     else if (checkDataType<DataTypeInt8>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<Int8> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<Int8> &>(*data).getData();
         APPEND(8, 0xFF, data_vector)
     }
     else if (checkDataType<DataTypeInt16>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<Int16> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<Int16> &>(*data).getData();
         APPEND(16, 0xFFFF, data_vector)
     }
     else if (checkDataType<DataTypeInt32>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<Int32> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<Int32> &>(*data).getData();
         APPEND(32, 0xFFFFFFFF, data_vector)
     }
     else if (checkDataType<DataTypeInt64>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<Int64> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<Int64> &>(*data).getData();
         for (size_t i = 0; i < size; ++i)
             handle_column[i] |= data_vector[i];
     }
     else if (checkDataType<DataTypeDateTime>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<typename DataTypeDateTime::FieldType> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<typename DataTypeDateTime::FieldType> &>(*data).getData();
         for (size_t i = 0; i < size; ++i)
             handle_column[i] |= data_vector[i];
     }
     else if (checkDataType<DataTypeDate>(type_ptr))
     {
-        auto & data_vector = typeid_cast<const ColumnVector<typename DataTypeDate::FieldType> &>(*data).getData();
+        const auto & data_vector = typeid_cast<const ColumnVector<typename DataTypeDate::FieldType> &>(*data).getData();
         APPEND(32, 0xFFFFFFFF, data_vector)
     }
     else
