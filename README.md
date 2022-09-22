@@ -362,13 +362,16 @@ Here is the overview of TiFlash architecture [The architecture of TiFlash's dist
 
 See [TiFlash Development Guide](/docs/DEVELOPMENT.md) and [TiFlash Design documents](/docs/design).
 
-Before submitting a pull request, please use [format-diff.py](format-diff.py) to format source code, otherwise CI build may raise error.
+Before submitting a pull request, please resolve clang-tidy errors and use [format-diff.py](format-diff.py) to format source code, otherwise CI build may raise error.
 
 > **NOTE**: It is required to use clang-format 12.0.0+.
 
 ```shell
 # In the TiFlash repository root:
-python3 format-diff.py --diff_from `git merge-base origin/master HEAD`
+merge_base=$(git merge-base upstream/master HEAD)
+python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only` 
+# if there are too much errors, you can try to run the script again with `-fix`
+python3 format-diff.py --diff_from $merge_base
 ```
 
 ## License
