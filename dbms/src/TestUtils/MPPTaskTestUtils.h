@@ -83,6 +83,9 @@ public:
     std::tuple<size_t, std::vector<BlockInputStreamPtr>> prepareMPPStreams(DAGRequestBuilder builder);
 
     ColumnsWithTypeAndName exeucteMPPTasks(QueryTasks & tasks, const DAGProperties & properties, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+
+    ColumnsWithTypeAndName executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request);
+
     static ::testing::AssertionResult assertQueryCancelled(size_t start_ts);
     static ::testing::AssertionResult assertQueryActive(size_t start_ts);
     static String queryInfo(size_t server_id);
