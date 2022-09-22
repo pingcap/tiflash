@@ -99,6 +99,8 @@ QueryTasks queryPlanToQueryTasks(
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
 std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+DAGSchema getSelectSchema(Context & context);
+std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type);
 
 namespace Debug
 {
