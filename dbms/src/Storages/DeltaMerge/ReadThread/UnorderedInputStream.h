@@ -16,6 +16,7 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::FailPoints
@@ -42,6 +43,7 @@ public:
         , physical_table_id(physical_table_id)
         , log(Logger::get(NAME, req_id))
         , ref_no(0)
+        , task_pool_added(false)
     {
         if (extra_table_id_index != InvalidColumnID)
         {
@@ -77,10 +79,10 @@ protected:
         {
             return {};
         }
+        addReadTaskPoolToScheduler();
         while (true)
         {
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
-
             Block res;
             task_pool->popBlock(res);
             if (res)
@@ -117,6 +119,16 @@ protected:
         LOG_FMT_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, total_rows);
     }
 
+    void addReadTaskPoolToScheduler()
+    {
+        if (likely(task_pool_added))
+        {
+            return;
+        }
+        std::call_once(task_pool->addToSchedulerFlag(), [&]() { SegmentReadTaskScheduler::instance().add(task_pool); });
+        task_pool_added = true;
+    }
+
 private:
     SegmentReadTaskPoolPtr task_pool;
     Block header;
@@ -127,5 +139,6 @@ private:
     LoggerPtr log;
     int64_t ref_no;
     size_t total_rows = 0;
+    bool task_pool_added;
 };
 } // namespace DB::DM
