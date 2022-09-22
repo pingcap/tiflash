@@ -15,6 +15,7 @@
 
 #include <list>
 #include <memory>
+#include <unordered_map>
 
 namespace DB::DM
 {
@@ -33,6 +34,7 @@ public:
     void add(const ElemPtr & ptr)
     {
         l.push_back(ptr);
+        m[ptr->poolId()] = --l.end();
     }
 
     ElemPtr next()
@@ -46,6 +48,7 @@ public:
             }
             else
             {
+                m.erase((*last_itr)->poolId());
                 last_itr = l.erase(last_itr);
                 if (last_itr == l.end())
                 {
@@ -56,6 +59,12 @@ public:
         return nullptr;
     }
 
+    size_t size() const
+    {
+        return l.size();
+    }
+
+    // `count` is for test
     std::pair<int64_t, int64_t> count(int64_t table_id) const
     {
         int64_t valid = 0;
@@ -72,14 +81,8 @@ public:
 
     ElemPtr get(uint64_t pool_id) const
     {
-        for (const auto & p : l)
-        {
-            if (p->poolId() == pool_id)
-            {
-                return p;
-            }
-        }
-        return nullptr;
+        auto itr = m.find(pool_id);
+        return itr != m.end() ? *(itr->second) : nullptr;
     }
 
 private:
@@ -104,6 +107,7 @@ private:
 
     std::list<ElemPtr> l;
     Iter last_itr;
+    std::unordered_map<uint64_t, Iter> m;
 };
 
 } // namespace DB::DM
