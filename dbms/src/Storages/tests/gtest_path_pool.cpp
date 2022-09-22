@@ -14,6 +14,7 @@
 
 #include <Core/Types.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -31,7 +32,7 @@ class PathPoolTest : public ::testing::Test
 {
 public:
     PathPoolTest()
-        : log(&Poco::Logger::get("PathPoolTest"))
+        : log(Logger::get("PathPoolTest"))
     {}
 
     static void SetUpTestCase() {}
@@ -49,7 +50,7 @@ public:
     }
 
 protected:
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 TEST_F(PathPoolTest, AlignPaths)
@@ -343,10 +344,18 @@ CATCH
 class MockPathCapacityMetrics : public PathCapacityMetrics
 {
 public:
-    MockPathCapacityMetrics(const size_t capacity_quota_, const Strings & main_paths_, const std::vector<size_t> main_capacity_quota_, //
-                            const Strings & latest_paths_,
-                            const std::vector<size_t> latest_capacity_quota_)
-        : PathCapacityMetrics(capacity_quota_, main_paths_, main_capacity_quota_, latest_paths_, latest_capacity_quota_)
+    MockPathCapacityMetrics(
+        const size_t capacity_quota_,
+        const Strings & main_paths_,
+        const std::vector<size_t> main_capacity_quota_,
+        const Strings & latest_paths_,
+        const std::vector<size_t> latest_capacity_quota_)
+        : PathCapacityMetrics(
+            capacity_quota_,
+            main_paths_,
+            main_capacity_quota_,
+            latest_paths_,
+            latest_capacity_quota_)
     {}
 
     std::map<FSID, DiskCapacity> getDiskStats() override { return disk_stats_map; }
@@ -382,7 +391,7 @@ class PathCapacity : public DB::base::TiFlashStorageTestBasic
     }
 
 protected:
-    struct statvfs vfs_info;
+    struct statvfs vfs_info = {};
     std::string main_data_path;
     std::string latest_data_path;
 };

@@ -21,11 +21,6 @@
 #include <mutex>
 #include <unordered_map>
 
-namespace Poco
-{
-class Logger;
-}
-
 namespace DB
 {
 class PathCapacityMetrics;

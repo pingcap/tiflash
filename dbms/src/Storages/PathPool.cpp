@@ -14,12 +14,14 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/escapeForFileName.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
+#include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
@@ -27,6 +29,7 @@
 #include <common/likely.h>
 #include <fmt/core.h>
 
+#include <mutex>
 #include <random>
 #include <set>
 #include <unordered_map>
@@ -720,6 +723,7 @@ PSDiskDelegatorRaft::PSDiskDelegatorRaft(PathPool & pool_)
 
 bool PSDiskDelegatorRaft::fileExist(const PageFileIdAndLevel & id_lvl) const
 {
+    std::lock_guard lock{mutex};
     return page_path_map.find(id_lvl) != page_path_map.end();
 }
 
@@ -813,9 +817,12 @@ size_t PSDiskDelegatorRaft::freePageFileUsedSize(
         throw Exception(fmt::format("Unrecognized path {}", upper_path));
     }
 
-    if (page_path_map.find(id_lvl) == page_path_map.end())
     {
-        throw Exception(fmt::format("Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path));
+        std::lock_guard lock{mutex};
+        if (page_path_map.find(id_lvl) == page_path_map.end())
+        {
+            throw Exception(fmt::format("Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path));
+        }
     }
 
     // update global used size
@@ -857,6 +864,7 @@ void PSDiskDelegatorRaft::removePageFile(const PageFileIdAndLevel & id_lvl, size
 
 bool PSDiskDelegatorGlobalMulti::fileExist(const PageFileIdAndLevel & id_lvl) const
 {
+    std::lock_guard lock{mutex};
     return page_path_map.find(id_lvl) != page_path_map.end();
 }
 
@@ -926,10 +934,10 @@ size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
     if (unlikely(index == UINT32_MAX))
         throw Exception(fmt::format("Unrecognized path {}", upper_path));
 
+    if (need_insert_location)
     {
         std::lock_guard lock{mutex};
-        if (need_insert_location)
-            page_path_map[id_lvl] = index;
+        page_path_map[id_lvl] = index;
     }
 
     // update global used size
@@ -961,9 +969,12 @@ size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
         throw Exception(fmt::format("Unrecognized path {}", upper_path));
     }
 
-    if (page_path_map.find(id_lvl) == page_path_map.end())
     {
-        throw Exception(fmt::format("Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path));
+        std::lock_guard lock{mutex};
+        if (page_path_map.find(id_lvl) == page_path_map.end())
+        {
+            throw Exception(fmt::format("Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path));
+        }
     }
 
     // update global used size
@@ -1002,6 +1013,7 @@ void PSDiskDelegatorGlobalMulti::removePageFile(const PageFileIdAndLevel & id_lv
 
 bool PSDiskDelegatorGlobalSingle::fileExist(const PageFileIdAndLevel & id_lvl) const
 {
+    std::lock_guard lock{mutex};
     return page_path_map.find(id_lvl) != page_path_map.end();
 }
 
