@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG)
-        set(_SYMBOLIZATION_BUILD_PROFILE "debug")
-else()
-        set(_SYMBOLIZATION_BUILD_PROFILE "release")
-        set(_SYMBOLIZATION_BUILD_ARGS --release)
-endif()
+# Debug-mode symbolization is slow. Let's always build a release. The building is fast anyway.
+set(_SYMBOLIZATION_BUILD_PROFILE "release")
+set(_SYMBOLIZATION_BUILD_ARGS --release)
 
 set(_SYMBOLIZATION_SOURCE_DIR "${TiFlash_SOURCE_DIR}/libs/libsymbolization")
 set(_SYMBOLIZATION_LIBRARY "${CMAKE_CURRENT_BINARY_DIR}/${_SYMBOLIZATION_BUILD_PROFILE}/${CMAKE_STATIC_LIBRARY_PREFIX}symbolization${CMAKE_STATIC_LIBRARY_SUFFIX}")
