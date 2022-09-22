@@ -49,7 +49,7 @@ target_compile_definitions(boost_fiber
 
 target_link_libraries (boost_fiber boost_context)
 
-if (COMPILER_CLANG)
+if (COMPILER_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15)
     target_compile_options (boost_fiber PRIVATE "-Wno-unused-but-set-variable")
 endif()
 
