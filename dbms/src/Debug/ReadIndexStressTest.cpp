@@ -54,10 +54,10 @@ void ReadIndexStressTest::dbgFuncStressTest(Context & context, const ASTs & args
 {
     if (args.size() < 4)
         throw Exception("Args not matched, should be: min_region_cnt, loop_cnt, type(batch-read-index-v1, async-read-index), concurrency", ErrorCodes::BAD_ARGUMENTS);
-    size_t min_region_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    size_t loop_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    auto min_region_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto loop_cnt = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
     TestType ver = TestName2Type.at(typeid_cast<const ASTIdentifier &>(*args[2]).name);
-    size_t concurrency = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
+    auto concurrency = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
     {
         if (min_region_cnt < 1 || loop_cnt < 1 || concurrency < 1)
             throw Exception("Invalid args: `min_region_cnt < 1 or loop_cnt < 1 or concurrency < 1` ", ErrorCodes::LOGICAL_ERROR);

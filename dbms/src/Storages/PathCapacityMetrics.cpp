@@ -254,7 +254,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     /// Get capacity, used, available size for one path.
     /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
     /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
-    struct statvfs vfs;
+    struct statvfs vfs{};
     if (int code = statvfs(path.data(), &vfs); code != 0)
     {
         if (log)

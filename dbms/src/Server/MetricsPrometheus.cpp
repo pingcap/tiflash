@@ -40,22 +40,22 @@ namespace DB
 class MetricHandler : public Poco::Net::HTTPRequestHandler
 {
 public:
-    MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_)
+    explicit MetricHandler(const std::weak_ptr<prometheus::Collectable> & collectable_)
         : collectable(collectable_)
     {}
 
-    ~MetricHandler() {}
+    ~MetricHandler() override = default;
 
     void handleRequest(Poco::Net::HTTPServerRequest &, Poco::Net::HTTPServerResponse & response) override
     {
-        auto metrics = CollectMetrics();
+        auto metrics = collectMetrics();
         auto serializer = std::unique_ptr<prometheus::Serializer>{new prometheus::TextSerializer()};
         String body = serializer->Serialize(metrics);
         response.sendBuffer(body.data(), body.size());
     }
 
 private:
-    std::vector<prometheus::MetricFamily> CollectMetrics() const
+    std::vector<prometheus::MetricFamily> collectMetrics() const
     {
         auto collected_metrics = std::vector<prometheus::MetricFamily>{};
 
@@ -77,15 +77,15 @@ private:
 class MetricHandlerFactory : public Poco::Net::HTTPRequestHandlerFactory
 {
 public:
-    MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_)
+    explicit MetricHandlerFactory(const std::weak_ptr<prometheus::Collectable> & collectable_)
         : collectable(collectable_)
     {}
 
-    ~MetricHandlerFactory() {}
+    ~MetricHandlerFactory() override = default;
 
     Poco::Net::HTTPRequestHandler * createRequestHandler(const Poco::Net::HTTPServerRequest & request) override
     {
-        String uri = request.getURI();
+        const String& uri = request.getURI();
         if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_GET || request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD)
         {
             if (uri == "/metrics")
@@ -133,8 +133,8 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
     return server;
 }
 
-constexpr long MILLISECOND = 1000;
-constexpr long INIT_DELAY = 5;
+constexpr Int64 MILLISECOND = 1000;
+constexpr Int64 INIT_DELAY = 5;
 
 MetricsPrometheus::MetricsPrometheus(
     Context & context,
@@ -221,7 +221,7 @@ MetricsPrometheus::MetricsPrometheus(
     }
 
     timer.scheduleAtFixedRate(
-        FunctionTimerTask::create(std::bind(&MetricsPrometheus::run, this)),
+        FunctionTimerTask::create([this] { run(); }),
         INIT_DELAY * MILLISECOND,
         metrics_interval * MILLISECOND);
 }
