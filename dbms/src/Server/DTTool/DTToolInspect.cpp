@@ -132,6 +132,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 counter++;
             }
             stream->readSuffix();
+            LOG_FMT_INFO(logger, "[success] ( {} blocks )", counter);
         }
     } // end of (arg.check)
 
