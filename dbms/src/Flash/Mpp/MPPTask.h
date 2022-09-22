@@ -96,13 +96,10 @@ private:
 
     void unregisterTask();
 
-    /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnels(const String & reason);
-
+    // abort the mpp task, note this function should be non-blocking, it just set some flags
     void abort(const String & message, AbortType abort_type);
 
-    void abortTunnels(const String & message, AbortType abort_type);
+    void abortTunnels(const String & message, bool wait_sender_finish);
     void abortReceivers();
     void abortDataStreams(AbortType abort_type);
 
@@ -143,14 +140,15 @@ private:
 
     int new_thread_count_of_exchange_receiver = 0;
 
-    std::atomic<MPPTaskManager *> manager = nullptr;
+    MPPTaskManager * manager;
+    std::atomic<bool> registered{false};
 
     const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
     friend class MPPTaskManager;
-    friend class MPPTaskCancelHelper;
+    friend class MPPHandler;
 
     int needed_threads;
 

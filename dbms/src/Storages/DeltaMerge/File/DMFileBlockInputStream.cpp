@@ -30,12 +30,7 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
 
 DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr & dmfile, const ColumnDefines & read_columns, const RowKeyRanges & rowkey_ranges)
 {
-    if (dmfile->getStatus() != DMFile::Status::READABLE)
-        throw Exception(fmt::format(
-                            "DMFile [{}] is expected to be in READABLE status, but: {}",
-                            dmfile->fileId(),
-                            DMFile::statusString(dmfile->getStatus())),
-                        ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK(dmfile->getStatus() == DMFile::Status::READABLE, dmfile->fileId(), DMFile::statusString(dmfile->getStatus()));
 
     // if `rowkey_ranges` is empty, we unconditionally read all packs
     // `rowkey_ranges` and `is_common_handle`  will only be useful in clean read mode.
