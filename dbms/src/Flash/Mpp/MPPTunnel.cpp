@@ -331,8 +331,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
     try
     {
         TrackedMppDataPacketPtr res;
-        MPMCQueueResult result;
-        while (result = send_queue.pop(res), result == MPMCQueueResult::OK)
+        while (send_queue.pop(res) == MPMCQueueResult::OK)
         {
             if (!writer->write(res->packet))
             {
@@ -341,7 +340,7 @@ void SyncTunnelSender::sendJob(PacketWriter * writer)
             }
         }
         /// write the last error packet if needed
-        if (result == MPMCQueueResult::CANCELLED)
+        if (send_queue.getStatus() == MPMCQueueStatus::CANCELLED)
         {
             RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
             if (!writer->write(getPacketWithError(send_queue.getCancelReason())))
