@@ -447,8 +447,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
             log,
             "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange checked false "
             "because segment DTFile is shared with a neighbor segment, "
-            "segment={} first_pack_inc={} last_pack_inc={} prev_seg_files=[{}] next_seg_files=[{}] my_files=[{}]",
-            seg->info(),
+            "first_pack_inc={} last_pack_inc={} prev_seg_files=[{}] next_seg_files=[{}] my_files=[{}] segment={}",
             magic_enum::enum_name(at_least_result.first_pack_intersection),
             magic_enum::enum_name(at_least_result.last_pack_intersection),
             fmt::join(prev_segment_file_ids, ","),
@@ -463,33 +462,29 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
                     },
                     ",");
                 return fmt_buf.toString();
-            }());
+            }(),
+            seg->info());
         // We do not mark `setValidDataRatioChecked` because neighbor segments' state could change.
         return false;
     }
 
-    size_t dt_file_rows = 0;
-    size_t dt_file_bytes = 0;
-    for (const auto & file : dt_files)
-    {
-        dt_file_rows += file->getRows();
-        dt_file_bytes += file->getBytes();
-    }
+    size_t file_rows = snap->stable->getDMFilesRows();
+    size_t file_bytes = snap->stable->getDMFilesBytes();
 
-    auto check_result = (at_least_result.rows < dt_file_rows * (1 - invalid_data_ratio_threshold)) //
-        || (at_least_result.bytes < dt_file_bytes * (1 - invalid_data_ratio_threshold));
+    auto check_result = (at_least_result.rows < file_rows * (1 - invalid_data_ratio_threshold)) //
+        || (at_least_result.bytes < file_bytes * (1 - invalid_data_ratio_threshold));
     LOG_FMT_TRACE(
         log,
         "GC - Checking shouldCompactStableWithTooMuchDataOutOfSegmentRange, "
-        "segment={} check_result={} first_pack_inc={} last_pack_inc={} rows_at_least={} bytes_at_least={} file_rows={} file_bytes={}",
-        seg->info(),
+        "check_result={} first_pack_inc={} last_pack_inc={} rows_at_least={} bytes_at_least={} file_rows={} file_bytes={} segment={} ",
         check_result,
         magic_enum::enum_name(at_least_result.first_pack_intersection),
         magic_enum::enum_name(at_least_result.last_pack_intersection),
         at_least_result.rows,
         at_least_result.bytes,
-        dt_file_rows,
-        dt_file_bytes);
+        file_rows,
+        file_bytes,
+        seg->info());
     seg->setValidDataRatioChecked();
     return check_result;
 }
