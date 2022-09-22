@@ -266,6 +266,20 @@ try
 CATCH
 
 
+TEST_F(DeltaMergeStoreGCMergeDeltaTest, SegmentContainsPack)
+try
+{
+    ensureSegmentBreakpoints({400, 500});
+    fill(410, 450);
+    flush();
+    mergeDelta();
+
+    auto gc_n = store->onSyncGc(100);
+    ASSERT_EQ(0, gc_n);
+}
+CATCH
+
+
 TEST_F(DeltaMergeStoreGCMergeDeltaTest, SegmentExactlyContainsStable)
 try
 {
