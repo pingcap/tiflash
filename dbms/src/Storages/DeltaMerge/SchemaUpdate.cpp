@@ -51,18 +51,18 @@ void setColumnDefineDefaultValue(const AlterCommand & command, ColumnDefine & de
             else if (value.getType() == Field::Types::Decimal32)
             {
                 auto dec = safeGet<DecimalField<Decimal32>>(value);
-                Float64 res = dec.getValue().toFloat<Float64>(dec.getScale());
+                auto res = dec.getValue().toFloat<Float64>(dec.getScale());
                 return toField(res);
             }
             else if (value.getType() == Field::Types::Decimal64)
             {
                 auto dec = safeGet<DecimalField<Decimal64>>(value);
-                Float64 res = dec.getValue().toFloat<Float64>(dec.getScale());
+                auto res = dec.getValue().toFloat<Float64>(dec.getScale());
                 return toField(res);
             }
             else
             {
-                throw Exception(fmt::format("Unknown float number literal: {}, value type: {}" + applyVisitor(FieldVisitorToString(), value), value.getTypeName()));
+                throw Exception(fmt::format("Unknown float number literal: {}, value type: {}", applyVisitor(FieldVisitorToString(), value), value.getTypeName()));
             }
         }
         case TypeIndex::String:
