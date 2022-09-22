@@ -175,7 +175,7 @@ struct MultiColumnSortFastPath
     }
 };
 
-struct CollatorDesc : boost::noncopyable
+struct FastSortDesc : boost::noncopyable
 {
     const ColumnsWithSortDescriptions & columns_with_sort_desc;
     std::vector<bool> need_collations;
@@ -204,7 +204,7 @@ struct CollatorDesc : boost::noncopyable
         type_for_fast_path[fast_path_cnt++] = tp;
     }
 
-    explicit CollatorDesc(const ColumnsWithSortDescriptions & columns_with_sort_desc_)
+    explicit FastSortDesc(const ColumnsWithSortDescriptions & columns_with_sort_desc_)
         : columns_with_sort_desc(columns_with_sort_desc_)
     {
         need_collations.reserve(columns_with_sort_desc.size());
@@ -314,9 +314,9 @@ struct PartialSortingLess
 
 struct PartialSortingLessWithCollation
 {
-    const CollatorDesc & collator_desc;
+    const FastSortDesc & collator_desc;
 
-    explicit PartialSortingLessWithCollation(const CollatorDesc & collator_desc_)
+    explicit PartialSortingLessWithCollation(const FastSortDesc & collator_desc_)
         : collator_desc(collator_desc_)
     {
         assert(collator_desc.has_collation);
@@ -353,14 +353,14 @@ template <>
 struct FastPathPermutationSort<2>
 {
     template <typename A, typename B>
-    ALWAYS_INLINE static inline void FastPathPermutationSort_P2(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit)
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P2(const FastSortDesc & desc, IColumn::Permutation & perm, size_t limit)
     {
         MultiColumnSortFastPath<A, B> cmp{desc.columns_with_sort_desc};
         return PermutationSort(perm, limit, cmp);
     }
 
     template <typename A>
-    ALWAYS_INLINE static inline void FastPathPermutationSort_P1(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit)
+    ALWAYS_INLINE static inline void FastPathPermutationSort_P1(const FastSortDesc & desc, IColumn::Permutation & perm, size_t limit)
     {
         constexpr size_t index = 1;
 
@@ -377,7 +377,7 @@ struct FastPathPermutationSort<2>
 #undef M
     }
 
-    void operator()(const CollatorDesc & desc, IColumn::Permutation & perm, size_t limit) const
+    void operator()(const FastSortDesc & desc, IColumn::Permutation & perm, size_t limit) const
     {
         constexpr size_t index = 0;
 
@@ -430,7 +430,7 @@ void sortBlock(Block & block, const SortDescription & description, size_t limit)
             limit = 0;
 
         ColumnsWithSortDescriptions columns_with_sort_desc = getColumnsWithSortDescription(block, description);
-        const auto collator_desc = CollatorDesc{columns_with_sort_desc};
+        const auto collator_desc = FastSortDesc{columns_with_sort_desc};
         if (collator_desc.can_use_fast_path)
         {
             assert(collator_desc.fast_path_cnt == max_fast_path_num);
