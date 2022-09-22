@@ -1010,7 +1010,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
         {
             // When split point is not specified, there are some preconditions in order to use logical split.
             if (!dm_context.enable_logical_split //
-                || segment_snap->stable->getPacks() <= 3 //
+                || segment_snap->stable->getDMFilesPacks() <= 3 //
                 || segment_snap->delta->getRows() > segment_snap->stable->getRows())
             {
                 try_split_mode = SplitMode::Physical;
@@ -1565,18 +1565,27 @@ String Segment::simpleInfo() const
 
 String Segment::info() const
 {
-    return fmt::format("<segment_id={} epoch={} range={}{} next_segment_id={} delta_rows={} delta_bytes={} delta_deletes={} stable_file={} stable_rows={} stable_bytes={}>",
+    return fmt::format("<segment_id={} epoch={} range={}{} next_segment_id={} "
+                       "delta_rows={} delta_bytes={} delta_deletes={} "
+                       "stable_file={} stable_rows={} stable_bytes={} "
+                       "dmf_rows={} dmf_bytes={} dmf_packs={}>",
                        segment_id,
                        epoch,
                        rowkey_range.toDebugString(),
                        hasAbandoned() ? " abandoned=true" : "",
                        next_segment_id,
+
                        delta->getRows(),
                        delta->getBytes(),
                        delta->getDeletes(),
+
                        stable->getDMFilesString(),
                        stable->getRows(),
-                       stable->getBytes());
+                       stable->getBytes(),
+
+                       stable->getDMFilesRows(),
+                       stable->getDMFilesBytes(),
+                       stable->getDMFilesPacks());
 }
 
 String Segment::simpleInfo(const std::vector<SegmentPtr> & segments)
