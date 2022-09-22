@@ -197,19 +197,19 @@ bool SegmentReadTaskScheduler::schedule()
     Stopwatch sw_sche_all;
     std::lock_guard lock(mtx);
     Stopwatch sw_do_sche_all;
-    static constexpr size_t max_sche_count = 64;
+    static constexpr size_t max_sche_count = 8;
     auto pool_count = read_pools.size();
     auto sche_count = std::min(pool_count, max_sche_count);
     bool run_sche = false;
     size_t count = 0;
     while (count < sche_count)
     {
+        count++;
         Stopwatch sw_sche_once;
         MergedTaskPtr merged_task;
         std::tie(merged_task, run_sche) = scheduleMergedTask();
         if (merged_task != nullptr)
         {
-            count++;
             auto elapsed_ms = sw_sche_once.elapsedMilliseconds();
             if (elapsed_ms >= 5)
             {
