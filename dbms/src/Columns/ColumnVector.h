@@ -48,9 +48,9 @@ struct CompareHelper
 template <>
 struct CompareHelper<Null>
 {
-    static bool less(Null, Null, int) { return false;}
-    static bool greater(Null, Null, int) { return false;}
-    static int compare(Null, Null, int) { return 0;}
+    static bool less(Null, Null, int) { return false; }
+    static bool greater(Null, Null, int) { return false; }
+    static int compare(Null, Null, int) { return 0; }
 };
 
 template <typename T>
