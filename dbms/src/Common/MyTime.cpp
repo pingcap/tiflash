@@ -56,14 +56,23 @@ int32_t adjustYear(int32_t year)
     return year;
 }
 
-void scanTimeArgs(const std::vector<String> & seps, std::initializer_list<int *> && list)
+bool scanTimeArgs(const std::vector<String> & seps, std::initializer_list<int *> && list)
 {
     int i = 0;
-    for (auto * ptr : list)
+    try
     {
-        *ptr = std::stoi(seps[i]);
-        i++;
+        for (auto * ptr : list)
+        {
+            *ptr = std::stoi(seps[i]);
+            i++;
+        }
     }
+    catch (std::exception & e)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 // find index of fractional point.
@@ -545,14 +554,131 @@ const String & MyTimeBase::monthName() const
 
 bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
 {
-    if (year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59)
+    return month != 0 && day != 0 && checkTimeValidAllowMonthAndDayZero(year, month, day, hour, minute, second);
+}
+
+bool checkTimeValidAllowMonthAndDayZero(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second)
+{
+    if (year > 9999 || month < 0 || month > 12 || day < 0 || day > 31 || hour > 23 || minute > 59 || second > 59)
     {
         return false;
     }
     return day <= getLastDay(year, month);
 }
 
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, bool needCheckTimeValid)
+bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32)
+{
+    return true;
+}
+
+// Return true if the time is invalid.
+inline bool getDatetime(const Int64 & num, MyDateTime & result)
+{
+    UInt64 ymd = num / 1000000;
+    UInt64 hms = num - ymd * 1000000;
+
+    UInt64 year = ymd / 10000;
+    ymd %= 10000;
+    UInt64 month = ymd / 100;
+    UInt64 day = ymd % 100;
+
+    UInt64 hour = hms / 10000;
+    hms %= 10000;
+    UInt64 minute = hms / 100;
+    UInt64 second = hms % 100;
+
+    if (toCoreTimeChecked(year, month, day, hour, minute, second, 0, result))
+    {
+        return true;
+    }
+    return !result.isValid(true, false);
+}
+
+// Convert a integer number to DateTime and return true if the result is NULL.
+// If number is invalid(according to SQL_MODE), return NULL and handle the error with DAGContext.
+// This function may throw exception.
+inline bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDate)
+{
+    MyDateTime datetime(0);
+    if (number == 0)
+    {
+        if (allowZeroDate)
+        {
+            result = datetime;
+            return false;
+        }
+        return true;
+    }
+
+    // datetime type
+    if (number >= 10000101000000)
+    {
+        return getDatetime(number, result);
+    }
+
+    // check MMDD
+    if (number < 101)
+    {
+        return true;
+    }
+
+    // check YYMMDD: 2000-2069
+    if (number <= 69 * 10000 + 1231)
+    {
+        number = (number + 20000000) * 1000000;
+        return getDatetime(number, result);
+    }
+
+    if (number < 70 * 10000 + 101)
+    {
+        return true;
+    }
+
+    // check YYMMDD
+    if (number <= 991231)
+    {
+        number = (number + 19000000) * 1000000;
+        return getDatetime(number, result);
+    }
+
+    // check hour/min/second
+    if (number <= 99991231)
+    {
+        number *= 1000000;
+        return getDatetime(number, result);
+    }
+
+    // check MMDDHHMMSS
+    if (number < 101000000)
+    {
+        return true;
+    }
+
+    // check YYMMDDhhmmss: 2000-2069
+    if (number <= 69 * 10000000000 + 1231235959)
+    {
+        number += 20000000000000;
+        return getDatetime(number, result);
+    }
+
+    // check YYYYMMDDhhmmss
+    if (number < 70 * 10000000000 + 101000000)
+    {
+        return true;
+    }
+
+    // check YYMMDDHHMMSS
+    if (number <= 991231235959)
+    {
+        number += 19000000000000;
+        return getDatetime(number, result);
+    }
+
+    return getDatetime(number, result);
+}
+
+// isFloat is true means that the input string is float format like "1212.111"
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc, bool isFloat)
 {
     Int32 year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0, delta_hour = 0, delta_minute = 0;
 
@@ -573,7 +699,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         return seps.size() > 5 || (seps.size() == 1 && seps[0].size() > 4);
     };
 
-    if (!frac_str.empty())
+    if (!frac_str.empty() && !isFloat)
     {
         if (!no_absorb(seps))
         {
@@ -607,6 +733,24 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     case 1:
     {
         size_t l = seps[0].size();
+        if (isFloat)
+        {
+            MyDateTime date_time(0);
+            if (seps[0] == "0")
+            {
+                return {date_time.toPackedUInt(), is_date};
+            }
+            if (numberToDateTime(std::stoll(seps[0]), date_time))
+            {
+                return {Field(), is_date};
+            }
+            std::tie(year, month, day, hour, minute, second) = std::tuple(date_time.year, date_time.month, date_time.day, date_time.hour, date_time.minute, date_time.second);
+            if (l >= 9 && l <= 14)
+            {
+                hhmmss = true;
+            }
+            break;
+        }
         switch (l)
         {
         case 14: // YYYYMMDDHHMMSS
@@ -669,7 +813,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         default:
         {
-            throw TiFlashException("Wrong datetime format: " + str, Errors::Types::WrongValue);
+            return {Field(), is_date};
         }
         }
         if (l == 5 || l == 6 || l == 8)
@@ -719,47 +863,51 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
         if (truncated_or_incorrect)
         {
-            throw TiFlashException("Datetime truncated: " + str, Errors::Types::Truncated);
+            return {Field(), is_date};
         }
         break;
     }
     case 3:
     {
         // YYYY-MM-DD
-        scanTimeArgs(seps, {&year, &month, &day});
+        if (!scanTimeArgs(seps, {&year, &month, &day}))
+            return {Field(), is_date};
         is_date = true;
         break;
     }
     case 4:
     {
         // YYYY-MM-DD HH
-        scanTimeArgs(seps, {&year, &month, &day, &hour});
+        if (!scanTimeArgs(seps, {&year, &month, &day, &hour}))
+            return {Field(), is_date};
         break;
     }
     case 5:
     {
         // YYYY-MM-DD HH-MM
-        scanTimeArgs(seps, {&year, &month, &day, &hour, &minute});
+        if (!scanTimeArgs(seps, {&year, &month, &day, &hour, &minute}))
+            return {Field(), is_date};
         break;
     }
     case 6:
     {
         // We don't have fractional seconds part.
         // YYYY-MM-DD HH-MM-SS
-        scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second});
+        if (!scanTimeArgs(seps, {&year, &month, &day, &hour, &minute, &second}))
+            return {Field(), is_date};
         hhmmss = true;
         break;
     }
     default:
     {
-        throw Exception("Wrong datetime format");
+        return {Field(), is_date};
     }
     }
 
     // If str is sepereated by delimiters, the first one is year, and if the year is 2 digit,
     // we should adjust it.
     // TODO: adjust year is very complex, now we only consider the simplest way.
-    if (seps[0].size() == 2)
+    if (seps[0].size() <= 2 && !isFloat)
     {
         if (year == 0 && month == 0 && day == 0 && hour == 0 && minute == 0 && second == 0 && frac_str.empty())
         {
@@ -807,9 +955,9 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         }
     }
 
-    if (needCheckTimeValid && !checkTimeValid(year, month, day, hour, minute, second))
+    if (!checkTimeFunc(year, month, day, hour, minute, second))
     {
-        throw Exception("Wrong datetime format");
+        return {Field(), is_date};
     }
 
     MyDateTime result(year, month, day, hour, minute, second, micro_second);
@@ -818,7 +966,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
     {
         if (!hhmmss)
         {
-            throw TiFlashException("Invalid datetime value: " + str, Errors::Types::WrongValue);
+            return {Field(), is_date};
         }
         if (!tz_hour.empty())
         {
@@ -832,7 +980,7 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
         if (delta_hour > 14 || delta_minute > 59 || (delta_hour == 14 && delta_minute != 0)
             || (tz_sign == "-" && delta_hour == 0 && delta_minute == 0))
         {
-            throw TiFlashException("Invalid datetime value: " + str, Errors::Types::WrongValue);
+            return {Field(), is_date};
         }
         // by default, if the temporal string literal does not contain timezone information, it will be in the timezone
         // specified by the time_zone system variable. However, if the timezone is specified in the string literal, we
@@ -850,9 +998,14 @@ std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t 
 }
 
 // TODO: support parse time from float string
-Field parseMyDateTime(const String & str, int8_t fsp, bool needCheckTimeValid)
+Field parseMyDateTime(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc)
 {
-    return parseMyDateTimeAndJudgeIsDate(str, fsp, needCheckTimeValid).first;
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc).first;
+}
+
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, CheckTimeFunc checkTimeFunc)
+{
+    return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc, true).first;
 }
 
 String MyDateTime::toString(int fsp) const
@@ -1074,59 +1227,59 @@ size_t maxFormattedDateTimeStringLength(const String & format)
     return std::max<size_t>(result, 1);
 }
 
-void MyTimeBase::check(bool allow_zero_in_date, bool allow_invalid_date) const
+bool MyTimeBase::isValid(bool allow_zero_in_date, bool allow_invalid_date) const
 {
     if (!(year == 0 && month == 0 && day == 0))
     {
         if (!allow_zero_in_date && (month == 0 || day == 0))
         {
-            throw TiFlashException(
-                fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day),
-                Errors::Types::WrongValue);
+            return false;
         }
     }
 
-    if (year >= 9999 || month > 12)
+    if (year > 9999 || month > 12)
     {
-        throw TiFlashException("Incorrect time value", Errors::Types::WrongValue);
+        return false;
     }
 
     UInt8 max_day = 31;
     if (!allow_invalid_date)
     {
-        if (month < 1)
-        {
-            throw TiFlashException(fmt::format("Incorrect time value: month {}", month), Errors::Types::WrongValue);
-        }
         constexpr static UInt8 max_days_in_month[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         static auto is_leap_year = [](UInt16 _year) {
             return ((_year % 4 == 0) && (_year % 100 != 0)) || (_year % 400 == 0);
         };
-        max_day = max_days_in_month[month - 1];
-        if (month == 2 && is_leap_year(year))
+        if (allow_zero_in_date && month == 0)
         {
-            max_day = 29;
+            max_day = 31;
+        }
+        else
+        {
+            max_day = max_days_in_month[month - 1]; // NOLINT
+            if (month == 2 && is_leap_year(year))
+            {
+                max_day = 29;
+            }
         }
     }
     if (day > max_day)
     {
-        throw TiFlashException(
-            fmt::format("Incorrect datetime value: {0:04d}-{1:02d}-{2:02d}", year, month, day),
-            Errors::Types::WrongValue);
+        return false;
     }
 
     if (hour < 0 || hour >= 24)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
     if (minute >= 60)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
     if (second >= 60)
     {
-        throw TiFlashException("Incorrect datetime value", Errors::Types::WrongValue);
+        return false;
     }
+    return true;
 }
 
 bool toCoreTimeChecked(const UInt64 & year, const UInt64 & month, const UInt64 & day, const UInt64 & hour, const UInt64 & minute, const UInt64 & second, const UInt64 & microsecond, MyDateTime & result)

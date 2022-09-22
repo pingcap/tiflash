@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FmtUtils.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadBuffer.h>
@@ -31,6 +32,32 @@ namespace ErrorCodes
 extern const int THERE_IS_NO_COLUMN;
 }
 
+String dumpJsonStructure(const NamesAndTypes & names_and_types)
+{
+    FmtBuffer bf;
+    bf.append("[");
+    bf.joinStr(
+        names_and_types.cbegin(),
+        names_and_types.cend(),
+        [](const auto & name_and_type, FmtBuffer & fb) {
+            fb.fmtAppend(
+                R"json({{"name":"{}","type":{}}})json",
+                name_and_type.name,
+                (name_and_type.type ? "\"" + name_and_type.type->getName() + "\"" : "null"));
+        },
+        ", ");
+    bf.append("]");
+    return bf.toString();
+}
+
+Names toNames(const NamesAndTypes & names_and_types)
+{
+    Names names;
+    names.reserve(names_and_types.size());
+    for (const auto & name_and_type : names_and_types)
+        names.push_back(name_and_type.name);
+    return names;
+}
 
 void NamesAndTypesList::readText(ReadBuffer & buf)
 {

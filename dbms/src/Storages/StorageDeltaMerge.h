@@ -14,12 +14,11 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Defines.h>
 #include <Core/SortDescription.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
@@ -27,18 +26,15 @@
 
 #include <ext/shared_ptr_helper.h>
 
-namespace Poco
-{
-class Logger;
-} // namespace Poco
-
 namespace DB
 {
 namespace DM
 {
 struct RowKeyRange;
+struct RowKeyValue;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+struct ExternalDTFileInfo;
 } // namespace DM
 
 class StorageDeltaMerge
@@ -85,13 +81,13 @@ public:
     /// If there is no segment found by the start key, nullopt is returned.
     ///
     /// This function is called when using `ALTER TABLE [TABLE] COMPACT ...` from TiDB.
-    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread);
+    std::optional<DM::RowKeyRange> mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key);
 
     void deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings);
 
     void ingestFiles(
         const DM::RowKeyRange & range,
-        const std::vector<UInt64> & file_ids,
+        const std::vector<DM::ExternalDTFileInfo> & external_files,
         bool clear_data_in_range,
         const Settings & settings);
 
@@ -146,6 +142,8 @@ public:
     {
         return getAndMaybeInitStore();
     }
+
+    DM::DeltaMergeStorePtr getStoreIfInited();
 
     bool isCommonHandle() const override { return is_common_handle; }
 

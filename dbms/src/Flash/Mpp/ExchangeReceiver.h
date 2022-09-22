@@ -38,7 +38,7 @@ struct ReceivedMessage
     size_t source_index;
     String req_info;
     // shared_ptr<const MPPDataPacket> is copied to make sure error_ptr, resp_ptr and chunks are valid.
-    const std::shared_ptr<const MPPDataPacket> packet;
+    const std::shared_ptr<DB::TrackedMppDataPacket> packet;
     const mpp::Error * error_ptr;
     const String * resp_ptr;
     std::vector<const String *> chunks;
@@ -46,7 +46,7 @@ struct ReceivedMessage
     // Constructor that move chunks.
     ReceivedMessage(size_t source_index_,
                     const String & req_info_,
-                    const std::shared_ptr<const MPPDataPacket> & packet_,
+                    const std::shared_ptr<DB::TrackedMppDataPacket> & packet_,
                     const mpp::Error * error_ptr_,
                     const String * resp_ptr_,
                     std::vector<const String *> && chunks_)
@@ -129,9 +129,12 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count);
+        uint64_t fine_grained_shuffle_stream_count,
+        bool setup_conn_manually = false);
 
     ~ExchangeReceiverBase();
+
+    void setUpConnection();
 
     void cancel();
 
@@ -164,9 +167,9 @@ public:
     }
 
 private:
+    std::shared_ptr<MemoryTracker> mem_tracker;
     using Request = typename RPCContext::Request;
 
-    void setUpConnection();
     // Template argument enable_fine_grained_shuffle will be setup properly in setUpConnection().
     template <bool enable_fine_grained_shuffle>
     void readLoop(const Request & req);
@@ -174,7 +177,7 @@ private:
     void reactor(const std::vector<Request> & async_requests);
 
     bool setEndState(ExchangeReceiverState new_state);
-    ExchangeReceiverState getState();
+    String getStatusString();
 
     DecodeDetail decodeChunks(
         const std::shared_ptr<ReceivedMessage> & recv_msg,
@@ -189,6 +192,12 @@ private:
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
 
+    ExchangeReceiverResult toDecodeResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        const std::shared_ptr<ReceivedMessage> & recv_msg);
+
+private:
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;

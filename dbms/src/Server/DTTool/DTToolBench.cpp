@@ -90,7 +90,10 @@ ColumnDefinesPtr createColumnDefines(size_t column_number)
 
 String createRandomString(std::size_t limit, std::mt19937_64 & eng, size_t & acc)
 {
-    std::uniform_int_distribution<char> dist('a', 'z');
+    // libc++-15 forbids instantiate `std::uniform_int_distribution<char>`.
+    // see https://github.com/llvm/llvm-project/blob/bfcd536a8ef6b1d6e9dd211925be3b078d06fe77/libcxx/include/__random/is_valid.h#L28
+    // and https://github.com/llvm/llvm-project/blob/bfcd536a8ef6b1d6e9dd211925be3b078d06fe77/libcxx/include/__random/uniform_int_distribution.h#L162
+    std::uniform_int_distribution<uint8_t> dist('a', 'z');
     std::string buffer((eng() % limit) + 1, 0);
     for (auto & i : buffer)
     {
@@ -342,8 +345,7 @@ int benchEntry(const std::vector<std::string> & opts)
             *db_context,
             *path_pool,
             *storage_pool,
-            /*hash_salt*/ 0,
-            0,
+            /*min_version_*/ 0,
             dm_settings.not_compress_columns,
             false,
             1,

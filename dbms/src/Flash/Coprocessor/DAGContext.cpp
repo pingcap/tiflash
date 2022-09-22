@@ -223,8 +223,12 @@ void DAGContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_r
 {
     if (!isMPPTask())
         return;
-    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
-    return mpp_receiver_set->addCoprocessorReader(coprocessor_reader);
+    coprocessor_readers.push_back(coprocessor_reader);
+}
+
+std::vector<CoprocessorReaderPtr> & DAGContext::getCoprocessorReaders()
+{
+    return coprocessor_readers;
 }
 
 bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
@@ -235,5 +239,9 @@ bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
 const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_id) const
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
+}
+const MPPReceiverSetPtr & DAGContext::getMppReceiverSet() const
+{
+    return mpp_receiver_set;
 }
 } // namespace DB

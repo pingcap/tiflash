@@ -26,6 +26,8 @@ public:
     {
         ExecutorTest::initializeContext();
 
+        enablePlanner(false);
+
         context.addMockTable({"test_db", "test_table"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"r_a", TiDB::TP::TypeLong}, {"r_b", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
@@ -403,23 +405,23 @@ try
         auto request = table1.join(
                                  table2.join(
                                      table3.join(table4,
-                                                 {col("join_c")},
-                                                 tipb::JoinType::TypeLeftOuterJoin),
-                                     {col("join_c")},
-                                     tipb::JoinType::TypeLeftOuterJoin),
-                                 {col("join_c")},
-                                 tipb::JoinType::TypeLeftOuterJoin)
+                                                 tipb::JoinType::TypeLeftOuterJoin,
+                                                 {col("join_c")}),
+                                     tipb::JoinType::TypeLeftOuterJoin,
+                                     {col("join_c")}),
+                                 tipb::JoinType::TypeLeftOuterJoin,
+                                 {col("join_c")})
                            .build(context);
 
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -445,23 +447,23 @@ CreatingSets
         auto request = receiver1.join(
                                     receiver2.join(
                                         receiver3.join(receiver4,
-                                                       {col("join_c")},
-                                                       tipb::JoinType::TypeLeftOuterJoin),
-                                        {col("join_c")},
-                                        tipb::JoinType::TypeLeftOuterJoin),
-                                    {col("join_c")},
-                                    tipb::JoinType::TypeLeftOuterJoin)
+                                                       tipb::JoinType::TypeLeftOuterJoin,
+                                                       {col("join_c")}),
+                                        tipb::JoinType::TypeLeftOuterJoin,
+                                        {col("join_c")}),
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")})
                            .build(context);
 
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -487,24 +489,24 @@ CreatingSets
         auto request = receiver1.join(
                                     receiver2.join(
                                         receiver3.join(receiver4,
-                                                       {col("join_c")},
-                                                       tipb::JoinType::TypeLeftOuterJoin),
-                                        {col("join_c")},
-                                        tipb::JoinType::TypeLeftOuterJoin),
-                                    {col("join_c")},
-                                    tipb::JoinType::TypeLeftOuterJoin)
+                                                       tipb::JoinType::TypeLeftOuterJoin,
+                                                       {col("join_c")}),
+                                        tipb::JoinType::TypeLeftOuterJoin,
+                                        {col("join_c")}),
+                                    tipb::JoinType::TypeLeftOuterJoin,
+                                    {col("join_c")})
                            .exchangeSender(tipb::PassThrough)
                            .build(context);
 
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = exchange_receiver_3>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
  Union x 2: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = Join_4>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      Expression: <remove useless column after join>
@@ -533,14 +535,14 @@ try
 
         auto request = table1.join(
                                  table2,
-                                 {col("join_c")},
-                                 tipb::JoinType::TypeLeftOuterJoin)
+                                 tipb::JoinType::TypeLeftOuterJoin,
+                                 {col("join_c")})
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Left
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
@@ -562,14 +564,14 @@ CreatingSets
 
         auto request = table1.join(
                                  table2,
-                                 {col("join_c")},
-                                 tipb::JoinType::TypeRightOuterJoin)
+                                 tipb::JoinType::TypeRightOuterJoin,
+                                 {col("join_c")})
                            .aggregation({Max(col("r_a"))}, {col("join_c")})
                            .build(context);
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
+  HashJoinBuild x 10: <join build, build_side_root_executor_id = table_scan_1>, join_kind = Right
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockTableScan
@@ -594,8 +596,8 @@ CreatingSets
 
         auto request = receiver1.join(
                                     receiver2,
-                                    {col("join_c")},
-                                    tipb::JoinType::TypeRightOuterJoin)
+                                    tipb::JoinType::TypeRightOuterJoin,
+                                    {col("join_c")})
                            .aggregation({Sum(col("r_a"))}, {col("join_c")})
                            .exchangeSender(tipb::PassThrough)
                            .limit(10)
@@ -603,7 +605,7 @@ CreatingSets
         String expected = R"(
 CreatingSets
  Union: <for join>
-  HashJoinBuildBlockInputStream x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
+  HashJoinBuild x 20: <join build, build_side_root_executor_id = exchange_receiver_1>, join_kind = Right
    Expression: <append join key and join filters for build side>
     Expression: <final projection>
      MockExchangeReceiver
@@ -624,6 +626,51 @@ CreatingSets
                MockExchangeReceiver
            Expression x 20: <remove useless column after join>
             NonJoined: <add stream with non_joined_data if full_or_right_join>)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
+    }
+}
+CATCH
+
+TEST_F(InterpreterExecuteTest, ListBase)
+try
+{
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .limit(10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Limit, limit = 10
+ Expression: <final projection>
+  Aggregating
+   Concat
+    Expression: <before aggregation>
+     Filter: <execute where>
+      MockTableScan)";
+        ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 1);
+    }
+
+    {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .filter(eq(col("s1"), col("s2")))
+                           .aggregation(Max(col("s1")), col("s2"))
+                           .topN("s2", false, 10)
+                           .build(context, DAGRequestType::list);
+        String expected = R"(
+Union: <for test>
+ SharedQuery x 20: <restore concurrency>
+  Expression: <final projection>
+   MergeSorting, limit = 10
+    Union: <for partial order>
+     PartialSorting x 20: limit = 10
+      SharedQuery: <restore concurrency>
+       ParallelAggregating, max_threads: 20, final: true
+        Expression x 20: <before aggregation>
+         Filter: <execute where>
+          MockTableScan)";
         ASSERT_BLOCKINPUTSTREAM_EQAUL(expected, request, 20);
     }
 }

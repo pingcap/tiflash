@@ -27,6 +27,8 @@ if(CMAKE_PREFIX_PATH)
             "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
 endif()
 
+include (cmake/find_rust.cmake)
+
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Require at least gcc 7
@@ -467,9 +469,18 @@ endif()
 option (ENABLE_FAILPOINTS "Enables failpoints injection" ${ENABLE_FAILPOINTS_DEFAULT})
 if (ENABLE_FAILPOINTS)
     message (STATUS "Failpoints are enabled")
-else (ENABLE_FAILPOINTS)
+else ()
     message (STATUS "Failpoints are disabled")
-endif (ENABLE_FAILPOINTS)
+endif ()
+
+# Since JEMALLOC_NARENAS_COUNT is introduced for very limited usage, default to -1
+set (JEMALLOC_NARENAS_DEFAULT -1)
+option (JEMALLOC_NARENAS "Set Jemalloc narenas " ${JEMALLOC_NARENAS_DEFAULT})
+if (JEMALLOC_NARENAS LESS_EQUAL 0)
+    message (STATUS "No jemalloc narenas settings")
+else ()
+    message (STATUS "Set jemalloc narenas ${JEMALLOC_NARENAS}")
+endif ()
 
 # Flags for test coverage
 option (TEST_COVERAGE "Enables flags for test coverage" OFF)
@@ -501,6 +512,11 @@ if (ARCH_AMD64)
         add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=1)
     else()
         add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+    endif()
+
+    check_cxx_compiler_flag("-mmovbe" TIFLASH_COMPILER_MOVBE_SUPPORT)
+    if (TIFLASH_COMPILER_MOVBE_SUPPORT)
+        set(COMPILER_MOVBE_FLAG "-mmovbe")
     endif()
 else()
     add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)

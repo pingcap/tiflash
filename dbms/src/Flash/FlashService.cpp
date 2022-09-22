@@ -16,11 +16,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadMetricUtil.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/VariantOp.h>
 #include <Common/setThreadName.h>
-#include <Core/Types.h>
 #include <Flash/BatchCoprocessorHandler.h>
-#include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
@@ -42,17 +40,37 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
+#define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
+    catch (Exception & e)                                                                                                                   \
+    {                                                                                                                                       \
+        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());                                                                                \
+        return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message())); \
+    }                                                                                                                                       \
+    catch (const std::exception & e)                                                                                                        \
+    {                                                                                                                                       \
+        LOG_FMT_ERROR(log, "std exception: {}", e.what());                                                                                  \
+        return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));                    \
+    }                                                                                                                                       \
+    catch (...)                                                                                                                             \
+    {                                                                                                                                       \
+        LOG_FMT_ERROR(log, "other exception");                                                                                              \
+        return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));           \
+    }
+
 constexpr char tls_err_msg[] = "common name check is failed";
 
-FlashService::FlashService(const TiFlashSecurityConfig & security_config_, Context & context_)
-    : security_config(security_config_)
-    , context(context_)
-    , log(&Poco::Logger::get("FlashService"))
-    , manual_compact_manager(std::make_unique<Management::ManualCompactManager>(
-          context.getGlobalContext(),
-          context.getGlobalContext().getSettingsRef()))
+FlashService::FlashService() = default;
+
+void FlashService::init(const TiFlashSecurityConfig & security_config_, Context & context_)
 {
-    auto settings = context.getSettingsRef();
+    security_config = &security_config_;
+    context = &context_;
+    log = &Poco::Logger::get("FlashService");
+    manual_compact_manager = std::make_unique<Management::ManualCompactManager>(
+        context->getGlobalContext(),
+        context->getGlobalContext().getSettingsRef());
+
+    auto settings = context->getSettingsRef();
     enable_local_tunnel = settings.enable_local_tunnel;
     enable_async_grpc_client = settings.enable_async_grpc_client;
     const size_t default_size = 2 * getNumberOfPhysicalCPUCores();
@@ -87,7 +105,8 @@ grpc::Status FlashService::Coprocessor(
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
+    // For coprocessor test, we don't care about security config.
+    if (unlikely(!context->isCopTest() && !security_config->checkGrpcContext(grpc_context)))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
@@ -101,13 +120,15 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
+    context->setMockStorage(mock_storage);
+
     grpc::Status ret = executeInThreadPool(*cop_pool, [&] {
-        auto [context, status] = createDBContext(grpc_context);
+        auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
             return status;
         }
-        CoprocessorContext cop_context(*context, request->context(), *grpc_context);
+        CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
         CoprocessorHandler cop_handler(cop_context, request, response);
         return cop_handler.execute();
     });
@@ -116,12 +137,12 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService::BatchCoprocessor(::grpc::ServerContext * grpc_context, const ::coprocessor::BatchRequest * request, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer)
+grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, const coprocessor::BatchRequest * request, grpc::ServerWriter<coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
+    if (!security_config->checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
@@ -136,12 +157,12 @@ grpc::Status FlashService::Coprocessor(
     });
 
     grpc::Status ret = executeInThreadPool(*batch_cop_pool, [&] {
-        auto [context, status] = createDBContext(grpc_context);
+        auto [db_context, status] = createDBContext(grpc_context);
         if (!status.ok())
         {
             return status;
         }
-        CoprocessorContext cop_context(*context, request->context(), *grpc_context);
+        CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
         BatchCoprocessorHandler cop_handler(cop_context, request, writer);
         return cop_handler.execute();
     });
@@ -150,15 +171,15 @@ grpc::Status FlashService::Coprocessor(
     return ret;
 }
 
-::grpc::Status FlashService::DispatchMPPTask(
-    ::grpc::ServerContext * grpc_context,
-    const ::mpp::DispatchTaskRequest * request,
-    ::mpp::DispatchTaskResponse * response)
+grpc::Status FlashService::DispatchMPPTask(
+    grpc::ServerContext * grpc_context,
+    const mpp::DispatchTaskRequest * request,
+    mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
     // For MPP test, we don't care about security config.
-    if (!context.isMPPTest() && !security_config.checkGrpcContext(grpc_context))
+    if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
@@ -181,59 +202,53 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    auto [context, status] = createDBContext(grpc_context);
+    auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
         return status;
     }
+    db_context->setMockStorage(mock_storage);
+    db_context->setMockMPPServerInfo(mpp_test_info);
 
     MPPHandler mpp_handler(*request);
-    return mpp_handler.execute(context, response);
+    return mpp_handler.execute(db_context, response);
 }
 
-::grpc::Status FlashService::IsAlive(::grpc::ServerContext * grpc_context [[maybe_unused]],
-                                     const ::mpp::IsAliveRequest * request [[maybe_unused]],
-                                     ::mpp::IsAliveResponse * response [[maybe_unused]])
+grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_unused]],
+                                   const mpp::IsAliveRequest * request [[maybe_unused]],
+                                   mpp::IsAliveResponse * response [[maybe_unused]])
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
+    if (!security_config->checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
 
-    auto [context, status] = createDBContext(grpc_context);
+    auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
         return status;
     }
 
-    auto & tmt_context = context->getTMTContext();
+    auto & tmt_context = db_context->getTMTContext();
     response->set_available(tmt_context.checkRunning());
-    return ::grpc::Status::OK;
+    return grpc::Status::OK;
 }
 
-::grpc::Status returnStatus(EstablishCallData * calldata, const grpc::Status & status)
-{
-    if (calldata)
-    {
-        calldata->writeDone(status);
-    }
-    return status;
-}
-
-::grpc::Status FlashService::establishMPPConnectionSyncOrAsync(::grpc::ServerContext * grpc_context,
-                                                               const ::mpp::EstablishMPPConnectionRequest * request,
-                                                               ::grpc::ServerWriter<::mpp::MPPDataPacket> * sync_writer,
-                                                               EstablishCallData * calldata)
+std::variant<grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(grpc::ServerContext * grpc_context,
+                                                                                        const mpp::EstablishMPPConnectionRequest * request,
+                                                                                        grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer,
+                                                                                        IAsyncCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    // Establish a pipe for data transferring. The pipes has registered by the task in advance.
+    // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
     LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
+    // For MPP test, we don't care about security config.
+    if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
     {
-        return returnStatus(calldata, grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg));
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
     GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
@@ -253,60 +268,32 @@ grpc::Status FlashService::Coprocessor(
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
-    auto [context, status] = createDBContext(grpc_context);
+    auto [db_context, status] = createDBContext(grpc_context);
     if (!status.ok())
     {
-        return returnStatus(calldata, status);
+        return status;
     }
 
-    auto & tmt_context = context->getTMTContext();
+    auto & tmt_context = db_context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
     std::chrono::seconds timeout(10);
-    std::string err_msg;
-    MPPTunnelPtr tunnel = nullptr;
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    if (tunnel == nullptr)
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
-        if (sender_task != nullptr)
-        {
-            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
-        }
-        if (tunnel == nullptr)
-        {
-            if (calldata)
-            {
-                LOG_ERROR(log, err_msg);
-                // In Async version, writer::Write() return void.
-                // So the way to track Write fail and return grpc::StatusCode::UNKNOWN is to catch the exeception.
-                calldata->writeErr(getPacketWithError(err_msg));
-                return grpc::Status::OK;
-            }
-            else
-            {
-                LOG_ERROR(log, err_msg);
-                if (sync_writer->Write(getPacketWithError(err_msg)))
-                {
-                    return grpc::Status::OK;
-                }
-                else
-                {
-                    LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
-                    return grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
-                }
-            }
-        }
+        LOG_ERROR(log, err_msg);
+        return err_msg;
     }
-    Stopwatch stopwatch;
-    if (calldata)
+
+    if (call_data)
     {
-        // In async mode, this function won't wait for the request done and the finish event is handled in EstablishCallData.
-        tunnel->connect(calldata);
-        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully in async way");
+        // In async mode, this function won't wait for the request done and the finish event is handled in IAsyncCallData.
+        tunnel->connectAsync(call_data);
     }
     else
     {
+        Stopwatch stopwatch;
         SyncPacketWriter writer(sync_writer);
         tunnel->connect(&writer);
-        LOG_FMT_DEBUG(tunnel->getLogger(), "connect tunnel successfully and begin to wait");
         tunnel->waitForFinish();
         LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     }
@@ -316,16 +303,39 @@ grpc::Status FlashService::Coprocessor(
     return grpc::Status::OK;
 }
 
-::grpc::Status FlashService::CancelMPPTask(
-    ::grpc::ServerContext * grpc_context,
-    const ::mpp::CancelTaskRequest * request,
-    ::mpp::CancelTaskResponse * response)
+grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer)
+{
+    auto res = establishMPPConnectionSyncOrAsync(grpc_context, request, sync_writer, nullptr);
+    grpc::Status status;
+    std::visit(variant_op::overloaded{
+                   [&](grpc::Status & stat) {
+                       status = stat;
+                   },
+                   [&](std::string & err_msg) {
+                       if (!sync_writer->Write(getPacketWithError(err_msg)))
+                       {
+                           status = grpc::Status::OK;
+                       }
+                       else
+                       {
+                           LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
+                           status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+                       }
+                   }},
+               res);
+    return status;
+}
+
+grpc::Status FlashService::CancelMPPTask(
+    grpc::ServerContext * grpc_context,
+    const mpp::CancelTaskRequest * request,
+    mpp::CancelTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
     LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
 
-    if (!security_config.checkGrpcContext(grpc_context))
+    if (!security_config->checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
@@ -338,7 +348,49 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
 
-    auto [context, status] = createDBContext(grpc_context);
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        auto err = std::make_unique<mpp::Error>();
+        err->set_msg("error status");
+        response->set_allocated_error(err.release());
+        return status;
+    }
+    auto & tmt_context = db_context->getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB", AbortType::ONCANCELLATION);
+    return grpc::Status::OK;
+}
+
+std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() const
+{
+    try
+    {
+        /// Create DB context.
+        auto tmp_context = std::make_shared<Context>(*context);
+        tmp_context->setGlobalContext(*context);
+
+        String query_id;
+        tmp_context->setCurrentQueryId(query_id);
+        ClientInfo & client_info = tmp_context->getClientInfo();
+        client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        client_info.interface = ClientInfo::Interface::GRPC;
+
+        String max_threads;
+        tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");
+        tmp_context->setSetting("enable_local_tunnel", enable_local_tunnel ? "true" : "false");
+        tmp_context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
+        return std::make_tuple(tmp_context, grpc::Status::OK);
+    }
+    CATCH_FLASHSERVICE_EXCEPTION
+}
+
+::grpc::Status FlashService::cancelMPPTaskForTest(const ::mpp::CancelTaskRequest * request, ::mpp::CancelTaskResponse * response)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    // CancelMPPTask cancels the query of the task.
+    LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    auto [context, status] = createDBContextForTest();
     if (!status.ok())
     {
         auto err = std::make_unique<mpp::Error>();
@@ -348,7 +400,7 @@ grpc::Status FlashService::Coprocessor(
     }
     auto & tmt_context = context->getTMTContext();
     auto task_manager = tmt_context.getMPPTaskManager();
-    task_manager->cancelMPPQuery(request->meta().start_ts(), "Receive cancel request from TiDB");
+    task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
 }
 
@@ -365,8 +417,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     try
     {
         /// Create DB context.
-        auto tmp_context = std::make_shared<Context>(context);
-        tmp_context->setGlobalContext(context);
+        auto tmp_context = std::make_shared<Context>(*context);
+        tmp_context->setGlobalContext(*context);
 
         /// Set a bunch of client information.
         std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
@@ -381,8 +433,8 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         std::string client_ip = peer.substr(pos + 1);
         Poco::Net::SocketAddress client_address(client_ip);
 
-        // For MPP test, we don't care about security config.
-        if (!context.isMPPTest())
+        // For MPP or Cop test, we don't care about security config.
+        if (likely(!context->isTest()))
             tmp_context->setUser(user, password, client_address, quota_key);
 
         String query_id = getClientMetaVarWithDefault(grpc_context, "query_id", "");
@@ -411,27 +463,13 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         tmp_context->setSetting("enable_async_grpc_client", enable_async_grpc_client ? "true" : "false");
         return std::make_tuple(tmp_context, grpc::Status::OK);
     }
-    catch (Exception & e)
-    {
-        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message()));
-    }
-    catch (const std::exception & e)
-    {
-        LOG_FMT_ERROR(log, "std exception: {}", e.what());
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));
-    }
-    catch (...)
-    {
-        LOG_FMT_ERROR(log, "other exception");
-        return std::make_tuple(std::make_shared<Context>(context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));
-    }
+    CATCH_FLASHSERVICE_EXCEPTION
 }
 
-::grpc::Status FlashService::Compact(::grpc::ServerContext * grpc_context, const ::kvrpcpb::CompactRequest * request, ::kvrpcpb::CompactResponse * response)
+grpc::Status FlashService::Compact(grpc::ServerContext * grpc_context, const kvrpcpb::CompactRequest * request, kvrpcpb::CompactResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    if (!security_config.checkGrpcContext(grpc_context))
+    if (!security_config->checkGrpcContext(grpc_context))
     {
         return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
     }
@@ -439,4 +477,13 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
     return manual_compact_manager->handleRequest(request, response);
 }
 
+void FlashService::setMockStorage(MockStorage & mock_storage_)
+{
+    mock_storage = mock_storage_;
+}
+
+void FlashService::setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_)
+{
+    mpp_test_info = mpp_test_info_;
+}
 } // namespace DB

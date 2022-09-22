@@ -113,8 +113,8 @@ struct MyTimeBase
     std::tuple<int, int> calcWeek(UInt32 mode) const;
 
     // Check validity of time under specified SQL_MODE.
-    // May throw exception.
-    void check(bool allow_zero_in_date, bool allow_invalid_date) const;
+    // return false if time is invalid
+    bool isValid(bool allow_zero_in_date, bool allow_invalid_date) const;
 };
 
 struct MyDateTime : public MyTimeBase
@@ -150,6 +150,8 @@ struct MyDate : public MyTimeBase
     }
 };
 
+bool numberToDateTime(Int64 number, MyDateTime & result, bool allowZeroDate = true);
+
 struct MyDateTimeFormatter
 {
     std::vector<std::function<void(const MyTimeBase & datetime, String & result)>> formatters;
@@ -181,8 +183,19 @@ private:
     std::vector<ParserCallback> parsers;
 };
 
-Field parseMyDateTime(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
-std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = 6, bool needCheckTimeValid = false);
+bool checkTimeValid(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
+bool checkTimeValidAllowMonthAndDayZero(Int32 year, Int32 month, Int32 day, Int32 hour, Int32 minute, Int32 second);
+bool noNeedCheckTime(Int32, Int32, Int32, Int32, Int32, Int32);
+
+using CheckTimeFunc = std::function<bool(Int32, Int32, Int32, Int32, Int32, Int32)>;
+
+static const int8_t DefaultFsp = 6;
+static bool DefaultIsFloat = false;
+static CheckTimeFunc DefaultCheckTimeFunc = noNeedCheckTime;
+
+Field parseMyDateTime(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
+Field parseMyDateTimeFromFloat(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc);
+std::pair<Field, bool> parseMyDateTimeAndJudgeIsDate(const String & str, int8_t fsp = DefaultFsp, CheckTimeFunc checkTimeFunc = DefaultCheckTimeFunc, bool isFloat = DefaultIsFloat);
 
 void convertTimeZone(UInt64 from_time, UInt64 & to_time, const DateLUTImpl & time_zone_from, const DateLUTImpl & time_zone_to, bool throw_exception = false);
 

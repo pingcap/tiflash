@@ -13,10 +13,12 @@
 // limitations under the License.
 
 
+#include <Common/SyncPoint/Ctl.h>
 #include <Encryption/MockKeyManager.h>
 #include <Encryption/PosixRandomAccessFile.h>
 #include <Encryption/RandomAccessFile.h>
 #include <Encryption/RateLimiter.h>
+#include <Storages/Page/ConfigSettings.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/PageStorage.h>
@@ -33,6 +35,9 @@
 #include <TestUtils/MockReadLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
+
+#include <ext/scope_guard.h>
+#include <future>
 
 namespace DB
 {
@@ -1156,16 +1161,37 @@ try
 
     size_t times_remover_called = 0;
 
+    enum
+    {
+        STAGE_SNAP_KEEP = 1,
+        STAGE_SNAP_RELEASED = 2,
+    } test_stage;
+    test_stage = STAGE_SNAP_KEEP;
+
     ExternalPageCallbacks callbacks;
     callbacks.scanner = []() -> ExternalPageCallbacks::PathAndIdsVec {
         return {};
     };
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
+    callbacks.remover = [&times_remover_called, &test_stage](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
         times_remover_called += 1;
-        // 0, 1024 are still alive
-        EXPECT_EQ(living_page_ids.size(), 2);
-        EXPECT_GT(living_page_ids.count(0), 0);
-        EXPECT_GT(living_page_ids.count(1024), 0);
+        switch (test_stage)
+        {
+        case STAGE_SNAP_KEEP:
+        {
+            // 0, 1024 are still alive
+            EXPECT_EQ(living_page_ids.size(), 2);
+            EXPECT_GT(living_page_ids.count(0), 0);
+            EXPECT_GT(living_page_ids.count(1024), 0);
+            break;
+        }
+        case STAGE_SNAP_RELEASED:
+        {
+            /// After `snapshot` released, 1024 should be removed from `living`
+            EXPECT_EQ(living_page_ids.size(), 1);
+            EXPECT_GT(living_page_ids.count(0), 0);
+            break;
+        }
+        }
     };
     callbacks.ns_id = TEST_NAMESPACE_ID;
     page_storage->registerExternalPagesCallbacks(callbacks);
@@ -1207,18 +1233,110 @@ try
 
     /// After `snapshot` released, 1024 should be removed from `living`
     snapshot.reset();
-    callbacks.remover = [&times_remover_called](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> & living_page_ids) -> void {
-        times_remover_called += 1;
-        EXPECT_EQ(living_page_ids.size(), 1);
-        EXPECT_GT(living_page_ids.count(0), 0);
-    };
-    page_storage->unregisterExternalPagesCallbacks(callbacks.ns_id);
-    page_storage->registerExternalPagesCallbacks(callbacks);
+    test_stage = STAGE_SNAP_RELEASED;
     {
         SCOPED_TRACE("gc with snapshot released");
         page_storage->gc();
         EXPECT_EQ(times_remover_called, 3);
     }
+}
+CATCH
+
+TEST_F(PageStorageTest, ConcurrencyAddExtCallbacks)
+try
+{
+    auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
+    ExternalPageCallbacks callbacks;
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return {};
+
+        (*ptr) += 1; // mock access the storage inside callback
+        return {};
+    };
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return;
+
+        (*ptr) += 1; // mock access the storage inside callback
+    };
+    page_storage->registerExternalPagesCallbacks(callbacks);
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr);
+    });
+    sp_gc.waitAndPause();
+
+    // mock table created while gc is running
+    {
+        ExternalPageCallbacks new_callbacks;
+        new_callbacks.ns_id = TEST_NAMESPACE_ID + 1;
+        new_callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+            auto ptr = ptr_weak_ref.lock();
+            if (!ptr)
+                return {};
+
+            (*ptr) += 1; // mock access the storage inside callback
+            return {};
+        };
+        new_callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+            auto ptr = ptr_weak_ref.lock();
+            if (!ptr)
+                return;
+
+            (*ptr) += 1; // mock access the storage inside callback
+        };
+        page_storage->registerExternalPagesCallbacks(new_callbacks);
+    }
+
+    sp_gc.next(); // continue the gc
+    th_gc.wait();
+
+    ASSERT_EQ(*ptr, 100 + 4);
+}
+CATCH
+
+TEST_F(PageStorageTest, ConcurrencyRemoveExtCallbacks)
+try
+{
+    auto ptr = std::make_shared<Int32>(100); // mock the `StorageDeltaMerge`
+    ExternalPageCallbacks callbacks;
+    callbacks.ns_id = TEST_NAMESPACE_ID;
+    callbacks.scanner = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)]() -> ExternalPageCallbacks::PathAndIdsVec {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return {};
+
+        (*ptr) += 1; // mock access the storage inside callback
+        return {};
+    };
+    callbacks.remover = [ptr_weak_ref = std::weak_ptr<Int32>(ptr)](const ExternalPageCallbacks::PathAndIdsVec &, const std::set<PageId> &) -> void {
+        auto ptr = ptr_weak_ref.lock();
+        if (!ptr)
+            return;
+
+        (*ptr) += 1; // mock access the storage inside callback
+    };
+    page_storage->registerExternalPagesCallbacks(callbacks);
+
+    // Start a PageStorage gc and suspend it before clean external page
+    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::cleanExternalPage_execute_callbacks");
+    auto th_gc = std::async([&]() {
+        page_storage->gcImpl(/*not_skip*/ true, nullptr, nullptr);
+    });
+    sp_gc.waitAndPause();
+
+    // mock table dropped while gc is running
+    page_storage->unregisterExternalPagesCallbacks(TEST_NAMESPACE_ID);
+    ptr = nullptr;
+
+    sp_gc.next(); // continue the gc
+    th_gc.wait();
 }
 CATCH
 
@@ -1632,6 +1750,29 @@ try
     }
 
     ASSERT_ANY_THROW(page_storage->read(page_id0));
+}
+CATCH
+
+
+TEST_F(PageStorageTest, ReloadConfig)
+try
+{
+    auto & global_context = DB::tests::TiFlashTestEnv::getContext().getGlobalContext();
+    auto & settings = global_context.getSettingsRef();
+    auto old_dt_page_gc_threshold = settings.dt_page_gc_threshold;
+
+    settings.dt_page_gc_threshold = 0.6;
+    page_storage->reloadSettings(getConfigFromSettings(settings));
+    ASSERT_EQ(page_storage->blob_store.config.heavy_gc_valid_rate, 0.6);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.heavy_gc_valid_rate, 0.6);
+
+    // change config twice make sure the test select a value different from default value
+    settings.dt_page_gc_threshold = 0.8;
+    page_storage->reloadSettings(getConfigFromSettings(settings));
+    ASSERT_EQ(page_storage->blob_store.config.heavy_gc_valid_rate, 0.8);
+    ASSERT_EQ(page_storage->blob_store.blob_stats.config.heavy_gc_valid_rate, 0.8);
+
+    settings.dt_page_gc_threshold = old_dt_page_gc_threshold;
 }
 CATCH
 

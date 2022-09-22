@@ -31,6 +31,7 @@
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -290,7 +291,7 @@ void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
     delete reader;
 }
 
-RegionMockTest::RegionMockTest(KVStorePtr kvstore_, RegionPtr region_)
+RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
     , region(region_)
 {
@@ -465,7 +466,7 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
 
     FailPointHelper::enableFailPoint(FailPoints::force_set_sst_decode_rand);
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
-    RegionMockTest mock_test(kvstore, region);
+    RegionMockTest mock_test(kvstore.get(), region);
 
     {
         // Mocking ingest a SST for column family "Write"
@@ -502,7 +503,7 @@ struct GlobalRegionMap
     using Key = std::string;
     using BlockVal = std::pair<RegionPtr, RegionPtrWithBlock::CachePtr>;
     std::unordered_map<Key, BlockVal> regions_block;
-    using SnapPath = std::pair<RegionPtr, std::vector<UInt64>>;
+    using SnapPath = std::pair<RegionPtr, std::vector<DM::ExternalDTFileInfo>>;
     std::unordered_map<Key, SnapPath> regions_snap_files;
     std::mutex mutex;
 
@@ -646,7 +647,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(Context & context, c
     RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, start_handle, end_handle + 10000, index);
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
-    RegionMockTest mock_test(kvstore, new_region);
+    RegionMockTest mock_test(kvstore.get(), new_region);
 
     std::vector<SSTView> sst_views;
     {
@@ -743,7 +744,7 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(Context &
     RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, region_start_handle, region_end_handle, index);
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
-    RegionMockTest mock_test(kvstore, new_region);
+    RegionMockTest mock_test(kvstore.get(), new_region);
 
     std::vector<SSTView> sst_views;
     {
@@ -786,10 +787,10 @@ void MockRaftCommand::dbgFuncRegionSnapshotApplyDTFiles(Context & context, const
 
     auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args.front()).value));
     const auto region_name = "__snap_snap_" + std::to_string(region_id);
-    auto [new_region, ingest_ids] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
+    auto [new_region, external_files] = GLOBAL_REGION_MAP.popRegionSnap(region_name);
     auto & tmt = context.getTMTContext();
     context.getTMTContext().getKVStore()->checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(
-        RegionPtrWithSnapshotFiles{new_region, std::move(ingest_ids)},
+        RegionPtrWithSnapshotFiles{new_region, std::move(external_files)},
         tmt);
 
     output(fmt::format("success apply region {} with dt files", new_region->id()));
