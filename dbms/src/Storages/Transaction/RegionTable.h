@@ -193,15 +193,6 @@ public:
     // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
     static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
     bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
-    bool canPrintLog()
-    {
-        if (Clock::now() > last_print_log_time + PRINT_LOG_INTERVAL)
-        {
-            last_print_log_time = Clock::now();
-            return true;
-        }
-        return false;
-    }
 
 private:
     friend class MockTiDB;
