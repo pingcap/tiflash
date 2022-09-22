@@ -22,7 +22,6 @@ namespace DB
   * This is done in order to reduce the consumption of RAM during build, and to speed up the parallel build.
   */
 void registerFunctionsArithmetic(FunctionFactory &);
-void registerFunctionsArray(FunctionFactory &);
 void registerFunctionsTuple(FunctionFactory &);
 void registerFunctionsCoding(FunctionFactory &);
 void registerFunctionsComparison(FunctionFactory &);
@@ -39,7 +38,6 @@ void registerFunctionsRandom(FunctionFactory &);
 void registerFunctionsReinterpret(FunctionFactory &);
 void registerFunctionsRound(FunctionFactory &);
 void registerFunctionsString(FunctionFactory &);
-void registerFunctionsStringArray(FunctionFactory &);
 void registerFunctionsStringSearch(FunctionFactory &);
 void registerFunctionsURL(FunctionFactory &);
 void registerFunctionsVisitParam(FunctionFactory &);
@@ -57,7 +55,6 @@ void registerFunctions()
     auto & factory = FunctionFactory::instance();
 
     registerFunctionsArithmetic(factory);
-    registerFunctionsArray(factory);
     registerFunctionsTuple(factory);
     registerFunctionsCoding(factory);
     registerFunctionsComparison(factory);
@@ -74,7 +71,6 @@ void registerFunctions()
     registerFunctionsReinterpret(factory);
     registerFunctionsRound(factory);
     registerFunctionsString(factory);
-    registerFunctionsStringArray(factory);
     registerFunctionsStringSearch(factory);
     registerFunctionsURL(factory);
     registerFunctionsVisitParam(factory);
