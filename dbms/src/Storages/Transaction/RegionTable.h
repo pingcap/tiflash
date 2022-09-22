@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Core/Names.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
@@ -55,17 +56,11 @@ struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
 
-namespace DM
-{
-struct ExternalDTFileInfo;
-}
-
 using SafeTS = UInt64;
 enum : SafeTS
 {
     InvalidSafeTS = std::numeric_limits<UInt64>::max()
 };
-
 class RegionTable : private boost::noncopyable
 {
 public:

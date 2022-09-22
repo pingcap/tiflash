@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsFindCluster.h>
+#pragma once
 
-namespace DB
-{
-void registerFunctionsFindCluster(FunctionFactory & factory)
-{
-    factory.registerFunction<FunctionFindClusterIndex>();
-    factory.registerFunction<FunctionFindClusterValue>();
-}
+#pragma GCC diagnostic push
+#if defined(__clang__) && __clang_major__ >= 15
+#pragma GCC diagnostic ignored "-Wdeprecated-builtins"
+#endif
+#if __cplusplus >= 202002L
+#pragma GCC diagnostic ignored "-Wambiguous-reversed-operator"
+#endif
 
-} // namespace DB
+#include <boost/lockfree/queue.hpp>
+
+#pragma GCC diagnostic pop
