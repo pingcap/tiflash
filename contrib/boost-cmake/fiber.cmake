@@ -49,10 +49,7 @@ target_compile_definitions(boost_fiber
 
 target_link_libraries (boost_fiber boost_context)
 
-if (COMPILER_CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15)
-    target_compile_options (boost_fiber PRIVATE "-Wno-unused-but-set-variable")
-endif()
-
+target_no_warning(boost_fiber unused-but-set-variable)
 
 if(BUILD_SHARED_LIBS)
   target_compile_definitions(boost_fiber PUBLIC BOOST_FIBER_DYN_LINK BOOST_FIBERS_DYN_LINK)
@@ -88,9 +85,7 @@ target_compile_definitions(boost_fiber_numa
   PRIVATE BOOST_FIBER_SOURCE BOOST_FIBERS_SOURCE
 )
 
-if (COMPILER_CLANG)
-    target_compile_options (boost_fiber_numa PRIVATE "-Wno-unused-but-set-variable")
-endif()
+target_no_warning(boost_fiber_numa unused-but-set-variable)
 
 if(BUILD_SHARED_LIBS)
   target_compile_definitions(boost_fiber_numa PUBLIC BOOST_FIBER_DYN_LINK BOOST_FIBERS_DYN_LINK)
