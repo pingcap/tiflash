@@ -85,7 +85,7 @@ public:
 
     Poco::Net::HTTPRequestHandler * createRequestHandler(const Poco::Net::HTTPServerRequest & request) override
     {
-        const String& uri = request.getURI();
+        const String & uri = request.getURI();
         if (request.getMethod() == Poco::Net::HTTPRequest::HTTP_GET || request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD)
         {
             if (uri == "/metrics")

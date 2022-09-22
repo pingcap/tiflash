@@ -190,12 +190,12 @@ static void writeSignalIDtoSignalPipe(int sig)
 }
 
 /** Signal handler for HUP / USR1 */
-static void closeLogsSignalHandler(int sig, siginfo_t *  /*info*/, void *  /*context*/)
+static void closeLogsSignalHandler(int sig, siginfo_t * /*info*/, void * /*context*/)
 {
     writeSignalIDtoSignalPipe(sig);
 }
 
-static void terminateRequestedSignalHandler(int sig, siginfo_t *  /*info*/, void *  /*context*/)
+static void terminateRequestedSignalHandler(int sig, siginfo_t * /*info*/, void * /*context*/)
 {
     writeSignalIDtoSignalPipe(sig);
 }
@@ -1010,7 +1010,9 @@ void BaseDaemon::initialize(Application & self)
 
     /// Write core dump on crash.
     {
-        struct rlimit rlim{};
+        struct rlimit rlim
+        {
+        };
         if (getrlimit(RLIMIT_CORE, &rlim))
             throw Poco::Exception("Cannot getrlimit");
         /// 1 GiB by default. If more - it writes to disk too long.
@@ -1116,7 +1118,9 @@ void BaseDaemon::initialize(Application & self)
     /// Setup signal handlers.
     auto add_signal_handler =
         [](const std::vector<int> & signals, signal_function handler) {
-            struct sigaction sa{};
+            struct sigaction sa
+            {
+            };
             memset(&sa, 0, sizeof(sa));
             sa.sa_sigaction = handler;
             sa.sa_flags = SA_SIGINFO;
