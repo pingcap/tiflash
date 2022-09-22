@@ -80,7 +80,7 @@ public:
 
     std::pair<bool, String> registerTask(MPPTaskPtr task);
 
-    std::pair<bool, String> unregisterTask(MPPTask * task);
+    std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
     bool tryToScheduleTask(const MPPTaskPtr & task);
 

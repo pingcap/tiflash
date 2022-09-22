@@ -209,7 +209,7 @@ public:
     TrackedMppDataPacketPtr readForLocal();
 
 private:
-    bool send_cancel_reason = false;
+    bool cancel_reason_sent = false;
 };
 
 using TunnelSenderPtr = std::shared_ptr<TunnelSender>;

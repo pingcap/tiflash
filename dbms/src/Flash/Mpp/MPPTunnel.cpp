@@ -384,9 +384,9 @@ std::shared_ptr<DB::TrackedMppDataPacket> LocalTunnelSender::readForLocal()
     else if (result == MPMCQueueResult::CANCELLED)
     {
         RUNTIME_ASSERT(!send_queue.getCancelReason().empty(), "Tunnel sender cancelled without reason");
-        if (!send_cancel_reason)
+        if (!cancel_reason_sent)
         {
-            send_cancel_reason = true;
+            cancel_reason_sent = true;
             res = std::make_shared<TrackedMppDataPacket>(getPacketWithError(send_queue.getCancelReason()), current_memory_tracker);
             return res;
         }

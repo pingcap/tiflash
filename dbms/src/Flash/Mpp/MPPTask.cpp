@@ -217,7 +217,7 @@ std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConn
 
 void MPPTask::unregisterTask()
 {
-    auto [result, reason] = manager->unregisterTask(this);
+    auto [result, reason] = manager->unregisterTask(id);
     if (result)
         LOG_FMT_DEBUG(log, "task unregistered");
     else

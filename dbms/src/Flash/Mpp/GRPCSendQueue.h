@@ -120,6 +120,7 @@ public:
         return ret;
     }
 
+    /// Cancel the send queue, and set the cancel reason
     bool cancelWith(const String & reason)
     {
         auto ret = send_queue.cancelWith(reason);

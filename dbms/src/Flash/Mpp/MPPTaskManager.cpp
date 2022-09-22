@@ -146,24 +146,24 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
     return {true, ""};
 }
 
-std::pair<bool, String> MPPTaskManager::unregisterTask(MPPTask * task)
+std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
 {
     std::unique_lock lock(mu);
     auto it = mpp_query_map.end();
     cv.wait(lock, [&] {
-        it = mpp_query_map.find(task->id.start_ts);
+        it = mpp_query_map.find(id.start_ts);
         return it == mpp_query_map.end() || it->second->allowUnregisterTask();
     });
     if (it != mpp_query_map.end())
     {
-        auto task_it = it->second->task_map.find(task->id);
+        auto task_it = it->second->task_map.find(id);
         if (task_it != it->second->task_map.end())
         {
             it->second->task_map.erase(task_it);
             if (it->second->task_map.empty())
             {
                 /// remove query task map if the task is the last one
-                scheduler->deleteQuery(task->id.start_ts, *this, false);
+                scheduler->deleteQuery(id.start_ts, *this, false);
                 mpp_query_map.erase(it);
                 GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
             }

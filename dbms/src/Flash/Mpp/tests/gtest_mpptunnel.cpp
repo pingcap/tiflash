@@ -175,22 +175,15 @@ public:
                 async_tunnel_sender->consumerFinish("");
                 return;
             case GRPCSendQueueRes::CANCELLED:
-                if (async_tunnel_sender->getCancelReason().empty())
+                assert(!async_tunnel_sender->getCancelReason().empty());
+                if (write_failed)
                 {
-                    async_tunnel_sender->consumerFinish("");
+                    async_tunnel_sender->consumerFinish(fmt::format("{} meet error: {}.", async_tunnel_sender->getTunnelId(), async_tunnel_sender->getCancelReason()));
                     return;
                 }
-                else
-                {
-                    if (write_failed)
-                    {
-                        async_tunnel_sender->consumerFinish(fmt::format("{} meet error: {}.", async_tunnel_sender->getTunnelId(), async_tunnel_sender->getCancelReason()));
-                        return;
-                    }
-                    write_packet_vec.push_back(async_tunnel_sender->getCancelReason());
-                    async_tunnel_sender->consumerFinish("");
-                    return;
-                }
+                write_packet_vec.push_back(async_tunnel_sender->getCancelReason());
+                async_tunnel_sender->consumerFinish("");
+                return;
             case GRPCSendQueueRes::EMPTY:
                 std::unique_lock<std::mutex> lock(mu);
                 cv.wait(lock, [&] {
