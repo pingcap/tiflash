@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/nocopyable.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/Transaction/FileEncryption.h>
 #include <Storages/Transaction/KVStore.h>
@@ -344,14 +345,14 @@ RawRustPtrWrap::RawRustPtrWrap(RawRustPtrWrap && src)
 struct PreHandledSnapshotWithFiles
 {
     ~PreHandledSnapshotWithFiles() { CurrentMetrics::sub(CurrentMetrics::RaftNumSnapshotsPendingApply); }
-    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<UInt64> && ids_)
+    PreHandledSnapshotWithFiles(const RegionPtr & region_, std::vector<DM::ExternalDTFileInfo> && external_files_)
         : region(region_)
-        , ingest_ids(std::move(ids_))
+        , external_files(std::move(external_files_))
     {
         CurrentMetrics::add(CurrentMetrics::RaftNumSnapshotsPendingApply);
     }
     RegionPtr region;
-    std::vector<UInt64> ingest_ids; // The file_ids storing pre-handled files
+    std::vector<DM::ExternalDTFileInfo> external_files; // The file_ids storing pre-handled files
 };
 
 RawCppPtr PreHandleSnapshot(
@@ -409,7 +410,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
         auto & kvstore = server->tmt->getKVStore();
         if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
         {
-            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->ingest_ids)}, *server->tmt);
+            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)}, *server->tmt);
         }
     }
     catch (...)
@@ -559,11 +560,8 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
-void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
+// just a dummy function to avoid proxy fn_handle_safe_ts_update.is_some() panic.
+void HandleSafeTSUpdate(EngineStoreServerWrap *, uint64_t, uint64_t, uint64_t)
 {
-    RegionTable & region_table = server->tmt->getRegionTable();
-    region_table.updateSelfSafeTS(region_id, self_safe_ts);
-    region_table.updateLeaderSafeTS(region_id, leader_safe_ts);
-    LOG_FMT_TRACE(&Poco::Logger::get(__FUNCTION__), "update safe ts in region_id={}, leader_safe_ts={}, self_safe_ts={}", region_id, leader_safe_ts, self_safe_ts);
 }
 } // namespace DB

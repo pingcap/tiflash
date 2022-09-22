@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockExecutor/astToExecutorUtils.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
 
 namespace DB
 {
@@ -41,10 +41,9 @@ ColumnName splitQualifiedName(const String & s)
     return ret;
 }
 
-
-std::__wrap_iter<const std::pair<std::string, TiDB::ColumnInfo> *> checkSchema(const DAGSchema & input, String checked_column)
+DAGSchema::const_iterator checkSchema(const DAGSchema & input, const String & checked_column)
 {
-    auto ft = std::find_if(input.begin(), input.end(), [&](const auto & field) {
+    auto ft = std::find_if(input.begin(), input.end(), [&checked_column](const auto & field) {
         auto [checked_db_name, checked_table_name, checked_column_name] = splitQualifiedName(checked_column);
         auto [db_name, table_name, column_name] = splitQualifiedName(field.first);
         if (checked_table_name.empty())
