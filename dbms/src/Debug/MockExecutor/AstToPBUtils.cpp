@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockExecutor/astToExecutorUtils.h>
+#include <Debug/MockExecutor/AstToPBUtils.h>
 
 namespace DB
 {
@@ -40,7 +40,6 @@ ColumnName splitQualifiedName(const String & s)
     }
     return ret;
 }
-
 
 DAGSchema::const_iterator checkSchema(const DAGSchema & input, const String & checked_column)
 {
