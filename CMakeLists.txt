@@ -28,6 +28,7 @@ if(CMAKE_PREFIX_PATH)
 endif()
 
 include (cmake/find_rust.cmake)
+include (cmake/add_warning.cmake)
 
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
@@ -269,11 +270,6 @@ option (ARCHNATIVE "Enable -march=native compiler flag" OFF)
 if (ARCHNATIVE)
     set (COMPILER_FLAGS                  "${COMPILER_FLAGS} -march=native")
 endif ()
-
-# Special options for better optimized code with clang
-#if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-#    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -Wno-unused-command-line-argument -mllvm -inline-threshold=10000")
-#endif ()
 
 if (CMAKE_VERSION VERSION_LESS "3.8.0")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
