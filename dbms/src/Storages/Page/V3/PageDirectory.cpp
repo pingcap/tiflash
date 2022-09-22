@@ -15,6 +15,9 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
+#include <Common/SyncPoint/SyncPoint.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/assert_cast.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/MapUtils.h>
@@ -40,7 +43,7 @@
 
 #include <pcg_random.hpp>
 #include <thread>
-#endif
+#endif // FIU_ENABLE
 
 namespace CurrentMetrics
 {
@@ -1233,6 +1236,8 @@ void PageDirectory::applyRefEditRecord(
 
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_apply).Observe(watch.elapsedSeconds()); });
     // Note that we need to make sure increasing `sequence` in order, so it
     // also needs to be protected by `write_lock` throughout the `apply`
     // TODO: It is totally serialized, make it a pipeline
@@ -1250,6 +1255,8 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         new_sequence += 1;
     }
     wal->apply(ser::serializeTo(edit), write_limiter);
+    GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
+    watch.restart();
 
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
