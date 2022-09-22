@@ -15,9 +15,11 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <fmt/core.h>
 
+#include <magic_enum.hpp>
 #include <string>
 #include <unordered_map>
 
@@ -30,7 +32,7 @@ extern const char random_task_manager_find_task_failure_failpoint[];
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
-    , log(&Poco::Logger::get("TaskManager"))
+    , log(Logger::get("TaskManager"))
 {}
 
 std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout)
@@ -92,7 +94,7 @@ public:
 
 void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type)
 {
-    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}", query_id, abortTypeToString(abort_type)));
+    LOG_WARNING(log, fmt::format("Begin to abort query: {}, abort type: {}, reason: {}", query_id, magic_enum::enum_name(abort_type), reason));
     MPPQueryTaskSetPtr task_set;
     {
         /// abort task may take a long time, so first
@@ -152,6 +154,7 @@ void MPPTaskManager::abortMPPQuery(UInt64 query_id, const String & reason, Abort
         /// just to double check the query still exists
         if (it != mpp_query_map.end())
             mpp_query_map.erase(it);
+        GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
         cv.notify_all();
     }
     LOG_WARNING(log, "Finish abort query: " + std::to_string(query_id));
@@ -174,6 +177,7 @@ std::pair<bool, String> MPPTaskManager::registerTask(MPPTaskPtr task)
         auto ptr = std::make_shared<MPPQueryTaskSet>();
         ptr->task_map.emplace(task->id, task);
         mpp_query_map.insert({task->id.start_ts, ptr});
+        GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     }
     else
     {
@@ -219,6 +223,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(MPPTask * task)
                 /// remove query task map if the task is the last one
                 scheduler->deleteQuery(task->id.start_ts, *this, false);
                 mpp_query_map.erase(it);
+                GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
             }
             cv.notify_all();
             return {true, ""};
@@ -243,6 +248,12 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSetWithoutLock(UInt64 query_id)
 {
     auto it = mpp_query_map.find(query_id);
     return it == mpp_query_map.end() ? nullptr : it->second;
+}
+
+MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
+{
+    std::lock_guard lock(mu);
+    return getQueryTaskSetWithoutLock(query_id);
 }
 
 bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)

@@ -66,6 +66,7 @@ struct DecodingStorageSchemaSnapshot
 
     bool pk_is_handle;
     bool is_common_handle;
+    size_t rowkey_column_size;
     TMTPKType pk_type = TMTPKType::UNSPECIFIED;
     // an internal increasing version for `DecodingStorageSchemaSnapshot`, has no relation with the table schema version
     Int64 decoding_schema_version;
@@ -114,16 +115,19 @@ struct DecodingStorageSchemaSnapshot
                 pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
             }
             pk_type = TMTPKType::STRING;
+            rowkey_column_size = pk_column_ids.size();
         }
         else if (table_info_.pk_is_handle)
         {
             pk_column_ids.emplace_back(original_handle_.id);
             pk_pos_map.emplace(original_handle_.id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
             pk_type = getTMTPKType(*original_handle_.type);
+            rowkey_column_size = 1;
         }
         else
         {
             pk_type = TMTPKType::INT64;
+            rowkey_column_size = 1;
         }
 
         // calculate pk column pos in block

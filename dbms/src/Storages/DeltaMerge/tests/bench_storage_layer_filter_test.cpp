@@ -34,6 +34,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char filter_once[];
+extern const char skip_check_segment_update[];
 } // namespace FailPoints
 namespace DM
 {
@@ -203,6 +204,10 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)
     auto delete_rows_num = state.range(2);
     auto file_num = state.range(3);
 
+    (void)fiu_init(0);
+    FailPointHelper::enableFailPoint(FailPoints::filter_once);
+    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
+
     auto begin_value = 0;
     Block block = createBlock(block_rows, columns_num, delete_rows_num, begin_value);
     begin_value += block_rows;
@@ -231,11 +236,8 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)
     store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
     store->mergeDeltaAll(*db_context);
 
-    Block block2 = createBlock(block_rows, columns_num, delete_rows_num, block_rows);
+    Block block2 = createBlock(block_rows, columns_num, delete_rows_num, begin_value);
     store->write(*db_context, db_context->getSettingsRef(), block2);
-
-    (void)fiu_init(0);
-    FailPointHelper::enableFailPoint(FailPoints::filter_once);
 
     for (auto _ : state)
     {
@@ -253,6 +255,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)
         while (in->read()) {};
     }
     FailPointHelper::disableFailPoint(FailPoints::filter_once);
+    FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
 }
 
 BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)
@@ -262,6 +265,9 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)
     auto columns_num = state.range(1);
     auto delete_rows_num = state.range(2);
     auto file_num = state.range(3);
+
+    (void)fiu_init(0);
+    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
 
     auto begin_value = 0;
     Block block = createBlock(block_rows, columns_num, delete_rows_num, begin_value);
@@ -311,6 +317,7 @@ BENCHMARK_DEFINE_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)
 
         while (in->read()) {};
     }
+    FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
 }
 
 // rowkey value All
@@ -320,9 +327,9 @@ BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({500
 BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)->Args({5000, 10, 0, 1})->Args({5000, 10, 10, 1})->Args({5000, 10, 50, 1})->Args({5000, 10, 100, 1})->Args({5000, 10, 0, 10})->Args({5000, 10, 10, 10})->Args({5000, 10, 50, 10})->Args({5000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
 
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
+// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterOnce)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
 
-BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
+// BENCHMARK_REGISTER_F(DeltaMergeStoreTestForBench, ReadWithFilterTwice)->Args({50000, 10, 0, 1})->Args({50000, 10, 10, 1})->Args({50000, 10, 50, 1})->Args({50000, 10, 100, 1})->Args({50000, 10, 0, 10})->Args({50000, 10, 10, 10})->Args({50000, 10, 50, 10})->Args({50000, 10, 100, 10})->Args({5000, 10, 0, 20})->Args({5000, 10, 10, 20})->Args({5000, 10, 50, 20})->Args({5000, 10, 100, 20});
 } // namespace tests
 } // namespace DM
 } // namespace DB

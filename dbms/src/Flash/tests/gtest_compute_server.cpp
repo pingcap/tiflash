@@ -18,6 +18,11 @@ namespace DB
 {
 namespace tests
 {
+
+LoggerPtr MPPTaskTestUtils::log_ptr = nullptr;
+size_t MPPTaskTestUtils::server_num = 0;
+MPPTestMeta MPPTaskTestUtils::test_meta = {};
+
 class ComputeServerRunner : public DB::tests::MPPTaskTestUtils
 {
 public:
@@ -286,5 +291,113 @@ try
 }
 CATCH
 
+TEST_F(ComputeServerRunner, cancelAggTasks)
+try
+{
+    startServers(4);
+    {
+        auto [start_ts, res] = prepareMPPStreams(context
+                                                     .scan("test_db", "test_table_1")
+                                                     .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                                                     .project({"max(s1)"}));
+        EXPECT_TRUE(assertQueryActive(start_ts));
+        MockComputeServerManager::instance().cancelQuery(start_ts);
+        EXPECT_TRUE(assertQueryCancelled(start_ts));
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, cancelJoinTasks)
+try
+{
+    startServers(4);
+    {
+        auto [start_ts, res] = prepareMPPStreams(context
+                                                     .scan("test_db", "l_table")
+                                                     .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        EXPECT_TRUE(assertQueryActive(start_ts));
+        MockComputeServerManager::instance().cancelQuery(start_ts);
+        EXPECT_TRUE(assertQueryCancelled(start_ts));
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, cancelJoinThenAggTasks)
+try
+{
+    startServers(4);
+    {
+        auto [start_ts, _] = prepareMPPStreams(context
+                                                   .scan("test_db", "l_table")
+                                                   .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                   .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                   .project({col("max(l_table.s)"), col("l_table.s")}));
+        EXPECT_TRUE(assertQueryActive(start_ts));
+        MockComputeServerManager::instance().cancelQuery(start_ts);
+        EXPECT_TRUE(assertQueryCancelled(start_ts));
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, multipleQuery)
+try
+{
+    startServers(4);
+    {
+        auto [start_ts1, res1] = prepareMPPStreams(context
+                                                       .scan("test_db", "l_table")
+                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")}));
+        auto [start_ts2, res2] = prepareMPPStreams(context
+                                                       .scan("test_db", "l_table")
+                                                       .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
+                                                       .aggregation({Max(col("l_table.s"))}, {col("l_table.s")})
+                                                       .project({col("max(l_table.s)"), col("l_table.s")}));
+
+        EXPECT_TRUE(assertQueryActive(start_ts1));
+        MockComputeServerManager::instance().cancelQuery(start_ts1);
+        EXPECT_TRUE(assertQueryCancelled(start_ts1));
+
+        EXPECT_TRUE(assertQueryActive(start_ts2));
+        MockComputeServerManager::instance().cancelQuery(start_ts2);
+        EXPECT_TRUE(assertQueryCancelled(start_ts2));
+    }
+
+    // start 10 queries
+    {
+        std::vector<std::tuple<size_t, std::vector<BlockInputStreamPtr>>> queries;
+        for (size_t i = 0; i < 10; ++i)
+        {
+            queries.push_back(prepareMPPStreams(context
+                                                    .scan("test_db", "l_table")
+                                                    .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})));
+        }
+        for (size_t i = 0; i < 10; ++i)
+        {
+            auto start_ts = std::get<0>(queries[i]);
+            EXPECT_TRUE(assertQueryActive(start_ts));
+            MockComputeServerManager::instance().cancelQuery(start_ts);
+            EXPECT_TRUE(assertQueryCancelled(start_ts));
+        }
+    }
+}
+CATCH
+
+TEST_F(ComputeServerRunner, runCoprocessor)
+try
+{
+    // In coprocessor test, we only need to start 1 server.
+    startServers(1);
+    {
+        auto request = context
+                           .scan("test_db", "l_table")
+                           .build(context);
+
+        auto expected_cols = {
+            toNullableVec<String>({{"banana", {}, "banana"}}),
+            toNullableVec<String>({{"apple", {}, "banana"}})};
+        ASSERT_COLUMNS_EQ_UR(expected_cols, executeCoprocessorTask(request));
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB

@@ -83,20 +83,19 @@ public:
     // **** filters **** //
 
     // Only set enable_handle_clean_read_ param to true when
-    // in normal mode:
-    //    1. There is no delta.
-    //    2. You don't need pk, version and delete_tag columns
-    // in fast mode:
-    //    1. You don't need pk columns
-    // If you have no idea what it means, then simply set it to false.
-    // Only set is_fast_mode_ param to true when read in fast mode.
-    // Only set enable_del_clean_read_ param to true when you don't need del columns in fast mode.
+    //    in normal mode (is_fast_scan_ == false):
+    //      1. There is no delta.
+    //      2. You don't need pk, version and delete_tag columns
+    //    in fast scan mode (is_fast_scan_ == true):
+    //      1. You don't need pk columns
+    //    If you have no idea what it means, then simply set it to false.
+    // Only set enable_del_clean_read_ param to true when you don't need del columns in fast scan.
     // `max_data_version_` is the MVCC filter version for reading. Used by clean read check
-    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable_handle_clean_read_, bool is_fast_mode_, bool enable_del_clean_read_, UInt64 max_data_version_)
+    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable_handle_clean_read_, bool is_fast_scan_, bool enable_del_clean_read_, UInt64 max_data_version_)
     {
         enable_handle_clean_read = enable_handle_clean_read_;
         enable_del_clean_read = enable_del_clean_read_;
-        is_fast_mode = is_fast_mode_;
+        is_fast_scan = is_fast_scan_;
         max_data_version = max_data_version_;
         return *this;
     }
@@ -159,8 +158,9 @@ private:
     FileProviderPtr file_provider;
 
     // clean read
+
     bool enable_handle_clean_read = false;
-    bool is_fast_mode = false;
+    bool is_fast_scan = false;
     bool enable_del_clean_read = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter

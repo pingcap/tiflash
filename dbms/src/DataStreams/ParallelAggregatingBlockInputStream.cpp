@@ -12,12 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ClickHouseRevision.h>
 #include <Common/FmtUtils.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
-#include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/ParallelAggregatingBlockInputStream.h>
 
 namespace DB
@@ -125,21 +123,6 @@ Block ParallelAggregatingBlockInputStream::readImpl()
         return res;
 
     return impl->read();
-}
-
-
-ParallelAggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(
-    const std::string & path,
-    const FileProviderPtr & file_provider_)
-    : file_provider(file_provider_)
-    , file_in(file_provider, path, EncryptionPath(path, ""))
-    , compressed_in(file_in)
-    , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get()))
-{}
-
-ParallelAggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
-{
-    file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
 }
 
 void ParallelAggregatingBlockInputStream::Handler::onBlock(Block & block, size_t thread_num)

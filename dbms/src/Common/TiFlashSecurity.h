@@ -13,20 +13,13 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/grpcpp.h>
 #include <Core/Types.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
 #include <common/logger_useful.h>
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-#endif
-#include <grpc++/grpc++.h>
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
 
 #include <set>
 

@@ -791,7 +791,7 @@ SnapshotsStatistics PageDirectory::getSnapshotsStat() const
     return stat;
 }
 
-PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
+PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
 
@@ -882,7 +882,7 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
     }
 }
 
-std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
+std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::getByIDsImpl(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
     PageIds page_not_found = {};
@@ -955,8 +955,9 @@ std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internal
     return std::make_pair(id_entries, page_not_found);
 }
 
-PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
+PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap_, bool throw_on_not_exist) const
 {
+    auto snap = toConcreteSnapshot(snap_);
     PageIdV3Internal id_to_resolve = page_id;
     PageVersion ver_to_resolve(snap->sequence, 0);
     bool keep_resolve = true;
@@ -1144,7 +1145,11 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     PageVersion new_version(last_sequence + 1, 0);
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    wal->apply(edit, new_version, write_limiter);
+    for (auto & r : edit.getMutRecords())
+    {
+        r.version = new_version;
+    }
+    wal->apply(ser::serializeTo(edit), write_limiter);
 
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
@@ -1170,8 +1175,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 {
                     // put the new created holder into `external_ids`
                     *holder = r.page_id;
-                    std::lock_guard guard(external_ids_mutex);
-                    external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+                    external_ids_by_ns.addExternalId(holder);
                 }
                 break;
             }
@@ -1212,7 +1216,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     }
 
     // Apply migrate edit into WAL with the increased epoch version
-    wal->apply(migrated_edit, write_limiter);
+    wal->apply(ser::serializeTo(migrated_edit), write_limiter);
 
     // Apply migrate edit to the mvcc map
     for (const auto & record : migrated_edit.getRecords())
@@ -1233,26 +1237,6 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     }
 
     LOG_FMT_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
-}
-
-std::set<PageId> PageDirectory::getAliveExternalIds(NamespaceId ns_id) const
-{
-    std::set<PageId> valid_external_ids;
-    {
-        std::lock_guard guard(external_ids_mutex);
-        for (auto iter = external_ids.begin(); iter != external_ids.end(); /*empty*/)
-        {
-            if (auto holder = iter->lock(); holder == nullptr)
-                iter = external_ids.erase(iter);
-            else
-            {
-                if (holder->high == ns_id)
-                    valid_external_ids.emplace(holder->low);
-                ++iter;
-            }
-        }
-    }
-    return valid_external_ids;
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
@@ -1334,7 +1318,7 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
             /* for_dump_snapshot */ true);
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
         auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
-        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit_from_disk), write_limiter);
+        done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
     }
     return done_any_io;
 }

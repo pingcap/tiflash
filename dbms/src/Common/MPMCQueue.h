@@ -73,7 +73,7 @@ public:
     using Status = MPMCQueueStatus;
     using Result = MPMCQueueResult;
 
-    explicit MPMCQueue(Int64 capacity_)
+    explicit MPMCQueue(size_t capacity_)
         : capacity(capacity_)
         , data(capacity * sizeof(T))
     {
@@ -81,9 +81,13 @@ public:
 
     ~MPMCQueue()
     {
-        std::unique_lock lock(mu);
-        for (; read_pos < write_pos; ++read_pos)
-            destruct(getObj(read_pos));
+        drain();
+    }
+
+    void finishAndDrain()
+    {
+        finish();
+        drain();
     }
 
     // Cannot to use copy/move constructor,
@@ -187,7 +191,7 @@ public:
     {
         return changeStatus([&] {
             status = Status::CANCELLED;
-            cancelReason = std::move(reason);
+            cancel_reason = std::move(reason);
         });
     }
 
@@ -200,18 +204,6 @@ public:
         return changeStatus([&] {
             status = Status::FINISHED;
         });
-    }
-
-    bool isNextPopNonBlocking() const
-    {
-        std::unique_lock lock(mu);
-        return read_pos < write_pos || !isNormal();
-    }
-
-    bool isNextPushNonBlocking() const
-    {
-        std::unique_lock lock(mu);
-        return write_pos - read_pos < capacity || !isNormal();
     }
 
     Status getStatus() const
@@ -231,7 +223,7 @@ public:
     {
         std::unique_lock lock(mu);
         RUNTIME_ASSERT(isCancelled());
-        return cancelReason;
+        return cancel_reason;
     }
 
 private:
@@ -418,6 +410,16 @@ private:
             obj.~T();
     }
 
+    void drain()
+    {
+        std::unique_lock lock(mu);
+        for (; read_pos < write_pos; ++read_pos)
+            destruct(getObj(read_pos));
+
+        read_pos = 0;
+        write_pos = 0;
+    }
+
     template <typename F>
     ALWAYS_INLINE bool changeStatus(F && action)
     {
@@ -440,7 +442,7 @@ private:
     Int64 read_pos = 0;
     Int64 write_pos = 0;
     Status status = Status::NORMAL;
-    String cancelReason;
+    String cancel_reason;
 
     std::vector<UInt8> data;
 };

@@ -25,6 +25,7 @@
 #include <Core/Defines.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Storages/Transaction/Collator.h>
+#include <common/memcpy.h>
 #include <common/unaligned.h>
 
 #include <memory>
@@ -72,7 +73,7 @@ struct HashMethodOneNumber
     using Base::getHash; /// (const Data & data, size_t row, Arena & pool) -> size_t
 
     /// Is used for default implementation in HashMethodBase.
-    FieldType getKeyHolder(size_t row, Arena *, std::vector<String> &) const
+    ALWAYS_INLINE inline FieldType getKeyHolder(size_t row, Arena *, std::vector<String> &) const
     {
         if constexpr (std::is_same_v<FieldType, Int256>)
             return vec[row];
@@ -99,7 +100,7 @@ struct HashMethodString
     HashMethodString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
-        const ColumnString & column_string = assert_cast<const ColumnString &>(column);
+        const auto & column_string = assert_cast<const ColumnString &>(column);
         offsets = column_string.getOffsets().data();
         chars = column_string.getChars().data();
         if (!collators.empty())
@@ -110,20 +111,112 @@ struct HashMethodString
         }
     }
 
-    auto getKeyHolder(ssize_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
+    ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
     {
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
 
         if constexpr (place_string_to_arena)
         {
-            if (collator)
-                key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
+            if (likely(collator))
+                key = collator->sortKeyFastPath(key.data, key.size, sort_key_containers[0]);
             return ArenaKeyHolder{key, *pool};
         }
         else
         {
             return key;
+        }
+    }
+
+protected:
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
+};
+
+/// For the case when there is multi string key.
+template <typename Value, typename Mapped>
+struct HashMethodMultiString
+    : public columns_hashing_impl::HashMethodBase<HashMethodMultiString<Value, Mapped>, Value, Mapped, false>
+{
+    using Self = HashMethodMultiString<Value, Mapped>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+
+    std::vector<const IColumn::Offset *> offsets;
+    std::vector<const UInt8 *> chars;
+    TiDB::TiDBCollators collators;
+    bool all_collators_padding_bin = false;
+
+    HashMethodMultiString(const ColumnRawPtrs & key_columns, const Sizes &, const TiDB::TiDBCollators & collators_)
+        : collators(collators_)
+    {
+        size_t num = key_columns.size();
+        offsets.resize(num);
+        chars.resize(num);
+
+        for (size_t i = 0; i < num; ++i)
+        {
+            const IColumn & column = *key_columns[i];
+            const auto & column_string = assert_cast<const ColumnString &>(column);
+            offsets[i] = column_string.getOffsets().data();
+            chars[i] = column_string.getChars().data();
+        }
+        if (!collators.empty())
+        {
+            all_collators_padding_bin = std::all_of(collators.begin(), collators.end(), [](auto & x) {
+                return x->isPaddingBinary();
+            });
+        }
+    }
+
+    template <typename F>
+    ALWAYS_INLINE inline SerializedKeyHolder genSerializedKeyHolder(ssize_t row, Arena * pool, F && fn_handle_key) const
+    {
+        auto num = offsets.size();
+
+        static_assert(std::is_same_v<size_t, decltype(reinterpret_cast<const StringRef *>(0)->size)>);
+
+        const char * begin = nullptr;
+        size_t sum_size = 0;
+
+        for (size_t key_index = 0; key_index < num; ++key_index)
+        {
+            auto last_offset = row == 0 ? 0 : offsets[key_index][row - 1];
+            StringRef key(chars[key_index] + last_offset, offsets[key_index][row] - last_offset - 1);
+
+            key = fn_handle_key(key_index, key);
+
+            char * pos = pool->allocContinue(key.size + sizeof(key.size), begin);
+            {
+                memcpy(pos, &key.size, sizeof(key.size));
+                inline_memcpy(pos + sizeof(key.size), key.data, key.size);
+            }
+
+            sum_size += key.size + sizeof(key.size);
+        }
+        return SerializedKeyHolder{{begin, sum_size}, *pool};
+    }
+
+    ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, Arena * pool, std::vector<String> & sort_key_containers) const
+    {
+        if (likely(all_collators_padding_bin))
+        {
+            return genSerializedKeyHolder(row, pool, [](size_t, StringRef key) {
+                return DB::BinCollatorSortKey<true>(key.data, key.size);
+            });
+        }
+
+        if (unlikely(collators.empty()))
+        {
+            return genSerializedKeyHolder(row, pool, [](size_t, StringRef key) {
+                return key;
+            });
+        }
+        else
+        {
+            return genSerializedKeyHolder(row, pool, [&](size_t key_index, StringRef key) {
+                if (collators[key_index])
+                    return collators[key_index]->sortKey(key.data, key.size, sort_key_containers[key_index]);
+                return key;
+            });
         }
     }
 
@@ -147,20 +240,20 @@ struct HashMethodFixedString
     HashMethodFixedString(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators & collators)
     {
         const IColumn & column = *key_columns[0];
-        const ColumnFixedString & column_string = assert_cast<const ColumnFixedString &>(column);
+        const auto & column_string = assert_cast<const ColumnFixedString &>(column);
         n = column_string.getN();
         chars = &column_string.getChars();
         if (!collators.empty())
             collator = collators[0];
     }
 
-    auto getKeyHolder(size_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
+    ALWAYS_INLINE inline auto getKeyHolder(size_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
     {
         StringRef key(&(*chars)[row * n], n);
 
         if (collator)
         {
-            key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
+            key = collator->sortKeyFastPath(key.data, key.size, sort_key_containers[0]);
         }
 
         if constexpr (place_string_to_arena)
@@ -280,7 +373,7 @@ struct HashMethodKeysFixed
 #endif
     }
 
-    ALWAYS_INLINE Key getKeyHolder(size_t row, Arena *, std::vector<String> &) const
+    ALWAYS_INLINE inline Key getKeyHolder(size_t row, Arena *, std::vector<String> &) const
     {
         if constexpr (has_nullable_keys)
         {
@@ -357,7 +450,7 @@ struct HashMethodSerialized
         , collators(collators_)
     {}
 
-    ALWAYS_INLINE SerializedKeyHolder getKeyHolder(size_t row, Arena * pool, std::vector<String> & sort_key_containers) const
+    ALWAYS_INLINE inline SerializedKeyHolder getKeyHolder(size_t row, Arena * pool, std::vector<String> & sort_key_containers) const
     {
         return SerializedKeyHolder{
             serializeKeysToPoolContiguous(row, keys_size, key_columns, collators, sort_key_containers, *pool),
@@ -385,7 +478,7 @@ struct HashMethodHashed
         , collators(collators_)
     {}
 
-    ALWAYS_INLINE Key getKeyHolder(size_t row, Arena *, std::vector<String> & sort_key_containers) const
+    ALWAYS_INLINE inline Key getKeyHolder(size_t row, Arena *, std::vector<String> & sort_key_containers) const
     {
         return hash128(row, key_columns.size(), key_columns, collators, sort_key_containers);
     }

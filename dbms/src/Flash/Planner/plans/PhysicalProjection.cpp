@@ -38,20 +38,12 @@ PhysicalPlanNodePtr PhysicalProjection::build(
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock(), context);
 
     NamesAndTypes schema;
-    NamesWithAliases project_aliases;
-    UniqueNameGenerator unique_name_generator;
     for (const auto & expr : projection.exprs())
     {
         auto expr_name = analyzer.getActions(expr, project_actions);
         const auto & col = project_actions->getSampleBlock().getByName(expr_name);
-
-        String alias = unique_name_generator.toUniqueName(col.name);
-        project_aliases.emplace_back(col.name, alias);
-        schema.emplace_back(alias, col.type);
+        schema.emplace_back(col.name, col.type);
     }
-    /// TODO When there is no alias, there is no need to add the project action.
-    /// https://github.com/pingcap/tiflash/issues/3921
-    project_actions->add(ExpressionAction::project(project_aliases));
 
     auto physical_projection = std::make_shared<PhysicalProjection>(
         executor_id,
@@ -151,9 +143,13 @@ void PhysicalProjection::transformImpl(DAGPipeline & pipeline, Context & context
 
 void PhysicalProjection::finalize(const Names & parent_require)
 {
-    FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
-    project_actions->finalize(parent_require);
+    FinalizeHelper::checkSampleBlockContainsParentRequire(getSampleBlock(), parent_require);
 
+    /// we can add a project action to remove the useless column for empty actions.
+    if (project_actions->getActions().empty())
+        PhysicalPlanHelper::addParentRequireProjectAction(project_actions, parent_require);
+
+    project_actions->finalize(parent_require);
     child->finalize(project_actions->getRequiredColumns());
     FinalizeHelper::prependProjectInputIfNeed(project_actions, child->getSampleBlock().columns());
 

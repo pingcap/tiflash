@@ -32,7 +32,8 @@ extern void concurrentBatchInsert(const TiDB::TableInfo &, Int64, Int64, Int64, 
 namespace DM
 {
 enum class FileConvertJobType;
-}
+struct ExternalDTFileInfo;
+} // namespace DM
 
 namespace tests
 {
@@ -112,11 +113,11 @@ public:
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
 
-    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, const SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
+    void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
-    std::vector<UInt64> /*   */ preHandleSnapshotToFiles(
+    std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
         RegionPtr new_region,
-        const SSTViewVec,
+        SSTViewVec,
         uint64_t index,
         uint64_t term,
         TMTContext & tmt);
@@ -125,7 +126,7 @@ public:
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
-    EngineStoreApplyRes handleIngestSST(UInt64 region_id, const SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
+    EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
 
@@ -188,7 +189,7 @@ private:
     StoreMeta & getStore();
     const StoreMeta & getStore() const;
 
-    std::vector<UInt64> preHandleSSTsToDTFiles(
+    std::vector<DM::ExternalDTFileInfo> preHandleSSTsToDTFiles(
         RegionPtr new_region,
         const SSTViewVec,
         uint64_t index,
