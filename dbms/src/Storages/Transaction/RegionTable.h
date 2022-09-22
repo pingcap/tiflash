@@ -218,8 +218,6 @@ private:
     mutable std::shared_mutex rw_lock;
 
     Poco::Logger * log;
-    Timepoint last_print_log_time = Clock::now();
-    static constexpr std::chrono::minutes PRINT_LOG_INTERVAL = std::chrono::minutes{5};
 };
 
 
