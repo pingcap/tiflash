@@ -16,8 +16,8 @@
 
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB::FailPoints
 {
@@ -125,9 +125,10 @@ protected:
         {
             return;
         }
-        std::call_once(task_pool->addToSchedulerFlag(), [&](){SegmentReadTaskScheduler::instance().add(task_pool);});
+        std::call_once(task_pool->addToSchedulerFlag(), [&]() { SegmentReadTaskScheduler::instance().add(task_pool); });
         task_pool_added = true;
     }
+
 private:
     SegmentReadTaskPoolPtr task_pool;
     Block header;
