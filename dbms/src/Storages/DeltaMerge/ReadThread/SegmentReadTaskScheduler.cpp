@@ -125,7 +125,7 @@ SegmentReadTaskPools SegmentReadTaskScheduler::getPoolsUnlock(const std::vector<
 
 SegmentReadTaskPoolPtr SegmentReadTaskScheduler::scheduleSegmentReadTaskPoolUnlock()
 {
-    int64_t pool_count = read_pools.size(); // All read task pool need to be scheduled, include invalid read task pool.
+    int64_t pool_count = read_pools.size(); // All read task pool need to be scheduled, including invalid read task pool.
     for (int64_t i = 0; i < pool_count; i++)
     {
         auto pool = read_pools.next();
