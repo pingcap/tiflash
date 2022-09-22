@@ -49,7 +49,8 @@ struct MockProxyRegion : MutexLockWrap
     {
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
-        raft_cmdpb::AdminCmdType cmd_type() const {
+        raft_cmdpb::AdminCmdType cmd_type() const
+        {
             return request.cmd_type();
         }
     };
@@ -152,7 +153,8 @@ struct MockRaftStoreProxy : MutexLockWrap
     /// Mutation funcs.
     struct FailCond
     {
-        enum Type {
+        enum Type
+        {
             NORMAL,
             BEFORE_KVSTORE_WRITE,
             BEFORE_KVSTORE_ADVANCE,

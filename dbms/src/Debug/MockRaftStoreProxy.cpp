@@ -374,7 +374,8 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::normalWrite(
     return std::make_tuple(index, term);
 }
 
-std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index) {
+std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, UInt64 compact_index)
+{
     uint64_t index = 0;
     uint64_t term = 0;
     {
@@ -392,7 +393,8 @@ std::tuple<uint64_t, uint64_t> MockRaftStoreProxy::compactLog(UInt64 region_id, 
         request.set_cmd_type(raft_cmdpb::AdminCmdType::CompactLog);
         request.mutable_compact_log()->set_compact_index(compact_index);
         // Find compact term, otherwise log must have been compacted.
-        if (region->commands.count(compact_index)) {
+        if (region->commands.count(compact_index))
+        {
             request.mutable_compact_log()->set_compact_term(region->commands[index].term);
         }
         region->commands[index] = {
@@ -449,7 +451,6 @@ void MockRaftStoreProxy::doApply(
     }
     else if (cmd.has_admin_request())
     {
-
     }
 
     if (cond.type == MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE)
@@ -462,7 +463,8 @@ void MockRaftStoreProxy::doApply(
         // TiFlash write
         kvs.handleWriteRaftCmd(std::move(request), region_id, index, term, tmt);
     }
-    if (cmd.has_admin_request()) {
+    if (cmd.has_admin_request())
+    {
         kvs.handleAdminRaftCmd(std::move(cmd.admin().request), std::move(cmd.admin().response), region_id, index, term, tmt);
     }
 
@@ -472,8 +474,10 @@ void MockRaftStoreProxy::doApply(
         return;
     }
 
-    if (cmd.has_admin_request()) {
-        if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog) {
+    if (cmd.has_admin_request())
+    {
+        if (cmd.admin().cmd_type() == raft_cmdpb::AdminCmdType::CompactLog)
+        {
             auto i = cmd.admin().request.compact_log().compact_index();
             // TODO We should remove (0, index] here, it is enough to remove exactly index now.
             region->commands.erase(i);
