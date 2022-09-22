@@ -187,7 +187,7 @@ FsStats PathCapacityMetrics::getFsStats()
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
     if (avail_rate <= 0.2)
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "Available space is only {:.2f}% of capacity size. Avail size: {}, used size: {}, capacity size: {}",
             avail_rate * 100.0,
@@ -281,7 +281,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     if (capacity > res.used_size)
         avail = capacity - res.used_size;
     else if (log)
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "No available space for path: {}, capacity: {}, used: {}",
             path,

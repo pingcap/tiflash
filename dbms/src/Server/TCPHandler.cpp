@@ -80,7 +80,7 @@ void TCPHandler::runImpl()
 
     if (in->eof())
     {
-        LOG_FMT_WARNING(log, "Client has not sent any data.");
+        LOG_WARNING(log, "Client has not sent any data.");
         return;
     }
 
@@ -98,7 +98,7 @@ void TCPHandler::runImpl()
 
         if (e.code() == ErrorCodes::ATTEMPT_TO_READ_AFTER_EOF)
         {
-            LOG_FMT_WARNING(log, "Client has gone away.");
+            LOG_WARNING(log, "Client has gone away.");
             return;
         }
 
@@ -120,7 +120,7 @@ void TCPHandler::runImpl()
         if (!connection_context.isDatabaseExist(default_database))
         {
             Exception e(fmt::format("Database {} doesn't exist", default_database), ErrorCodes::UNKNOWN_DATABASE);
-            LOG_FMT_WARNING(log, "Code: {}, e.displayText() = {}, Stack trace:\n\n{}", e.code(), e.displayText(), e.getStackTrace().toString());
+            LOG_WARNING(log, "Code: {}, e.displayText() = {}, Stack trace:\n\n{}", e.code(), e.displayText(), e.getStackTrace().toString());
             default_database = "test";
         }
 
@@ -282,7 +282,7 @@ void TCPHandler::runImpl()
         {
             /** Could not send exception information to the client. */
             network_error = true;
-            LOG_FMT_WARNING(log, "Client has gone away.");
+            LOG_WARNING(log, "Client has gone away.");
         }
 
         try
@@ -914,7 +914,7 @@ void TCPHandler::processSharedQuery()
         Block block;
         if (isQueryCancelled())
         {
-            LOG_FMT_WARNING(log, "Cancel input stream");
+            LOG_WARNING(log, "Cancel input stream");
             if (IProfilingBlockInputStream * input = dynamic_cast<IProfilingBlockInputStream *>(state.io.in.get()))
                 input->cancel(true);
         }

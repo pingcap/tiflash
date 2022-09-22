@@ -118,7 +118,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
 {
     auto & tmt = context->getTMTContext();
 
-    LOG_FMT_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
+    LOG_TRACE(log, "table {}, {} original {} bytes", region->getMappedTableID(), region->toString(false), region->dataSize());
 
     /// Write region data into corresponding storage.
     RegionDataReadInfoList data_list_to_remove;
@@ -138,7 +138,7 @@ RegionDataReadInfoList RegionTable::flushRegion(const RegionPtrWithBlock & regio
             }
         }
 
-        LOG_FMT_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
+        LOG_TRACE(log, "table {}, {} after flush {} bytes", region->getMappedTableID(), region->toString(false), cache_size);
     }
 
     return data_list_to_remove;
@@ -254,7 +254,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         auto it = regions.find(region_id);
         if (it == regions.end())
         {
-            LOG_FMT_WARNING(log, "region {} does not exist.", region_id);
+            LOG_WARNING(log, "region {} does not exist.", region_id);
             return;
         }
 
@@ -291,7 +291,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(RegionID region_id, bool try_
     auto region = context->getTMTContext().getKVStore()->getRegion(region_id);
     if (!region)
     {
-        LOG_FMT_WARNING(log, "region {} not found", region_id);
+        LOG_WARNING(log, "region {} not found", region_id);
         return {};
     }
 
@@ -311,7 +311,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
         }
         else
         {
-            LOG_FMT_WARNING(log, "Internal region {} might be removed", region_id);
+            LOG_WARNING(log, "Internal region {} might be removed", region_id);
             return false;
         }
     };
@@ -340,7 +340,7 @@ RegionDataReadInfoList RegionTable::tryFlushRegion(const RegionPtrWithBlock & re
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip flush.
-            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__), "Got error while reading region committed cache: {}. Skip flush region and keep original cache.", e.displayText());
+            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__), "Got error while reading region committed cache: {}. Skip flush region and keep original cache.", e.displayText());
         }
         else
             first_exception = std::current_exception();

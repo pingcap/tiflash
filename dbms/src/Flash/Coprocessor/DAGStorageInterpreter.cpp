@@ -718,7 +718,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
                                 ++iter;
                             }
                         }
-                        LOG_FMT_WARNING(
+                        LOG_WARNING(
                             log,
                             "RegionException after read from storage, regions [{}], message: {}{}",
                             buffer.toString(),
@@ -740,7 +740,7 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
                                 buffer.fmtAppend("{},", iter->first);
                             }
                         }
-                        LOG_FMT_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
+                        LOG_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
                         break; // break retry loop
                     }
                 }

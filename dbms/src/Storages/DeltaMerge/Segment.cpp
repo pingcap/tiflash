@@ -305,13 +305,13 @@ void Segment::serialize(WriteBatch & wb)
 
 bool Segment::writeToDisk(DMContext & dm_context, const ColumnFilePtr & column_file)
 {
-    LOG_FMT_TRACE(log, "Segment write to disk, rows={} isBigFile={}", column_file->getRows(), column_file->isBigFile());
+    LOG_TRACE(log, "Segment write to disk, rows={} isBigFile={}", column_file->getRows(), column_file->isBigFile());
     return delta->appendColumnFile(dm_context, column_file);
 }
 
 bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t offset, size_t limit)
 {
-    LOG_FMT_TRACE(log, "Segment write to cache, rows={}", limit);
+    LOG_TRACE(log, "Segment write to cache, rows={}", limit);
     if (unlikely(limit == 0))
         return true;
     return delta->appendToCache(dm_context, block, offset, limit);
@@ -319,7 +319,7 @@ bool Segment::writeToCache(DMContext & dm_context, const Block & block, size_t o
 
 bool Segment::write(DMContext & dm_context, const Block & block, bool flush_cache)
 {
-    LOG_FMT_TRACE(log, "Segment write to disk, rows={}", block.rows());
+    LOG_TRACE(log, "Segment write to disk, rows={}", block.rows());
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
 
     auto column_file = ColumnFileTiny::writeColumnFile(dm_context, block, 0, block.rows(), wbs);
@@ -348,18 +348,18 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     auto new_range = delete_range.shrink(rowkey_range);
     if (new_range.none())
     {
-        LOG_FMT_WARNING(log, "Try to write an invalid delete range, delete_range={}", delete_range.toDebugString());
+        LOG_WARNING(log, "Try to write an invalid delete range, delete_range={}", delete_range.toDebugString());
         return true;
     }
 
-    LOG_FMT_TRACE(log, "Segment write delete range, delete_range={}", delete_range.toDebugString());
+    LOG_TRACE(log, "Segment write delete range, delete_range={}", delete_range.toDebugString());
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
 bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
-    LOG_FMT_TRACE(log, "Segment write region snapshot, range={} clear={}", new_range.toDebugString(), clear_data_in_range);
+    LOG_TRACE(log, "Segment write region snapshot, range={} clear={}", new_range.toDebugString(), clear_data_in_range);
 
     return delta->ingestColumnFiles(dm_context, range, column_files, clear_data_in_range);
 }
@@ -383,7 +383,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
                                             UInt64 max_version,
                                             size_t expected_block_size)
 {
-    LOG_FMT_TRACE(log, "Begin segment create input stream");
+    LOG_TRACE(log, "Begin segment create input stream");
 
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, max_version);
 
@@ -450,7 +450,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         is_common_handle,
         dm_context.tracing_id);
 
-    LOG_FMT_TRACE(
+    LOG_TRACE(
         Logger::get(log->name(), log->identifier(), dm_context.tracing_id),
         "Finish segment create input stream, max_version={} range_size={} ranges={}",
         max_version,
@@ -865,7 +865,7 @@ std::optional<RowKeyValue> Segment::getSplitPointFast(DMContext & dm_context, co
         || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
         || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
     {
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "Split - unexpected split_point: {}, should be in range {}, cur_rows: {}, read_row_in_pack: {}, file_index: {}",
             split_point.toRowKeyValueRef().toDebugString(),
@@ -916,7 +916,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
 
     if (exact_rows == 0)
     {
-        LOG_FMT_WARNING(log, "Segment has no rows, should not split, segment={}", info());
+        LOG_WARNING(log, "Segment has no rows, should not split, segment={}", info());
         return {};
     }
 
@@ -957,7 +957,7 @@ std::optional<RowKeyValue> Segment::getSplitPointSlow(
         || RowKeyRange(rowkey_range.start, split_point, is_common_handle, rowkey_column_size).none()
         || RowKeyRange(split_point, rowkey_range.end, is_common_handle, rowkey_column_size).none())
     {
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "unexpected split_handle: {}, should be in range {}, exact_rows: {}, cur count: {}, split_row_index: {}",
             split_point.toRowKeyValueRef().toDebugString(),
@@ -990,7 +990,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
     {
         if (!isSplitPointValid(rowkey_range, opt_split_at->toRowKeyValueRef()))
         {
-            LOG_FMT_WARNING(log, "Split - Split skipped because the specified split point is invalid, split_point={}", opt_split_at.value().toDebugString());
+            LOG_WARNING(log, "Split - Split skipped because the specified split point is invalid, split_point={}", opt_split_at.value().toDebugString());
             return std::nullopt;
         }
     }
@@ -1072,7 +1072,7 @@ Segment::prepareSplitLogical(DMContext & dm_context, //
 
     if (my_range.none() || other_range.none())
     {
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "Split - SplitLogical - Unexpected range, aborted, my_range: {}, other_range: {}",
             my_range.toDebugString(),
@@ -1163,7 +1163,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical(DMContext & dm_c
 
     if (my_range.none() || other_range.none())
     {
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "Split - SplitPhysical - Unexpected range, aborted, my_range: {}, other_range: {}",
             my_range.toDebugString(),

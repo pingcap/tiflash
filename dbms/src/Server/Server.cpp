@@ -1006,7 +1006,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             rlim.rlim_cur = config().getUInt("max_open_files", rlim.rlim_max);
             int rc = setrlimit(RLIMIT_NOFILE, &rlim);
             if (rc != 0)
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Cannot set max number of file descriptors to {}"
                     ". Try to specify max_open_files according to your system limits. error: {}",
@@ -1023,7 +1023,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize DateLUT early, to not interfere with running time of first query.
     LOG_FMT_DEBUG(log, "Initializing DateLUT.");
     DateLUT::instance();
-    LOG_FMT_TRACE(log, "Initialized DateLUT with time zone `{}`.", DateLUT::instance().getTimeZone());
+    LOG_TRACE(log, "Initialized DateLUT with time zone `{}`.", DateLUT::instance().getTimeZone());
 
     /// Directory with temporary data for processing of heavy queries.
     {

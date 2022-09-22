@@ -41,13 +41,13 @@ ReadIndexStressTest::ReadIndexStressTest(
     : tmt(tmt_)
 {
     MockStressTestCfg::enable = true;
-    LOG_FMT_WARNING(logger, "enable MockStressTest");
+    LOG_WARNING(logger, "enable MockStressTest");
 }
 
 ReadIndexStressTest::~ReadIndexStressTest()
 {
     MockStressTestCfg::enable = false;
-    LOG_FMT_WARNING(logger, "disable MockStressTest");
+    LOG_WARNING(logger, "disable MockStressTest");
 }
 
 void ReadIndexStressTest::dbgFuncStressTest(Context & context, const ASTs & args, DBGInvoker::Printer printer)

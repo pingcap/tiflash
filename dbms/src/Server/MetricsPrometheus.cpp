@@ -152,12 +152,12 @@ MetricsPrometheus::MetricsPrometheus(
     metrics_interval = conf.getInt(status_metrics_interval, 15);
     if (metrics_interval < 5)
     {
-        LOG_FMT_WARNING(log, "Config Error: {} should >= 5", status_metrics_interval);
+        LOG_WARNING(log, "Config Error: {} should >= 5", status_metrics_interval);
         metrics_interval = 5;
     }
     if (metrics_interval > 120)
     {
-        LOG_FMT_WARNING(log, "Config Error: {} should <= 120", status_metrics_interval);
+        LOG_WARNING(log, "Config Error: {} should <= 120", status_metrics_interval);
         metrics_interval = 120;
     }
     LOG_FMT_INFO(log, "Config: {} = {}", status_metrics_interval, metrics_interval);
@@ -271,7 +271,7 @@ void MetricsPrometheus::run()
     {
         if (auto return_code = gateway->Push(); return_code != 200)
         {
-            LOG_FMT_WARNING(log, "Failed to push metrics to gateway, return code is {}", return_code);
+            LOG_WARNING(log, "Failed to push metrics to gateway, return code is {}", return_code);
         }
     }
 }

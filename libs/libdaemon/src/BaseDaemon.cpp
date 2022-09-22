@@ -674,7 +674,7 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     }
     catch (...)
     {
-        LOG_FMT_WARNING(logger, "when creating {}, {}", path, DB::getCurrentExceptionMessage(true));
+        LOG_WARNING(logger, "when creating {}, {}", path, DB::getCurrentExceptionMessage(true));
     }
     return false;
 }
