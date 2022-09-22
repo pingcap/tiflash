@@ -63,6 +63,12 @@ SegmentPtr SimplePKTestBasic::getSegmentAt(Int64 key) const
 
 void SimplePKTestBasic::ensureSegmentBreakpoints(const std::vector<Int64> & breakpoints, bool use_logical_split)
 {
+    LOG_FMT_INFO(
+        logger_op,
+        "ensureSegmentBreakpoints [{}] logical_split={}",
+        fmt::join(breakpoints, ","),
+        use_logical_split);
+
     for (const auto & bp : breakpoints)
     {
         auto bp_key = buildRowKey(bp);
@@ -173,35 +179,85 @@ Block SimplePKTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool 
 
 void SimplePKTestBasic::fill(Int64 start_key, Int64 end_key)
 {
+    LOG_FMT_INFO(
+        logger_op,
+        "fill [{}, {})",
+        start_key,
+        end_key);
+
     auto block = prepareWriteBlock(start_key, end_key);
     store->write(*db_context, db_context->getSettingsRef(), block);
 }
 
 void SimplePKTestBasic::fillDelete(Int64 start_key, Int64 end_key)
 {
+    LOG_FMT_INFO(
+        logger_op,
+        "fillDelete [{}, {})",
+        start_key,
+        end_key);
+
     auto block = prepareWriteBlock(start_key, end_key, /* delete */ true);
     store->write(*db_context, db_context->getSettingsRef(), block);
 }
 
 void SimplePKTestBasic::flush(Int64 start_key, Int64 end_key)
 {
+    LOG_FMT_INFO(
+        logger_op,
+        "flush [{}, {})",
+        start_key,
+        end_key);
+
     auto range = buildRowRange(start_key, end_key);
     store->flushCache(*db_context, range, true);
 }
 
 void SimplePKTestBasic::flush()
 {
+    LOG_FMT_INFO(
+        logger_op,
+        "flushAll");
+
     auto range = RowKeyRange::newAll(is_common_handle, 1);
     store->flushCache(*db_context, range, true);
 }
 
+void SimplePKTestBasic::mergeDelta(Int64 start_key, Int64 end_key)
+{
+    LOG_FMT_INFO(
+        logger_op,
+        "mergeDelta [{}, {})",
+        start_key,
+        end_key);
+
+    auto range = buildRowRange(start_key, end_key);
+    while (!range.none())
+    {
+        auto processed_range = store->mergeDeltaBySegment(*db_context, range.start);
+        RUNTIME_CHECK(processed_range.has_value());
+        range.setStart(processed_range->end);
+    }
+}
+
 void SimplePKTestBasic::mergeDelta()
 {
+    LOG_FMT_INFO(
+        logger_op,
+        "mergeDeltaAll");
+
+    flush(); // as mergeDeltaBySegment always flush, so we also flush here.
     store->mergeDeltaAll(*db_context);
 }
 
 void SimplePKTestBasic::deleteRange(Int64 start_key, Int64 end_key)
 {
+    LOG_FMT_INFO(
+        logger_op,
+        "deleteRange [{}, {})",
+        start_key,
+        end_key);
+
     auto range = buildRowRange(start_key, end_key);
     store->deleteRange(*db_context, db_context->getSettingsRef(), range);
 }
@@ -240,6 +296,16 @@ size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key)
         /* is_fast_scan= */ false,
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
+}
+
+void SimplePKTestBasic::debugDumpAllSegments() const
+{
+    std::shared_lock lock(store->read_write_mutex);
+    for (auto [key, segment] : store->segments)
+    {
+        UNUSED(key);
+        LOG_FMT_INFO(logger, "debugDumpAllSegments: {}", segment->info());
+    }
 }
 
 

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -50,6 +51,7 @@ public:
     void fillDelete(Int64 start_key, Int64 end_key);
     void flush(Int64 start_key, Int64 end_key);
     void flush();
+    void mergeDelta(Int64 start_key, Int64 end_key);
     void mergeDelta();
     void deleteRange(Int64 start_key, Int64 end_key);
     size_t getRowsN();
@@ -77,6 +79,8 @@ public:
      */
     std::vector<Int64> getSegmentBreakpoints() const;
 
+    void debugDumpAllSegments() const;
+
 protected:
     void reload();
 
@@ -93,6 +97,9 @@ protected:
     DMContextPtr dm_context;
 
     UInt64 version = 0;
+
+    LoggerPtr logger = Logger::get("SimplePKTestBasic");
+    LoggerPtr logger_op = Logger::get("SimplePKTestBasicOperations");
 
 protected:
     // Below are options
