@@ -1072,6 +1072,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
+    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
 
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
