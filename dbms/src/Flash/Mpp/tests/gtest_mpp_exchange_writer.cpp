@@ -190,6 +190,71 @@ try
 }
 CATCH
 
+TEST_F(TestMPPExchangeWriter, testFineGrainedShuffleWriter)
+try
+{
+    const size_t block_rows = 64;
+    const size_t block_num = 64;
+    const uint16_t part_num = 4;
+    const uint32_t fine_grained_shuffle_stream_count = 8;
+    const Int64 fine_grained_shuffle_batch_size = 108;
+
+    const bool should_send_exec_summary_at_last = true;
+
+    // 1. Build Block.
+    std::vector<Block> blocks;
+    for (size_t i = 0; i < block_num; ++i)
+    {
+        blocks.emplace_back(prepareUniformBlock(block_rows));
+        blocks.emplace_back(prepareUniformBlock(0));
+    }
+    Block header = blocks.back();
+
+    // 2. Build MockStreamWriter.
+    std::unordered_map<uint16_t, std::vector<mpp::MPPDataPacket>> write_report;
+    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(std::move(packet));
+    };
+    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+
+    // 3. Start to write.
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
+        mock_writer,
+        part_col_ids,
+        part_col_collators,
+        should_send_exec_summary_at_last,
+        *dag_context_ptr,
+        fine_grained_shuffle_stream_count,
+        fine_grained_shuffle_batch_size);
+    for (const auto & block : blocks)
+        dag_writer->write(block);
+    dag_writer->finishWrite();
+
+    // 4. Start to check write_report.
+    size_t per_part_rows = block_rows * block_num / part_num;
+    ASSERT_EQ(write_report.size(), part_num);
+    std::vector<size_t> rows_of_stream_ids(fine_grained_shuffle_stream_count, 0);
+    for (const auto & ele : write_report)
+    {
+        size_t part_decoded_block_rows = 0;
+        for (const auto & packet : ele.second)
+        {
+            ASSERT_EQ(packet.chunks_size(), packet.stream_ids_size());
+            for (int i = 0; i < packet.chunks_size(); ++i)
+            {
+                auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+                part_decoded_block_rows += decoded_block.rows();
+                rows_of_stream_ids[packet.stream_ids(i)] += decoded_block.rows();
+            }
+        }
+        ASSERT_EQ(part_decoded_block_rows, per_part_rows);
+    }
+    size_t per_stream_id_rows = block_rows * block_num / fine_grained_shuffle_stream_count;
+    for (size_t rows : rows_of_stream_ids)
+        ASSERT_EQ(rows, per_stream_id_rows);
+}
+CATCH
+
 TEST_F(TestMPPExchangeWriter, emptyBlockForFineGrainedShuffleWriter)
 try
 {
@@ -235,7 +300,10 @@ try
     // 1. Build Blocks.
     std::vector<Block> blocks;
     for (size_t i = 0; i < block_num; ++i)
+    {
         blocks.emplace_back(prepareUniformBlock(block_rows));
+        blocks.emplace_back(prepareUniformBlock(0));
+    }
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
@@ -318,7 +386,10 @@ try
     // 1. Build Blocks.
     std::vector<Block> blocks;
     for (size_t i = 0; i < block_num; ++i)
+    {
         blocks.emplace_back(prepareRandomBlock(block_rows));
+        blocks.emplace_back(prepareRandomBlock(0));
+    }
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
