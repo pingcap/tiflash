@@ -34,36 +34,34 @@ public:
         : path(std::move(path_))
     {}
 
-    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const
+    bool fileExist(const PageFileIdAndLevel & /*id_lvl*/) const override
     {
         return true;
     }
 
-    size_t numPaths() const
+    size_t numPaths() const override
     {
         return 1;
     }
 
-    String defaultPath() const
+    String defaultPath() const override
     {
         return path;
     }
 
-    String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
+    String getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const override
     {
         return path;
     }
 
-    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/) {}
+    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/) override {}
 
-    Strings listPaths() const
+    Strings listPaths() const override
     {
-        Strings paths;
-        paths.emplace_back(path);
-        return paths;
+        return Strings{path};
     }
 
-    String choosePath(const PageFileIdAndLevel & /*id_lvl*/)
+    String choosePath(const PageFileIdAndLevel & /*id_lvl*/) override
     {
         return path;
     }
@@ -72,7 +70,7 @@ public:
         const PageFileIdAndLevel & /*id_lvl*/,
         size_t /*size_to_add*/,
         const String & /*pf_parent_path*/,
-        bool /*need_insert_location*/)
+        bool /*need_insert_location*/) override
     {
         return 0;
     }
@@ -80,7 +78,7 @@ public:
     size_t freePageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
         size_t /*size_to_free*/,
-        const String & /*pf_parent_path*/)
+        const String & /*pf_parent_path*/) override
     {
         return 0;
     }
@@ -99,44 +97,41 @@ public:
             throw Exception("Should not generate MockDiskDelegatorMulti with empty paths");
     }
 
-    bool fileExist(const PageFileIdAndLevel & id_lvl) const
+    bool fileExist(const PageFileIdAndLevel & id_lvl) const override
     {
-        return page_path_map.find(id_lvl) != page_path_map.end();
+        return page_path_map.exist(id_lvl);
     }
 
 
-    size_t numPaths() const
+    size_t numPaths() const override
     {
         return paths.size();
     }
 
-    String defaultPath() const
+    String defaultPath() const override
     {
         return paths[0];
     }
 
-    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const
+    String getPageFilePath(const PageFileIdAndLevel & id_lvl) const override
     {
-        auto iter = page_path_map.find(id_lvl);
-        if (likely(iter != page_path_map.end()))
-        {
-            return paths[iter->second];
-        }
-        throw Exception(fmt::format("Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second));
+        auto idx_opt = page_path_map.getIndex(id_lvl);
+        RUNTIME_CHECK_MSG(idx_opt.has_value(), "Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second);
+        return paths[*idx_opt];
     }
 
-    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/) {}
+    void removePageFile(const PageFileIdAndLevel & /*id_lvl*/, size_t /*file_size*/, bool /*meta_left*/, bool /*remove_from_default_path*/) override {}
 
-    Strings listPaths() const
+    Strings listPaths() const override
     {
         return paths;
     }
 
-    String choosePath(const PageFileIdAndLevel & id_lvl)
+    String choosePath(const PageFileIdAndLevel & id_lvl) override
     {
-        if (auto iter = page_path_map.find(id_lvl); iter != page_path_map.end())
+        if (auto idx_opt = page_path_map.getIndex(id_lvl); idx_opt.has_value())
         {
-            return paths[iter->second];
+            return paths[*idx_opt];
         }
         auto chosen = paths[choose_idx];
         choose_idx = (choose_idx + 1) % paths.size();
@@ -147,7 +142,7 @@ public:
         const PageFileIdAndLevel & id_lvl,
         size_t /*size_to_add*/,
         const String & pf_parent_path,
-        bool need_insert_location)
+        bool need_insert_location) override
     {
         if (need_insert_location)
         {
@@ -162,9 +157,8 @@ public:
                 }
             }
 
-            if (unlikely(index == UINT32_MAX))
-                throw Exception(fmt::format("Unrecognized path {}", pf_parent_path));
-            page_path_map[id_lvl] = index;
+            RUNTIME_CHECK_MSG(index != UINT32_MAX, "Unrecognized path {}", pf_parent_path);
+            page_path_map.setIndex(id_lvl, index);
         }
         return 0;
     }
@@ -172,7 +166,7 @@ public:
     size_t freePageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
         size_t /*size_to_free*/,
-        const String & /*pf_parent_path*/)
+        const String & /*pf_parent_path*/) override
     {
         return 0;
     }
