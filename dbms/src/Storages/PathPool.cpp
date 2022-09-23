@@ -14,7 +14,6 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/escapeForFileName.h>
 #include <Core/Types.h>
 #include <Encryption/FileProvider.h>
