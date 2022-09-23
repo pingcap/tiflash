@@ -598,7 +598,7 @@ size_t PSDiskDelegatorMulti::addPageFileUsedSize(
     return index;
 }
 
-size_t PSDiskDelegatorMulti::freePageFileUsedSize(
+void PSDiskDelegatorMulti::freePageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/,
     size_t /*size_to_free*/,
     const String & /*pf_parent_path*/)
@@ -676,12 +676,12 @@ size_t PSDiskDelegatorSingle::addPageFileUsedSize(
 }
 
 
-size_t PSDiskDelegatorSingle::freePageFileUsedSize(
-    const PageFileIdAndLevel & /*id_lvl*/,
-    size_t /*size_to_free*/,
+void PSDiskDelegatorSingle::freePageFileUsedSize(
+    const PageFileIdAndLevel & id_lvl,
+    size_t size_to_free,
     const String & /*pf_parent_path*/)
 {
-    throw Exception("Not Implemented", ErrorCodes::NOT_IMPLEMENTED);
+    removePageFile(id_lvl, size_to_free, false, false);
 }
 
 String PSDiskDelegatorSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
@@ -779,7 +779,7 @@ size_t PSDiskDelegatorRaft::addPageFileUsedSize(
     return index;
 }
 
-size_t PSDiskDelegatorRaft::freePageFileUsedSize(
+void PSDiskDelegatorRaft::freePageFileUsedSize(
     const PageFileIdAndLevel & id_lvl,
     size_t size_to_free,
     const String & pf_parent_path)
@@ -800,7 +800,6 @@ size_t PSDiskDelegatorRaft::freePageFileUsedSize(
 
     // update global used size
     pool.global_capacity->freeUsedSize(upper_path, size_to_free);
-    return index;
 }
 
 String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
@@ -912,7 +911,7 @@ size_t PSDiskDelegatorGlobalMulti::addPageFileUsedSize(
     return index;
 }
 
-size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
+void PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
     const PageFileIdAndLevel & id_lvl,
     size_t size_to_free,
     const String & pf_parent_path)
@@ -936,7 +935,6 @@ size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
 
     // update global used size
     pool.global_capacity->freeUsedSize(upper_path, size_to_free);
-    return index;
 }
 
 String PSDiskDelegatorGlobalMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
@@ -1007,13 +1005,12 @@ size_t PSDiskDelegatorGlobalSingle::addPageFileUsedSize(
     return 0;
 }
 
-size_t PSDiskDelegatorGlobalSingle::freePageFileUsedSize(
+void PSDiskDelegatorGlobalSingle::freePageFileUsedSize(
     const PageFileIdAndLevel & /*id_lvl*/,
     size_t size_to_free,
     const String & pf_parent_path)
 {
     pool.global_capacity->freeUsedSize(pf_parent_path, size_to_free);
-    return 0;
 }
 
 String PSDiskDelegatorGlobalSingle::getPageFilePath(const PageFileIdAndLevel & /*id_lvl*/) const
