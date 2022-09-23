@@ -413,8 +413,8 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
         && at_least_result.last_pack_intersection == RSResult::All)
     {
         LOG_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange permanently skipped segment "
-                           "because all packs in DTFiles are fully contained by the segment range, segment={}",
-                      seg->info());
+                       "because all packs in DTFiles are fully contained by the segment range, segment={}",
+                  seg->info());
         seg->setValidDataRatioChecked();
         return false;
     }
