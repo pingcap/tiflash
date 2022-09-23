@@ -341,6 +341,35 @@ try
 }
 CATCH
 
+TEST_F(PathPoolTest, FileLifecycle)
+{
+    Strings paths = getMultiTestPaths();
+    Strings latest_paths(paths.begin(), paths.begin() + 1);
+    auto ctx = TiFlashTestEnv::getContext();
+
+    PathPool pool(paths, paths, Strings{}, ctx.getPathCapacity(), ctx.getFileProvider());
+    auto delegator = pool.getPSDiskDelegatorGlobalMulti("log");
+    PageFileIdAndLevel id_lvl{100, 0};
+    // create new page data file
+    const String chosen_path = delegator->choosePath(id_lvl);
+    EXPECT_FALSE(delegator->fileExist(id_lvl));
+    delegator->addPageFileUsedSize(id_lvl, 1024, chosen_path, true);
+    // add size to page data file
+    delegator->addPageFileUsedSize(id_lvl, 2048, chosen_path, false);
+    // remove size to page data file
+    delegator->freePageFileUsedSize(id_lvl, 2048, chosen_path);
+    delegator->freePageFileUsedSize(id_lvl, 512, chosen_path);
+    delegator->freePageFileUsedSize(id_lvl, 512, chosen_path);
+    EXPECT_TRUE(delegator->fileExist(id_lvl));
+    // get page data file path
+    EXPECT_EQ(delegator->getPageFilePath(id_lvl), chosen_path);
+    // add size to page data file
+    delegator->addPageFileUsedSize(id_lvl, 256, chosen_path, false);
+    // remove page data file
+    delegator->removePageFile(id_lvl, 256, false, false);
+    EXPECT_FALSE(delegator->fileExist(id_lvl));
+}
+
 class MockPathCapacityMetrics : public PathCapacityMetrics
 {
 public:
