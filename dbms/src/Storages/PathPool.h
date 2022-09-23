@@ -51,17 +51,18 @@ public:
     PathPool() = default;
 
     // Constructor to be used during initialization
-    PathPool( //
+    PathPool(
         const Strings & main_data_paths,
-        const Strings & latest_data_paths, //
-        const Strings & kvstore_paths, //
+        const Strings & latest_data_paths,
+        const Strings & kvstore_paths,
         PathCapacityMetricsPtr global_capacity_,
-        FileProviderPtr file_provider_, //
+        FileProviderPtr file_provider_,
         bool enable_raft_compatible_mode_ = false);
 
     // Constructor to create PathPool for one Storage
     StoragePathPool withTable(const String & database_, const String & table_, bool path_need_database_name_) const;
 
+    // TODO: remove this outdated code
     bool isRaftCompatibleModeEnabled() const { return enable_raft_compatible_mode; }
 
     // Generate a delegator for managing the paths of `RegionPersister`.
@@ -81,13 +82,7 @@ public:
     const Strings & listGlobalPagePaths() const { return global_page_paths; }
 
 public:
-    struct PageFileIdLvlHasher
-    {
-        std::size_t operator()(const PageFileIdAndLevel & id_lvl) const
-        {
-            return std::hash<PageFileId>()(id_lvl.first) ^ std::hash<PageFileLevel>()(id_lvl.second);
-        }
-    };
+    // A thread safe wrapper for storing a map of <page data file id, path index>
     class PageFilePathMap
     {
     public:
@@ -118,9 +113,15 @@ public:
 
     private:
         mutable std::mutex mtx;
+        struct PageFileIdLvlHasher
+        {
+            std::size_t operator()(const PageFileIdAndLevel & id_lvl) const
+            {
+                return std::hash<PageFileId>()(id_lvl.first) ^ std::hash<PageFileLevel>()(id_lvl.second);
+            }
+        };
         std::unordered_map<PageFileIdAndLevel, UInt32, PageFileIdLvlHasher> page_id_to_index;
     };
-    // using PageFilePathMap = std::unordered_map<PageFileIdAndLevel, UInt32, PageFileIdLvlHasher>;
 
     friend class PSDiskDelegatorRaft;
     friend class PSDiskDelegatorGlobalSingle;
@@ -186,7 +187,7 @@ public:
         bool need_insert_location)
         = 0;
 
-    virtual size_t freePageFileUsedSize(
+    virtual void freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
         size_t size_to_free,
         const String & pf_parent_path)
@@ -221,7 +222,7 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t freePageFileUsedSize(
+    void freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
         size_t size_to_free,
         const String & pf_parent_path) override;
@@ -262,7 +263,7 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t freePageFileUsedSize(
+    void freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
         size_t size_to_free,
         const String & pf_parent_path) override;
@@ -297,7 +298,7 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t freePageFileUsedSize(
+    void freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
         size_t size_to_free,
         const String & pf_parent_path) override;
@@ -314,7 +315,6 @@ private:
     using RaftPathInfos = std::vector<RaftPathInfo>;
 
     PathPool & pool;
-    // mutable std::mutex mutex;
     RaftPathInfos raft_path_infos;
     // PageFileID -> path index
     PathPool::PageFilePathMap page_path_map;
@@ -345,7 +345,7 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t freePageFileUsedSize(
+    void freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
         size_t size_to_free,
         const String & pf_parent_path) override;
@@ -355,8 +355,6 @@ public:
     void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) override;
 
 private:
-    // mutable std::mutex mutex;
-
     const PathPool & pool;
     const String path_prefix;
     // PageFileID -> path index
@@ -388,7 +386,7 @@ public:
         const String & pf_parent_path,
         bool need_insert_location) override;
 
-    size_t freePageFileUsedSize(
+    void freePageFileUsedSize(
         const PageFileIdAndLevel & id_lvl,
         size_t size_to_free,
         const String & pf_parent_path) override;
@@ -401,7 +399,6 @@ private:
     const PathPool & pool;
     const String path_prefix;
 
-    // mutable std::mutex mutex;
     PathPool::PageFilePathMap page_path_map;
 };
 

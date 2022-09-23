@@ -75,13 +75,11 @@ public:
         return 0;
     }
 
-    size_t freePageFileUsedSize(
+    void freePageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
         size_t /*size_to_free*/,
         const String & /*pf_parent_path*/) override
-    {
-        return 0;
-    }
+    {}
 
 private:
     String path;
@@ -162,13 +160,11 @@ public:
         return 0;
     }
 
-    size_t freePageFileUsedSize(
+    void freePageFileUsedSize(
         const PageFileIdAndLevel & /*id_lvl*/,
         size_t /*size_to_free*/,
         const String & /*pf_parent_path*/) override
-    {
-        return 0;
-    }
+    {}
 
 private:
     Strings paths;
