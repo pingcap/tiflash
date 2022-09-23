@@ -21,9 +21,7 @@ add_subdirectory (libcommon)
 add_subdirectory (libpocoext)
 add_subdirectory (libdaemon)
 
-if (USE_INTERNAL_MEMCPY)
-    add_subdirectory (libmemcpy)
-endif()
+add_subdirectory (libmemcpy)
 
 if (GLIBC_COMPATIBILITY)
     add_subdirectory (libglibc-compatibility)

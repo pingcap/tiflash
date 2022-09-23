@@ -33,7 +33,7 @@ set(RE2_SOURCES
 
 add_library(re2 ${RE2_SOURCES})
 target_include_directories(re2 PUBLIC "${SRC_DIR}")
-
+target_no_warning(re2 unused-but-set-variable)
 
 # Building re2 which is thread-safe and re2_st which is not.
 # re2 changes its state during matching of regular expression, e.g. creates temporary DFA.
@@ -44,6 +44,7 @@ add_library(re2_st ${RE2_SOURCES})
 target_compile_definitions (re2_st PRIVATE NDEBUG NO_THREADS re2=re2_st)
 target_include_directories (re2_st PRIVATE .)
 target_include_directories (re2_st SYSTEM PUBLIC ${CMAKE_CURRENT_BINARY_DIR} ${SRC_DIR})
+target_no_warning(re2_st unused-but-set-variable)
 
 file (MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/re2_st)
 foreach (FILENAME filtered_re2.h re2.h set.h stringpiece.h)

@@ -197,7 +197,7 @@ try
 
         // flush segment and make sure there is two packs in stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+        ASSERT_EQ(segment->getStable()->getDMFilesPacks(), 2);
     }
 
     {
