@@ -722,8 +722,8 @@ std::set<UInt64> DMFile::listAllInPath(
                 const String readable_path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
                 file_provider->deleteEncryptionInfo(EncryptionPath(readable_path, ""), /* throw_on_error= */ false);
                 const auto full_path = parent_path + "/" + name;
-                if (Poco::File temp_file(full_path); temp_file.exists())
-                    temp_file.remove(true);
+                if (Poco::File file(full_path); file.exists())
+                    file.remove(true);
                 LOG_FMT_WARNING(log, "Existing temporary or dropped dmfile, removed: {}", full_path);
                 continue;
             }
