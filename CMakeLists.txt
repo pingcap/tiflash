@@ -27,6 +27,9 @@ if(CMAKE_PREFIX_PATH)
             "${CMAKE_PREFIX_PATH}/lib:${CMAKE_PREFIX_PATH}/lib/x86_64-unknown-linux-gnu/:${CMAKE_PREFIX_PATH}/lib/aarch64-unknown-linux-gnu/")
 endif()
 
+include (cmake/find_rust.cmake)
+include (cmake/add_warning.cmake)
+
 message (STATUS "Using CXX=${CMAKE_CXX_COMPILER}, ver=${CMAKE_CXX_COMPILER_VERSION};CC=${CMAKE_C_COMPILER}, ver=${CMAKE_C_COMPILER_VERSION}")
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     # Require at least gcc 7
@@ -268,11 +271,6 @@ if (ARCHNATIVE)
     set (COMPILER_FLAGS                  "${COMPILER_FLAGS} -march=native")
 endif ()
 
-# Special options for better optimized code with clang
-#if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-#    set (CMAKE_CXX_FLAGS_RELWITHDEBINFO  "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -Wno-unused-command-line-argument -mllvm -inline-threshold=10000")
-#endif ()
-
 if (CMAKE_VERSION VERSION_LESS "3.8.0")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 else ()
@@ -510,6 +508,11 @@ if (ARCH_AMD64)
         add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=1)
     else()
         add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
+    endif()
+
+    check_cxx_compiler_flag("-mmovbe" TIFLASH_COMPILER_MOVBE_SUPPORT)
+    if (TIFLASH_COMPILER_MOVBE_SUPPORT)
+        set(COMPILER_MOVBE_FLAG "-mmovbe")
     endif()
 else()
     add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)

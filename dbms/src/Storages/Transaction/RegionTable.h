@@ -17,17 +17,16 @@
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Core/Names.h>
+#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionDataRead.h>
 #include <Storages/Transaction/RegionException.h>
 #include <Storages/Transaction/RegionLockInfo.h>
 #include <Storages/Transaction/TiKVHandle.h>
 #include <common/logger_useful.h>
-#include <common/types.h>
 
 #include <condition_variable>
 #include <functional>
-#include <limits>
 #include <mutex>
 #include <optional>
 #include <variant>
@@ -62,7 +61,6 @@ enum : SafeTS
 {
     InvalidSafeTS = std::numeric_limits<UInt64>::max()
 };
-
 class RegionTable : private boost::noncopyable
 {
 public:
@@ -84,7 +82,7 @@ public:
 
     struct Table : boost::noncopyable
     {
-        explicit Table(const TableID table_id_)
+        Table(const TableID table_id_)
             : table_id(table_id_)
         {}
         TableID table_id;
@@ -93,7 +91,21 @@ public:
 
     using TableMap = std::unordered_map<TableID, Table>;
     using RegionInfoMap = std::unordered_map<RegionID, TableID>;
-    using SafeTsMap = std::unordered_map<RegionID, UInt64>;
+
+    // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
+    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
+    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
+    struct SafeTsEntry
+    {
+        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
+            : leader_safe_ts(leader_safe_ts)
+            , self_safe_ts(self_safe_ts)
+        {}
+        std::atomic<UInt64> leader_safe_ts;
+        std::atomic<UInt64> self_safe_ts;
+    };
+    using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
+    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
 
     using DirtyRegions = std::unordered_set<RegionID>;
     using TableToOptimize = std::unordered_set<TableID>;
@@ -102,7 +114,7 @@ public:
     {
         using FlushThresholdsData = std::vector<std::pair<Int64, Seconds>>;
 
-        explicit FlushThresholds(FlushThresholdsData && data_)
+        FlushThresholds(FlushThresholdsData && data_)
             : data(std::make_shared<FlushThresholdsData>(std::move(data_)))
         {}
 
@@ -126,7 +138,7 @@ public:
         mutable std::mutex mutex;
     };
 
-    explicit RegionTable(Context & context_);
+    RegionTable(Context & context_);
     void restore();
 
     void setFlushThresholds(const FlushThresholds::FlushThresholdsData & flush_thresholds_);
@@ -169,38 +181,13 @@ public:
 
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
-    void updateSelfSafeTS(UInt64 region_id, UInt64 safe_ts)
-    {
-        if (safe_ts == InvalidSafeTS)
-        {
-            return;
-        }
-        std::lock_guard lock(mutex);
-        self_safe_ts[region_id] = safe_ts;
-    }
-    void updateLeaderSafeTS(UInt64 region_id, UInt64 safe_ts)
-    {
-        if (safe_ts == InvalidSafeTS)
-        {
-            return;
-        }
-        std::lock_guard lock(mutex);
-        leader_safe_ts[region_id] = safe_ts;
-    }
+
+
+    void updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts);
 
     // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
     static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
-    bool isSafeTSLag(UInt64 region_id)
-    {
-        auto self_it = self_safe_ts.find(region_id);
-        auto leader_it = leader_safe_ts.find(region_id);
-        if (self_it == self_safe_ts.end() || leader_it == leader_safe_ts.end())
-        {
-            return false;
-        }
-        LOG_FMT_TRACE(log, "region_id:{}, table_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, regions[region_id], leader_it->second, self_it->second);
-        return (leader_it->second > self_it->second) && (leader_it->second - self_it->second > SafeTsDiffThreshold);
-    }
+    bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
 
 private:
     friend class MockTiDB;
@@ -220,11 +207,7 @@ private:
 private:
     TableMap tables;
     RegionInfoMap regions;
-    // safe_ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
-    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts in check_leader RPC as leader_safe_ts.
-    SafeTsMap leader_safe_ts;
-    // self_safe_ts is the safe_ts in learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update self_safe_ts when TiFlash has applied the raft log to applied_index.
-    SafeTsMap self_safe_ts;
+    SafeTsMap safe_ts_map;
     DirtyRegions dirty_regions;
 
     FlushThresholds flush_thresholds;
@@ -232,6 +215,7 @@ private:
     Context * const context;
 
     mutable std::mutex mutex;
+    mutable std::shared_mutex rw_lock;
 
     Poco::Logger * log;
 };
@@ -290,10 +274,9 @@ struct RegionPtrWithSnapshotFiles
     using Base = RegionPtr;
 
     /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<UInt64> ids_ = {})
-        : base(base_)
-        , ingest_ids(std::move(ids_))
-    {}
+    RegionPtrWithSnapshotFiles(
+        const Base & base_,
+        std::vector<DM::ExternalDTFileInfo> && external_files_ = {});
 
     /// to be compatible with usage as RegionPtr.
     Base::element_type * operator->() const { return base.operator->(); }
@@ -303,7 +286,7 @@ struct RegionPtrWithSnapshotFiles
     operator const Base &() const { return base; }
 
     const Base & base;
-    const std::vector<UInt64> ingest_ids;
+    const std::vector<DM::ExternalDTFileInfo> external_files;
 };
 
 } // namespace DB

@@ -13,58 +13,64 @@
 // limitations under the License.
 
 #include <Common/config.h>
-#include <Interpreters/Context.h>
-#include <DataStreams/NativeBlockInputStream.h>
-#include <DataStreams/NativeBlockOutputStream.h>
-#include <DataStreams/TabSeparatedRowInputStream.h>
-#include <DataStreams/TabSeparatedRowOutputStream.h>
-#include <DataStreams/TabSeparatedRawRowOutputStream.h>
 #include <DataStreams/BinaryRowInputStream.h>
 #include <DataStreams/BinaryRowOutputStream.h>
-#include <DataStreams/ValuesRowInputStream.h>
-#include <DataStreams/ValuesRowOutputStream.h>
+#include <DataStreams/BlockInputStreamFromRowInputStream.h>
+#include <DataStreams/BlockOutputStreamFromRowOutputStream.h>
+#include <DataStreams/CSVRowInputStream.h>
+#include <DataStreams/CSVRowOutputStream.h>
+#include <DataStreams/FormatFactory.h>
+#include <DataStreams/JSONCompactRowOutputStream.h>
+#include <DataStreams/JSONEachRowRowInputStream.h>
+#include <DataStreams/JSONEachRowRowOutputStream.h>
+#include <DataStreams/JSONRowOutputStream.h>
+#include <DataStreams/MaterializingBlockOutputStream.h>
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/NativeBlockOutputStream.h>
+#include <DataStreams/NullBlockOutputStream.h>
 #include <DataStreams/PrettyBlockOutputStream.h>
 #include <DataStreams/PrettyCompactBlockOutputStream.h>
 #include <DataStreams/PrettySpaceBlockOutputStream.h>
-#include <DataStreams/VerticalRowOutputStream.h>
-#include <DataStreams/NullBlockOutputStream.h>
-#include <DataStreams/BlockInputStreamFromRowInputStream.h>
-#include <DataStreams/BlockOutputStreamFromRowOutputStream.h>
-#include <DataStreams/JSONRowOutputStream.h>
-#include <DataStreams/JSONCompactRowOutputStream.h>
-#include <DataStreams/JSONEachRowRowOutputStream.h>
-#include <DataStreams/JSONEachRowRowInputStream.h>
-#include <DataStreams/XMLRowOutputStream.h>
-#include <DataStreams/TSKVRowOutputStream.h>
-#include <DataStreams/TSKVRowInputStream.h>
-#include <DataStreams/CSVRowInputStream.h>
-#include <DataStreams/CSVRowOutputStream.h>
-#include <DataStreams/MaterializingBlockOutputStream.h>
-#include <DataStreams/FormatFactory.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
+#include <DataStreams/TSKVRowInputStream.h>
+#include <DataStreams/TSKVRowOutputStream.h>
+#include <DataStreams/TabSeparatedRawRowOutputStream.h>
+#include <DataStreams/TabSeparatedRowInputStream.h>
+#include <DataStreams/TabSeparatedRowOutputStream.h>
+#include <DataStreams/ValuesRowInputStream.h>
+#include <DataStreams/ValuesRowOutputStream.h>
+#include <DataStreams/VerticalRowOutputStream.h>
+#include <DataStreams/XMLRowOutputStream.h>
 #include <DataTypes/FormatSettingsJSON.h>
-
-#include <boost/algorithm/string.hpp>
+#include <Interpreters/Context.h>
+#include <boost_wrapper/string.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int FORMAT_IS_NOT_SUITABLE_FOR_INPUT;
-    extern const int UNKNOWN_FORMAT;
-}
+extern const int FORMAT_IS_NOT_SUITABLE_FOR_INPUT;
+extern const int UNKNOWN_FORMAT;
+} // namespace ErrorCodes
 
 
-BlockInputStreamPtr FormatFactory::getInput(const String & name, ReadBuffer & buf,
-    const Block & sample, const Context & context, size_t max_block_size) const
+BlockInputStreamPtr FormatFactory::getInput(
+    const String & name,
+    ReadBuffer & buf,
+    const Block & sample,
+    const Context & context,
+    size_t max_block_size)
 {
     const Settings & settings = context.getSettingsRef();
 
-    auto wrap_row_stream = [&](auto && row_stream)
-    {
-        return std::make_shared<BlockInputStreamFromRowInputStream>(std::move(row_stream), sample, max_block_size,
-            settings.input_format_allow_errors_num, settings.input_format_allow_errors_ratio);
+    auto wrap_row_stream = [&](auto && row_stream) {
+        return std::make_shared<BlockInputStreamFromRowInputStream>(
+            std::forward<decltype(row_stream)>(row_stream),
+            sample,
+            max_block_size,
+            settings.input_format_allow_errors_num,
+            settings.input_format_allow_errors_ratio);
     };
 
     if (name == "Native")
@@ -108,20 +114,20 @@ BlockInputStreamPtr FormatFactory::getInput(const String & name, ReadBuffer & bu
         return wrap_row_stream(std::make_shared<JSONEachRowRowInputStream>(buf, sample, settings.input_format_skip_unknown_fields));
     }
     else if (name == "TabSeparatedRaw"
-        || name == "TSVRaw"
-        || name == "Pretty"
-        || name == "PrettyCompact"
-        || name == "PrettyCompactMonoBlock"
-        || name == "PrettySpace"
-        || name == "PrettyNoEscapes"
-        || name == "PrettyCompactNoEscapes"
-        || name == "PrettySpaceNoEscapes"
-        || name == "Vertical"
-        || name == "VerticalRaw"
-        || name == "Null"
-        || name == "JSON"
-        || name == "JSONCompact"
-        || name == "XML")
+             || name == "TSVRaw"
+             || name == "Pretty"
+             || name == "PrettyCompact"
+             || name == "PrettyCompactMonoBlock"
+             || name == "PrettySpace"
+             || name == "PrettyNoEscapes"
+             || name == "PrettyCompactNoEscapes"
+             || name == "PrettySpaceNoEscapes"
+             || name == "Vertical"
+             || name == "VerticalRaw"
+             || name == "Null"
+             || name == "JSON"
+             || name == "JSONCompact"
+             || name == "XML")
     {
         throw Exception("Format " + name + " is not suitable for input", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
     }
@@ -130,8 +136,7 @@ BlockInputStreamPtr FormatFactory::getInput(const String & name, ReadBuffer & bu
 }
 
 
-static BlockOutputStreamPtr getOutputImpl(const String & name, WriteBuffer & buf,
-    const Block & sample, const Context & context)
+static BlockOutputStreamPtr getOutputImpl(const String & name, WriteBuffer & buf, const Block & sample, const Context & context)
 {
     const Settings & settings = context.getSettingsRef();
     FormatSettingsJSON json_settings(settings.output_format_json_quote_64bit_integers, settings.output_format_json_quote_denormals);
@@ -173,24 +178,40 @@ static BlockOutputStreamPtr getOutputImpl(const String & name, WriteBuffer & buf
         return std::make_shared<PrettySpaceBlockOutputStream>(buf, sample, true, settings.output_format_pretty_max_rows, context);
     else if (name == "Vertical")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<VerticalRowOutputStream>(
-            buf, sample, settings.output_format_pretty_max_rows), sample);
+                                                                          buf,
+                                                                          sample,
+                                                                          settings.output_format_pretty_max_rows),
+                                                                      sample);
     else if (name == "VerticalRaw")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<VerticalRawRowOutputStream>(
-            buf, sample, settings.output_format_pretty_max_rows), sample);
+                                                                          buf,
+                                                                          sample,
+                                                                          settings.output_format_pretty_max_rows),
+                                                                      sample);
     else if (name == "Values")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<ValuesRowOutputStream>(buf), sample);
     else if (name == "JSON")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<JSONRowOutputStream>(
-            buf, sample, settings.output_format_write_statistics, json_settings), sample);
+                                                                          buf,
+                                                                          sample,
+                                                                          settings.output_format_write_statistics,
+                                                                          json_settings),
+                                                                      sample);
     else if (name == "JSONCompact")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<JSONCompactRowOutputStream>(
-            buf, sample, settings.output_format_write_statistics, json_settings), sample);
+                                                                          buf,
+                                                                          sample,
+                                                                          settings.output_format_write_statistics,
+                                                                          json_settings),
+                                                                      sample);
     else if (name == "JSONEachRow")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<JSONEachRowRowOutputStream>(
-            buf, sample, json_settings), sample);
+                                                                          buf,
+                                                                          sample,
+                                                                          json_settings),
+                                                                      sample);
     else if (name == "XML")
-        return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<XMLRowOutputStream>(buf, sample,
-            settings.output_format_write_statistics), sample);
+        return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<XMLRowOutputStream>(buf, sample, settings.output_format_write_statistics), sample);
     else if (name == "TSKV")
         return std::make_shared<BlockOutputStreamFromRowOutputStream>(std::make_shared<TSKVRowOutputStream>(buf, sample), sample);
     else if (name == "Null")
@@ -199,8 +220,7 @@ static BlockOutputStreamPtr getOutputImpl(const String & name, WriteBuffer & buf
         throw Exception("Unknown format " + name, ErrorCodes::UNKNOWN_FORMAT);
 }
 
-BlockOutputStreamPtr FormatFactory::getOutput(const String & name, WriteBuffer & buf,
-    const Block & sample, const Context & context) const
+BlockOutputStreamPtr FormatFactory::getOutput(const String & name, WriteBuffer & buf, const Block & sample, const Context & context)
 {
     /** Materialization is needed, because formats can use the functions `IDataType`,
       *  which only work with full columns.
@@ -208,4 +228,4 @@ BlockOutputStreamPtr FormatFactory::getOutput(const String & name, WriteBuffer &
     return std::make_shared<MaterializingBlockOutputStream>(getOutputImpl(name, buf, materializeBlock(sample), context), sample);
 }
 
-}
+} // namespace DB

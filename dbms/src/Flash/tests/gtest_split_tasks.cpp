@@ -26,8 +26,6 @@ public:
     {
         ExecutorTest::initializeContext();
 
-        enablePlanner(false);
-
         context.addMockTable({"test_db", "test_table_1"}, {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}, {"s3", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "l_table"}, {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
         context.addMockTable({"test_db", "r_table"}, {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}});
@@ -63,20 +61,22 @@ try
     std::vector<String> streams = {
         "MockExchangeSender\n"
         " Expression: <final projection>\n"
-        "  Aggregating\n"
-        "   Concat\n"
-        "    Expression: <before aggregation>\n"
-        "     Filter: <execute where>\n"
-        "      MockTableScan",
+        "  Expression: <expr after aggregation>\n"
+        "   Aggregating\n"
+        "    Concat\n"
+        "     Expression: <before aggregation>\n"
+        "      Filter\n"
+        "       MockTableScan",
         "MockExchangeSender\n"
         " Expression: <final projection>\n"
         "  MergeSorting, limit = 10\n"
         "   PartialSorting: limit = 10\n"
-        "    Expression: <before order and select>\n"
-        "     Filter: <execute having>\n"
-        "      Aggregating\n"
-        "       Concat\n"
-        "        MockExchangeReceiver"};
+        "    Expression: <before TopN>\n"
+        "     Filter\n"
+        "      Expression: <expr after aggregation>\n"
+        "       Aggregating\n"
+        "        Concat\n"
+        "         MockExchangeReceiver"};
     for (size_t i = 0; i < task_size; ++i)
     {
         ASSERT_BLOCKINPUTSTREAM_EQAUL(streams[i], tasks[i].dag_request, 1);
@@ -135,7 +135,6 @@ try
     }
 }
 CATCH
-
 
 } // namespace tests
 } // namespace DB

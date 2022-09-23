@@ -52,21 +52,36 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     std::vector<RegionID> region_list;
     size_t count = 0;
 
+    // print 30 lag regions per table per 5min.
+    const size_t max_print_region = 30;
+    static const std::chrono::minutes PRINT_LOG_INTERVAL = std::chrono::minutes{5};
+    static Timepoint last_print_log_time = Clock::now();
     // if storage is not created in ch, flash replica should not be available.
     if (tmt.getStorages().get(table_id))
     {
         RegionTable & region_table = tmt.getRegionTable();
         region_table.handleInternalRegionsByTable(table_id, [&](const RegionTable::InternalRegions & regions) {
             region_list.reserve(regions.size());
+            bool can_log = Clock::now() > last_print_log_time + PRINT_LOG_INTERVAL;
+            FmtBuffer lag_regions_log;
+            size_t print_count = 0;
             for (const auto & region : regions)
             {
-                if (!region_table.isSafeTSLag(region.first))
+                UInt64 leader_safe_ts;
+                UInt64 self_safe_ts;
+                if (!region_table.isSafeTSLag(region.first, &leader_safe_ts, &self_safe_ts))
                 {
                     region_list.push_back(region.first);
                 }
+                else if (can_log && print_count < max_print_region)
+                {
+                    lag_regions_log.fmtAppend("lag_region_id: {}, leader_safe_ts: {}, self_safe_ts: {}; ", region.first, leader_safe_ts, self_safe_ts);
+                    print_count++;
+                    last_print_log_time = Clock::now();
+                }
             }
             count = region_list.size();
-            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}", table_id, regions.size(), count);
+            LOG_FMT_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}, lag_region_info={}", table_id, regions.size(), count, lag_regions_log.toString());
         });
     }
     ss << count << std::endl;
