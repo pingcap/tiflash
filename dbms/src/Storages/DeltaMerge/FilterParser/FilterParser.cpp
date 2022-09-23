@@ -47,6 +47,8 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     case TiDB::TypeLongLong:
     case TiDB::TypeInt24:
     case TiDB::TypeYear:
+    case TiDB::TypeFloat:
+    case TiDB::TypeDouble:
         return true;
     // For these date-like types, they store UTC time and ignore time_zone
     case TiDB::TypeNewDate:
@@ -68,8 +70,6 @@ inline bool isRoughSetFilterSupportType(const Int32 field_type)
     // Unknown.
     case TiDB::TypeDecimal:
     case TiDB::TypeNewDecimal:
-    case TiDB::TypeFloat:
-    case TiDB::TypeDouble:
     case TiDB::TypeNull:
     case TiDB::TypeBit:
     case TiDB::TypeEnum:
