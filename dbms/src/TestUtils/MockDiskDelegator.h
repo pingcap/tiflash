@@ -93,8 +93,7 @@ public:
     explicit MockDiskDelegatorMulti(Strings paths_)
         : paths(std::move(paths_))
     {
-        if (paths.empty())
-            throw Exception("Should not generate MockDiskDelegatorMulti with empty paths");
+        RUNTIME_CHECK(!paths.empty());
     }
 
     bool fileExist(const PageFileIdAndLevel & id_lvl) const override
