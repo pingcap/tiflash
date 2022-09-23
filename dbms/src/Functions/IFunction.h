@@ -390,4 +390,12 @@ private:
 
 using FunctionPtr = std::shared_ptr<IFunction>;
 
+struct NullPresence
+{
+    bool has_nullable = false;
+    bool has_null_constant = false;
+};
+
+NullPresence getNullPresense(const Block &, const ColumnNumbers &);
+
 } // namespace DB

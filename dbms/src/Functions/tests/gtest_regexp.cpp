@@ -1809,59 +1809,72 @@ TEST_F(Regexp, testRegexp)
 
     auto const_uint8_null_column = createConstColumn<Nullable<UInt8>>(row_size, {});
     auto const_string_null_column = createConstColumn<Nullable<String>>(row_size, {});
+    std::cout << "here 1" << std::endl;
     /// case 1. regexp(const, const [, const])
     for (size_t i = 0; i < row_size; i++)
     {
         /// test regexp(const, const)
         ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results[i]),
                          executeFunction("regexp", createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i])));
-
+std::cout << "here 1.1" << std::endl;
         /// test regexp(const, const, const)
         ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results_with_match_type[i]),
                          executeFunction("regexp", createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, match_types[i])));
-
+std::cout << "here 1.2" << std::endl;
         /// test regexp(const, const, const) with binary collator
         ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results_with_match_type_collator[i]),
                          executeFunction("regexp", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, match_types[i])}, binary_collator));
     }
     /// case 2. regexp(const, const [, const]) with null value
+    std::cout << "here 2" << std::endl;
     for (size_t i = 0; i < row_size; i++)
     {
         /// test regexp(const, const)
         ASSERT_COLUMN_EQ(input_string_nulls[i] || pattern_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results[i]),
                          executeFunction("regexp", input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i])));
+    std::cout << "here 2.1" << std::endl;
 
         /// test regexp(const, const, const)
         ASSERT_COLUMN_EQ(input_string_nulls[i] || pattern_nulls[i] || match_type_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results_with_match_type[i]),
                          executeFunction("regexp", input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])));
+    std::cout << "here 2.2" << std::endl;
 
         /// test regexp(const, const, const) with binary collator
         ASSERT_COLUMN_EQ(input_string_nulls[i] || pattern_nulls[i] || match_type_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results_with_match_type_collator[i]),
                          executeFunction("regexp", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])}, binary_collator));
     }
     /// case 3 regexp(vector, const[, const])
+    std::cout << "here 3" << std::endl;
     {
         /// test regexp(vector, const)
         ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results),
                          executeFunction("regexp", createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0])));
-
+std::cout << "here 3.1" << std::endl;
         /// test regexp(vector, const, const)
         ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results_with_match_type),
                          executeFunction("regexp", createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")));
-
+std::cout << "here 3.2" << std::endl;
         /// test regexp(vector, const, const) with binary collator
         ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results_with_match_type_collator),
                          executeFunction("regexp", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")}, binary_collator));
     }
     /// case 4 regexp(vector, const[, const]) nullable
+    std::cout << "here 4" << std::endl;
     {
         ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results, input_string_nulls),
                          executeFunction("regexp", createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0])));
+                         std::cout << "here 4.2" << std::endl;
         ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results_with_match_type, input_string_nulls),
                          executeFunction("regexp", createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")));
+                         std::cout << "here 4.2" << std::endl;
         ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results_with_match_type_collator, input_string_nulls),
                          executeFunction("regexp", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")}, binary_collator));
     }
+
+    /// issue 5984
+    ASSERT_THROW(executeFunction("regexp", createColumn<String>(std::vector<String>{"1"}), createConstColumn<String>(row_size, "")), Exception);
+    ASSERT_THROW(executeFunction("regexp", createConstColumn<String>(row_size, ""), createConstColumn<String>(row_size, "")), Exception);
+    ASSERT_THROW(executeFunction("regexp", createColumn<String>(std::vector<String>{"1"}), createColumn<String>(std::vector<String>{""})), Exception);
 }
 
 TEST_F(Regexp, testRegexpCustomerCases)
