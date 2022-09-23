@@ -98,8 +98,6 @@ bool checkMatch(
 
     RowKeyRange all_range = RowKeyRange::newAll(is_common_handle, 1);
 
-    auto data_type = DataTypeFactory::instance().get(type);
-
     ColumnDefine cd(DEFAULT_COL_ID, DEFAULT_COL_NAME, DataTypeFactory::instance().get(type));
 
     ColumnDefines table_columns;
