@@ -715,7 +715,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 auto res = try_parse_file_id(name);
                 if (!res)
                 {
-                    LOG_FMT_INFO(log, "Unrecognized temporary or dropped dmfile, ignored: {}", name);
+                    LOG_INFO(log, "Unrecognized temporary or dropped dmfile, ignored: {}", name);
                     continue;
                 }
                 UInt64 file_id = *res;
@@ -724,7 +724,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File file(full_path); file.exists())
                     file.remove(true);
-                LOG_FMT_WARNING(log, "Existing temporary or dropped dmfile, removed: {}", full_path);
+                LOG_WARNING(log, "Existing temporary or dropped dmfile, removed: {}", full_path);
                 continue;
             }
         }
@@ -737,7 +737,7 @@ std::set<UInt64> DMFile::listAllInPath(
         auto res = try_parse_file_id(name);
         if (!res)
         {
-            LOG_FMT_INFO(log, "Unrecognized DM file, ignored: {}", name);
+            LOG_INFO(log, "Unrecognized DM file, ignored: {}", name);
             continue;
         }
         UInt64 file_id = *res;
