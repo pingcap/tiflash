@@ -13,3 +13,10 @@ crate-type = ["staticlib"]
 backtrace = "0.3"
 findshlibs = "0.10"
 lazy_static = "1.4"
+
+[profile.dev]
+overflow-checks = false
+
+[profile.release]
+debug = true
+overflow-checks = false

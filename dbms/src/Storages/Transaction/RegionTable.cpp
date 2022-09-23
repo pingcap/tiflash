@@ -188,8 +188,10 @@ void RegionTable::removeTable(TableID table_id)
     for (const auto & region_info : table.regions)
     {
         regions.erase(region_info.first);
-        leader_safe_ts.erase(region_info.first);
-        self_safe_ts.erase(region_info.first);
+        {
+            std::unique_lock write_lock(rw_lock);
+            safe_ts_map.erase(region_info.first);
+        }
     }
 
     // Remove from table map.
@@ -268,8 +270,10 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         handle_range = internal_region_it->second.range_in_table;
 
         regions.erase(it);
-        leader_safe_ts.erase(region_id);
-        self_safe_ts.erase(region_id);
+        {
+            std::unique_lock write_lock(rw_lock);
+            safe_ts_map.erase(region_id);
+        }
         table.regions.erase(internal_region_it);
         if (table.regions.empty())
         {
@@ -484,5 +488,48 @@ RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
     : base(base_)
     , external_files(std::move(external_files_))
 {}
+
+bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts)
+{
+    {
+        std::shared_lock lock(rw_lock);
+        auto it = safe_ts_map.find(region_id);
+        if (it == safe_ts_map.end())
+        {
+            return false;
+        }
+        *leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
+        *self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
+    }
+    LOG_FMT_TRACE(log, "region_id:{}, table_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, regions[region_id], *leader_safe_ts, *self_safe_ts);
+    return (*leader_safe_ts > *self_safe_ts) && (*leader_safe_ts - *self_safe_ts > SafeTsDiffThreshold);
+}
+
+void RegionTable::updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts)
+{
+    {
+        std::shared_lock lock(rw_lock);
+        auto it = safe_ts_map.find(region_id);
+        if (it == safe_ts_map.end() && (leader_safe_ts == InvalidSafeTS || self_safe_ts == InvalidSafeTS))
+        {
+            LOG_FMT_TRACE(log, "safe_ts_map empty but safe ts invalid, region_id:{}, leader_safe_ts:{}, self_safe_ts:{}", region_id, leader_safe_ts, self_safe_ts);
+            return;
+        }
+        if (it != safe_ts_map.end())
+        {
+            if (leader_safe_ts != InvalidSafeTS)
+            {
+                it->second->leader_safe_ts.store(leader_safe_ts, std::memory_order_relaxed);
+            }
+            if (self_safe_ts != InvalidSafeTS)
+            {
+                it->second->self_safe_ts.store(self_safe_ts, std::memory_order_relaxed);
+            }
+            return;
+        }
+    }
+    std::unique_lock lock(rw_lock);
+    safe_ts_map.emplace(region_id, std::make_unique<SafeTsEntry>(leader_safe_ts, self_safe_ts));
+}
 
 } // namespace DB

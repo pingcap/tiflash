@@ -50,7 +50,6 @@ namespace DB
 struct ContextShared;
 class IRuntimeComponentsFactory;
 class QuotaForIntervals;
-class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
 class MarkCache;
@@ -161,6 +160,7 @@ private:
     {
         non_test,
         mpp_test,
+        cop_test,
         executor_test,
         cancel_test
     };
@@ -284,10 +284,6 @@ public:
 
     /// Set a setting by name. Read the value in text form from a string (for example, from a config, or from a URL parameter).
     void setSetting(const String & name, const std::string & value);
-
-    const ExternalModels & getExternalModels() const;
-    ExternalModels & getExternalModels();
-    void tryCreateExternalModels() const;
 
     /// I/O formats.
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, size_t max_block_size) const;
@@ -478,6 +474,8 @@ public:
     void setCancelTest();
     bool isExecutorTest() const;
     void setExecutorTest();
+    void setCopTest();
+    bool isCopTest() const;
     bool isTest() const;
 
     void setMockStorage(MockStorage & mock_storage_);
@@ -491,8 +489,6 @@ private:
       * NOTE: This method should always be called when the `shared->mutex` mutex is acquired.
       */
     void checkDatabaseAccessRightsImpl(const std::string & database_name) const;
-
-    ExternalModels & getExternalModelsImpl(bool throw_on_error) const;
 
     StoragePtr getTableImpl(const String & database_name, const String & table_name, Exception * exception) const;
 

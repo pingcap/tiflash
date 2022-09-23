@@ -42,7 +42,7 @@ std::pair<WALStorePtr, WALStoreReaderPtr> WALStore::create(
     String storage_name,
     FileProviderPtr & provider,
     PSDiskDelegatorPtr & delegator,
-    WALStore::Config config)
+    WALConfig config)
 {
     auto reader = WALStoreReader::create(storage_name,
                                          provider,
@@ -65,7 +65,7 @@ WALStore::WALStore(
     const PSDiskDelegatorPtr & delegator_,
     const FileProviderPtr & provider_,
     Format::LogNumberType last_log_num_,
-    WALStore::Config config_)
+    WALConfig config_)
     : storage_name(std::move(storage_name_))
     , delegator(delegator_)
     , provider(provider_)
@@ -76,19 +76,9 @@ WALStore::WALStore(
 {
 }
 
-void WALStore::apply(PageEntriesEdit & edit, const PageVersion & version, const WriteLimiterPtr & write_limiter)
+void WALStore::apply(String && serialized_edit, const WriteLimiterPtr & write_limiter)
 {
-    for (auto & r : edit.getMutRecords())
-    {
-        r.version = version;
-    }
-    apply(edit, write_limiter);
-}
-
-void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write_limiter)
-{
-    const String serialized = ser::serializeTo(edit);
-    ReadBufferFromString payload(serialized);
+    ReadBufferFromString payload(serialized_edit);
 
     {
         std::lock_guard lock(log_file_mutex);
@@ -102,7 +92,7 @@ void WALStore::apply(const PageEntriesEdit & edit, const WriteLimiterPtr & write
             log_file.swap(new_log_file);
         }
 
-        log_file->addRecord(payload, serialized.size(), write_limiter);
+        log_file->addRecord(payload, serialized_edit.size(), write_limiter);
     }
 }
 
@@ -152,7 +142,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
 
 WALStore::FilesSnapshot WALStore::getFilesSnapshot() const
 {
-    const auto [ok, current_writting_log_num] = [this]() -> std::tuple<bool, Format::LogNumberType> {
+    const auto [ok, current_writing_log_num] = [this]() -> std::tuple<bool, Format::LogNumberType> {
         std::lock_guard lock(log_file_mutex);
         if (!log_file)
         {
@@ -164,7 +154,7 @@ WALStore::FilesSnapshot WALStore::getFilesSnapshot() const
     if (!ok)
     {
         return WALStore::FilesSnapshot{
-            .current_writting_log_num = 0,
+            .current_writing_log_num = 0,
             .persisted_log_files = {},
         };
     }
@@ -173,20 +163,24 @@ WALStore::FilesSnapshot WALStore::getFilesSnapshot() const
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
     for (auto iter = persisted_log_files.begin(); iter != persisted_log_files.end(); /*empty*/)
     {
-        if (iter->log_num >= current_writting_log_num)
+        if (iter->log_num >= current_writing_log_num)
             iter = persisted_log_files.erase(iter);
         else
             ++iter;
     }
     return WALStore::FilesSnapshot{
-        .current_writting_log_num = current_writting_log_num,
+        .current_writing_log_num = current_writing_log_num,
         .persisted_log_files = std::move(persisted_log_files),
     };
 }
 
 // In order to make `restore` in a reasonable time, we need to compact
 // log files.
-bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && directory_snap, const WriteLimiterPtr & write_limiter)
+bool WALStore::saveSnapshot(
+    FilesSnapshot && files_snap,
+    String && serialized_snap,
+    size_t num_records,
+    const WriteLimiterPtr & write_limiter)
 {
     if (files_snap.persisted_log_files.empty())
         return false;
@@ -198,10 +192,9 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
     // Create a temporary file for saving directory snapshot
     auto [compact_log, log_filename] = createLogWriter({log_num, 1}, /*manual_flush*/ true);
 
-    const String serialized = ser::serializeTo(directory_snap);
-    ReadBufferFromString payload(serialized);
+    ReadBufferFromString payload(serialized_snap);
 
-    compact_log->addRecord(payload, serialized.size(), write_limiter, /*background*/ true);
+    compact_log->addRecord(payload, serialized_snap.size(), write_limiter, /*background*/ true);
     compact_log->flush(write_limiter, /*background*/ true);
     compact_log.reset(); // close fd explicitly before renaming file.
 
@@ -226,22 +219,23 @@ bool WALStore::saveSnapshot(FilesSnapshot && files_snap, PageEntriesEdit && dire
         provider->deleteRegularFile(log_fullname, EncryptionPath(log_fullname, ""));
     }
 
-    FmtBuffer fmt_buf;
-    fmt_buf.append("Dumped directory snapshot to log file done. [files_snapshot=");
-
-    fmt_buf.joinStr(
-        files_snap.persisted_log_files.begin(),
-        files_snap.persisted_log_files.end(),
-        [](const auto & arg, FmtBuffer & fb) {
-            fb.fmtAppend("{}", arg.filename(arg.stage));
-        },
-        ", ");
-    fmt_buf.fmtAppend("] [num of records={}] [file={}] [size={}].",
-                      directory_snap.size(),
-                      normal_fullname,
-                      serialized.size());
-
-    LOG_INFO(logger, fmt_buf.toString());
+    auto get_logging_str = [&]() {
+        FmtBuffer fmt_buf;
+        fmt_buf.append("Dumped directory snapshot to log file done. [files_snapshot=");
+        fmt_buf.joinStr(
+            files_snap.persisted_log_files.begin(),
+            files_snap.persisted_log_files.end(),
+            [](const auto & arg, FmtBuffer & fb) {
+                fb.fmtAppend("{}", arg.filename(arg.stage));
+            },
+            ", ");
+        fmt_buf.fmtAppend("] [num_records={}] [file={}] [size={}].",
+                          num_records,
+                          normal_fullname,
+                          serialized_snap.size());
+        return fmt_buf.toString();
+    };
+    LOG_INFO(logger, get_logging_str());
 
     return true;
 }

@@ -17,10 +17,10 @@
 #include <Common/TiFlashMetrics.h>
 #include <Encryption/RateLimiter.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <boost_wrapper/string.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
-#include <boost/algorithm/string.hpp>
 #include <cassert>
 #include <fstream>
 #include <magic_enum.hpp>
