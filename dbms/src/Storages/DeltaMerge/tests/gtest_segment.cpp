@@ -485,7 +485,7 @@ try
         // try further logical split
         auto rand_seg_id = getRandomSegmentId();
         auto seg_nrows = getSegmentRowNum(rand_seg_id);
-        LOG_FMT_TRACE(&Poco::Logger::root(), "test_round={} seg={} nrows={}", test_round, rand_seg_id, seg_nrows);
+        LOG_TRACE(&Poco::Logger::root(), "test_round={} seg={} nrows={}", test_round, rand_seg_id, seg_nrows);
         writeSegment(rand_seg_id, 150);
         flushSegmentCache(rand_seg_id);
         splitSegment(rand_seg_id, Segment::SplitMode::Auto);
