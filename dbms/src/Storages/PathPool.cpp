@@ -215,7 +215,7 @@ void StoragePathPool::clearPSV2ObsoleteData()
                 {
                     // This function is used to clean obsolete data in ps v2 instance at restart,
                     // so no need to update global_capacity here.
-                    LOG_FMT_INFO(log, "Begin to drop obsolete data[dir={}]", path);
+                    LOG_FMT_INFO(log, "Begin to drop obsolete data [dir={}]", path);
                     file_provider->deleteDirectory(dir.path(), false, true);
                 }
             }
@@ -419,7 +419,7 @@ String StableDiskDelegator::getDTFilePath(UInt64 file_id, bool throw_on_not_exis
     if (likely(iter != pool.dt_file_path_map.end()))
         return fmt::format("{}/{}", pool.main_path_infos[iter->second].path, StoragePathPool::STABLE_FOLDER_NAME);
     if (likely(throw_on_not_exist))
-        throw Exception(fmt::format("Can not find path for DMFile [id={}]", file_id));
+        throw Exception(fmt::format("Can not find path for DMFile, file_id={}", file_id));
     return "";
 }
 
@@ -431,7 +431,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     {
         const auto & path_info = pool.main_path_infos[iter->second];
         throw DB::TiFlashException(
-            fmt::format("Try to add a DTFile with duplicated id. [id={}] [path={}] [existed_path={}]", file_id, path, path_info.path),
+            fmt::format("Try to add a DTFile with duplicated id, file_id={} path={} existed_path={}", file_id, path, path_info.path),
             Errors::DeltaTree::Internal);
     }
 
@@ -444,7 +444,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
             break;
         }
     }
-    RUNTIME_CHECK_MSG(index != UINT32_MAX, "Try to add a DTFile to an unrecognized path. [id={}] [path={}]", file_id, path);
+    RUNTIME_CHECK_MSG(index != UINT32_MAX, "Try to add a DTFile to an unrecognized path. file_id={} path={}", file_id, path);
     pool.dt_file_path_map.emplace(file_id, index);
     pool.main_path_infos[index].file_size_map.emplace(file_id, file_size);
 
@@ -508,7 +508,7 @@ void StableDiskDelegator::removeDTFile(UInt64 file_id)
 {
     std::lock_guard lock{pool.mutex};
     auto iter = pool.dt_file_path_map.find(file_id);
-    RUNTIME_CHECK_MSG(iter != pool.dt_file_path_map.end(), "Cannot find DMFile for id {}", file_id);
+    RUNTIME_CHECK_MSG(iter != pool.dt_file_path_map.end(), "Cannot find DMFile when removing, file_id={}", file_id);
     UInt32 index = iter->second;
     const auto file_size = pool.main_path_infos[index].file_size_map.at(file_id);
     pool.dt_file_path_map.erase(file_id);
@@ -609,7 +609,7 @@ size_t PSDiskDelegatorMulti::freePageFileUsedSize(
 String PSDiskDelegatorMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
     auto index_opt = page_path_map.getIndex(id_lvl);
-    RUNTIME_CHECK_MSG(index_opt.has_value(), "Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second);
+    RUNTIME_CHECK_MSG(index_opt.has_value(), "Can not find path for PageFile, file_id={}", id_lvl);
     return fmt::format("{}/{}", pool.latest_path_infos[*index_opt].path, path_prefix);
 }
 
@@ -796,7 +796,7 @@ size_t PSDiskDelegatorRaft::freePageFileUsedSize(
     }
 
     RUNTIME_CHECK_MSG(index != UINT32_MAX, "Unrecognized path {}", upper_path);
-    RUNTIME_CHECK_MSG(page_path_map.exist(id_lvl), "Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path);
+    RUNTIME_CHECK_MSG(page_path_map.exist(id_lvl), "Can not find path for PageFile, file_id={} path={}", id_lvl, pf_parent_path);
 
     // update global used size
     pool.global_capacity->freeUsedSize(upper_path, size_to_free);
@@ -806,7 +806,7 @@ size_t PSDiskDelegatorRaft::freePageFileUsedSize(
 String PSDiskDelegatorRaft::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
     auto index_opt = page_path_map.getIndex(id_lvl);
-    RUNTIME_CHECK_MSG(index_opt.has_value(), "Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second);
+    RUNTIME_CHECK_MSG(index_opt.has_value(), "Can not find path for PageFile, file_id={}", id_lvl);
     return raft_path_infos[*index_opt].path;
 }
 
@@ -932,7 +932,7 @@ size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
     }
 
     RUNTIME_CHECK_MSG(index != UINT32_MAX, "Unrecognized path {}", upper_path);
-    RUNTIME_CHECK_MSG(page_path_map.exist(id_lvl), "Can not find path for PageFile [id={}_{}, path={}]", id_lvl.first, id_lvl.second, pf_parent_path);
+    RUNTIME_CHECK_MSG(page_path_map.exist(id_lvl), "Can not find path for PageFile, file_id={} path={}", id_lvl, pf_parent_path);
 
     // update global used size
     pool.global_capacity->freeUsedSize(upper_path, size_to_free);
@@ -942,7 +942,7 @@ size_t PSDiskDelegatorGlobalMulti::freePageFileUsedSize(
 String PSDiskDelegatorGlobalMulti::getPageFilePath(const PageFileIdAndLevel & id_lvl) const
 {
     auto index = page_path_map.getIndex(id_lvl);
-    RUNTIME_CHECK_MSG(index.has_value(), "Can not find path for PageFile [id={}_{}]", id_lvl.first, id_lvl.second);
+    RUNTIME_CHECK_MSG(index.has_value(), "Can not find path for PageFile file_id={}", id_lvl);
     return fmt::format("{}/{}", pool.listGlobalPagePaths()[*index], path_prefix);
 }
 
