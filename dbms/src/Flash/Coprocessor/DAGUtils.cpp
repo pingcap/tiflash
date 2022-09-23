@@ -584,7 +584,7 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::FromUnixTime1Arg, "fromUnixTime"},
     {tipb::ScalarFuncSig::FromUnixTime2Arg, "fromUnixTime"},
     {tipb::ScalarFuncSig::ExtractDatetime, "extractMyDateTime"},
-    //{tipb::ScalarFuncSig::ExtractDuration, "cast"},
+    {tipb::ScalarFuncSig::ExtractDuration, "extractMyDuration"},
 
     //{tipb::ScalarFuncSig::AddDateStringString, "cast"},
     {tipb::ScalarFuncSig::AddDateStringInt, "date_add"},

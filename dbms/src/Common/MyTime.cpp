@@ -1008,6 +1008,11 @@ Field parseMyDateTimeFromFloat(const String & str, int8_t fsp, CheckTimeFunc che
     return parseMyDateTimeAndJudgeIsDate(str, fsp, checkTimeFunc, true).first;
 }
 
+Field parseMyDuration(const String & str, int8_t fsp)
+{
+
+}
+
 String MyDateTime::toString(int fsp) const
 {
     const static String format = "%Y-%m-%d %H:%i:%s";

@@ -88,4 +88,228 @@ public:
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override;
 };
 
+struct ExtractMyDurationImpl
+{
+    static Int64 signMultiplier(const MyDuration & duration)
+    {
+        return duration.isNeg() ? -1 : 1;
+    }
+
+    static Int64 extractHour(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.hours();
+    }
+
+    static Int64 extractMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.minutes();
+    }
+
+    static Int64 extractSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.seconds();
+    }
+
+    static Int64 extractMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * duration.microSecond();
+    }
+
+    static Int64 extractSecondMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.seconds() * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractMinuteMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.minutes() * 100000000LL + duration.seconds() * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractMinuteSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractHourMicrosecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 10000000000LL + duration.minutes() * 100000000LL + duration.seconds() * 1000000LL + duration.microSecond());
+    }
+
+    static Int64 extractHourSecond(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 10000LL + duration.minutes() * 100LL + duration.seconds());
+    }
+
+    static Int64 extractHourMinute(Int64 nano)
+    {
+        MyDuration duration(nano);
+        return signMultiplier(duration) * (duration.hours() * 100LL + duration.minutes());
+    }
+};
+
+class FunctionExtractMyDuration : public IFunction
+{
+public:
+    static constexpr auto name = "extractMyDuration";
+
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionExtractMyDuration>(); };
+
+    String getName() const override { return name; }
+
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isString())
+            throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
+
+        // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
+        // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
+        if (!arguments[1]->isMyTime())
+            throw TiFlashException(
+                fmt::format("Illegal type {} of second argument of function {}. Must be Duration.", arguments[1]->getName(), getName()),
+                Errors::Coprocessor::BadRequest);
+
+        return std::make_shared<DataTypeInt64>();
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {0}; }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto * unit_column = checkAndGetColumnConst<ColumnString>(block.getByPosition(arguments[0]).column.get());
+        if (!unit_column)
+            throw TiFlashException(
+                fmt::format("First argument for function {} must be constant String", getName()),
+                Errors::Coprocessor::BadRequest);
+        
+        String unit = Poco::toLower(unit_column->getValue<String>());
+
+        auto col_from = block.getByPosition(arguments[1]).column;
+
+        size_t rows = block.rows();
+        auto col_to = ColumnInt64::create(rows);
+        auto & vec_to = col_to->getData();
+
+        if (unit == "hour")
+            dispatch<ExtractMyDurationImpl::extractHour>(col_from, vec_to);
+        else if (unit == "minute")
+            dispatch<ExtractMyDurationImpl::extractMinute>(col_from, vec_to);
+        else if (unit == "second")
+            dispatch<ExtractMyDurationImpl::extractSecond>(col_from, vec_to);
+        else if (unit == "microsecond")
+            dispatch<ExtractMyDurationImpl::extractMicrosecond>(col_from, vec_to);
+        else if (unit == "second_microsecond")
+            dispatch<ExtractMyDurationImpl::extractSecondMicrosecond>(col_from, vec_to);
+        else if (unit == "minute_microsecond")
+            dispatch<ExtractMyDurationImpl::extractMinuteMicrosecond>(col_from, vec_to);
+        else if (unit == "minute_second")
+            dispatch<ExtractMyDurationImpl::extractMinuteSecond>(col_from, vec_to);
+        else if (unit == "hour_microsecond")
+            dispatch<ExtractMyDurationImpl::extractHourMicrosecond>(col_from, vec_to);
+        else if (unit == "hour_second")
+            dispatch<ExtractMyDurationImpl::extractHourSecond>(col_from, vec_to);
+        else if (unit == "hour_minute")
+            dispatch<ExtractMyDurationImpl::extractHourMinute>(col_from, vec_to);
+        else
+            throw TiFlashException(fmt::format("Function {} does not support '{}' unit", getName(), unit), Errors::Coprocessor::BadRequest);
+
+        block.getByPosition(result).column = std::move(col_to);
+    }
+
+private:
+    using Func = Int64 (*)(Int64);
+
+    template <Func F>
+    static void dispatch(const ColumnPtr col_from, PaddedPODArray<Int64> & vec_to)
+    {
+        if (const auto * from = checkAndGetColumn<ColumnString>(col_from.get()); from)
+        {
+            const auto & data = from->getChars();
+            const auto & offsets = from->getOffsets();
+            if (checkColumnConst<ColumnString>(from))
+            {
+                StringRef string_ref(data.data(), offsets[0] - 1);
+                constantString<F>(string_ref, from->size(), vec_to);
+            }
+            else
+            {
+                vectorString<F>(data, offsets, vec_to);
+            }
+        }
+        else if (const auto * from = checkAndGetColumn<ColumnInt64>(col_from.get()); from)
+        {
+            const auto & data = from->getData();
+            if (checkColumnConst<ColumnInt64>(from))
+            {
+                constantDuration<F>(from->getUInt(0), from->size(), vec_to);
+            }
+            else
+            {
+                vectorDuration<F>(data, vec_to);
+            }
+        }
+    }
+
+    template <Func F>
+    static void constantString(const StringRef & from, size_t size, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(size);
+        auto from_value = get<Int64>(parseMyDuration(from.toString()));
+        for (size_t i = 0; i < size; ++i)
+        {
+            vec_to[i] = F(from_value);
+        }
+    }
+
+    template <Func F>
+    static void vectorString(
+        const ColumnString::Chars_t & vec_from,
+        const ColumnString::Offsets & offsets_from,
+        PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(offsets_from.size() + 1);
+        size_t current_offset = 0;
+        for (size_t i = 0; i < offsets_from.size(); i++)
+        {
+            size_t next_offset = offsets_from[i];
+            size_t string_size = next_offset - current_offset - 1;
+            StringRef string_value(&vec_from[current_offset], string_size);
+            auto nano = get<Int64>(parseMyDuration(string_value.toString()));
+            vec_to[i] = F(nano);
+            current_offset = next_offset;
+        }
+    }
+
+    template <Func F>
+    static void constantDuration(const Int64 & from, size_t size, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(size);
+        for (size_t i = 0; i < size; ++i)
+        {
+            vec_to[i] = F(from);
+        }
+    }
+
+    template <Func F>
+    static void vectorDuration(const ColumnInt64::Container & vec_from, PaddedPODArray<Int64> & vec_to)
+    {
+        vec_to.resize(vec_from.size());
+        for (size_t i = 0; i < vec_from.size(); i++)
+        {
+            vec_to[i] = F(vec_from[i]);
+        }
+    }
+};
+
 } // namespace DB
