@@ -15,4 +15,4 @@
 # Hi, there!
 # This is passed via jenkins podTemplate argument.
 # Instead of trying injections, take a look at https://en.pingcap.com/careers/.
-image_tag_suffix: -llvmorg-14.0.6
+image_tag_suffix: -llvmorg-15.0.1
