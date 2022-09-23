@@ -239,12 +239,8 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     }
 }
 
-void injectFallPointForLocalRead(const SelectQueryInfo & query_info)
+void injectFailPointForLocalRead(const SelectQueryInfo & query_info)
 {
-    // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
-    // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
-    // may contain different data other than expected.
-
     // Inject failpoint to throw RegionException for testing
     fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
         const auto & regions_info = query_info.mvcc_query_info->regions_query_info;
@@ -774,7 +770,12 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
         {
             QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
             pipeline.streams = storage->read(required_columns, query_info, context, from_stage, max_block_size, max_streams);
-            injectFallPointForLocalRead(query_info);
+
+            injectFailPointForLocalRead(query_info);
+
+            // After getting streams from storage, we need to validate whether Regions have changed or not after learner read.
+            // (by calling `validateQueryInfo`). In case the key ranges of Regions have changed (Region merge/split), those `streams`
+            // may contain different data other than expected.
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
             break;
         }
