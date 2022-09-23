@@ -204,8 +204,8 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
 {
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
     const auto & null_map = column_nullable.getNullMapColumn();
-    bool min_is_null = null_map.getElement(0);
-    bool max_is_null = null_map.getElement(1);
+    bool min_is_null = null_map.getElement(pack_index * 2);
+    bool max_is_null = null_map.getElement(pack_index * 2 + 1);
 
     const auto * raw_type = type.get();
 
@@ -328,8 +328,8 @@ RSResult MinMaxIndex::checkNullableGreater(size_t pack_index, const Field & valu
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
 
     const auto & null_map = column_nullable.getNullMapColumn();
-    bool min_is_null = null_map.getElement(0);
-    bool max_is_null = null_map.getElement(1);
+    bool min_is_null = null_map.getElement(pack_index * 2);
+    bool max_is_null = null_map.getElement(pack_index * 2 + 1);
 
     const auto * raw_type = type.get();
 
@@ -451,8 +451,8 @@ RSResult MinMaxIndex::checkNullableGreaterEqual(size_t pack_index, const Field &
     const auto & column_nullable = static_cast<const ColumnNullable &>(*minmaxes);
 
     const auto & null_map = column_nullable.getNullMapColumn();
-    bool min_is_null = null_map.getElement(0);
-    bool max_is_null = null_map.getElement(1);
+    bool min_is_null = null_map.getElement(pack_index * 2);
+    bool max_is_null = null_map.getElement(pack_index * 2 + 1);
 
     const auto * raw_type = type.get();
 

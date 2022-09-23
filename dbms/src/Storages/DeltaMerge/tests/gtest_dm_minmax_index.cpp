@@ -1103,7 +1103,6 @@ try
     {
         for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
         {
-            std::cout << " operater_type is " << operater_type << " datatype is " << datatype << std::endl;
             {
                 // not null
                 auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
