@@ -35,8 +35,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(const DMFilePtr &
     // if `rowkey_ranges` is empty, we unconditionally read all packs
     // `rowkey_ranges` and `is_common_handle`  will only be useful in clean read mode.
     // It is safe to ignore them here.
-    if (unlikely(rowkey_ranges.empty() && enable_handle_clean_read))
-        throw Exception("rowkey ranges shouldn't be empty with clean-read enabled", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK_MSG(!(rowkey_ranges.empty() && enable_handle_clean_read), "rowkey ranges shouldn't be empty with clean-read enabled");
 
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
