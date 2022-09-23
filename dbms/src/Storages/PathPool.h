@@ -142,7 +142,7 @@ private:
     LoggerPtr log;
 };
 
-class StableDiskDelegator : private boost::noncopyable
+class StableDiskDelegator
 {
 public:
     explicit StableDiskDelegator(StoragePathPool & pool_)
@@ -161,13 +161,20 @@ public:
 
     void removeDTFile(UInt64 file_id);
 
+    DISALLOW_COPY_AND_MOVE(StableDiskDelegator);
+
 private:
     StoragePathPool & pool;
 };
 
-class PSDiskDelegator : private boost::noncopyable
+// TODO: the `freePageFileUsedSize` and `removePageFile`
+// is not well design interface. We need refactor related
+// methods later.
+class PSDiskDelegator
 {
 public:
+    PSDiskDelegator() = default;
+
     virtual ~PSDiskDelegator() = default;
 
     virtual bool fileExist(const PageFileIdAndLevel & id_lvl) const = 0;
@@ -196,6 +203,8 @@ public:
     virtual String getPageFilePath(const PageFileIdAndLevel & id_lvl) const = 0;
 
     virtual void removePageFile(const PageFileIdAndLevel & id_lvl, size_t file_size, bool meta_left, bool remove_from_default_path) = 0;
+
+    DISALLOW_COPY_AND_MOVE(PSDiskDelegator);
 };
 
 class PSDiskDelegatorMulti : public PSDiskDelegator
