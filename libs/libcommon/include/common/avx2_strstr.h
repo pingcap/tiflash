@@ -183,7 +183,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, cons
     return res;
 }
 
-inline const char * avx2_strstr_impl_genetic(const char * src, size_t n, const char * needle, size_t k)
+inline const char * avx2_strstr_impl_generic(const char * src, size_t n, const char * needle, size_t k)
 {
     return avx2_strstr_impl(src, needle[0], n - k + 1, [&](const char * s) -> bool {
         return avx2_mem_equal(s, needle, k);
@@ -242,7 +242,7 @@ ALWAYS_INLINE static inline const char * avx2_strstr_impl(const char * src, size
         M(16);
     default:
     {
-        return avx2_strstr_impl_genetic(src, n, needle, k);
+        return avx2_strstr_impl_generic(src, n, needle, k);
     }
     }
 #undef M
