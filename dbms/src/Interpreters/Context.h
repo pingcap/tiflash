@@ -150,7 +150,6 @@ private:
     Context * session_context = nullptr; /// Session context or nullptr. Could be equal to this.
     Context * global_context = nullptr; /// Global context or nullptr. Could be equal to this.
     SystemLogsPtr system_logs; /// Used to log queries and operations on parts
-    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
@@ -499,6 +498,12 @@ private:
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 
     void checkIsConfigLoaded() const;
+
+#ifndef NDEBUG
+// access it only in TiFlashTestEnv, in order to skip checkIsConfigLoaded.
+public:
+#endif
+    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 
 using ContextPtr = std::shared_ptr<Context>;
