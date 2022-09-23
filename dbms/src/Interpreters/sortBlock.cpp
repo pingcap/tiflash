@@ -314,20 +314,20 @@ struct PartialSortingLess
 
 struct PartialSortingLessWithCollation
 {
-    const FastSortDesc & collator_desc;
+    const FastSortDesc & fast_sort_desc;
 
-    explicit PartialSortingLessWithCollation(const FastSortDesc & collator_desc_)
-        : collator_desc(collator_desc_)
+    explicit PartialSortingLessWithCollation(const FastSortDesc & desc_)
+        : fast_sort_desc(desc_)
     {
-        assert(collator_desc.has_collation);
+        assert(fast_sort_desc.has_collation);
     }
 
     ALWAYS_INLINE inline bool operator()(size_t a, size_t b) const
     {
         int res = 0;
-        for (size_t i = 0; i < collator_desc.size(); ++i)
+        for (size_t i = 0; i < fast_sort_desc.size(); ++i)
         {
-            res = collator_desc.compareAt(i, a, b);
+            res = fast_sort_desc.compareAt(i, a, b);
             if (res)
                 break;
         }
