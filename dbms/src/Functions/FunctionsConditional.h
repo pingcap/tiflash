@@ -959,25 +959,4 @@ private:
     const Context & context;
 };
 
-
-/// Implements the CASE construction when it is
-/// provided an expression. Users should not call this function.
-class FunctionCaseWithExpression : public IFunction
-{
-public:
-    static constexpr auto name = "caseWithExpression";
-    static FunctionPtr create(const Context & context_);
-
-public:
-    explicit FunctionCaseWithExpression(const Context & context_);
-    bool isVariadic() const override { return true; }
-    size_t getNumberOfArguments() const override { return 0; }
-    String getName() const override;
-    DataTypePtr getReturnTypeImpl(const DataTypes & args) const override;
-    void executeImpl(Block & block, const ColumnNumbers & args, size_t result) const override;
-
-private:
-    const Context & context;
-};
-
 } // namespace DB
