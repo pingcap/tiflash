@@ -723,7 +723,7 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
                 ++iter;
             }
         }
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "RegionException after read from storage, regions [{}], message: {}{}",
             buffer.toString(),
@@ -745,7 +745,7 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
                 buffer.fmtAppend("{},", iter->first);
             }
         }
-        LOG_FMT_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
+        LOG_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
         return false; // break retry loop
     }
 }
