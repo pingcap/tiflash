@@ -939,10 +939,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         }
         res.push_back(stream);
     }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
-    }
     return res;
 }
 
@@ -1029,10 +1025,6 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 req_info);
         }
         res.push_back(stream);
-    }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
     }
     LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
 
@@ -1546,17 +1538,17 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             total_delta_valid_cache_rows += delta->getValidCacheRows();
         }
 
-        if (stable->getPacks())
+        if (stable->getDMFilesPacks())
         {
             stat.total_rows += stable->getRows();
             stat.total_size += stable->getBytes();
 
             stat.stable_count += 1;
-            stat.total_pack_count_in_stable += stable->getPacks();
+            stat.total_pack_count_in_stable += stable->getDMFilesPacks();
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_size += stable->getBytes();
-            stat.total_stable_size_on_disk += stable->getBytesOnDisk();
+            stat.total_stable_size_on_disk += stable->getDMFilesBytesOnDisk();
         }
     }
 
@@ -1679,10 +1671,10 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stat.size = delta->getBytes() + stable->getBytes();
         stat.delete_ranges = delta->getDeletes();
 
-        stat.stable_size_on_disk = stable->getBytesOnDisk();
+        stat.stable_size_on_disk = stable->getDMFilesBytesOnDisk();
 
         stat.delta_pack_count = delta->getColumnFileCount();
-        stat.stable_pack_count = stable->getPacks();
+        stat.stable_pack_count = stable->getDMFilesPacks();
 
         stat.avg_delta_pack_rows = static_cast<Float64>(delta->getRows()) / stat.delta_pack_count;
         stat.avg_stable_pack_rows = static_cast<Float64>(stable->getRows()) / stat.stable_pack_count;
