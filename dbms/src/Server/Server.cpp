@@ -79,13 +79,13 @@
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <WindowFunctions/registerWindowFunctions.h>
+#include <boost_wrapper/string_split.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
@@ -1072,6 +1072,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
+    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
 
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.

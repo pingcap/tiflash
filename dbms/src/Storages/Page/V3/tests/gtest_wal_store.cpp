@@ -301,12 +301,22 @@ public:
         }
     }
 
+protected:
+    static void applyWithSameVersion(WALStorePtr & wal, PageEntriesEdit & edit, const PageVersion & version)
+    {
+        for (auto & r : edit.getMutRecords())
+        {
+            r.version = version;
+        }
+        wal->apply(ser::serializeTo(edit));
+    }
+
 private:
     const bool multi_paths;
 
 protected:
     PSDiskDelegatorPtr delegator;
-    WALStore::Config config;
+    WALConfig config;
     LoggerPtr log;
 };
 
@@ -413,7 +423,7 @@ try
         edit.put(1, entry_p1);
         edit.put(2, entry_p2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(edit, ver20);
+        applyWithSameVersion(wal, edit, ver20);
     }
 
     wal.reset();
@@ -445,7 +455,7 @@ try
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(edit, ver21);
+        applyWithSameVersion(wal, edit, ver21);
     }
 
     wal.reset();
@@ -479,7 +489,7 @@ try
         edit.upsertPage(3, ver21_1, entry_p3_2);
         edit.upsertPage(5, ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(edit);
+        wal->apply(ser::serializeTo(edit));
     }
 
     wal.reset();
@@ -522,7 +532,7 @@ try
         edit.put(1, entry_p1);
         edit.put(2, entry_p2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(edit, ver20);
+        applyWithSameVersion(wal, edit, ver20);
     }
 
     // Stage 2. Apply with puts and refs
@@ -536,7 +546,7 @@ try
         edit.put(5, entry_p5);
         edit.del(2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(edit, ver21);
+        applyWithSameVersion(wal, edit, ver21);
     }
 
     // Stage 3. Apply with delete and upsert
@@ -551,7 +561,7 @@ try
         edit.upsertPage(3, ver21_1, entry_p3_2);
         edit.upsertPage(5, ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(edit);
+        wal->apply(ser::serializeTo(edit));
     }
 
     wal.reset();
@@ -624,7 +634,7 @@ try
             entry.size = page_id;
             edit.put(page_id, entry);
         }
-        wal->apply(edit, ver);
+        applyWithSameVersion(wal, edit, ver);
 
         size_each_edit.emplace_back(num_pages_put);
         ver.sequence += 1;
@@ -656,7 +666,7 @@ try
     // Test for save snapshot (with encryption)
 
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, log);
-    WALStore::FilesSnapshot file_snap{.current_writting_log_num = 100, // just a fake value
+    WALStore::FilesSnapshot file_snap{.current_writing_log_num = 100, // just a fake value
                                       .persisted_log_files = persisted_log_files};
 
     PageEntriesEdit snap_edit;
@@ -668,7 +678,7 @@ try
         snap_edit.varEntry(d_10000(rd), PageVersion(345, 22), entry, 1);
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
-    bool done = wal->saveSnapshot(std::move(file_snap), std::move(snap_edit));
+    bool done = wal->saveSnapshot(std::move(file_snap), ser::serializeTo(snap_edit), snap_edit.size());
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();
