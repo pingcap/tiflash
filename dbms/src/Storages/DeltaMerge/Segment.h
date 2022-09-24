@@ -373,6 +373,7 @@ public:
 
     PageId segmentId() const { return segment_id; }
     PageId nextSegmentId() const { return next_segment_id; }
+    UInt64 segmentEpoch() const { return epoch; };
 
     void check(DMContext & dm_context, const String & when) const;
 
