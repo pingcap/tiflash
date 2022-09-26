@@ -514,7 +514,7 @@ void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
 
 void MockSetFFI::MockSetRustGcHelper(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType))
 {
-    LOG_FMT_WARNING(&Poco::Logger::get(__FUNCTION__), "Set mock rust ptr gc function");
+    LOG_WARNING(&Poco::Logger::get(__FUNCTION__), "Set mock rust ptr gc function");
     RustGcHelper::instance().setRustPtrGcFn(fn_gc_rust_ptr);
 }
 

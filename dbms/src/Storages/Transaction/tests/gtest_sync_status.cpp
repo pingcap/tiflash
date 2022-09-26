@@ -26,6 +26,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TMTStorages.h>
 #include <Storages/Transaction/tests/region_helper.h>
@@ -213,6 +214,7 @@ try
     // normal region count is 10.
     EXPECT_EQ(res.res.view.data[0], '1');
     EXPECT_EQ(res.res.view.data[1], '0');
+    delete (static_cast<RawCppString *>(res.res.inner.ptr));
     dropDataBase("db_1");
 }
 CATCH
@@ -231,6 +233,7 @@ try
     // normal region count is 20.
     EXPECT_EQ(res.res.view.data[0], '2');
     EXPECT_EQ(res.res.view.data[1], '0');
+    delete (static_cast<RawCppString *>(res.res.inner.ptr));
     dropDataBase("db_1");
 }
 CATCH

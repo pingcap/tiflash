@@ -68,7 +68,7 @@ LegacyCompactor::tryCompact(
     const String storage_path = delegator->defaultPath();
     if (PageFile::isPageFileExist(checkpoint_id, storage_path, file_provider, PageFile::Type::Checkpoint, page_file_log))
     {
-        LOG_FMT_WARNING(log, "{} LegacyCompactor::tryCompact to checkpoint PageFile_{}_{} is done before.", storage_name, checkpoint_id.first, checkpoint_id.second);
+        LOG_WARNING(log, "{} LegacyCompactor::tryCompact to checkpoint PageFile_{}_{} is done before.", storage_name, checkpoint_id.first, checkpoint_id.second);
         removePageFilesIf(page_files, [&min_writing_file_id_level](const PageFile & pf) -> bool {
             return
                 // Remove page files that maybe writing to
@@ -206,7 +206,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
                 // Then there would be a hole in the WAL. We need to automatically recover from crashes in the middle
                 // from writing, so just skip the hole and continue the compaction.
                 // FIXME: rethink the multi-threads writing support.
-                LOG_FMT_WARNING(log, "{} collectPageFilesToCompact skip non-continuous sequence from {} to {}, {{{}}}", storage_name, last_sequence, reader_wb_seq, reader->toString());
+                LOG_WARNING(log, "{} collectPageFilesToCompact skip non-continuous sequence from {} to {}, {{{}}}", storage_name, last_sequence, reader_wb_seq, reader->toString());
             }
 
             try
@@ -233,7 +233,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
         else
         {
             // We apply all edit of belonging PageFile, do compaction on it.
-            LOG_FMT_TRACE(log, "{} collectPageFilesToCompact try to compact: {}", storage_name, reader->belongingPageFile().toString());
+            LOG_TRACE(log, "{} collectPageFilesToCompact try to compact: {}", storage_name, reader->belongingPageFile().toString());
             page_files_to_compact.emplace(reader->belongingPageFile());
         }
     }

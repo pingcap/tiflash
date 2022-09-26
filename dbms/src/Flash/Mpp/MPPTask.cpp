@@ -219,9 +219,9 @@ void MPPTask::unregisterTask()
 {
     auto [result, reason] = manager->unregisterTask(id);
     if (result)
-        LOG_FMT_DEBUG(log, "task unregistered");
+        LOG_DEBUG(log, "task unregistered");
     else
-        LOG_FMT_WARNING(log, "task failed to unregister, reason: {}", reason);
+        LOG_WARNING(log, "task failed to unregister, reason: {}", reason);
 }
 
 void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
@@ -401,7 +401,7 @@ void MPPTask::runImpl()
         if (switchStatus(RUNNING, FINISHED))
             LOG_INFO(log, "finish task");
         else
-            LOG_FMT_WARNING(log, "finish task which is in {} state", magic_enum::enum_name(status.load()));
+            LOG_WARNING(log, "finish task which is in {} state", magic_enum::enum_name(status.load()));
         if (status == FINISHED)
         {
             // todo when error happens, should try to update the metrics if it is available
@@ -459,13 +459,13 @@ void MPPTask::abort(const String & message, AbortType abort_type)
         next_task_status = FAILED;
         break;
     }
-    LOG_FMT_WARNING(log, "Begin abort task: {}, abort type: {}", id.toString(), abort_type_string);
+    LOG_WARNING(log, "Begin abort task: {}, abort type: {}", id.toString(), abort_type_string);
     while (true)
     {
         auto previous_status = status.load();
         if (previous_status == FINISHED || previous_status == CANCELLED || previous_status == FAILED)
         {
-            LOG_FMT_WARNING(log, "task already in {} state", magic_enum::enum_name(previous_status));
+            LOG_WARNING(log, "task already in {} state", magic_enum::enum_name(previous_status));
             return;
         }
         else if (previous_status == INITIALIZING && switchStatus(INITIALIZING, next_task_status))

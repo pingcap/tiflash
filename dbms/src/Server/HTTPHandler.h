@@ -82,7 +82,7 @@ private:
         Poco::Net::HTTPServerResponse & response,
         Output & used_output);
 
-    void pushDelayedResults(Output & used_output);
+    static void pushDelayedResults(Output & used_output);
 };
 
 } // namespace DB

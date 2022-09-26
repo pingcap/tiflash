@@ -273,7 +273,7 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
         if (!compaction_task->commit(persisted_file_set, wbs))
         {
-            LOG_FMT_WARNING(log, "Structure has been updated during compact, delta={}", simpleInfo());
+            LOG_WARNING(log, "Structure has been updated during compact, delta={}", simpleInfo());
             wbs.rollbackWrittenLogAndData();
             LOG_FMT_DEBUG(log, "Compact stop because structure got updated, delta={}", simpleInfo());
             return false;
