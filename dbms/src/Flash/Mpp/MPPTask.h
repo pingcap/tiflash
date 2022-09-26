@@ -26,6 +26,7 @@
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/IQuerySource.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
@@ -123,7 +124,9 @@ private:
     // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
     // before `context`.
     std::unique_ptr<DAGContext> dag_context;
-    MemoryTracker * memory_tracker = nullptr;
+
+    std::shared_ptr<ProcessListEntry> process_list_entry;
+    std::unique_ptr<IQuerySource> query_source;
 
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;

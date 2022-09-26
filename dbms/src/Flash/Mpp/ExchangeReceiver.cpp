@@ -204,7 +204,10 @@ public:
         }
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
+            {
                 ++read_packet_index;
+                packets[read_packet_index - 1]->recomputeTrackedMem();
+            }
             if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->hasError())
                 notifyReactor();
             else
@@ -244,7 +247,7 @@ public:
                 has_data = true;
 
             if (auto packet = getErrorPacket())
-                setDone("Exchange receiver meet error : " + packet->error().msg());
+                setDone("Exchange receiver meet error : " + packet->error());
             else if (!sendPackets(err_info))
                 setDone("Exchange receiver meet error : push packets fail, " + err_info);
             else if (read_packet_index < batch_packet_count)
@@ -360,7 +363,6 @@ private:
             // We shouldn't throw error directly, since the caller works in a standalone thread.
             try
             {
-                packet->recomputeTrackedMem();
                 if (!pushPacket<enable_fine_grained_shuffle, false>(
                         request->source_index,
                         req_info,
@@ -415,8 +417,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
-    uint64_t fine_grained_shuffle_stream_count_,
-    bool setup_conn_manually)
+    uint64_t fine_grained_shuffle_stream_count_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -442,11 +443,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
             msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
         }
         rpc_context->fillSchema(schema);
-        if (!setup_conn_manually)
-        {
-            // In CH client case, we need setUpConn right now. However, MPPTask will setUpConnection manually after ProcEntry is created.
-            setUpConnection();
-        }
+        setUpConnection();
     }
     catch (...)
     {
@@ -494,8 +491,6 @@ void ExchangeReceiverBase<RPCContext>::close()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
-    if (thread_count)
-        return;
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
 
@@ -627,7 +622,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->hasError())
                 {
                     meet_error = true;
-                    local_err_msg = fmt::format("Read error message from mpp packet: {}", packet->getPacket().error().msg());
+                    local_err_msg = fmt::format("Read error message from mpp packet: {}", packet->error());
                     break;
                 }
 

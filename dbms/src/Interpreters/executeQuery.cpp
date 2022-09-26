@@ -222,7 +222,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Put query to process list. But don't put SHOW PROCESSLIST query itself.
         ProcessList::EntryPtr process_list_entry;
-        if (!internal && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
+        if (!internal && !context.isMPPTask() && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
         {
             process_list_entry = context.getProcessList().insert(
                 query,
@@ -232,16 +232,8 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             context.setProcessListElement(&process_list_entry->get());
         }
-
-        // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
-        // so that we can propagate current_memory_tracker into them.
-        if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
-        {
-            if (context.getDAGContext()->tunnel_set)
-                context.getDAGContext()->tunnel_set->updateMemTracker();
-            if (context.getDAGContext()->getMppReceiverSet())
-                context.getDAGContext()->getMppReceiverSet()->setUpConnection();
-        }
+        if (context.isMPPTask())
+            process_list_entry = context.getDAGContext()->getProcessListEntry();
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
         auto interpreter = query_src.interpreter(context, stage);

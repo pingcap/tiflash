@@ -20,12 +20,14 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/ProcessList.h>
@@ -59,14 +61,16 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , mpp_task_statistics(id, meta.address())
     , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
-{}
+{
+    current_memory_tracker = nullptr;
+}
 
 MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    if (current_memory_tracker != memory_tracker)
-        current_memory_tracker = memory_tracker;
+    if (current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
+        current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
     if (schedule_state == ScheduleState::SCHEDULED)
     {
@@ -170,8 +174,7 @@ void MPPTask::initExchangeReceivers()
                 context->getMaxStreams(),
                 log->identifier(),
                 executor_id,
-                executor.fine_grained_shuffle_stream_count(),
-                true);
+                executor.fine_grained_shuffle_stream_count());
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
@@ -281,6 +284,21 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context->setDAGContext(dag_context.get());
 
+    if (context->getSettingsRef().enable_planner)
+        query_source = std::make_unique<PlanQuerySource>(*context);
+    else
+        query_source = std::make_unique<DAGQuerySource>(*context);
+
+    auto [query, ast] = query_source->parse(context->getSettingsRef().max_query_size);
+    process_list_entry = context->getProcessList().insert(
+        query,
+        ast.get(),
+        context->getClientInfo(),
+        context->getSettingsRef());
+
+    context->setProcessListElement(&process_list_entry->get());
+    dag_context->setProcessListEntry(process_list_entry);
+
     if (dag_context->isRootMPPTask())
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
@@ -336,6 +354,7 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
+    current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -360,7 +379,6 @@ void MPPTask::runImpl()
         scheduleOrWait();
 
         LOG_FMT_INFO(log, "task starts running");
-        memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however

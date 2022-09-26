@@ -305,13 +305,14 @@ public:
     {
         mpp_receiver_set = receiver_set;
     }
-    const MPPReceiverSetPtr & getMppReceiverSet() const;
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     std::vector<CoprocessorReaderPtr> & getCoprocessorReaders();
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
+    void setProcessListEntry(std::shared_ptr<ProcessListEntry> entry) { process_list_entry = entry; }
+    std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
 
     const tipb::DAGRequest * dag_request;
     Int64 compile_time_ns = 0;
@@ -352,6 +353,7 @@ private:
     void initOutputInfo();
 
 private:
+    std::shared_ptr<ProcessListEntry> process_list_entry;
     /// Hold io for correcting the destruction order.
     BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
