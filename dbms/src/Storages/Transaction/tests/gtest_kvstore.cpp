@@ -65,20 +65,16 @@ public:
         proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
             RaftStoreProxyPtr{proxy_instance.get()}));
         kvstore->restore(*path_pool, proxy_helper.get());
-    }
-
-    void init(bool create_regions = true)
-    {
-        if (create_regions)
-        {
-            proxy_instance->init(100);
-        }
         {
             auto store = metapb::Store{};
             store.set_id(1234);
             kvstore->setStore(store);
             ASSERT_EQ(kvstore->getStoreID(), store.id());
         }
+    }
+
+    void create_default_regions() {
+        proxy_instance->init(100);
     }
 
     void TearDown() override {}
@@ -128,7 +124,7 @@ protected:
 
 TEST_F(RegionKVStoreTest, NewProxy)
 {
-    init();
+    create_default_regions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -166,7 +162,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
 
 TEST_F(RegionKVStoreTest, ReadIndex)
 {
-    init();
+    create_default_regions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     // start mock proxy in other thread
@@ -762,7 +758,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 
 TEST_F(RegionKVStoreTest, Region)
 {
-    init();
+    create_default_regions();
     TableID table_id = 100;
     {
         auto meta = RegionMeta(createPeer(2, true), createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)), initialApplyState());
@@ -860,7 +856,7 @@ TEST_F(RegionKVStoreTest, Region)
 
 TEST_F(RegionKVStoreTest, KVStore)
 {
-    init();
+    create_default_regions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -1273,7 +1269,6 @@ TEST_F(RegionKVStoreTest, KVStore)
 
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 {
-    init(false);
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
         auto applied_index = 0;
@@ -1410,7 +1405,6 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 
 TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
 {
-    init(false);
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
         auto applied_index = 0;
@@ -1444,7 +1438,6 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
 
 TEST_F(RegionKVStoreTest, KVStoreRestore)
 {
-    init();
     {
         KVStore & kvs = getKVS();
         {
@@ -1526,7 +1519,6 @@ void test_mergeresult()
 
 TEST_F(RegionKVStoreTest, Basic)
 {
-    init();
     {
         RegionsRangeIndex region_index;
         const auto & root_map = region_index.getRoot();

@@ -331,7 +331,7 @@ void MockRaftStoreProxy::bootstrap(
     TMTContext & tmt,
     UInt64 region_id)
 {
-    (void)tmt;
+    UNUSED(tmt);
     auto _ = genLockGuard();
     regions.emplace(region_id, std::make_shared<MockProxyRegion>(region_id));
 
