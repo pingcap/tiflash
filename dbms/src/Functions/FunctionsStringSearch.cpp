@@ -1903,19 +1903,64 @@ private:
 class FunctionStringRegexpBase
 {
 public:
-    bool memorizeRE2(const char * pattern)
+    static constexpr size_t REGEXP_PARAM_NUM = 2;
+    static constexpr size_t REGEXP_LIKE_PARAM_NUM = 3;
+    static constexpr size_t REGEXP_INSTR_PARAM_NUM = 6;
+    static constexpr size_t REGEXP_REPLACE_PARAM_NUM = 6;
+    static constexpr size_t REGEXP_SUBSTR_PARAM_NUM = 5;
+
+    void memorize(const Param<StringRef> & pat_param, std::unique_ptr<const Param<StringRef>> match_type_param)
     {
-        memorized_re = std::make_unique<re2_st::RE2>(pattern);
-        return memorized_re->ok();
+        String pat(pat_param.getString(0));
+        if (match_type_param != nullptr)
+        {
+            // TODO handle match_type_param
+        }
+
+        int flags = 0;
+        flags |= OptimizedRegularExpressionImpl<false>::RE_NO_CAPTURE | OptimizedRegularExpressionImpl<false>::RE_NO_OPTIMIZE;
+        memorized_re = std::make_unique<Regexps::Regexp>(pat, flags);
+    }
+
+    // Check if we can memorize the regexp
+    template <typename Name>
+    static bool canMemorize(size_t arg_num, const Param<StringRef> & pat_param, const std::unique_ptr<const Param<StringRef>> & match_type_param)
+    {
+        size_t total_param_num = 0;
+        if constexpr (Name::name == NameTiDBRegexp::name)
+            total_param_num = REGEXP_PARAM_NUM;
+        else if constexpr (Name::name == NameRegexpLike::name)
+            total_param_num = REGEXP_LIKE_PARAM_NUM;
+        else
+            throw Exception("Unknown regular function.");
+        
+        if constexpr (Name::name == NameTiDBRegexp::name)
+        {
+            return pat_param.isConstCol();
+        } else
+        {
+            const bool is_pat_const = pat_param.isConstCol();
+            if ((arg_num < total_param_num && is_pat_const)
+                || (arg_num == total_param_num && is_pat_const && match_type_param->isConstCol()))
+            {
+                return true;
+            }
+        }
+
+        return false;        
     }
 
     bool isMemorized() const { return memorized_re != nullptr; }
+
+    const std::unique_ptr<Regexps::Regexp> & getRegexp() const { return memorized_re; }
 private:
     // We should pre compile the regular expression when:
     //  - only pattern column is provided and it's a constant column
-    //  - pattern and match type columns are provided and they are constant columns
-    std::unique_ptr<re2_st::RE2> memorized_re;
+    //  - pattern and match type columns are provided and they are both constant columns
+    std::unique_ptr<Regexps::Regexp> memorized_re;
 };
+
+#define SET_FLAGS(flags) flags |= RE_NO_CAPTURE | RE_NO_OPTIMIZE;
 
 template<typename Name>
 class FunctionStringRegexp : public FunctionStringRegexpBase, public IFunction
@@ -1923,6 +1968,7 @@ class FunctionStringRegexp : public FunctionStringRegexpBase, public IFunction
 public:
     using ResuleType = UInt8;
     static constexpr auto name = Name::name;
+
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionStringRegexp>(); }
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
@@ -1944,11 +1990,12 @@ public:
         const ColumnPtr & col_expr = block.getByPosition(arguments[0]).column;
         const ColumnPtr & col_pat = block.getByPosition(arguments[1]).column;
         
-        const Param expr_param(&col_expr, "");
-        const Param pat_param(&col_pat, "");
+        const Param<StringRef> expr_param(&col_expr, "");
+        const Param<StringRef> pat_param(&col_pat, "");
         auto arg_num = arguments.size();
         
-        std::unique_ptr<const Param> match_type_param;
+        // Only when this is a regexp_like function, match_type_param will be initialized
+        std::unique_ptr<const Param<StringRef>> match_type_param;
         if constexpr (name == NameRegexpLike::name)
         {
             const ColumnPtr * col_match_type = nullptr;
@@ -1956,87 +2003,164 @@ public:
             if (arg_num > 2)
             {
                 col_match_type = &(block.getByPosition(arguments[2]).column);
-                match_type_param = std::make_unique(col_match_type, "");
+                match_type_param = std::make_unique<const Param<StringRef>>(col_match_type, "");
             }
             else
             {
-                match_type_param = std::make_unique(col_match_type, "");
+                match_type_param = std::make_unique<const Param<StringRef>>(col_match_type, "");
             }
         }
 
         if (pat_param.getDataNum() == 0)
         {
-            // TODO return empty result
+            auto null_col_res = ColumnNullable::create(ColumnString::create(), ColumnUInt8::create());
+            block.getByPosition(result).column = ColumnConst::create(null_col_res, 0);
+            return;
         }
 
-        // Check if all args are all const columns
+        // Check if args are all const columns
         if (expr_param.isConstCol() && pat_param.isConstCol())
         {
-            // TODO implement 2 param with macro
-            // TODO check empty pattern
+#define PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type) \
+    do {
+        int flags = 0; \
+        SET_FLAGS(flags) \
+        if constexpr (has_match_type) \
+        { \
+            const StringRef & match_type = match_type_param->getString(0); \
+            // TODO should put match_type into pattern
+        } \
+        Regexps::Regexp regexp(pat, flags); \
+        ResultType res{regexp.match(expr)}; \
+        block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(pat_param.getDataNum(), toField(res)); \
+    } while(0)
+
+            const StringReg & pat = pat_param.getString(0);
+            if (pat.size() == 0)
+                throw Exception("Empty pattern is invalid");
+
+            const StringRef & expr = expr_param.getString(0);
             if constexpr (name == NameRegexpLike::name)
             {
                 if (arg_num > 2 && match_type_param.isConstCol())
                 {
-                    // TODO calculate return result 3 param
+                    const bool has_match_type = true;
+                    PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type);
+                    return;
                 }
                 else if (arg_num == 2)
                 {
-                    // TODO calculate return result 2 param
+                    const bool has_match_type = false;
+                    PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type);
+                    return;
                 }
-                // Do nothing
+                // reach here when arg_num == 3 and match_type is not const
             }
             else
             {
-                // TODO calculate return result 2 param
+                const bool has_match_type = false;
+                PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type);
+                return;
             }
+
+#undef PROCESS
         }
-
-        // TODO check memorization
-
-        // if (col_expr_const && col_pat_const)
-        // {
-        //     ResultType res{};
-        //     String expr = col_expr_const->getValue<String>();
-        //     String pattern = col_pat_const->getValue<String>();
-        //     if constexpr (name == NameTiDBRegexp::name)
-        //     {
-        //         // TODO calculate
-        //         // judge the empty pattern
-        //         block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_expr_const->size(), toField(res));
-        //         return
-        //     } else
-        //     {
-        //         if (col_match_type == nullptr || col_match_type_const != nullptr)
-        //         {
-        //             // TODO calculate
-        //             // judge the empty pattern
-        //             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_expr_const->size(), toField(res));
-        //             return
-        //         }
-        //     }
-        // }
-
+        
+        // Check memorization
+        if (canMemorize<Name>(arg_num, pat_param, match_type_param))
+            memorize(pat_param, match_type_param);
+        
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize(col_expr->size());
+        vec_res.resize(expr_param->getDataNum());
 
-        // Start to calculate
-        for (size_t i = 0; i < arg_num; ++i)
+        // Start to match
+        if (isMemorized())
         {
-            if constexpr (name == NameRegexpLike::name)
+            const auto & regexp = getRegexp();            
+            if (null_presence.has_nullable)
             {
-                const StringRef & expr = expr_param.getString(i);
-                const StringRef & pat = pat_param.getString(i);
-                const StringRef & match_type = match_type_param->getString(i);
-                // TODO process
+                // expr column must be a nullable column here, so we need to check null for each elems
+                auto nullmap_col = ColumnUInt8::create();
+                typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
+                nullmap.resize(expr_param->getDataNum());
+
+                for (size_t i = 0; i < arg_num; ++i)
+                {
+                    if (expr_param.isNullAt(i))
+                    {
+                        nullmap[i] = 1;
+                        continue;
+                    }
+
+                    nullmap[i] = 0;
+                    vec_res[i] = regexp->match(expr_param.getString(i)); // match
+                }
+                // TODO set result
             }
             else
             {
-                const StringRef & expr = expr_param.getString(i);
-                const StringRef & pat = pat_param.getString(i);
-                // TODO process
+                // expr column is impossible to be a nullable column here
+                for (size_t i = 0; i < arg_num; ++i)
+                    vec_res[i] = regexp->match(expr_param.getString(i)); // match
+                // TODO set result
+            } 
+        }
+        else
+        {
+            if (null_presence.has_nullable)
+            {
+                auto nullmap_col = ColumnUInt8::create();
+                typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
+                nullmap.resize(expr_param->getDataNum());
+
+                for (size_t i = 0; i < arg_num; ++i)
+                {
+                    if (expr_param.isNullAt(i) || pat_param.isNullAt(i))
+                    {
+                        nullmap[i] = 1;
+                        continue;
+                    }
+
+                    const StringRef & expr = expr_param.getString(i);
+                    const StringRef & pat = pat_param.getString(i);
+
+                    if constexpr (name == NameTiDBRegexp::name)
+                    {
+                        int flags = 0;
+                        SET_FLAGS(flags);
+                        const auto & regexp = Regexps::get<like, true>(pat, flags);
+                        vec_res[i] = regexp->match(expr); // match
+                    }
+                    else
+                    {
+                        // TODO handle match_type first and do match action
+                    }
+                    
+                }
+                // TODO set result
+            }
+            else
+            {
+                for (size_t i = 0; i < arg_num; ++i)
+                {
+                    const StringRef & expr = expr_param.getString(i);
+                    const StringRef & pat = pat_param.getString(i);
+
+                    if constexpr (name == NameTiDBRegexp::name)
+                    {
+                        int flags = 0;
+                        SET_FLAGS(flags);
+                        const auto & regexp = Regexps::get<like, true>(pat, flags);
+                        vec_res[i] = regexp->match(expr); // match
+                    }
+                    else
+                    {
+                        // TODO handle match_type first and do match action
+                    }
+                }
+                // TODO set result
             }
         }
     }
