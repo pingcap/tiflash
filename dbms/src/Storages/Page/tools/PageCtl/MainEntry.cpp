@@ -15,8 +15,8 @@
 #include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 #include <Storages/Page/tools/PageCtl/PageStorageCtlV2.h>
 #include <Storages/Page/tools/PageCtl/PageStorageCtlV3.h>
+#include <boost_wrapper/program_options.h>
 
-#include <boost/program_options.hpp>
 #include <iostream>
 namespace DB
 {

@@ -24,10 +24,10 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/Page/PageUtil.h>
+#include <boost_wrapper/string_split.h>
 #include <fmt/format.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <utility>
 
 namespace DB
@@ -117,7 +117,7 @@ DMFilePtr DMFile::create(UInt64 file_id, const String & parent_path, bool single
     if (file.exists())
     {
         file.remove(true);
-        LOG_FMT_WARNING(log, "Existing dmfile, removed: {}", path);
+        LOG_WARNING(log, "Existing dmfile, removed: {}", path);
     }
     if (single_file_mode)
     {
@@ -626,13 +626,13 @@ void DMFile::finalizeForFolderMode(const FileProviderPtr & file_provider, const 
     Poco::File file(new_path);
     if (file.exists())
     {
-        LOG_FMT_WARNING(log, "Existing dmfile, removing: {}", new_path);
+        LOG_WARNING(log, "Existing dmfile, removing: {}", new_path);
         const String deleted_path = getPathByStatus(parent_path, file_id, Status::DROPPED);
         // no need to delete the encryption info associated with the dmfile path here.
         // because this dmfile path is still a valid path and no obsolete encryption info will be left.
         file.renameTo(deleted_path);
         file.remove(true);
-        LOG_FMT_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
+        LOG_WARNING(log, "Existing dmfile, removed: {}", deleted_path);
     }
     old_file.renameTo(new_path);
     initializeSubFileStatsForFolderMode();
@@ -718,7 +718,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File temp_file(full_path); temp_file.exists())
                     temp_file.remove(true);
-                LOG_FMT_WARNING(log, "Existing temporary dmfile, removed: {}", full_path);
+                LOG_WARNING(log, "Existing temporary dmfile, removed: {}", full_path);
                 continue;
             }
             else if (startsWith(name, details::FOLDER_PREFIX_DROPPED))
@@ -738,7 +738,7 @@ std::set<UInt64> DMFile::listAllInPath(
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File del_file(full_path); del_file.exists())
                     del_file.remove(true);
-                LOG_FMT_WARNING(log, "Existing dropped dmfile, removed: {}", full_path);
+                LOG_WARNING(log, "Existing dropped dmfile, removed: {}", full_path);
                 continue;
             }
         }

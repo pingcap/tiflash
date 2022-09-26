@@ -185,7 +185,7 @@ LearnerReadSnapshot doLearnerRead(
         auto region = kvstore->getRegion(info.region_id);
         if (region == nullptr)
         {
-            LOG_FMT_WARNING(log, "[region {}] is not found in KVStore, try again", info.region_id);
+            LOG_WARNING(log, "[region {}] is not found in KVStore, try again", info.region_id);
             throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND);
         }
         regions_snapshot.emplace(info.region_id, std::move(region));
@@ -381,7 +381,7 @@ LearnerReadSnapshot doLearnerRead(
                         [&](RegionException::RegionReadStatus & status) {
                             if (status != RegionException::RegionReadStatus::OK)
                             {
-                                LOG_FMT_WARNING(
+                                LOG_WARNING(
                                     log,
                                     "Check memory cache, region {}, version {}, handle range {}, status {}",
                                     region_to_query.region_id,
@@ -472,7 +472,7 @@ void validateQueryInfo(
         {
             fail_region_ids.emplace(region_query_info.region_id);
             fail_status = status;
-            LOG_FMT_WARNING(
+            LOG_WARNING(
                 log,
                 "Check after read from Storage, region {}, version {}, handle range {}, status {}",
                 region_query_info.region_id,

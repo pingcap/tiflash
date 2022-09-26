@@ -41,6 +41,7 @@ using IdSetPtr = std::shared_ptr<IdSet>;
 class DMFilePackFilter
 {
 public:
+    // Empty `rowkey_ranges` means do not filter by rowkey_ranges
     static DMFilePackFilter loadFrom(
         const DMFilePtr & dmfile,
         const MinMaxIndexCachePtr & index_cache,
@@ -213,7 +214,7 @@ private:
                       after_read_packs,
                       after_filter,
                       toDebugString(rowkey_ranges),
-                      ((!read_packs) ? 0 : read_packs->size()),
+                      ((read_packs == nullptr) ? 0 : read_packs->size()),
                       pack_count);
     }
 
@@ -269,7 +270,7 @@ private:
             // try load from the cache first
             if (index_cache)
                 minmax_index = index_cache->get(dmfile->colIndexCacheKey(file_name_base));
-            if (!minmax_index)
+            if (minmax_index == nullptr)
                 minmax_index = load();
         }
         indexes.emplace(col_id, RSIndex(type, minmax_index));
