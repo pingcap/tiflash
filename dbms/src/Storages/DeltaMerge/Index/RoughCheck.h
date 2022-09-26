@@ -47,18 +47,13 @@ inline RSResult checkEqual(const Field & v, const DataTypePtr & type, const T & 
     //        return Some;
     //    else
     //        return None;
+
     if (min == max && EQUAL(v, min))
-    {
         return All;
-    }
     else if (GREATER_EQ(v, min) && LESS_EQ(v, max))
-    {
         return Some;
-    }
     else
-    {
         return None;
-    }
 }
 
 template <typename T>
