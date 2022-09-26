@@ -38,12 +38,6 @@ extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_le
 
 namespace tests
 {
-RegionPtr makeRegion(UInt64 id, const std::string start_key, const std::string end_key, const TiFlashRaftProxyHelper * proxy_helper = nullptr)
-{
-    return std::make_shared<Region>(
-        RegionMeta(createPeer(2, true), createRegionInfo(id, std::move(start_key), std::move(end_key)), initialApplyState()),
-        proxy_helper);
-}
 
 class RegionKVStoreTest : public ::testing::Test
 {
