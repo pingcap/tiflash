@@ -348,7 +348,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
     }
     else
     {
-        LOG_FMT_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
+        LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
     }
 
     return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
@@ -836,10 +836,10 @@ PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const Page
             {
                 if (throw_on_not_exist)
                 {
-                    LOG_FMT_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
+                    LOG_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
                     for (const auto & [dump_id, dump_entry] : mvcc_table_directory)
                     {
-                        LOG_FMT_WARNING(log, "Dumping state [page_id={}] [entry={}]", dump_id, dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
+                        LOG_WARNING(log, "Dumping state [page_id={}] [entry={}]", dump_id, dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
                     }
                     throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
                 }
@@ -1351,7 +1351,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    LOG_FMT_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                    LOG_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
                     stale_snapshot_nums++;
                 }
 

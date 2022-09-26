@@ -139,7 +139,7 @@ bool pushPacket(size_t source_index,
                 fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
         }
     }
-    LOG_FMT_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
+    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
     return push_succeed;
 }
 
@@ -222,7 +222,7 @@ public:
     void handle()
     {
         std::string err_info;
-        LOG_FMT_TRACE(log, "stage: {}", stage);
+        LOG_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
@@ -234,12 +234,12 @@ public:
             }
             else
             {
-                LOG_FMT_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+                LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
                 waitForRetryOrDone("Exchange receiver meet error : send async stream request fail");
             }
             break;
         case AsyncRequestStage::WAIT_BATCH_READ:
-            LOG_FMT_TRACE(log, "Received {} packets.", read_packet_index);
+            LOG_TRACE(log, "Received {} packets.", read_packet_index);
             if (read_packet_index > 0)
                 has_data = true;
 
@@ -263,7 +263,7 @@ public:
                 setDone("");
             else
             {
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Finish fail. err code: {}, err msg: {}, retry time {}",
                     finish_status.error_code(),
@@ -618,7 +618,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             bool has_data = false;
             for (;;)
             {
-                LOG_FMT_TRACE(log, "begin next ");
+                LOG_TRACE(log, "begin next ");
                 TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
                 bool success = reader->read(packet);
                 if (!success)
@@ -658,7 +658,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             else
             {
                 bool retriable = !has_data && i + 1 < max_retry_times;
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "EstablishMPPConnectionRequest meets rpc fail. Err code = {}, err msg = {}, retriable = {}",
                     status.error_code(),

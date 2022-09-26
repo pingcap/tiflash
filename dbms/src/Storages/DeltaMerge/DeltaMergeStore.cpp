@@ -395,7 +395,7 @@ void DeltaMergeStore::shutdown()
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start");
+    LOG_TRACE(log, "Shutdown DeltaMerge start");
     // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
     // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
     storage_pool->shutdown();
@@ -405,7 +405,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end");
+    LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
@@ -486,7 +486,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
+    LOG_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -880,10 +880,10 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
 
     fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
         std::thread thread_hold_snapshots([this, tasks]() {
-            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
             std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
             (void)tasks;
-            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
         });
         thread_hold_snapshots.detach();
     });

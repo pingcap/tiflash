@@ -189,7 +189,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
 
     if (table->contains("bg_task_io_rate_limit"))
     {
-        LOG_FMT_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
+        LOG_WARNING(log, "The configuration \"bg_task_io_rate_limit\" is deprecated. Check [storage.io_rate_limit] section for new style.");
     }
 
     if (auto version = table->get_qualified_as<UInt64>("format_version"); version)
@@ -238,7 +238,7 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
     if (!config.has("path"))
         return false;
 
-    LOG_FMT_WARNING(log, "The configuration \"path\" is deprecated. Check [storage] section for new style.");
+    LOG_WARNING(log, "The configuration \"path\" is deprecated. Check [storage] section for new style.");
 
     String paths = config.getString("path");
     Poco::trimInPlace(paths);
@@ -277,7 +277,7 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
         String str_kvstore_path;
         if (config.has("raft.kvstore_path"))
         {
-            LOG_FMT_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check [storage.raft] section for new style.");
+            LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check [storage.raft] section for new style.");
             str_kvstore_path = config.getString("raft.kvstore_path");
         }
         if (str_kvstore_path.empty())
@@ -316,9 +316,9 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
     if (config.has("storage.main"))
     {
         if (config.has("path"))
-            LOG_FMT_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
+            LOG_WARNING(log, "The configuration \"path\" is ignored when \"storage\" is defined.");
         if (config.has("capacity"))
-            LOG_FMT_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
+            LOG_WARNING(log, "The configuration \"capacity\" is ignored when \"storage\" is defined.");
 
         storage_config.parseStoragePath(config.getString("storage"), log);
 
@@ -328,12 +328,12 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
             String deprecated_kvstore_path = config.getString("raft.kvstore_path");
             if (!deprecated_kvstore_path.empty())
             {
-                LOG_FMT_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check \"storage.raft.dir\" for new style.");
+                LOG_WARNING(log, "The configuration \"raft.kvstore_path\" is deprecated. Check \"storage.raft.dir\" for new style.");
                 kvstore_paths.clear();
                 kvstore_paths.emplace_back(getNormalizedPath(deprecated_kvstore_path));
                 for (auto & kvstore_path : kvstore_paths)
                 {
-                    LOG_FMT_WARNING(
+                    LOG_WARNING(
                         log,
                         "Raft data candidate path: {}. "
                         "The path is overwritten by deprecated configuration for backward compatibility.",
@@ -347,7 +347,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
         // capacity
         if (config.has("capacity"))
         {
-            LOG_FMT_WARNING(log, "The configuration \"capacity\" is deprecated. Check [storage] section for new style.");
+            LOG_WARNING(log, "The configuration \"capacity\" is deprecated. Check [storage] section for new style.");
             // TODO: support human readable format for capacity, mark_cache_size, minmax_index_cache_size
             // eg. 100GiB, 10MiB
             String capacities = config.getString("capacity");
@@ -363,7 +363,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
                 num_token++;
             }
             if (num_token != 1)
-                LOG_FMT_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
+                LOG_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
             LOG_FMT_INFO(log, "The capacity limit is: {}", formatReadableSizeWithBinarySuffix(global_capacity_quota));
         }
 

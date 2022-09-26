@@ -196,7 +196,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     catch (...)
     {
         auto message = getCurrentExceptionMessage(false);
-        LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
+        LOG_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
         std::terminate();
     }
 }
