@@ -284,15 +284,9 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context->setDAGContext(dag_context.get());
 
-    if (context->getSettingsRef().enable_planner)
-        query_source = std::make_unique<PlanQuerySource>(*context);
-    else
-        query_source = std::make_unique<DAGQuerySource>(*context);
-
-    auto [query, ast] = query_source->parse(context->getSettingsRef().max_query_size);
     process_list_entry = context->getProcessList().insert(
-        query,
-        ast.get(),
+        dag_context->dummy_query_string,
+        dag_context->dummy_ast.get(),
         context->getClientInfo(),
         context->getSettingsRef());
 

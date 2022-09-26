@@ -204,10 +204,7 @@ public:
         }
         case AsyncRequestStage::WAIT_BATCH_READ:
             if (ok)
-            {
                 ++read_packet_index;
-                packets[read_packet_index - 1]->recomputeTrackedMem();
-            }
             if (!ok || read_packet_index == batch_packet_count || packets[read_packet_index - 1]->hasError())
                 notifyReactor();
             else
@@ -246,9 +243,9 @@ public:
             if (read_packet_index > 0)
                 has_data = true;
 
-            if (auto packet = getErrorPacket())
-                setDone("Exchange receiver meet error : " + packet->error());
-            else if (!sendPackets(err_info))
+            if (auto error_message = getErrorFromPackets(); !error_message.empty())
+                setDone(fmt::format("Exchange receiver meet error : {}", error_message));
+            else if (!sendPackets())
                 setDone("Exchange receiver meet error : push packets fail, " + err_info);
             else if (read_packet_index < batch_packet_count)
             {
@@ -311,12 +308,20 @@ private:
         notify_queue->push(this);
     }
 
-    TrackedMppDataPacketPtr getErrorPacket() const
+    String getErrorFromPackets()
     {
+        // step 1: check if there is error packet
         // only the last packet may has error, see execute().
         if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
-            return packets[read_packet_index - 1];
-        return nullptr;
+            return packets[read_packet_index - 1]->error();
+        // step 2: check memory overflow error
+        for (size_t i = 0; i < read_packet_index; ++i)
+        {
+            packets[i]->recomputeTrackedMem();
+            if (packets[i]->hasError())
+                return packets[i]->error();
+        }
+        return "";
     }
 
     bool retriable() const
@@ -354,28 +359,19 @@ private:
             setDone(done_msg);
     }
 
-    bool sendPackets(std::string & err_info)
+    bool sendPackets()
     {
         // note: no exception should be thrown rudely, since it's called by a GRPC poller.
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            // We shouldn't throw error directly, since the caller works in a standalone thread.
-            try
-            {
-                if (!pushPacket<enable_fine_grained_shuffle, false>(
-                        request->source_index,
-                        req_info,
-                        packet,
-                        *msg_channels,
-                        log))
-                    return false;
-            }
-            catch (...)
-            {
-                err_info = getCurrentExceptionMessage(false);
+            if (!pushPacket<enable_fine_grained_shuffle, false>(
+                    request->source_index,
+                    req_info,
+                    packet,
+                    *msg_channels,
+                    log))
                 return false;
-            }
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<TrackedMppDataPacket>();
         }

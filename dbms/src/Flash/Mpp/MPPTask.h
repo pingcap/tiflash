@@ -126,7 +126,6 @@ private:
     std::unique_ptr<DAGContext> dag_context;
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
-    std::unique_ptr<IQuerySource> query_source;
 
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;
