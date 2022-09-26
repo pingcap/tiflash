@@ -175,7 +175,7 @@ protected:
                     if (fields_map.count(column_element.column_id) > 0)
                         ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id)) << gen_error_log();
                     else
-                        LOG_INFO(logger, "ignore value check for new added column, id={}, name={}", column_element.column_id, column_element.name);
+                        LOG_FMT_INFO(logger, "ignore value check for new added column, id={}, name={}", column_element.column_id, column_element.name);
                 }
             }
         }

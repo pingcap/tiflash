@@ -26,6 +26,7 @@ namespace DB
 class Region;
 using RegionPtr = std::shared_ptr<Region>;
 class StorageDeltaMerge;
+class TMTContext;
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region);
 
