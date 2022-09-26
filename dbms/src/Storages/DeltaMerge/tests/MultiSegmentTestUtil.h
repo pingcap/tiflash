@@ -70,13 +70,33 @@ public:
         FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
     }
 
+    void resetExpectedRows()
+    {
+        auto * log = &Poco::Logger::get(tracing_id);
+
+        rows_by_segments.clear();
+        expected_stable_rows.clear();
+        expected_delta_rows.clear();
+
+        std::shared_lock lock(store->read_write_mutex);
+        auto segment_idx = 0;
+        for (auto & [_key, seg] : store->segments)
+        {
+            UNUSED(_key);
+            LOG_FMT_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
+            rows_by_segments[segment_idx] = seg->getEstimatedRows();
+            expected_stable_rows[segment_idx] = seg->getStable()->getRows();
+            expected_delta_rows[segment_idx] = seg->getDelta()->getRows();
+            segment_idx++;
+        }
+    }
+
     /// Prepare segments * 4. The rows of each segment will be roughly close to n_avg_rows_per_segment.
     /// The exact rows will be recorded in rows_by_segments.
     void prepareSegments(DeltaMergeStorePtr store_, size_t n_avg_rows_per_segment, DMTestEnv::PkType pk_type)
     {
         store = store_;
 
-        auto * log = &Poco::Logger::get(tracing_id);
         auto dm_context = store->newDMContext(db_context, db_context.getSettingsRef(), /*tracing_id*/ tracing_id);
         {
             // Write [0, 4*N) data with tso=2.
@@ -105,19 +125,16 @@ public:
         {
             std::shared_lock lock(store->read_write_mutex);
             // Now we have 4 segments.
+            resetExpectedRows();
+            ASSERT_EQ(rows_by_segments.size(), 4);
+
+            // Verify our expectations.
             auto total_stable_rows = 0;
-            auto segment_idx = 0;
-            for (auto & [_key, seg] : store->segments)
+            for (size_t i = 0; i < rows_by_segments.size(); i++)
             {
-                (void)_key;
-                LOG_FMT_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
-                ASSERT_EQ(seg->getDelta()->getRows(), 0);
-                ASSERT_GT(seg->getStable()->getRows(), 0); // We don't check the exact rows of each segment.
-                total_stable_rows += seg->getStable()->getRows();
-                rows_by_segments[segment_idx] = seg->getStable()->getRows();
-                expected_stable_rows[segment_idx] = seg->getStable()->getRows();
-                expected_delta_rows[segment_idx] = seg->getDelta()->getRows(); // = 0
-                segment_idx++;
+                ASSERT_EQ(expected_delta_rows[i], 0);
+                ASSERT_GT(expected_stable_rows[i], 0); // We don't check the exact rows of each segment.
+                total_stable_rows += expected_stable_rows[i];
             }
             ASSERT_EQ(total_stable_rows, 4 * n_avg_rows_per_segment);
         }
@@ -133,7 +150,7 @@ public:
             store->read_write_mutex.lock();
             auto seg = std::next(store->segments.begin(), segment_idx)->second;
             store->read_write_mutex.unlock();
-            auto result = store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+            auto result = store->segmentSplit(*dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
             if (result.first)
             {
                 break;
@@ -145,7 +162,7 @@ public:
     void verifyExpectedRowsForAllSegments()
     {
         std::shared_lock lock(store->read_write_mutex);
-        ASSERT_EQ(store->segments.size(), 4);
+        ASSERT_EQ(store->segments.size(), expected_delta_rows.size());
         auto segment_idx = 0;
         for (auto & [_key, seg] : store->segments)
         {

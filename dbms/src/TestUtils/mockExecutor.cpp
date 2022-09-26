@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/astToExecutor.h>
+#include <Debug/MockComputeServerManager.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
+#include <Storages/Transaction/TiDB.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <TestUtils/mockExecutor.h>
 #include <tipb/executor.pb.h>
@@ -28,6 +30,8 @@
 
 namespace DB::tests
 {
+using TableInfo = TiDB::TableInfo;
+
 ASTPtr buildColumn(const String & column_name)
 {
     return std::make_shared<ASTIdentifier>(column_name);
@@ -83,8 +87,9 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 }
 
 // traval the AST tree to build tipb::Executor recursively.
-std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context)
+std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext & mock_context, DAGRequestType type)
 {
+    // build tree struct base executor
     MPPInfo mpp_info(properties.start_ts, -1, -1, {}, mock_context.receiver_source_task_ids_map);
     std::shared_ptr<tipb::DAGRequest> dag_request_ptr = std::make_shared<tipb::DAGRequest>();
     tipb::DAGRequest & dag_request = *dag_request_ptr;
@@ -92,12 +97,27 @@ std::shared_ptr<tipb::DAGRequest> DAGRequestBuilder::build(MockDAGRequestContext
     root->toTiPBExecutor(dag_request.mutable_root_executor(), properties.collator, mpp_info, mock_context.context);
     root.reset();
     executor_index = 0;
+
+    // convert to list struct base executor
+    if (type == DAGRequestType::list)
+    {
+        auto & mutable_executors = *dag_request_ptr->mutable_executors();
+        traverseExecutorsReverse(dag_request_ptr.get(), [&](const tipb::Executor & executor) -> bool {
+            auto * mutable_executor = mutable_executors.Add();
+            (*mutable_executor) = executor;
+            mutable_executor->clear_executor_id();
+            return true;
+        });
+        auto * root_executor = dag_request_ptr->release_root_executor();
+        delete root_executor;
+    }
+
     return dag_request_ptr;
 }
 
 // Currently Sort and Window Executors don't support columnPrune.
 // TODO: support columnPrume for Sort and Window.
-void columnPrune(ExecutorPtr executor)
+void columnPrune(mock::ExecutorBinderPtr executor)
 {
     std::unordered_set<String> used_columns;
     for (auto & schema : executor->output_schema)
@@ -107,23 +127,36 @@ void columnPrune(ExecutorPtr executor)
 
 
 // Split a DAGRequest into multiple QueryTasks which can be dispatched to multiple Compute nodes.
-// Currently we don't support window functions.
-QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context)
+// Currently we don't support window functions
+QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context, const DAGProperties & properties)
 {
     columnPrune(root);
-    // enable mpp
-    properties.is_mpp_query = true;
+    mock_context.context.setMPPTest();
     auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
     root.reset();
     executor_index = 0;
     return query_tasks;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, const MockColumnInfoVec & columns)
+QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context)
+{
+    columnPrune(root);
+    DAGProperties properties;
+    properties.is_mpp_query = true;
+    properties.mpp_partition_num = 1;
+    mock_context.context.setMPPTest();
+    auto query_tasks = queryPlanToQueryTasks(properties, root, executor_index, mock_context.context);
+    root.reset();
+    executor_index = 0;
+    return query_tasks;
+}
+
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns)
 {
     assert(!columns.empty());
     TableInfo table_info;
     table_info.name = db + "." + table;
+    table_info.id = table_id;
     int i = 0;
     for (const auto & column : columns)
     {
@@ -136,14 +169,13 @@ DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String
         ret.id = i++;
         table_info.columns.push_back(std::move(ret));
     }
-    String empty_alias;
-    root = compileTableScan(getExecutorIndex(), table_info, empty_alias, false);
+    root = mock::compileTableScan(getExecutorIndex(), table_info, db, table, false);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns)
 {
-    return mockTable(name.first, name.second, columns);
+    return mockTable(name.first, name.second, table_id, columns);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count)
@@ -162,42 +194,42 @@ DAGRequestBuilder & DAGRequestBuilder::buildExchangeReceiver(const MockColumnInf
         schema.push_back({column.first, info});
     }
 
-    root = compileExchangeReceiver(getExecutorIndex(), schema, fine_grained_shuffle_stream_count);
+    root = mock::compileExchangeReceiver(getExecutorIndex(), schema, fine_grained_shuffle_stream_count);
     return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::filter(ASTPtr filter_expr)
 {
     assert(root);
-    root = compileSelection(root, getExecutorIndex(), filter_expr);
+    root = mock::compileSelection(root, getExecutorIndex(), filter_expr);
     return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::limit(int limit)
 {
     assert(root);
-    root = compileLimit(root, getExecutorIndex(), buildLiteral(Field(static_cast<UInt64>(limit))));
+    root = mock::compileLimit(root, getExecutorIndex(), buildLiteral(Field(static_cast<UInt64>(limit))));
     return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::limit(ASTPtr limit_expr)
 {
     assert(root);
-    root = compileLimit(root, getExecutorIndex(), limit_expr);
+    root = mock::compileLimit(root, getExecutorIndex(), limit_expr);
     return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::topN(ASTPtr order_exprs, ASTPtr limit_expr)
 {
     assert(root);
-    root = compileTopN(root, getExecutorIndex(), order_exprs, limit_expr);
+    root = mock::compileTopN(root, getExecutorIndex(), order_exprs, limit_expr);
     return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::topN(const String & col_name, bool desc, int limit)
 {
     assert(root);
-    root = compileTopN(root, getExecutorIndex(), buildOrderByItemVec({{col_name, desc}}), buildLiteral(Field(static_cast<UInt64>(limit))));
+    root = mock::compileTopN(root, getExecutorIndex(), buildOrderByItemVec({{col_name, desc}}), buildLiteral(Field(static_cast<UInt64>(limit))));
     return *this;
 }
 
@@ -209,7 +241,7 @@ DAGRequestBuilder & DAGRequestBuilder::topN(MockOrderByItemVec order_by_items, i
 DAGRequestBuilder & DAGRequestBuilder::topN(MockOrderByItemVec order_by_items, ASTPtr limit_expr)
 {
     assert(root);
-    root = compileTopN(root, getExecutorIndex(), buildOrderByItemVec(order_by_items), limit_expr);
+    root = mock::compileTopN(root, getExecutorIndex(), buildOrderByItemVec(order_by_items), limit_expr);
     return *this;
 }
 
@@ -221,7 +253,7 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockAstVec exprs)
     {
         exp_list->children.push_back(expr);
     }
-    root = compileProject(root, getExecutorIndex(), exp_list);
+    root = mock::compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
 
@@ -233,36 +265,29 @@ DAGRequestBuilder & DAGRequestBuilder::project(MockColumnNameVec col_names)
     {
         exp_list->children.push_back(col(name));
     }
-    root = compileProject(root, getExecutorIndex(), exp_list);
+    root = mock::compileProject(root, getExecutorIndex(), exp_list);
     return *this;
 }
 
 DAGRequestBuilder & DAGRequestBuilder::exchangeSender(tipb::ExchangeType exchange_type)
 {
     assert(root);
-    root = compileExchangeSender(root, getExecutorIndex(), exchange_type);
+    root = mock::compileExchangeSender(root, getExecutorIndex(), exchange_type);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs)
-{
-    return join(right, exprs, ASTTableJoin::Kind::Inner);
-}
-
-DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right, MockAstVec exprs, ASTTableJoin::Kind kind)
+DAGRequestBuilder & DAGRequestBuilder::join(const DAGRequestBuilder & right,
+                                            tipb::JoinType tp,
+                                            MockAstVec join_cols,
+                                            MockAstVec left_conds,
+                                            MockAstVec right_conds,
+                                            MockAstVec other_conds,
+                                            MockAstVec other_eq_conds_from_in)
 {
     assert(root);
     assert(right.root);
-    auto join_ast = std::make_shared<ASTTableJoin>();
-    auto exp_list = std::make_shared<ASTExpressionList>();
-    for (const auto & expr : exprs)
-    {
-        exp_list->children.push_back(expr);
-    }
-    join_ast->using_expression_list = exp_list;
-    join_ast->strictness = ASTTableJoin::Strictness::All;
-    join_ast->kind = kind;
-    root = compileJoin(getExecutorIndex(), root, right.root, join_ast);
+
+    root = mock::compileJoin(getExecutorIndex(), root, right.root, tp, join_cols, left_conds, right_conds, other_conds, other_eq_conds_from_in);
     return *this;
 }
 
@@ -339,32 +364,32 @@ DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, boo
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos)
 {
-    mock_tables[db + "." + table] = columnInfos;
+    mock_storage.addTableSchema(db + "." + table, columnInfos);
 }
 
 void MockDAGRequestContext::addMockTable(const MockTableName & name, const MockColumnInfoVec & columnInfos)
 {
-    mock_tables[name.first + "." + name.second] = columnInfos;
+    mock_storage.addTableSchema(name.first + "." + name.second, columnInfos);
 }
 
 void MockDAGRequestContext::addExchangeRelationSchema(String name, const MockColumnInfoVec & columnInfos)
 {
-    exchange_schemas[name] = columnInfos;
+    mock_storage.addExchangeSchema(name, columnInfos);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const String & db, const String & table, ColumnsWithTypeAndName columns)
 {
-    mock_table_columns[db + "." + table] = columns;
+    mock_storage.addTableData(db + "." + table, columns);
 }
 
 void MockDAGRequestContext::addMockTableColumnData(const MockTableName & name, ColumnsWithTypeAndName columns)
 {
-    mock_table_columns[name.first + "." + name.second] = columns;
+    mock_storage.addTableData(name.first + "." + name.second, columns);
 }
 
 void MockDAGRequestContext::addExchangeReceiverColumnData(const String & name, ColumnsWithTypeAndName columns)
 {
-    mock_exchange_columns[name] = columns;
+    mock_storage.addExchangeData(name, columns);
 }
 
 void MockDAGRequestContext::addMockTable(const String & db, const String & table, const MockColumnInfoVec & columnInfos, ColumnsWithTypeAndName columns)
@@ -385,28 +410,17 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
     addExchangeReceiverColumnData(name, columns);
 }
 
-DAGRequestBuilder MockDAGRequestContext::scan(String db_name, String table_name)
+DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
 {
-    auto builder = DAGRequestBuilder(index).mockTable({db_name, table_name}, mock_tables[db_name + "." + table_name]);
-    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
-    // If user don't want to test executors, it will be safe to run Interpreter Tests.
-    if (mock_table_columns.find(db_name + "." + table_name) != mock_table_columns.end())
-    {
-        executor_id_columns_map[builder.getRoot()->name] = mock_table_columns[db_name + "." + table_name];
-    }
-    return builder;
+    auto table_id = mock_storage.getTableId(db_name + "." + table_name);
+    return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_storage.getTableSchema(db_name + "." + table_name));
 }
 
-DAGRequestBuilder MockDAGRequestContext::receive(String exchange_name, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
 {
-    auto builder = DAGRequestBuilder(index).exchangeReceiver(exchange_schemas[exchange_name], fine_grained_shuffle_stream_count);
+    auto builder = DAGRequestBuilder(index, collation).exchangeReceiver(mock_storage.getExchangeSchema(exchange_name), fine_grained_shuffle_stream_count);
     receiver_source_task_ids_map[builder.getRoot()->name] = {};
-    // If don't have related columns, user must pass input columns as argument of executeStreams in order to run Executors Tests.
-    // If user don't want to test executors, it will be safe to run Interpreter Tests.
-    if (mock_exchange_columns.find(exchange_name) != mock_exchange_columns.end())
-    {
-        executor_id_columns_map[builder.getRoot()->name] = mock_exchange_columns[exchange_name];
-    }
+    mock_storage.addExchangeRelation(builder.getRoot()->name, exchange_name);
     return builder;
 }
 } // namespace DB::tests

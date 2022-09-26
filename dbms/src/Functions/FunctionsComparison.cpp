@@ -108,7 +108,7 @@ void FunctionComparison<GreaterOrEqualsOp, NameGreaterOrEquals>::executeTupleImp
 }
 
 template <>
-void FunctionComparison<CmpOp, NameStrcmp>::executeTupleImpl(
+void FunctionComparison<CmpOp, NameStrcmp, StrcmpReturnColumnType>::executeTupleImpl(
     [[maybe_unused]] Block & block,
     [[maybe_unused]] size_t result,
     [[maybe_unused]] const ColumnsWithTypeAndName & x,

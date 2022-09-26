@@ -32,6 +32,7 @@
 #include <Encryption/WriteBufferFromFileProvider.h>
 #include <IO/CompressedWriteBuffer.h>
 #include <Interpreters/Aggregator.h>
+#include <Storages/Transaction/CollatorUtils.h>
 #include <common/demangle.h>
 
 #include <future>
@@ -303,6 +304,18 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     if (params.keys_size == 1 && types_removed_nullable[0]->isString())
         return AggregatedDataVariants::Type::key_string;
 
+    if (params.keys_size > 1 && types_removed_nullable[0]->isString())
+    {
+        bool is_all_str = std::all_of(types_removed_nullable.data(), types_removed_nullable.data() + params.keys_size, [](const auto & x) {
+            return x->isString();
+        });
+
+        if (is_all_str)
+        {
+            return AggregatedDataVariants::Type::multi_key_string;
+        }
+    }
+
     if (params.keys_size == 1 && types_removed_nullable[0]->isFixedString())
         return AggregatedDataVariants::Type::key_fixed_string;
 
@@ -361,7 +374,7 @@ void NO_INLINE Aggregator::executeImpl(
 }
 
 template <bool no_more_keys, typename Method>
-void NO_INLINE Aggregator::executeImplBatch(
+ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,

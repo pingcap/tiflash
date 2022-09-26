@@ -17,7 +17,8 @@
 #include <Columns/ColumnsCommon.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <Functions/CollationOperatorOptimized.h>
+#include <Storages/Transaction/CollatorUtils.h>
+#include <common/memcpy.h>
 #include <fmt/core.h>
 
 
@@ -86,15 +87,20 @@ void ColumnString::insertRangeFrom(const IColumn & src, size_t start, size_t len
     const auto & src_concrete = static_cast<const ColumnString &>(src);
 
     if (start + length > src_concrete.offsets.size())
-        throw Exception("Parameter out of bound in IColumnString::insertRangeFrom method.",
-                        ErrorCodes::PARAMETER_OUT_OF_BOUND);
+        throw Exception(
+            fmt::format(
+                "Parameters are out of bound in ColumnString::insertRangeFrom method, start={}, length={}, src.size()={}",
+                start,
+                length,
+                src_concrete.size()),
+            ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
     size_t nested_offset = src_concrete.offsetAt(start);
     size_t nested_length = src_concrete.offsets[start + length - 1] - nested_offset;
 
     size_t old_chars_size = chars.size();
     chars.resize(old_chars_size + nested_length);
-    memcpy(&chars[old_chars_size], &src_concrete.chars[nested_offset], nested_length);
+    inline_memcpy(&chars[old_chars_size], &src_concrete.chars[nested_offset], nested_length);
 
     if (start == 0 && offsets.empty())
     {
@@ -315,12 +321,10 @@ int ColumnString::compareAtWithCollationImpl(size_t n, size_t m, const IColumn &
 {
     const auto & rhs = static_cast<const ColumnString &>(rhs_);
 
-    return collator.compare(
-        reinterpret_cast<const char *>(&chars[offsetAt(n)]),
-        sizeAt(n) - 1, // Skip last zero byte.
-        reinterpret_cast<const char *>(&rhs.chars[rhs.offsetAt(m)]),
-        rhs.sizeAt(m) - 1 // Skip last zero byte.
-    );
+    auto a = getDataAt(n);
+    auto b = rhs.getDataAt(m);
+
+    return collator.compare(a.data, a.size, b.data, b.size);
 }
 
 // Derived must implement function `int compare(const char *, size_t, const char *, size_t)`.
@@ -355,11 +359,12 @@ struct ColumnString::LessWithCollation
     }
 };
 
-struct Utf8MB4BinCmp
+template <bool padding>
+struct CompareBinCollator
 {
     static FLATTEN_INLINE_PURE inline int compare(const char * s1, size_t length1, const char * s2, size_t length2)
     {
-        return DB::BinCollatorCompare<true>(s1, length1, s2, length2);
+        return DB::BinCollatorCompare<padding>(s1, length1, s2, length2);
     }
 };
 
@@ -400,17 +405,27 @@ void ColumnString::getPermutationWithCollationImpl(const ICollator & collator, b
 {
     using PermutationWithCollationUtils = ColumnString::LessWithCollation<false, void>;
 
-    // optimize path for default collator `UTF8MB4_BIN`
-    if (TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN) == &collator)
+    switch (TiDB::GetTiDBCollatorType(&collator))
     {
-        Utf8MB4BinCmp cmp_impl;
+    case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+    case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+    case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+    {
+        CompareBinCollator<true> cmp_impl;
         PermutationWithCollationUtils::getPermutationWithCollationImpl(*this, cmp_impl, reverse, limit, res);
-        ///
-        return;
+        break;
     }
-
+    case TiDB::ITiDBCollator::CollatorType::BINARY:
+    {
+        CompareBinCollator<false> cmp_impl;
+        PermutationWithCollationUtils::getPermutationWithCollationImpl(*this, cmp_impl, reverse, limit, res);
+        break;
+    }
+    default:
     {
         PermutationWithCollationUtils::getPermutationWithCollationImpl(*this, collator, reverse, limit, res);
+    }
     }
 }
 
@@ -425,7 +440,12 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
 
     if (collator != nullptr)
     {
-        if (collator->getCollatorId() == TiDB::ITiDBCollator::UTF8MB4_BIN)
+        switch (collator->getCollatorType())
+        {
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+        case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+        case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+        case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
         {
             // Skip last zero byte.
             LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
@@ -433,8 +453,19 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
                 *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
                 ++hash_data;
             });
+            break;
         }
-        else
+        case TiDB::ITiDBCollator::CollatorType::BINARY:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
+                auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
+                *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
+                ++hash_data;
+            });
+            break;
+        }
+        default:
         {
             // Skip last zero byte.
             LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t) {
@@ -442,6 +473,8 @@ void ColumnString::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorP
                 *hash_data = ::updateWeakHash32(reinterpret_cast<const UInt8 *>(sort_key.data), sort_key.size, *hash_data);
                 ++hash_data;
             });
+            break;
+        }
         }
     }
     else
@@ -458,7 +491,12 @@ void ColumnString::updateHashWithValues(IColumn::HashValues & hash_values, const
 {
     if (collator != nullptr)
     {
-        if (collator->getCollatorId() == TiDB::ITiDBCollator::UTF8MB4_BIN)
+        switch (collator->getCollatorType())
+        {
+        case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+        case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+        case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+        case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
         {
             // Skip last zero byte.
             LoopOneColumn(chars, offsets, offsets.size(), [&hash_values](const std::string_view & view, size_t i) {
@@ -467,8 +505,20 @@ void ColumnString::updateHashWithValues(IColumn::HashValues & hash_values, const
                 hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
                 hash_values[i].update(sort_key.data, sort_key.size);
             });
+            break;
         }
-        else
+        case TiDB::ITiDBCollator::CollatorType::BINARY:
+        {
+            // Skip last zero byte.
+            LoopOneColumn(chars, offsets, offsets.size(), [&hash_values](const std::string_view & view, size_t i) {
+                auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
+                size_t string_size = sort_key.size;
+                hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
+                hash_values[i].update(sort_key.data, sort_key.size);
+            });
+            break;
+        }
+        default:
         {
             // Skip last zero byte.
             LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t i) {
@@ -477,6 +527,8 @@ void ColumnString::updateHashWithValues(IColumn::HashValues & hash_values, const
                 hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
                 hash_values[i].update(sort_key.data, sort_key.size);
             });
+            break;
+        }
         }
     }
     else

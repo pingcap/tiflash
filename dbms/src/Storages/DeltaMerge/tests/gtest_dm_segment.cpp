@@ -23,6 +23,7 @@
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
 
@@ -89,7 +90,6 @@ protected:
         dm_context = std::make_unique<DMContext>(*db_context,
                                                  *storage_path_pool,
                                                  *storage_pool,
-                                                 0,
                                                  /*min_version_*/ 0,
                                                  settings.not_compress_columns,
                                                  false,
@@ -139,14 +139,7 @@ try
         {
             // read written data (only in delta)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
 
         {
@@ -157,14 +150,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
     }
 
@@ -180,14 +166,7 @@ try
         {
             // read written data (both in delta and stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
 
         {
@@ -198,14 +177,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, num_rows_write + num_rows_write_2);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
     }
 }
@@ -225,7 +197,7 @@ try
 
         // flush segment and make sure there is two packs in stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+        ASSERT_EQ(segment->getStable()->getDMFilesPacks(), 2);
     }
 
     {
@@ -235,15 +207,8 @@ try
 
     {
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
         // only write two visible pks
-        ASSERT_EQ(num_rows_read, 2);
+        ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
 }
 CATCH
@@ -278,14 +243,7 @@ try
         {
             // read written data (only in delta)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
 
         {
@@ -298,14 +256,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
     }
 
@@ -323,14 +274,7 @@ try
         {
             // read written data (both in delta and stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows_2);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
 
         {
@@ -342,14 +286,7 @@ try
         {
             // read written data (only in stable)
             auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_rows_read, expect_read_rows_2);
+            ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
     }
 }
@@ -372,18 +309,6 @@ try
         segment->write(dmContext(), block);
     };
 
-    auto check_rows = [&](size_t expected_rows) {
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, expected_rows);
-    };
-
     {
         // check segment
         segment->check(dmContext(), "test");
@@ -391,12 +316,16 @@ try
 
     // Thread A
     write_rows(100);
-    check_rows(100);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        100);
     auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     // Thread B
     write_rows(100);
-    check_rows(200);
+    ASSERT_INPUTSTREAM_NROWS(
+        segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        200);
 
     // Thread A
     {
@@ -408,14 +337,7 @@ try
             {},
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
-        int num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, 100);
+        ASSERT_INPUTSTREAM_NROWS(in, 100);
     }
 }
 CATCH
@@ -444,15 +366,7 @@ try
 
     auto get_rows = [&](const RowKeyRange & range) {
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {range});
-        in->readPrefix();
-        size_t rows = 0;
-        while (Block block = in->read())
-        {
-            rows += block.rows();
-        }
-        in->readSuffix();
-
-        return rows;
+        return getInputStreamNRows(in);
     };
 
     // First place the block packs, so that we can only place DeleteRange below.
@@ -522,14 +436,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     {
@@ -550,21 +457,10 @@ try
     {
         // read after delete range
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), 2UL);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 0);
-                    EXPECT_EQ(c->getInt(1), 99);
-                }
-            }
-        }
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>({0, 99})}));
     }
 
     // For the case that apply merge delta after delete range, we ensure that data on disk are compacted
@@ -572,15 +468,8 @@ try
     {
         // read raw after delete range
         auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
-        in->readPrefix();
-        size_t num_rows = 0;
-        while (Block block = in->read())
-        {
-            num_rows += block.rows();
-        }
-        in->readSuffix();
         // Only 2 rows are left on disk, others are compacted.
-        ASSERT_EQ(num_rows, 2UL);
+        ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
 }
 CATCH
@@ -600,14 +489,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     {
@@ -636,21 +518,10 @@ try
     {
         // read after delete range
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), 2UL);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 0);
-                    EXPECT_EQ(c->getInt(1), 99);
-                }
-            }
-        }
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>({0, 99})}));
     }
 
     // For the case that apply merge delta after delete range, we ensure that data on disk are compacted
@@ -658,15 +529,8 @@ try
     {
         // read raw after delete range
         auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
-        in->readPrefix();
-        size_t num_rows = 0;
-        while (Block block = in->read())
-        {
-            num_rows += block.rows();
-        }
-        in->readSuffix();
         // Only 2 rows are left on disk, others are compacted.
-        ASSERT_EQ(num_rows, 2UL);
+        ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
 }
 CATCH
@@ -695,14 +559,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     {
@@ -723,21 +580,10 @@ try
     {
         // read after delete range
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), 2UL);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 0);
-                    EXPECT_EQ(c->getInt(1), 99);
-                }
-            }
-        }
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>({0, 99})}));
     }
 
     // For the case that apply merge delta after delete range, we ensure that data on disk are compacted
@@ -745,15 +591,8 @@ try
     {
         // read raw after delete range
         auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
-        size_t num_rows = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows += block.rows();
-        }
-        in->readSuffix();
         // Only 2 rows are left on disk, others are compacted.
-        ASSERT_EQ(num_rows, 2UL);
+        ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
 }
 CATCH
@@ -795,23 +634,10 @@ try
         // Read after deletion
         // The deleted range has no overlap with current data, so there should be no change
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), num_rows_write);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                for (Int64 i = 0; i < Int64(c->size()); i++)
-                {
-                    if (iter.name == DMTestEnv::pk_name)
-                    {
-                        EXPECT_EQ(c->getInt(i), i);
-                    }
-                }
-            }
-        }
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>(createNumbers<Int64>(0, num_rows_write))}));
     }
 
     {
@@ -828,22 +654,10 @@ try
         // Read after deletion
         // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), num_rows_write - 1);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 0);
-                    EXPECT_EQ(c->getInt(62), 62);
-                }
-                EXPECT_EQ(c->size(), 63UL);
-            }
-        }
-        in->readSuffix();
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>(createNumbers<Int64>(0, 63))}));
     }
 
     {
@@ -858,21 +672,14 @@ try
     {
         // Read after deletion
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), num_rows_write - 32);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 0);
-                    EXPECT_EQ(c->getInt(1), 32);
-                }
-            }
-        }
-        in->readSuffix();
+
+        std::vector<Int64> pk_coldata{0};
+        auto tmp = createNumbers<Int64>(32, 63);
+        pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>(pk_coldata)}));
     }
 
     {
@@ -888,21 +695,13 @@ try
     {
         // Read after deletion
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), num_rows_write - 32);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 0);
-                    EXPECT_EQ(c->getInt(1), 32);
-                }
-            }
-        }
-        in->readSuffix();
+        std::vector<Int64> pk_coldata{0};
+        auto tmp = createNumbers<Int64>(32, 63);
+        pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>(pk_coldata)}));
     }
 
     {
@@ -918,20 +717,11 @@ try
     {
         // Read after deletion
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), num_rows_write - 33);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 32);
-                }
-            }
-        }
-        in->readSuffix();
+        std::vector<Int64> pk_coldata = createNumbers<Int64>(32, 63);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>(pk_coldata)}));
     }
 
     {
@@ -945,23 +735,14 @@ try
     {
         // Read after new write
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            ASSERT_EQ(block.rows(), num_rows_write - 33 + 7);
-            for (auto & iter : block)
-            {
-                auto c = iter.column;
-                if (iter.name == DMTestEnv::pk_name)
-                {
-                    EXPECT_EQ(c->getInt(0), 9);
-                    EXPECT_EQ(c->getInt(6), 15);
-                    EXPECT_EQ(c->getInt(7), 32);
-                    EXPECT_EQ(c->getInt(block.rows() - 1), 62);
-                }
-            }
-        }
-        in->readSuffix();
+        std::vector<Int64> pk_coldata = createNumbers<Int64>(9, 16);
+        auto tmp = createNumbers<Int64>(32, 63);
+        pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>(pk_coldata)}));
     }
 }
 CATCH
@@ -985,15 +766,7 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
     const auto old_range = segment->getRowKeyRange();
@@ -1011,29 +784,9 @@ try
     EXPECT_EQ(*s2_range.end.value, *old_range.end.value);
     // TODO check segment epoch is increase
 
-    size_t num_rows_seg1 = 0;
-    size_t num_rows_seg2 = 0;
-    {
-        {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_seg1 += block.rows();
-            }
-            in->readSuffix();
-        }
-        {
-            auto in = new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_seg2 += block.rows();
-            }
-            in->readSuffix();
-        }
-        ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
-    }
+    size_t num_rows_seg1 = getInputStreamNRows(segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()}));
+    size_t num_rows_seg2 = getInputStreamNRows(new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()}));
+    ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
 
     // delete rows in the right segment
     {
@@ -1043,7 +796,7 @@ try
 
     // merge segments
     {
-        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
+        segment = Segment::merge(dmContext(), tableColumns(), {segment, new_segment});
         {
             // check merged segment range
             const auto & merged_range = segment->getRowKeyRange();
@@ -1052,15 +805,8 @@ try
             // TODO check segment epoch is increase
         }
         {
-            size_t num_rows_read = 0;
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            EXPECT_EQ(num_rows_read, num_rows_seg1);
+            ASSERT_INPUTSTREAM_NROWS(in, num_rows_seg1);
         }
     }
 }
@@ -1192,7 +938,7 @@ try
 
     const time_t start_time = std::time(nullptr);
 
-    auto temp = std::vector<Int64>();
+    std::vector<Int64> temp;
     for (;;)
     {
         {
@@ -1227,26 +973,11 @@ try
         {
             // Read after writing
             auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-            size_t num_rows_read = 0;
-            in->readPrefix();
-            while (Block block = in->read())
-            {
-                for (auto & iter : block)
-                {
-                    auto c = iter.column;
-                    for (size_t i = 0; i < c->size(); i++)
-                    {
-                        if (iter.name == DMTestEnv::pk_name)
-                        {
-                            auto expect = temp.at(i + num_rows_read);
-                            EXPECT_EQ(c->getInt(Int64(i)), expect);
-                        }
-                    }
-                }
-                num_rows_read += block.rows();
-            }
-            in->readSuffix();
-            ASSERT_EQ(num_batches_written * (num_rows_per_write - 2), num_rows_read);
+            ASSERT_INPUTSTREAM_COLS_UR(
+                in,
+                Strings({DMTestEnv::pk_name}),
+                createColumns({createColumn<Int64>(temp)}))
+                << fmt::format("num_batches_written={} num_rows_per_write={}", num_batches_written, num_rows_per_write);
         }
 
         {
@@ -1375,15 +1106,8 @@ try
     };
 
     auto read_rows = [&](const SegmentPtr & segment) {
-        size_t rows = 0;
         auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            rows += block.rows();
-        }
-        in->readSuffix();
-        return rows;
+        return getInputStreamNRows(in);
     };
 
     write_100_rows(segment);
@@ -1404,7 +1128,7 @@ try
         split_info->other_stable->enableDMFilesGC();
 
         auto lock = segment->mustGetUpdateLock();
-        std::tie(segment, other_segment) = segment->applySplit(dmContext(), segment_snap, wbs, split_info.value());
+        std::tie(segment, other_segment) = segment->applySplit(lock, dmContext(), segment_snap, wbs, split_info.value());
 
         wbs.writeAll();
     }
@@ -1428,15 +1152,15 @@ try
         write_100_rows(other_segment);
         segment->flushCache(dmContext());
 
-        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), segment, left_snap, other_segment, right_snap, wbs);
+        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), {segment, other_segment}, {left_snap, right_snap}, wbs);
 
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC();
 
-        auto left_lock = segment->mustGetUpdateLock();
-        auto right_lock = other_segment->mustGetUpdateLock();
-
-        segment = Segment::applyMerge(dmContext(), segment, left_snap, other_segment, right_snap, wbs, merged_stable);
+        std::vector<Segment::Lock> locks;
+        locks.emplace_back(segment->mustGetUpdateLock());
+        locks.emplace_back(other_segment->mustGetUpdateLock());
+        segment = Segment::applyMerge(locks, dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
 
         wbs.writeAll();
     }
@@ -1526,27 +1250,13 @@ try
     {
         // read written data
         auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
-
         // check that we can read correct values
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(column_name_i8_to_i32));
-            const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
-            ASSERT_DATATYPE_EQ(col.type, column_i32_after_ddl.type);
-            ASSERT_EQ(col.name, column_i32_after_ddl.name);
-            ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                auto value = col.column->getInt(i);
-                const auto expected = static_cast<int64_t>((i % 2 == 0 ? -1 : 1) * i);
-                ASSERT_EQ(value, expected) << "at row: " << i;
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, column_i32_after_ddl.name}),
+            createColumns({//
+                           createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                           createColumn<Int32>(createSignedNumbers(0, num_rows_write))}));
     }
 
 
@@ -1574,33 +1284,18 @@ try
         auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(column_name_i8_to_i32));
-            const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
-            ASSERT_DATATYPE_EQ(col.type, column_i32_after_ddl.type);
-            ASSERT_EQ(col.name, column_i32_after_ddl.name);
-            ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                auto value = col.column->getInt(i);
-                auto expected = 0;
-                if (i < num_rows_write / 2)
-                    expected = static_cast<int64_t>((i % 2 == 0 ? -1 : 1) * i);
-                else
-                {
-                    auto r = i - num_rows_write / 2;
-                    expected = static_cast<int64_t>((r % 2 == 0 ? -1 : 1) * r);
-                }
-                // std::cerr << " row: " << i << "  "<< value << std::endl;
-                ASSERT_EQ(value, expected) << "at row: " << i;
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+        // [0, 50) is the old signed values, [50, 100) is replaced by newer written values
+        std::vector<Int64> i32_columndata = createSignedNumbers(0, num_rows_write / 2);
+        auto tmp = createSignedNumbers(0, num_rows_write * 2 - num_rows_write / 2);
+        i32_columndata.insert(i32_columndata.end(), tmp.begin(), tmp.end());
+        ASSERT_EQ(i32_columndata.size(), 2 * num_rows_write);
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, column_i32_after_ddl.name}),
+            createColumns({//
+                           createColumn<Int64>(createNumbers<Int64>(0, 2 * num_rows_write)),
+                           createColumn<Int32>(i32_columndata)}));
     }
 
     // Flush cache and apply delta-merge, then read again
@@ -1615,33 +1310,17 @@ try
         auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(column_name_i8_to_i32));
-            const ColumnWithTypeAndName & col = block.getByName(column_name_i8_to_i32);
-            ASSERT_DATATYPE_EQ(col.type, column_i32_after_ddl.type);
-            ASSERT_EQ(col.name, column_i32_after_ddl.name);
-            ASSERT_EQ(col.column_id, column_i32_after_ddl.id);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                auto value = col.column->getInt(i);
-                auto expected = 0;
-                if (i < num_rows_write / 2)
-                    expected = static_cast<int64_t>((i % 2 == 0 ? -1 : 1) * i);
-                else
-                {
-                    auto r = i - num_rows_write / 2;
-                    expected = static_cast<int64_t>((r % 2 == 0 ? -1 : 1) * r);
-                }
-                // std::cerr << " row: " << i << "  "<< value << std::endl;
-                ASSERT_EQ(value, expected) << "at row: " << i;
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+        std::vector<Int64> i32_columndata = createSignedNumbers(0, num_rows_write / 2);
+        auto tmp = createSignedNumbers(0, num_rows_write * 2 - num_rows_write / 2);
+        i32_columndata.insert(i32_columndata.end(), tmp.begin(), tmp.end());
+        ASSERT_EQ(i32_columndata.size(), 2 * num_rows_write);
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, column_i32_after_ddl.name}),
+            createColumns({//
+                           createColumn<Int64>(createNumbers<Int64>(0, 2 * num_rows_write)),
+                           createColumn<Int32>(i32_columndata)}));
     }
 }
 CATCH
@@ -1696,23 +1375,12 @@ try
         auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            const ColumnWithTypeAndName & col = block.getByName(new_column_define.name);
-            ASSERT_TRUE(col.type->equals(*new_column_define.type));
-            ASSERT_EQ(col.name, new_column_define.name);
-            ASSERT_EQ(col.column_id, new_column_define.id);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                auto value = col.column->getInt(i);
-                ASSERT_EQ(value, new_column_default_value_int) << "at row:" << i;
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, num_rows_write);
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, new_column_define.name}),
+            createColumns({//
+                           createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                           createColumn<Int8>(std::vector<Int64>(num_rows_write, new_column_default_value_int))}));
     }
 
 
@@ -1742,33 +1410,19 @@ try
         auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(new_column_name));
-            const ColumnWithTypeAndName & col = block.getByName(new_column_name);
-            ASSERT_DATATYPE_EQ(col.type, new_column_define.type);
-            ASSERT_EQ(col.name, new_column_define.name);
-            ASSERT_EQ(col.column_id, new_column_define.id);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                int8_t value = col.column->getInt(i);
-                int8_t expected = 0;
-                if (i < num_rows_write / 2)
-                    expected = new_column_default_value_int;
-                else
-                {
-                    auto r = i - num_rows_write / 2;
-                    expected = static_cast<int8_t>((r % 2 == 0 ? -1 : 1) * r);
-                }
-                // std::cerr << " row: " << i << "  "<< value << std::endl;
-                ASSERT_EQ(value, expected) << "at row: " << i;
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+        // First 50 values are default value
+        std::vector<Int64> i8_columndata(num_rows_write / 2, new_column_default_value_int);
+        // then fill with signed number sequence
+        auto tmp = createSignedNumbers(0, num_rows_write * 2 - num_rows_write / 2);
+        i8_columndata.insert(i8_columndata.end(), tmp.begin(), tmp.end());
+        ASSERT_EQ(i8_columndata.size(), 2 * num_rows_write);
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, new_column_define.name}),
+            createColumns({//
+                           createColumn<Int64>(createNumbers<Int64>(0, 2 * num_rows_write)),
+                           createColumn<Int8>(i8_columndata)}));
     }
 
     // Flush cache and apply delta-merge, then read again
@@ -1783,33 +1437,19 @@ try
         auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
-        size_t num_rows_read = 0;
-        in->readPrefix();
-        while (Block block = in->read())
-        {
-            num_rows_read += block.rows();
-            ASSERT_TRUE(block.has(new_column_name));
-            const ColumnWithTypeAndName & col = block.getByName(new_column_name);
-            ASSERT_DATATYPE_EQ(col.type, new_column_define.type);
-            ASSERT_EQ(col.name, new_column_define.name);
-            ASSERT_EQ(col.column_id, new_column_define.id);
-            for (size_t i = 0; i < block.rows(); ++i)
-            {
-                int8_t value = col.column->getInt(i);
-                int8_t expected = 0;
-                if (i < num_rows_write / 2)
-                    expected = new_column_default_value_int;
-                else
-                {
-                    auto r = i - num_rows_write / 2;
-                    expected = static_cast<int8_t>((r % 2 == 0 ? -1 : 1) * r);
-                }
-                // std::cerr << " row: " << i << "  "<< value << std::endl;
-                ASSERT_EQ(value, expected) << "at row: " << i;
-            }
-        }
-        in->readSuffix();
-        ASSERT_EQ(num_rows_read, (size_t)(num_rows_write * 2));
+        // First 50 values are default value
+        std::vector<Int64> i8_columndata(num_rows_write / 2, new_column_default_value_int);
+        // then fill with signed number sequence
+        auto tmp = createSignedNumbers(0, num_rows_write * 2 - num_rows_write / 2);
+        i8_columndata.insert(i8_columndata.end(), tmp.begin(), tmp.end());
+        ASSERT_EQ(i8_columndata.size(), 2 * num_rows_write);
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, new_column_define.name}),
+            createColumns({//
+                           createColumn<Int64>(createNumbers<Int64>(0, 2 * num_rows_write)),
+                           createColumn<Int8>(i8_columndata)}));
     }
 }
 CATCH

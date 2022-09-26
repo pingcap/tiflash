@@ -37,7 +37,12 @@ struct TiFlashRaftConfig
     std::unordered_set<std::string> ignore_databases{"system"};
     // Actually it is "flash.service_addr"
     std::string flash_server_addr;
+
+    // Use PageStorage V1 for kvstore or not.
+    // TODO: remove this config
     bool enable_compatible_mode = true;
+
+    bool for_unit_test = false;
 
     static constexpr TiDB::StorageEngine DEFAULT_ENGINE = TiDB::StorageEngine::DT;
     TiDB::StorageEngine engine = DEFAULT_ENGINE;
@@ -46,7 +51,7 @@ struct TiFlashRaftConfig
 public:
     TiFlashRaftConfig() = default;
 
-    static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, Poco::Logger * log);
+    static TiFlashRaftConfig parseSettings(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 };
 
 } // namespace DB

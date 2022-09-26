@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Core/Field.h>
+#include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
 
 namespace DB
@@ -59,6 +60,21 @@ void WindowDescription::setWindowFrame(const tipb::WindowFrame & frame_)
     frame.end_type = getBoundaryTypeFromTipb(frame_.end());
     frame.end_preceding = (frame_.end().type() == tipb::WindowBoundType::Preceding);
     frame.is_default = false;
+}
+
+void WindowDescription::fillArgColumnNumbers()
+{
+    const auto & before_window_header = before_window->getSampleBlock();
+    for (auto & descr : window_functions_descriptions)
+    {
+        if (descr.arguments.empty())
+        {
+            for (const auto & name : descr.argument_names)
+            {
+                descr.arguments.emplace_back(before_window_header.getPositionByName(name));
+            }
+        }
+    }
 }
 
 String frameTypeToString(const WindowFrame::FrameType & type)

@@ -37,13 +37,13 @@ class StorageConfigTest : public ::testing::Test
 {
 public:
     StorageConfigTest()
-        : log(&Poco::Logger::get("StorageConfigTest"))
+        : log(Logger::get("StorageConfigTest"))
     {}
 
     static void SetUpTestCase() {}
 
 protected:
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 TEST_F(StorageConfigTest, SimpleSinglePath)
@@ -449,7 +449,7 @@ dir=["/data0/tiflash"]
 capacity=[ 1024 ]
         )",
     };
-    Poco::Logger * log = &Poco::Logger::get("PathCapacityMetrics_test");
+    auto log = Logger::get("PathCapacityMetrics_test");
 
     for (size_t i = 0; i < tests.size(); ++i)
     {
@@ -603,7 +603,7 @@ background_read_weight=2
         )",
     };
 
-    Poco::Logger * log = &Poco::Logger::get("StorageIORateLimitConfigTest");
+    auto log = Logger::get("StorageIORateLimitConfigTest");
 
     auto verify_default = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);

@@ -30,8 +30,6 @@ extern const int DIVIDED_BY_ZERO;
 extern const int INVALID_TIME;
 } // namespace ErrorCodes
 
-const String enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
-
 bool strictSqlMode(UInt64 sql_mode)
 {
     return sql_mode & TiDBSQLMode::STRICT_ALL_TABLES || sql_mode & TiDBSQLMode::STRICT_TRANS_TABLES;
@@ -86,25 +84,25 @@ void DAGContext::initExecutorIdToJoinIdMap()
 {
     // only mpp task has join executor
     // for mpp, all executor has executor id.
-    if (isMPPTask())
-    {
-        executor_id_to_join_id_map.clear();
-        traverseExecutorsReverse(dag_request, [&](const tipb::Executor & executor) {
-            std::vector<String> all_join_id;
-            // for mpp, dag_request.has_root_executor() == true, can call `getChildren` directly.
-            getChildren(executor).forEach([&](const tipb::Executor & child) {
-                assert(child.has_executor_id());
-                auto child_it = executor_id_to_join_id_map.find(child.executor_id());
-                if (child_it != executor_id_to_join_id_map.end())
-                    all_join_id.insert(all_join_id.end(), child_it->second.begin(), child_it->second.end());
-            });
-            assert(executor.has_executor_id());
-            if (executor.tp() == tipb::ExecType::TypeJoin)
-                all_join_id.push_back(executor.executor_id());
-            if (!all_join_id.empty())
-                executor_id_to_join_id_map[executor.executor_id()] = all_join_id;
+    if (!isMPPTask())
+        return;
+
+    executor_id_to_join_id_map.clear();
+    traverseExecutorsReverse(dag_request, [&](const tipb::Executor & executor) {
+        std::vector<String> all_join_id;
+        // for mpp, dag_request.has_root_executor() == true, can call `getChildren` directly.
+        getChildren(executor).forEach([&](const tipb::Executor & child) {
+            assert(child.has_executor_id());
+            auto child_it = executor_id_to_join_id_map.find(child.executor_id());
+            if (child_it != executor_id_to_join_id_map.end())
+                all_join_id.insert(all_join_id.end(), child_it->second.begin(), child_it->second.end());
         });
-    }
+        assert(executor.has_executor_id());
+        if (executor.tp() == tipb::ExecType::TypeJoin)
+            all_join_id.push_back(executor.executor_id());
+        if (!all_join_id.empty())
+            executor_id_to_join_id_map[executor.executor_id()] = all_join_id;
+    });
 }
 
 std::unordered_map<String, std::vector<String>> & DAGContext::getExecutorIdToJoinIdMap()
@@ -225,8 +223,12 @@ void DAGContext::addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_r
 {
     if (!isMPPTask())
         return;
-    RUNTIME_ASSERT(mpp_receiver_set != nullptr, log, "MPPTask without receiver set");
-    return mpp_receiver_set->addCoprocessorReader(coprocessor_reader);
+    coprocessor_readers.push_back(coprocessor_reader);
+}
+
+std::vector<CoprocessorReaderPtr> & DAGContext::getCoprocessorReaders()
+{
+    return coprocessor_readers;
 }
 
 bool DAGContext::containsRegionsInfoForTable(Int64 table_id) const
@@ -238,14 +240,8 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
-
-ColumnsWithTypeAndName DAGContext::columnsForTest(String executor_id)
+const MPPReceiverSetPtr & DAGContext::getMppReceiverSet() const
 {
-    auto it = columns_for_test_map.find(executor_id);
-    if (unlikely(it == columns_for_test_map.end()))
-    {
-        throw DB::Exception("Don't have columns for mock source executors");
-    }
-    return it->second;
+    return mpp_receiver_set;
 }
 } // namespace DB

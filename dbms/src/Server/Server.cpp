@@ -79,21 +79,21 @@
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <WindowFunctions/registerWindowFunctions.h>
+#include <boost_wrapper/string_split.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
 
 #if Poco_NetSSL_FOUND
+#include <Common/grpcpp.h>
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
-#include <grpc++/grpc++.h>
 #endif
 
 #if USE_JEMALLOC
@@ -157,7 +157,7 @@ void loadMiConfig(Logger * log)
 
 namespace
 {
-[[maybe_unused]] void tryLoadBoolConfigFromEnv(Poco::Logger * log, bool & target, const char * name)
+[[maybe_unused]] void tryLoadBoolConfigFromEnv(const DB::LoggerPtr & log, bool & target, const char * name)
 {
     auto * config = getenv(name);
     if (config)
@@ -194,7 +194,6 @@ extern const int NO_ELEMENTS_IN_CONFIG;
 extern const int SUPPORT_IS_DISABLED;
 extern const int ARGUMENT_OUT_OF_BOUND;
 extern const int INVALID_CONFIG_PARAMETER;
-extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 
 namespace Debug
@@ -297,7 +296,7 @@ pingcap::ClusterConfig getClusterConfig(const TiFlashSecurityConfig & security_c
     return config;
 }
 
-Poco::Logger * grpc_log = nullptr;
+LoggerPtr grpc_log;
 
 void printGRPCLog(gpr_log_func_args * args)
 {
@@ -344,7 +343,7 @@ protected:
     }
 };
 
-void UpdateMallocConfig([[maybe_unused]] Poco::Logger * log)
+void UpdateMallocConfig([[maybe_unused]] const LoggerPtr & log)
 {
 #ifdef RUN_FAIL_RETURN
     static_assert(false);
@@ -435,7 +434,7 @@ struct RaftStoreProxyRunner : boost::noncopyable
         size_t stack_size = 1024 * 1024 * 20;
     };
 
-    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, Poco::Logger * log_)
+    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, const LoggerPtr & log_)
         : parms(std::move(parms_))
         , log(log_)
     {}
@@ -470,11 +469,11 @@ private:
 
     RunRaftStoreProxyParms parms;
     pthread_t thread{};
-    Poco::Logger * log;
+    const LoggerPtr & log;
 };
 
 // We only need this task run once.
-void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_store)
+void initStores(Context & global_context, const LoggerPtr & log, bool lazily_init_store)
 {
     auto do_init_stores = [&global_context, log]() {
         auto storages = global_context.getTMTContext().getStorages().getAllStorage();
@@ -518,198 +517,10 @@ void initStores(Context & global_context, Poco::Logger * log, bool lazily_init_s
     }
 }
 
-void handleRpcs(grpc::ServerCompletionQueue * curcq, Poco::Logger * log)
-{
-    GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Increment();
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_thread_count, type_total_rpc_async_worker).Decrement();
-    });
-    void * tag = nullptr; // uniquely identifies a request.
-    bool ok = false;
-    while (true)
-    {
-        String err_msg;
-        try
-        {
-            // Block waiting to read the next event from the completion queue. The
-            // event is uniquely identified by its tag, which in this case is the
-            // memory address of a EstablishCallData instance.
-            // The return value of Next should always be checked. This return value
-            // tells us whether there is any kind of event or cq is shutting down.
-            if (!curcq->Next(&tag, &ok))
-            {
-                LOG_FMT_INFO(grpc_log, "CQ is fully drained and shut down");
-                break;
-            }
-            GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
-            SCOPE_EXIT({
-                GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Decrement();
-            });
-            // If ok is false, it means server is shutdown.
-            // We need not log all not ok events, since the volumn is large which will pollute the content of log.
-            if (ok)
-                static_cast<EstablishCallData *>(tag)->proceed();
-            else
-                static_cast<EstablishCallData *>(tag)->cancel();
-        }
-        catch (Exception & e)
-        {
-            err_msg = e.displayText();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {} Stack Trace : {}", err_msg, e.getStackTrace().toString());
-        }
-        catch (pingcap::Exception & e)
-        {
-            err_msg = e.message();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
-        }
-        catch (std::exception & e)
-        {
-            err_msg = e.what();
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
-        }
-        catch (...)
-        {
-            err_msg = "unrecovered error";
-            LOG_FMT_ERROR(log, "handleRpcs meets error: {}", err_msg);
-            throw;
-        }
-    }
-}
-
-class Server::FlashGrpcServerHolder
-{
-public:
-    FlashGrpcServerHolder(Server & server, const TiFlashRaftConfig & raft_config, Poco::Logger * log_)
-        : log(log_)
-        , is_shutdown(std::make_shared<std::atomic<bool>>(false))
-    {
-        grpc::ServerBuilder builder;
-        if (server.security_config.has_tls_config)
-        {
-            grpc::SslServerCredentialsOptions server_cred(GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY);
-            auto options = server.security_config.readAndCacheSecurityInfo();
-            server_cred.pem_root_certs = options.pem_root_certs;
-            server_cred.pem_key_cert_pairs.push_back(
-                grpc::SslServerCredentialsOptions::PemKeyCertPair{options.pem_private_key, options.pem_cert_chain});
-            builder.AddListeningPort(raft_config.flash_server_addr, grpc::SslServerCredentials(server_cred));
-        }
-        else
-        {
-            builder.AddListeningPort(raft_config.flash_server_addr, grpc::InsecureServerCredentials());
-        }
-
-        /// Init and register flash service.
-        bool enable_async_server = server.context().getSettingsRef().enable_async_server;
-        if (enable_async_server)
-            flash_service = std::make_unique<AsyncFlashService>(server);
-        else
-            flash_service = std::make_unique<FlashService>(server);
-        diagnostics_service = std::make_unique<DiagnosticsService>(server);
-        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
-        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
-        builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
-        // number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads
-        auto max_grpc_pollers = server.context().getSettingsRef().max_grpc_pollers;
-        if (max_grpc_pollers > 0 && max_grpc_pollers <= std::numeric_limits<int>::max())
-            builder.SetSyncServerOption(grpc::ServerBuilder::SyncServerOption::MAX_POLLERS, max_grpc_pollers);
-        builder.RegisterService(flash_service.get());
-        LOG_FMT_INFO(log, "Flash service registered");
-        builder.RegisterService(diagnostics_service.get());
-        LOG_FMT_INFO(log, "Diagnostics service registered");
-
-        /// Kick off grpc server.
-        // Prevent TiKV from throwing "Received message larger than max (4404462 vs. 4194304)" error.
-        builder.SetMaxReceiveMessageSize(-1);
-        builder.SetMaxSendMessageSize(-1);
-        thread_manager = DB::newThreadManager();
-        int async_cq_num = server.context().getSettingsRef().async_cqs;
-        if (enable_async_server)
-        {
-            for (int i = 0; i < async_cq_num; ++i)
-            {
-                cqs.emplace_back(builder.AddCompletionQueue());
-                notify_cqs.emplace_back(builder.AddCompletionQueue());
-            }
-        }
-        flash_grpc_server = builder.BuildAndStart();
-        if (!flash_grpc_server)
-        {
-            throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
-        }
-        LOG_FMT_INFO(log, "Flash grpc server listening on [{}]", raft_config.flash_server_addr);
-        Debug::setServiceAddr(raft_config.flash_server_addr);
-        if (enable_async_server)
-        {
-            int preallocated_request_count_per_poller = server.context().getSettingsRef().preallocated_request_count_per_poller;
-            int pollers_per_cq = server.context().getSettingsRef().async_pollers_per_cq;
-            for (int i = 0; i < async_cq_num * pollers_per_cq; ++i)
-            {
-                auto * cq = cqs[i / pollers_per_cq].get();
-                auto * notify_cq = notify_cqs[i / pollers_per_cq].get();
-                for (int j = 0; j < preallocated_request_count_per_poller; ++j)
-                {
-                    // EstablishCallData will handle its lifecycle by itself.
-                    EstablishCallData::spawn(assert_cast<AsyncFlashService *>(flash_service.get()), cq, notify_cq, is_shutdown);
-                }
-                thread_manager->schedule(false, "async_poller", [cq, this] { handleRpcs(cq, log); });
-                thread_manager->schedule(false, "async_poller", [notify_cq, this] { handleRpcs(notify_cq, log); });
-            }
-        }
-    }
-
-    ~FlashGrpcServerHolder()
-    {
-        try
-        {
-            /// Shut down grpc server.
-            LOG_FMT_INFO(log, "Begin to shut down flash grpc server");
-            flash_grpc_server->Shutdown();
-            *is_shutdown = true;
-            // Wait all existed MPPTunnels done to prevent crash.
-            // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
-            const int max_wait_cnt = 300;
-            int wait_cnt = 0;
-            while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
-                std::this_thread::sleep_for(std::chrono::seconds(1));
-
-            for (auto & cq : cqs)
-                cq->Shutdown();
-            for (auto & cq : notify_cqs)
-                cq->Shutdown();
-            thread_manager->wait();
-            flash_grpc_server->Wait();
-            flash_grpc_server.reset();
-            LOG_FMT_INFO(log, "Shut down flash grpc server");
-
-            /// Close flash service.
-            LOG_FMT_INFO(log, "Begin to shut down flash service");
-            flash_service.reset();
-            LOG_FMT_INFO(log, "Shut down flash service");
-        }
-        catch (...)
-        {
-            auto message = getCurrentExceptionMessage(false);
-            LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
-            std::terminate();
-        }
-    }
-
-private:
-    Poco::Logger * log;
-    std::shared_ptr<std::atomic<bool>> is_shutdown;
-    std::unique_ptr<FlashService> flash_service = nullptr;
-    std::unique_ptr<DiagnosticsService> diagnostics_service = nullptr;
-    std::unique_ptr<grpc::Server> flash_grpc_server = nullptr;
-    // cqs and notify_cqs are used for processing async grpc events (currently only EstablishMPPConnection).
-    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> cqs;
-    std::vector<std::unique_ptr<grpc::ServerCompletionQueue>> notify_cqs;
-    std::shared_ptr<ThreadManager> thread_manager;
-};
-
 class Server::TcpHttpServersHolder
 {
 public:
-    TcpHttpServersHolder(Server & server_, const Settings & settings, Poco::Logger * log_)
+    TcpHttpServersHolder(Server & server_, const Settings & settings, const LoggerPtr & log_)
         : server(server_)
         , log(log_)
         , server_pool(1, server.config().getUInt("max_connections", 1024))
@@ -983,7 +794,7 @@ public:
 
 private:
     Server & server;
-    Poco::Logger * log;
+    const LoggerPtr & log;
     Poco::ThreadPool server_pool;
     std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
@@ -992,7 +803,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
-    Poco::Logger * log = &logger();
+    const auto log = std::make_shared<Logger>(&logger(), "");
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
     FailPointHelper::initRandomFailPoints(config(), log);
@@ -1078,8 +889,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
 
-    // print necessary grpc log.
-    grpc_log = &Poco::Logger::get("grpc");
+    grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
@@ -1146,15 +956,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getPathCapacity(),
         global_context->getFileProvider());
 
-    /// Initialize the background & blockable background thread pool.
-    Settings & settings = global_context->getSettingsRef();
-    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
-    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
-    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
-
+    /// Determining PageStorage run mode based on current files on disk and storage config.
+    /// Do it as early as possible after loading storage config.
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
-    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     // Use pd address to define which default_database we use by default.
     // For mock test, we use "default". For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
@@ -1268,6 +1072,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
+    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
+
+    ///
+    /// The config value in global settings can only be used from here because we just loaded it from config file.
+    ///
+
+    /// Initialize the background & blockable background thread pool.
+    Settings & settings = global_context->getSettingsRef();
+    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
+    auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
+    auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
+
+    /// PageStorage run mode has been determined above
+    global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
+    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
@@ -1340,9 +1159,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+    DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
-    DM::DMFileReaderPool::instance();
 
     {
         // Note that this must do before initialize schema sync service.
@@ -1404,6 +1224,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
           *  table engines could use Context on destroy.
           */
         LOG_FMT_INFO(log, "Shutting down storages.");
+        // `SegmentReader` threads may hold a segment and its delta-index for read.
+        // `Context::shutdown()` will destroy `DeltaIndexManager`.
+        // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
+        DB::DM::SegmentReaderPoolManager::instance().stop();
         global_context->shutdown();
         LOG_FMT_DEBUG(log, "Shutted down storages.");
     });
@@ -1411,8 +1235,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
             throw Exception("Raft Proxy Helper is not set, should not happen");
+        auto & path_pool = global_context->getPathPool();
         /// initialize TMTContext
-        global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
+        global_context->getTMTContext().restore(path_pool, tiflash_instance_wrap.proxy_helper);
     }
 
     /// setting up elastic thread pool
@@ -1430,7 +1255,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(*this, raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), this->security_config, raft_config, log);
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
@@ -1461,21 +1286,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             users_config_reloader.reset();
         });
 
-        /// try to load dictionaries immediately, throw on error and die
-        try
-        {
-            if (!config().getBool("dictionaries_lazy_load", true))
-            {
-                global_context->tryCreateEmbeddedDictionaries();
-                global_context->tryCreateExternalDictionaries();
-            }
-        }
-        catch (...)
-        {
-            LOG_FMT_ERROR(log, "Caught exception while loading dictionaries.");
-            throw;
-        }
-
         /// This object will periodically calculate some metrics.
         /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
@@ -1504,14 +1314,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
             size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
-            tmt_context.getKVStore()->initReadIndexWorkers(
+            auto & kvstore_ptr = tmt_context.getKVStore();
+            kvstore_ptr->initReadIndexWorkers(
                 [&]() {
                     // get from tmt context
                     return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
                 },
                 /*running thread count*/ runner_cnt);
             tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-            WaitCheckRegionReady(tmt_context, terminate_signals_counter);
+            WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
         SCOPE_EXIT({
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)

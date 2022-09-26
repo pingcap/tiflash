@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/Types.h>
+#include <tipb/schema.pb.h>
 
 #include <optional>
 
@@ -196,10 +197,19 @@ struct ColumnInfo
 #ifdef M
 #error "Please undefine macro M first."
 #endif
-#define M(f, v)                                                    \
-    inline bool has##f##Flag() const { return (flag & (v)) != 0; } \
-    inline void set##f##Flag() { flag |= (v); }                    \
-    inline void clear##f##Flag() { flag &= (~(v)); }
+#define M(f, v)                      \
+    inline bool has##f##Flag() const \
+    {                                \
+        return (flag & (v)) != 0;    \
+    }                                \
+    inline void set##f##Flag()       \
+    {                                \
+        flag |= (v);                 \
+    }                                \
+    inline void clear##f##Flag()     \
+    {                                \
+        flag &= (~(v));              \
+    }
     COLUMN_FLAGS(M)
 #undef M
 
@@ -333,12 +343,6 @@ struct IndexInfo
     bool is_global;
 };
 
-enum class TiFlashMode
-{
-    Normal,
-    Fast,
-};
-
 struct TableInfo
 {
     TableInfo() = default;
@@ -388,8 +392,6 @@ struct TableInfo
     // The TiFlash replica info persisted by TiDB
     TiFlashReplicaInfo replica_info;
 
-    TiFlashMode tiflash_mode = TiFlashMode::Normal;
-
     ::TiDB::StorageEngine engine_type = ::TiDB::StorageEngine::UNSPECIFIED;
 
     ColumnID getColumnID(const String & name) const;
@@ -420,8 +422,6 @@ String genJsonNull();
 
 tipb::FieldType columnInfoToFieldType(const ColumnInfo & ci);
 ColumnInfo fieldTypeToColumnInfo(const tipb::FieldType & field_type);
-
-String TiFlashModeToString(TiFlashMode tiflash_mode);
-TiFlashMode parseTiFlashMode(String mode_str);
+ColumnInfo toTiDBColumnInfo(const tipb::ColumnInfo & tipb_column_info);
 
 } // namespace TiDB

@@ -38,6 +38,14 @@
 namespace DB
 {
 class MPPTaskManager;
+
+enum class AbortType
+{
+    /// todo add ONKILL to distinguish between silent cancellation and kill
+    ONCANCELLATION,
+    ONERROR,
+};
+
 class MPPTask : public std::enable_shared_from_this<MPPTask>
     , private boost::noncopyable
 {
@@ -57,8 +65,6 @@ public:
 
     TaskStatus getStatus() const { return status.load(); }
 
-    void cancel(const String & reason);
-
     void handleError(const String & error_msg);
 
     void prepare(const mpp::DispatchTaskRequest & task_request);
@@ -76,9 +82,7 @@ public:
         COMPLETED
     };
 
-    void scheduleThisTask(ScheduleState state);
-
-    bool isScheduled();
+    bool scheduleThisTask(ScheduleState state);
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -92,19 +96,10 @@ private:
 
     void unregisterTask();
 
-    /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnels(const String & reason);
-
-    enum class AbortType
-    {
-        /// todo add ONKILL to distinguish between silent cancellation and kill
-        ONCANCELLATION,
-        ONERROR,
-    };
+    // abort the mpp task, note this function should be non-blocking, it just set some flags
     void abort(const String & message, AbortType abort_type);
 
-    void abortTunnels(const String & message, AbortType abort_type);
+    void abortTunnels(const String & message, bool wait_sender_finish);
     void abortReceivers();
     void abortDataStreams(AbortType abort_type);
 
@@ -137,19 +132,23 @@ private:
 
     MPPTaskId id;
 
+    std::mutex tunnel_and_receiver_mu;
+
     MPPTunnelSetPtr tunnel_set;
 
     MPPReceiverSetPtr receiver_set;
 
     int new_thread_count_of_exchange_receiver = 0;
 
-    std::atomic<MPPTaskManager *> manager = nullptr;
+    MPPTaskManager * manager;
+    std::atomic<bool> registered{false};
 
     const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
     friend class MPPTaskManager;
+    friend class MPPHandler;
 
     int needed_threads;
 

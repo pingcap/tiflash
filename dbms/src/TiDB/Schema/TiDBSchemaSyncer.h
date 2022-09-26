@@ -27,21 +27,22 @@
 
 namespace DB
 {
+using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
 namespace ErrorCodes
 {
 extern const int FAIL_POINT_ERROR;
 };
 
-template <bool mock_getter>
+template <bool mock_getter, bool mock_mapper>
 struct TiDBSchemaSyncer : public SchemaSyncer
 {
     using Getter = std::conditional_t<mock_getter, MockSchemaGetter, SchemaGetter>;
 
-    using NameMapper = std::conditional_t<mock_getter, MockSchemaNameMapper, SchemaNameMapper>;
+    using NameMapper = std::conditional_t<mock_mapper, MockSchemaNameMapper, SchemaNameMapper>;
 
     KVClusterPtr cluster;
 
-    const Int64 maxNumberOfDiffs = 100;
+    static constexpr Int64 maxNumberOfDiffs = 100;
 
     Int64 cur_version;
 
@@ -51,8 +52,8 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
     Poco::Logger * log;
 
-    TiDBSchemaSyncer(KVClusterPtr cluster_)
-        : cluster(cluster_)
+    explicit TiDBSchemaSyncer(KVClusterPtr cluster_)
+        : cluster(std::move(cluster_))
         , cur_version(0)
         , log(&Poco::Logger::get("SchemaSyncer"))
     {}
@@ -73,6 +74,9 @@ struct TiDBSchemaSyncer : public SchemaSyncer
     }
 
     // just for test
+    // It clear all synced database info and reset the `cur_version` to 0.
+    // All info will fetch from the `getter` again the next time
+    // `syncSchemas` is call.
     void reset() override
     {
         std::lock_guard lock(schema_mutex);
@@ -124,9 +128,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         if (version_after_load_diff = tryLoadSchemaDiffs(getter, version, context); version_after_load_diff == -1)
         {
             GET_METRIC(tiflash_schema_apply_count, type_full).Increment();
-            loadAllSchema(getter, version, context);
-            // After loadAllSchema, we need update `version_after_load_diff` by last diff value exist or not
-            version_after_load_diff = getter.checkSchemaDiffExists(version) ? version : version - 1;
+            version_after_load_diff = loadAllSchema(getter, version, context);
         }
         cur_version = version_after_load_diff;
         GET_METRIC(tiflash_schema_version).Set(cur_version);
@@ -167,8 +169,6 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         LOG_FMT_DEBUG(log, "Try load schema diffs.");
 
-        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, latest_version);
-
         Int64 used_version = cur_version;
         // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
         // schema diff without any exception.
@@ -180,6 +180,22 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         LOG_FMT_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
 
+
+        if (diffs.empty())
+        {
+            LOG_FMT_WARNING(log, "Schema Diff is empty.");
+            return -1;
+        }
+        // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
+        // Thus we need check whether latest schema diff is empty or not before begin to builder.applyDiff.
+        if (!diffs.back())
+        {
+            --used_version;
+            diffs.pop_back();
+        }
+
+        SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, used_version);
+
         try
         {
             for (size_t diff_index = 0; diff_index < diffs.size(); ++diff_index)
@@ -188,25 +204,15 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
                 if (!schema_diff)
                 {
-                    // If `schema diff` from `latest_version` got empty `schema diff`
-                    // Then we won't apply to `latest_version`, but we will apply to `latest_version - 1`
-                    // If `schema diff` from [`cur_version`, `latest_version - 1`] got empty `schema diff`
-                    // Then we should just skip it.
+                    // If `schema diff` got empty `schema diff`(it's not the latest one, due to we check it before), we should just skip it.
                     //
                     // example:
                     //  - `cur_version` is 1, `latest_version` is 10
                     //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
-                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9
-                    if (diff_index != diffs.size() - 1)
-                    {
-                        LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
-                        continue;
-                    }
-
-                    // if diff_index == diffs.size() - 1, return used_version - 1;
-                    return used_version - 1;
+                    //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9(which we check it before)
+                    LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
+                    continue;
                 }
-
                 builder.applyDiff(*schema_diff);
             }
         }
@@ -245,10 +251,15 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         return used_version;
     }
 
-    void loadAllSchema(Getter & getter, Int64 version, Context & context)
+    Int64 loadAllSchema(Getter & getter, Int64 version, Context & context)
     {
+        if (!getter.checkSchemaDiffExists(version))
+        {
+            --version;
+        }
         SchemaBuilder<Getter, NameMapper> builder(getter, context, databases, version);
         builder.syncAllSchema();
+        return version;
     }
 };
 

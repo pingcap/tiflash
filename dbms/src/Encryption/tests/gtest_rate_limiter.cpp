@@ -177,7 +177,7 @@ TEST(WriteLimiterTest, LimiterStat)
     ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
 }
 
-TEST(ReadLimiterTest, GetIOStatPeroid2000us)
+TEST(ReadLimiterTest, GetIOStatPeroid200ms)
 {
     Int64 consumed = 0;
     auto get_stat = [&consumed]() {
@@ -187,41 +187,31 @@ TEST(ReadLimiterTest, GetIOStatPeroid2000us)
         limiter.request(bytes);
         consumed += bytes;
     };
-    Int64 get_io_stat_period_us = 2000;
-    auto wait_refresh = [&]() {
-        std::chrono::microseconds sleep_time(get_io_stat_period_us + 1);
-        std::this_thread::sleep_for(sleep_time);
-    };
 
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
-    ReadLimiter limiter(get_stat, bytes_per_sec, LimiterType::UNKNOW, get_io_stat_period_us, refill_period_ms);
-
     TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
+    ReadLimiter limiter(get_stat, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
+
     // Refill 20 every 20ms.
     ASSERT_EQ(limiter.getAvailableBalance(), 20);
     request(limiter, 1);
-    ASSERT_EQ(limiter.getAvailableBalance(), 20);
-    ASSERT_EQ(limiter.refreshAvailableBalance(), 19);
-    request(limiter, 9);
     ASSERT_EQ(limiter.getAvailableBalance(), 19);
-    wait_refresh();
-    ASSERT_EQ(limiter.getAvailableBalance(), 10);
-    request(limiter, 11);
-    wait_refresh();
+    request(limiter, 20);
     ASSERT_EQ(limiter.getAvailableBalance(), -1);
     request(limiter, 50);
     TimePointMS t1 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     UInt64 elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
     ASSERT_GE(elasped, refill_period_ms);
-    ASSERT_EQ(limiter.getAvailableBalance(), 19);
-    wait_refresh();
     ASSERT_EQ(limiter.getAvailableBalance(), -31);
     request(limiter, 1);
     TimePointMS t2 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count();
     ASSERT_GE(elasped, 2 * refill_period_ms);
+    ASSERT_EQ(limiter.getAvailableBalance(), 8);
+    request(limiter, 9);
+    ASSERT_EQ(limiter.getAvailableBalance(), -1);
 }
 
 void testSetStop(int blocked_thread_cnt)
@@ -278,8 +268,12 @@ TEST(ReadLimiterTest, LimiterStat)
         limiter.request(bytes);
         consumed += bytes;
     };
-    Int64 get_io_stat_period_us = 2000;
-    ReadLimiter read_limiter(get_stat, 1000, LimiterType::UNKNOW, get_io_stat_period_us, 100);
+
+    Int64 bytes_per_sec = 1000;
+    UInt64 refill_period_ms = 100;
+    ReadLimiter read_limiter(get_stat, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
+    ASSERT_EQ(read_limiter.getAvailableBalance(), 100);
+
     try
     {
         read_limiter.getStat();
@@ -314,7 +308,7 @@ TEST(ReadLimiterTest, LimiterStat)
     request(read_limiter, 100);
 
     std::this_thread::sleep_for(100ms);
-    read_limiter.refreshAvailableBalance();
+    ASSERT_EQ(read_limiter.getAvailableBalance(), 0);
 
     stat = read_limiter.getStat();
     ASSERT_EQ(stat.alloc_bytes, 100ul);
@@ -337,23 +331,47 @@ TEST(ReadLimiterTest, LimiterStat)
         ASSERT_GT(stat.pct(), 100) << stat.toString();
     }
 
-    static constexpr UInt64 alloc_bytes = 2047;
+    static constexpr UInt64 total_bytes = 2047;
     for (int i = 0; i < 11; i++)
     {
         request(read_limiter, 1 << i);
     }
-
     std::this_thread::sleep_for(100ms);
-    read_limiter.refreshAvailableBalance();
+    ASSERT_EQ(read_limiter.getAvailableBalance(), -947);
 
     stat = read_limiter.getStat();
-    ASSERT_EQ(stat.alloc_bytes, alloc_bytes);
-    ASSERT_GE(stat.elapsed_ms, alloc_bytes / 100 + 1);
+    ASSERT_EQ(stat.alloc_bytes, total_bytes + read_limiter.getAvailableBalance());
+    ASSERT_GE(stat.elapsed_ms, stat.alloc_bytes / 100 + 1);
     ASSERT_EQ(stat.refill_period_ms, 100ul);
     ASSERT_EQ(stat.refill_bytes_per_period, 100);
     ASSERT_EQ(stat.maxBytesPerSec(), 1000);
-    ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
-    ASSERT_EQ(stat.pct(), static_cast<Int64>(alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+    ASSERT_EQ(stat.avgBytesPerSec(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms)) << stat.toString();
+    ASSERT_EQ(stat.pct(), static_cast<Int64>(stat.alloc_bytes * 1000 / stat.elapsed_ms) * 100 / stat.maxBytesPerSec()) << stat.toString();
+}
+
+TEST(ReadLimiterTest, ReadMany)
+{
+    Int64 real_read_bytes{0};
+    auto get_read_bytes = [&]() {
+        return real_read_bytes;
+    };
+    auto request = [&](ReadLimiter & limiter, Int64 bytes) {
+        limiter.request(bytes);
+        real_read_bytes += bytes;
+    };
+
+    constexpr Int64 bytes_per_sec = 1000;
+    constexpr UInt64 refill_period_ms = 100;
+    ReadLimiter read_limiter(get_read_bytes, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
+    ASSERT_EQ(read_limiter.getAvailableBalance(), 100);
+    request(read_limiter, 1000);
+    ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
+    ASSERT_EQ(read_limiter.alloc_bytes, 100);
+
+    std::this_thread::sleep_for(1200ms);
+    Stopwatch sw;
+    request(read_limiter, 100);
+    ASSERT_LE(sw.elapsedMilliseconds(), 1); // Not blocked.
 }
 
 #ifdef __linux__
@@ -376,7 +394,7 @@ TEST(IORateLimiterTest, IOStat)
     int buf_size = 4096;
     int ret = ::posix_memalign(&buf, buf_size, buf_size);
     ASSERT_EQ(ret, 0) << strerror(errno);
-    std::unique_ptr<void, std::function<void(void *)>> defer_free(buf, [](void * p) { ::free(p); });
+    std::unique_ptr<void, std::function<void(void *)>> defer_free(buf, [](void * p) { ::free(p); }); // NOLINT(cppcoreguidelines-no-malloc)
 
     ssize_t n = ::pwrite(fd, buf, buf_size, 0);
     ASSERT_EQ(n, buf_size) << strerror(errno);
@@ -384,12 +402,10 @@ TEST(IORateLimiterTest, IOStat)
     n = ::pread(fd, buf, buf_size, 0);
     ASSERT_EQ(n, buf_size) << strerror(errno);
 
-    //int ret = ::fsync(fd);
-    //ASSERT_EQ(ret, 0) << strerror(errno);
-
-    auto io_info = io_rate_limiter.getCurrentIOInfo();
-    ASSERT_GE(io_info.total_write_bytes, buf_size);
-    ASSERT_GE(io_info.total_read_bytes, buf_size);
+    io_rate_limiter.getCurrentIOInfo();
+    Int64 bg_read_bytes = io_rate_limiter.read_info.bg_read_bytes.load(std::memory_order_relaxed);
+    Int64 fg_read_bytes = io_rate_limiter.read_info.fg_read_bytes.load(std::memory_order_relaxed);
+    ASSERT_GE(bg_read_bytes + fg_read_bytes, buf_size);
 }
 
 TEST(IORateLimiterTest, IOStatMultiThread)
@@ -418,7 +434,7 @@ TEST(IORateLimiterTest, IOStatMultiThread)
 
         void * buf = nullptr;
         int ret = ::posix_memalign(&buf, buf_size, buf_size);
-        std::unique_ptr<void, std::function<void(void *)>> auto_free(buf, [](void * p) { free(p); });
+        std::unique_ptr<void, std::function<void(void *)>> auto_free(buf, [](void * p) { free(p); }); // NOLINT(cppcoreguidelines-no-malloc)
         ASSERT_EQ(ret, 0) << strerror(errno);
 
         ssize_t n = ::pwrite(fd, buf, buf_size, 0);
@@ -453,12 +469,12 @@ TEST(IORateLimiterTest, IOStatMultiThread)
 
     IORateLimiter io_rate_limiter;
     io_rate_limiter.setBackgroundThreadIds(bg_pids);
-    auto io_info = io_rate_limiter.getCurrentIOInfo();
-    std::cout << io_info.toString() << std::endl;
-    ASSERT_GE(io_info.total_read_bytes, buf_size * (bg_thread_count + fg_thread_count));
-    ASSERT_GE(io_info.total_write_bytes, buf_size * (bg_thread_count + fg_thread_count));
-    ASSERT_GE(io_info.bg_read_bytes, buf_size * bg_thread_count);
-    ASSERT_GE(io_info.bg_write_bytes, buf_size * bg_thread_count);
+
+    io_rate_limiter.getCurrentIOInfo();
+    Int64 bg_read_bytes = io_rate_limiter.read_info.bg_read_bytes.load(std::memory_order_relaxed);
+    Int64 fg_read_bytes = io_rate_limiter.read_info.fg_read_bytes.load(std::memory_order_relaxed);
+    ASSERT_GE(fg_read_bytes, buf_size * fg_thread_count);
+    ASSERT_GE(bg_read_bytes, buf_size * bg_thread_count);
     stop.store(true);
 
     for (auto & t : threads)

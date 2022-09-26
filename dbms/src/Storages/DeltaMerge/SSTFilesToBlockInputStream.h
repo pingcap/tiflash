@@ -61,7 +61,7 @@ public:
                                bool force_decode_,
                                TMTContext & tmt_,
                                size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
-    ~SSTFilesToBlockInputStream();
+    ~SSTFilesToBlockInputStream() override;
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 
@@ -82,7 +82,7 @@ public:
     };
 
 private:
-    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_need_include);
+    void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
     Block readCommitedBlock();
 
@@ -131,10 +131,10 @@ public:
 
     SSTFilesToBlockInputStream::ProcessKeys getProcessKeys() const;
 
-    const RegionPtr getRegion() const;
+    RegionPtr getRegion() const;
 
-    // Return values: (effective rows, not clean rows, gc hint version)
-    std::tuple<size_t, size_t, UInt64> getMvccStatistics() const;
+    // Return values: (effective rows, not clean rows, is delete rows, gc hint version)
+    std::tuple<size_t, size_t, size_t, UInt64> getMvccStatistics() const;
 
 private:
     const ColId pk_column_id;

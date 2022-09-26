@@ -48,6 +48,9 @@ struct ColumnWithTypeAndName
         : ColumnWithTypeAndName(type_->createColumn(), type_, name_)
     {}
 
+    ColumnWithTypeAndName(ColumnPtr column_, DataTypePtr type_)
+        : ColumnWithTypeAndName(column_, type_, "")
+    {}
     // If we use `Field default_value_` as the param and init default_value with `std::move(default_value_)`, it brings compile warnings.
     // Check PR#1383 for more details
     ColumnWithTypeAndName(ColumnPtr column_, DataTypePtr type_, String name_, Int64 column_id_ = 0, const Field & default_value_ = Field())
@@ -63,6 +66,9 @@ struct ColumnWithTypeAndName
 
     void dumpStructure(WriteBuffer & out) const;
     String dumpStructure() const;
+
+    void dumpJsonStructure(WriteBuffer & out) const;
+    String dumpJsonStructure() const;
 };
 
 } // namespace DB
