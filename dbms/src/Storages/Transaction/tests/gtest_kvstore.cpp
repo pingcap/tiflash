@@ -73,7 +73,8 @@ public:
         }
     }
 
-    void create_default_regions() {
+    void create_default_regions()
+    {
         proxy_instance->init(100);
     }
 
