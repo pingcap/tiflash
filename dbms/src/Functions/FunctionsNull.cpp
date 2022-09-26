@@ -30,7 +30,6 @@ void registerFunctionsNull(FunctionFactory & factory)
     factory.registerFunction<FunctionIsNull>();
     factory.registerFunction<FunctionIsNotNull>();
     factory.registerFunction<FunctionCoalesce>();
-//    factory.registerFunction<FunctionIfNull>();
     factory.registerFunction<FunctionNullIf>();
     factory.registerFunction<FunctionAssumeNotNull>();
     factory.registerFunction<FunctionToNullable>();
