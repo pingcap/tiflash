@@ -1314,9 +1314,9 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
                 if (storage == nullptr)
                 {
                     /// This is abnormal as the storage shouldn't be null after creation, the underlying table must already be existing for unknown reason.
-                    LOG_FMT_WARNING(log,
-                                    "Table {} not synced because may have been dropped during sync all schemas",
-                                    name_mapper.debugCanonicalName(*db, *table));
+                    LOG_WARNING(log,
+                                "Table {} not synced because may have been dropped during sync all schemas",
+                                name_mapper.debugCanonicalName(*db, *table));
                     continue;
                 }
             }

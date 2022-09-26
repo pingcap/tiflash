@@ -395,7 +395,7 @@ void DeltaMergeStore::shutdown()
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start");
+    LOG_TRACE(log, "Shutdown DeltaMerge start");
     // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
     // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
     storage_pool->shutdown();
@@ -405,7 +405,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end");
+    LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
@@ -486,7 +486,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
+    LOG_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -880,10 +880,10 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
 
     fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
         std::thread thread_hold_snapshots([this, tasks]() {
-            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
             std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
             (void)tasks;
-            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
         });
         thread_hold_snapshots.detach();
     });
@@ -938,10 +938,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 req_info);
         }
         res.push_back(stream);
-    }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
     }
     return res;
 }
@@ -1029,10 +1025,6 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 req_info);
         }
         res.push_back(stream);
-    }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
     }
     LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
 
@@ -1546,17 +1538,17 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             total_delta_valid_cache_rows += delta->getValidCacheRows();
         }
 
-        if (stable->getPacks())
+        if (stable->getDMFilesPacks())
         {
             stat.total_rows += stable->getRows();
             stat.total_size += stable->getBytes();
 
             stat.stable_count += 1;
-            stat.total_pack_count_in_stable += stable->getPacks();
+            stat.total_pack_count_in_stable += stable->getDMFilesPacks();
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_size += stable->getBytes();
-            stat.total_stable_size_on_disk += stable->getBytesOnDisk();
+            stat.total_stable_size_on_disk += stable->getDMFilesBytesOnDisk();
         }
     }
 
@@ -1679,10 +1671,10 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stat.size = delta->getBytes() + stable->getBytes();
         stat.delete_ranges = delta->getDeletes();
 
-        stat.stable_size_on_disk = stable->getBytesOnDisk();
+        stat.stable_size_on_disk = stable->getDMFilesBytesOnDisk();
 
         stat.delta_pack_count = delta->getColumnFileCount();
-        stat.stable_pack_count = stable->getPacks();
+        stat.stable_pack_count = stable->getDMFilesPacks();
 
         stat.avg_delta_pack_rows = static_cast<Float64>(delta->getRows()) / stat.delta_pack_count;
         stat.avg_stable_pack_rows = static_cast<Float64>(stable->getRows()) / stat.stable_pack_count;

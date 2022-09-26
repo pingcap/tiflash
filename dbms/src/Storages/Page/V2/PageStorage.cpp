@@ -251,7 +251,7 @@ void PageStorage::restore()
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
         if (debugging_recover_stop_sequence != 0 && reader->writeBatchSequence() > debugging_recover_stop_sequence)
         {
-            LOG_FMT_TRACE(log, "{} debugging early stop on sequence: {}", storage_name, debugging_recover_stop_sequence);
+            LOG_TRACE(log, "{} debugging early stop on sequence: {}", storage_name, debugging_recover_stop_sequence);
             break;
         }
 #endif
@@ -266,12 +266,11 @@ void PageStorage::restore()
         {
             if (unlikely(cur_sequence > write_batch_seq + 1))
             {
-                LOG_FMT_WARNING(log, "{} restore skip non-continuous sequence from {} to {}, [{}]", storage_name, write_batch_seq, cur_sequence, reader->toString());
+                LOG_WARNING(log, "{} restore skip non-continuous sequence from {} to {}, [{}]", storage_name, write_batch_seq, cur_sequence, reader->toString());
             }
 
             try
             {
-                // LOG_FMT_TRACE(log, "{} recovering from {}", storage_name, reader->toString());
                 auto edits = reader->getEdits();
                 versioned_page_entries.apply(edits);
                 restore_info.mergeEdits(edits);
@@ -294,7 +293,7 @@ void PageStorage::restore()
         else
         {
             // Set belonging PageFile's offset and close reader.
-            LOG_FMT_TRACE(log, "{} merge done from {}", storage_name, reader->toString());
+            LOG_TRACE(log, "{} merge done from {}", storage_name, reader->toString());
             reader->setPageFileOffsets();
         }
     }
@@ -303,9 +302,9 @@ void PageStorage::restore()
     {
         // Remove old checkpoints and archive obsolete PageFiles that have not been archived yet during gc for some reason.
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-        LOG_FMT_TRACE(log, "{} These file would be archive:", storage_name);
+        LOG_TRACE(log, "{} These file would be archive:", storage_name);
         for (const auto & pf : page_files_to_remove)
-            LOG_FMT_TRACE(log, "{} {}", storage_name, pf.toString());
+            LOG_TRACE(log, "{} {}", storage_name, pf.toString());
 #else
         // when restore `PageStorage`, the `PageFile` in `page_files_to_remove` is not counted in the total size,
         // so no need to remove its' size here again.
@@ -398,7 +397,7 @@ DB::PageEntry PageStorage::getEntryImpl(NamespaceId /*ns_id*/, PageId page_id, S
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_WARNING(log, "{} {}", storage_name, e.message());
+        LOG_WARNING(log, "{} {}", storage_name, e.message());
         return {}; // return invalid PageEntry
     }
 }
@@ -522,7 +521,7 @@ void PageStorage::writeImpl(DB::WriteBatch && wb, const WriteLimiterPtr & write_
             {
                 pcg64 rng(randomSeed());
                 std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Failpoint random_slow_page_storage_write sleep for {}ms, WriteBatch with sequence={}",
                     ms.count(),
@@ -1016,7 +1015,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
     if (unlikely(page_files.empty()))
     {
         // In case the directory are removed by accident
-        LOG_FMT_WARNING(log, "{} There are no page files while running GC", storage_name);
+        LOG_WARNING(log, "{} There are no page files while running GC", storage_name);
         return false;
     }
 
@@ -1044,7 +1043,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         statistics_snapshot = statistics;
     }
     PageFileIdAndLevel min_writing_file_id_level = writing_files_snapshot.minFileIDLevel();
-    LOG_FMT_TRACE(log, "{} Before gc, {}", storage_name, statistics_snapshot.toString());
+    LOG_TRACE(log, "{} Before gc, {}", storage_name, statistics_snapshot.toString());
 
     // Helper function for apply edits and clean up before gc exit.
     auto apply_and_cleanup = [&, this](PageEntriesEdit && gc_edits) -> void {
@@ -1169,7 +1168,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         {
             // Apply empty edit and cleanup.
             apply_and_cleanup(PageEntriesEdit{});
-            LOG_FMT_TRACE(log, "{} GC exit with no files to gc.", storage_name);
+            LOG_TRACE(log, "{} GC exit with no files to gc.", storage_name);
             return false;
         }
     } while (false);
@@ -1263,7 +1262,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         // Log warning if the GC run for a long time.
         static constexpr double EXIST_LONG_GC = 30.0;
         if (elapsed_sec > EXIST_LONG_GC)
-            LOG_FMT_WARNING(log, GC_LOG_PARAMS);
+            LOG_WARNING(log, GC_LOG_PARAMS);
         else
             LOG_FMT_INFO(log, GC_LOG_PARAMS);
 #undef GC_LOG_PARAMS

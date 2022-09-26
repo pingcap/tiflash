@@ -74,7 +74,7 @@ ReadWriteBufferFromHTTP::ReadWriteBufferFromHTTP(const Poco::URI & uri,
 
     Poco::Net::HTTPResponse response;
 
-    LOG_FMT_TRACE((&Poco::Logger::get("ReadWriteBufferFromHTTP")), "Sending request to {}", uri.toString());
+    LOG_TRACE((&Poco::Logger::get("ReadWriteBufferFromHTTP")), "Sending request to {}", uri.toString());
 
     auto & stream_out = session->sendRequest(request);
 

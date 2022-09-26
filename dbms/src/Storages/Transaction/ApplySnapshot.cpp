@@ -73,9 +73,9 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         }
         else if (old_applied_index == new_index)
         {
-            LOG_FMT_WARNING(log,
-                            "{} already has same applied index, just ignore next process. Please check log whether server crashed after successfully applied snapshot.",
-                            old_region->getDebugString());
+            LOG_WARNING(log,
+                        "{} already has same applied index, just ignore next process. Please check log whether server crashed after successfully applied snapshot.",
+                        old_region->getDebugString());
             return;
         }
 
@@ -328,6 +328,8 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             }
             physical_table_id = storage->getTableInfo().id;
 
+            auto & global_settings = context.getGlobalContext().getSettingsRef();
+
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
                 new_region,
@@ -345,9 +347,9 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 schema_snap,
                 snapshot_apply_method,
                 job_type,
-                /* split_after_rows */ 0,
-                /* split_after_size */ 0,
-                tmt.getContext());
+                /* split_after_rows */ global_settings.dt_segment_limit_rows,
+                /* split_after_size */ global_settings.dt_segment_limit_size,
+                context);
 
             stream->writePrefix();
             stream->write();
@@ -479,7 +481,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_FMT_WARNING(log, "[region {}] is not found at [term {}, index {}], might be removed already", region_id, term, index);
+        LOG_WARNING(log, "[region {}] is not found at [term {}, index {}], might be removed already", region_id, term, index);
         return EngineStoreApplyRes::NotFound;
     }
 

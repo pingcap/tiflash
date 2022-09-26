@@ -331,7 +331,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
             }
             if (snapshot_lifetime > exist_stale_snapshot)
             {
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Suspicious stale snapshot detected lifetime {:.3f} seconds, created from thread_id {}, tracing_id {}",
                     snapshot_lifetime,
@@ -364,7 +364,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         stats.longest_living_from_thread_id,               \
         stats.longest_living_from_tracing_id
         if (stats.longest_living_seconds > exist_stale_snapshot)
-            LOG_FMT_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
+            LOG_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
         else
             LOG_FMT_DEBUG(log, STALE_SNAPSHOT_LOG_PARAMS);
     }
@@ -375,7 +375,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
     {
         if (unlikely(snap == nullptr))
         {
-            LOG_FMT_WARNING(log, "{} gcApply get invalid snapshot for collectLiveFilesFromVersionList, ignored.", name);
+            LOG_WARNING(log, "{} gcApply get invalid snapshot for collectLiveFilesFromVersionList, ignored.", name);
             continue;
         }
         collectLiveFilesFromVersionList(*snap->version(), live_files, live_normal_pages, need_scan_page_ids);
@@ -542,7 +542,7 @@ void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
         // The Page to be ref is not exist.
         if (ignore_invalid_ref)
         {
-            LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
+            LOG_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyRef, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
         }
         else
         {
@@ -578,7 +578,7 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
             }
             catch (DB::Exception & e)
             {
-                LOG_FMT_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
+                LOG_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
             }
             break;
         case WriteBatch::WriteType::UPSERT:
