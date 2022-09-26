@@ -64,7 +64,7 @@ struct MemTrackerWrapper
     {
         if (delta)
         {
-            if (memory_tracker)
+            if likely (memory_tracker)
             {
                 memory_tracker->alloc(delta);
                 size += delta;
@@ -76,7 +76,7 @@ struct MemTrackerWrapper
     {
         if (delta)
         {
-            if (memory_tracker)
+            if likely (memory_tracker)
             {
                 memory_tracker->free(delta);
                 size -= delta;

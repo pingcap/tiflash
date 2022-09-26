@@ -233,7 +233,11 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             context.setProcessListElement(&process_list_entry->get());
         }
         if (context.isMPPTask())
+        {
+            /// for MPPTask, process list entry is created in MPPTask::prepare()
+            RUNTIME_ASSERT(context.getDAGContext()->getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
             process_list_entry = context.getDAGContext()->getProcessListEntry();
+        }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
         auto interpreter = query_src.interpreter(context, stage);
