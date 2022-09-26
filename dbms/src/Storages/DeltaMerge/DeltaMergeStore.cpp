@@ -1775,7 +1775,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
 
 String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
 {
-    if (!dm_ctx.tracing_id.empty())
+    if (likely(!dm_ctx.tracing_id.empty()))
     {
         return dm_ctx.tracing_id;
     }
