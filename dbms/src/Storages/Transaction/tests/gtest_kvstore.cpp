@@ -1428,8 +1428,8 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
 
             kvr1->markCompactLog();
             kvs.setRegionCompactLogConfig(0, 0, 0);
-            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, true, ctx.getTMTContext(), index, term));
             auto [index2, term2] = proxy_instance->compactLog(region_id, index);
+            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, true, ctx.getTMTContext(), index2, term));
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 2);
