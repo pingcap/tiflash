@@ -469,8 +469,9 @@ DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & pare
         // or you may delete some writing files
         if (options.clean_up)
         {
-            if (startsWith(name, details::FOLDER_PREFIX_WRITABLE))
+            if (startsWith(name, details::FOLDER_PREFIX_WRITABLE) || startsWith(name, details::FOLDER_PREFIX_DROPPED))
             {
+<<<<<<< HEAD
                 // Clear temporary files
                 const auto full_path = parent_path + "/" + name;
                 if (Poco::File temp_file(full_path); temp_file.exists())
@@ -485,17 +486,30 @@ DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & pare
                 if (!res)
                 {
                     LOG_INFO(log, "Unrecognized dropped DM file, ignored: " + name);
+=======
+                // Clear temporary/deleted (maybe broken) files
+                // The encryption info use readable path. We are not sure the encryption info is deleted or not.
+                // Try to delete and ignore if it is already deleted.
+                auto res = try_parse_file_id(name);
+                if (!res)
+                {
+                    LOG_INFO(log, "Unrecognized temporary or dropped dmfile, ignored: {}", name);
+>>>>>>> 5609e68c0f (clear encryption info for temporary dmfile (#6018))
                     continue;
                 }
                 UInt64 file_id = *res;
-                // The encryption info use readable path. We are not sure the encryption info is deleted or not.
-                // Try to delete and ignore if it is already deleted.
                 const String readable_path = getPathByStatus(parent_path, file_id, DMFile::Status::READABLE);
                 file_provider->deleteEncryptionInfo(EncryptionPath(readable_path, ""), /* throw_on_error= */ false);
                 const auto full_path = parent_path + "/" + name;
+<<<<<<< HEAD
                 if (Poco::File del_file(full_path); del_file.exists())
                     del_file.remove(true);
                 LOG_WARNING(log, __PRETTY_FUNCTION__ << ": Existing dropped dmfile, removed: " << full_path);
+=======
+                if (Poco::File file(full_path); file.exists())
+                    file.remove(true);
+                LOG_WARNING(log, "Existing temporary or dropped dmfile, removed: {}", full_path);
+>>>>>>> 5609e68c0f (clear encryption info for temporary dmfile (#6018))
                 continue;
             }
         }
@@ -508,7 +522,11 @@ DMFile::listAllInPath(const FileProviderPtr & file_provider, const String & pare
         auto res = try_parse_file_id(name);
         if (!res)
         {
+<<<<<<< HEAD
             LOG_INFO(log, "Unrecognized DM file, ignored: " + name);
+=======
+            LOG_INFO(log, "Unrecognized DM file, ignored: {}", name);
+>>>>>>> 5609e68c0f (clear encryption info for temporary dmfile (#6018))
             continue;
         }
         UInt64 file_id = *res;
