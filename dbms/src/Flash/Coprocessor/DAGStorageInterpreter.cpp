@@ -239,7 +239,7 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     }
 }
 
-void injectFailPointForLocalRead(const SelectQueryInfo & query_info)
+void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_info)
 {
     // Inject failpoint to throw RegionException for testing
     fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
