@@ -1779,10 +1779,6 @@ String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
     {
         return dm_ctx.tracing_id;
     }
-    else if (const auto * dag_ctx = dm_ctx.db_context.getDAGContext(); dag_ctx != nullptr && dag_ctx->isMPPTask())
-    {
-        return fmt::format("{} Table<{}>", dag_ctx->getMPPTaskId().toString(), physical_table_id);
-    }
     else
     {
         return fmt::format("Table<{}>", physical_table_id);
