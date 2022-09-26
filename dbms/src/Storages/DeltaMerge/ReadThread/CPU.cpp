@@ -110,7 +110,7 @@ std::vector<std::vector<int>> getNumaNodes(Poco::Logger * log)
     }
     catch (...)
     {
-        LOG_WARNING(log, "Unknow Error");
+        LOG_WARNING(log, "Unknown Error");
     }
 #endif
     LOG_WARNING(log, "Cannot recognize the CPU NUMA infomation, use the CPU as 'one numa node'");

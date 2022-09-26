@@ -227,8 +227,6 @@ void Connection::forceConnected()
 
 bool Connection::ping()
 {
-    // LOG_TRACE(log_wrapper.get(), "Ping");
-
     TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
     try
     {
