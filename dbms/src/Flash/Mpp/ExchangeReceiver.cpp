@@ -23,6 +23,8 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <fmt/core.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace FailPoints
@@ -33,28 +35,11 @@ extern const char random_receiver_async_msg_push_failure_failpoint[];
 
 namespace
 {
-String getReceiverStateStr(const ExchangeReceiverState & s)
-{
-    switch (s)
-    {
-    case ExchangeReceiverState::NORMAL:
-        return "NORMAL";
-    case ExchangeReceiverState::ERROR:
-        return "ERROR";
-    case ExchangeReceiverState::CANCELED:
-        return "CANCELED";
-    case ExchangeReceiverState::CLOSED:
-        return "CLOSED";
-    default:
-        return "UNKNOWN";
-    }
-}
-
 String constructStatusString(ExchangeReceiverState state, const String & error_message)
 {
     if (error_message.empty())
-        return fmt::format("Receiver state: {}", getReceiverStateStr(state));
-    return fmt::format("Receiver state: {}, error message: {}", getReceiverStateStr(state), error_message);
+        return fmt::format("Receiver state: {}", magic_enum::enum_name(state));
+    return fmt::format("Receiver state: {}, error message: {}", magic_enum::enum_name(state), error_message);
 }
 
 // If enable_fine_grained_shuffle:
@@ -154,7 +139,7 @@ bool pushPacket(size_t source_index,
                 fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
         }
     }
-    LOG_FMT_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
+    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
     return push_succeed;
 }
 
@@ -237,7 +222,7 @@ public:
     void handle()
     {
         std::string err_info;
-        LOG_FMT_TRACE(log, "stage: {}", stage);
+        LOG_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
@@ -249,12 +234,12 @@ public:
             }
             else
             {
-                LOG_FMT_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+                LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
                 waitForRetryOrDone("Exchange receiver meet error : send async stream request fail");
             }
             break;
         case AsyncRequestStage::WAIT_BATCH_READ:
-            LOG_FMT_TRACE(log, "Received {} packets.", read_packet_index);
+            LOG_TRACE(log, "Received {} packets.", read_packet_index);
             if (read_packet_index > 0)
                 has_data = true;
 
@@ -278,7 +263,7 @@ public:
                 setDone("");
             else
             {
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Finish fail. err code: {}, err msg: {}, retry time {}",
                     finish_status.error_code(),
@@ -633,7 +618,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             bool has_data = false;
             for (;;)
             {
-                LOG_FMT_TRACE(log, "begin next ");
+                LOG_TRACE(log, "begin next ");
                 TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
                 bool success = reader->read(packet);
                 if (!success)
@@ -673,7 +658,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             else
             {
                 bool retriable = !has_data && i + 1 < max_retry_times;
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "EstablishMPPConnectionRequest meets rpc fail. Err code = {}, err msg = {}, retriable = {}",
                     status.error_code(),
@@ -740,56 +725,58 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
     if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
     {
         std::unique_lock lock(mu);
-
-        if (state != ExchangeReceiverState::NORMAL)
-        {
-            return ExchangeReceiverResult::newError(0, name, constructStatusString(state, err_msg));
-        }
-        else /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
-        {
-            return ExchangeReceiverResult::newEOF(name);
-        }
-    }
-    assert(recv_msg != nullptr);
-    ExchangeReceiverResult result;
-    if (recv_msg->error_ptr != nullptr)
-    {
-        result = ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
+        return state != ExchangeReceiverState::NORMAL
+            ? ExchangeReceiverResult::newError(0, name, constructStatusString(state, err_msg))
+            : ExchangeReceiverResult::newEOF(name); /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
     }
     else
     {
-        if (recv_msg->resp_ptr != nullptr) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
+        assert(recv_msg != nullptr);
+        if (unlikely(recv_msg->error_ptr != nullptr))
+            return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
+        return toDecodeResult(block_queue, header, recv_msg);
+    }
+}
+
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
+    std::queue<Block> & block_queue,
+    const Block & header,
+    const std::shared_ptr<ReceivedMessage> & recv_msg)
+{
+    assert(recv_msg != nullptr);
+    if (recv_msg->resp_ptr != nullptr) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
+    {
+        auto select_resp = std::make_shared<tipb::SelectResponse>();
+        if (unlikely(!select_resp->ParseFromString(*(recv_msg->resp_ptr))))
         {
-            auto select_resp = std::make_shared<tipb::SelectResponse>();
-            if (!select_resp->ParseFromString(*(recv_msg->resp_ptr)))
-            {
-                result = ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, "decode error");
-            }
-            else
-            {
-                /// If mocking TiFlash as TiDB, here should decode chunks from select_resp.
-                result = ExchangeReceiverResult::newOk(select_resp, recv_msg->source_index, recv_msg->req_info);
-                if (!select_resp->chunks().empty())
-                {
-                    assert(recv_msg->chunks.empty());
-                    // Fine grained shuffle should only be enabled when sending data to TiFlash node.
-                    // So all data should be encoded into MPPDataPacket.chunks.
-                    RUNTIME_CHECK_MSG(!enableFineGrainedShuffle(fine_grained_shuffle_stream_count), "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
-                    result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
-                }
-            }
+            return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, "decode error");
         }
-        else /// the non-last packets
+        else
         {
-            result = ExchangeReceiverResult::newOk(nullptr, recv_msg->source_index, recv_msg->req_info);
-        }
-        if (!result.meet_error && !recv_msg->chunks.empty())
-        {
-            assert(result.decode_detail.rows == 0);
-            result.decode_detail = decodeChunks(recv_msg, block_queue, header);
+            auto result = ExchangeReceiverResult::newOk(select_resp, recv_msg->source_index, recv_msg->req_info);
+            /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
+            if (unlikely(!result.resp->chunks().empty()))
+            {
+                assert(recv_msg->chunks.empty());
+                // Fine grained shuffle should only be enabled when sending data to TiFlash node.
+                // So all data should be encoded into MPPDataPacket.chunks.
+                RUNTIME_CHECK_MSG(!enableFineGrainedShuffle(fine_grained_shuffle_stream_count), "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
+                result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
+            }
+            else if (!recv_msg->chunks.empty())
+            {
+                result.decode_detail = decodeChunks(recv_msg, block_queue, header);
+            }
+            return result;
         }
     }
-    return result;
+    else /// the non-last packets
+    {
+        auto result = ExchangeReceiverResult::newOk(nullptr, recv_msg->source_index, recv_msg->req_info);
+        result.decode_detail = decodeChunks(recv_msg, block_queue, header);
+        return result;
+    }
 }
 
 template <typename RPCContext>

@@ -30,7 +30,7 @@ class MockComputeServerManager : public ext::Singleton<MockComputeServerManager>
 {
 public:
     /// register an server to run.
-    void addServer(String addr);
+    void addServer(const String & addr);
 
     /// call startServers to run all servers in current test.
     void startServers(const LoggerPtr & log_ptr, Context & global_context);

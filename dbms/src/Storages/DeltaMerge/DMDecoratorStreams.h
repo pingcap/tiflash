@@ -42,13 +42,13 @@ public:
     }
     ~DMDeleteFilterBlockInputStream()
     {
-        LOG_FMT_TRACE(log,
-                      "Total rows: {}, pass: {:.2f}%"
-                      ", complete pass: {:.2f}%, complete not pass: {:.2f}%",
-                      total_rows,
-                      passed_rows * 100.0 / total_rows,
-                      complete_passed * 100.0 / total_blocks,
-                      complete_not_passed * 100.0 / total_blocks);
+        LOG_TRACE(log,
+                  "Total rows: {}, pass: {:.2f}%"
+                  ", complete pass: {:.2f}%, complete not pass: {:.2f}%",
+                  total_rows,
+                  passed_rows * 100.0 / total_rows,
+                  complete_passed * 100.0 / total_blocks,
+                  complete_not_passed * 100.0 / total_blocks);
     }
 
     String getName() const override { return "DMDeleteFilter"; }

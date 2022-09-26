@@ -43,6 +43,19 @@ public:
         }
     }
 
+    coprocessor::Response runCoprocessor(std::shared_ptr<coprocessor::Request> request)
+    {
+        coprocessor::Response response;
+        grpc::ClientContext context;
+        Status status = stub->Coprocessor(&context, *request, &response);
+        if (!status.ok())
+        {
+            throw Exception(fmt::format("Meet error while run coprocessor task, error code = {}, message = {}", status.error_code(), status.error_message()));
+        }
+
+        return response;
+    }
+
 private:
     std::unique_ptr<tikvpb::Tikv::Stub> stub{};
 };

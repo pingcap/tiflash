@@ -52,6 +52,7 @@ namespace DTTool::Inspect
 struct InspectArgs
 {
     bool check;
+    bool dump_columns;
     size_t file_id;
     std::string workdir;
 };
@@ -119,7 +120,7 @@ class ImitativeEnv
         return global_context;
     }
 
-    void setupLogger()
+    static void setupLogger()
     {
         Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cout);
         Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
@@ -132,7 +133,7 @@ class ImitativeEnv
     ContextPtr global_context{};
 
 public:
-    ImitativeEnv(const std::string & workdir, bool encryption = false)
+    explicit ImitativeEnv(const std::string & workdir, bool encryption = false)
     {
         setupLogger();
         createImitativeContext(workdir, encryption);

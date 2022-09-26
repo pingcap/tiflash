@@ -348,7 +348,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
     }
     else
     {
-        LOG_FMT_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
+        LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
     }
 
     return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
@@ -791,7 +791,7 @@ SnapshotsStatistics PageDirectory::getSnapshotsStat() const
     return stat;
 }
 
-PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
+PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
 
@@ -836,10 +836,10 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
             {
                 if (throw_on_not_exist)
                 {
-                    LOG_FMT_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
+                    LOG_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
                     for (const auto & [dump_id, dump_entry] : mvcc_table_directory)
                     {
-                        LOG_FMT_WARNING(log, "Dumping state [page_id={}] [entry={}]", dump_id, dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
+                        LOG_WARNING(log, "Dumping state [page_id={}] [entry={}]", dump_id, dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
                     }
                     throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
                 }
@@ -882,7 +882,7 @@ PageIDAndEntryV3 PageDirectory::get(PageIdV3Internal page_id, const PageDirector
     }
 }
 
-std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
+std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::getByIDsImpl(const PageIdV3Internals & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
 {
     PageEntryV3 entry_got;
     PageIds page_not_found = {};
@@ -955,8 +955,9 @@ std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::get(const PageIdV3Internal
     return std::make_pair(id_entries, page_not_found);
 }
 
-PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const
+PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const DB::PageStorageSnapshotPtr & snap_, bool throw_on_not_exist) const
 {
+    auto snap = toConcreteSnapshot(snap_);
     PageIdV3Internal id_to_resolve = page_id;
     PageVersion ver_to_resolve(snap->sequence, 0);
     bool keep_resolve = true;
@@ -1144,7 +1145,11 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     PageVersion new_version(last_sequence + 1, 0);
 
     // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
-    wal->apply(edit, new_version, write_limiter);
+    for (auto & r : edit.getMutRecords())
+    {
+        r.version = new_version;
+    }
+    wal->apply(ser::serializeTo(edit), write_limiter);
 
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
@@ -1211,7 +1216,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
     }
 
     // Apply migrate edit into WAL with the increased epoch version
-    wal->apply(migrated_edit, write_limiter);
+    wal->apply(ser::serializeTo(migrated_edit), write_limiter);
 
     // Apply migrate edit to the mvcc map
     for (const auto & record : migrated_edit.getRecords())
@@ -1313,7 +1318,7 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
             /* for_dump_snapshot */ true);
         // The records persisted in `files_snap` is older than or equal to all records in `edit`
         auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
-        done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit_from_disk), write_limiter);
+        done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
     }
     return done_any_io;
 }
@@ -1346,7 +1351,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    LOG_FMT_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                    LOG_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
                     stale_snapshot_nums++;
                 }
 
