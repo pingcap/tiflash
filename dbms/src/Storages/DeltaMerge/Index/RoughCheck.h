@@ -36,25 +36,10 @@ using Cmp = ValueComparision<Op>;
 
 
 template <typename T>
-inline RSResult checkEqual(const Field & v, const DataTypePtr & type, const T & min, const T & max, bool min_is_null = false, bool max_is_null = false)
+inline RSResult checkEqual(const Field & v, const DataTypePtr & type, const T & min, const T & max)
 {
     if (!IS_LEGAL(v, min))
         return Some;
-
-
-    if (min_is_null)
-    {
-        // min is null, max is null --> None
-        if (max_is_null)
-            return None;
-        // min is null, max is not null
-        // if v > max --> None;
-        // else --> Some;
-        else if (GREATER(v, max))
-            return None;
-        else
-            return Some;
-    }
 
     //    if (min == max && v == min)
     //        return All;
@@ -77,24 +62,10 @@ inline RSResult checkEqual(const Field & v, const DataTypePtr & type, const T & 
 }
 
 template <typename T>
-inline RSResult checkGreater(const Field & v, const DataTypePtr & type, const T & min, const T & max, bool min_is_null = false, bool max_is_null = false)
+inline RSResult checkGreater(const Field & v, const DataTypePtr & type, const T & min, const T & max)
 {
     if (!IS_LEGAL(v, min))
         return Some;
-
-    if (min_is_null)
-    {
-        // min is null, max is null --> None
-        if (max_is_null)
-            return None;
-        // min is null, max is not null
-        // if v >= max --> None;
-        // else --> Some;
-        else if (GREATER_EQ(v, max))
-            return None;
-        else
-            return Some;
-    }
 
     //    if (v >= max)
     //        return None;
@@ -111,24 +82,10 @@ inline RSResult checkGreater(const Field & v, const DataTypePtr & type, const T 
 }
 
 template <typename T>
-inline RSResult checkGreaterEqual(const Field & v, const DataTypePtr & type, T min, T max, bool min_is_null = false, bool max_is_null = false)
+inline RSResult checkGreaterEqual(const Field & v, const DataTypePtr & type, T min, T max)
 {
     if (!IS_LEGAL(v, min))
         return Some;
-
-    if (min_is_null)
-    {
-        // min is null, max is null --> None
-        if (max_is_null)
-            return None;
-        // min is null, max is not null
-        // if v > max --> None;
-        // else --> Some;
-        else if (GREATER(v, max))
-            return None;
-        else
-            return Some;
-    }
 
     //    if (v > max)
     //        return None;
