@@ -41,7 +41,7 @@ struct SharedQuery
         , clients(clients_)
         , log(&Poco::Logger::get("SharedQuery"))
     {
-        LOG_FMT_TRACE(log, "Create SharedQuery({})", query_id);
+        LOG_TRACE(log, "Create SharedQuery({})", query_id);
         /// We only share BlockInputStream between clients,
         /// other resources in BlockIO should only be used by current thread.
         io.in = in;
@@ -57,11 +57,11 @@ struct SharedQuery
         ++finished_clients;
         last_finish_time = Poco::Timestamp();
 
-        LOG_FMT_TRACE(log,
-                      "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
-                      query_id,
-                      clients,
-                      finished_clients);
+        LOG_TRACE(log,
+                  "onClientFinish, SharedQuery({}), clients:{}, finished_clients: {}",
+                  query_id,
+                  clients,
+                  finished_clients);
     }
 
     bool isDone() const
@@ -106,11 +106,11 @@ public:
         {
             if (clients != it->second->clients)
             {
-                LOG_FMT_WARNING(log,
-                                "Different client numbers between shared queries with same query_id({}), former: {} now: {}",
-                                query_id,
-                                it->second->clients,
-                                clients);
+                LOG_WARNING(log,
+                            "Different client numbers between shared queries with same query_id({}), former: {} now: {}",
+                            query_id,
+                            it->second->clients,
+                            clients);
             }
             auto & query = *(it->second);
             if (query.connected_clients >= clients)
@@ -123,11 +123,11 @@ public:
             }
             query.connected_clients++;
 
-            LOG_FMT_TRACE(log,
-                          "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
-                          query_id,
-                          clients,
-                          query.connected_clients);
+            LOG_TRACE(log,
+                      "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: {}",
+                      query_id,
+                      clients,
+                      query.connected_clients);
             return query.io;
         }
         else
@@ -136,7 +136,7 @@ public:
             io.in = std::make_shared<SharedQueryBlockInputStream>(clients, io.in, /*req_id=*/"");
             queries.emplace(query_id, std::make_shared<SharedQuery>(query_id, clients, io.in));
 
-            LOG_FMT_TRACE(log, "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: 1", query_id, clients);
+            LOG_TRACE(log, "getOrCreateBlockIO, query_id: {}, clients: {}, connected_clients: 1", query_id, clients);
 
             return io;
         }
@@ -149,9 +149,9 @@ public:
         const auto it = queries.find(query_id);
         if (it == queries.end())
         {
-            LOG_FMT_WARNING(log,
-                            "Shared query finished with query_id({}), while resource cache not exists. Maybe this client takes too long before finish",
-                            query_id);
+            LOG_WARNING(log,
+                        "Shared query finished with query_id({}), while resource cache not exists. Maybe this client takes too long before finish",
+                        query_id);
             return;
         }
         auto & query = *(it->second);
@@ -159,7 +159,7 @@ public:
 
         //        if (it->second->isDone())
         //        {
-        //            LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
+        //            LOG_TRACE(log, "Remove shared query({})", it->second->query_id);
         //            queries.erase(it);
         //        }
     }
@@ -172,7 +172,7 @@ public:
         {
             if (it->second->isDone())
             {
-                LOG_FMT_TRACE(log, "Remove shared query({})", it->second->query_id);
+                LOG_TRACE(log, "Remove shared query({})", it->second->query_id);
                 queries.erase(it++);
             }
             else

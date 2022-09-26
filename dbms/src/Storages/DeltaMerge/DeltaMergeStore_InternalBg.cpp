@@ -325,7 +325,7 @@ bool shouldCompactStableWithTooManyInvalidVersion(const SegmentPtr & seg, DB::Ti
         return true;
 
     const auto & property = seg->getStable()->getStableProperty();
-    LOG_FMT_TRACE(log, "{}", property.toDebugString());
+    LOG_TRACE(log, "{}", property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -358,7 +358,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentPtr & 
     //   What's more, we can ignore this kind of delete range in future to avoid this extra gc.
     auto check_result = (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
 
-    LOG_FMT_TRACE(
+    LOG_TRACE(
         log,
         "GC - Checking shouldCompactDeltaWithStable, "
         "check_result={} delete_rows={}, delete_bytes={} stable_rows={} stable_bytes={} segment={}",
@@ -400,7 +400,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 {
     if (snap->stable->getDMFilesPacks() == 0)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange skipped segment "
             "because the DTFile of stable is empty, segment={}",
@@ -412,9 +412,9 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     if (at_least_result.first_pack_intersection == RSResult::All //
         && at_least_result.last_pack_intersection == RSResult::All)
     {
-        LOG_FMT_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange permanently skipped segment "
-                           "because all packs in DTFiles are fully contained by the segment range, segment={}",
-                      seg->info());
+        LOG_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange permanently skipped segment "
+                       "because all packs in DTFiles are fully contained by the segment range, segment={}",
+                  seg->info());
         seg->setValidDataRatioChecked();
         return false;
     }
@@ -443,7 +443,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     }
     if (!contains_invalid_data)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange checked false "
             "because segment DTFile is shared with a neighbor segment, "
@@ -497,7 +497,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 
     auto check_result = (at_least_result.rows < file_rows * (1 - invalid_data_ratio_threshold)) //
         || (at_least_result.bytes < file_bytes * (1 - invalid_data_ratio_threshold));
-    LOG_FMT_TRACE(
+    LOG_TRACE(
         log,
         "GC - Checking shouldCompactStableWithTooMuchDataOutOfSegmentRange, "
         "check_result={} first_pack_inc={} last_pack_inc={} rows_at_least={} bytes_at_least={} file_rows={} file_bytes={} segment={} ",
@@ -525,7 +525,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto segment_bytes = segment->getEstimatedBytes();
     if (segment_rows >= dm_context->small_segment_rows || segment_bytes >= dm_context->small_segment_bytes)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - Merge skipped because current segment is not small, segment={} table={}",
             segment->simpleInfo(),
@@ -536,7 +536,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto segments_to_merge = getMergeableSegments(dm_context, segment);
     if (segments_to_merge.size() < 2)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - Merge skipped because cannot find adjacent segments to merge, segment={} table={}",
             segment->simpleInfo(),
@@ -571,14 +571,14 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
         // The segment we just retrieved may be dropped from the map. Let's verify it again before creating a snapshot.
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={} table={}", segment->simpleInfo(), table_name);
+            LOG_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={} table={}", segment->simpleInfo(), table_name);
             return {};
         }
 
         segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
         if (!segment_snap)
         {
-            LOG_FMT_TRACE(
+            LOG_TRACE(
                 log,
                 "GC - Skip checking MergeDelta because snapshot failed, segment={} table={}",
                 segment->simpleInfo(),
@@ -651,7 +651,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 
     if (!should_compact)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - MergeDelta skipped, segment={} table={}",
             segment->simpleInfo(),
@@ -711,12 +711,12 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_TRACE(log,
-                  "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
-                  table_name,
-                  next_gc_check_key.toDebugString(),
-                  gc_safe_point,
-                  limit);
+    LOG_TRACE(log,
+              "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
+              table_name,
+              next_gc_check_key.toDebugString(),
+              gc_safe_point,
+              limit);
 
     UInt64 check_segments_num = 0;
     Int64 gc_segments_num = 0;
@@ -771,7 +771,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
             if (!new_seg)
             {
-                LOG_FMT_TRACE(
+                LOG_TRACE(
                     log,
                     "GC - Skipped segment, segment={} table={}",
                     segment->simpleInfo(),
