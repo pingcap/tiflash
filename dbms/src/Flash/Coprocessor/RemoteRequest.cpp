@@ -26,6 +26,7 @@ RemoteRequest RemoteRequest::build(
     const TiDBTableScan & table_scan,
     const TiDB::TableInfo & table_info,
     const PushDownFilter & push_down_filter,
+    Int64 physical_table_id,
     const LoggerPtr & log)
 {
     auto print_retry_regions = [&retry_regions, &table_info] {
@@ -100,6 +101,6 @@ RemoteRequest RemoteRequest::build(
             key_ranges.emplace_back(*range.first, *range.second);
     }
     sort(key_ranges.begin(), key_ranges.end());
-    return {std::move(dag_req), std::move(schema), std::move(key_ranges)};
+    return {std::move(dag_req), std::move(schema), std::move(key_ranges), physical_table_id};
 }
 } // namespace DB

@@ -138,7 +138,7 @@ try
             }
             writer->Write(response);
         }
-        // TODO: here is hacked, encode for batch cop with concurrency in function `executeCreatingSets`
+        // StreamWriter is constructed in `executeCreatingSets` to make batch cop run in multiple threads.
         dag_output_stream = std::make_shared<NullBlockOutputStream>(streams.in->getHeader());
 
         copyData(*streams.in, *dag_output_stream);

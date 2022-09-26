@@ -544,19 +544,15 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         req->tp = pingcap::coprocessor::ReqType::DAG;
         req->start_ts = context.getSettingsRef().read_tso;
         req->schema_version = context.getSettingsRef().schema_version;
-        // FIXME: req->table_regions for partition table?
 
+        std::vector<Int64> physical_table_ids;
+        physical_table_ids.reserve(remote_requests.size());
         std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
         ranges_for_each_physical_table.reserve(remote_requests.size());
         for (const auto & remote_request : remote_requests)
         {
+            physical_table_ids.emplace_back(remote_request.physical_table_id);
             ranges_for_each_physical_table.emplace_back(remote_request.key_ranges);
-        }
-
-        // TODO: support partition table
-        if (ranges_for_each_physical_table.size() != 1)
-        {
-            throw Exception(fmt::format("Do not support for partition table scan now! [ranges_for_each_physical_table={}]", ranges_for_each_physical_table.size()), ErrorCodes::NOT_IMPLEMENTED);
         }
 
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
@@ -566,11 +562,11 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         const size_t expect_concurrent_num = settings.max_threads;
         const size_t recv_buffer_size = settings.rn_recv_buffer;
         const std::string log_id = log->identifier();
-        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, ranges_for_each_physical_table, store_type, batch_cop_split, &Poco::Logger::get("pingcap/coprocessor"));
+        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, batch_cop_split, &Poco::Logger::get("pingcap/coprocessor"));
         LOG_FMT_INFO(log, "build {} batch cop tasks with [split={}]", all_batch_tasks.size(), batch_cop_split);
         for (size_t i = 0; i < all_batch_tasks.size(); ++i)
         {
-            LOG_FMT_DEBUG(log, "gjt debug batch task[{}], storeAddr: {}, len(RegionInfo): {}", i, all_batch_tasks[i].store_addr, all_batch_tasks[i].region_infos.size());
+            LOG_FMT_DEBUG(log, "batch task[{}], storeAddr: {}, len(RegionInfo): {}", i, all_batch_tasks[i].store_addr, all_batch_tasks[i].region_infos.size());
         }
         for (size_t task_idx = 0; task_idx < all_batch_tasks.size(); ++task_idx)
         {
@@ -1151,6 +1147,7 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
             push_down_filter,
+            physical_table_id,
             log));
     }
     return remote_requests;

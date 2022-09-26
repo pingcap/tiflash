@@ -19,7 +19,6 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Storages/Transaction/TMTContext.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {

@@ -32,7 +32,7 @@ class BatchCoprocessorHandler : public CoprocessorHandler
 public:
     BatchCoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::BatchRequest * cop_request_, ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_);
 
-    ~BatchCoprocessorHandler() = default;
+    ~BatchCoprocessorHandler() override = default;
 
     grpc::Status execute() override;
 
@@ -44,7 +44,6 @@ protected:
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer;
 
     ::coprocessor::BatchResponse err_response;
-    const LoggerPtr logger;
 };
 
 using BatchCopHandlerPtr = std::shared_ptr<BatchCoprocessorHandler>;

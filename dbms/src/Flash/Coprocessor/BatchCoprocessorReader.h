@@ -27,6 +27,7 @@
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Mpp/ExchangeReceiver.h>
 #include <common/logger_useful.h>
 
 #include <memory>
@@ -97,6 +98,7 @@ public:
         , total_net_recv_bytes(0)
         , collected(false)
         , log(Logger::get(name, log_id))
+        , state(ExchangeReceiverState::NORMAL)
     {
         auto batch_req = std::make_shared<::coprocessor::BatchRequest>();
         batch_req->set_tp(req->tp);
@@ -105,22 +107,44 @@ public:
         batch_req->set_schema_ver(req->schema_version);
         batch_req->set_log_id(log_id);
 
-        // TODO: set `regions`, `table_regions`
-        for (const auto & ri : task.region_infos)
+        if (!task.region_infos.empty())
         {
-            auto * reg = batch_req->add_regions();
-            reg->set_region_id(ri.region_id.id);
-            reg->mutable_region_epoch()->set_version(ri.region_id.ver);
-            reg->mutable_region_epoch()->set_conf_ver(ri.region_id.conf_ver);
-            for (const auto & key_range : ri.ranges)
+            // Non-Partition table.
+            for (const auto & ri : task.region_infos)
             {
-                key_range.setKeyRange(reg->add_ranges());
+                auto * reg = batch_req->add_regions();
+                reg->set_region_id(ri.region_id.id);
+                reg->mutable_region_epoch()->set_version(ri.region_id.ver);
+                reg->mutable_region_epoch()->set_conf_ver(ri.region_id.conf_ver);
+                for (const auto & key_range : ri.ranges)
+                {
+                    key_range.setKeyRange(reg->add_ranges());
+                }
+            }
+        }
+        else
+        {
+            // Partition table.
+            for (const auto & table_region : task.table_regions)
+            {
+                auto * req_table_region = batch_req->add_table_regions();
+                req_table_region->set_physical_table_id(table_region.physical_table_id);
+                auto * reg = req_table_region->add_regions();
+                for (const auto & ri : table_region.region_infos)
+                {
+                    reg->set_region_id(ri.region_id.id);
+                    reg->mutable_region_epoch()->set_version(ri.region_id.ver);
+                    reg->mutable_region_epoch()->set_conf_ver(ri.region_id.conf_ver);
+                    for (const auto & key_range : ri.ranges)
+                    {
+                        key_range.setKeyRange(reg->add_ranges());
+                    }
+                }
             }
         }
 
         try
         {
-            //
             for (size_t index = 0; index < getSourceNum(); ++index)
             {
                 thread_manager->schedule(true, "BatchCoprocessor", [this, batch_req = std::move(batch_req)] { readLoop(batch_req); });
@@ -142,6 +166,15 @@ public:
 
     ~BatchCoprocessorReader()
     {
+        try
+        {
+            close();
+            thread_manager->wait();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
         // TODO: Remove this verbose logging?
         LOG_FMT_DEBUG(
             log,
@@ -162,9 +195,24 @@ public:
         watch.restart();
         if (!msg_channel.pop(recv_msg))
         {
-            // TODO: check error
-            // msg_channel is finished
-            return BatchCoprocessorReaderResult::newEOF(name);
+            std::unique_lock lock(mu);
+            if (state != ExchangeReceiverState::NORMAL)
+            {
+                String msg;
+                if (state == ExchangeReceiverState::CANCELED)
+                    msg = "query canceled";
+                else if (state == ExchangeReceiverState::CLOSED)
+                    msg = "ExchangeReceiver closed";
+                else if (!err_msg.empty())
+                    msg = err_msg;
+                else
+                    msg = "Unknown error";
+                return BatchCoprocessorReaderResult::newError(0, name, msg);
+            }
+            else /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
+            {
+                return BatchCoprocessorReaderResult::newEOF(name);
+            }
         }
         auto elapsed_ms = watch.elapsedMilliseconds();
         total_wait_pull_channel_elapse_ms += elapsed_ms;
@@ -184,7 +232,7 @@ public:
                 result = BatchCoprocessorReaderResult::newOk(resp_ptr, 0, "");
             }
         }
-        else // the non-last packets
+        else // Last packet.
         {
             result = BatchCoprocessorReaderResult::newOk(nullptr, 0, "");
         }
@@ -193,17 +241,26 @@ public:
         {
             assert(result.decode_detail.rows == 0);
             result.decode_detail = decodeChunks(result.resp, block_queue, header, schema);
-            LOG_FMT_DEBUG(log, "gjt debug read {} rows from {}", result.decode_detail.rows, task.store_addr);
         }
         return result;
     }
 
     void cancel()
     {
+        {
+            std::unique_lock lock(mu);
+            state = ExchangeReceiverState::CANCELED;
+        }
+        msg_channel.cancel();
     }
 
     void close()
     {
+        {
+            std::unique_lock lock(mu);
+            state = ExchangeReceiverState::CLOSED;
+        }
+        msg_channel.finish();
     }
 
     void collectNewThreadCount(int & cnt)
@@ -303,13 +360,22 @@ private:
     }
 
     void connectionDone(
-        bool /*meet_error*/,
-        const String & /*local_err_msg*/,
-        const LoggerPtr & /*log*/,
+        bool meet_error,
+        const String & local_err_msg,
+        const LoggerPtr & /* log */,
         size_t net_elapsed_ms,
         size_t net_recv_bytes)
     {
-        // TODO: check and release resources
+        {
+            std::unique_lock lock(mu);
+            if (meet_error)
+            {
+                if (state == ExchangeReceiverState::NORMAL)
+                    state = ExchangeReceiverState::ERROR;
+                if (err_msg.empty())
+                    err_msg = local_err_msg;
+            }
+        }
         msg_channel.finish();
         total_wait_net_elapse_ms = net_elapsed_ms;
         total_net_recv_bytes = net_recv_bytes;
@@ -379,5 +445,9 @@ private:
     bool collected;
 
     LoggerPtr log;
+
+    std::mutex mu;
+    ExchangeReceiverState state;
+    String err_msg;
 };
 } // namespace DB

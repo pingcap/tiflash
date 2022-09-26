@@ -34,13 +34,10 @@ BatchCoprocessorHandler::BatchCoprocessorHandler(
     CoprocessorContext & cop_context_,
     const coprocessor::BatchRequest * cop_request_,
     ::grpc::ServerWriter<::coprocessor::BatchResponse> * writer_)
-    : CoprocessorHandler(cop_context_, nullptr, nullptr)
+    : CoprocessorHandler(cop_context_, nullptr, nullptr, Logger::get("MPPTask", cop_request_->log_id()))
     , cop_request(cop_request_)
     , writer(writer_)
-    , logger(Logger::get("MPPTask", cop_request->log_id()))
-{
-    log = (&Poco::Logger::get("BatchCoprocessorHandler"));
-}
+{}
 
 grpc::Status BatchCoprocessorHandler::execute()
 {

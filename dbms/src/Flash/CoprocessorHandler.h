@@ -48,6 +48,7 @@ class CoprocessorHandler
 {
 public:
     CoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * response_);
+    CoprocessorHandler(CoprocessorContext & cop_context_, const coprocessor::Request * cop_request_, coprocessor::Response * response_, LoggerPtr logger);
 
     virtual ~CoprocessorHandler() = default;
 
@@ -71,7 +72,7 @@ protected:
     const coprocessor::Request * cop_request;
     coprocessor::Response * cop_response;
 
-    Poco::Logger * log;
+    const LoggerPtr logger;
 };
 
 } // namespace DB
