@@ -87,7 +87,7 @@ void ColumnAggregateFunction::insertRangeFrom(const IColumn & from, size_t start
     if (start + length > from_concrete.getData().size())
         throw Exception(
             fmt::format(
-                "Parameters start = {}, length = {} are out of bound in ColumnAggregateFunction::insertRangeFrom method (data.size() = {}).",
+                "Parameters are out of bound in ColumnAggregateFunction::insertRangeFrom method, start={}, length={}, from.size()={}",
                 start,
                 length,
                 from_concrete.getData().size()),
