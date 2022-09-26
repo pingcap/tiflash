@@ -348,7 +348,7 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
-    current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
+    RUNTIME_ASSERT(current_memory_tracker == process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
