@@ -393,7 +393,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
 {
     if (compaction->getCompactionVersion() != minor_compaction_version)
     {
-        LOG_FMT_WARNING(log, "Structure has been updated during compact");
+        LOG_WARNING(log, "Structure has been updated during compact");
         return false;
     }
     minor_compaction_version += 1;

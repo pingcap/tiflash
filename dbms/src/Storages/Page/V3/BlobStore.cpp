@@ -438,13 +438,13 @@ void BlobStore::remove(const PageEntriesV3 & del_entries)
                 auto lock = stat->lock();
                 stat->recalculateCapacity();
             }
-            LOG_FMT_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] "
-                               "[total_size={}] [valid_size={}] [valid_rate={}]",
-                          blob_id,
-                          stat->sm_max_caps,
-                          stat->sm_total_size,
-                          stat->sm_valid_size,
-                          stat->sm_valid_rate);
+            LOG_TRACE(log, "Blob recalculated capability [blob_id={}] [max_cap={}] "
+                           "[total_size={}] [valid_size={}] [valid_rate={}]",
+                      blob_id,
+                      stat->sm_max_caps,
+                      stat->sm_total_size,
+                      stat->sm_valid_size,
+                      stat->sm_valid_rate);
         }
     }
 }
@@ -960,7 +960,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                           stat->changeToReadOnly();
                       }
                   }
-                  LOG_FMT_WARNING(log, "enabled force_change_all_blobs_to_read_only. All of BlobStat turn to READ-ONLY");
+                  LOG_WARNING(log, "enabled force_change_all_blobs_to_read_only. All of BlobStat turn to READ-ONLY");
               });
 
     for (const auto & [path, stats] : stats_list)
@@ -971,7 +971,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             if (stat->isReadOnly())
             {
                 blobstore_gc_info.appendToReadOnlyBlob(stat->id, stat->sm_valid_rate);
-                LOG_FMT_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
+                LOG_TRACE(log, "Current [blob_id={}] is read-only", stat->id);
                 continue;
             }
 
@@ -1015,7 +1015,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Check if GC is required
             if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
             {
-                LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
                 blob_need_gc.emplace_back(stat->id);
 
                 // Change current stat to read only
@@ -1025,13 +1025,13 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             else
             {
                 blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
-                LOG_FMT_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
             }
 
             if (right_margin != stat->sm_total_size)
             {
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
+                LOG_TRACE(log, "Truncate blob file [blob_id={}] [origin size={}] [truncated size={}]", stat->id, stat->sm_total_size, right_margin);
                 blobfile->truncate(right_margin);
                 blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
 

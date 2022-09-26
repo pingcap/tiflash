@@ -102,18 +102,18 @@ std::vector<std::vector<int>> getNumaNodes(Poco::Logger * log)
     }
     catch (Exception & e)
     {
-        LOG_FMT_WARNING(log, "{}", e.message());
+        LOG_WARNING(log, "{}", e.message());
     }
     catch (std::exception & e)
     {
-        LOG_FMT_WARNING(log, "{}", e.what());
+        LOG_WARNING(log, "{}", e.what());
     }
     catch (...)
     {
-        LOG_FMT_WARNING(log, "Unknow Error");
+        LOG_WARNING(log, "Unknown Error");
     }
 #endif
-    LOG_FMT_WARNING(log, "Cannot recognize the CPU NUMA infomation, use the CPU as 'one numa node'");
+    LOG_WARNING(log, "Cannot recognize the CPU NUMA infomation, use the CPU as 'one numa node'");
     std::vector<std::vector<int>> numa_nodes(1); // "One numa node"
     return numa_nodes;
 }
