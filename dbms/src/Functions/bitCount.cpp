@@ -34,7 +34,7 @@ namespace
 template <typename A>
 struct BitCountImpl
 {
-    using ResultType = UInt64;
+    using ResultType = Int64;
 
     static ResultType apply(A a)
     {
@@ -45,7 +45,7 @@ struct BitCountImpl
 template <typename A>
 struct BitCountImpl<Decimal<A>>
 {
-    using ResultType = UInt64;
+    using ResultType = Int64;
 
     static ResultType apply(Decimal<A> a)
     {

@@ -23,7 +23,7 @@ mysql> insert test.t values (100);
 mysql> insert test.t values (-100);
 
 
-mysql> mysql> select a, bit_count(a) from t;
+mysql> select a, bit_count(a) from test.t;
 +------+--------------+
 | a    | bit_count(a) |
 +------+--------------+
@@ -40,7 +40,7 @@ mysql> insert test.s values (-9223372036854775808);
 mysql> insert test.s values (9223372036854775807);
 
 
-mysql> select a, bit_count(a) from s;
+mysql> select a, bit_count(a) from test.s;
 +----------------------+--------------+
 | a                    | bit_count(a) |
 +----------------------+--------------+
