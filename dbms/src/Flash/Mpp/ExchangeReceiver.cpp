@@ -246,7 +246,7 @@ public:
             if (auto error_message = getErrorFromPackets(); !error_message.empty())
                 setDone(fmt::format("Exchange receiver meet error : {}", error_message));
             else if (!sendPackets())
-                setDone("Exchange receiver meet error : push packets fail, " + err_info);
+                setDone("Exchange receiver meet error : push packets fail");
             else if (read_packet_index < batch_packet_count)
             {
                 stage = AsyncRequestStage::WAIT_FINISH;
