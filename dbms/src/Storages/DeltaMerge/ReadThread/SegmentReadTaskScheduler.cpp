@@ -37,23 +37,18 @@ void SegmentReadTaskScheduler::add(const SegmentReadTaskPoolPtr & pool)
     Stopwatch sw_do_add;
     read_pools.add(pool);
 
-    std::unordered_set<uint64_t> seg_ids;
-    for (const auto & task : pool->getTasks())
+    const auto & tasks = pool->getTasks();
+    for (const auto & pa : tasks)
     {
-        auto seg_id = task->segment->segmentId();
+        auto seg_id = pa.first;
         merging_segments[pool->tableId()][seg_id].push_back(pool->poolId());
-        if (!seg_ids.insert(seg_id).second)
-        {
-            throw DB::Exception(fmt::format("Not support split segment task. segment_ids={} => segment_id={} already exist.", seg_ids, seg_id));
-        }
     }
     auto block_slots = pool->getFreeBlockSlots();
-    LOG_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} segments={} pool_count={} cost={}ns do_add_cost={}ns", //
+    LOG_DEBUG(log, "Added, pool_id={} table_id={} block_slots={} segment_count={} pool_count={} cost={}ns do_add_cost={}ns", //
               pool->poolId(),
               pool->tableId(),
               block_slots,
-              seg_ids.size(),
-              seg_ids,
+              tasks.size(),
               read_pools.size(),
               sw_add.elapsed(),
               sw_do_add.elapsed());
