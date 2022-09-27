@@ -20,14 +20,12 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/Utils.h>
-#include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/ProcessList.h>
