@@ -263,6 +263,10 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         FilterParser::RSFilterType filter_type = iter->second;
         switch (filter_type)
         {
+        // Not/And/Or only support when the child is FunctionExpr, thus expr like `a and null` can not do filter here.
+        // If later we want to support Not/And/Or do filter not only FunctionExpr but also ColumnExpr and Literal,
+        // we must take a special consideration about null value, due to we just ignore the null value in other filter(such as equal, greater, etc.)
+        // Therefore, null value may bring some extra correctness problem if we expand Not/And/Or filtering areas.
         case FilterParser::RSFilterType::Not:
         {
             if (unlikely(expr.children_size() != 1))
@@ -311,11 +315,18 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
 
         case FilterParser::RSFilterType::IsNull:
         {
+            // for IsNULL filter, we only support do filter when the child is ColumnExpr.
+            // That is, we only do filter when the statement likes `where a is null`, but not `where (a > 1) is null`
+            // because in other filter calculation(like Equal/Less/LessEqual/Greater/GreateEqual/NotEqual), we just make filter ignoring the null value.
+            // Therefore, if we support IsNull with sub expr, there could be correctness problem.
+            // For example, we have a table t(a int, b int), and the data is: (1, 2), (0, null), (null, 1)
+            // and then we execute `select * from t where (a > 1) is null`, we want to get (null, 1)
+            // but in RSResult (a > 1), we will get the result RSResult::None, and then we think the result is the empty set.
             if (unlikely(expr.children_size() != 1))
             {
                 op = createUnsupported(
                     expr.ShortDebugString(),
-                    "is null with " + DB::toString(expr.children_size()) + " children",
+                    "filter IsNull with " + DB::toString(expr.children_size()) + " children",
                     false);
             }
             else

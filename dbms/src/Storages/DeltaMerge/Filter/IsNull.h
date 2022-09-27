@@ -37,7 +37,7 @@ public:
     String toDebugString() override
     {
         String s = R"({"op":")" + name() + //
-            R"(","col":")" + attr.col_name + R"("]})";
+            R"(","col":")" + attr.col_name + R"("})";
         return s;
     }
 

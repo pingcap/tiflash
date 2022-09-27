@@ -267,7 +267,7 @@ RSResult MinMaxIndex::checkNullableEqual(size_t pack_index, const Field & value,
 
 RSResult MinMaxIndex::checkEqual(size_t pack_index, const Field & value, const DataTypePtr & type)
 {
-    // In normal cases, optimizer will not push down comparisons with null, because everything comparison with null will return null.
+    // Everything comparison with null will return null.
     if (value.isNull() || !(*has_value_marks)[pack_index])
     {
         return RSResult::None;
@@ -396,7 +396,7 @@ RSResult MinMaxIndex::checkNullableGreater(size_t pack_index, const Field & valu
 
 RSResult MinMaxIndex::checkGreater(size_t pack_index, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    // In normal cases, optimizer will not push down comparisons with null, because everything comparison with null will return null.
+    // Everything comparison with null will return null.
     if (value.isNull() || !(*has_value_marks)[pack_index])
     {
         return RSResult::None;
@@ -525,7 +525,7 @@ RSResult MinMaxIndex::checkNullableGreaterEqual(size_t pack_index, const Field &
 
 RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, const DataTypePtr & type, int /*nan_direction_hint*/)
 {
-    // In normal cases, optimizer will not push down comparisons with null, because everything comparison with null will return null.
+    // Everything comparison with null will return null.
     if (value.isNull() || !(*has_value_marks)[pack_index])
     {
         return RSResult::None;
