@@ -16,10 +16,10 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
+#include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <stdexcept>
 
 namespace DB::PS::V3

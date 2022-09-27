@@ -50,21 +50,21 @@ ALWAYS_INLINE static inline void * sse2_inline_memcpy(void * __restrict dst_, co
             }
             /// No bytes remaining.
         }
-        else if (unlikely(size <= 4))
+        else if (unlikely(size < 4)) // sse2_inline_memcpy(_,_, 4 ) should use 4 bytes register directly
         {
-            /// Chunks of 2..4 bytes.
+            /// Chunks of 2..3 bytes.
             MCP(2);
             MCP_END(2);
         }
-        else if (unlikely(size <= 8))
+        else if (unlikely(size < 8)) // sse2_inline_memcpy(_,_, 8 ) should use 8 bytes register directly
         {
-            /// Chunks of 5..8 bytes.
+            /// Chunks of 4..7 bytes.
             MCP(4);
             MCP_END(4);
         }
         else if (unlikely(size <= 16))
         {
-            /// Chunks of 9..16 bytes.
+            /// Chunks of 8..16 bytes.
             MCP(8);
             MCP_END(8);
         }

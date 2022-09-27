@@ -224,6 +224,8 @@ public:
     void add(DMFileReader & reader);
     void del(DMFileReader & reader);
     void set(DMFileReader & from_reader, int64_t col_id, size_t start, size_t count, ColumnPtr & col);
+    // `get` is just for test.
+    DMFileReader * get(const std::string & name);
 
 private:
     DMFileReaderPool() = default;

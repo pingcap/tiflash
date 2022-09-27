@@ -25,13 +25,13 @@ function get_elapse_s()
 	# time format:$(date +"%s.%N"), such as 1662367015.453429263
 	start_time=$1
 	end_time=$2
-	
+
 	start_s=${start_time%.*}
 	start_nanos=${start_time#*.}
 	end_s=${end_time%.*}
 	end_nanos=${end_time#*.}
-	
-	# end_nanos > start_nanos? 
+
+	# end_nanos > start_nanos?
 	# Another way, the time part may start with 0, which means
 	# it will be regarded as oct format, use "10#" to ensure
 	# calculateing with decimal
@@ -39,9 +39,9 @@ function get_elapse_s()
 		end_s=$(( 10#$end_s - 1 ))
 		end_nanos=$(( 10#$end_nanos + 10**9 ))
 	fi
-	
+
 	elapse_s=$(( 10#$end_s - 10#$start_s )).`printf "%03d\n" $(( (10#$end_nanos - 10#$start_nanos)/10**6 ))`
-	
+
 	echo $elapse_s
 }
 
@@ -142,8 +142,16 @@ set -e
 # Export the `PY` env so that it can be
 # used when the function `wait_table` is
 # called from subprocess.
-export PY="python2"
-# export PY="python3"
+if [ -x "$(command -v python3)" ]; then
+	export PY="python3"
+elif [ -x "$(command -v python2)" ]; then
+	export PY="python2"
+elif [ -x "$(command -v python)" ]; then
+	export PY="python"
+else
+	echo 'Error: python not found in PATH.' >&2
+	exit 1
+fi
 
 target="$1"
 fullstack="$2"
@@ -200,13 +208,13 @@ fi
 mysql_client="mysql -u root -P $tidb_port -h $tidb_server -e"
 
 if [ "$fullstack" = true ]; then
-    mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
-    sleep 10
-    if [ $? != 0 ]; then
-        echo "create database '"$tidb_db"' failed" >&2
-        exit 1
-    fi
-    ${PY} generate-fullstack-test.py "$tidb_db" "$tidb_table"
+	mysql -u root -P $tidb_port -h $tidb_server -e "create database if not exists $tidb_db"
+	sleep 10
+	if [ $? != 0 ]; then
+		echo "create database '"$tidb_db"' failed" >&2
+		exit 1
+	fi
+	${PY} generate-fullstack-test.py "$tidb_db" "$tidb_table"
 fi
 
 run_path "$dbc" "$target" "$continue_on_error" "$fuzz" "$skip_raw_test" "$mysql_client" "$verbose"
