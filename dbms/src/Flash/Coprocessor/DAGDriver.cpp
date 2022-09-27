@@ -90,7 +90,7 @@ try
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
 
-    BlockIO streams = executeQuery(context, internal, QueryProcessingStage::Complete);
+    BlockIO streams = executeQuery(context, internal);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
