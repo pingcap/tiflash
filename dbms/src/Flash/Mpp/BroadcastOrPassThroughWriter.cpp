@@ -51,8 +51,9 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
 template <class StreamWriterPtr>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
 {
-    if (block.columns() != dag_context.result_field_types.size())
-        throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
+    RUNTIME_CHECK_MSG(
+        block.columns() == dag_context.result_field_types.size(),
+        "Output column size mismatch with field type size");
     size_t rows = block.rows();
     rows_in_blocks += rows;
     if (rows > 0)
@@ -83,13 +84,15 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
         }
         return;
     }
-    for (const auto & block : blocks)
+    while (!blocks.empty())
     {
+        const auto & block = blocks.back();
         chunk_codec_stream->encode(block, 0, block.rows());
+        blocks.pop_back();
         tracked_packet.addChunk(chunk_codec_stream->getString());
         chunk_codec_stream->clear();
     }
-    blocks.clear();
+    assert(blocks.empty());
     rows_in_blocks = 0;
     writer->write(tracked_packet.getPacket());
 }

@@ -25,8 +25,7 @@
 
 namespace DB
 {
-/// Serializes the stream of blocks and sends them to TiDB with different serialization paths.
-/// When sending data to TiDB, blocks with extra info are written into tipb::SelectResponse, then the whole tipb::SelectResponse is further serialized into mpp::MPPDataPacket.data.
+/// Serializes the stream of blocks and sends them to TiDB/TiSpark with different serialization paths.
 template <class StreamWriterPtr>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
@@ -42,10 +41,7 @@ public:
 
 private:
     template <bool send_exec_summary_at_last>
-    void batchWrite();
-
-    template <bool send_exec_summary_at_last>
-    void encodeThenWriteBlocks(const std::vector<Block> & input_blocks);
+    void encodeThenWriteBlocks();
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.

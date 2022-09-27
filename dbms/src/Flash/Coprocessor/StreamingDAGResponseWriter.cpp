@@ -55,7 +55,13 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     case tipb::EncodeType::TypeCHBlock:
         chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
         break;
+    default:
+        throw TiFlashException("Unsupported EncodeType", Errors::Coprocessor::Internal);
     }
+    /// For other encode types, we will use records_per_chunk to control the batch size sent.
+    batch_send_min_limit = dag_context.encode_type == tipb::EncodeType::TypeCHBlock
+        ? batch_send_min_limit
+        : (records_per_chunk - 1);
 }
 
 template <class StreamWriterPtr>
@@ -63,19 +69,20 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
     if (should_send_exec_summary_at_last)
     {
-        batchWrite<true>();
+        encodeThenWriteBlocks<true>();
     }
     else
     {
-        batchWrite<false>();
+        encodeThenWriteBlocks<false>();
     }
 }
 
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
-    if (block.columns() != dag_context.result_field_types.size())
-        throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
+    RUNTIME_CHECK_MSG(
+        block.columns() == dag_context.result_field_types.size(),
+        "Output column size mismatch with field type size");
     size_t rows = block.rows();
     rows_in_blocks += rows;
     if (rows > 0)
@@ -83,19 +90,19 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > (dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : records_per_chunk - 1))
-        batchWrite<false>();
+    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+        encodeThenWriteBlocks<false>();
 }
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(const std::vector<Block> & input_blocks)
+void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
     TrackedSelectResp response;
     if constexpr (send_exec_summary_at_last)
         addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
     response.setEncodeType(dag_context.encode_type);
-    if (input_blocks.empty())
+    if (blocks.empty())
     {
         if constexpr (send_exec_summary_at_last)
         {
@@ -107,19 +114,21 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(const st
     if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         /// passthrough data to a non-TiFlash node, like sending data to TiSpark
-        for (const auto & block : input_blocks)
+        while (!blocks.empty())
         {
+            const auto & block = blocks.back();
             chunk_codec_stream->encode(block, 0, block.rows());
+            blocks.pop_back();
             response.addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(response.getResponse());
     }
     else /// passthrough data to a TiDB node
     {
         Int64 current_records_num = 0;
-        for (const auto & block : input_blocks)
+        while (!blocks.empty())
         {
+            const auto & block = blocks.back();
             size_t rows = block.rows();
             for (size_t row_index = 0; row_index < rows;)
             {
@@ -134,6 +143,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(const st
                 current_records_num += (upper - row_index);
                 row_index = upper;
             }
+            blocks.pop_back();
         }
 
         if (current_records_num > 0)
@@ -141,17 +151,11 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks(const st
             response.addChunk(chunk_codec_stream->getString());
             chunk_codec_stream->clear();
         }
-        writer->write(response.getResponse());
     }
-}
 
-template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr>::batchWrite()
-{
-    encodeThenWriteBlocks<send_exec_summary_at_last>(blocks);
-    blocks.clear();
+    assert(blocks.empty());
     rows_in_blocks = 0;
+    writer->write(response.getResponse());
 }
 
 template class StreamingDAGResponseWriter<StreamWriterPtr>;
