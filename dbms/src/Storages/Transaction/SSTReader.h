@@ -19,7 +19,6 @@
 
 namespace DB
 {
-
 struct SSTReader
 {
     bool remained() const;
@@ -37,5 +36,67 @@ private:
     ColumnFamilyType type;
 };
 
+template <typename R, typename E>
+struct MultiSSTReader: SSTReader
+{
+    using Initer = std::function<std::unique_ptr<R>(const E &)>;
+
+    DISALLOW_COPY_AND_MOVE(MultiSSTReader);
+
+    bool remained() const
+    {
+        this->maybe_next_reader();
+        return proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+    }
+    BaseBuffView key() const
+    {
+        return proxy_helper->sst_reader_interfaces.fn_key(inner, type);
+    }
+    BaseBuffView value() const
+    {
+        return proxy_helper->sst_reader_interfaces.fn_value(inner, type);
+    }
+    void next()
+    {
+        this->maybe_next_reader();
+        return proxy_helper->sst_reader_interfaces.fn_next(inner, type);
+    }
+    void maybe_next_reader()
+    {
+        if (!proxy_helper->sst_reader_interfaces.fn_remained(inner, type))
+        {
+            current++;
+            if (current < args.size())
+            {
+                proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
+                inner = initer(args[current]);
+            }
+        }
+    }
+
+    MultiSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, ColumnFamilyType type_, Initer initer_, std::vector<E> && args_)
+        : proxy_helper(proxy_helper_)
+        , type(type_)
+        , initer(initer_)
+        , args(args_)
+        , current(0)
+    {
+        assert(args.size() > 0);
+        inner = initer(args[current]);
+    }
+
+    ~MultiSSTReader()
+    {
+        proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
+    }
+
+private:
+    mutable std::unique_ptr<R> inner;
+    const TiFlashRaftProxyHelper * proxy_helper;
+    ColumnFamilyType type;
+    Initer initer;
+    std::vector<E> args;
+    mutable int current;
+};
 
 } // namespace DB
