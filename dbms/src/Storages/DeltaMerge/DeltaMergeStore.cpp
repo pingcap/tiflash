@@ -964,8 +964,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
-
-    auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
+    auto log_tracing_id = getLogTracingId(*dm_context);
+    auto tracing_logger = Logger::get(log->name(), log_tracing_id);
     LOG_FMT_DEBUG(tracing_logger,
                   "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
                   keep_order,
@@ -990,11 +990,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
         after_segment_read,
-        tracing_id);
+        log_tracing_id);
 
-    String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1006,7 +1003,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                log_tracing_id);
         }
         else
         {
@@ -1022,7 +1019,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                log_tracing_id);
         }
         res.push_back(stream);
     }
@@ -1764,7 +1761,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         total_ranges += task->ranges.size();
     }
 
-    auto tracing_logger = Logger::get(log->name(), dm_context.tracing_id);
+    auto tracing_logger = Logger::get(log->name(), getLogTracingId(dm_context));
     LOG_FMT_DEBUG(
         tracing_logger,
         "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
@@ -1776,5 +1773,16 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     return tasks;
 }
 
+String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
+{
+    if (likely(!dm_ctx.tracing_id.empty()))
+    {
+        return dm_ctx.tracing_id;
+    }
+    else
+    {
+        return fmt::format("Table<{}>", physical_table_id);
+    }
+}
 } // namespace DM
 } // namespace DB
