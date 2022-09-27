@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/task/PipelineTask.h>
 
 namespace DB
@@ -21,6 +22,7 @@ PipelineTaskResult PipelineTask::execute(size_t loop_id)
 {
     try
     {
+        MemoryTrackerSetter setter(true, getMemTracker());
         switch (status)
         {
         case PipelineTaskStatus::running:
