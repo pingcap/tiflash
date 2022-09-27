@@ -12,15 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/hex.h>
 #include <Core/Field.h>
+#include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/Transaction/DatumCodec.h>
 #include <Storages/Transaction/DecodingStorageSchemaSnapshot.h>
+#include <Storages/Transaction/PartitionStreams.h>
+#include <Storages/Transaction/Region.h>
 #include <Storages/Transaction/RegionBlockReader.h>
+#include <Storages/Transaction/TiDB.h>
+#include <Storages/Transaction/TiKVKeyValue.h>
 #include <Storages/Transaction/tests/RowCodecTestUtils.h>
+#include <Storages/Transaction/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
 
 using TableInfo = TiDB::TableInfo;
 
@@ -76,10 +84,10 @@ protected:
         {
             if (table_info.is_common_handle || table_info.pk_is_handle)
             {
-                if (!table_info.columns[i].hasPriKeyFlag())
-                    value_encode_fields.emplace_back(fields[i]);
-                else
+                if (table_info.columns[i].hasPriKeyFlag())
                     key_encode_fields.emplace_back(fields[i]);
+                else
+                    value_encode_fields.emplace_back(fields[i]);
             }
             else
             {
@@ -91,7 +99,7 @@ protected:
         WriteBufferFromOwnString pk_buf;
         if (table_info.is_common_handle)
         {
-            auto & primary_index_info = table_info.getPrimaryIndexInfo();
+            const auto & primary_index_info = table_info.getPrimaryIndexInfo();
             for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
             {
                 auto idx = column_name_columns_index_map[primary_index_info.idx_cols[i].name];
@@ -164,7 +172,10 @@ protected:
                 }
                 else
                 {
-                    ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id)) << gen_error_log();
+                    if (fields_map.count(column_element.column_id) > 0)
+                        ASSERT_FIELD_EQ((*column_element.column)[row], fields_map.at(column_element.column_id)) << gen_error_log();
+                    else
+                        LOG_FMT_INFO(logger, "ignore value check for new added column, id={}, name={}", column_element.column_id, column_element.name);
                 }
             }
         }
@@ -267,6 +278,17 @@ protected:
         return table_info;
     }
 };
+
+String bytesFromHexString(std::string_view hex_str)
+{
+    assert(hex_str.size() % 2 == 0);
+    String bytes(hex_str.size() / 2, '\x00');
+    for (size_t i = 0; i < bytes.size(); ++i)
+    {
+        bytes[i] = unhex2(hex_str.data() + i * 2);
+    }
+    return bytes;
+}
 
 TEST_F(RegionBlockReaderTest, PKIsNotHandle)
 {
@@ -396,5 +418,223 @@ TEST_F(RegionBlockReaderTest, InvalidNULLRowV1)
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
 }
+
+
+TEST_F(RegionBlockReaderTest, MissingPrimaryKeyColumnRowV2)
+try
+{
+    // Mock a table
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    column4 varchar(20) DEFAULT NULL,
+    //    primary key (`column3`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    auto [table_info, fields] = getTableInfoAndFields(/*pk_col_ids*/ {3}, false, ColumnIDValue<String>(3, "hello"), ColumnIDValueNull<String>(4));
+    ASSERT_EQ(table_info.is_common_handle, false);
+    ASSERT_EQ(table_info.pk_is_handle, false);
+    ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_FALSE(table_info.getColumnInfo(4).hasPriKeyFlag());
+
+    // FIXME: actually TiDB won't encode the "NULL" for column4 into value
+    // but now the `RowEncoderV2` does not support this, we use `RegionBlockReaderTest::ReadFromRegion`
+    // to test that.
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+
+    // Mock re-create the primary key index with "column4" that contains `NULL` value
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    column4 varchar(20) NOT NULL,
+    //    primary key (`column3`, `column4`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    TableInfo new_table_info;
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    ASSERT_EQ(new_table_info.is_common_handle, false);
+    ASSERT_EQ(new_table_info.pk_is_handle, false);
+    ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_TRUE(new_table_info.getColumnInfo(4).hasPriKeyFlag());
+
+    auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
+    // FIXME: actually we need to decode the block with force_decode=true, see the
+    // comments before `encodeColumns`
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+    // // force_decode=false can not decode because there are
+    // // missing value for column with primary key flag.
+    // EXPECT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    // // force_decode=true, decode ok.
+    // EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+}
+CATCH
+
+TEST_F(RegionBlockReaderTest, MissingPrimaryKeyColumnRowV1)
+try
+{
+    // Mock a table
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    column4 varchar(20) DEFAULT NULL,
+    //    primary key (`column3`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    auto [table_info, fields] = getTableInfoAndFields(/*pk_col_ids*/ {3}, false, ColumnIDValue<String>(3, "hello"), ColumnIDValueNull<String>(4));
+    ASSERT_EQ(table_info.is_common_handle, false);
+    ASSERT_EQ(table_info.pk_is_handle, false);
+    ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_FALSE(table_info.getColumnInfo(4).hasPriKeyFlag());
+
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
+
+    // Mock re-create the primary key index with "column4" that contains `NULL` value
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    column4 varchar(20) NOT NULL,
+    //    primary key (`column3`, `column4`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    TableInfo new_table_info;
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    ASSERT_EQ(new_table_info.is_common_handle, false);
+    ASSERT_EQ(new_table_info.pk_is_handle, false);
+    ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_TRUE(new_table_info.getColumnInfo(4).hasPriKeyFlag());
+
+    auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
+}
+CATCH
+
+TEST_F(RegionBlockReaderTest, NewMissingPrimaryKeyColumnRowV2)
+try
+{
+    // Mock a table
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    primary key (`column3`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    auto [table_info, fields] = getTableInfoAndFields(/*pk_col_ids*/ {3}, false, ColumnIDValue<String>(3, "hello"));
+    ASSERT_EQ(table_info.is_common_handle, false);
+    ASSERT_EQ(table_info.pk_is_handle, false);
+    ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_ANY_THROW(table_info.getColumnInfo(4)); // not exist
+
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
+
+    // Mock re-create the primary key index with new-added "column4"
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    column4 varchar(20) NOT NULL,
+    //    primary key (`column3`, `column4`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    TableInfo new_table_info;
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    ASSERT_EQ(new_table_info.is_common_handle, false);
+    ASSERT_EQ(new_table_info.pk_is_handle, false);
+    ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_TRUE(new_table_info.getColumnInfo(4).hasPriKeyFlag());
+
+    auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
+    // force_decode=false can not decode because there are
+    // missing value for column with primary key flag.
+    EXPECT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    // force_decode=true, decode ok.
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+}
+CATCH
+
+TEST_F(RegionBlockReaderTest, NewMissingPrimaryKeyColumnRowV1)
+try
+{
+    // Mock a table
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    primary key (`column3`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    auto [table_info, fields] = getTableInfoAndFields(/*pk_col_ids*/ {3}, false, ColumnIDValue<String>(3, "hello"));
+    ASSERT_EQ(table_info.is_common_handle, false);
+    ASSERT_EQ(table_info.pk_is_handle, false);
+    ASSERT_TRUE(table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_ANY_THROW(table_info.getColumnInfo(4)); // not exist
+
+    encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
+
+    // Mock re-create the primary key index with new-added "column4"
+    // `t_case` {
+    //    column3 varchar(32) NOT NULL,
+    //    column4 varchar(20) NOT NULL,
+    //    primary key (`column3`, `column4`) /*T![clustered_index] NONCLUSTERED */
+    //    -- _tidb_rowid bigint, // hidden handle
+    // }
+    TableInfo new_table_info;
+    std::tie(new_table_info, std::ignore) = getTableInfoAndFields(/*pk_col_ids*/ {3, 4}, false, ColumnIDValueNull<String>(3), ColumnIDValueNull<String>(4));
+    ASSERT_EQ(new_table_info.is_common_handle, false);
+    ASSERT_EQ(new_table_info.pk_is_handle, false);
+    ASSERT_TRUE(new_table_info.getColumnInfo(3).hasPriKeyFlag());
+    ASSERT_TRUE(new_table_info.getColumnInfo(4).hasPriKeyFlag());
+
+    auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
+    // force_decode=false can not decode because there are
+    // missing value for column with primary key flag.
+    EXPECT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
+    // force_decode=true, decode ok.
+    EXPECT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
+}
+CATCH
+
+TEST_F(RegionBlockReaderTest, ReadFromRegion)
+try
+{
+    TableInfo table_info(R"({"cols":[
+        {"comment":"","default":null,"default_bit":null,"id":1,"name":{"L":"case_no","O":"case_no"},"offset":0,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":32,"Tp":15}},
+        {"comment":"","default":null,"default_bit":null,"id":2,"name":{"L":"p","O":"p"},"offset":1,"origin_default":null,"state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":0,"Flen":12,"Tp":15}},
+        {"comment":"","default":null,"default_bit":null,"id":3,"name":{"L":"source","O":"source"},"offset":2,"origin_default":"","state":5,"type":{"Charset":"utf8mb4","Collate":"utf8mb4_bin","Decimal":0,"Elems":null,"Flag":4099,"Flen":20,"Tp":15}}
+    ],"comment":"","id":77,"index_info":[],"is_common_handle":false,"name":{"L":"t_case","O":"t_case"},"partition":null,"pk_is_handle":false,"schema_version":62,"state":5,"tiflash_replica":{"Count":1},"update_timestamp":435984541435559947})");
+
+    RegionID region_id = 4;
+    String region_start_key(bytesFromHexString("7480000000000000FF445F720000000000FA"));
+    String region_end_key(bytesFromHexString("7480000000000000FF4500000000000000F8"));
+    auto region = makeRegion(region_id, region_start_key, region_end_key);
+    // the hex kv dump from SSTFile
+    std::vector<std::tuple<std::string_view, std::string_view>> kvs = {
+        {"7480000000000000FF4D5F728000000000FF0000010000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
+        {"7480000000000000FF4D5F728000000000FF0000010000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010031"},
+        {"7480000000000000FF4D5F728000000000FF0000020000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
+        {"7480000000000000FF4D5F728000000000FF0000020000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010032"},
+        {"7480000000000000FF4D5F728000000000FF0000030000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
+        {"7480000000000000FF4D5F728000000000FF0000030000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010033"},
+        {"7480000000000000FF4D5F728000000000FF0000040000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
+        {"7480000000000000FF4D5F728000000000FF0000040000000000FAF9F3126548ABFFFC", "508180D0BAABB3BB8606760A80000100000001010034"},
+    };
+    for (const auto & [k, v] : kvs)
+    {
+        region->insert(ColumnFamilyType::Write, TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
+    }
+
+    auto data_list_read = ReadRegionCommitCache(region, true);
+    ASSERT_TRUE(data_list_read.has_value());
+
+    auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
+    {
+        // force_decode=false can not decode because there are
+        // missing value for column with primary key flag.
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        EXPECT_FALSE(reader.read(res_block, *data_list_read, false));
+    }
+    {
+        // force_decode=true can decode the block
+        auto reader = RegionBlockReader(decoding_schema);
+        Block res_block = createBlockSortByColumnID(decoding_schema);
+        EXPECT_TRUE(reader.read(res_block, *data_list_read, true));
+        res_block.checkNumberOfRows();
+        EXPECT_EQ(res_block.rows(), 4);
+        ASSERT_COLUMN_EQ(res_block.getByName("case_no"), createColumn<String>({"1", "2", "3", "4"}));
+    }
+}
+CATCH
+
 
 } // namespace DB::tests
