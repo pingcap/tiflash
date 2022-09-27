@@ -173,7 +173,8 @@ to merge delta or split.
 #### 1. Multi-threaded IngestSST
 
 Low Priority Apply Pool size will be increased from 1 to, for example, 4 or 8,
-so that IngestSST can be parallelized.
+which is chosen automatically according to the number of CPU cores that TiFlash
+is allowed to use, so that IngestSST can be parallelized.
 
 During BR restore, TiKV utilizes full resources and causes business impacts.
 At this moment TiFlash should also utilize more resources in order to speed up
