@@ -220,8 +220,8 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
     }
     region_info.set_start_key(start_key.toString());
     region_info.set_end_key(end_key.toString());
-    *region_info.add_peers() = createPeer(1, true);
-    *region_info.add_peers() = createPeer(2, true);
+    *region_info.add_peers() = tests::createPeer(1, true);
+    *region_info.add_peers() = tests::createPeer(2, true);
     auto peer_id = 1;
     auto start_decoded_key = RecordKVFormat::decodeTiKVKey(start_key);
     auto end_decoded_key = RecordKVFormat::decodeTiKVKey(end_key);

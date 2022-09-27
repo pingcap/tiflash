@@ -180,10 +180,18 @@ struct RowEncoderV2
         /// Cache encoded individual columns.
         for (size_t i_col = 0, i_val = 0; i_col < table_info.columns.size(); i_col++)
         {
+            if (i_val == fields.size())
+                break;
+
             const auto & column_info = table_info.columns[i_col];
             const auto & field = fields[i_val];
             if ((table_info.pk_is_handle || table_info.is_common_handle) && column_info.hasPriKeyFlag())
+            {
+                // for common handle/pk is handle table,
+                // the field with primary key flag is usually encoded to key instead of value
                 continue;
+            }
+
             if (column_info.id > std::numeric_limits<typename RowV2::Types<false>::ColumnIDType>::max())
                 is_big = true;
             if (!field.isNull())
@@ -199,9 +207,6 @@ struct RowEncoderV2
                 null_column_ids.emplace(column_info.id);
             }
             i_val++;
-
-            if (i_val == fields.size())
-                break;
         }
         is_big = is_big || value_length > std::numeric_limits<RowV2::Types<false>::ValueOffsetType>::max();
 
@@ -271,53 +276,95 @@ void encodeRowV2(const TiDB::TableInfo & table_info, const std::vector<Field> & 
     RowEncoderV2(table_info, fields).encode(ss);
 }
 
+// pre-declar block
+template <bool is_big>
+bool appendRowV2ToBlockImpl(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    ColumnID pk_handle_id,
+    bool ignore_pk_if_absent,
+    bool force_decode);
+
+bool appendRowV1ToBlock(
+    const TiKVValue::Base & raw_value,
+    SortedColumnIDWithPosConstIter column_ids_iter,
+    SortedColumnIDWithPosConstIter column_ids_iter_end,
+    Block & block,
+    size_t block_column_pos,
+    const ColumnInfos & column_infos,
+    ColumnID pk_handle_id,
+    bool ignore_pk_if_absent,
+    bool force_decode);
+// pre-declar block end
+
 bool appendRowToBlock(
     const TiKVValue::Base & raw_value,
     SortedColumnIDWithPosConstIter column_ids_iter,
     SortedColumnIDWithPosConstIter column_ids_iter_end,
     Block & block,
     size_t block_column_pos,
-    const ColumnInfos & column_infos,
-    ColumnID pk_handle_id,
+    const DecodingStorageSchemaSnapshotConstPtr & schema_snapshot,
     bool force_decode)
 {
+    const ColumnInfos & column_infos = schema_snapshot->column_infos;
+    // when pk is handle, we need skip pk column when decoding value
+    ColumnID pk_handle_id = InvalidColumnID;
+    if (schema_snapshot->pk_is_handle)
+    {
+        pk_handle_id = schema_snapshot->pk_column_ids[0];
+    }
+
+    // For pk_is_handle table, the column with primary key flag is decoded from encoded key instead of encoded value.
+    // For common handle table, the column with primary key flag is (usually) decoded from encoded key. We skip
+    // filling the columns with primary key flags inside this method.
+    // For other table (non-clustered, use hidden _tidb_rowid as handle), the column with primary key flags could be
+    // changed, we need to fill missing column with default value.
+    const bool ignore_pk_if_absent = schema_snapshot->is_common_handle || schema_snapshot->pk_is_handle;
+
     switch (static_cast<UInt8>(raw_value[0]))
     {
     case static_cast<UInt8>(RowCodecVer::ROW_V2):
-        return appendRowV2ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode);
+    {
+        auto row_flag = readLittleEndian<UInt8>(&raw_value[1]);
+        bool is_big = row_flag & RowV2::BigRowMask;
+        return is_big ? appendRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, ignore_pk_if_absent, force_decode)
+                      : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, ignore_pk_if_absent, force_decode);
+    }
     default:
-        return appendRowV1ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode);
+        return appendRowV1ToBlock(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, ignore_pk_if_absent, force_decode);
     }
 }
 
-bool appendRowV2ToBlock(
-    const TiKVValue::Base & raw_value,
-    SortedColumnIDWithPosConstIter column_ids_iter,
-    SortedColumnIDWithPosConstIter column_ids_iter_end,
-    Block & block,
-    size_t block_column_pos,
-    const ColumnInfos & column_infos,
-    ColumnID pk_handle_id,
-    bool force_decode)
-{
-    UInt8 row_flag = readLittleEndian<UInt8>(&raw_value[1]);
-    bool is_big = row_flag & RowV2::BigRowMask;
-    return is_big ? appendRowV2ToBlockImpl<true>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode)
-                  : appendRowV2ToBlockImpl<false>(raw_value, column_ids_iter, column_ids_iter_end, block, block_column_pos, column_infos, pk_handle_id, force_decode);
-}
-
-inline bool addDefaultValueToColumnIfPossible(const ColumnInfo & column_info, Block & block, size_t block_column_pos, bool force_decode)
+inline bool addDefaultValueToColumnIfPossible(const ColumnInfo & column_info, Block & block, size_t block_column_pos, bool ignore_pk_if_absent, bool force_decode)
 {
     // We consider a missing column could be safely filled with NULL, unless it has not default value and is NOT NULL.
-    // This could saves lots of unnecessary schema syncs for old data with a schema that has newly added columns.
-    // for clustered index, if the pk column does not exists, it can still be decoded from the key
+    // This could saves lots of unnecessary schema syncs for old data with a newer schema that has newly added columns.
+
     if (column_info.hasPriKeyFlag())
-        return true;
+    {
+        // For clustered index or pk_is_handle, if the pk column does not exists, it can still be decoded from the key
+        if (ignore_pk_if_absent)
+            return true;
+
+        assert(!ignore_pk_if_absent);
+        if (!force_decode)
+            return false;
+        // Else non-clustered index, and not pk_is_handle, it could be a row encoded by older schema,
+        // we need to fill the column wich has primary key flag with default value.
+        // fallthrough to fill default value when force_decode
+    }
 
     if (column_info.hasNoDefaultValueFlag() && column_info.hasNotNullFlag())
     {
         if (!force_decode)
             return false;
+        // Else the row does not contain this "not null" / "no default value" column,
+        // it could be a row encoded by older schema.
+        // fallthrough to fill default value when force_decode
     }
     // not null or has no default value, tidb will fill with specific value.
     auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
@@ -334,6 +381,7 @@ bool appendRowV2ToBlockImpl(
     size_t block_column_pos,
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
+    bool ignore_pk_if_absent,
     bool force_decode)
 {
     size_t cursor = 2; // Skip the initial codec ver and row flag.
@@ -346,9 +394,10 @@ bool appendRowV2ToBlockImpl(
     decodeUInts<ColumnID, typename RowV2::Types<is_big>::ColumnIDType>(cursor, raw_value, num_null_columns, null_column_ids);
     decodeUInts<size_t, typename RowV2::Types<is_big>::ValueOffsetType>(cursor, raw_value, num_not_null_columns, value_offsets);
     size_t values_start_pos = cursor;
-    size_t id_not_null = 0, id_null = 0;
+    size_t idx_not_null = 0;
+    size_t idx_null = 0;
     // Merge ordered not null/null columns to keep order.
-    while (id_not_null < not_null_column_ids.size() || id_null < null_column_ids.size())
+    while (idx_not_null < not_null_column_ids.size() || idx_null < null_column_ids.size())
     {
         if (column_ids_iter == column_ids_iter_end)
         {
@@ -357,49 +406,58 @@ bool appendRowV2ToBlockImpl(
         }
 
         bool is_null;
-        if (id_not_null < not_null_column_ids.size() && id_null < null_column_ids.size())
-            is_null = not_null_column_ids[id_not_null] > null_column_ids[id_null];
+        if (idx_not_null < not_null_column_ids.size() && idx_null < null_column_ids.size())
+            is_null = not_null_column_ids[idx_not_null] > null_column_ids[idx_null];
         else
-            is_null = id_null < null_column_ids.size();
+            is_null = idx_null < null_column_ids.size();
 
-        auto next_datum_column_id = is_null ? null_column_ids[id_null] : not_null_column_ids[id_not_null];
-        if (column_ids_iter->first > next_datum_column_id)
+        auto next_datum_column_id = is_null ? null_column_ids[idx_null] : not_null_column_ids[idx_not_null];
+        const auto next_column_id = column_ids_iter->first;
+        if (next_column_id > next_datum_column_id)
         {
-            // extra column
+            // The next column id to read is bigger than the column id of next datum in encoded row.
+            // It means this is the datum of extra column. May happen when reading after dropping
+            // a column.
             if (!force_decode)
                 return false;
+            // Ignore the extra column and continue to parse other datum
             if (is_null)
-                id_null++;
+                idx_null++;
             else
-                id_not_null++;
+                idx_not_null++;
         }
-        else if (column_ids_iter->first < next_datum_column_id)
+        else if (next_column_id < next_datum_column_id)
         {
+            // The next column id to read is less than the column id of next datum in encoded row.
+            // It means this is the datum of missing column. May happen when reading after adding
+            // a column.
+            // Fill with default value and continue to read data for next column id.
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
                 return false;
             column_ids_iter++;
             block_column_pos++;
         }
         else
         {
-            // if pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
+            // If pk_handle_id is a valid column id, then it means the table's pk_is_handle is true
             // we can just ignore the pk value encoded in value part
-            if (unlikely(column_ids_iter->first == pk_handle_id))
+            if (unlikely(next_column_id == pk_handle_id))
             {
                 column_ids_iter++;
                 block_column_pos++;
                 if (is_null)
                 {
-                    id_null++;
+                    idx_null++;
                 }
                 else
                 {
-                    id_not_null++;
+                    idx_not_null++;
                 }
                 continue;
             }
 
+            // Parse the datum.
             auto * raw_column = const_cast<IColumn *>((block.getByPosition(block_column_pos)).column.get());
             const auto & column_info = column_infos[column_ids_iter->second];
             if (is_null)
@@ -418,15 +476,15 @@ bool appendRowV2ToBlockImpl(
                 }
                 // ColumnNullable::insertDefault just insert a null value
                 raw_column->insertDefault();
-                id_null++;
+                idx_null++;
             }
             else
             {
-                size_t start = id_not_null ? value_offsets[id_not_null - 1] : 0;
-                size_t length = value_offsets[id_not_null] - start;
+                size_t start = idx_not_null ? value_offsets[idx_not_null - 1] : 0;
+                size_t length = value_offsets[idx_not_null] - start;
                 if (!raw_column->decodeTiDBRowV2Datum(values_start_pos + start, raw_value, length, force_decode))
                     return false;
-                id_not_null++;
+                idx_not_null++;
             }
             column_ids_iter++;
             block_column_pos++;
@@ -437,7 +495,7 @@ bool appendRowV2ToBlockImpl(
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
                 return false;
         }
         column_ids_iter++;
@@ -455,6 +513,7 @@ bool appendRowV1ToBlock(
     size_t block_column_pos,
     const ColumnInfos & column_infos,
     ColumnID pk_handle_id,
+    bool ignore_pk_if_absent,
     bool force_decode)
 {
     size_t cursor = 0;
@@ -491,7 +550,7 @@ bool appendRowV1ToBlock(
         else if (column_ids_iter->first < next_field_column_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
                 return false;
             column_ids_iter++;
             block_column_pos++;
@@ -551,7 +610,7 @@ bool appendRowV1ToBlock(
         if (column_ids_iter->first != pk_handle_id)
         {
             const auto & column_info = column_infos[column_ids_iter->second];
-            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, force_decode))
+            if (!addDefaultValueToColumnIfPossible(column_info, block, block_column_pos, ignore_pk_if_absent, force_decode))
                 return false;
         }
         column_ids_iter++;
