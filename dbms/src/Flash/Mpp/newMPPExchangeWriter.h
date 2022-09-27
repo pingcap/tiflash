@@ -53,7 +53,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
         {
             if (enable_fine_grained_shuffle)
             {
-                return std::make_unique<FineGrainedShuffleWriter<MPPTunnelSetPtr>>(
+                return std::make_unique<FineGrainedShuffleWriter<StreamWriterPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
@@ -64,7 +64,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             }
             else
             {
-                return std::make_unique<HashPartitionWriter<MPPTunnelSetPtr>>(
+                return std::make_unique<HashPartitionWriter<StreamWriterPtr>>(
                     writer,
                     partition_col_ids,
                     partition_col_collators,
@@ -76,7 +76,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
         else
         {
             RUNTIME_CHECK(!enable_fine_grained_shuffle);
-            return std::make_unique<BroadcastOrPassThroughWriter<MPPTunnelSetPtr>>(
+            return std::make_unique<BroadcastOrPassThroughWriter<StreamWriterPtr>>(
                 writer,
                 batch_send_min_limit,
                 should_send_exec_summary_at_last,
