@@ -15,8 +15,9 @@
 #include <Flash/tests/bench_exchange.h>
 #include <fmt/core.h>
 
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp> // to include the implementation of StreamingDAGResponseWriter
 #include <Flash/Mpp/ExchangeReceiver.cpp> // to include the implementation of ExchangeReceiver
+#include <Flash/Mpp/FineGrainedShuffleWriter.cpp> // to include the implementation of FineGrainedShuffleWriter
+#include <Flash/Mpp/HashParitionWriter.cpp> // to include the implementation of HashParitionWriter
 #include <Flash/Mpp/MPPTunnel.cpp> // to include the implementation of MPPTunnel
 #include <Flash/Mpp/MPPTunnelSet.cpp> // to include the implementation of MPPTunnelSet
 #include <atomic>
@@ -284,13 +285,10 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(
         if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
         {
             std::unique_ptr<DAGResponseWriter> response_writer(
-                new StreamingDAGResponseWriter<MockTunnelSetPtr, true>(
+                new FineGrainedShuffleWriter<MockTunnelSetPtr>(
                     tunnel_set,
                     {0, 1, 2},
                     TiDB::TiDBCollators(3),
-                    tipb::Hash,
-                    -1,
-                    -1,
                     true,
                     *dag_context,
                     fine_grained_shuffle_stream_count,
@@ -300,17 +298,13 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(
         else
         {
             std::unique_ptr<DAGResponseWriter> response_writer(
-                new StreamingDAGResponseWriter<MockTunnelSetPtr, false>(
+                new HashParitionWriter<MockTunnelSetPtr>(
                     tunnel_set,
                     {0, 1, 2},
                     TiDB::TiDBCollators(3),
-                    tipb::Hash,
-                    -1,
                     -1,
                     true,
-                    *dag_context,
-                    fine_grained_shuffle_stream_count,
-                    fine_grained_shuffle_batch_size));
+                    *dag_context));
             send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
     }
@@ -327,13 +321,10 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std:
         if (enableFineGrainedShuffle(fine_grained_shuffle_stream_count))
         {
             std::unique_ptr<DAGResponseWriter> response_writer(
-                new StreamingDAGResponseWriter<MockTunnelSetPtr, true>(
+                new FineGrainedShuffleWriter<MockTunnelSetPtr>(
                     tunnel_set,
                     {0, 1, 2},
                     TiDB::TiDBCollators(3),
-                    tipb::Hash,
-                    -1,
-                    -1,
                     true,
                     *dag_context,
                     fine_grained_shuffle_stream_count,
@@ -343,17 +334,13 @@ BlockInputStreamPtr SenderHelper::buildUnionStream(size_t total_rows, const std:
         else
         {
             std::unique_ptr<DAGResponseWriter> response_writer(
-                new StreamingDAGResponseWriter<MockTunnelSetPtr, false>(
+                new HashParitionWriter<MockTunnelSetPtr>(
                     tunnel_set,
                     {0, 1, 2},
                     TiDB::TiDBCollators(3),
-                    tipb::Hash,
-                    -1,
                     -1,
                     true,
-                    *dag_context,
-                    fine_grained_shuffle_stream_count,
-                    fine_grained_shuffle_batch_size));
+                    *dag_context));
             send_streams.push_back(std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), /*req_id=*/""));
         }
     }

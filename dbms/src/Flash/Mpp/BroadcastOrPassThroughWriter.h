@@ -14,25 +14,20 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Core/Types.h>
-#include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
-/// Serializes the stream of blocks and sends them to TiDB/TiSpark with different serialization paths.
 template <class StreamWriterPtr>
-class StreamingDAGResponseWriter : public DAGResponseWriter
+class BroadcastOrPassThroughWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(
+    BroadcastOrPassThroughWriter(
         StreamWriterPtr writer_,
-        Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
@@ -44,7 +39,7 @@ private:
     void encodeThenWriteBlocks();
 
     Int64 batch_send_min_limit;
-    bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
+    bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
