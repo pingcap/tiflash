@@ -16,15 +16,12 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Executor/DataStreamExecutor.h>
-#include <Flash/Mpp/MPPReceiverSet.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/Planner/Planner.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/executeQuery.h>
-#include <Parsers/makeDummyQuery.h>
 
 namespace ProfileEvents
 {
@@ -55,7 +52,7 @@ QueryExecutorPtr executeQuery(
     bool internal,
     QueryProcessingStage::Enum stage)
 {
-    if (context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
+    if (context.isMPPTask() && context.getSettingsRef().enable_planner && context.getSettingsRef().enable_pipeline)
     {
         PlanQuerySource plan(context);
         if (plan.isSupportPipeline())
@@ -68,26 +65,11 @@ QueryExecutorPtr executeQuery(
 
             ProfileEvents::increment(ProfileEvents::Query);
             context.setQueryContext(context);
-            ProcessList::EntryPtr process_list_entry = context.getProcessList().insert(
-                query,
-                ast.get(),
-                context.getClientInfo(),
-                settings);
-            context.setProcessListElement(&process_list_entry->get());
-
-            // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
-            // so that we can propagate current_memory_tracker into them.
-            if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
-            {
-                if (context.getDAGContext()->tunnel_set)
-                    context.getDAGContext()->tunnel_set->updateMemTracker();
-                if (context.getDAGContext()->getMppReceiverSet())
-                    context.getDAGContext()->getMppReceiverSet()->setUpConnection();
-            }
 
             auto interpreter = plan.interpreter(context, stage);
             const auto * planner = static_cast<Planner *>(interpreter.get());
-            return planner->pipelineExecute(process_list_entry);
+
+            return planner->pipelineExecute(context.getDAGContext()->getProcessListEntry());
         }
     }
     return std::make_shared<DataStreamExecutor>(executeQueryAsStream(context, internal, stage));

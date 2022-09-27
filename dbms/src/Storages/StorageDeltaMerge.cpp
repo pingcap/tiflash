@@ -704,7 +704,7 @@ std::vector<SourcePtr> StorageDeltaMerge::readSources(
                 fb.append(range.toDebugString());
             },
             ",");
-        LOG_FMT_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
+        LOG_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
@@ -752,7 +752,7 @@ std::vector<SourcePtr> StorageDeltaMerge::readSources(
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
 
-    LOG_FMT_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), sources.size());
+    LOG_TRACE(tracing_logger, "[ranges: {}] [sources: {}]", ranges.size(), sources.size());
 
     return sources;
 }

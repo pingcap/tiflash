@@ -141,7 +141,7 @@ bool MPPTunnel::asyncWrite(const mpp::MPPDataPacket & data)
             throw Exception(fmt::format("write to tunnel which is already closed."));
     }
 
-    auto res = tunnel_sender->push(data);
+    auto res = tunnel_sender->nativePush(data);
     switch (res)
     {
     case MPMCQueueResult::OK:

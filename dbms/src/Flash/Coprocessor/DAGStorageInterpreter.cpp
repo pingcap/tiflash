@@ -413,7 +413,7 @@ void DAGStorageInterpreter::executeImpl(TransformsPipeline & pipeline)
     std::vector<SourcePtr> remote_sources;
     if (!remote_requests.empty())
     {
-        remote_sources = buildRemoteSources(std::move(remote_requests));
+        remote_sources = buildRemoteSources(remote_requests);
         sources.insert(sources.end(), remote_sources.cbegin(), remote_sources.cend());
     }
 
@@ -541,28 +541,9 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     size_t remote_read_sources_start_index,
     TransformsPipeline & pipeline)
 {
-    auto original_source_columns = analyzer->getCurrentInputColumns();
-
-    ExpressionActionsChain chain;
-    analyzer->initChain(chain, original_source_columns);
-
-    // execute timezone cast or duration cast if needed for local table scan
-    if (addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, chain, table_scan))
+    auto [has_cast, extra_cast, project_for_cop_read] = addExtraCastsAfterTs(*analyzer, is_need_add_cast_column, table_scan);
+    if (has_cast)
     {
-        ExpressionActionsPtr extra_cast = chain.getLastActions();
-        chain.finalize();
-        chain.clear();
-
-        // After `addExtraCastsAfterTs`, analyzer->getCurrentInputColumns() has been modified.
-        // For remote read, `timezone cast and duration cast` had been pushed down, don't need to execute cast expressions.
-        // To keep the schema of local read sources and remote read sources the same, do project action for remote read sources.
-        NamesWithAliases project_for_remote_read;
-        const auto & after_cast_source_columns = analyzer->getCurrentInputColumns();
-        for (size_t i = 0; i < after_cast_source_columns.size(); ++i)
-        {
-            project_for_remote_read.emplace_back(original_source_columns[i].name, after_cast_source_columns[i].name);
-        }
-        assert(!project_for_remote_read.empty());
         assert(remote_read_sources_start_index <= pipeline.transforms_vec.size());
         size_t i = 0;
         // local sources
@@ -574,10 +555,6 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
         // remote sources
         if (i < pipeline.transforms_vec.size())
         {
-            ExpressionActionsPtr project_for_cop_read = std::make_shared<ExpressionActions>(
-                pipeline.transforms_vec[i]->getHeader().getColumnsWithTypeAndName(),
-                context.getSettingsRef());
-            project_for_cop_read->add(ExpressionAction::project(project_for_remote_read));
             while (i < pipeline.transforms_vec.size())
             {
                 auto & transforms = pipeline.transforms_vec[i++];
@@ -682,45 +659,14 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
 }
 
 
-std::vector<SourcePtr> DAGStorageInterpreter::buildRemoteSources(std::vector<RemoteRequest> && remote_requests)
+std::vector<SourcePtr> DAGStorageInterpreter::buildRemoteSources(const std::vector<RemoteRequest> & remote_requests)
 {
-    assert(!remote_requests.empty());
-    DAGSchema & schema = remote_requests[0].schema;
-#ifndef NDEBUG
-    auto schema_match = [&schema](const DAGSchema & other) {
-        if (schema.size() != other.size())
-            return false;
-        for (size_t i = 0; i < schema.size(); ++i)
-        {
-            if (schema[i].second.tp != other[i].second.tp || schema[i].second.flag != other[i].second.flag)
-                return false;
-        }
-        return true;
-    };
-    for (size_t i = 1; i < remote_requests.size(); ++i)
-    {
-        if (!schema_match(remote_requests[i].schema))
-            throw Exception("Schema mismatch between different partitions for partition table");
-    }
-#endif
-    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
-    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    std::vector<pingcap::coprocessor::copTask> all_tasks;
-    for (const auto & remote_request : remote_requests)
-    {
-        pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
-        remote_request.dag_request.SerializeToString(&(req->data));
-        req->tp = pingcap::coprocessor::ReqType::DAG;
-        req->start_ts = context.getSettingsRef().read_tso;
-        req->schema_version = context.getSettingsRef().schema_version;
-
-        pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-        pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-        auto tasks = pingcap::coprocessor::buildCopTasks(bo, cluster, remote_request.key_ranges, req, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-        all_tasks.insert(all_tasks.end(), tasks.begin(), tasks.end());
-    }
-
+    std::vector<pingcap::coprocessor::copTask> all_tasks = buildCopTasks(remote_requests);
     std::vector<SourcePtr> sources;
+
+    const DAGSchema & schema = remote_requests[0].schema;
+    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
     size_t task_per_thread = all_tasks.size() / concurrent_num;
     size_t rest_task = all_tasks.size() % concurrent_num;
@@ -999,10 +945,9 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
 
 std::vector<SourcePtr> DAGStorageInterpreter::buildLocalSources(size_t max_block_size)
 {
-    const DAGContext & dag_context = *context.getDAGContext();
     size_t total_local_region_num = mvcc_query_info->regions_query_info.size();
     if (total_local_region_num == 0)
-        return;
+        return {};
     const auto table_query_infos = generateSelectQueryInfos();
     RUNTIME_CHECK(table_query_infos.size() == 1);
     const auto & table_query_info = *table_query_infos.cbegin();
@@ -1020,7 +965,6 @@ std::vector<SourcePtr> DAGStorageInterpreter::buildLocalSources(size_t max_block
     {
         try
         {
-            QueryProcessingStage::Enum from_stage = QueryProcessingStage::FetchColumns;
             auto sources = storage->readSources(required_columns, query_info, context, max_block_size, max_streams);
 
             injectFailPointForLocalRead(query_info);
@@ -1037,7 +981,6 @@ std::vector<SourcePtr> DAGStorageInterpreter::buildLocalSources(size_t max_block
             if (dag_context.isBatchCop() || dag_context.isMPPTask())
             {
                 // clean all streams from local because we are not sure the correctness of those streams
-                pipeline.streams.clear();
                 if (likely(checkRetriableForBatchCopOrMPP(table_id, query_info, e, num_allow_retry)))
                     continue;
                 else

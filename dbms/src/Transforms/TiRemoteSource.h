@@ -64,34 +64,37 @@ class TiRemoteSource : public Source
     };
     FetchResult fetchRemoteResult()
     {
-        auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
-        if (result.meet_error)
+        while(true)
         {
-            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
-            throw Exception(result.error_msg);
+            auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
+            if (result.meet_error)
+            {
+                LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);
+                throw Exception(result.error_msg);
+            }
+            if (result.eof)
+                return FetchResult::finished;
+            if (result.await)
+                return FetchResult::notFetched;
+            if (result.resp != nullptr && result.resp->has_error())
+            {
+                LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
+                throw Exception(result.resp->error().DebugString());
+            }
+    
+            const auto & decode_detail = result.decode_detail;
+    
+            total_rows += decode_detail.rows;
+            LOG_TRACE(
+                log,
+                "recv {} rows from remote for {}, total recv row num: {}",
+                decode_detail.rows,
+                result.req_info,
+                total_rows);
+            if (decode_detail.rows > 0)
+                return FetchResult::fetched;
+            // else continue
         }
-        if (result.eof)
-            return FetchResult::finished;
-        if (result.await)
-            return FetchResult::notFetched;
-        if (result.resp != nullptr && result.resp->has_error())
-        {
-            LOG_FMT_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
-            throw Exception(result.resp->error().DebugString());
-        }
-
-        const auto & decode_detail = result.decode_detail;
-
-        total_rows += decode_detail.rows;
-        LOG_FMT_TRACE(
-            log,
-            "recv {} rows from remote for {}, total recv row num: {}",
-            decode_detail.rows,
-            result.req_info,
-            total_rows);
-        if (decode_detail.rows == 0)
-            return fetchRemoteResult();
-        return FetchResult::fetched;
     }
 
 public:

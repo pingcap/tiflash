@@ -120,6 +120,17 @@ public:
         return ret;
     }
 
+    template <typename U>
+    MPMCQueueResult nativePush(U && u)
+    {
+        auto ret = send_queue.tryPush(std::forward<U>(u));
+        if (ret == MPMCQueueResult::OK)
+        {
+            kickCompletionQueue();
+        }
+        return ret;
+    }
+
     /// Cancel the send queue, and set the cancel reason
     bool cancelWith(const String & reason)
     {

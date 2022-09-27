@@ -132,7 +132,7 @@ std::unique_ptr<IBlockInputStream> AggregateStore::merge()
             input_streams.emplace_back(temporary_inputs.back()->block_in);
         }
 
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "Will merge {} temporary files of size {:.2f} MiB compressed, {:.2f} MiB uncompressed.",
             files.files.size(),
