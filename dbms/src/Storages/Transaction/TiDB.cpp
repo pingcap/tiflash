@@ -617,13 +617,8 @@ catch (const Poco::Exception & e)
 ///////////////////////
 
 IndexColumnInfo::IndexColumnInfo(Poco::JSON::Object::Ptr json)
-<<<<<<< HEAD
     : length(0)
     , offset(0)
-=======
-    : offset()
-    , length()
->>>>>>> ca3e1c6be8 (Fix an invalid default value cause bootstrap failed (#4916))
 {
     deserialize(json);
 }
