@@ -46,6 +46,24 @@ void prepareForExecute(Context & context)
     quota.checkExceeded(time(nullptr));
 }
 
+ProcessList::EntryPtr getProcessListEntry(Context & context, const DAGContext & dag_context)
+{
+    if (dag_context.is_mpp_task)
+    {
+        /// for MPPTask, process list entry is created in MPPTask::prepare()
+        RUNTIME_ASSERT(dag_context.getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
+        return dag_context.getProcessListEntry();
+    }
+    else
+    {
+        RUNTIME_ASSERT(dag_context.getProcessListEntry() == nullptr, "process list entry for non-MPP must be nullptr");
+        return setProcessListElement(
+            context,
+            dag_context.dummy_query_string,
+            dag_context.dummy_ast.get());
+    }
+}
+
 BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
@@ -55,35 +73,24 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
 
     prepareForExecute(context);
 
-    if (!internal)
+    ProcessList::EntryPtr process_list_entry;
+    if (likely(!internal))
+    {
+        process_list_entry = getProcessListEntry(context, dag_context);
         logQuery(dag.str(context.getSettingsRef().log_queries_cut_to_length), context, logger);
+    }
+
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
     auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
     BlockIO res = interpreter->execute();
+    if (likely(process_list_entry))
+        (*process_list_entry)->setQueryStreams(res);
 
-    // For internal == true, no need to set up the resource usage tracker.
-    if (!internal)
-    {
-        /// Hold element of process list till end of query execution.
-        if (dag_context.is_mpp_task)
-        {
-            /// for MPPTask, process list entry is created in MPPTask::prepare()
-            RUNTIME_ASSERT(dag_context.getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
-            res.process_list_entry = dag_context.getProcessListEntry();
-        }
-        else
-        {
-            RUNTIME_ASSERT(dag_context.getProcessListEntry() == nullptr, "process list entry for non-MPP must be nullptr");
-            res.process_list_entry = setProcessListElement(
-                context,
-                dag_context.dummy_query_string,
-                dag_context.dummy_ast.get());
-        }
-        (*res.process_list_entry)->setQueryStreams(res);
-    }
+    /// Hold element of process list till end of query execution.
+    res.process_list_entry = process_list_entry;
 
     prepareForInputStream(context, QueryProcessingStage::Complete, res.in);
-    if (!internal)
+    if (likely(!internal))
         logQueryPipeline(logger, res.in);
 
     dag_context.attachBlockIO(res);
