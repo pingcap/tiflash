@@ -117,7 +117,7 @@ struct Pipe
 {
     union
     {
-        int fds[2];
+        int fds[2]{};
         struct
         {
             int read_fd;
@@ -190,12 +190,12 @@ static void writeSignalIDtoSignalPipe(int sig)
 }
 
 /** Signal handler for HUP / USR1 */
-static void closeLogsSignalHandler(int sig, siginfo_t * info, void * context)
+static void closeLogsSignalHandler(int sig, siginfo_t * /*info*/, void * /*context*/)
 {
     writeSignalIDtoSignalPipe(sig);
 }
 
-static void terminateRequestedSignalHandler(int sig, siginfo_t * info, void * context)
+static void terminateRequestedSignalHandler(int sig, siginfo_t * /*info*/, void * /*context*/)
 {
     writeSignalIDtoSignalPipe(sig);
 }
@@ -298,7 +298,7 @@ public:
     {
     }
 
-    void run()
+    void run() override
     {
         setThreadName("SignalListener");
 
@@ -604,7 +604,7 @@ static void terminate_handler()
             log << "Terminate called after throwing an instance of " << (status == 0 ? dem : name) << std::endl;
 
             if (status == 0)
-                free(dem);
+                free(dem); // NOLINT(cppcoreguidelines-no-malloc)
         }
 
         already_printed_stack_trace = true;
@@ -674,7 +674,7 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     }
     catch (...)
     {
-        LOG_FMT_WARNING(logger, "when creating {}, {}", path, DB::getCurrentExceptionMessage(true));
+        LOG_WARNING(logger, "when creating {}, {}", path, DB::getCurrentExceptionMessage(true));
     }
     return false;
 }
@@ -883,7 +883,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         // only loggers created after buildLoggers() need to change properties, types of channel in them must be ReloadableSplitterChannel
         if (typeid(*cur_logger_channel) == typeid(Poco::ReloadableSplitterChannel))
         {
-            Poco::ReloadableSplitterChannel * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
+            auto * splitter_channel = dynamic_cast<Poco::ReloadableSplitterChannel *>(cur_logger_channel);
             splitter_channel->changeProperties(config);
         }
     }
@@ -1010,7 +1010,9 @@ void BaseDaemon::initialize(Application & self)
 
     /// Write core dump on crash.
     {
-        struct rlimit rlim;
+        struct rlimit rlim
+        {
+        };
         if (getrlimit(RLIMIT_CORE, &rlim))
             throw Poco::Exception("Cannot getrlimit");
         /// 1 GiB by default. If more - it writes to disk too long.
@@ -1116,7 +1118,9 @@ void BaseDaemon::initialize(Application & self)
     /// Setup signal handlers.
     auto add_signal_handler =
         [](const std::vector<int> & signals, signal_function handler) {
-            struct sigaction sa;
+            struct sigaction sa
+            {
+            };
             memset(&sa, 0, sizeof(sa));
             sa.sa_sigaction = handler;
             sa.sa_flags = SA_SIGINFO;

@@ -122,7 +122,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
     const WritingFilesSnapshot & writing_files) const
 {
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-    LOG_FMT_TRACE(log, "{} input size of candidates: {}", storage_name, page_files.size());
+    LOG_TRACE(log, "{} input size of candidates: {}", storage_name, page_files.size());
 #endif
 
     /**
@@ -176,7 +176,7 @@ DataCompactor<SnapshotPtr>::selectCandidateFiles( // keep readable indent
                 || config.gc_max_valid_rate >= 1.0 // all page file will be picked
             );
 #ifdef PAGE_STORAGE_UTIL_DEBUGGGING
-        LOG_FMT_TRACE(log, "{} {} [valid rate={:.2f}] [file size={}]", storage_name, page_file.toString(), valid_rate, file_size);
+        LOG_TRACE(log, "{} {} [valid rate={:.2f}] [file size={}]", storage_name, page_file.toString(), valid_rate, file_size);
 #endif
         if (!is_candidate)
         {

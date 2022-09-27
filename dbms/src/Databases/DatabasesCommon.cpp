@@ -351,7 +351,7 @@ void cleanupTables(IDatabase & database, const String & db_name, const Tables & 
     for (const auto & table : tables)
     {
         const String & table_name = table.first;
-        LOG_FMT_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", db_name, table_name);
+        LOG_WARNING(log, "Detected startup failed table {}.{}, removing it from TiFlash", db_name, table_name);
         const String table_meta_path = database.getTableMetadataPath(table_name);
         if (!table_meta_path.empty())
         {

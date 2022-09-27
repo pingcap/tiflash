@@ -194,7 +194,7 @@ void WriteLimiter::request(Int64 bytes)
             }
         }
     }
-    LOG_FMT_TRACE(log, "pending_us {} wait_times {} pending_count {} rate_limit_per_sec {}", sw_pending.elapsed() / 1000, wait_times, req_queue.size(), refill_balance_per_period * 1000 / refill_period_ms);
+    LOG_TRACE(log, "pending_us {} wait_times {} pending_count {} rate_limit_per_sec {}", sw_pending.elapsed() / 1000, wait_times, req_queue.size(), refill_balance_per_period * 1000 / refill_period_ms);
 }
 
 size_t WriteLimiter::setStop()
@@ -308,7 +308,7 @@ Int64 ReadLimiter::getAvailableBalance()
     Int64 bytes = get_read_bytes();
     if (unlikely(bytes < last_stat_bytes))
     {
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "last_stat: {} current_stat: {}",
             last_stat_bytes,
@@ -555,7 +555,7 @@ Int64 IORateLimiter::getReadBytes(const std::string & fname [[maybe_unused]])
         boost::split(values, s, boost::is_any_of(":"));
         if (values.size() != 2)
         {
-            LOG_FMT_WARNING(log, "readTaskIOInfo: {} is invalid.", s);
+            LOG_WARNING(log, "readTaskIOInfo: {} is invalid.", s);
             continue;
         }
         if (values[0] == "read_bytes")
