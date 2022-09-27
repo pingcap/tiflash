@@ -170,6 +170,8 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                     {
                         LOG_FMT_INFO(log, "clear region {} old range {} before apply snapshot of new range {}", region_id, old_key_range.toDebugString(), new_key_range.toDebugString());
                         dm_storage->deleteRange(old_key_range, context.getSettingsRef());
+                        // flush to disk, because ingestFiles may flush another range, and leave this delete range not flushed.
+                        dm_storage->flushCache(context, old_key_range, /*try_until_succeed*/ true);
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
