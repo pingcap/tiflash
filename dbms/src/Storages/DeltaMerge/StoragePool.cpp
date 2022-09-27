@@ -510,13 +510,13 @@ PageStorageRunMode StoragePool::restore()
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_TRACE(logger, "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
-                          " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
-                  static_cast<UInt8>(run_mode),
-                  ns_id,
-                  max_log_page_id,
-                  max_data_page_id,
-                  max_meta_page_id);
+    LOG_TRACE(logger, "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
+                      " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
+              static_cast<UInt8>(run_mode),
+              ns_id,
+              max_log_page_id,
+              max_data_page_id,
+              max_meta_page_id);
     return run_mode;
 }
 
@@ -664,11 +664,11 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
             break;
         }
         // else there is a DTFile with that id, continue to acquire a new ID.
-        LOG_FMT_WARNING(logger,
-                        "The DTFile is already exists, continute to acquire another ID. [call={}][path={}] [id={}]",
-                        who,
-                        existed_path,
-                        dtfile_id);
+        LOG_WARNING(logger,
+                    "The DTFile is already exists, continute to acquire another ID. [call={}][path={}] [id={}]",
+                    who,
+                    existed_path,
+                    dtfile_id);
     } while (true);
     return dtfile_id;
 }

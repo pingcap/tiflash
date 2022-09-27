@@ -91,7 +91,7 @@ std::string HTTPDictionarySource::getUpdateFieldAndDate()
 
 BlockInputStreamPtr HTTPDictionarySource::loadAll()
 {
-    LOG_FMT_TRACE(log, "loadAll {}", toString());
+    LOG_TRACE(log, "loadAll {}", toString());
     Poco::URI uri(url);
     auto in_ptr = std::make_unique<ReadWriteBufferFromHTTP>(uri, Poco::Net::HTTPRequest::HTTP_GET, ReadWriteBufferFromHTTP::OutStreamCallback(), timeouts);
     auto input_stream = context.getInputFormat(format, *in_ptr, sample_block, max_block_size);
@@ -101,7 +101,7 @@ BlockInputStreamPtr HTTPDictionarySource::loadAll()
 BlockInputStreamPtr HTTPDictionarySource::loadUpdatedAll()
 {
     std::string url_update = getUpdateFieldAndDate();
-    LOG_FMT_TRACE(log, "loadUpdatedAll {}", url_update);
+    LOG_TRACE(log, "loadUpdatedAll {}", url_update);
     Poco::URI uri(url_update);
     auto in_ptr = std::make_unique<ReadWriteBufferFromHTTP>(uri, Poco::Net::HTTPRequest::HTTP_GET, ReadWriteBufferFromHTTP::OutStreamCallback(), timeouts);
     auto input_stream = context.getInputFormat(format, *in_ptr, sample_block, max_block_size);
@@ -110,7 +110,7 @@ BlockInputStreamPtr HTTPDictionarySource::loadUpdatedAll()
 
 BlockInputStreamPtr HTTPDictionarySource::loadIds(const std::vector<UInt64> & ids)
 {
-    LOG_FMT_TRACE(log, "loadIds {} size = {}", toString(), ids.size());
+    LOG_TRACE(log, "loadIds {} size = {}", toString(), ids.size());
 
     ReadWriteBufferFromHTTP::OutStreamCallback out_stream_callback = [&](std::ostream & ostr) {
         WriteBufferFromOStream out_buffer(ostr);
@@ -128,7 +128,7 @@ BlockInputStreamPtr HTTPDictionarySource::loadKeys(
     const Columns & key_columns,
     const std::vector<size_t> & requested_rows)
 {
-    LOG_FMT_TRACE(log, "loadKeys {} size = {}", toString(), requested_rows.size());
+    LOG_TRACE(log, "loadKeys {} size = {}", toString(), requested_rows.size());
 
     ReadWriteBufferFromHTTP::OutStreamCallback out_stream_callback = [&](std::ostream & ostr) {
         WriteBufferFromOStream out_buffer(ostr);

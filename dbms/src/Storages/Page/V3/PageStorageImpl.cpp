@@ -147,7 +147,7 @@ DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceId ns_id, PageId page_id, S
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_WARNING(log, "{}", e.message());
+        LOG_WARNING(log, "{}", e.message());
         return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
     }
 }

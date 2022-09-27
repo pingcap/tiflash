@@ -145,6 +145,14 @@ public:
             sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
     }
 
+    ExpressionActions(const NamesAndTypes & input_columns_, const Settings & settings_)
+        : input_columns(input_columns_.cbegin(), input_columns_.cend())
+        , settings(settings_)
+    {
+        for (const auto & input_elem : input_columns)
+            sample_block.insert(ColumnWithTypeAndName(nullptr, input_elem.type, input_elem.name));
+    }
+
     /// For constant columns the columns themselves can be contained in `input_columns_`.
     ExpressionActions(const ColumnsWithTypeAndName & input_columns_, const Settings & settings_)
         : settings(settings_)

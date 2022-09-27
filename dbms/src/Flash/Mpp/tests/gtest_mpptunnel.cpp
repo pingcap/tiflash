@@ -67,9 +67,9 @@ struct MockLocalReader
         if (local_sender)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            LOG_FMT_TRACE(local_sender->getLogger(), "before mocklocalreader invoking consumerFinish!");
+            LOG_TRACE(local_sender->getLogger(), "before mocklocalreader invoking consumerFinish!");
             local_sender->consumerFinish("Receiver closed");
-            LOG_FMT_TRACE(local_sender->getLogger(), "after mocklocalreader invoking consumerFinish!");
+            LOG_TRACE(local_sender->getLogger(), "after mocklocalreader invoking consumerFinish!");
         }
         thread_manager->wait();
     }
@@ -528,7 +528,7 @@ try
     GTEST_ASSERT_EQ(getTunnelSenderConsumerFinishedFlag(mpp_tunnel_ptr->getTunnelSender()), true);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec.size(), 1);
     GTEST_ASSERT_EQ(local_reader_ptr->write_packet_vec[0], "First");
-    LOG_FMT_TRACE(mpp_tunnel_ptr->getLogger(), "basic logic done!");
+    LOG_TRACE(mpp_tunnel_ptr->getLogger(), "basic logic done!");
 }
 CATCH
 

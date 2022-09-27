@@ -241,7 +241,7 @@ public:
         {
             if (!storage.no_destination)
             {
-                LOG_FMT_TRACE(storage.log, "Writing block with {} rows, {} bytes directly.", rows, bytes);
+                LOG_TRACE(storage.log, "Writing block with {} rows, {} bytes directly.", rows, bytes);
                 storage.writeBlockToDestination(block, destination);
             }
             return;
@@ -340,7 +340,7 @@ void StorageBuffer::startup()
 {
     if (context.getSettingsRef().readonly)
     {
-        LOG_FMT_WARNING(log, "Storage {} is run with readonly settings, it will not be able to insert data. Set apropriate system_profile to fix this.", getName());
+        LOG_WARNING(log, "Storage {} is run with readonly settings, it will not be able to insert data. Set apropriate system_profile to fix this.", getName());
     }
 
     flush_thread = std::thread(&StorageBuffer::flushThread, this);
@@ -469,7 +469,7 @@ void StorageBuffer::flushBuffer(Buffer & buffer, bool check_thresholds)
     buffer.data.swap(block_to_write);
     buffer.first_write_time = 0;
 
-    LOG_FMT_TRACE(log, "Flushing buffer with {} rows, {} bytes, age {} seconds.", rows, bytes, time_passed);
+    LOG_TRACE(log, "Flushing buffer with {} rows, {} bytes, age {} seconds.", rows, bytes, time_passed);
 
     if (no_destination)
         return;
@@ -542,7 +542,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
     }
 
     if (columns_intersection.size() != block.columns())
-        LOG_FMT_WARNING(log, "Not all columns from block in buffer exist in destination table {}.{}. Some columns are discarded.", destination_database, destination_table);
+        LOG_WARNING(log, "Not all columns from block in buffer exist in destination table {}.{}. Some columns are discarded.", destination_database, destination_table);
 
     auto list_of_columns = std::make_shared<ASTExpressionList>();
     insert->columns = list_of_columns;
