@@ -116,7 +116,7 @@ struct LowerUpperUTF8Impl
                        ColumnString::Chars_t & res_data,
                        ColumnString::Offsets & res_offsets);
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 
     static void constant(const std::string & data, std::string & res_data);
 
@@ -183,7 +183,7 @@ public:
         else if (const ColumnFixedString * col = checkAndGetColumn<ColumnFixedString>(column.get()))
         {
             auto col_res = ColumnFixedString::create(col->getN());
-            Impl::vector_fixed(col->getChars(), col->getN(), col_res->getChars());
+            Impl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
         else
@@ -203,7 +203,7 @@ struct TiDBLowerUpperUTF8Impl
                        ColumnString::Chars_t & res_data,
                        ColumnString::Offsets & res_offsets);
 
-    static void vector_fixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
+    static void vectorFixed(const ColumnString::Chars_t & data, size_t n, ColumnString::Chars_t & res_data);
 
     static void constant(const std::string & data, std::string & res_data);
 
@@ -228,7 +228,7 @@ struct TiDBLowerUpperBinaryImpl
         throw Exception("the TiDB function of lower or upper for binary should do noting.");
     }
 
-    static void vector_fixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
+    static void vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
     {
         throw Exception("the TiDB function of lower or upper for binary should do noting.");
     }

@@ -79,7 +79,8 @@ private:
         const ExpressionActionsPtr & expression_actions_ptr,
         Names & key_names,
         TiDB::TiDBCollators & collators,
-        AggregateDescriptions & aggregate_descriptions);
+        AggregateDescriptions & aggregate_descriptions,
+        bool is_final_agg);
     void executeProject(DAGPipeline & pipeline, NamesWithAliases & project_cols);
     void executeExchangeSender(DAGPipeline & pipeline);
 
