@@ -113,8 +113,10 @@ namespace DB
         F(type_delta_merge_manual, {"type", "delta_merge_manual"}),                                                                       \
         F(type_delta_compact, {"type", "delta_compact"}),                                                                                 \
         F(type_delta_flush, {"type", "delta_flush"}),                                                                                     \
-        F(type_seg_split, {"type", "seg_split"}), F(type_seg_split_fg, {"type", "seg_split_fg"}),                                         \
-        F(type_seg_merge, {"type", "seg_merge"}), F(type_seg_merge_fg, {"type", "seg_merge_fg"}),                                         \
+        F(type_seg_split_bg, {"type", "seg_split_bg"}),                                                                                   \
+        F(type_seg_split_fg, {"type", "seg_split_fg"}),                                                                                   \
+        F(type_seg_split_ingest, {"type", "seg_split_ingest"}),                                                                           \
+        F(type_seg_merge_bg_gc, {"type", "type_seg_merge_bg_gc"}),                                                                        \
         F(type_place_index_update, {"type", "place_index_update"}))                                                                       \
     M(tiflash_storage_subtask_duration_seconds, "Bucketed histogram of storage's sub task duration", Histogram,                           \
         F(type_delta_merge_bg, {{"type", "delta_merge_bg"}}, ExpBuckets{0.001, 2, 20}),                                                   \
@@ -123,10 +125,10 @@ namespace DB
         F(type_delta_merge_manual, {{"type", "delta_merge_manual"}}, ExpBuckets{0.001, 2, 20}),                                           \
         F(type_delta_compact, {{"type", "delta_compact"}}, ExpBuckets{0.001, 2, 20}),                                                     \
         F(type_delta_flush, {{"type", "delta_flush"}}, ExpBuckets{0.001, 2, 20}),                                                         \
-        F(type_seg_split, {{"type", "seg_split"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+        F(type_seg_split_bg, {{"type", "seg_split_bg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
         F(type_seg_split_fg, {{"type", "seg_split_fg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
-        F(type_seg_merge, {{"type", "seg_merge"}}, ExpBuckets{0.001, 2, 20}),                                                             \
-        F(type_seg_merge_fg, {{"type", "seg_merge_fg"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+        F(type_seg_split_ingest, {{"type", "seg_split_ingest"}}, ExpBuckets{0.001, 2, 20}),                                               \
+        F(type_seg_merge_bg_gc, {{"type", "seg_merge_bg_gc"}}, ExpBuckets{0.001, 2, 20}),                                                 \
         F(type_place_index_update, {{"type", "place_index_update"}}, ExpBuckets{0.001, 2, 20}))                                           \
     M(tiflash_storage_throughput_bytes, "Calculate the throughput of tasks of storage in bytes", Gauge,           /**/                    \
         F(type_write, {"type", "write"}),                                                                         /**/                    \
@@ -229,7 +231,9 @@ namespace DB
     M(tiflash_storage_read_thread_gauge, "The gauge of storage read thread", Gauge,                                                       \
         F(type_merged_task, {"type", "merged_task"}))                                                                                     \
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
-        F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))
+        F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
+    M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
+        F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
 // clang-format on
 
 struct ExpBuckets

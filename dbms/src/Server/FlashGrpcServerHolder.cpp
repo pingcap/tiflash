@@ -14,6 +14,7 @@
 #include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
@@ -109,7 +110,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     diagnostics_service = std::make_unique<DiagnosticsService>(context, config_);
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_RECV_PING_INTERVAL_WITHOUT_DATA_MS, 5 * 1000));
     builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_HTTP2_MIN_SENT_PING_INTERVAL_WITHOUT_DATA_MS, 10 * 1000));
-    builder.SetOption(grpc::MakeChannelArgumentOption(GRPC_ARG_KEEPALIVE_PERMIT_WITHOUT_CALLS, 1));
     // number of grpc thread pool's non-temporary threads, better tune it up to avoid frequent creation/destruction of threads
     auto max_grpc_pollers = context.getSettingsRef().max_grpc_pollers;
     if (max_grpc_pollers > 0 && max_grpc_pollers <= std::numeric_limits<int>::max())
@@ -196,7 +196,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     catch (...)
     {
         auto message = getCurrentExceptionMessage(false);
-        LOG_FMT_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
+        LOG_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
         std::terminate();
     }
 }

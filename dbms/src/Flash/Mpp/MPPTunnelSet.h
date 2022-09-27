@@ -54,11 +54,9 @@ public:
     // this is a partition writing.
     void write(tipb::SelectResponse & response, int16_t partition_id);
     void write(mpp::MPPDataPacket & packet, int16_t partition_id);
-    void writeError(const String & msg);
-    void close(const String & reason);
+    void close(const String & reason, bool wait_sender_finish);
     void finishWrite();
     void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel);
-    void updateMemTracker();
 
     bool asyncWrite(const mpp::MPPDataPacket & packet, int16_t partition_id);
 

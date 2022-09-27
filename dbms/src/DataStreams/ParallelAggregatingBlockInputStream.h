@@ -17,9 +17,6 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/ParallelInputsProcessor.h>
 #include <DataStreams/TemporaryFileStream.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <IO/CompressedReadBuffer.h>
 
 namespace DB
 {
@@ -88,7 +85,7 @@ private:
 
     std::atomic<bool> executed{false};
 
-    std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
+    TemporaryFileStreams temporary_inputs;
 
     ManyAggregatedDataVariants many_data;
     Exceptions exceptions;

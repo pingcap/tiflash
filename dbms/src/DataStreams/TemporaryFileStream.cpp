@@ -18,10 +18,8 @@
 
 namespace DB
 {
-TemporaryFileStream::TemporaryFileStream(
-    const std::string & path,
-    const FileProviderPtr & file_provider_)
-    : file_provider(file_provider_)
+TemporaryFileStream::TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_)
+    : file_provider{file_provider_}
     , file_in(file_provider, path, EncryptionPath(path, ""))
     , compressed_in(file_in)
     , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get()))

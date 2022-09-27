@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/Segment.h>
+
+#include <magic_enum.hpp>
 
 namespace CurrentMetrics
 {
@@ -34,12 +37,14 @@ namespace DB
 namespace DM
 {
 
-SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, bool is_foreground)
+SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at, SegmentSplitMode opt_split_mode)
 {
     LOG_FMT_INFO(
         log,
-        "Split - Begin, is_foreground={} safe_point={} segment={}",
-        is_foreground,
+        "Split - Begin, mode={} reason={}{} safe_point={} segment={}",
+        magic_enum::enum_name(opt_split_mode),
+        magic_enum::enum_name(reason),
+        (opt_split_at.has_value() ? fmt::format(" force_split_at={}", opt_split_at->toDebugString()) : ""),
         dm_context.min_version,
         segment->info());
 
@@ -56,9 +61,15 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         }
 
         segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
-        if (!segment_snap || !segment_snap->getRows())
+        if (!segment_snap)
         {
-            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because snapshot failed or no row, segment={}", segment->simpleInfo());
+            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because snapshot failed, segment={}", segment->simpleInfo());
+            return {};
+        }
+        if (!opt_split_at.has_value() && !segment_snap->getRows())
+        {
+            // When opt_split_at is not specified, we skip split for empty segments.
+            LOG_FMT_DEBUG(log, "Split - Give up auto segmentSplit because no row, segment={}", segment->simpleInfo());
             return {};
         }
         schema_snap = store_columns;
@@ -72,28 +83,62 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     size_t duplicated_rows = 0;
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentSplit};
-    if (is_foreground)
+    switch (reason)
+    {
+    case SegmentSplitReason::ForegroundWrite:
         GET_METRIC(tiflash_storage_subtask_count, type_seg_split_fg).Increment();
-    else
-        GET_METRIC(tiflash_storage_subtask_count, type_seg_split).Increment();
+        break;
+    case SegmentSplitReason::Background:
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_bg).Increment();
+        break;
+    case SegmentSplitReason::IngestBySplit:
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_split_ingest).Increment();
+        break;
+    }
+
     Stopwatch watch_seg_split;
     SCOPE_EXIT({
-        if (is_foreground)
+        switch (reason)
+        {
+        case SegmentSplitReason::ForegroundWrite:
             GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_fg).Observe(watch_seg_split.elapsedSeconds());
-        else
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split).Observe(watch_seg_split.elapsedSeconds());
+            break;
+        case SegmentSplitReason::Background:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_bg).Observe(watch_seg_split.elapsedSeconds());
+            break;
+        case SegmentSplitReason::IngestBySplit:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_split_ingest).Observe(watch_seg_split.elapsedSeconds());
+            break;
+        }
     });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
+    Segment::SplitMode seg_split_mode;
+    switch (opt_split_mode)
+    {
+    case SegmentSplitMode::Auto:
+        seg_split_mode = Segment::SplitMode::Auto;
+        break;
+    case SegmentSplitMode::Logical:
+        seg_split_mode = Segment::SplitMode::Logical;
+        break;
+    case SegmentSplitMode::Physical:
+        seg_split_mode = Segment::SplitMode::Physical;
+        break;
+    default:
+        seg_split_mode = Segment::SplitMode::Auto;
+        break;
+    }
+
     auto range = segment->getRowKeyRange();
-    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, wbs);
+    auto split_info_opt = segment->prepareSplit(dm_context, schema_snap, segment_snap, opt_split_at, seg_split_mode, wbs);
 
     if (!split_info_opt.has_value())
     {
         // Likely we can not find an appropriate split point for this segment later, forbid the split until this segment get updated through applying delta-merge. Or it will slow down the write a lot.
         segment->forbidSplit();
-        LOG_FMT_WARNING(log, "Split - Give up segmentSplit and forbid later split because of prepare split failed, segment={}", segment->simpleInfo());
+        LOG_WARNING(log, "Split - Give up segmentSplit and forbid later auto split because prepare split failed, segment={}", segment->simpleInfo());
         return {};
     }
 
@@ -116,7 +161,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        std::tie(new_left, new_right) = segment->applySplit(dm_context, segment_snap, wbs, split_info);
+        std::tie(new_left, new_right) = segment->applySplit(segment_lock, dm_context, segment_snap, wbs, split_info);
 
         wbs.writeMeta();
 
@@ -163,14 +208,14 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
     return {new_left, new_right};
 }
 
-SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, bool is_foreground)
+SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vector<SegmentPtr> & ordered_segments, SegmentMergeReason reason)
 {
     RUNTIME_CHECK(ordered_segments.size() >= 2, ordered_segments.size());
 
     LOG_FMT_INFO(
         log,
-        "Merge - Begin, is_foreground={} safe_point={} segments_to_merge={}",
-        is_foreground,
+        "Merge - Begin, reason={} safe_point={} segments_to_merge={}",
+        magic_enum::enum_name(reason),
         dm_context.min_version,
         Segment::simpleInfo(ordered_segments));
 
@@ -191,6 +236,8 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
             if (seg->flushCache(dm_context))
                 break;
+
+            SYNC_FOR("before_DeltaMergeStore::segmentMerge|retry_flush");
 
             // Else: retry. Flush could fail. Typical cases:
             // #1. The segment is abandoned (due to an update is finished)
@@ -242,16 +289,24 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
     }
 
     CurrentMetrics::Increment cur_dm_segments{CurrentMetrics::DT_SegmentMerge};
-    if (is_foreground)
-        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge_fg).Increment();
-    else
-        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge).Increment();
+    switch (reason)
+    {
+    case SegmentMergeReason::BackgroundGCThread:
+        GET_METRIC(tiflash_storage_subtask_count, type_seg_merge_bg_gc).Increment();
+        break;
+    default:
+        break;
+    }
     Stopwatch watch_seg_merge;
     SCOPE_EXIT({
-        if (is_foreground)
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge_fg).Observe(watch_seg_merge.elapsedSeconds());
-        else
-            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge).Observe(watch_seg_merge.elapsedSeconds());
+        switch (reason)
+        {
+        case SegmentMergeReason::BackgroundGCThread:
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_seg_merge_bg_gc).Observe(watch_seg_merge.elapsedSeconds());
+            break;
+        default:
+            break;
+        }
     });
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
@@ -278,7 +333,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         for (const auto & seg : ordered_segments)
             locks.emplace_back(seg->mustGetUpdateLock());
 
-        merged = Segment::applyMerge(dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
+        merged = Segment::applyMerge(locks, dm_context, ordered_segments, ordered_snapshots, wbs, merged_stable);
 
         wbs.writeMeta();
 
@@ -297,9 +352,9 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 
         LOG_FMT_INFO(
             log,
-            "Merge - Finish, {} segments are merged into one, is_foreground={} merged={} segments_to_merge={}",
+            "Merge - Finish, {} segments are merged into one, reason={} merged={} segments_to_merge={}",
             ordered_segments.size(),
-            is_foreground,
+            magic_enum::enum_name(reason),
             merged->info(),
             Segment::info(ordered_segments));
     }
@@ -321,7 +376,12 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     const MergeDeltaReason reason,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_INFO(log, "MergeDelta - Begin, reason={} safe_point={} segment={}", toString(reason), dm_context.min_version, segment->info());
+    LOG_FMT_INFO(
+        log,
+        "MergeDelta - Begin, reason={} safe_point={} segment={}",
+        magic_enum::enum_name(reason),
+        dm_context.min_version,
+        segment->info());
 
     ColumnDefinesPtr schema_snap;
 
@@ -412,7 +472,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         auto segment_lock = segment->mustGetUpdateLock();
 
-        new_segment = segment->applyMergeDelta(dm_context, segment_snap, wbs, new_stable);
+        new_segment = segment->applyMergeDelta(segment_lock, dm_context, segment_snap, wbs, new_stable);
 
         wbs.writeMeta();
 
@@ -432,13 +492,59 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
             new_segment->check(dm_context, "After segmentMergeDelta");
         }
 
-        LOG_FMT_INFO(log, "MergeDelta - Finish, delta is merged, old_segment={} new_segment={}", segment->info(), new_segment->info());
+        LOG_FMT_INFO(
+            log,
+            "MergeDelta - Finish, delta is merged, old_segment={} new_segment={}",
+            segment->info(),
+            new_segment->info());
     }
 
     wbs.writeRemoves();
 
     GET_METRIC(tiflash_storage_throughput_bytes, type_delta_merge).Increment(delta_bytes);
     GET_METRIC(tiflash_storage_throughput_rows, type_delta_merge).Increment(delta_rows);
+
+    if constexpr (DM_RUN_CHECK)
+        check(dm_context.db_context);
+
+    return new_segment;
+}
+
+SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
+    DMContext & dm_context,
+    const SegmentPtr & segment,
+    const DMFilePtr & data_file)
+{
+    LOG_FMT_INFO(log, "ReplaceData - Begin, segment={} data_file={}", segment->info(), data_file->path());
+
+    WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
+
+    SegmentPtr new_segment;
+    {
+        std::unique_lock lock(read_write_mutex);
+        if (!isSegmentValid(lock, segment))
+        {
+            LOG_FMT_DEBUG(log, "ReplaceData - Give up segment replace data because segment not valid, segment={} data_file={}", segment->simpleInfo(), data_file->path());
+            return {};
+        }
+
+        auto segment_lock = segment->mustGetUpdateLock();
+        new_segment = segment->dangerouslyReplaceData(segment_lock, dm_context, data_file, wbs);
+
+        RUNTIME_CHECK(compare(segment->getRowKeyRange().getEnd(), new_segment->getRowKeyRange().getEnd()) == 0, segment->info(), new_segment->info());
+        RUNTIME_CHECK(segment->segmentId() == new_segment->segmentId(), segment->info(), new_segment->info());
+
+        wbs.writeLogAndData();
+        wbs.writeMeta();
+
+        segment->abandon(dm_context);
+        segments[segment->getRowKeyRange().getEnd()] = new_segment;
+        id_to_segment[segment->segmentId()] = new_segment;
+
+        LOG_FMT_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
+    }
+
+    wbs.writeRemoves();
 
     if constexpr (DM_RUN_CHECK)
         check(dm_context.db_context);

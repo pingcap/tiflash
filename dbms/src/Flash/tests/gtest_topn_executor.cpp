@@ -115,7 +115,7 @@ try
                 else
                     expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.begin() + limit_num))});
 
-                executeWithConcurrency(request, expect_cols[0]);
+                executeAndAssertColumnsEqual(request, expect_cols.back());
             }
         }
     }
@@ -148,7 +148,7 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(table_name, order_by_items[i], 100);
-            executeWithConcurrency(request, expect_cols[1]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
 }
@@ -182,7 +182,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeWithConcurrency(request, expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 
@@ -200,7 +200,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeWithConcurrency(request, expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 
@@ -218,7 +218,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            executeWithConcurrency(request, expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 

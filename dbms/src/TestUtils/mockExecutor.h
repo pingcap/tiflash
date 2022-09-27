@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Core/ColumnsWithTypeAndName.h>
+#include <Debug/MockExecutor/AstToPB.h>
 #include <Debug/MockStorage.h>
-#include <Debug/astToExecutor.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTFunction.h>
@@ -71,7 +71,7 @@ public:
         properties.collator = -abs(collator);
     }
 
-    ExecutorPtr getRoot()
+    mock::ExecutorBinderPtr getRoot()
     {
         return root;
     }
@@ -147,7 +147,7 @@ private:
     DAGRequestBuilder & buildAggregation(ASTPtr agg_funcs, ASTPtr group_by_exprs);
     DAGRequestBuilder & buildExchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count = 0);
 
-    ExecutorPtr root;
+    mock::ExecutorBinderPtr root;
     DAGProperties properties;
 };
 

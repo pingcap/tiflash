@@ -154,6 +154,8 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
     {
         return target;
     }
+    static constexpr int max_iter_count = 32;
+    int iter_count = 0;
     for (const auto & task : tasks)
     {
         auto itr = segments.find(task->segment->segmentId());
@@ -169,7 +171,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
         {
             target = itr;
         }
-        if (target->second.size() >= expected_merge_count)
+        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count)
         {
             break;
         }

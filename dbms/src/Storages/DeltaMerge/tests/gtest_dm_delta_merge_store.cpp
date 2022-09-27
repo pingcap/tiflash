@@ -35,12 +35,11 @@
 #include <future>
 #include <iterator>
 
-#include "Storages/DeltaMerge/RowKeyRange.h"
-
 namespace DB
 {
 namespace FailPoints
 {
+extern const char gc_skip_update_safe_point[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];
@@ -1160,7 +1159,7 @@ try
 
         SegmentPtr seg;
         std::tie(std::ignore, seg) = *store->segments.begin();
-        store->segmentSplit(*dm_context, seg, /*is_foreground*/ true);
+        store->segmentSplit(*dm_context, seg, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
     }
 
     const UInt64 tso2 = 10;
@@ -1273,10 +1272,8 @@ try
     // The ingest range is [32, 256)
     {
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-
-        PageIds file_ids;
         auto ingest_range = RowKeyRange::fromHandleRange(HandleRange{32, 256});
-        store->ingestFiles(dm_context, ingest_range, file_ids, /*clear_data_in_range*/ true);
+        store->ingestFiles(dm_context, ingest_range, /*file_ids*/ {}, /*clear_data_in_range*/ true);
     }
 
 
@@ -1407,7 +1404,7 @@ try
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
@@ -1415,7 +1412,7 @@ try
                     createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
                 }));
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -2988,7 +2985,7 @@ try
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
@@ -2996,7 +2993,7 @@ try
                 createColumns({
                     createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
                 }));
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -3334,7 +3331,7 @@ try
         // Split segment1 into 2.
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), "test");
         auto segment1 = std::next(store->segments.begin())->second;
-        auto result = store->segmentSplit(*dm_context, segment1, /*is_foreground*/ true);
+        auto result = store->segmentSplit(*dm_context, segment1, DeltaMergeStore::SegmentSplitReason::ForegroundWrite);
         ASSERT_NE(result.second, nullptr);
 
         helper->resetExpectedRows();

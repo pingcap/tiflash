@@ -270,7 +270,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             else
             {
                 // just ignore and keep that directory if it is not empty
-                LOG_FMT_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
+                LOG_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
             }
         }
     }
@@ -294,7 +294,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             else
             {
                 // just ignore and keep that directory if it is not empty
-                LOG_FMT_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
+                LOG_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
             }
         }
     }
@@ -318,7 +318,7 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
     if (auto file = Poco::File{old_path}; file.exists())
         file.renameTo(new_path);
     else
-        LOG_FMT_WARNING(log, "Path \"{}\" is missed.", old_path);
+        LOG_WARNING(log, "Path \"{}\" is missed.", old_path);
 }
 
 String StoragePathPool::getPSV2DeleteMarkFilePath() const
@@ -354,7 +354,7 @@ String genericChoosePath(const std::vector<T> & paths, //
     // If available space is limited by the quota, then write down a GC-ed file can make
     // some files be deleted later.
     if (total_available_size == 0)
-        LOG_FMT_WARNING(log, "No available space for all disks, choose randomly.");
+        LOG_WARNING(log, "No available space for all disks, choose randomly.");
     std::vector<double> ratio;
     for (auto & stat : stats)
     {
@@ -497,7 +497,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     }
     catch (const Poco::Exception & exp)
     {
-        LOG_FMT_WARNING(pool.log, "failed to get real size info for dtfile. [id={}] [path={}] [err={}]", file_id, path, exp.displayText());
+        LOG_WARNING(pool.log, "failed to get real size info for dtfile. [id={}] [path={}] [err={}]", file_id, path, exp.displayText());
     }
 #endif
 

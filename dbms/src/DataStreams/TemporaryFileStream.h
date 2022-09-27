@@ -19,9 +19,12 @@
 #include <Encryption/ReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
 
+#include <memory>
+#include <vector>
+
 namespace DB
 {
-/// To read the data stored into the temporary data file.
+/// To read the data that was flushed into the temporary data file.
 struct TemporaryFileStream
 {
     FileProviderPtr file_provider;
@@ -32,4 +35,6 @@ struct TemporaryFileStream
     TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_);
     ~TemporaryFileStream();
 };
+
+using TemporaryFileStreams = std::vector<std::unique_ptr<TemporaryFileStream>>;
 } // namespace DB

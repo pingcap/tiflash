@@ -121,7 +121,7 @@ static void writeRegionDataToStorage(
         BlockUPtr block_ptr = nullptr;
         if (need_decode)
         {
-            LOG_FMT_TRACE(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
+            LOG_TRACE(log, "{} begin to decode table {}, region {}", FUNCTION_NAME, table_id, region->id());
             DecodingStorageSchemaSnapshotConstPtr decoding_schema_snapshot;
             std::tie(decoding_schema_snapshot, block_ptr) = storage->getSchemaSnapshotAndBlockForDecoding(lock, true);
             block_decoding_schema_version = decoding_schema_snapshot->decoding_schema_version;
@@ -159,7 +159,7 @@ static void writeRegionDataToStorage(
         if (need_decode)
             storage->releaseDecodingBlock(block_decoding_schema_version, std::move(block_ptr));
 
-        LOG_FMT_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
+        LOG_TRACE(log, "{}: table {}, region {}, cost [region decode {},  write part {}] ms", FUNCTION_NAME, table_id, region->id(), region_decode_cost, write_part_cost);
         return true;
     };
 
@@ -269,31 +269,26 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     return data_list_read;
 }
 
-std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
+std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
 {
     auto scanner = region->createCommittedScanner(lock_region);
 
     /// Some sanity checks for region meta.
-    {
-        if (region->isPendingRemove())
-            return std::nullopt;
-    }
+    if (region->isPendingRemove())
+        return std::nullopt;
 
     /// Read raw KVs from region cache.
+    // Shortcut for empty region.
+    if (!scanner.hasNext())
+        return std::nullopt;
+
+    RegionDataReadInfoList data_list_read;
+    data_list_read.reserve(scanner.writeMapSize());
+    do
     {
-        // Shortcut for empty region.
-        if (!scanner.hasNext())
-            return std::nullopt;
-
-        RegionDataReadInfoList data_list_read;
-        data_list_read.reserve(scanner.writeMapSize());
-
-        do
-        {
-            data_list_read.emplace_back(scanner.next());
-        } while (scanner.hasNext());
-        return data_list_read;
-    }
+        data_list_read.emplace_back(scanner.next());
+    } while (scanner.hasNext());
+    return data_list_read;
 }
 
 void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true)
@@ -421,7 +416,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     try
     {
-        data_list_read = ReadRegionCommitCache(region);
+        data_list_read = ReadRegionCommitCache(region, true);
         if (!data_list_read)
             return nullptr;
     }
@@ -430,9 +425,9 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_FMT_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
-                            "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
-                            e.displayText());
+            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
+                        "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
+                        e.displayText());
             // set data_list_read and let apply snapshot process use empty block
             data_list_read = RegionDataReadInfoList();
         }
@@ -579,7 +574,7 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
                                    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
                                    Timestamp gc_safepoint,
                                    bool force_decode,
-                                   TMTContext & tmt)
+                                   TMTContext & /* */)
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
@@ -587,15 +582,12 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
               { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
-    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
-    data_list_read = ReadRegionCommitCache(region);
+    std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
 
     Block res_block;
     // No committed data, just return
     if (!data_list_read)
         return res_block;
-
-    auto context = tmt.getContext();
 
     {
         Stopwatch watch;

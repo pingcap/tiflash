@@ -222,7 +222,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Put query to process list. But don't put SHOW PROCESSLIST query itself.
         ProcessList::EntryPtr process_list_entry;
-        if (!internal && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
+        if (!internal && !context.isMPPTask() && nullptr == typeid_cast<const ASTShowProcesslistQuery *>(&*ast))
         {
             process_list_entry = context.getProcessList().insert(
                 query,
@@ -232,15 +232,31 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             context.setProcessListElement(&process_list_entry->get());
         }
-
-        // Do set-up work for tunnels and receivers after ProcessListEntry is constructed,
-        // so that we can propagate current_memory_tracker into them.
-        if (context.getDAGContext()) // When using TiFlash client, dag context will be nullptr in this case.
+        if (context.isMPPTask())
         {
-            if (context.getDAGContext()->tunnel_set)
-                context.getDAGContext()->tunnel_set->updateMemTracker();
-            if (context.getDAGContext()->getMppReceiverSet())
-                context.getDAGContext()->getMppReceiverSet()->setUpConnection();
+            if (!context.isTest())
+            {
+                /// for MPPTask, process list entry is created in MPPTask::prepare()
+                RUNTIME_ASSERT(context.getDAGContext()->getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
+                process_list_entry = context.getDAGContext()->getProcessListEntry();
+            }
+            else
+            {
+                /// it is possible that in test mode, the process list entry is nullptr because some tests run mpp query
+                /// just based on dag request, there is even no MPPTask at all.
+                if (context.getDAGContext()->getProcessListEntry() == nullptr)
+                {
+                    process_list_entry = context.getProcessList().insert(
+                        query,
+                        ast.get(),
+                        context.getClientInfo(),
+                        settings);
+
+                    context.setProcessListElement(&process_list_entry->get());
+                }
+                else
+                    process_list_entry = context.getDAGContext()->getProcessListEntry();
+            }
         }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);

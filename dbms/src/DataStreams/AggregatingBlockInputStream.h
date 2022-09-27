@@ -16,9 +16,6 @@
 
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/TemporaryFileStream.h>
-#include <Encryption/FileProvider.h>
-#include <Encryption/ReadBufferFromFileProvider.h>
-#include <IO/CompressedReadBuffer.h>
 #include <Interpreters/Aggregator.h>
 
 namespace DB
@@ -68,7 +65,7 @@ protected:
 
     bool executed = false;
 
-    std::vector<std::unique_ptr<TemporaryFileStream>> temporary_inputs;
+    TemporaryFileStreams temporary_inputs;
 
     /** From here we will get the completed blocks after the aggregation. */
     std::unique_ptr<IBlockInputStream> impl;

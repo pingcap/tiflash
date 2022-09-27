@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/Page/Page.h>
@@ -49,13 +50,46 @@ public:
 
     PageId getId() { return id; }
     void saveMeta(WriteBatch & meta_wb);
-    const DMFiles & getDMFiles() { return files; }
-    String getDMFilesString();
 
     size_t getRows() const;
     size_t getBytes() const;
-    size_t getBytesOnDisk() const;
-    size_t getPacks() const;
+
+    /**
+     * Return the underlying DTFiles.
+     * DTFiles are not fully included in the segment range will be also included in the result.
+     * Note: Out-of-range DTFiles may be produced by logical split.
+     */
+    const DMFiles & getDMFiles() const { return files; }
+
+    String getDMFilesString();
+
+    /**
+     * Return the total on-disk size of the underlying DTFiles.
+     * DTFiles are not fully included in the segment range will be also counted in.
+     * Note: Out-of-range DTFiles may be produced by logical split.
+     */
+    size_t getDMFilesBytesOnDisk() const;
+
+    /**
+     * Return the total number of packs of the underlying DTFiles.
+     * Packs that are not included in the segment range will be also counted in.
+     * Note: Out-of-range packs may be produced by logical split.
+     */
+    size_t getDMFilesPacks() const;
+
+    /**
+     * Return the total number of rows of the underlying DTFiles.
+     * Rows from packs that are not included in the segment range will be also counted in.
+     * Note: Out-of-range rows may be produced by logical split.
+     */
+    size_t getDMFilesRows() const;
+
+    /**
+     * Return the total size of the data of the underlying DTFiles.
+     * Rows from packs that are not included in the segment range will be also counted in.
+     * Note: Out-of-range rows may be produced by logical split.
+     */
+    size_t getDMFilesBytes() const;
 
     void enableDMFilesGC();
 
@@ -111,7 +145,7 @@ public:
             : log(&Poco::Logger::get("StableValueSpace::Snapshot"))
         {}
 
-        SnapshotPtr clone()
+        SnapshotPtr clone() const
         {
             auto c = std::make_shared<Snapshot>();
             c->stable = stable;
@@ -127,20 +161,38 @@ public:
             return c;
         }
 
-        PageId getId() { return id; }
+        PageId getId() const { return id; }
 
-        size_t getRows() { return valid_rows; }
-        size_t getBytes() { return valid_bytes; }
+        size_t getRows() const { return valid_rows; }
+        size_t getBytes() const { return valid_bytes; }
 
-        const DMFiles & getDMFiles() { return stable->getDMFiles(); }
+        /**
+         * Return the underlying DTFiles.
+         * DTFiles are not fully included in the segment range will be also included in the result.
+         * Note: Out-of-range DTFiles may be produced by logical split.
+         */
+        const DMFiles & getDMFiles() const { return stable->getDMFiles(); }
 
-        size_t getPacks()
-        {
-            size_t packs = 0;
-            for (auto & file : getDMFiles())
-                packs += file->getPacks();
-            return packs;
-        }
+        /**
+         * Return the total number of packs of the underlying DTFiles.
+         * Packs that are not included in the segment range will be also counted in.
+         * Note: Out-of-range packs may be produced by logical split.
+         */
+        size_t getDMFilesPacks() const { return stable->getDMFilesPacks(); }
+
+        /**
+         * Return the total number of rows of the underlying DTFiles.
+         * Rows from packs that are not included in the segment range will be also counted in.
+         * Note: Out-of-range rows may be produced by logical split.
+         */
+        size_t getDMFilesRows() const { return stable->getDMFilesRows(); };
+
+        /**
+         * Return the total size of the data of the underlying DTFiles.
+         * Rows from packs that are not included in the segment range will be also counted in.
+         * Note: Out-of-range rows may be produced by logical split.
+         */
+        size_t getDMFilesBytes() const { return stable->getDMFilesBytes(); };
 
         ColumnCachePtrs & getColumnCaches() { return column_caches; }
 
@@ -156,6 +208,20 @@ public:
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
+        struct AtLeastRowsAndBytesResult
+        {
+            size_t rows = 0;
+            size_t bytes = 0;
+            RSResult first_pack_intersection = RSResult::None;
+            RSResult last_pack_intersection = RSResult::None;
+        };
+
+        /**
+         * Get the rows and bytes calculated from packs that is **fully contained** by the given range.
+         * If the pack is partially intersected, then it is not counted.
+         */
+        AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
+
     private:
         Poco::Logger * log;
     };
@@ -169,8 +235,9 @@ private:
 
     // Valid rows is not always the sum of rows in file,
     // because after logical split, two segments could reference to a same file.
-    UInt64 valid_rows;
-    UInt64 valid_bytes;
+    UInt64 valid_rows; /* At most. The actual valid rows may be lower than this value. */
+    UInt64 valid_bytes; /* At most. The actual valid bytes may be lower than this value. */
+
     DMFiles files;
 
     StableProperty property;

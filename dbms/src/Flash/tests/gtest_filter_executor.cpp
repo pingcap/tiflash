@@ -39,26 +39,103 @@ public:
 TEST_F(FilterExecutorTestRunner, equals)
 try
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     auto request = context
                        .scan("test_db", "test_table")
                        .filter(eq(col("s1"), col("s2")))
                        .build(context);
-    {
-        ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                            createColumns({toNullableVec<String>({"banana"}),
-                                           toNullableVec<String>({"banana"})}));
-    }
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<String>({"banana"}),
+         toNullableVec<String>({"banana"})});
 
     request = context.receive("exchange1")
                   .filter(eq(col("s1"), col("s2")))
                   .build(context);
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<String>({"banana"}),
+         toNullableVec<String>({"banana"})});
+
+    request = context.receive("exchange1")
+                  .filter(eq(col("s1"), col("s1")))
+                  .build(context);
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<String>({"banana", "banana"}),
+         toNullableVec<String>({"apple", "banana"})});
+
+    request = context.receive("exchange1")
+                  .filter(eq(col("s1"), lit(Field(String("0")))))
+                  .build(context);
+    executeAndAssertColumnsEqual(request, {});
+}
+CATCH
+
+TEST_F(FilterExecutorTestRunner, const_bool)
+try
+{
+    auto const_true = lit(Field(static_cast<UInt64>(1)));
     {
-        ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                            createColumns({toNullableVec<String>({"banana"}),
-                                           toNullableVec<String>({"banana"})}));
+        auto request = context.receive("exchange1")
+                           .filter(const_true)
+                           .build(context);
+        executeAndAssertColumnsEqual(
+            request,
+            {toNullableVec<String>({"banana", {}, "banana"}),
+             toNullableVec<String>({"apple", {}, "banana"})});
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
+
+    auto const_false = lit(Field(static_cast<UInt64>(0)));
+    {
+        auto request = context.receive("exchange1")
+                           .filter(const_false)
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {});
+    }
+
+    auto column_not_null_true = eq(col("s1"), col("s1"));
+    auto column_false = eq(col("s1"), lit(Field(String("0"))));
+    auto column_other = eq(col("s1"), col("s2"));
+
+    auto test_and = [&](const ASTPtr & a, const ASTPtr & b, const ColumnsWithTypeAndName & expect_columns) {
+        auto request = context.receive("exchange1")
+                           .filter(And(a, b))
+                           .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+
+        request = context.receive("exchange1")
+                      .filter(And(b, a))
+                      .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+    };
+
+    test_and(const_true, column_not_null_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+    test_and(const_true, column_false, {});
+    test_and(const_true, column_other, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
+
+    test_and(const_false, column_not_null_true, {});
+    test_and(const_false, column_false, {});
+    test_and(const_false, column_other, {});
+
+    auto test_or = [&](const ASTPtr & a, const ASTPtr & b, const ColumnsWithTypeAndName & expect_columns) {
+        auto request = context.receive("exchange1")
+                           .filter(Or(a, b))
+                           .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+
+        request = context.receive("exchange1")
+                      .filter(Or(b, a))
+                      .build(context);
+        executeAndAssertColumnsEqual(request, expect_columns);
+    };
+
+    test_or(const_true, column_not_null_true, {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
+    test_or(const_true, column_false, {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
+    test_or(const_true, column_other, {toNullableVec<String>({"banana", {}, "banana"}), toNullableVec<String>({"apple", {}, "banana"})});
+
+    test_or(const_false, column_not_null_true, {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+    test_or(const_false, column_false, {});
+    test_or(const_false, column_other, {toNullableVec<String>({"banana"}), toNullableVec<String>({"banana"})});
 }
 CATCH
 
@@ -69,11 +146,10 @@ try
                        .scan("test_db", "test_table")
                        .filter(eq(col("test_table.s1"), col("test_table.s2")))
                        .build(context);
-    {
-        ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                            createColumns({toNullableVec<String>({"banana"}),
-                                           toNullableVec<String>({"banana"})}));
-    }
+    executeAndAssertColumnsEqual(
+        request,
+        {toNullableVec<String>({"banana"}),
+         toNullableVec<String>({"banana"})});
 }
 CATCH
 

@@ -44,6 +44,7 @@
 
 #include <atomic>
 #include <ext/scope_guard.h>
+#include <magic_enum.hpp>
 #include <memory>
 
 namespace ProfileEvents
@@ -106,7 +107,6 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
     switch (task.type)
     {
     case TaskType::Split:
-    case TaskType::Merge:
     case TaskType::MergeDelta:
         is_heavy = true;
         // reserve some task space for light tasks
@@ -124,15 +124,15 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
         light_tasks.push(task);
         break;
     default:
-        throw Exception(fmt::format("Unsupported task type: {}", toString(task.type)));
+        throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
     }
 
     LOG_FMT_DEBUG(
         log_,
         "Segment task add to background task pool, segment={} task={} by_whom={}",
         task.segment->simpleInfo(),
-        toString(task.type),
-        toString(whom));
+        magic_enum::enum_name(task.type),
+        magic_enum::enum_name(whom));
     return std::make_pair(true, is_heavy);
 }
 
@@ -146,7 +146,7 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
     auto task = tasks.front();
     tasks.pop();
 
-    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), toString(task.type));
+    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), magic_enum::enum_name(task.type));
 
     return task;
 }
@@ -396,7 +396,7 @@ void DeltaMergeStore::shutdown()
     if (!shutdown_called.compare_exchange_strong(v, true))
         return;
 
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge start");
+    LOG_TRACE(log, "Shutdown DeltaMerge start");
     // shutdown before unregister to avoid conflict between this thread and background gc thread on the `ExternalPagesCallbacks`
     // because PageStorage V2 doesn't have any lock protection on the `ExternalPagesCallbacks`.(The order doesn't matter for V3)
     storage_pool->shutdown();
@@ -406,7 +406,7 @@ void DeltaMergeStore::shutdown()
     blockable_background_pool.removeTask(blockable_background_pool_handle);
     background_task_handle = nullptr;
     blockable_background_pool_handle = nullptr;
-    LOG_FMT_TRACE(log, "Shutdown DeltaMerge end");
+    LOG_TRACE(log, "Shutdown DeltaMerge end");
 }
 
 DMContextPtr DeltaMergeStore::newDMContext(const Context & db_context, const DB::Settings & db_settings, const String & tracing_id)
@@ -487,7 +487,7 @@ Block DeltaMergeStore::addExtraColumnIfNeed(const Context & db_context, const Co
 
 void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_settings, Block & block)
 {
-    LOG_FMT_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
+    LOG_TRACE(log, "Table write block, rows={} bytes={}", block.rows(), block.bytes());
 
     EventRecorder write_block_recorder(ProfileEvents::DMWriteBlock, ProfileEvents::DMWriteBlockNS);
 
@@ -881,10 +881,10 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
 
     fiu_do_on(FailPoints::force_slow_page_storage_snapshot_release, {
         std::thread thread_hold_snapshots([this, tasks]() {
-            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release begin");
             std::this_thread::sleep_for(std::chrono::seconds(5 * 60));
             (void)tasks;
-            LOG_FMT_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
+            LOG_WARNING(log, "failpoint force_slow_page_storage_snapshot_release end");
         });
         thread_hold_snapshots.detach();
     });
@@ -940,10 +940,6 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         }
         res.push_back(stream);
     }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
-    }
     return res;
 }
 
@@ -969,8 +965,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
-
-    auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
+    auto log_tracing_id = getLogTracingId(*dm_context);
+    auto tracing_logger = Logger::get(log->name(), log_tracing_id);
     LOG_FMT_DEBUG(tracing_logger,
                   "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
                   keep_order,
@@ -995,11 +991,8 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
         after_segment_read,
-        tracing_id);
+        log_tracing_id);
 
-    String req_info;
-    if (db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask())
-        req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
     {
@@ -1011,7 +1004,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 columns_to_read,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                log_tracing_id);
         }
         else
         {
@@ -1027,13 +1020,9 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
                 extra_table_id_index,
                 physical_table_id,
-                req_info);
+                log_tracing_id);
         }
         res.push_back(stream);
-    }
-    if (enable_read_thread)
-    {
-        SegmentReadTaskScheduler::instance().add(read_task_pool);
     }
     LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
 
@@ -1249,8 +1238,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                                 || delta_bytes - delta_last_try_split_bytes >= delta_cache_limit_bytes))
         || (segment_rows >= segment_limit_rows * 3 || segment_bytes >= segment_limit_bytes * 3);
 
-    bool should_merge = segment_rows < segment_limit_rows / 3 && segment_bytes < segment_limit_bytes / 3;
-
     // Don't do compact on starting up.
     bool should_compact = (thread_type != ThreadType::Init) && std::max(static_cast<Int64>(column_file_count) - delta_last_try_compact_column_files, 0) >= 10;
 
@@ -1307,7 +1294,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
             {
                 delta_last_try_flush_rows = delta_rows;
                 delta_last_try_flush_bytes = delta_bytes;
-                try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment, {}});
+                try_add_background_task(BackgroundTask{TaskType::Flush, dm_context, segment});
             }
         }
     }
@@ -1316,36 +1303,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
     // give up adding more tasks on this version of delta.
     if (segment->getDelta()->isUpdating())
         return;
-
-    /// Now start trying structure update.
-
-    auto get_merge_sibling = [&]() -> SegmentPtr {
-        /// For complexity reason, currently we only try to merge with next segment. Normally it is good enough.
-
-        // The last segment cannot be merged.
-        if (segment->getRowKeyRange().isEndInfinite())
-            return {};
-        SegmentPtr next_segment;
-        {
-            std::shared_lock read_write_lock(read_write_mutex);
-
-            auto it = segments.find(segment->getRowKeyRange().getEnd());
-            // check legality
-            if (it == segments.end())
-                return {};
-            auto & cur_segment = it->second;
-            if (cur_segment.get() != segment.get())
-                return {};
-            ++it;
-            if (it == segments.end())
-                return {};
-            next_segment = it->second;
-            auto limit = dm_context->segment_limit_rows / 5;
-            if (next_segment->getEstimatedRows() >= limit)
-                return {};
-        }
-        return next_segment;
-    };
 
     auto try_fg_merge_delta = [&]() -> SegmentPtr {
         // If the table is already dropped, don't trigger foreground merge delta when executing `remove region peer`,
@@ -1374,7 +1331,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_background_merge_delta)
         {
             delta_last_try_merge_delta_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::MergeDelta, dm_context, segment, {}});
+            try_add_background_task(BackgroundTask{TaskType::MergeDelta, dm_context, segment});
             return true;
         }
         return false;
@@ -1384,12 +1341,12 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         {
             delta_last_try_split_rows = delta_rows;
             delta_last_try_split_bytes = delta_bytes;
-            try_add_background_task(BackgroundTask{TaskType::Split, dm_context, seg, {}});
+            try_add_background_task(BackgroundTask{TaskType::Split, dm_context, seg});
             return true;
         }
         return false;
     };
-    auto try_fg_split = [&](const SegmentPtr & my_segment) -> bool {
+    auto try_fg_split = [&](const SegmentPtr & my_segment) {
         auto my_segment_size = my_segment->getEstimatedBytes();
         auto my_should_split = my_segment_size >= dm_context->segment_force_split_bytes;
         if (my_should_split && !my_segment->isSplitForbidden())
@@ -1401,16 +1358,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
                 GET_METRIC(tiflash_storage_write_stall_duration_seconds, type_split).Observe(watch.elapsedSeconds());
             });
 
-            return segmentSplit(*dm_context, my_segment, true).first != nullptr;
-        }
-        return false;
-    };
-    auto try_bg_merge = [&]() {
-        SegmentPtr merge_sibling;
-        if (should_merge && (merge_sibling = get_merge_sibling()))
-        {
-            try_add_background_task(BackgroundTask{TaskType::Merge, dm_context, segment, merge_sibling});
-            return true;
+            return segmentSplit(*dm_context, my_segment, SegmentSplitReason::ForegroundWrite).first != nullptr;
         }
         return false;
     };
@@ -1423,7 +1371,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_compact && !segment->isFlushing())
         {
             delta_last_try_compact_column_files = column_file_count;
-            try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment, {}});
+            try_add_background_task(BackgroundTask{TaskType::Compact, dm_context, segment});
             return true;
         }
         return false;
@@ -1432,7 +1380,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (should_place_delta_index)
         {
             delta_last_try_place_delta_index_rows = delta_rows;
-            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment, {}});
+            try_add_background_task(BackgroundTask{TaskType::PlaceIndex, dm_context, segment});
             return true;
         }
         return false;
@@ -1477,8 +1425,6 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
         if (try_bg_merge_delta())
             return;
     }
-    if (try_bg_merge())
-        return;
     if (try_bg_compact())
         return;
     if (try_place_delta_index())
@@ -1660,17 +1606,17 @@ DeltaMergeStoreStat DeltaMergeStore::getStat()
             total_delta_valid_cache_rows += delta->getValidCacheRows();
         }
 
-        if (stable->getPacks())
+        if (stable->getDMFilesPacks())
         {
             stat.total_rows += stable->getRows();
             stat.total_size += stable->getBytes();
 
             stat.stable_count += 1;
-            stat.total_pack_count_in_stable += stable->getPacks();
+            stat.total_pack_count_in_stable += stable->getDMFilesPacks();
 
             stat.total_stable_rows += stable->getRows();
             stat.total_stable_size += stable->getBytes();
-            stat.total_stable_size_on_disk += stable->getBytesOnDisk();
+            stat.total_stable_size_on_disk += stable->getDMFilesBytesOnDisk();
         }
     }
 
@@ -1793,10 +1739,10 @@ SegmentStats DeltaMergeStore::getSegmentStats()
         stat.size = delta->getBytes() + stable->getBytes();
         stat.delete_ranges = delta->getDeletes();
 
-        stat.stable_size_on_disk = stable->getBytesOnDisk();
+        stat.stable_size_on_disk = stable->getDMFilesBytesOnDisk();
 
         stat.delta_pack_count = delta->getColumnFileCount();
-        stat.stable_pack_count = stable->getPacks();
+        stat.stable_pack_count = stable->getDMFilesPacks();
 
         stat.avg_delta_pack_rows = static_cast<Float64>(delta->getRows()) / stat.delta_pack_count;
         stat.avg_stable_pack_rows = static_cast<Float64>(stable->getRows()) / stat.stable_pack_count;
@@ -1886,7 +1832,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         total_ranges += task->ranges.size();
     }
 
-    auto tracing_logger = Logger::get(log->name(), dm_context.tracing_id);
+    auto tracing_logger = Logger::get(log->name(), getLogTracingId(dm_context));
     LOG_FMT_DEBUG(
         tracing_logger,
         "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
@@ -1898,5 +1844,16 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     return tasks;
 }
 
+String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
+{
+    if (likely(!dm_ctx.tracing_id.empty()))
+    {
+        return dm_ctx.tracing_id;
+    }
+    else
+    {
+        return fmt::format("Table<{}>", physical_table_id);
+    }
+}
 } // namespace DM
 } // namespace DB

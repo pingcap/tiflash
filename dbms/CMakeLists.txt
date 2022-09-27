@@ -67,6 +67,7 @@ add_headers_and_sources(dbms src/Transforms)
 add_headers_and_sources(dbms src/DataTypes)
 add_headers_and_sources(dbms src/Databases)
 add_headers_and_sources(dbms src/Debug)
+add_headers_and_sources(dbms src/Debug/MockExecutor)
 add_headers_and_sources(dbms src/Dictionaries)
 add_headers_and_sources(dbms src/Dictionaries/Embedded)
 add_headers_and_sources(dbms src/Dictionaries/Embedded/GeodataProviders)
@@ -99,6 +100,7 @@ add_headers_and_sources(dbms src/Storages/Page/V3/LogFile)
 add_headers_and_sources(dbms src/Storages/Page/V3/WAL)
 add_headers_and_sources(dbms src/Storages/Page/V3/spacemap)
 add_headers_and_sources(dbms src/Storages/Page/V3/PageDirectory)
+add_headers_and_sources(dbms src/Storages/Page/V3/Blob)
 add_headers_and_sources(dbms src/Storages/Page/)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
@@ -193,6 +195,7 @@ target_link_libraries (clickhouse_common_io
     prometheus-cpp::push
     prometheus-cpp::pull
     cpptoml
+    magic_enum
     libsymbolization
 )
 target_include_directories (clickhouse_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
@@ -333,34 +336,6 @@ if (ENABLE_TESTS)
     endif ()
 
     add_check(bench_dbms)
-endif ()
-
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set (COVERAGE_LCOV_EXCLUDES
-        "/Library/Developer/CommandLineTools/usr/include/*"
-        "/usr/include/*"
-        "/usr/local/*"
-        "/usr/lib/*"
-        "${CMAKE_SOURCE_DIR}/cmake-build-*/*"
-        "${CMAKE_SOURCE_DIR}/contrib/*"
-        )
-    set (COVERAGE_GCOVR_EXCLUDES ${COVERAGE_LCOV_EXCLUDES})
-
-    if (TEST_COVERAGE_XML)
-        setup_target_for_coverage_gcovr_xml (
-            NAME tiflash_gcovr_coverage
-            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
-            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
-            EXECUTABLE echo "please run gtests manually"
-        )
-    else ()
-        setup_target_for_coverage_lcov (
-            NAME tiflash_coverage_lcov
-            BASE_DIRECTORY ${CMAKE_SOURCE_DIR}
-            DEPENDENCIES "gtests_dbms" "gtests_libcommon" "gtests_libdaemon"
-            EXECUTABLE echo "please run gtests manually"
-        )
-    endif ()
 endif ()
 
 # dbms

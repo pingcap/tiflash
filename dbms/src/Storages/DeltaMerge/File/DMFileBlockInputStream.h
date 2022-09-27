@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
@@ -74,6 +75,7 @@ public:
     explicit DMFileBlockInputStreamBuilder(const Context & context);
 
     // Build the final stream ptr.
+    // Empty `rowkey_ranges` means not filter by rowkey
     // Should not use the builder again after `build` is called.
     DMFileBlockInputStreamPtr build(
         const DMFilePtr & dmfile,
@@ -183,19 +185,26 @@ private:
 
 /**
  * Create a simple stream that read all blocks on default.
+ * Only read one pack every time.
  * @param context Database context.
  * @param file DMFile pointer.
+ * @param cols The columns to read. Empty means read all columns.
  * @return A shared pointer of an input stream
  */
-inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context & context, const DMFilePtr & file)
+inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context & context, const DMFilePtr & file, ColumnDefines cols = {})
 {
     // disable clean read is needed, since we just want to read all data from the file, and we do not know about the column handle
     // enable read_one_pack_every_time_ is needed to preserve same block structure as the original file
     DMFileBlockInputStreamBuilder builder(context);
+    if (cols.empty())
+    {
+        // turn into read all columns from file
+        cols = file->getColumnDefines();
+    }
     return builder
         .setRowsThreshold(DMFILE_READ_ROWS_THRESHOLD)
         .onlyReadOnePackEveryTime()
-        .build(file, file->getColumnDefines(), DB::DM::RowKeyRanges{});
+        .build(file, cols, DB::DM::RowKeyRanges{});
 }
 
 } // namespace DM

@@ -205,7 +205,7 @@ std::optional<SchemaDiff> SchemaGetter::getSchemaDiff(Int64 ver)
     String data = TxnStructure::get(snap, key);
     if (data.empty())
     {
-        LOG_FMT_WARNING(log, "The schema diff for version {}, key {} is empty.", ver, key);
+        LOG_WARNING(log, "The schema diff for version {}, key {} is empty.", ver, key);
         return std::nullopt;
     }
     SchemaDiff diff;

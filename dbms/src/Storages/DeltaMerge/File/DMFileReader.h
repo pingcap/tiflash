@@ -102,13 +102,11 @@ public:
     /// Return false if it is the end of stream.
     bool getSkippedRows(size_t & skip_rows);
     Block read();
-    UInt64 fileId() const
-    {
-        return dmfile->fileId();
-    }
     std::string path() const
     {
-        return dmfile->path();
+        // Status of DMFile can be updated when DMFileReader in used and the pathname will be changed.
+        // For DMFileReader, always use the readable path.
+        return DMFile::getPathByStatus(dmfile->parentPath(), dmfile->fileId(), DMFile::Status::READABLE);
     }
     void addCachedPacks(ColId col_id, size_t start_pack_id, size_t pack_count, ColumnPtr & col);
 

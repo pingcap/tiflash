@@ -100,7 +100,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     {
         const auto mock_table_id = MockTiDB::instance().newTableID();
         tidb_table_info.id = mock_table_id;
-        LOG_FMT_WARNING(log, "Allocate table id for mock test [id={}]", mock_table_id);
+        LOG_WARNING(log, "Allocate table id for mock test [id={}]", mock_table_id);
     }
 
     table_column_info = std::make_unique<TableColumnInfo>(db_name_, table_name_, primary_expr_ast_);
@@ -889,7 +889,7 @@ BlockInputStreams StorageDeltaMerge::read(
                 fb.append(range.toDebugString());
             },
             ",");
-        LOG_FMT_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
+        LOG_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
@@ -937,7 +937,7 @@ BlockInputStreams StorageDeltaMerge::read(
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
 
-    LOG_FMT_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
+    LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
 }
@@ -975,7 +975,7 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
 
 void StorageDeltaMerge::ingestFiles(
     const DM::RowKeyRange & range,
-    const std::vector<UInt64> & file_ids,
+    const std::vector<DM::ExternalDTFileInfo> & external_files,
     bool clear_data_in_range,
     const Settings & settings)
 {
@@ -984,7 +984,7 @@ void StorageDeltaMerge::ingestFiles(
         global_context,
         settings,
         range,
-        file_ids,
+        external_files,
         clear_data_in_range);
 }
 
@@ -1256,7 +1256,7 @@ try
                 // this exception and avoid of reading broken data, they have truncate that table.
                 if (table_info && table_info.value().get().replica_info.count == 0)
                 {
-                    LOG_FMT_WARNING(
+                    LOG_WARNING(
                         log,
                         "Accept lossy column data type modification. Table (id:{}) modify column {}({}) from {} to {}",
                         table_info.value().get().id,
