@@ -28,7 +28,7 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
-#include <Interpreters/ProcessList.h>
+#include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
@@ -281,14 +281,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
     context->setDAGContext(dag_context.get());
-
-    process_list_entry = context->getProcessList().insert(
-        dag_context->dummy_query_string,
-        dag_context->dummy_ast.get(),
-        context->getClientInfo(),
-        context->getSettingsRef());
-
-    context->setProcessListElement(&process_list_entry->get());
+    process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
     dag_context->setProcessListEntry(process_list_entry);
 
     if (dag_context->isRootMPPTask())
