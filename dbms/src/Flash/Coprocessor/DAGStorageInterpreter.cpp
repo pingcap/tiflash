@@ -651,7 +651,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
-        query_info.query = makeDummyQuery();
+        query_info.query = dagContext().dummy_ast;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             push_down_filter.conditions,
             analyzer->getPreparedSets(),
