@@ -187,6 +187,7 @@ public:
         , dummy_query_string(dag_request->DebugString())
         , dummy_ast(makeDummyQuery())
         , initialize_concurrency(concurrency)
+        , is_mpp_task(true)
         , is_root_mpp_task(false)
         , log(Logger::get(log_identifier))
         , flags(dag_request->flags())
@@ -197,9 +198,6 @@ public:
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
-        is_mpp_task = dag_request->root_executor().has_exchange_sender();
-        if (!is_mpp_task)
-            is_batch_cop = true;
 
         initOutputInfo();
     }

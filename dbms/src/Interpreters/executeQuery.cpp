@@ -234,9 +234,23 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
         if (context.isMPPTask())
         {
-            /// for MPPTask, process list entry is created in MPPTask::prepare()
-            RUNTIME_ASSERT(context.getDAGContext()->getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
-            process_list_entry = context.getDAGContext()->getProcessListEntry();
+            if (!context.isTest())
+            {
+                /// for MPPTask, process list entry is created in MPPTask::prepare()
+                RUNTIME_ASSERT(context.getDAGContext()->getProcessListEntry() != nullptr, "process list entry for MPP task must not be nullptr");
+            }
+            else if (context.getDAGContext()->getProcessListEntry() == nullptr)
+            {
+                process_list_entry = context.getProcessList().insert(
+                    query,
+                    ast.get(),
+                    context.getClientInfo(),
+                    settings);
+
+                context.setProcessListElement(&process_list_entry->get());
+            }
+            else
+                process_list_entry = context.getDAGContext()->getProcessListEntry();
         }
 
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
