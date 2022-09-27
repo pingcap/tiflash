@@ -12,31 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/CPUAffinityManager.h>
-#include <Common/FailPoint.h>
-#include <Common/ThreadFactory.h>
-#include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/SquashingBlockOutputStream.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Mpp/GRPCReceiverContext.h>
-#include <Flash/Mpp/MPPTask.h>
+#include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTaskScheduleEntry.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
-#include <Flash/Mpp/Utils.h>
-#include <Flash/Statistics/traverseExecutors.h>
-#include <Flash/executeQuery.h>
-#include <Interpreters/ProcessList.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
-
-#include <chrono>
-#include <ext/scope_guard.h>
-#include <magic_enum.hpp>
-#include <map>
 
 namespace DB
 {

@@ -14,26 +14,8 @@
 
 #pragma once
 
-#include <Common/Exception.h>
 #include <Common/Logger.h>
-#include <Common/MemoryTracker.h>
-#include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Flash/Mpp/MPPTaskStatistics.h>
-#include <Flash/Mpp/MPPTunnel.h>
-#include <Flash/Mpp/MPPTunnelSet.h>
-#include <Flash/Mpp/TaskStatus.h>
-#include <Interpreters/Context.h>
-#include <common/logger_useful.h>
-#include <common/types.h>
-#include <kvproto/mpp.pb.h>
-
-#include <atomic>
-#include <boost/noncopyable.hpp>
-#include <memory>
-#include <unordered_map>
 
 namespace DB
 {
