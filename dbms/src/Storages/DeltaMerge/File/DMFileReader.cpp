@@ -172,13 +172,13 @@ DMFileReader::Stream::Stream(
 
     buffer_size = std::min(buffer_size, max_read_buffer_size);
 
-    LOG_FMT_TRACE(log,
-                  "file size: {}, estimated read size: {}, buffer_size: {} (aio_threshold: {}, max_read_buffer_size: {})",
-                  data_file_size,
-                  estimated_size,
-                  buffer_size,
-                  aio_threshold,
-                  max_read_buffer_size);
+    LOG_TRACE(log,
+              "file size: {}, estimated read size: {}, buffer_size: {} (aio_threshold: {}, max_read_buffer_size: {})",
+              data_file_size,
+              estimated_size,
+              buffer_size,
+              aio_threshold,
+              max_read_buffer_size);
 
     if (!reader.dmfile->configuration)
     {
@@ -507,7 +507,7 @@ Block DMFileReader::read()
                 }
                 else
                 {
-                    LOG_FMT_TRACE(
+                    LOG_TRACE(
                         log,
                         "Column [id: {}, name: {}, type: {}] not found, use default value. DMFile: {}",
                         cd.id,

@@ -106,7 +106,7 @@ std::string ExecutableDictionarySource::getUpdateFieldAndDate()
 
 BlockInputStreamPtr ExecutableDictionarySource::loadAll()
 {
-    LOG_FMT_TRACE(log, "loadAll {}", toString());
+    LOG_TRACE(log, "loadAll {}", toString());
     auto process = ShellCommand::execute(command);
     auto input_stream = context.getInputFormat(format, process->out, sample_block, max_block_size);
     return std::make_shared<ShellCommandOwningBlockInputStream>(input_stream, std::move(process));
@@ -115,7 +115,7 @@ BlockInputStreamPtr ExecutableDictionarySource::loadAll()
 BlockInputStreamPtr ExecutableDictionarySource::loadUpdatedAll()
 {
     std::string command_update = getUpdateFieldAndDate();
-    LOG_FMT_TRACE(log, "loadUpdatedAll {}", command_update);
+    LOG_TRACE(log, "loadUpdatedAll {}", command_update);
     auto process = ShellCommand::execute(command_update);
     auto input_stream = context.getInputFormat(format, process->out, sample_block, max_block_size);
     return std::make_shared<ShellCommandOwningBlockInputStream>(input_stream, std::move(process));
@@ -188,7 +188,7 @@ private:
 
 BlockInputStreamPtr ExecutableDictionarySource::loadIds(const std::vector<UInt64> & ids)
 {
-    LOG_FMT_TRACE(log, "loadIds {} size = {}", toString(), ids.size());
+    LOG_TRACE(log, "loadIds {} size = {}", toString(), ids.size());
     auto process = ShellCommand::execute(command);
 
     auto output_stream = context.getOutputFormat(format, process->in, sample_block);
@@ -207,7 +207,7 @@ BlockInputStreamPtr ExecutableDictionarySource::loadKeys(
     const Columns & key_columns,
     const std::vector<size_t> & requested_rows)
 {
-    LOG_FMT_TRACE(log, "loadKeys {} size = {}", toString(), requested_rows.size());
+    LOG_TRACE(log, "loadKeys {} size = {}", toString(), requested_rows.size());
     auto process = ShellCommand::execute(command);
 
     auto output_stream = context.getOutputFormat(format, process->in, sample_block);

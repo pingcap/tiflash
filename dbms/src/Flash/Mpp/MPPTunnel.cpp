@@ -94,7 +94,7 @@ MPPTunnel::~MPPTunnel()
     {
         tryLogCurrentException(log, "Error in destructor function of MPPTunnel");
     }
-    LOG_FMT_TRACE(log, "destructed tunnel obj!");
+    LOG_TRACE(log, "destructed tunnel obj!");
 }
 
 /// exit abnormally, such as being cancelled.
@@ -134,7 +134,7 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 // TODO: consider to hold a buffer
 void MPPTunnel::write(const mpp::MPPDataPacket & data)
 {
-    LOG_FMT_TRACE(log, "ready to write");
+    LOG_TRACE(log, "ready to write");
     {
         std::unique_lock lk(mu);
         waitUntilConnectedOrFinished(lk);
@@ -154,7 +154,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data)
 /// done normally and being called exactly once after writing all packets
 void MPPTunnel::writeDone()
 {
-    LOG_FMT_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
+    LOG_TRACE(log, "ready to finish, is_local: {}", mode == TunnelSenderMode::LOCAL);
     {
         std::unique_lock lk(mu);
         /// make sure to finish the tunnel after it is connected
@@ -173,7 +173,7 @@ void MPPTunnel::connect(PacketWriter * writer)
         if (status != TunnelStatus::Unconnected)
             throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
 
-        LOG_FMT_TRACE(log, "ready to connect");
+        LOG_TRACE(log, "ready to connect");
         switch (mode)
         {
         case TunnelSenderMode::LOCAL:
@@ -207,7 +207,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         if (status != TunnelStatus::Unconnected)
             throw Exception(fmt::format("MPPTunnel has connected or finished: {}", statusToString()));
 
-        LOG_FMT_TRACE(log, "ready to connect async");
+        LOG_TRACE(log, "ready to connect async");
         RUNTIME_ASSERT(mode == TunnelSenderMode::ASYNC_GRPC, log, "mode {} is not async grpc in connectAsync", mode);
         RUNTIME_ASSERT(call_data != nullptr, log, "Async writer shouldn't be null");
 
@@ -242,7 +242,7 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
         assert(status != TunnelStatus::Unconnected);
     }
 #endif
-    LOG_FMT_TRACE(log, "start wait for consumer finish!");
+    LOG_TRACE(log, "start wait for consumer finish!");
     {
         std::unique_lock lock(mu);
         if (status == TunnelStatus::Finished)
@@ -258,7 +258,7 @@ void MPPTunnel::waitForSenderFinish(bool allow_throw)
     }
     if (allow_throw && !err_msg.empty())
         throw Exception("Consumer exits unexpected, " + err_msg);
-    LOG_FMT_TRACE(log, "end wait for consumer finish!");
+    LOG_TRACE(log, "end wait for consumer finish!");
 }
 
 void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
@@ -268,21 +268,21 @@ void MPPTunnel::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
     };
     if (timeout.count() > 0)
     {
-        LOG_FMT_TRACE(log, "start waitUntilConnectedOrFinished");
+        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
         if (status == TunnelStatus::Unconnected)
         {
             fiu_do_on(FailPoints::random_tunnel_wait_timeout_failpoint, throw Exception(tunnel_id + " is timeout"););
         }
         auto res = cv_for_status_changed.wait_for(lk, timeout, not_unconnected);
-        LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
+        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
         if (!res)
             throw Exception(tunnel_id + " is timeout");
     }
     else
     {
-        LOG_FMT_TRACE(log, "start waitUntilConnectedOrFinished");
+        LOG_TRACE(log, "start waitUntilConnectedOrFinished");
         cv_for_status_changed.wait(lk, not_unconnected);
-        LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
+        LOG_TRACE(log, "end waitUntilConnectedOrFinished");
     }
     if (status == TunnelStatus::Unconnected)
         throw Exception("MPPTunnel can not be connected because MPPTask is cancelled");
@@ -312,14 +312,14 @@ void MPPTunnel::updateMemTracker()
 
 void TunnelSender::consumerFinish(const String & msg)
 {
-    LOG_FMT_TRACE(log, "calling consumer Finish");
+    LOG_TRACE(log, "calling consumer Finish");
     finish();
     consumer_state.setMsg(msg);
 }
 
 SyncTunnelSender::~SyncTunnelSender()
 {
-    LOG_FMT_TRACE(log, "waiting child thread finished!");
+    LOG_TRACE(log, "waiting child thread finished!");
     thread_manager->wait();
 }
 

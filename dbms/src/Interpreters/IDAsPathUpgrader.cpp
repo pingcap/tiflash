@@ -240,7 +240,7 @@ void tryRemoveDirectory(const String & directory, Poco::Logger * log, bool recur
         catch (Poco::DirectoryNotEmptyException &)
         {
             // just ignore and keep that directory if it is not empty
-            LOG_FMT_WARNING(log, "Can not remove directory: {}, it is not empty", directory);
+            LOG_WARNING(log, "Can not remove directory: {}, it is not empty", directory);
         }
     }
 }
@@ -539,7 +539,7 @@ static void dropAbsentDatabase(
     if (auto file = Poco::File(old_meta_file); file.exists())
         file.remove();
     else
-        LOG_FMT_WARNING(log, "Can not remove database meta file: {}", old_meta_file);
+        LOG_WARNING(log, "Can not remove database meta file: {}", old_meta_file);
     // Remove old data dir
     const String old_data_dir = db_info.getDataDirectory(root_path);
     tryRemoveDirectory(old_data_dir, log, true);
@@ -578,7 +578,7 @@ void IDAsPathUpgrader::linkDatabaseTableInfos(const std::vector<TiDB::DBInfoPtr>
                 // For mock test or develop environment, we may reserve some database
                 // for convenience. Keep them as what they are. Print warnings and
                 // ignore it in later upgrade.
-                LOG_FMT_WARNING(log, "Database {} is reserved, ignored in upgrade.", db_name);
+                LOG_WARNING(log, "Database {} is reserved, ignored in upgrade.", db_name);
             }
             else
             {
@@ -809,7 +809,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
         if (auto file = Poco::File(old_meta_file); file.exists())
             file.remove();
         else
-            LOG_FMT_WARNING(log, "Can not remove database meta file: {}", old_meta_file);
+            LOG_WARNING(log, "Can not remove database meta file: {}", old_meta_file);
         // Remove old data dir
         const String old_data_dir = db_info.getDataDirectory(root_path);
         tryRemoveDirectory(old_data_dir, log);

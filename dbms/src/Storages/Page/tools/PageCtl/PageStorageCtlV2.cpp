@@ -147,7 +147,7 @@ try
     if (mode == DUMP_VALID_ENTRIES && argc > 3)
     {
         debugging_recover_stop_sequence = strtoull(argv[3], nullptr, 10);
-        LOG_FMT_TRACE(logger, "debug early stop sequence set to: {}", debugging_recover_stop_sequence);
+        LOG_TRACE(logger, "debug early stop sequence set to: {}", debugging_recover_stop_sequence);
     }
     DB::KeyManagerPtr key_manager = std::make_shared<DB::MockKeyManager>(false);
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(key_manager, false);

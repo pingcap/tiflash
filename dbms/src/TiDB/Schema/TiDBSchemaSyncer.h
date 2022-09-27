@@ -183,7 +183,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
 
         if (diffs.empty())
         {
-            LOG_FMT_WARNING(log, "Schema Diff is empty.");
+            LOG_WARNING(log, "Schema Diff is empty.");
             return -1;
         }
         // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
@@ -210,7 +210,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     //  - `cur_version` is 1, `latest_version` is 10
                     //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
                     //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9(which we check it before)
-                    LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
+                    LOG_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                     continue;
                 }
                 builder.applyDiff(*schema_diff);
@@ -222,7 +222,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             {
                 GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             }
-            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return -1;
         }
         catch (Exception & e)
@@ -232,19 +232,19 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 throw;
             }
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return -1;
         }
         catch (Poco::Exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.displayText());
+            LOG_WARNING(log, "apply diff meets exception : {}", e.displayText());
             return -1;
         }
         catch (std::exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.what());
+            LOG_WARNING(log, "apply diff meets exception : {}", e.what());
             return -1;
         }
 
