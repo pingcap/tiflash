@@ -1989,11 +1989,11 @@ public:
 
         const ColumnPtr & col_expr = block.getByPosition(arguments[0]).column;
         const ColumnPtr & col_pat = block.getByPosition(arguments[1]).column;
-        
+
         const Param<StringRef> expr_param(&col_expr, "");
         const Param<StringRef> pat_param(&col_pat, "");
         auto arg_num = arguments.size();
-        
+
         // Only when this is a regexp_like function, match_type_param will be initialized
         std::unique_ptr<const Param<StringRef>> match_type_param;
         if constexpr (name == NameRegexpLike::name)
@@ -2065,11 +2065,11 @@ public:
 
 #undef PROCESS
         }
-        
+
         // Check memorization
         if (canMemorize<Name>(arg_num, pat_param, match_type_param))
             memorize(pat_param, match_type_param);
-        
+
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
@@ -2097,14 +2097,16 @@ public:
                     nullmap[i] = 0;
                     vec_res[i] = regexp->match(expr_param.getString(i)); // match
                 }
-                // TODO set result
+
+                block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
             else
             {
                 // expr column is impossible to be a nullable column here
                 for (size_t i = 0; i < arg_num; ++i)
                     vec_res[i] = regexp->match(expr_param.getString(i)); // match
-                // TODO set result
+
+                block.getByPosition(result).column = std::move(col_res);
             } 
         }
         else
@@ -2139,7 +2141,8 @@ public:
                     }
                     
                 }
-                // TODO set result
+                
+                block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
             else
             {
@@ -2160,7 +2163,8 @@ public:
                         // TODO handle match_type first and do match action
                     }
                 }
-                // TODO set result
+
+                block.getByPosition(result).column = std::move(col_res);
             }
         }
     }
