@@ -167,6 +167,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    friend struct MockRaftStoreProxy;
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;

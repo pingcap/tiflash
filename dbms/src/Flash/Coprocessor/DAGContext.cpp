@@ -240,8 +240,4 @@ const SingleTableRegions & DAGContext::getTableRegionsInfoByTableID(Int64 table_
 {
     return tables_regions_info.getTableRegionInfoByTableID(table_id);
 }
-const MPPReceiverSetPtr & DAGContext::getMppReceiverSet() const
-{
-    return mpp_receiver_set;
-}
 } // namespace DB

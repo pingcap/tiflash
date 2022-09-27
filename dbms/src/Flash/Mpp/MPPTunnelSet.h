@@ -57,7 +57,6 @@ public:
     void close(const String & reason, bool wait_sender_finish);
     void finishWrite();
     void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel);
-    void updateMemTracker();
 
     TunnelPtr getTunnelByReceiverTaskId(const MPPTaskId & id);
 

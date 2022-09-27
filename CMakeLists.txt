@@ -478,14 +478,6 @@ else ()
     message (STATUS "Set jemalloc narenas ${JEMALLOC_NARENAS}")
 endif ()
 
-# Flags for test coverage
-option (TEST_COVERAGE "Enables flags for test coverage" OFF)
-option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
-    include(CodeCoverage)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
-endif ()
-
 option (TEST_LLVM_COVERAGE "Enables flags for test coverage" OFF)
 if (TEST_LLVM_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
     set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-instr-generate -fcoverage-mapping -DTIFLASH_LLVM_COVERAGE=1")
