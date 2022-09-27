@@ -252,7 +252,7 @@ private:
             const auto & data = from->getData();
             if (checkColumnConst<ColumnInt64>(from))
             {
-                constantDuration<F>(from->getUInt(0), from->size(), vec_to);
+                constantDuration<F>(from->getInt(0), from->size(), vec_to);
             }
             else
             {
@@ -265,10 +265,11 @@ private:
     static void constantString(const StringRef & from, size_t size, PaddedPODArray<Int64> & vec_to)
     {
         vec_to.resize(size);
-        auto from_value = get<Int64>(parseMyDuration(from.toString()));
+        auto from_value = get<Int64>(parseMyDuration(from.toString(), 6));
+        const auto & const_value = F(from_value);
         for (size_t i = 0; i < size; ++i)
         {
-            vec_to[i] = F(from_value);
+            vec_to[i] = const_value;
         }
     }
 
@@ -285,7 +286,7 @@ private:
             size_t next_offset = offsets_from[i];
             size_t string_size = next_offset - current_offset - 1;
             StringRef string_value(&vec_from[current_offset], string_size);
-            auto nano = get<Int64>(parseMyDuration(string_value.toString()));
+            auto nano = get<Int64>(parseMyDuration(string_value.toString(), 6));
             vec_to[i] = F(nano);
             current_offset = next_offset;
         }
@@ -295,9 +296,10 @@ private:
     static void constantDuration(const Int64 & from, size_t size, PaddedPODArray<Int64> & vec_to)
     {
         vec_to.resize(size);
+        const auto & const_value = F(from);
         for (size_t i = 0; i < size; ++i)
         {
-            vec_to[i] = F(from);
+            vec_to[i] = const_value;
         }
     }
 
