@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MemoryTrackerSetter.h>
 #include <Common/setThreadName.h>
 #include <Flash/Pipeline/PipelineManager.h>
 #include <Flash/Pipeline/dag/DAGScheduler.h>
@@ -40,6 +41,7 @@ void EventLoop::finish()
 
 void EventLoop::handleSubmit(PipelineTask & task)
 {
+    MemoryTrackerSetter setter(true, task.getMemTracker());
     auto result = task.execute(loop_id);
     switch (result.type)
     {

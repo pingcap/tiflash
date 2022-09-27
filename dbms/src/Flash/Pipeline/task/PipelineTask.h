@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/MemoryTracker.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Transforms/Transforms.h>
 
@@ -53,6 +54,7 @@ public:
         , pipeline_id(pipeline_id_)
         , mpp_task_id(mpp_task_id_)
         , transforms(transforms_)
+        , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     {}
 
     PipelineTask(PipelineTask && task)
@@ -61,6 +63,7 @@ public:
         , mpp_task_id(std::move(task.mpp_task_id))
         , transforms(std::move(task.transforms))
         , status(std::move(task.status))
+        , mem_tracker(std::move(task.mem_tracker))
     {}
 
     PipelineTask & operator=(PipelineTask && task)
@@ -72,12 +75,17 @@ public:
             mpp_task_id = std::move(task.mpp_task_id);
             transforms = std::move(task.transforms);
             status = std::move(task.status);
+            mem_tracker = std::move(task.mem_tracker);
         }
         return *this;
     }
 
     PipelineTaskResult execute(size_t loop_id);
 
+    MemoryTracker * getMemTracker()
+    {
+        return mem_tracker ? mem_tracker.get() : nullptr;
+    }
 public:
     UInt32 task_id;
     UInt32 pipeline_id;
@@ -85,6 +93,8 @@ public:
     TransformsPtr transforms;
 
     PipelineTaskStatus status = PipelineTaskStatus::prepare;
+
+    std::shared_ptr<MemoryTracker> mem_tracker;
 
 private:
     PipelineTaskResult finish();
