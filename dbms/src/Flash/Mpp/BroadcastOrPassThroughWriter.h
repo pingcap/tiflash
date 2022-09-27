@@ -22,9 +22,6 @@
 
 namespace DB
 {
-/// Serializes the stream of blocks and sends them to TiDB or TiFlash with different serialization paths.
-/// When sending data to TiDB, blocks with extra info are written into tipb::SelectResponse, then the whole tipb::SelectResponse is further serialized into mpp::MPPDataPacket.data.
-/// Differently when sending data to TiFlash, blocks with only tuples are directly serialized into mpp::MPPDataPacket.chunks, but for the last block, its extra info (like execution summaries) is written into tipb::SelectResponse, then further serialized into mpp::MPPDataPacket.data.
 template <class StreamWriterPtr>
 class BroadcastOrPassThroughWriter : public DAGResponseWriter
 {
