@@ -59,14 +59,16 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , mpp_task_statistics(id, meta.address())
     , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
-{}
+{
+    current_memory_tracker = nullptr;
+}
 
 MPPTask::~MPPTask()
 {
     /// MPPTask maybe destructed by different thread, set the query memory_tracker
     /// to current_memory_tracker in the destructor
-    if (current_memory_tracker != memory_tracker)
-        current_memory_tracker = memory_tracker;
+    if (process_list_entry != nullptr && current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
+        current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
     if (schedule_state == ScheduleState::SCHEDULED)
     {
@@ -170,8 +172,7 @@ void MPPTask::initExchangeReceivers()
                 context->getMaxStreams(),
                 log->identifier(),
                 executor_id,
-                executor.fine_grained_shuffle_stream_count(),
-                true);
+                executor.fine_grained_shuffle_stream_count());
             if (status != RUNNING)
                 throw Exception("exchange receiver map can not be initialized, because the task is not in running state");
 
@@ -281,6 +282,15 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     context->setDAGContext(dag_context.get());
 
+    process_list_entry = context->getProcessList().insert(
+        dag_context->dummy_query_string,
+        dag_context->dummy_ast.get(),
+        context->getClientInfo(),
+        context->getSettingsRef());
+
+    context->setProcessListElement(&process_list_entry->get());
+    dag_context->setProcessListEntry(process_list_entry);
+
     if (dag_context->isRootMPPTask())
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_before_mpp_register_tunnel_for_root_mpp_task);
@@ -336,6 +346,7 @@ void MPPTask::preprocess()
 void MPPTask::runImpl()
 {
     CPUAffinityManager::getInstance().bindSelfQueryThread();
+    RUNTIME_ASSERT(current_memory_tracker == process_list_entry->get().getMemoryTrackerPtr().get(), log, "The current memory tracker is not set correctly for MPPTask::runImpl");
     if (!switchStatus(INITIALIZING, RUNNING))
     {
         LOG_WARNING(log, "task not in initializing state, skip running");
@@ -360,7 +371,6 @@ void MPPTask::runImpl()
         scheduleOrWait();
 
         LOG_FMT_INFO(log, "task starts running");
-        memory_tracker = current_memory_tracker;
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
