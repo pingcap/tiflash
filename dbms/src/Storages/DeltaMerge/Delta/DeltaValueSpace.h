@@ -96,8 +96,6 @@ private:
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
-    std::string log_prefix;
-
     LoggerPtr log;
 
 public:
