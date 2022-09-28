@@ -35,7 +35,7 @@ using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 class MinTSOScheduler : private boost::noncopyable
 {
 public:
-    MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_hard_limit_);
+    MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit_);
     ~MinTSOScheduler() = default;
     /// try to schedule this task if it is the min_tso query or there are enough threads, otherwise put it into the waiting set.
     /// NOTE: call tryToSchedule under the lock protection of MPPTaskManager
