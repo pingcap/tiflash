@@ -47,6 +47,36 @@ public:
     }
 };
 
+TEST_F(ComputeServerRunner, simpleTest)
+try
+{
+    startServers(1);
+    {
+        std::vector<String> expected_strings = {
+            R"(
+exchange_sender_5 | type:Hash, {<0, Long>, <1, String>, <2, String>}
+ aggregation_4 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+  table_scan_0 | {<0, Long>, <1, String>, <2, String>}
+)",
+            R"(
+exchange_sender_3 | type:PassThrough, {<0, Long>}
+ project_2 | {<0, Long>}
+  aggregation_1 | group_by: {<1, String>, <2, String>}, agg_func: {max(<0, Long>)}
+   exchange_receiver_6 | type:PassThrough, {<0, Long>, <1, String>, <2, String>}
+)"};
+        auto expected_cols = {toNullableVec<Int32>({1, {}, 10000000, 10000000})};
+
+        ASSERT_MPPTASK_EQUAL_PLAN_AND_RESULT(
+            context
+                .scan("test_db", "test_table_1")
+                .aggregation({Max(col("s1"))}, {col("s2"), col("s3")})
+                .project({"max(s1)"}),
+            expected_strings,
+            expected_cols);
+    }
+}
+CATCH
+
 TEST_F(ComputeServerRunner, runAggTasks)
 try
 {

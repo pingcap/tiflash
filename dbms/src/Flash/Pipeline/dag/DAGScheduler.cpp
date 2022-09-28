@@ -132,13 +132,13 @@ void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)
     pipeline->finish(event.task_id);
     if (pipeline->active_task_num == 0)
     {
+        LOG_TRACE(log, "pipeline {} finished", pipeline->toString());
         status_machine.stateToComplete(event.pipeline_id);
         pipeline->finish();
         if (event.pipeline_id == final_pipeline_id)
         {
             event_queue.finish();
             status_machine.finish();
-            LOG_TRACE(log, "pipeline {} finished", pipeline->toString());
         }
         else
         {
@@ -150,7 +150,8 @@ void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)
 void DAGScheduler::handlePipelineSubmit(const PipelineEvent & event)
 {
     assert(event.type == PipelineEventType::submit && event.pipeline);
-    auto pipeline = event.pipeline;
+    const auto & pipeline = event.pipeline;
+    LOG_TRACE(log, "submit pipeline {}", pipeline->toString());
     auto tasks = pipeline->transform(context, task_scheduler.concurrency());
     task_scheduler.submit(tasks);
 }

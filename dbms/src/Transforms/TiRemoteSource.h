@@ -66,7 +66,7 @@ class TiRemoteSource : public Source
     {
         while(true)
         {
-            auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
+            auto result = remote_reader->asyncNextResult(block_queue, sample_block, stream_id);
             if (result.meet_error)
             {
                 LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);

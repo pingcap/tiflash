@@ -17,6 +17,7 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Transforms/TryLock.h>
 
 #include <memory>
 
@@ -40,6 +41,8 @@ public:
     void add(Blocks && local_blocks);
 
     Block read();
+
+    std::pair<bool, Block> tryRead();
 
     void initHeader(const Block & header_);
 

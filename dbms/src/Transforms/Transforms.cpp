@@ -60,9 +60,13 @@ bool Transforms::execute()
     return sink->write(block);
 }
 
-void Transforms::prepare() {}
+void Transforms::prepare()
+{
+    source->prepare();
+}
 bool Transforms::finish()
 {
+    source->finish();
     return sink->finish();
 }
 

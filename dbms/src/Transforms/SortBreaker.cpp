@@ -31,9 +31,19 @@ void SortBreaker::initHeader(const Block & header_)
 
 Block SortBreaker::read()
 {
-    // TODO try lock.
+    assert(impl);
     std::lock_guard<std::mutex> lock(mu);
     return impl->read();
+}
+
+std::pair<bool, Block> SortBreaker::tryRead()
+{
+    assert(impl);
+    TryLock lock(mu);
+    if (lock.isLocked())
+        return {true, impl->read()};
+    else
+        return {false, {}};
 }
 
 void SortBreaker::initForRead()
@@ -51,6 +61,7 @@ void SortBreaker::initForRead()
     assert(header.rows() == 0);
     if (blocks.empty())
         blocks.push_back(header);
+    // don't need to call readPrefix/readSuffix for MergeSortingBlocksBlockInputStream.
     impl = std::make_unique<MergeSortingBlocksBlockInputStream>(
         blocks,
         description,

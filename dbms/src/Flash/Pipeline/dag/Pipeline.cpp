@@ -75,7 +75,7 @@ void Pipeline::finish(size_t task_id)
 
 void Pipeline::finish()
 {
-    task_transforms_vec.clear();
+    task_transforms_vec = {};
     plan_node = nullptr;
 }
 } // namespace DB

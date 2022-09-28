@@ -37,6 +37,16 @@ public:
         return impl->getHeader();
     }
 
+    void prepare() override
+    {
+        impl->readPrefix();
+    }
+
+    void finish() override
+    {
+        impl->readSuffix();
+    }
+
 private:
     BlockInputStreamPtr impl;
 };

@@ -14,23 +14,27 @@
 
 #pragma once
 
-#include <Core/Block.h>
-
-#include <memory>
-#include <utility>
-
 namespace DB
 {
-class Source
+template <typename Mutex>
+class TryLock
 {
 public:
-    virtual ~Source() = default;
-    virtual std::pair<bool, Block> read() = 0;
-    virtual Block getHeader() const = 0;
-    virtual void cancel(bool /*kill*/) {}
-    virtual void prepare() {}
-    virtual void finish() {}
-};
+    explicit TryLock(Mutex & m_) noexcept: m(m_)
+    {
+        is_locked = m.try_lock();
+    }
 
-using SourcePtr = std::shared_ptr<Source>;
+    ~TryLock()
+    {
+        if (is_locked)
+            m.unlock();
+    }
+
+    bool isLocked() const { return is_locked; }
+
+private:
+    Mutex & m;
+    bool is_locked = false;
+};
 } // namespace DB

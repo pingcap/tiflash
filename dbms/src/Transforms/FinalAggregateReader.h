@@ -16,6 +16,7 @@
 
 #include <Core/Block.h>
 #include <Interpreters/AggregateStore.h>
+#include <Transforms/TryLock.h>
 
 #include <memory>
 
@@ -27,7 +28,7 @@ public:
     FinalAggregateReader(
         const AggregateStorePtr & agg_store_)
         : agg_store(agg_store_)
-        , impl(agg_store->merge())
+        , impl(agg_store->merge()) // don't need to call readPrefix/readSuffix for impl.
     {}
 
     Block getHeader()
@@ -36,10 +37,20 @@ public:
         return impl->getHeader();
     }
 
+    std::pair<bool, Block> tryRead()
+    {
+        assert(impl);
+        TryLock lock(mu);
+        if (lock.isLocked())
+            return {true, impl->read()};
+        else
+            return {false, {}};
+    }
+
     Block read()
     {
-        std::lock_guard<std::mutex> lock(mu);
         assert(impl);
+        std::lock_guard<std::mutex> lock(mu);
         return impl->read();
     }
 
