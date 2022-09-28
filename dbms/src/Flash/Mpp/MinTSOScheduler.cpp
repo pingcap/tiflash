@@ -69,14 +69,14 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     }
 }
 
-bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & scheduler_entry, MPPTaskManager & task_manager)
+bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTaskManager & task_manager)
 {
     /// check whether this schedule is disabled or not
     if (isDisabled())
     {
         return true;
     }
-    const auto & id = scheduler_entry.getMPPTaskId();
+    const auto & id = schedule_entry.getMPPTaskId();
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.start_ts);
     if (nullptr == query_task_set || !query_task_set->isInNormalState())
     {
@@ -84,7 +84,7 @@ bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & scheduler_entry, MPPT
         return true;
     }
     bool has_error = false;
-    return scheduleImp(id.start_ts, query_task_set, scheduler_entry, false, has_error);
+    return scheduleImp(id.start_ts, query_task_set, schedule_entry, false, has_error);
 }
 
 /// after finishing the query, there would be no threads released soon, so the updated min-tso query with waiting tasks should be scheduled.
