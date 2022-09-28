@@ -38,17 +38,31 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    StableValueSpace(PageId id_)
+    /**
+     * Note: `StableValueSpace` is a special case, the `log_prefix_` may be not known when it is built
+     * (see prepareSplit). So we allow `resetLogger` later.
+     */
+    StableValueSpace(const std::string & log_prefix_, PageId id_)
         : id(id_)
-        , log(&Poco::Logger::get("StableValueSpace"))
+        , log(Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix_)))
     {}
+
+    /**
+     * This is a hack to allow reset the logger using a new `log_prefix`.
+     * We don't know the exact segment id when StableValueSpace is constructed during
+     * prepareSplit.
+     */
+    void resetLogger(const std::string & log_prefix)
+    {
+        log = Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix));
+    }
 
     // Set DMFiles for this value space.
     // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
     // bytes and rows.
     void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
 
-    PageId getId() { return id; }
+    PageId getId() const { return id; }
     void saveMeta(WriteBatch & meta_wb);
 
     size_t getRows() const;
@@ -93,7 +107,7 @@ public:
 
     void enableDMFilesGC();
 
-    static StableValueSpacePtr restore(DMContext & context, PageId id);
+    static StableValueSpacePtr restore(const std::string & log_prefix, DMContext & context, PageId id);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
@@ -243,7 +257,7 @@ private:
     StableProperty property;
     std::atomic<bool> is_property_cached = false;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using StableSnapshot = StableValueSpace::Snapshot;

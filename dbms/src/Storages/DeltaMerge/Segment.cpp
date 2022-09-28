@@ -163,11 +163,13 @@ DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
     return dmfile;
 }
 
-StableValueSpacePtr createNewStable(DMContext & context,
-                                    const ColumnDefinesPtr & schema_snap,
-                                    const BlockInputStreamPtr & input_stream,
-                                    PageId stable_id,
-                                    WriteBatches & wbs)
+StableValueSpacePtr createNewStable( //
+    const std::string & log_prefix,
+    DMContext & context,
+    const ColumnDefinesPtr & schema_snap,
+    const BlockInputStreamPtr & input_stream,
+    PageId stable_id,
+    WriteBatches & wbs)
 {
     auto delegator = context.path_pool.getStableDiskDelegator();
     auto store_path = delegator.choosePath();
@@ -178,7 +180,7 @@ StableValueSpacePtr createNewStable(DMContext & context,
     PageId dtfile_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
     auto dtfile = writeIntoNewDMFile(context, schema_snap, input_stream, dtfile_id, store_path, flags);
 
-    auto stable = std::make_shared<StableValueSpace>(stable_id);
+    auto stable = std::make_shared<StableValueSpace>(log_prefix, stable_id);
     stable->setFiles({dtfile}, RowKeyRange::newAll(context.is_common_handle, context.rowkey_column_size));
     stable->saveMeta(wbs.meta);
     wbs.data.putExternal(dtfile_id, 0);
@@ -225,7 +227,7 @@ SegmentPtr Segment::newSegment( //
 
     auto child_log_prefix = getSegmentChildLogPrefix(log_prefix, segment_id);
     auto delta = std::make_shared<DeltaValueSpace>(child_log_prefix, delta_id);
-    auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
+    auto stable = createNewStable(child_log_prefix, context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
 
     auto segment = std::make_shared<Segment>(log_prefix, INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
 
@@ -301,7 +303,7 @@ SegmentPtr Segment::restoreSegment( //
 
     auto child_log_prefix = getSegmentChildLogPrefix(log_prefix, segment_id);
     auto delta = DeltaValueSpace::restore(child_log_prefix, context, rowkey_range, delta_id);
-    auto stable = StableValueSpace::restore(context, stable_id);
+    auto stable = StableValueSpace::restore(child_log_prefix, context, stable_id);
     auto segment = std::make_shared<Segment>(log_prefix, epoch, rowkey_range, segment_id, next_segment_id, delta, stable);
 
     return segment;
@@ -679,7 +681,8 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
         dm_context.stable_pack_rows,
         /*reorginize_block*/ true);
 
-    auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
+    auto child_log_prefix = getSegmentChildLogPrefix(log_prefix, segment_id);
+    auto new_stable = createNewStable(child_log_prefix, dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
     LOG_FMT_DEBUG(log, "MergeDelta - Finish prepare, segment={}", info());
 
@@ -765,13 +768,15 @@ SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
         DMFile::ReadMetaMode::all());
     wbs.data.putRefPage(new_page_id, data_file->pageId());
 
-    auto new_stable = std::make_shared<StableValueSpace>(stable->getId());
+    auto child_log_prefix = getSegmentChildLogPrefix(log_prefix, segment_id);
+
+    auto new_stable = std::make_shared<StableValueSpace>(child_log_prefix, stable->getId());
     new_stable->setFiles({ref_file}, rowkey_range, &dm_context);
     new_stable->saveMeta(wbs.meta);
 
     // Empty new delta
     auto new_delta = std::make_shared<DeltaValueSpace>(
-        getSegmentChildLogPrefix(log_prefix, segment_id),
+        child_log_prefix,
         delta->getId());
     new_delta->saveMeta(wbs);
 
@@ -1151,9 +1156,12 @@ Segment::prepareSplitLogical( //
     }
 
     auto other_stable_id = storage_pool.newMetaPageId();
+    // Note: this log prefix is wrong for other_stable, because it will be attached to another segment.
+    // We will fix it in applySplit.
+    std::string child_log_prefix = getSegmentChildLogPrefix(log_prefix, segment_id);
 
-    auto my_stable = std::make_shared<StableValueSpace>(segment_snap->stable->getId());
-    auto other_stable = std::make_shared<StableValueSpace>(other_stable_id);
+    auto my_stable = std::make_shared<StableValueSpace>(child_log_prefix, segment_snap->stable->getId());
+    auto other_stable = std::make_shared<StableValueSpace>(child_log_prefix, other_stable_id);
 
     my_stable->setFiles(my_stable_files, my_range, &dm_context);
     other_stable->setFiles(other_stable_files, other_range, &dm_context);
@@ -1204,6 +1212,10 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
     StableValueSpacePtr my_new_stable;
     StableValueSpacePtr other_stable;
 
+    // Note: this log prefix is wrong for other_stable, because it will be attached to another segment.
+    // We will fix it in applySplit.
+    auto child_log_prefix = getSegmentChildLogPrefix(log_prefix, segment_id);
+
     {
         auto my_delta_reader = read_info.getDeltaReader(schema_snap);
 
@@ -1227,7 +1239,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             dm_context.min_version,
             is_common_handle);
         auto my_stable_id = segment_snap->stable->getId();
-        my_new_stable = createNewStable(dm_context, schema_snap, my_data, my_stable_id, wbs);
+        my_new_stable = createNewStable(child_log_prefix, dm_context, schema_snap, my_data, my_stable_id, wbs);
     }
 
     LOG_FMT_DEBUG(log, "Split - SplitPhysical - Finish prepare my_new_stable");
@@ -1256,7 +1268,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
             dm_context.min_version,
             is_common_handle);
         auto other_stable_id = dm_context.storage_pool.newMetaPageId();
-        other_stable = createNewStable(dm_context, schema_snap, other_data, other_stable_id, wbs);
+        other_stable = createNewStable(child_log_prefix, dm_context, schema_snap, other_data, other_stable_id, wbs);
     }
 
     LOG_FMT_DEBUG(log, "Split - SplitPhysical - Finish prepare other_stable");
@@ -1302,14 +1314,18 @@ SegmentPair Segment::applySplit( //
     auto other_segment_id = dm_context.storage_pool.newMetaPageId();
     auto other_delta_id = dm_context.storage_pool.newMetaPageId();
 
-    auto child_log_prefix = getSegmentChildLogPrefix(log_prefix, segment_id);
+    auto child_log_prefix_me = getSegmentChildLogPrefix(log_prefix, segment_id);
+    split_info.my_stable->resetLogger(child_log_prefix_me);
+    auto child_log_prefix_other = getSegmentChildLogPrefix(log_prefix, other_segment_id);
+    split_info.other_stable->resetLogger(child_log_prefix_other);
+
     auto my_delta = std::make_shared<DeltaValueSpace>( //
-        child_log_prefix,
+        child_log_prefix_me,
         delta->getId(),
         my_persisted_files,
         my_in_memory_files);
     auto other_delta = std::make_shared<DeltaValueSpace>( //
-        child_log_prefix,
+        child_log_prefix_other,
         other_delta_id,
         other_persisted_files,
         other_in_memory_files);
@@ -1322,7 +1338,6 @@ SegmentPair Segment::applySplit( //
         other_segment_id,
         my_delta,
         split_info.my_stable);
-
     auto other = std::make_shared<Segment>( //
         log_prefix,
         INITIAL_EPOCH,
@@ -1471,8 +1486,9 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
         dm_context.min_version,
         dm_context.is_common_handle);
 
+    auto child_log_prefix = getSegmentChildLogPrefix(ordered_segments[0]->log_prefix, ordered_segments[0]->segment_id);
     auto merged_stable_id = ordered_segments[0]->stable->getId();
-    auto merged_stable = createNewStable(dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
+    auto merged_stable = createNewStable(child_log_prefix, dm_context, schema_snap, merged_stream, merged_stable_id, wbs);
 
     LOG_FMT_DEBUG(log, "Merge - Finish prepare, segments_to_merge={}", info(ordered_segments));
 
