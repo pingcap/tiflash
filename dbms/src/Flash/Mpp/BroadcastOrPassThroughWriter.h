@@ -18,12 +18,13 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
+#include <Flash/Mpp/AsyncWriter.h>
 #include <common/types.h>
 
 namespace DB
 {
 template <class StreamWriterPtr>
-class BroadcastOrPassThroughWriter : public DAGResponseWriter
+class BroadcastOrPassThroughWriter : public DAGResponseWriter, public AsyncWriter
 {
 public:
     BroadcastOrPassThroughWriter(
@@ -34,9 +35,15 @@ public:
     void write(const Block & block) override;
     void finishWrite() override;
 
+    void asyncWrite(Block && block) override;
+    bool asyncFinishWrite() override;
+    bool asyncIsReady() override;
+
 private:
     template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks();
+
+    void asyncEncodeThenWriteBlocks();
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;
@@ -44,6 +51,10 @@ private:
     std::vector<Block> blocks;
     size_t rows_in_blocks;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
+
+    // async
+    std::optional<TrackedMppDataPacket> not_ready_packet;
+    std::vector<uint16_t> not_ready_partitions;
 };
 
 } // namespace DB

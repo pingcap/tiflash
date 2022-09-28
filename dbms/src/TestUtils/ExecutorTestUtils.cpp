@@ -224,8 +224,9 @@ void ExecutorTest::enablePipeline(bool is_enable)
     context.context.setSetting("enable_pipeline", is_enable ? "true" : "false");
 }
 
-DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t)
+DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t /*concurrency*/)
 {
+    // DAGContext dag_context(*request, "executor_test", concurrency);
     DAGContext dag_context(*request, "executor_test", getNumberOfPhysicalCPUCores());
     context.context.setExecutorTest();
     context.context.setMockStorage(context.mockStorage());

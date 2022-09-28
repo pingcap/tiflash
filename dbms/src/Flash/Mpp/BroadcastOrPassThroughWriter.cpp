@@ -97,6 +97,84 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
     writer->write(tracked_packet.getPacket());
 }
 
+template <class StreamWriterPtr>
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::asyncWrite(Block && block)
+{
+    RUNTIME_CHECK_MSG(
+        block.columns() == dag_context.result_field_types.size(),
+        "Output column size mismatch with field type size");
+    size_t rows = block.rows();
+    rows_in_blocks += rows;
+    if (rows > 0)
+    {
+        blocks.emplace_back(std::move(block));
+    }
+
+    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+        asyncEncodeThenWriteBlocks();
+}
+
+template <class StreamWriterPtr>
+bool BroadcastOrPassThroughWriter<StreamWriterPtr>::asyncFinishWrite()
+{
+    asyncEncodeThenWriteBlocks();
+    return asyncIsReady();
+}
+
+template <class StreamWriterPtr>
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::asyncEncodeThenWriteBlocks()
+{
+    if (blocks.empty())
+        return;
+    TrackedMppDataPacket tracked_packet(current_memory_tracker);
+    while (!blocks.empty())
+    {
+        const auto & block = blocks.back();
+        chunk_codec_stream->encode(block, 0, block.rows());
+        blocks.pop_back();
+        tracked_packet.addChunk(chunk_codec_stream->getString());
+        chunk_codec_stream->clear();
+    }
+    assert(blocks.empty());
+    rows_in_blocks = 0;
+
+    assert(!not_ready_packet.has_value() && not_ready_partitions.empty());
+    for (uint16_t part_id = 0; part_id < writer->getPartitionNum(); ++part_id)
+    {
+        if (!writer->asyncWrite(tracked_packet.getPacket(), part_id))
+            not_ready_partitions.emplace_back(part_id);
+    }
+    if (!not_ready_partitions.empty())
+        not_ready_packet.emplace(std::move(tracked_packet));
+}
+
+template <class StreamWriterPtr>
+bool BroadcastOrPassThroughWriter<StreamWriterPtr>::asyncIsReady()
+{
+    if (!not_ready_packet.has_value())
+        return true;
+
+    const auto & packet = not_ready_packet.value().getPacket();
+    assert(!not_ready_partitions.empty());
+    auto iter = not_ready_partitions.begin();
+    while (iter != not_ready_partitions.end())
+    {
+        if (writer->asyncWrite(packet, *iter))
+            iter = not_ready_partitions.erase(iter);
+        else
+            ++iter;
+    }
+    if (not_ready_partitions.empty())
+    {
+        not_ready_packet.reset();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;
 
 } // namespace DB

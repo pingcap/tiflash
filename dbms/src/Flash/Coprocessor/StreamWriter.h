@@ -50,6 +50,10 @@ struct StreamWriter
     {
         throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
     }
+    bool asyncWrite(const mpp::MPPDataPacket &, int16_t)
+    {
+        throw Exception("StreamWriter::asyncWrite(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
+    }
     void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
     {
         ::coprocessor::BatchResponse resp;

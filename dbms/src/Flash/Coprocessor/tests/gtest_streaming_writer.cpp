@@ -99,6 +99,7 @@ struct MockStreamWriter
         : checker(checker_)
     {}
 
+    bool asyncWrite(const mpp::MPPDataPacket &, int16_t) { throw Exception("unsupport"); }
     void write(mpp::MPPDataPacket &) { FAIL() << "cannot reach here."; }
     void write(mpp::MPPDataPacket &, uint16_t) { FAIL() << "cannot reach here."; }
     void write(tipb::SelectResponse & response, uint16_t part_id) { checker(response, part_id); }

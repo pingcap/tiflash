@@ -55,13 +55,12 @@ public:
     {
         if (done)
             return {true, {}};
-
+        addReadTaskPoolToScheduler();
         while (true)
         {
             Block res;
             if (!task_pool->tryPopBlock(res))
                 return {false, {}};
-
             if (res)
             {
                 if (extra_table_id_index != InvalidColumnID)
@@ -97,6 +96,17 @@ public:
     }
 
 private:
+    void addReadTaskPoolToScheduler()
+    {
+        if (likely(task_pool_added))
+        {
+            return;
+        }
+        std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
+        task_pool_added = true;
+    }
+
+private:
     DM::SegmentReadTaskPoolPtr task_pool;
     Block header;
     // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
@@ -106,5 +116,6 @@ private:
     LoggerPtr log;
     int64_t ref_no;
     size_t total_rows = 0;
+    bool task_pool_added;
 };
 } // namespace DB

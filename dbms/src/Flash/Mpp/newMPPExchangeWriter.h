@@ -18,6 +18,8 @@
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashParitionWriter.h>
+#include <Flash/Mpp/HashParitionWriter.h>
+#include <Flash/Mpp/AsyncWriter.h>
 
 namespace DB
 {
@@ -80,6 +82,50 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                 writer,
                 batch_send_min_limit,
                 should_send_exec_summary_at_last,
+                dag_context);
+        }
+    }
+}
+
+template <class StreamWriterPtr>
+AsyncWriterPtr newMPPExchangeAsyncWriter(
+    const StreamWriterPtr & writer,
+    const std::vector<Int64> & partition_col_ids,
+    const TiDB::TiDBCollators & partition_col_collators,
+    const tipb::ExchangeType & exchange_type,
+    Int64 records_per_chunk,
+    Int64 batch_send_min_limit,
+    DAGContext & dag_context)
+{
+    RUNTIME_CHECK(dag_context.isMPPTask());
+    if (dag_context.isRootMPPTask())
+    {
+        RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
+        return std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
+            writer,
+            records_per_chunk,
+            batch_send_min_limit,
+            false,
+            dag_context);
+    }
+    else
+    {
+        if (exchange_type == tipb::ExchangeType::Hash)
+        {
+            return std::make_unique<HashPartitionWriter<StreamWriterPtr>>(
+                writer,
+                partition_col_ids,
+                partition_col_collators,
+                batch_send_min_limit,
+                false,
+                dag_context);
+        }
+        else
+        {
+            return std::make_unique<BroadcastOrPassThroughWriter<StreamWriterPtr>>(
+                writer,
+                batch_send_min_limit,
+                false,
                 dag_context);
         }
     }

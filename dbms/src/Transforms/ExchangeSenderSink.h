@@ -14,7 +14,8 @@
 
 #pragma once
 
-#include <Flash/Mpp/AsyncMPPTunnelWriter.h>
+#include <Flash/Mpp/AsyncWriter.h>
+#include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Transforms/Sink.h>
 
 namespace DB
@@ -30,14 +31,14 @@ public:
         Int64 records_per_chunk_,
         Int64 batch_send_min_limit_,
         DAGContext & dag_context_)
-        : async_writer(
+        : async_writer(newMPPExchangeAsyncWriter(
             writer_,
             partition_col_ids_,
             collators_,
             exchange_type_,
             records_per_chunk_,
             batch_send_min_limit_,
-            dag_context_)
+            dag_context_))
     {}
 
     bool write(Block & block, size_t) override
@@ -45,21 +46,21 @@ public:
         if (!block)
             return false;
 
-        async_writer.write(std::move(block));
+        async_writer->asyncWrite(std::move(block));
         return true;
     }
 
     bool finish() override
     {
-        return async_writer.finishWrite();
+        return async_writer->asyncFinishWrite();
     }
 
     bool isReady() override
     {
-        return async_writer.isReady();
+        return async_writer->asyncIsReady();
     }
 
 private:
-    AsyncMPPTunnelWriter async_writer;
+    AsyncWriterPtr async_writer;
 };
 } // namespace DB

@@ -25,6 +25,7 @@ void SortBreaker::add(Blocks && local_blocks)
 
 Block SortBreaker::read()
 {
+    // TODO try lock.
     std::lock_guard<std::mutex> lock(mu);
     return impl->read();
 }
