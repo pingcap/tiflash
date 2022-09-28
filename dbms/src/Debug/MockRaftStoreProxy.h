@@ -179,6 +179,42 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<ColumnFamilyType> && cmd_cf);
 
     std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
+    struct Cf
+    {
+        Cf(UInt64 region_id_, ColumnFamilyType type_);
+
+        // Actual data will be stored in MockSSTReader.
+        void finish_file();
+        void freeze() { freezed = true; }
+
+        void insert(HandleID key, std::string val);
+
+        ColumnFamilyType cf_type() const
+        {
+            return type;
+        }
+
+        // Only use this after all sst_files is generated.
+        // vector::push_back can cause destruction of std::string,
+        // which is referenced by SSTView.
+        std::vector<SSTView> ssts() const;
+
+    protected:
+        UInt64 region_id;
+        ColumnFamilyType type;
+        std::vector<std::string> sst_files;
+        std::vector<std::pair<std::string, std::string>> kvs;
+        int c;
+        bool freezed;
+    };
+
+    void snapshot(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id,
+        std::vector<Cf> && cfs,
+        uint64_t index,
+        uint64_t term);
 
     void doApply(
         KVStore & kvs,
@@ -193,12 +229,17 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t region_id,
         uint64_t to);
 
+    MockRaftStoreProxy()
+    {
+        log = &Poco::Logger::get("MockRaftStoreProxy");
+    }
 
     std::unordered_set<uint64_t> region_id_to_drop;
     std::unordered_set<uint64_t> region_id_to_error;
     std::map<uint64_t, MockProxyRegionPtr> regions;
     std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
     AsyncWaker::Notifier notifier;
+    Poco::Logger * log;
 };
 
 enum class RawObjType : uint32_t

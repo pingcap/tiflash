@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockSSTReader.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
@@ -505,85 +506,91 @@ void MockRaftStoreProxy::replay(
     }
 }
 
-struct Cf {
-
-    Cf(UInt64 region_id_, ColumnFamilyType type_): region_id(region_id_), type(type_), c(0) {
-
+void MockRaftStoreProxy::Cf::finish_file()
+{
+    if (freezed)
+        return;
+    auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
+    c++;
+    sst_files.push_back(region_id_str);
+    LOG_FMT_INFO(&Poco::Logger::get("MockRaftStoreProxy::cf"), "add {}", region_id_str);
+    MockSSTReader::Data kv_list;
+    for (auto it = kvs.begin(); it != kvs.end(); it++)
+    {
+        kv_list.emplace_back(it->first, it->second);
     }
+    auto & mmp = MockSSTReader::getMockSSTData();
+    mmp[MockSSTReader::Key{region_id_str, type}] = std::move(kv_list);
+}
 
-    void next_file() {
-        auto region_id_str = std::to_string(region_id) + "_" + std::to_string(c);
-        c++;
-        sst_views.push_back(SSTView{
-            type,
-            BaseBuffView{region_id_str.data(), region_id_str.length()},
-        });
-    }
-
-    void insert(HandleID key, std::string val) {
-        
-    }
-
-    UInt64 region_id;
-    ColumnFamilyType type;
+std::vector<SSTView> MockRaftStoreProxy::Cf::ssts() const
+{
+    assert(freezed);
     std::vector<SSTView> sst_views;
-    int c;
+    sst_views.push_back(SSTView{
+        type,
+        BaseBuffView{sst_files.back().data(), sst_files.back().length()},
+    });
+    return sst_views;
+}
+
+MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, ColumnFamilyType type_)
+    : region_id(region_id_)
+    , type(type_)
+    , c(0)
+    , freezed(false)
+{
+    auto & mmp = MockSSTReader::getMockSSTData();
+    mmp.clear();
+}
+
+void MockRaftStoreProxy::Cf::insert(HandleID key, std::string val)
+{
+    auto k = RecordKVFormat::genKey(1, key, 1);
+    TiKVValue v = std::move(val);
+    kvs.emplace_back(k, v);
 }
 
 void MockRaftStoreProxy::snapshot(
+    KVStore & kvs,
+    TMTContext & tmt,
     UInt64 region_id,
-    std::vector<std::string> && vals)
+    std::vector<Cf> && cfs,
+    uint64_t index,
+    uint64_t term)
 {
+    auto region = getRegion(region_id);
+    auto kv_region = kvs.getRegion(region_id);
+    // We have catch up to index by snapshot.
+    index = region->getLatestCommitIndex() + 1;
+    term = region->getLatestCommitTerm();
+    // The new entry is committed on Proxy's side.
+    region->updateCommitIndex(index);
+
     auto ori_snapshot_apply_method = kvs.snapshot_apply_method;
     kvs.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
     SCOPE_EXIT({
         kvs.snapshot_apply_method = ori_snapshot_apply_method;
     });
-
-
-    auto region_id = 19;
-    auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
-    auto region_id_str = std::to_string(19);
-    auto & mmp = MockSSTReader::getMockSSTData();
-    MockSSTReader::getMockSSTData().clear();
-    MockSSTReader::Data default_kv_list;
+    std::vector<SSTView> ssts;
+    for (auto iter = cfs.begin(); iter != cfs.end(); iter++)
     {
-        default_kv_list.emplace_back(RecordKVFormat::genKey(1, 55, 5).getStr(), TiKVValue("value1").getStr());
-        default_kv_list.emplace_back(RecordKVFormat::genKey(1, 58, 5).getStr(), TiKVValue("value2").getStr());
-    }
-    mmp[MockSSTReader::Key{region_id_str, ColumnFamilyType::Default}] = std::move(default_kv_list);
-    std::vector<SSTView> sst_views;
-    sst_views.push_back(SSTView{
-        ColumnFamilyType::Default,
-        BaseBuffView{region_id_str.data(), region_id_str.length()},
-    });
-    {
-        RegionMockTest mock_test(kvstore.get(), region);
-
-        kvs.handleApplySnapshot(
-            region->getMetaRegion(),
-            2,
-            SSTViewVec{sst_views.data(), sst_views.size()},
-            8,
-            5,
-            ctx.getTMTContext());
-        ASSERT_EQ(kvs.getRegion(19)->checkIndex(8), true);
-        try
+        auto sst = iter->ssts();
+        for (auto it = sst.begin(); it != sst.end(); it++)
         {
-            kvs.handleApplySnapshot(
-                region->getMetaRegion(),
-                2,
-                {}, // empty
-                6, // smaller index
-                5,
-                ctx.getTMTContext());
-            ASSERT_TRUE(false);
-        }
-        catch (Exception & e)
-        {
-            ASSERT_EQ(e.message(), "[region 19] already has newer apply-index 8 than 6, should not happen");
+            ssts.push_back(*it);
         }
     }
+    SSTViewVec snaps{ssts.data(), ssts.size()};
+    auto ingest_ids = kvs.preHandleSnapshotToFiles(
+        kv_region,
+        snaps,
+        index,
+        term,
+        tmt);
+
+    kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{kv_region, std::move(ingest_ids)}, tmt);
+    region->updateAppliedIndex(index);
 }
 
 void GCMonitor::add(RawObjType type, int64_t diff)

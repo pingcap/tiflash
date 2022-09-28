@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <Storages/Transaction/ProxyFFI.h>
 
@@ -49,33 +50,33 @@ struct MultiSSTReader : public SSTReader
     bool remained() const override
     {
         this->maybe_next_reader();
-        return inner->remained();
+        return mono->remained();
     }
     BaseBuffView key() const override
     {
-        return inner->key();
+        return mono->key();
     }
     BaseBuffView value() const override
     {
-        return inner->value();
+        return mono->value();
     }
     void next() override
     {
         this->maybe_next_reader();
-        inner->next();
+        mono->next();
     }
-    void maybe_next_reader()
+    void maybe_next_reader() const
     {
-        if (!proxy_helper->sst_reader_interfaces.fn_remained(inner, type))
+        if (!mono->remained())
         {
             current++;
             if (current < args.size())
             {
-                // We gc current inner, iif:
-                // 1. We can switch to next reader inner;
-                // 2. We must switch to next reader inner;
-                proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
-                inner = initer(proxy_helper, args[current]);
+                // We gc current mono, iif:
+                // 1. We can switch to next reader mono;
+                // 2. We must switch to next reader mono;
+                LOG_FMT_INFO(log, "Swithch to {}", args[current].path.data);
+                mono = initer(proxy_helper, args[current]);
             }
         }
     }
@@ -88,7 +89,9 @@ struct MultiSSTReader : public SSTReader
         , current(0)
     {
         assert(args.size() > 0);
-        inner = initer(proxy_helper, args[current]);
+        log = &Poco::Logger::get("MultiSSTReader");
+        LOG_FMT_INFO(log, "Init with {}", args[current].path.data);
+        mono = initer(proxy_helper, args[current]);
     }
 
     ~MultiSSTReader()
@@ -97,14 +100,15 @@ struct MultiSSTReader : public SSTReader
     }
 
 private:
-    mutable std::unique_ptr<R> inner;
+    Poco::Logger * log;
+    mutable std::unique_ptr<R> mono;
     // Overwrite
     const TiFlashRaftProxyHelper * proxy_helper;
     // Overwrite
     ColumnFamilyType type;
     Initer initer;
     std::vector<E> args;
-    mutable int current;
+    mutable size_t current;
 };
 
 } // namespace DB

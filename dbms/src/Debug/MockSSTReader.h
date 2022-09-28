@@ -70,6 +70,7 @@ private:
     static std::map<Key, MockSSTReader::Data> MockSSTData;
 };
 
+SSTReaderInterfaces make_mock_sst_reader_interface();
 
 class RegionMockTest final
 {

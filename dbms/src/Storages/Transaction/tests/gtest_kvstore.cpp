@@ -1438,6 +1438,56 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
     }
 }
 
+TEST_F(RegionKVStoreTest, KVStoreSnapshot)
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    {
+        UInt64 region_id = 1;
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            auto kvr1 = kvs.getRegion(region_id);
+            auto & table = ctx.getTMTContext().getRegionTable().getOrCreateTable(1);
+            auto range = RegionRangeKeys(RecordKVFormat::genKey(region_id, 0), RecordKVFormat::genKey(region_id, 10));
+            ctx.getTMTContext().getRegionTable().insertRegion(table, range, region_id);
+
+            MockRaftStoreProxy::Cf default_cf{region_id, ColumnFamilyType::Default};
+            default_cf.insert(1, "v1");
+            default_cf.insert(2, "v2");
+            default_cf.finish_file();
+            default_cf.insert(3, "v3");
+            default_cf.insert(4, "v4");
+            default_cf.insert(5, "v5");
+            default_cf.finish_file();
+            default_cf.insert(6, "v6");
+            default_cf.finish_file();
+            default_cf.freeze();
+
+            auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
+                RaftStoreProxyPtr{proxy_instance.get()}));
+            proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
+            auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
+                return std::make_unique<SSTReader>(proxy_helper, snap);
+            };
+            auto ssts = default_cf.ssts();
+            MultiSSTReader<SSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, default_cf.ssts()};
+            size_t counter = 0;
+            while (reader.remained())
+            {
+                counter++;
+                ASSERT_EQ(std::string(reader.value().data), "v" + std::to_string(counter));
+                reader.next();
+            }
+            ASSERT_EQ(counter, 6);
+
+            // proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 6, 6);
+            // auto r1 = proxy_instance->getRegion(region_id);
+            // ASSERT_EQ(r1->getLatestAppliedIndex(), 6);
+            // ASSERT_EQ(kvr1->appliedIndex(), 6);
+        }
+    }
+}
+
 TEST_F(RegionKVStoreTest, KVStoreRestore)
 {
     {
