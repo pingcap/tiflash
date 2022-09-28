@@ -46,5 +46,7 @@ private:
 
     std::mt19937 gen;
     std::uniform_int_distribution<size_t> dis;
+
+    LoggerPtr logger = Logger::get("TaskScheduler");
 };
 } // namespace DB

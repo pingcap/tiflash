@@ -22,20 +22,23 @@ namespace DB
 class AggregateSink : public Sink
 {
 public:
-    explicit AggregateSink(
-        const AggregateStorePtr & aggregate_store_)
+    AggregateSink(
+        const AggregateStorePtr & aggregate_store_,
+        size_t index_)
         : aggregate_store(aggregate_store_)
+        , index(index_)
     {}
 
-    bool write(Block & block, size_t loop_id) override
+    bool write(Block & block) override
     {
         if (!block)
             return false;
-        aggregate_store->executeOnBlock(loop_id, block);
+        aggregate_store->executeOnBlock(index, block);
         return true;
     }
 
 private:
     AggregateStorePtr aggregate_store;
+    size_t index;
 };
 } // namespace DB

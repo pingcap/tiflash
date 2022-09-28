@@ -37,7 +37,7 @@ void Transforms::addTableLock(const TableLockHolder & lock)
     table_locks.push_back(lock);
 }
 
-bool Transforms::execute(size_t loop_id)
+bool Transforms::execute()
 {
     assert(source);
     assert(sink);
@@ -57,7 +57,7 @@ bool Transforms::execute(size_t loop_id)
         if (!transform->transform(block))
             return true;
     }
-    return sink->write(block, loop_id);
+    return sink->write(block);
 }
 
 void Transforms::prepare() {}

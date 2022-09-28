@@ -97,7 +97,7 @@ void PhysicalPartialAggregation::transform(TransformsPipeline & pipeline, Contex
     {
         Block before_agg_header = pipeline.getHeader();
         AggregationInterpreterHelper::fillArgColumnNumbers(aggregate_descriptions, before_agg_header);
-        size_t max_threads = pipeline.concurrency();
+        size_t max_threads = std::min(concurrency, pipeline.concurrency());
         auto params = AggregationInterpreterHelper::buildParams(
             context,
             before_agg_header,
@@ -109,8 +109,10 @@ void PhysicalPartialAggregation::transform(TransformsPipeline & pipeline, Contex
         aggregate_store->init(max_threads, params);
     }
 
+    size_t index = 0;
     pipeline.transform([&](auto & transforms) {
-        transforms->setSink(std::make_shared<AggregateSink>(aggregate_store));
+        transforms->setSink(std::make_shared<AggregateSink>(aggregate_store, index % aggregate_store->max_threads));
+        ++index;
     });
 }
 } // namespace DB

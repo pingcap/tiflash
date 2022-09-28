@@ -560,11 +560,11 @@ bool MPPTask::scheduleThisTask(ScheduleState state)
 
 int MPPTask::estimateCountOfNewThreads()
 {
-    if (dag_context == nullptr || dag_context->getBlockIO().in == nullptr || dag_context->tunnel_set == nullptr)
+    if (dag_context == nullptr || (dag_context->getBlockIO().in == nullptr && !dag_context->is_pipeline_mode) || dag_context->tunnel_set == nullptr)
         throw Exception("It should not estimate the threads for the uninitialized task" + id.toString());
 
     // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
-    return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
+    return (dag_context->is_pipeline_mode ? 1 : dag_context->getBlockIO().in->estimateNewThreadCount() + 1)
         + dag_context->tunnel_set->getRemoteTunnelCnt();
 }
 

@@ -58,6 +58,7 @@ Block AggregateStore::getHeader() const
 
 void AggregateStore::executeOnBlock(size_t index, const Block & block)
 {
+    assert(index < max_threads);
     std::lock_guard lock((*mutexs)[index]);
     executeOnBlockWithoutLock(index, block);
 }

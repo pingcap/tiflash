@@ -80,12 +80,18 @@ public:
         return *this;
     }
 
-    PipelineTaskResult execute(size_t loop_id);
+    PipelineTaskResult execute();
 
     MemoryTracker * getMemTracker()
     {
         return mem_tracker ? mem_tracker.get() : nullptr;
     }
+
+    String toString()
+    {
+        return fmt::format("{{task_id: {}, pipeline_id: {}, mpp_task_id: {}}}", task_id, pipeline_id, mpp_task_id.toString());
+    }
+
 public:
     UInt32 task_id;
     UInt32 pipeline_id;

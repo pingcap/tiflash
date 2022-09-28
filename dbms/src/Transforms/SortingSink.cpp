@@ -16,7 +16,7 @@
 
 namespace DB
 {
-bool SortingSink::write(Block & block, size_t)
+bool SortingSink::write(Block & block)
 {
     if (!block)
         return false;

@@ -33,7 +33,7 @@ public:
         , sort_breaker(sort_breaker_)
     {}
 
-    bool write(Block & block, size_t) override;
+    bool write(Block & block) override;
 
     bool finish() override;
 

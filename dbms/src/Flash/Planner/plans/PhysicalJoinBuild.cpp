@@ -80,15 +80,15 @@ void PhysicalJoinBuild::transform(TransformsPipeline & pipeline, Context & conte
 {
     child->transform(pipeline, context, concurrency);
 
+    size_t join_build_concurrency = context.getSettingsRef().join_concurrent_build ? std::min(concurrency, pipeline.concurrency()) : 1;
+    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
     pipeline.transform([&](auto & transforms) {
         transforms->append(std::make_shared<ExpressionTransform>(build_side_prepare_actions));
-        transforms->setSink(std::make_shared<HashJoinBuildSink>(join_ptr));
+        transforms->setSink(std::make_shared<HashJoinBuildSink>(join_ptr, get_concurrency_build_index()));
     });
     if (!join_ptr->initialized)
     {
-        const auto & settings = context.getSettingsRef();
-        RUNTIME_CHECK(settings.join_concurrent_build);
-        join_ptr->init(pipeline.getHeader(), concurrency);
+        join_ptr->init(pipeline.getHeader(), join_build_concurrency);
     }
 }
 

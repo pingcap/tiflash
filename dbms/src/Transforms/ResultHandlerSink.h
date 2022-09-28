@@ -27,7 +27,7 @@ public:
         : result_handler(result_handler_)
     {}
 
-    bool write(Block & block, size_t) override
+    bool write(Block & block) override
     {
         if (!block)
             return false;

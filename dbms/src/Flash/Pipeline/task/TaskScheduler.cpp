@@ -35,6 +35,7 @@ TaskScheduler::TaskScheduler(PipelineManager & pipeline_manager)
             event_loops[index]->loop();
         });
     }
+    LOG_DEBUG(logger, "init {} event loop success", cores);
 
     std::random_device rd;
     gen = std::mt19937{rd()};

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Flash/Pipeline/task/PipelineTask.h>
 
@@ -35,13 +36,15 @@ public:
     void submit(PipelineTask && task);
 
 private:
-    void handleSubmit(PipelineTask & task);
+    void handleTask(PipelineTask & task);
 
 private:
     size_t loop_id;
     MPMCQueue<PipelineTask> event_queue{499999};
 
     PipelineManager & pipeline_manager;
+
+    LoggerPtr logger = Logger::get(fmt::format("event loop {}", loop_id));
 };
 
 using EventLoopPtr = std::shared_ptr<EventLoop>;

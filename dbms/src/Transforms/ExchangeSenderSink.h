@@ -41,7 +41,7 @@ public:
             dag_context_))
     {}
 
-    bool write(Block & block, size_t) override
+    bool write(Block & block) override
     {
         if (!block)
             return false;

@@ -22,21 +22,24 @@ namespace DB
 class HashJoinBuildSink : public Sink
 {
 public:
-    explicit HashJoinBuildSink(
-        const JoinPtr & join_)
+    HashJoinBuildSink(
+        const JoinPtr & join_,
+        size_t index_)
         : join(join_)
+        , index(index_)
     {}
 
-    bool write(Block & block, size_t loop_id) override
+    bool write(Block & block) override
     {
         if (!block)
             return false;
 
-        join->insertFromBlock(block, loop_id);
+        join->insertFromBlock(block, index);
         return true;
     }
 
 private:
     JoinPtr join;
+    size_t index;
 };
 } // namespace DB

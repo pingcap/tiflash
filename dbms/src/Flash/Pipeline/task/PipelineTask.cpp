@@ -18,7 +18,7 @@
 
 namespace DB
 {
-PipelineTaskResult PipelineTask::execute(size_t loop_id)
+PipelineTaskResult PipelineTask::execute()
 {
     try
     {
@@ -27,7 +27,7 @@ PipelineTaskResult PipelineTask::execute(size_t loop_id)
         {
         case PipelineTaskStatus::running:
         {
-            if (!transforms->execute(loop_id))
+            if (!transforms->execute())
                 status = PipelineTaskStatus::finish;
             return running();
         }

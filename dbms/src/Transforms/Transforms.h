@@ -46,7 +46,7 @@ public:
     void setSink(const SinkPtr & sink_);
     void append(const TransformPtr & transform);
 
-    bool execute(size_t loop_id);
+    bool execute();
 
     void prepare();
     bool finish();

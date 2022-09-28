@@ -26,7 +26,7 @@ public:
         : limit_breaker(limit_breaker_)
     {}
 
-    bool write(Block & block, size_t) override
+    bool write(Block & block) override
     {
         if (!block)
             return false;

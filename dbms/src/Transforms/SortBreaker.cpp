@@ -23,6 +23,12 @@ void SortBreaker::add(Blocks && local_blocks)
     multi_local_blocks.emplace_back(std::move(local_blocks));
 }
 
+void SortBreaker::initHeader(const Block & header_)
+{
+    assert(!header);
+    header = header_.cloneEmpty();
+}
+
 Block SortBreaker::read()
 {
     // TODO try lock.

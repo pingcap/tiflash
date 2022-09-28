@@ -41,10 +41,7 @@ public:
 
     Block read();
 
-    void initHeader(const Block & header_)
-    {
-        header = header_;
-    }
+    void initHeader(const Block & header_);
 
     void initForRead();
 

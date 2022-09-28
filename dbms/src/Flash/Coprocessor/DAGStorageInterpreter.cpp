@@ -405,15 +405,13 @@ void DAGStorageInterpreter::executeImpl(TransformsPipeline & pipeline)
 
     const TableLockHolders drop_locks = releaseAlterLocks();
 
-
     // after buildRemoteSources, remote read source will be appended in sources.
     size_t remote_read_sources_start_index = sources.size();
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
-    std::vector<SourcePtr> remote_sources;
     if (!remote_requests.empty())
     {
-        remote_sources = buildRemoteSources(remote_requests);
+        auto remote_sources = buildRemoteSources(remote_requests);
         sources.insert(sources.end(), remote_sources.cbegin(), remote_sources.cend());
     }
 

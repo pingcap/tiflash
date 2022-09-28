@@ -47,18 +47,6 @@ public:
                               toNullableVec<Int32>(col_name[3], col_salary)});
     }
 
-    static const size_t max_concurrency_level = 10;
-
-    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
-        for (size_t i = 1; i <= max_concurrency_level; i += 2)
-        {
-            ASSERT_COLUMNS_EQ_UR(executeStreams(request, i), expect_columns);
-        }
-        WRAP_FOR_DIS_ENABLE_PLANNER_END
-    }
-
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(const String & table_name, const String & col_name, bool is_desc, int limit_num)
     {
         return context.scan(db_name, table_name).topN(col_name, is_desc, limit_num).build(context);
