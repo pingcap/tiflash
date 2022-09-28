@@ -45,6 +45,7 @@ std::pair<bool, String> DAGScheduler::run(
     const PhysicalPlanNodePtr & plan_node,
     ResultHandler result_handler)
 {
+    LOG_TRACE(log, "start run mpp task {} with pipeline model", mpp_task_id.toString());
     assert(plan_node);
     auto final_pipeline = genPipeline(handleResultHandler(plan_node, result_handler));
     final_pipeline_id = final_pipeline->getId();
@@ -74,6 +75,7 @@ std::pair<bool, String> DAGScheduler::run(
             break;
         }
     }
+    LOG_TRACE(log, "finish mpp task {} with pipeline model", mpp_task_id.toString());
     return {event_queue.getStatus() == MPMCQueueStatus::FINISHED, err_msg};
 }
 
@@ -136,6 +138,7 @@ void DAGScheduler::handlePipelineFinish(const PipelineEvent & event)
         {
             event_queue.finish();
             status_machine.finish();
+            LOG_TRACE(log, "pipeline {} finished", pipeline->toString());
         }
         else
         {

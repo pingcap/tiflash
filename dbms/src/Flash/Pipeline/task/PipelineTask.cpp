@@ -18,6 +18,11 @@
 
 namespace DB
 {
+String PipelineTask::toString() const
+{
+    return fmt::format("{{task_id: {}, pipeline_id: {}, mpp_task_id: {}}}", task_id, pipeline_id, mpp_task_id.toString());
+}
+
 PipelineTaskResult PipelineTask::execute()
 {
     try

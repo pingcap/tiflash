@@ -45,6 +45,8 @@ public:
 
     PhysicalPlanNodePtr getPlanNode() const { return plan_node; }
 
+    String toString() const;
+
 public:
     size_t active_task_num = 0;
 

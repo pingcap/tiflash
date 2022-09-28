@@ -87,10 +87,7 @@ public:
         return mem_tracker ? mem_tracker.get() : nullptr;
     }
 
-    String toString()
-    {
-        return fmt::format("{{task_id: {}, pipeline_id: {}, mpp_task_id: {}}}", task_id, pipeline_id, mpp_task_id.toString());
-    }
+    String toString() const;
 
 public:
     UInt32 task_id;

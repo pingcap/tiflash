@@ -20,6 +20,11 @@
 
 namespace DB
 {
+String Pipeline::toString() const
+{
+    return fmt::format("{{pipeline_id: {}, mpp_task_id: {}}}", id, mpp_task_id.toString());
+}
+
 Pipeline::Pipeline(
     const PhysicalPlanNodePtr & plan_node_,
     const MPPTaskId & mpp_task_id_,

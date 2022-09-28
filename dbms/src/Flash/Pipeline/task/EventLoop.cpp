@@ -40,13 +40,13 @@ void EventLoop::finish()
 
 void EventLoop::handleTask(PipelineTask & task)
 {
-    LOG_FMT_DEBUG(logger, "handle task: {}", task.toString());
+    LOG_TRACE(logger, "handle task: {}", task.toString());
     auto result = task.execute();
     switch (result.type)
     {
     case PipelineTaskResultType::running:
     {
-        LOG_FMT_DEBUG(logger, "task: {} is running", task.toString());
+        LOG_TRACE(logger, "task: {} is running", task.toString());
         RUNTIME_ASSERT(
             event_queue.tryPush(std::move(task)) != MPMCQueueResult::FULL,
             "EventLoop event queue full");
@@ -54,7 +54,7 @@ void EventLoop::handleTask(PipelineTask & task)
     }
     case PipelineTaskResultType::finished:
     {
-        LOG_FMT_DEBUG(logger, "task: {} is finished", task.toString());
+        LOG_TRACE(logger, "task: {} is finished", task.toString());
         if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); dag_scheduler)
         {
             dag_scheduler->submit(PipelineEvent::finish(task.task_id, task.pipeline_id));
@@ -63,7 +63,7 @@ void EventLoop::handleTask(PipelineTask & task)
     }
     case PipelineTaskResultType::error:
     {
-        LOG_FMT_DEBUG(logger, "task: {} occur error", task.toString());
+        LOG_TRACE(logger, "task: {} occur error", task.toString());
         if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); dag_scheduler)
         {
             dag_scheduler->submit(PipelineEvent::fail(result.err_msg));
