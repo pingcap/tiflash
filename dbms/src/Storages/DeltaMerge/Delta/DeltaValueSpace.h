@@ -96,16 +96,18 @@ private:
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
-    Poco::Logger * log;
+    std::string log_prefix;
+
+    LoggerPtr log;
 
 public:
-    explicit DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
+    explicit DeltaValueSpace(const std::string & log_prefix_, PageId id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
 
-    explicit DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_);
+    explicit DeltaValueSpace(const std::string & log_prefix_, ColumnFilePersistedSetPtr && persisted_file_set_);
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static DeltaValueSpacePtr restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id);
 
     /// The following two methods are just for test purposes
     MemTableSetPtr getMemTableSet() const { return mem_table_set; }

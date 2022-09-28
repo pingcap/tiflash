@@ -193,7 +193,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , db_name(db_name_)
     , table_name(table_name_)
     , physical_table_id(physical_table_id_)
-    , child_log_prefix(fmt::format("table_id={}", physical_table_id_))
+    , child_log_prefix(fmt::format("table_id={} ", physical_table_id_))
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , original_table_handle_define(handle)
@@ -249,8 +249,13 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                 segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             }
 
-            auto first_segment
-                = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0, child_log_prefix);
+            auto first_segment = Segment::newSegment( //
+                child_log_prefix,
+                *dm_context,
+                store_columns,
+                RowKeyRange::newAll(is_common_handle, rowkey_column_size),
+                segment_id,
+                0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
@@ -259,7 +264,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             while (segment_id)
             {
-                auto segment = Segment::restoreSegment(*dm_context, segment_id, child_log_prefix);
+                auto segment = Segment::restoreSegment(child_log_prefix, *dm_context, segment_id);
                 segments.emplace(segment->getRowKeyRange().getEnd(), segment);
                 id_to_segment.emplace(segment_id, segment);
 
