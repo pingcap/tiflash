@@ -48,6 +48,7 @@ void registerFunctionsCharset(FunctionFactory &);
 void registerFunctionsNull(FunctionFactory &);
 void registerFunctionsStringMath(FunctionFactory &);
 void registerFunctionsDuration(FunctionFactory &);
+void registerFunctionsRegexp(FunctionFactory &);
 
 
 void registerFunctions()
@@ -81,6 +82,7 @@ void registerFunctions()
     registerFunctionsNull(factory);
     registerFunctionsStringMath(factory);
     registerFunctionsDuration(factory);
+    registerFunctionsRegexp(factory);
 }
 
 } // namespace DB
