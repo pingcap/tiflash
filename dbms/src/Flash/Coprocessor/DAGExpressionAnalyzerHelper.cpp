@@ -128,7 +128,6 @@ String DAGExpressionAnalyzerHelper::buildNullEqFunction(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
-
     /// nullEq(col1, col2) == isNull(col1) AND isNull(col2) OR assumeNotNull(Equal(col1, col2)))
 
     /// nullEq(col1, col2) == if(isNull(col1) AND isNull(col2),
