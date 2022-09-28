@@ -505,6 +505,87 @@ void MockRaftStoreProxy::replay(
     }
 }
 
+struct Cf {
+
+    Cf(UInt64 region_id_, ColumnFamilyType type_): region_id(region_id_), type(type_), c(0) {
+
+    }
+
+    void next_file() {
+        auto region_id_str = std::to_string(region_id) + "_" + std::to_string(c);
+        c++;
+        sst_views.push_back(SSTView{
+            type,
+            BaseBuffView{region_id_str.data(), region_id_str.length()},
+        });
+    }
+
+    void insert(HandleID key, std::string val) {
+        
+    }
+
+    UInt64 region_id;
+    ColumnFamilyType type;
+    std::vector<SSTView> sst_views;
+    int c;
+}
+
+void MockRaftStoreProxy::snapshot(
+    UInt64 region_id,
+    std::vector<std::string> && vals)
+{
+    auto ori_snapshot_apply_method = kvs.snapshot_apply_method;
+    kvs.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
+    SCOPE_EXIT({
+        kvs.snapshot_apply_method = ori_snapshot_apply_method;
+    });
+
+
+    auto region_id = 19;
+    auto region = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60));
+    auto region_id_str = std::to_string(19);
+    auto & mmp = MockSSTReader::getMockSSTData();
+    MockSSTReader::getMockSSTData().clear();
+    MockSSTReader::Data default_kv_list;
+    {
+        default_kv_list.emplace_back(RecordKVFormat::genKey(1, 55, 5).getStr(), TiKVValue("value1").getStr());
+        default_kv_list.emplace_back(RecordKVFormat::genKey(1, 58, 5).getStr(), TiKVValue("value2").getStr());
+    }
+    mmp[MockSSTReader::Key{region_id_str, ColumnFamilyType::Default}] = std::move(default_kv_list);
+    std::vector<SSTView> sst_views;
+    sst_views.push_back(SSTView{
+        ColumnFamilyType::Default,
+        BaseBuffView{region_id_str.data(), region_id_str.length()},
+    });
+    {
+        RegionMockTest mock_test(kvstore.get(), region);
+
+        kvs.handleApplySnapshot(
+            region->getMetaRegion(),
+            2,
+            SSTViewVec{sst_views.data(), sst_views.size()},
+            8,
+            5,
+            ctx.getTMTContext());
+        ASSERT_EQ(kvs.getRegion(19)->checkIndex(8), true);
+        try
+        {
+            kvs.handleApplySnapshot(
+                region->getMetaRegion(),
+                2,
+                {}, // empty
+                6, // smaller index
+                5,
+                ctx.getTMTContext());
+            ASSERT_TRUE(false);
+        }
+        catch (Exception & e)
+        {
+            ASSERT_EQ(e.message(), "[region 19] already has newer apply-index 8 than 6, should not happen");
+        }
+    }
+}
+
 void GCMonitor::add(RawObjType type, int64_t diff)
 {
     auto _ = genLockGuard();

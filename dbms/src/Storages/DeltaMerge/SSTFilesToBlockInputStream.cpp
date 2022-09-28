@@ -63,20 +63,64 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix()
 {
-    for (UInt64 i = 0; i < snaps.len; ++i)
+    if (snaps.len > 3)
     {
-        const auto & snapshot = snaps.views[i];
-        switch (snapshot.type)
+        LOG_INFO(log, "Read SST Files with MultiSSTReader");
+        std::vector<SSTView> ssts;
+        bool flag = false;
+        ColumnFamilyType prev_type;
+        int size_write = 0;
+        int size_lock = 0;
+        int size_default = 0;
+        for (UInt64 i = 0; i < snaps.len; ++i)
         {
-        case ColumnFamilyType::Default:
-            default_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
-            break;
-        case ColumnFamilyType::Write:
-            write_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
-            break;
-        case ColumnFamilyType::Lock:
-            lock_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
-            break;
+            const auto & snapshot = snaps.views[i];
+            if (!flag || snapshot.type != prev_type)
+            {
+                auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
+                    return std::make_unique<SSTReader>(proxy_helper, snap);
+                };
+                // Generate old cf reader.
+                switch (prev_type)
+                {
+                case ColumnFamilyType::Default:
+                    size_default = ssts.size();
+                    default_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, snapshot.type, make_inner_func, ssts);
+                    break;
+                case ColumnFamilyType::Write:
+                    size_write = ssts.size();
+                    write_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, snapshot.type, make_inner_func, ssts);
+                    break;
+                case ColumnFamilyType::Lock:
+                    size_lock = ssts.size();
+                    lock_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, snapshot.type, make_inner_func, ssts);
+                    break;
+                }
+                ssts.clear();
+                prev_type = snapshot.type;
+            }
+            LOG_FMT_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {}", size_write, size_lock, size_default);
+            ssts.push_back(snapshot);
+        }
+    }
+    else
+    {
+        LOG_INFO(log, "Read SST Files with Normal SSTReader");
+        for (UInt64 i = 0; i < snaps.len; ++i)
+        {
+            const auto & snapshot = snaps.views[i];
+            switch (snapshot.type)
+            {
+            case ColumnFamilyType::Default:
+                default_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+                break;
+            case ColumnFamilyType::Write:
+                write_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+                break;
+            case ColumnFamilyType::Lock:
+                lock_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+                break;
+            }
         }
     }
 

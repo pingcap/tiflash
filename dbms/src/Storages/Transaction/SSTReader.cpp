@@ -39,10 +39,19 @@ SSTReader::SSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view)
     : proxy_helper(proxy_helper_)
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
+    , inited(true)
 {}
+
+SSTReader::SSTReader()
+    : inited(false)
+{
+}
 
 SSTReader::~SSTReader()
 {
-    proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
+    if (inited)
+    {
+        proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
+    }
 }
 } // namespace DB

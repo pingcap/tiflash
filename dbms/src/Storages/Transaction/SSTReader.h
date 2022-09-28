@@ -21,45 +21,48 @@ namespace DB
 {
 struct SSTReader
 {
-    bool remained() const;
-    BaseBuffView key() const;
-    BaseBuffView value() const;
-    void next();
+    virtual bool remained() const;
+    virtual BaseBuffView key() const;
+    virtual BaseBuffView value() const;
+    virtual void next();
 
     DISALLOW_COPY_AND_MOVE(SSTReader);
     SSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view);
-    ~SSTReader();
+    // Should only be used when SSTReader is a base class.
+    SSTReader();
+    virtual ~SSTReader();
 
 private:
     const TiFlashRaftProxyHelper * proxy_helper;
     SSTReaderPtr inner;
     ColumnFamilyType type;
+    bool inited;
 };
 
 template <typename R, typename E>
-struct MultiSSTReader: SSTReader
+struct MultiSSTReader : public SSTReader
 {
-    using Initer = std::function<std::unique_ptr<R>(const E &)>;
+    using Initer = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E)>;
 
     DISALLOW_COPY_AND_MOVE(MultiSSTReader);
 
-    bool remained() const
+    bool remained() const override
     {
         this->maybe_next_reader();
-        return proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
+        return inner->remained();
     }
-    BaseBuffView key() const
+    BaseBuffView key() const override
     {
-        return proxy_helper->sst_reader_interfaces.fn_key(inner, type);
+        return inner->key();
     }
-    BaseBuffView value() const
+    BaseBuffView value() const override
     {
-        return proxy_helper->sst_reader_interfaces.fn_value(inner, type);
+        return inner->value();
     }
-    void next()
+    void next() override
     {
         this->maybe_next_reader();
-        return proxy_helper->sst_reader_interfaces.fn_next(inner, type);
+        inner->next();
     }
     void maybe_next_reader()
     {
@@ -68,13 +71,16 @@ struct MultiSSTReader: SSTReader
             current++;
             if (current < args.size())
             {
+                // We gc current inner, iif:
+                // 1. We can switch to next reader inner;
+                // 2. We must switch to next reader inner;
                 proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
-                inner = initer(args[current]);
+                inner = initer(proxy_helper, args[current]);
             }
         }
     }
 
-    MultiSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, ColumnFamilyType type_, Initer initer_, std::vector<E> && args_)
+    MultiSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, ColumnFamilyType type_, Initer initer_, std::vector<E> args_)
         : proxy_helper(proxy_helper_)
         , type(type_)
         , initer(initer_)
@@ -82,17 +88,19 @@ struct MultiSSTReader: SSTReader
         , current(0)
     {
         assert(args.size() > 0);
-        inner = initer(args[current]);
+        inner = initer(proxy_helper, args[current]);
     }
 
     ~MultiSSTReader()
     {
-        proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
+        // The last sst reader will be dropped with inner.
     }
 
 private:
     mutable std::unique_ptr<R> inner;
+    // Overwrite
     const TiFlashRaftProxyHelper * proxy_helper;
+    // Overwrite
     ColumnFamilyType type;
     Initer initer;
     std::vector<E> args;

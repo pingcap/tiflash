@@ -16,13 +16,13 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/Transaction/ProxyFFI.h>
+#include <Storages/Transaction/SSTReader.h>
 
 #include <map>
 
 
 namespace DB
 {
-
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
@@ -66,6 +66,7 @@ private:
     Data::const_iterator end;
     bool remained;
 
+    // (region_id, cf) -> Data
     static std::map<Key, MockSSTReader::Data> MockSSTData;
 };
 
