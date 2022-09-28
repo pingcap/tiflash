@@ -59,7 +59,7 @@ protected:
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
+        return Segment::newSegment(*dm_context_, table_columns_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0, /* log_prefix */ "");
     }
 
     // setColumns should update dm_context at the same time
@@ -795,7 +795,7 @@ try
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
-    SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
+    SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId(), /* log_prefix */ "");
 
     {
         // test compare
@@ -807,7 +807,7 @@ try
     {
         // Do some update and restore again
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 32, rowkey_column_size)});
-        new_segment = segment->restoreSegment(dmContext(), segment->segmentId());
+        new_segment = segment->restoreSegment(dmContext(), segment->segmentId(), /* log_prefix */ "");
     }
 
     {

@@ -191,7 +191,8 @@ Segment::Segment(UInt64 epoch_, //
                  PageId segment_id_,
                  PageId next_segment_id_,
                  const DeltaValueSpacePtr & delta_,
-                 const StableValueSpacePtr & stable_)
+                 const StableValueSpacePtr & stable_,
+                 const std::string & log_prefix_)
     : epoch(epoch_)
     , rowkey_range(rowkey_range_)
     , is_common_handle(rowkey_range.is_common_handle)
@@ -200,6 +201,7 @@ Segment::Segment(UInt64 epoch_, //
     , next_segment_id(next_segment_id_)
     , delta(delta_)
     , stable(stable_)
+    , log_prefix(log_prefix_)
     , log(Logger::get("Segment", logId()))
 {}
 
@@ -209,14 +211,15 @@ SegmentPtr Segment::newSegment(DMContext & context,
                                PageId segment_id,
                                PageId next_segment_id,
                                PageId delta_id,
-                               PageId stable_id)
+                               PageId stable_id,
+                               const std::string & log_prefix)
 {
     WriteBatches wbs(context.storage_pool, context.getWriteLimiter());
 
     auto delta = std::make_shared<DeltaValueSpace>(delta_id);
     auto stable = createNewStable(context, schema, std::make_shared<EmptySkippableBlockInputStream>(*schema), stable_id, wbs);
 
-    auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable);
+    auto segment = std::make_shared<Segment>(INITIAL_EPOCH, range, segment_id, next_segment_id, delta, stable, log_prefix);
 
     // Write metadata.
     delta->saveMeta(wbs);
@@ -234,7 +237,8 @@ SegmentPtr Segment::newSegment(
     const ColumnDefinesPtr & schema,
     const RowKeyRange & rowkey_range,
     PageId segment_id,
-    PageId next_segment_id)
+    PageId next_segment_id,
+    const std::string & log_prefix)
 {
     return newSegment(context,
                       schema,
@@ -242,10 +246,11 @@ SegmentPtr Segment::newSegment(
                       segment_id,
                       next_segment_id,
                       context.storage_pool.newMetaPageId(),
-                      context.storage_pool.newMetaPageId());
+                      context.storage_pool.newMetaPageId(),
+                      log_prefix);
 }
 
-SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
+SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id, const std::string & log_prefix)
 {
     Page page = context.storage_pool.metaReader()->read(segment_id); // not limit restore
 
@@ -284,7 +289,7 @@ SegmentPtr Segment::restoreSegment(DMContext & context, PageId segment_id)
 
     auto delta = DeltaValueSpace::restore(context, rowkey_range, delta_id);
     auto stable = StableValueSpace::restore(context, stable_id);
-    auto segment = std::make_shared<Segment>(epoch, rowkey_range, segment_id, next_segment_id, delta, stable);
+    auto segment = std::make_shared<Segment>(epoch, rowkey_range, segment_id, next_segment_id, delta, stable, log_prefix);
 
     return segment;
 }
@@ -688,7 +693,8 @@ SegmentPtr Segment::applyMergeDelta(const Segment::Lock &, //
                                             segment_id,
                                             next_segment_id,
                                             new_delta,
-                                            new_stable);
+                                            new_stable,
+                                            log_prefix);
 
     // avoid recheck whether to do DeltaMerge using the same gc_safe_point
     new_me->setLastCheckGCSafePoint(context.min_version);
@@ -754,7 +760,8 @@ SegmentPtr Segment::dangerouslyReplaceData(const Segment::Lock &, //
                                             segment_id,
                                             next_segment_id,
                                             new_delta,
-                                            new_stable);
+                                            new_stable,
+                                            log_prefix);
     new_me->serialize(wbs.meta);
 
     delta->recordRemoveColumnFilesPages(wbs);
@@ -1279,14 +1286,16 @@ SegmentPair Segment::applySplit(const Segment::Lock &, //
                                             this->segment_id,
                                             other_segment_id,
                                             my_delta,
-                                            split_info.my_stable);
+                                            split_info.my_stable,
+                                            log_prefix);
 
     auto other = std::make_shared<Segment>(INITIAL_EPOCH, //
                                            other_range,
                                            other_segment_id,
                                            this->next_segment_id,
                                            other_delta,
-                                           split_info.other_stable);
+                                           split_info.other_stable,
+                                           log_prefix);
 
     new_me->delta->saveMeta(wbs);
     new_me->stable->saveMeta(wbs.meta);
@@ -1471,7 +1480,8 @@ SegmentPtr Segment::applyMerge(const std::vector<Segment::Lock> &, //
                                             first_seg->segment_id,
                                             last_seg->next_segment_id,
                                             merged_delta,
-                                            merged_stable);
+                                            merged_stable,
+                                            first_seg->log_prefix);
 
     // Store new meta data
     merged->delta->saveMeta(wbs);
@@ -1506,7 +1516,8 @@ SegmentPtr Segment::dropNextSegment(WriteBatches & wbs, const RowKeyRange & next
                                                  segment_id,
                                                  0,
                                                  delta,
-                                                 stable);
+                                                 stable,
+                                                 log_prefix);
     new_segment->serialize(wbs.meta);
     wbs.writeMeta();
     LOG_FMT_INFO(log, "Finish segment drop its next segment, segment={}", info());
@@ -1549,7 +1560,9 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::logId() const
 {
-    return fmt::format("<segment_id={} epoch={}>",
+    return fmt::format("<{}{}segment_id={} epoch={}>",
+                       log_prefix,
+                       log_prefix.size() > 0 ? " " : "",
                        segment_id,
                        epoch);
 }

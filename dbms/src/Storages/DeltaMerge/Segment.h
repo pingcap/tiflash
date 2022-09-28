@@ -115,7 +115,8 @@ public:
         PageId segment_id_,
         PageId next_segment_id_,
         const DeltaValueSpacePtr & delta_,
-        const StableValueSpacePtr & stable_);
+        const StableValueSpacePtr & stable_,
+        const std::string & log_prefix_);
 
     static SegmentPtr newSegment(
         DMContext & context,
@@ -124,15 +125,17 @@ public:
         PageId segment_id,
         PageId next_segment_id,
         PageId delta_id,
-        PageId stable_id);
+        PageId stable_id,
+        const std::string & log_prefix);
     static SegmentPtr newSegment(
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
         PageId segment_id,
-        PageId next_segment_id);
+        PageId next_segment_id,
+        const std::string & log_prefix);
 
-    static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
+    static SegmentPtr restoreSegment(DMContext & context, PageId segment_id, const std::string & log_prefix);
 
     void serialize(WriteBatch & wb);
 
@@ -513,6 +516,8 @@ private:
     // This involves to check the valid data ratio in the background gc thread,
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
+
+    const std::string log_prefix;
 
     LoggerPtr log;
 };
