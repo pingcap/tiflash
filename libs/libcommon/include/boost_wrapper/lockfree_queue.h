@@ -14,13 +14,14 @@
 
 #pragma once
 
-#if defined(__clang__) && __clang_major__ >= 15
 #pragma GCC diagnostic push
+#if defined(__clang__) && __clang_major__ >= 15
 #pragma GCC diagnostic ignored "-Wdeprecated-builtins"
+#endif
+#if __cplusplus >= 202002L
+#pragma GCC diagnostic ignored "-Wambiguous-reversed-operator"
 #endif
 
 #include <boost/lockfree/queue.hpp>
 
-#if defined(__clang__) && __clang_major__ >= 15
 #pragma GCC diagnostic pop
-#endif

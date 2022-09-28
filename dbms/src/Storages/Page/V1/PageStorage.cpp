@@ -259,7 +259,7 @@ PageEntry PageStorage::getEntry(PageId page_id, SnapshotPtr snapshot)
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_WARNING(log, "{} {}", storage_name, e.message());
+        LOG_WARNING(log, "{} {}", storage_name, e.message());
         return {}; // return invalid PageEntry
     }
 }
@@ -481,7 +481,7 @@ bool PageStorage::gc()
         gc_is_running.compare_exchange_strong(is_running, false);
     });
 
-    LOG_FMT_TRACE(log, "{} Before gc, deletes[{}], puts[{}], refs[{}], upserts[{}]", storage_name, deletes, puts, refs, upserts);
+    LOG_TRACE(log, "{} Before gc, deletes[{}], puts[{}], refs[{}], upserts[{}]", storage_name, deletes, puts, refs, upserts);
 
     /// Get all pending external pages and PageFiles. Note that we should get external pages before PageFiles.
     PathAndIdsVec external_pages;
@@ -590,7 +590,7 @@ bool PageStorage::gc()
     }
 
     if (!should_merge)
-        LOG_FMT_TRACE(log, "{} GC exit without merging. merge file size: {}, candidate size: {}", storage_name, merge_files.size(), candidate_total_size);
+        LOG_TRACE(log, "{} GC exit without merging. merge file size: {}, candidate size: {}", storage_name, merge_files.size(), candidate_total_size);
     return should_merge;
 }
 
@@ -829,7 +829,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
             auto it = file_valid_pages.find(file_id_level);
             if (it == file_valid_pages.end())
             {
-                LOG_FMT_TRACE(log, "{} No valid pages from PageFile_{}_{} to PageFile_{}_{}", storage_name, file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
+                LOG_TRACE(log, "{} No valid pages from PageFile_{}_{} to PageFile_{}_{}", storage_name, file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
                 continue;
             }
 
@@ -853,7 +853,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
                     catch (DB::Exception & e)
                     {
                         // ignore if it2 is a ref to non-exist page
-                        LOG_FMT_WARNING(log, "{} Ignore invalid RefPage while gcMigratePages: {}", storage_name, e.message());
+                        LOG_WARNING(log, "{} Ignore invalid RefPage while gcMigratePages: {}", storage_name, e.message());
                     }
                 }
             }
@@ -875,7 +875,7 @@ PageEntriesEdit PageStorage::gcMigratePages(const SnapshotPtr & snapshot,
                 gc_file_writer->write(wb, gc_file_edit);
             }
 
-            LOG_FMT_TRACE(log, "{} Migrate {} pages from PageFile_{}_{} to PageFile_{}_{}", storage_name, page_id_and_entries.size(), file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
+            LOG_TRACE(log, "{} Migrate {} pages from PageFile_{}_{} to PageFile_{}_{}", storage_name, page_id_and_entries.size(), file_id_level.first, file_id_level.second, gc_file.getFileId(), gc_file.getLevel());
         }
 
 #if 0

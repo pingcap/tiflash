@@ -30,6 +30,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char gc_skip_update_safe_point[];
+extern const char gc_skip_merge_delta[];
+extern const char gc_skip_merge[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 } // namespace FailPoints
@@ -323,7 +325,7 @@ bool shouldCompactStableWithTooManyInvalidVersion(const SegmentPtr & seg, DB::Ti
         return true;
 
     const auto & property = seg->getStable()->getStableProperty();
-    LOG_FMT_TRACE(log, "{}", property.toDebugString());
+    LOG_TRACE(log, "{}", property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -356,7 +358,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentPtr & 
     //   What's more, we can ignore this kind of delete range in future to avoid this extra gc.
     auto check_result = (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
 
-    LOG_FMT_TRACE(
+    LOG_TRACE(
         log,
         "GC - Checking shouldCompactDeltaWithStable, "
         "check_result={} delete_rows={}, delete_bytes={} stable_rows={} stable_bytes={} segment={}",
@@ -396,13 +398,23 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
                                                          double invalid_data_ratio_threshold,
                                                          const LoggerPtr & log)
 {
-    auto [first_pack_included, last_pack_included] = snap->stable->isFirstAndLastPackIncludedInRange(context, seg->getRowKeyRange());
-    // Do a quick check about whether the DTFile is completely included in the segment range
-    if (first_pack_included && last_pack_included)
+    if (snap->stable->getDMFilesPacks() == 0)
     {
-        LOG_FMT_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange marking "
-                           "segment as valid data ratio checked because all packs are included, segment={}",
-                      seg->info());
+        LOG_TRACE(
+            log,
+            "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange skipped segment "
+            "because the DTFile of stable is empty, segment={}",
+            seg->info());
+        return false;
+    }
+
+    auto at_least_result = snap->stable->getAtLeastRowsAndBytes(context, seg->getRowKeyRange());
+    if (at_least_result.first_pack_intersection == RSResult::All //
+        && at_least_result.last_pack_intersection == RSResult::All)
+    {
+        LOG_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange permanently skipped segment "
+                       "because all packs in DTFiles are fully contained by the segment range, segment={}",
+                  seg->info());
         seg->setValidDataRatioChecked();
         return false;
     }
@@ -410,34 +422,34 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     std::unordered_set<UInt64> prev_segment_file_ids = getDMFileIDs(prev_seg);
     std::unordered_set<UInt64> next_segment_file_ids = getDMFileIDs(next_seg);
 
+    // Only try to compact the segment when there is data out of this segment range and is also not shared by neighbor segments.
     bool contains_invalid_data = false;
     const auto & dt_files = snap->stable->getDMFiles();
-    if (!first_pack_included)
+    if (at_least_result.first_pack_intersection != RSResult::All)
     {
-        auto first_file_id = dt_files[0]->fileId();
-        if (prev_segment_file_ids.count(first_file_id) == 0)
+        auto first_file_id = dt_files.front()->fileId();
+        if (prev_seg != nullptr && prev_segment_file_ids.count(first_file_id) == 0)
         {
             contains_invalid_data = true;
         }
     }
-    if (!last_pack_included)
+    if (at_least_result.last_pack_intersection != RSResult::All)
     {
-        auto last_file_id = dt_files[dt_files.size() - 1]->fileId();
-        if (next_segment_file_ids.count(last_file_id) == 0)
+        auto last_file_id = dt_files.back()->fileId();
+        if (next_seg != nullptr && next_segment_file_ids.count(last_file_id) == 0)
         {
             contains_invalid_data = true;
         }
     }
-    // Only try to compact the segment when there is data out of this segment range and is also not shared by neighbor segments.
     if (!contains_invalid_data)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
-            "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange checked false because no invalid data, "
-            "segment={} first_pack_included={} last_pack_included={} prev_seg_files=[{}] next_seg_files=[{}] my_files=[{}]",
-            seg->simpleInfo(),
-            first_pack_included,
-            last_pack_included,
+            "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange checked false "
+            "because segment DTFile is shared with a neighbor segment, "
+            "first_pack_inc={} last_pack_inc={} prev_seg_files=[{}] next_seg_files=[{}] my_files=[{}] segment={}",
+            magic_enum::enum_name(at_least_result.first_pack_intersection),
+            magic_enum::enum_name(at_least_result.last_pack_intersection),
             fmt::join(prev_segment_file_ids, ","),
             fmt::join(next_segment_file_ids, ","),
             [&] {
@@ -450,30 +462,53 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
                     },
                     ",");
                 return fmt_buf.toString();
-            }());
+            }(),
+            seg->info());
+        // We do not mark `setValidDataRatioChecked` because neighbor segments' state could change.
         return false;
     }
 
-    size_t total_rows = 0;
-    size_t total_bytes = 0;
-    for (const auto & file : dt_files)
-    {
-        total_rows += file->getRows();
-        total_bytes += file->getBytes();
-    }
-    auto valid_rows = snap->stable->getRows();
-    auto valid_bytes = snap->stable->getBytes();
+    size_t file_rows = snap->stable->getDMFilesRows();
+    size_t file_bytes = snap->stable->getDMFilesBytes();
 
-    auto check_result = (valid_rows < total_rows * (1 - invalid_data_ratio_threshold)) || (valid_bytes < total_bytes * (1 - invalid_data_ratio_threshold));
-    LOG_FMT_TRACE(
+    // We use at_least_rows|bytes, instead of stable_rows|bytes. The difference is that, at_least_rows|bytes only count packs
+    // that are fully contained in the segment range, while stable_rows|bytes count packs that are intersected with the segment
+    // range.
+    //
+    // Consider the following case, where segment only contain one pack:
+    //     │*****              ******│   DTFile only contains 1 pack
+    //             │<------>│            Segment
+    // This kind of data layout may be produced by logical split. In this case, ratio calculated using at_least_rows would be 0%,
+    // but ratio calculated using stable_rows would be 100%.
+    // We definitely want such DTFile to be reclaimed, because this segment is not containing any real rows at all!.
+    //
+    // Of course there are false positives, consider the following case:
+    //     │*************************│   DTFile only contains 1 pack
+    //       │<------------------->│     Segment
+    // The segment is containing most of the data in the DTFile and not much space can be reclaimed after merging the delta.
+    // We are just wasting the disk IO when doing the GC.
+    // This is currently acceptable, considering that:
+    // 1) The cost of rewriting the stable of 1 pack is small
+    // 2) After rewriting, the segment will not need to be rewritten again, as it will look like:
+    //       │*********************│     DTFile only contains 1 pack
+    //       │<------------------->│     Segment
+    //
+    // See https://github.com/pingcap/tiflash/pull/6010 for more details.
+
+    auto check_result = (at_least_result.rows < file_rows * (1 - invalid_data_ratio_threshold)) //
+        || (at_least_result.bytes < file_bytes * (1 - invalid_data_ratio_threshold));
+    LOG_TRACE(
         log,
         "GC - Checking shouldCompactStableWithTooMuchDataOutOfSegmentRange, "
-        "check_result={} valid_rows={} valid_bytes={} file_rows={} file_bytes={}",
+        "check_result={} first_pack_inc={} last_pack_inc={} rows_at_least={} bytes_at_least={} file_rows={} file_bytes={} segment={} ",
         check_result,
-        valid_rows,
-        valid_bytes,
-        total_rows,
-        total_bytes);
+        magic_enum::enum_name(at_least_result.first_pack_intersection),
+        magic_enum::enum_name(at_least_result.last_pack_intersection),
+        at_least_result.rows,
+        at_least_result.bytes,
+        file_rows,
+        file_bytes,
+        seg->info());
     seg->setValidDataRatioChecked();
     return check_result;
 }
@@ -482,11 +517,15 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 
 SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, const SegmentPtr & segment)
 {
+    fiu_do_on(FailPoints::gc_skip_merge, {
+        return {};
+    });
+
     auto segment_rows = segment->getEstimatedRows();
     auto segment_bytes = segment->getEstimatedBytes();
     if (segment_rows >= dm_context->small_segment_rows || segment_bytes >= dm_context->small_segment_bytes)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - Merge skipped because current segment is not small, segment={} table={}",
             segment->simpleInfo(),
@@ -497,7 +536,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto segments_to_merge = getMergeableSegments(dm_context, segment);
     if (segments_to_merge.size() < 2)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - Merge skipped because cannot find adjacent segments to merge, segment={} table={}",
             segment->simpleInfo(),
@@ -521,6 +560,10 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
 
 SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point)
 {
+    fiu_do_on(FailPoints::gc_skip_merge_delta, {
+        return {};
+    });
+
     SegmentSnapshotPtr segment_snap;
     {
         std::shared_lock lock(read_write_mutex);
@@ -528,14 +571,14 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
         // The segment we just retrieved may be dropped from the map. Let's verify it again before creating a snapshot.
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={} table={}", segment->simpleInfo(), table_name);
+            LOG_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={} table={}", segment->simpleInfo(), table_name);
             return {};
         }
 
         segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
         if (!segment_snap)
         {
-            LOG_FMT_TRACE(
+            LOG_TRACE(
                 log,
                 "GC - Skip checking MergeDelta because snapshot failed, segment={} table={}",
                 segment->simpleInfo(),
@@ -608,7 +651,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 
     if (!should_compact)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - MergeDelta skipped, segment={} table={}",
             segment->simpleInfo(),
@@ -668,12 +711,12 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_TRACE(log,
-                  "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
-                  table_name,
-                  next_gc_check_key.toDebugString(),
-                  gc_safe_point,
-                  limit);
+    LOG_TRACE(log,
+              "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
+              table_name,
+              next_gc_check_key.toDebugString(),
+              gc_safe_point,
+              limit);
 
     UInt64 check_segments_num = 0;
     Int64 gc_segments_num = 0;
@@ -728,7 +771,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
 
             if (!new_seg)
             {
-                LOG_FMT_TRACE(
+                LOG_TRACE(
                     log,
                     "GC - Skipped segment, segment={} table={}",
                     segment->simpleInfo(),
