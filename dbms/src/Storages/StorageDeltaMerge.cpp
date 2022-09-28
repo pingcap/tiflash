@@ -815,11 +815,11 @@ void StorageDeltaMerge::ingestFiles(
         clear_data_in_range);
 }
 
-UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
+UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (storeInited())
     {
-        return _store->onSyncGc(limit);
+        return _store->onSyncGc(limit, gc_options);
     }
     return 0;
 }
