@@ -471,7 +471,6 @@ void KVStore::handleApplySnapshot(
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
     auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
-    LOG_FMT_INFO(Logger::get("KVStore"), "external_files={}", external_files.size());
     applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
