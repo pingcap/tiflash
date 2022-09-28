@@ -138,5 +138,4 @@ public:
 };
 
 using ExchangeReceiverSource = TiRemoteSource<ExchangeReceiver>;
-// using CoprocessorBlockInputStream = TiRemoteBlockInputStream<CoprocessorReader>;
 } // namespace DB
