@@ -52,7 +52,7 @@ try
         ASSERT_TRUE(result_type->equals(*getReturnTypeForNullEq(col_1_type, col_2_type)));
     };
     /// test integer type Int8/Int16/Int32/Int64/UInt8/UInt16/UInt32/UInt64
-    const auto result_type_name_nulleq = "UInt8";
+    const auto * const result_type_name_nulleq = "UInt8";
     test_type("Int8", "Int8", result_type_name_nulleq);
     test_type("Int8", "Int16", result_type_name_nulleq);
     test_type("Int8", "Int32", result_type_name_nulleq);
