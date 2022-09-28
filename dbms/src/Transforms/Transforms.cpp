@@ -21,11 +21,13 @@ void Transforms::setSource(const SourcePtr & source_)
 {
     assert(!source);
     source = source_;
+    assert(source);
 }
 void Transforms::setSink(const SinkPtr & sink_)
 {
     assert(!sink);
     sink = sink_;
+    assert(sink);
 }
 void Transforms::append(const TransformPtr & transform)
 {
@@ -42,7 +44,7 @@ bool Transforms::execute()
     assert(source);
     assert(sink);
 
-    if (isCancelledOrThrowIfKilled())
+    if (unlikely(isCancelledOrThrowIfKilled()))
         return false;
 
     if (!sink->isReady())
@@ -64,10 +66,18 @@ void Transforms::prepare()
 {
     source->prepare();
 }
+
 bool Transforms::finish()
 {
-    source->finish();
-    return sink->finish();
+    if (sink->finish())
+    {
+        source->finish();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 void Transforms::cancel(bool kill)

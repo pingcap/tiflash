@@ -16,6 +16,7 @@
 
 #include <Flash/Executor/ResultHandler.h>
 #include <Transforms/Sink.h>
+#include <Transforms/TryLock.h>
 
 namespace DB
 {
@@ -29,15 +30,20 @@ public:
 
     bool write(Block & block) override
     {
-        if (!block)
+        if (unlikely(!block))
             return false;
 
         static std::mutex mu;
+        TryLock lock(mu);
+        if (lock.isLocked())
         {
-            std::lock_guard lock(mu);
             result_handler(block);
+            return true;
         }
-        return true;
+        else
+        {
+            return false;
+        }
     }
 
 private:

@@ -55,7 +55,6 @@ public:
     {
         if (done)
             return {true, {}};
-        addReadTaskPoolToScheduler();
         while (true)
         {
             Block res;
@@ -95,13 +94,15 @@ public:
         return header;
     }
 
+    void prepare() override
+    {
+        addReadTaskPoolToScheduler();
+    }
+
 private:
     void addReadTaskPoolToScheduler()
     {
-        if (likely(task_pool_added))
-        {
-            return;
-        }
+        RUNTIME_CHECK(!task_pool_added);
         std::call_once(task_pool->addToSchedulerFlag(), [&]() { DM::SegmentReadTaskScheduler::instance().add(task_pool); });
         task_pool_added = true;
     }

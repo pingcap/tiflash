@@ -31,7 +31,7 @@ public:
 
     bool write(Block & block) override
     {
-        if (!block)
+        if (unlikely(!block))
             return false;
 
         join->insertFromBlock(block, index);

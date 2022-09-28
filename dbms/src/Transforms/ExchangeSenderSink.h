@@ -43,7 +43,7 @@ public:
 
     bool write(Block & block) override
     {
-        if (!block)
+        if (unlikely(!block))
             return false;
 
         async_writer->asyncWrite(std::move(block));

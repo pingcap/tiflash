@@ -18,7 +18,7 @@ namespace DB
 {
 bool SortingSink::write(Block & block)
 {
-    if (!block)
+    if (unlikely(!block))
         return false;
 
     sortBlock(block, description, limit);

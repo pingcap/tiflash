@@ -32,7 +32,7 @@ PipelineTaskResult PipelineTask::execute()
         {
         case PipelineTaskStatus::running:
         {
-            if (!transforms->execute())
+            if (unlikely(!transforms->execute()))
                 status = PipelineTaskStatus::finish;
             return running();
         }

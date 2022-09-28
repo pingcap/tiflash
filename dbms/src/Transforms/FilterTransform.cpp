@@ -52,7 +52,7 @@ void FilterTransform::transformHeader(Block & block)
 
 bool FilterTransform::transform(Block & block)
 {
-    if (!block)
+    if (unlikely(!block))
         return true;
 
     if (constant_filter_description.always_false)

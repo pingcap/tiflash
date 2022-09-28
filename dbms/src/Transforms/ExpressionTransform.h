@@ -29,7 +29,7 @@ public:
 
     bool transform(Block & block) override
     {
-        if (block)
+        if (likely(block))
             expression->execute(block);
         return true;
     }

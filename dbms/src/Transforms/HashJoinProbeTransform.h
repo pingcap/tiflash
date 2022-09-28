@@ -35,7 +35,7 @@ public:
 
     bool transform(Block & block) override
     {
-        if (block)
+        if (likely(block))
             join_probe_actions->execute(block);
         return true;
     }
