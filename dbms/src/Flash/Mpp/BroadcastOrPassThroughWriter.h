@@ -17,14 +17,15 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
-#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Mpp/AsyncWriter.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/types.h>
 
 namespace DB
 {
 template <class StreamWriterPtr>
-class BroadcastOrPassThroughWriter : public DAGResponseWriter, public AsyncWriter
+class BroadcastOrPassThroughWriter : public DAGResponseWriter
+    , public AsyncWriter
 {
 public:
     BroadcastOrPassThroughWriter(

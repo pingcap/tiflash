@@ -15,11 +15,10 @@
 #pragma once
 
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
+#include <Flash/Mpp/AsyncWriter.h>
 #include <Flash/Mpp/BroadcastOrPassThroughWriter.h>
 #include <Flash/Mpp/FineGrainedShuffleWriter.h>
 #include <Flash/Mpp/HashParitionWriter.h>
-#include <Flash/Mpp/HashParitionWriter.h>
-#include <Flash/Mpp/AsyncWriter.h>
 
 namespace DB
 {

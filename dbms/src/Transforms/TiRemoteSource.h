@@ -64,7 +64,7 @@ class TiRemoteSource : public Source
     };
     FetchResult fetchRemoteResult()
     {
-        while(true)
+        while (true)
         {
             auto result = remote_reader->asyncNextResult(block_queue, sample_block, stream_id);
             if (result.meet_error)
@@ -81,9 +81,9 @@ class TiRemoteSource : public Source
                 LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
                 throw Exception(result.resp->error().DebugString());
             }
-    
+
             const auto & decode_detail = result.decode_detail;
-    
+
             total_rows += decode_detail.rows;
             LOG_TRACE(
                 log,

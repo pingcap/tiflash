@@ -20,7 +20,8 @@ template <typename Mutex>
 class TryLock
 {
 public:
-    explicit TryLock(Mutex & m_) noexcept: m(m_)
+    explicit TryLock(Mutex & m_) noexcept
+        : m(m_)
     {
         is_locked = m.try_lock();
     }

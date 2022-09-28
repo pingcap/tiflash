@@ -226,14 +226,14 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::asyncEncodeThenWriteBlocks()
                 }
                 blocks.pop_back();
             }
-    
+
             if (current_records_num > 0)
             {
                 response.addChunk(chunk_codec_stream->getString());
                 chunk_codec_stream->clear();
             }
         }
-    
+
         assert(blocks.empty());
         rows_in_blocks = 0;
 
