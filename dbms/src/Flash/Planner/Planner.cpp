@@ -48,7 +48,7 @@ QueryExecutorPtr Planner::pipelineExecute(std::shared_ptr<ProcessListEntry> proc
     physical_plan.build(&plan_source.getDAGRequest());
     physical_plan.outputAndOptimize();
 
-    return std::make_shared<PipelineExecutor>(
+    return std::make_unique<PipelineExecutor>(
         context,
         physical_plan.rootNode(),
         log->identifier(),

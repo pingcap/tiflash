@@ -36,6 +36,7 @@
 #include <atomic>
 #include <boost/noncopyable.hpp>
 #include <memory>
+#include <shared_mutex>
 #include <unordered_map>
 
 namespace DB
@@ -111,7 +112,7 @@ private:
 
     void initExchangeReceivers();
 
-    QueryExecutorPtr getQueryExecutorPtr();
+    QueryExecutor * getQueryExecutorPtr();
 
     tipb::DAGRequest dag_req;
     mpp::TaskMeta meta;
@@ -130,8 +131,8 @@ private:
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
 
+    std::shared_mutex query_executor_mu;
     QueryExecutorPtr query_executor = nullptr;
-    std::mutex query_executor_mu;
 
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;

@@ -37,6 +37,7 @@ public:
     void submit(PipelineTask && task);
 
     ~EventLoop();
+
 private:
     void handleTask(PipelineTask & task);
 

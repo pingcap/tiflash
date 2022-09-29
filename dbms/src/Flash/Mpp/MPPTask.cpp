@@ -29,6 +29,7 @@
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <fmt/core.h>
@@ -97,7 +98,7 @@ void MPPTask::abortDataStreams(AbortType abort_type)
     /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
     bool is_kill = abort_type == AbortType::ONCANCELLATION;
     context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
-    if (auto query_executor_ptr = getQueryExecutorPtr(); query_executor_ptr)
+    if (auto * query_executor_ptr = getQueryExecutorPtr(); query_executor_ptr)
         query_executor_ptr->cancel(is_kill);
 }
 
@@ -275,14 +276,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     dag_context->tidb_host = context->getClientInfo().current_address.toString();
 
     context->setDAGContext(dag_context.get());
-
-    process_list_entry = context->getProcessList().insert(
-        dag_context->dummy_query_string,
-        dag_context->dummy_ast.get(),
-        context->getClientInfo(),
-        context->getSettingsRef());
-
-    context->setProcessListElement(&process_list_entry->get());
+    process_list_entry = setProcessListElement(*context, dag_context->dummy_query_string, dag_context->dummy_ast.get());
     dag_context->setProcessListEntry(process_list_entry);
 
     if (dag_context->isRootMPPTask())
@@ -324,7 +318,7 @@ void MPPTask::preprocess()
     auto start_time = Clock::now();
     initExchangeReceivers();
     {
-        std::lock_guard lock(query_executor_mu);
+        std::unique_lock lock(query_executor_mu);
         query_executor = executeQuery(*context);
     }
     {
@@ -376,7 +370,7 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        if (auto query_executor_ptr = getQueryExecutorPtr(); query_executor_ptr)
+        if (auto * query_executor_ptr = getQueryExecutorPtr(); query_executor_ptr)
         {
             bool is_success;
             std::tie(is_success, err_msg) = query_executor_ptr->execute();
@@ -443,10 +437,10 @@ void MPPTask::runImpl()
     unregisterTask();
 }
 
-QueryExecutorPtr MPPTask::getQueryExecutorPtr()
+QueryExecutor * MPPTask::getQueryExecutorPtr()
 {
-    std::lock_guard lock(query_executor_mu);
-    return query_executor;
+    std::shared_lock lock(query_executor_mu);
+    return query_executor != nullptr ? query_executor.get() : nullptr;
 }
 
 void MPPTask::handleError(const String & error_msg)

@@ -17,7 +17,6 @@
 #include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Pipeline/dag/Event.h>
 #include <Flash/Pipeline/task/EventLoop.h>
-
 #include <errno.h>
 
 namespace DB

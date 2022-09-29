@@ -345,7 +345,6 @@ public:
 
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
-    bool isMPPTask() const;
 
     /// List all queries.
     ProcessList & getProcessList();

@@ -42,5 +42,5 @@ protected:
     virtual std::pair<bool, String> execute(ResultHandler) = 0;
 };
 
-using QueryExecutorPtr = std::shared_ptr<QueryExecutor>;
+using QueryExecutorPtr = std::unique_ptr<QueryExecutor>;
 } // namespace DB
