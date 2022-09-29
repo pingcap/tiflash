@@ -111,6 +111,7 @@ void ExecutorTest::executeExecutor(
     std::vector<size_t> concurrencies{1, 2, 10, std::thread::hardware_concurrency(), std::thread::hardware_concurrency() + 1};
     for (auto concurrency : concurrencies)
     {
+        assert(concurrency > 0);
         std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
