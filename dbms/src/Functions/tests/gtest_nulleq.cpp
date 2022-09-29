@@ -32,6 +32,10 @@ namespace tests
 class TestNullEq : public DB::tests::FunctionTest
 {
 protected:
+    ColumnWithTypeAndName executeNullEq(const ColumnWithTypeAndName & first_column, const ColumnWithTypeAndName & second_column)
+    {
+        return executeFunction("nullEq", first_column, second_column);
+    }
     DataTypePtr getReturnTypeForNullEq(const DataTypePtr & type_1, const DataTypePtr & type_2)
     {
         ColumnsWithTypeAndName input_columns{
@@ -40,8 +44,212 @@ protected:
         };
         return getReturnTypeForFunction(context, "nullEq", input_columns);
     }
+    template <class IntegerType>
+    ColumnWithTypeAndName createIntegerColumnInternal(const std::vector<Int64> & signed_input, const std::vector<UInt64> unsigned_input, const std::vector<Int32> & null_map)
+    {
+        static_assert(std::is_integral_v<IntegerType>);
+        InferredDataVector<IntegerType> data_vector;
+        if constexpr (std::is_signed_v<IntegerType>)
+        {
+            for (auto v : signed_input)
+                data_vector.push_back(static_cast<IntegerType>(v));
+        }
+        else
+        {
+            for (auto v : unsigned_input)
+                data_vector.push_back(static_cast<IntegerType>(v));
+        }
+        return null_map.empty() ? createColumn<IntegerType>(data_vector) : createNullableColumn<IntegerType>(data_vector, null_map);
+    }
+    template <class FloatType>
+    ColumnWithTypeAndName createFloatColumnInternal(const std::vector<Float64> & float_input, const std::vector<Int32> & null_map)
+    {
+        static_assert(std::is_floating_point_v<FloatType>);
+        InferredDataVector<FloatType> data_vector;
+        for (auto v : float_input)
+            data_vector.push_back(static_cast<FloatType>(v));
+        return null_map.empty() ? createColumn<FloatType>(data_vector) : createNullableColumn<FloatType>(data_vector, null_map);
+    }
+    void testNullEqFunction(const ColumnsWithTypeAndName & input_columns, const std::vector<Int32> & null_map)
+    {
+        auto col_result = createColumn<UInt8>({0, 1});
+        for (const auto & col_1 : input_columns)
+        {
+            for (const auto & col_2 : input_columns)
+            {
+                const auto * const result_type_name_nulleq = "UInt8";
+                auto result_type = DataTypeFactory::instance().get(result_type_name_nulleq);
+                auto result_column = result_type->createColumn();
+                for (size_t i = 0; i < col_1.column->size(); i++)
+                {
+                    Field result;
+                    if (col_1.type->isNullable() && null_map[i] && col_2.type->isNullable() && null_map[i])
+                    {
+                        /// Both Null.
+                        col_result.column->get(1, result);
+                        result_column->insert(result);
+                    }
+                    else if (col_1.type->isNullable() && null_map[i])
+                    {
+                        /// Only one side is Null
+                        col_result.column->get(0, result);
+                        result_column->insert(result);
+                    }
+                    else if (col_2.type->isNullable() && null_map[i])
+                    {
+                        /// Only one side is Null
+                        col_result.column->get(0, result);
+                        result_column->insert(result);
+                    }
+                    else
+                    {
+                        /// Both not Null. Make a comparison then.
+                        Field col1_field;
+                        col_1.column->get(i, col1_field);
+                        Field col2_field;
+                        col_2.column->get(i, col2_field);
+                        bool equals = (col1_field == col2_field);
+                        col_result.column->get(equals, result);
+                        result_column->insert(result);
+                    }
+                }
+                ColumnWithTypeAndName expected{std::move(result_column), result_type, ""};
+                ASSERT_COLUMN_EQ(expected, executeNullEq(col_1, col_2));
+            }
+        }
+    }
 };
 
+TEST_F(TestNullEq, TestInputType)
+try
+{
+    std::vector<Int32> null_map{1, 0, 0, 0, 1};
+    /// case 1 test NullEqInt
+    std::vector<Int64> signed_ints{-2, -1, 0, 1, 2};
+    std::vector<UInt64> unsigned_ints{0, 1, 2, 3, 4};
+    ColumnsWithTypeAndName int_input{
+        /// not null column
+        createIntegerColumnInternal<UInt8>(signed_ints, unsigned_ints, {}),
+        createIntegerColumnInternal<Int8>(signed_ints, unsigned_ints, {}),
+        createIntegerColumnInternal<UInt16>(signed_ints, unsigned_ints, {}),
+        createIntegerColumnInternal<Int16>(signed_ints, unsigned_ints, {}),
+        createIntegerColumnInternal<UInt32>(signed_ints, unsigned_ints, {}),
+        createIntegerColumnInternal<Int32>(signed_ints, unsigned_ints, {}),
+        createIntegerColumnInternal<UInt64>(signed_ints, unsigned_ints, {}),
+        createIntegerColumnInternal<Int64>(signed_ints, unsigned_ints, {}),
+        /// nullable column
+        createIntegerColumnInternal<UInt8>(signed_ints, unsigned_ints, null_map),
+        createIntegerColumnInternal<Int8>(signed_ints, unsigned_ints, null_map),
+        createIntegerColumnInternal<UInt16>(signed_ints, unsigned_ints, null_map),
+        createIntegerColumnInternal<Int16>(signed_ints, unsigned_ints, null_map),
+        createIntegerColumnInternal<UInt32>(signed_ints, unsigned_ints, null_map),
+        createIntegerColumnInternal<Int32>(signed_ints, unsigned_ints, null_map),
+        createIntegerColumnInternal<UInt64>(signed_ints, unsigned_ints, null_map),
+        createIntegerColumnInternal<Int64>(signed_ints, unsigned_ints, null_map),
+    };
+    testNullEqFunction(int_input, null_map);
+    /// case 2 test NullEqReal
+    std::vector<Float64> float_data{-2, -1, 0, 1, 2};
+    ColumnsWithTypeAndName float_input{
+        createFloatColumnInternal<Float32>(float_data, {}),
+        createFloatColumnInternal<Float64>(float_data, {}),
+        createFloatColumnInternal<Float32>(float_data, null_map),
+        createFloatColumnInternal<Float64>(float_data, null_map),
+    };
+    testNullEqFunction(float_input, null_map);
+    /// case 3 test NullEqString
+    std::vector<String> string_data{"abc", "bcd", "cde", "def", "efg"};
+    ColumnsWithTypeAndName string_input{
+        createColumn<String>(string_data),
+        createNullableColumn<String>(string_data, null_map),
+    };
+    testNullEqFunction(string_input, null_map);
+    /// case 4 test NullEqDecimal
+//    std::vector<String> decimal_data{"-12.34", "-12.12", "0.00", "12.12", "12.34"};
+//    ColumnsWithTypeAndName decimal_input{
+//        createColumn<Decimal32>(std::make_tuple(5, 3), decimal_data),
+//        createNullableColumn<Decimal32>(std::make_tuple(5, 3), decimal_data, null_map),
+//        createColumn<Decimal64>(std::make_tuple(12, 4), decimal_data),
+//        createNullableColumn<Decimal64>(std::make_tuple(12, 4), decimal_data, null_map),
+//        createColumn<Decimal128>(std::make_tuple(20, 2), decimal_data),
+//        createNullableColumn<Decimal128>(std::make_tuple(20, 2), decimal_data, null_map),
+//        createColumn<Decimal256>(std::make_tuple(40, 6), decimal_data),
+//        createNullableColumn<Decimal256>(std::make_tuple(40, 6), decimal_data, null_map),
+//    };
+//    testNullEqFunction(decimal_input, null_map);
+    /// case 5 test NullEqTime
+    InferredDataVector<MyDate> date_data{
+        MyDate(0, 0, 0).toPackedUInt(),
+        MyDate(1960, 1, 1).toPackedUInt(),
+        MyDate(1999, 1, 1).toPackedUInt(),
+        MyDate(2000, 1, 1).toPackedUInt(),
+        MyDate(2400, 1, 1).toPackedUInt(),
+    };
+    InferredDataVector<MyDate> datetime_data_fsp_0{
+        MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt(),
+        MyDateTime(1960, 1, 1, 11, 11, 11, 0).toPackedUInt(),
+        MyDateTime(1999, 1, 1, 22, 22, 22, 0).toPackedUInt(),
+        MyDateTime(2000, 1, 1, 1, 1, 1, 0).toPackedUInt(),
+        MyDateTime(2400, 1, 1, 2, 2, 2, 0).toPackedUInt(),
+    };
+    InferredDataVector<MyDate> datetime_data_fsp_3{
+        MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt(),
+        MyDateTime(1960, 1, 1, 11, 11, 11, 123000).toPackedUInt(),
+        MyDateTime(1999, 1, 1, 22, 22, 22, 234000).toPackedUInt(),
+        MyDateTime(2000, 1, 1, 1, 1, 1, 345000).toPackedUInt(),
+        MyDateTime(2400, 1, 1, 2, 2, 2, 456000).toPackedUInt(),
+    };
+    InferredDataVector<MyDate> datetime_data_fsp_6{
+        MyDateTime(0, 0, 0, 0, 0, 0, 0).toPackedUInt(),
+        MyDateTime(1960, 1, 1, 11, 11, 11, 123456).toPackedUInt(),
+        MyDateTime(1999, 1, 1, 22, 22, 22, 234561).toPackedUInt(),
+        MyDateTime(2000, 1, 1, 1, 1, 1, 345612).toPackedUInt(),
+        MyDateTime(2400, 1, 1, 2, 2, 2, 456123).toPackedUInt(),
+    };
+    ColumnsWithTypeAndName time_input{
+        createColumn<MyDate>(date_data),
+        createNullableColumn<MyDate>(date_data, null_map),
+        createColumn<MyDateTime>(std::make_tuple(0), datetime_data_fsp_0),
+        createNullableColumn<MyDateTime>(std::make_tuple(0), datetime_data_fsp_0, null_map),
+        createColumn<MyDateTime>(std::make_tuple(3), datetime_data_fsp_3),
+        createNullableColumn<MyDateTime>(std::make_tuple(3), datetime_data_fsp_3, null_map),
+        createColumn<MyDateTime>(std::make_tuple(6), datetime_data_fsp_6),
+        createNullableColumn<MyDateTime>(std::make_tuple(6), datetime_data_fsp_6, null_map),
+    };
+    testNullEqFunction(time_input, null_map);
+    /// case 6 test NullEqDuration
+    InferredDataVector<MyDuration> duration_data_fsp_0{
+        MyDuration(-1, 10, 10, 10, 0, 0).nanoSecond(),
+        MyDuration(-1, 11, 11, 11, 0, 0).nanoSecond(),
+        MyDuration(1, 10, 10, 10, 0, 0).nanoSecond(),
+        MyDuration(1, 11, 11, 11, 0, 0).nanoSecond(),
+        MyDuration(1, 12, 12, 12, 0, 0).nanoSecond(),
+    };
+    InferredDataVector<MyDuration> duration_data_fsp_3{
+        MyDuration(-1, 10, 10, 10, 123000, 3).nanoSecond(),
+        MyDuration(-1, 11, 11, 11, 234000, 3).nanoSecond(),
+        MyDuration(1, 10, 10, 10, 345000, 3).nanoSecond(),
+        MyDuration(1, 11, 11, 11, 456000, 3).nanoSecond(),
+        MyDuration(1, 12, 12, 12, 561000, 3).nanoSecond(),
+    };
+    InferredDataVector<MyDuration> duration_data_fsp_6{
+        MyDuration(-1, 10, 10, 10, 123456, 6).nanoSecond(),
+        MyDuration(-1, 11, 11, 11, 234561, 6).nanoSecond(),
+        MyDuration(1, 10, 10, 10, 345612, 6).nanoSecond(),
+        MyDuration(1, 11, 11, 11, 456123, 6).nanoSecond(),
+        MyDuration(1, 12, 12, 12, 561234, 6).nanoSecond(),
+    };
+    ColumnsWithTypeAndName duration_input{
+        createColumn<MyDuration>(std::make_tuple(0), duration_data_fsp_0),
+        createNullableColumn<MyDuration>(std::make_tuple(0), duration_data_fsp_0, null_map),
+        createColumn<MyDuration>(std::make_tuple(3), duration_data_fsp_3),
+        createNullableColumn<MyDuration>(std::make_tuple(3), duration_data_fsp_3, null_map),
+        createColumn<MyDuration>(std::make_tuple(6), duration_data_fsp_6),
+        createNullableColumn<MyDuration>(std::make_tuple(6), duration_data_fsp_6, null_map),
+    };
+    testNullEqFunction(duration_input, null_map);
+}
+CATCH
 TEST_F(TestNullEq, TestTypeInfer)
 try
 {
