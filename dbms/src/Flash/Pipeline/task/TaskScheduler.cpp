@@ -50,18 +50,6 @@ TaskScheduler::TaskScheduler(PipelineManager & pipeline_manager, const ServerInf
             numa_event_loops.emplace_back(std::move(event_loops));
         }
     }
-
-    thread_pool_manager = newThreadPoolManager(total_event_loop_num);
-    for (const auto & event_loops : numa_event_loops)
-    {
-        for (const auto & event_loop : event_loops)
-        {
-            // TODO 2 thread for per event loop.
-            thread_pool_manager->schedule(false, [&]() {
-                event_loop->loop();
-            });
-        }
-    }
     LOG_DEBUG(log, "init {} event loop success", total_event_loop_num);
 
     std::random_device rd;
@@ -79,7 +67,6 @@ TaskScheduler::~TaskScheduler()
         for (const auto & event_loop : event_loops)
             event_loop->finish();
     }
-    thread_pool_manager->wait();
     numa_event_loops.clear();
 }
 

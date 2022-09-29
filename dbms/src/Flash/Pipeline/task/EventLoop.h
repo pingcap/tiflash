@@ -19,6 +19,7 @@
 #include <Flash/Pipeline/task/PipelineTask.h>
 
 #include <memory>
+#include <thread>
 
 namespace DB
 {
@@ -35,6 +36,7 @@ public:
 
     void submit(PipelineTask && task);
 
+    ~EventLoop();
 private:
     void handleTask(PipelineTask & task);
 
@@ -43,8 +45,8 @@ private:
     MPMCQueue<PipelineTask> event_queue{499999};
 
     PipelineManager & pipeline_manager;
-
     LoggerPtr logger = Logger::get(fmt::format("event loop with cpu_core {}", core));
+    std::thread t;
 };
 
 using EventLoopPtr = std::unique_ptr<EventLoop>;

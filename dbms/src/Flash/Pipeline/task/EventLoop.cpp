@@ -17,6 +17,7 @@
 #include <Flash/Pipeline/dag/DAGScheduler.h>
 #include <Flash/Pipeline/dag/Event.h>
 #include <Flash/Pipeline/task/EventLoop.h>
+
 #include <errno.h>
 
 namespace DB
@@ -24,7 +25,10 @@ namespace DB
 EventLoop::EventLoop(int core_, PipelineManager & pipeline_manager_)
     : core(core_)
     , pipeline_manager(pipeline_manager_)
-{}
+{
+    // TODO 2 thread for per event loop.
+    t = std::thread(&EventLoop::loop, this);
+}
 
 void EventLoop::submit(PipelineTask && task)
 {
@@ -36,6 +40,11 @@ void EventLoop::submit(PipelineTask && task)
 void EventLoop::finish()
 {
     event_queue.finish();
+}
+
+EventLoop::~EventLoop()
+{
+    t.join();
 }
 
 void EventLoop::handleTask(PipelineTask & task)
@@ -93,7 +102,7 @@ void EventLoop::loop()
     if (ret != 0)
         throw Exception(fmt::format("sched_setaffinity fail: {}", std::strerror(errno)));
 #endif
-    setThreadName(fmt::format("event loop with core: ", core).c_str());
+    setThreadName(fmt::format("event loop: {}", core).c_str());
 
     PipelineTask task;
     while (likely(event_queue.pop(task) == MPMCQueueResult::OK))

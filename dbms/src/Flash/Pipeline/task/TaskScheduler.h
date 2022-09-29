@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <Common/ThreadManager.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Pipeline/task/EventLoop.h>
 #include <Server/ServerInfo.h>
@@ -44,8 +43,6 @@ private:
     // numa nodes<logical cpus>
     std::vector<std::vector<EventLoopPtr>> numa_event_loops;
     size_t total_event_loop_num = 0;
-
-    std::shared_ptr<ThreadPoolManager> thread_pool_manager;
 
     std::mt19937 gen;
     std::uniform_int_distribution<size_t> numa_dis;
