@@ -45,6 +45,7 @@ void EventLoop::finish()
 EventLoop::~EventLoop()
 {
     t.join();
+    LOG_INFO(logger, "stop event loop with cpu core: {}", core);
 }
 
 void EventLoop::handleTask(PipelineTask & task)
@@ -103,6 +104,7 @@ void EventLoop::loop()
         throw Exception(fmt::format("sched_setaffinity fail: {}", std::strerror(errno)));
 #endif
     setThreadName(fmt::format("event loop: {}", core).c_str());
+    LOG_INFO(logger, "start event loop with cpu core: {}", core);
 
     PipelineTask task;
     while (likely(event_queue.pop(task) == MPMCQueueResult::OK))
