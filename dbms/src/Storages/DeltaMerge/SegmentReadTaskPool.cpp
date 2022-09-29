@@ -103,7 +103,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
     switch (read_mode)
     {
-    case Normal:
+    case ReadMode::Normal:
         stream = seg->getInputStream(
             *dm_context,
             columns_to_read,
@@ -113,7 +113,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
             max_version,
             block_size);
         break;
-    case Fast:
+    case ReadMode::Fast:
         stream = seg->getInputStreamFast(
             *dm_context,
             columns_to_read,
@@ -122,7 +122,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
             filter,
             block_size);
         break;
-    case Raw:
+    case ReadMode::Raw:
         stream = seg->getInputStreamRaw(
             *dm_context,
             columns_to_read,
