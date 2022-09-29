@@ -501,10 +501,6 @@ private:
 
     void checkIsConfigLoaded() const;
 
-#ifndef NDEBUG
-    // access it only in TiFlashTestEnv, in order to skip checkIsConfigLoaded.
-public:
-#endif
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 

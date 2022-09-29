@@ -22,6 +22,7 @@
 #include <Flash/Executor/QueryExecutor.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Mpp/MPPTaskScheduleEntry.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
@@ -73,18 +74,9 @@ public:
 
     void run();
 
-    int getNeededThreads();
-
-    enum class ScheduleState
-    {
-        WAITING,
-        SCHEDULED,
-        FAILED,
-        EXCEEDED,
-        COMPLETED
-    };
-
     bool scheduleThisTask(ScheduleState state);
+
+    MPPTaskScheduleEntry & getScheduleEntry() { return schedule_entry; }
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -122,8 +114,16 @@ private:
     QueryExecutorPtr getQueryExecutorPtr();
 
     tipb::DAGRequest dag_req;
+    mpp::TaskMeta meta;
+    MPPTaskId id;
 
     ContextPtr context;
+
+    MPPTaskManager * manager;
+    std::atomic<bool> registered{false};
+
+    MPPTaskScheduleEntry schedule_entry;
+
     // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
     // before `context`.
     std::unique_ptr<DAGContext> dag_context;
@@ -136,10 +136,6 @@ private:
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;
 
-    mpp::TaskMeta meta;
-
-    MPPTaskId id;
-
     std::mutex tunnel_and_receiver_mu;
 
     MPPTunnelSetPtr tunnel_set;
@@ -148,21 +144,12 @@ private:
 
     int new_thread_count_of_exchange_receiver = 0;
 
-    MPPTaskManager * manager;
-    std::atomic<bool> registered{false};
-
     const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
     friend class MPPTaskManager;
     friend class MPPHandler;
-
-    int needed_threads;
-
-    std::mutex schedule_mu;
-    std::condition_variable schedule_cv;
-    ScheduleState schedule_state;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

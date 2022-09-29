@@ -78,17 +78,11 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
     global_contexts.push_back(global_context);
     global_context->setGlobalContext(*global_context);
-    global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
+    global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
 
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
     global_context->initializeFileProvider(key_manager, false);
-
-
-#ifndef NDEBUG
-    // do not need to load config file in unit test, just set `is_config_loaded = true` to skip checkIsConfigLoaded
-    global_context->is_config_loaded = true;
-#endif
 
     // initialize background & blockable background thread pool
     Settings & settings = global_context->getSettingsRef();
