@@ -45,8 +45,6 @@
 #include <memory>
 #include <numeric>
 
-#include "Storages/DeltaMerge/Filter/RSOperator.h"
-
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
