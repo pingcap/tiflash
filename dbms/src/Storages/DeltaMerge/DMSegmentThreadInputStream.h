@@ -47,8 +47,7 @@ public:
         const RSOperatorPtr & filter_,
         UInt64 max_version_,
         size_t expected_block_size_,
-        bool is_raw_,
-        bool do_delete_mark_filter_for_raw_,
+        ReadMode read_mode_,
         const int extra_table_id_index,
         const TableID physical_table_id,
         const String & req_id)
@@ -60,8 +59,7 @@ public:
         , header(toEmptyBlock(columns_to_read))
         , max_version(max_version_)
         , expected_block_size(expected_block_size_)
-        , is_raw(is_raw_)
-        , do_delete_mark_filter_for_raw(do_delete_mark_filter_for_raw_)
+        , read_mode(read_mode_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
         , log(Logger::get(NAME, req_id))
@@ -102,18 +100,10 @@ protected:
                 }
 
                 cur_segment = task->segment;
-                if (is_raw)
+                auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
+                switch (read_mode)
                 {
-                    cur_stream = cur_segment->getInputStreamRaw(
-                        *dm_context,
-                        columns_to_read,
-                        task->read_snapshot,
-                        task->ranges,
-                        filter,
-                        do_delete_mark_filter_for_raw);
-                }
-                else
-                {
+                case Normal:
                     cur_stream = cur_segment->getInputStream(
                         *dm_context,
                         columns_to_read,
@@ -121,7 +111,24 @@ protected:
                         task->ranges,
                         filter,
                         max_version,
-                        std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows)));
+                        block_size);
+                    break;
+                case Fast:
+                    cur_stream = cur_segment->getInputStreamFast(
+                        *dm_context,
+                        columns_to_read,
+                        task->read_snapshot,
+                        task->ranges,
+                        filter,
+                        block_size);
+                    break;
+                case Raw:
+                    cur_stream = cur_segment->getInputStreamRaw(
+                        *dm_context,
+                        columns_to_read,
+                        task->read_snapshot,
+                        task->ranges);
+                    break;
                 }
                 LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
             }
@@ -172,8 +179,7 @@ private:
     Block header;
     const UInt64 max_version;
     const size_t expected_block_size;
-    const bool is_raw;
-    const bool do_delete_mark_filter_for_raw;
+    const ReadMode read_mode;
     // position of the ExtraPhysTblID column in column_names parameter in the StorageDeltaMerge::read function.
     const int extra_table_id_index;
 
