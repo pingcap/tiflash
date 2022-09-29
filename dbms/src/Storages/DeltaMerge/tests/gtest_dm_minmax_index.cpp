@@ -1409,6 +1409,9 @@ try
                          {{"0", "0", "1", "88"}, {"1", "1", "0", "100"}},
                          createLess(attr("Int64"), Field((Int64)100), 0)));
     ASSERT_EQ(false, checkDelMatch(case_name, *context, "Int64", "100", createEqual(attr("Int64"), Field((Int64)100))));
+
+    ASSERT_EQ(true, checkMatch(case_name, *context, "Nullable(Int64)", {{"0", "0", "0", "\\N"}}, createIsNull(attr("Int64"))));
+    ASSERT_EQ(false, checkDelMatch(case_name, *context, "Nullable(Int64)", "\\N", createIsNull(attr("Int64"))));
 }
 CATCH
 

@@ -588,16 +588,16 @@ RSResult MinMaxIndex::checkGreaterEqual(size_t pack_index, const Field & value, 
 
 RSResult MinMaxIndex::checkIsNull(size_t pack_index)
 {
-    if (!(*has_value_marks)[pack_index])
+    // if the pack has no null values, then directly return None, otherwise return Some
+    if (!(*has_null_marks)[pack_index])
     {
-        return RSResult::All;
-    }
-    else if ((*has_null_marks)[pack_index])
-        return RSResult::Some;
-    else
         return RSResult::None;
+    }
+    else
+    {
+        return RSResult::Some;
+    }
 }
-
 
 String MinMaxIndex::toString()
 {
