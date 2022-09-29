@@ -19,7 +19,6 @@
 #include <Storages/Transaction/FileEncryption.h>
 
 #include <cassert>
-#include <cstddef>
 #include <ext/scope_guard.h>
 #include <limits>
 
@@ -41,13 +40,7 @@ size_t keySize(EncryptionMethod method)
     case EncryptionMethod::Aes256Ctr:
         return 32;
     case EncryptionMethod::SM4Ctr:
-#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
-                                   Errors::Encryption::Internal);
-#else
-        // OpenSSL support SM4 after 1.1.1 release version.
         return 16;
-#endif
     default:
         return 0;
     }
@@ -62,13 +55,7 @@ size_t blockSize(EncryptionMethod method)
     case EncryptionMethod::Aes256Ctr:
         return AES_BLOCK_SIZE;
     case EncryptionMethod::SM4Ctr:
-#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-        throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
-                                   Errors::Encryption::Internal);
-#else
-        // OpenSSL support SM4 after 1.1.1 release version.
         return SM4_BLOCK_SIZE;
-#endif
     default:
         return 0;
     }
@@ -83,17 +70,160 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     (void)is_encrypt;
     throw Exception("OpenSSL version < 1.0.2", ErrorCodes::NOT_IMPLEMENTED);
 #else
-    int ret = 1;
-    EVP_CIPHER_CTX * ctx = nullptr;
-    InitCipherContext(ctx);
-    RUNTIME_CHECK_MSG(ctx != nullptr, "Failed to create cipher context.");
+#if USE_INTERNAL_SSL_LIBRARY
+    if (cipher_ == nullptr)
+    {
+        const size_t block_size = blockSize();
+        uint64_t block_index = file_offset / block_size;
+        uint64_t block_offset = file_offset % block_size;
 
-    SCOPE_EXIT({ FreeCipherContext(ctx); });
+        unsigned char iv[block_size];
+        initIV(block_index, iv);
 
-    const size_t block_size = blockSize();
-    uint64_t block_index = file_offset / block_size;
-    uint64_t block_offset = file_offset % block_size;
+        uint64_t data_offset = 0;
+        size_t remaining_data_size = data_size;
+        unsigned char partial_block[block_size];
 
+        // Handle partial block at the beginning. The partial block is copied to
+        // buffer to fake a full block.
+        if (block_offset > 0)
+        {
+            size_t partial_block_size = std::min<size_t>(block_size - block_offset, remaining_data_size);
+            memcpy(partial_block + block_offset, data, partial_block_size);
+            if (is_encrypt)
+            {
+                // TODO: check iv have been updated
+                sm4_ctr_encrypt(&sm4_key_, iv, partial_block, block_size, partial_block);
+            }
+            else
+            {
+                sm4_ctr_decrypt(&sm4_key_, iv, partial_block, block_size, partial_block);
+            }
+            memcpy(data, partial_block + block_offset, partial_block_size);
+            data_offset += partial_block_size;
+            remaining_data_size -= partial_block_size;
+        }
+
+        // Handle full blocks in the middle.
+        if (remaining_data_size >= block_size)
+        {
+            size_t actual_data_size = remaining_data_size - remaining_data_size % block_size;
+            unsigned char * full_blocks = reinterpret_cast<unsigned char *>(data) + data_offset;
+            if (is_encrypt)
+            {
+                sm4_ctr_encrypt(&sm4_key_, iv, full_blocks, actual_data_size, full_blocks);
+            }
+            else
+            {
+                sm4_ctr_decrypt(&sm4_key_, iv, full_blocks, actual_data_size, full_blocks);
+            }
+            data_offset += actual_data_size;
+            remaining_data_size -= actual_data_size;
+        }
+
+        // Handle partial block at the end. The partial block is copied to buffer to
+        // fake a full block.
+        if (remaining_data_size > 0)
+        {
+            assert(remaining_data_size < AES_BLOCK_SIZE);
+            memcpy(partial_block, data + data_offset, remaining_data_size);
+            if (is_encrypt)
+            {
+                sm4_ctr_encrypt(&sm4_key_, iv, partial_block, block_size, partial_block);
+            }
+            else
+            {
+                sm4_ctr_decrypt(&sm4_key_, iv, partial_block, block_size, partial_block);
+            }
+            memcpy(data + data_offset, partial_block, remaining_data_size);
+        }
+    }
+    else
+    {
+#endif
+        int ret = 1;
+        EVP_CIPHER_CTX * ctx = nullptr;
+        InitCipherContext(ctx);
+        RUNTIME_CHECK_MSG(ctx != nullptr, "Failed to create cipher context.");
+
+        SCOPE_EXIT({ FreeCipherContext(ctx); });
+
+        const size_t block_size = blockSize();
+        uint64_t block_index = file_offset / block_size;
+        uint64_t block_offset = file_offset % block_size;
+
+        unsigned char iv[block_size];
+        initIV(block_index, iv);
+        ret = EVP_CipherInit(ctx, cipher_, reinterpret_cast<const unsigned char *>(key_.data()), iv, (is_encrypt ? 1 : 0));
+        RUNTIME_CHECK_MSG(ret == 1, "Failed to create cipher context.");
+
+        // Disable padding. After disabling padding, data size should always be
+        // multiply of block size.
+        ret = EVP_CIPHER_CTX_set_padding(ctx, 0);
+        RUNTIME_CHECK_MSG(ret == 1, "Failed to disable padding for cipher context.");
+
+        uint64_t data_offset = 0;
+        size_t remaining_data_size = data_size;
+        int output_size = 0;
+        unsigned char partial_block[block_size];
+
+        // In the following we assume EVP_CipherUpdate allow in and out buffer are
+        // the same, to save one memcpy. This is not specified in official man page.
+
+        // Handle partial block at the beginning. The partial block is copied to
+        // buffer to fake a full block.
+        if (block_offset > 0)
+        {
+            size_t partial_block_size = std::min<size_t>(block_size - block_offset, remaining_data_size);
+            memcpy(partial_block + block_offset, data, partial_block_size);
+            ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
+            RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for first block, offset {}.", file_offset);
+            RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
+                              "Unexpected cipher output size for first block, expected {} actual {}",
+                              block_size,
+                              output_size);
+            memcpy(data, partial_block + block_offset, partial_block_size);
+            data_offset += partial_block_size;
+            remaining_data_size -= partial_block_size;
+        }
+
+        // Handle full blocks in the middle.
+        if (remaining_data_size >= block_size)
+        {
+            size_t actual_data_size = remaining_data_size - remaining_data_size % block_size;
+            unsigned char * full_blocks = reinterpret_cast<unsigned char *>(data) + data_offset;
+            ret = EVP_CipherUpdate(ctx, full_blocks, &output_size, full_blocks, static_cast<int>(actual_data_size));
+            RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for offset {}.", file_offset + data_offset);
+            RUNTIME_CHECK_MSG(output_size == static_cast<int>(actual_data_size),
+                              "Unexpected cipher output size for block, expected {} actual {}",
+                              actual_data_size,
+                              output_size);
+            data_offset += actual_data_size;
+            remaining_data_size -= actual_data_size;
+        }
+
+        // Handle partial block at the end. The partial block is copied to buffer to
+        // fake a full block.
+        if (remaining_data_size > 0)
+        {
+            assert(remaining_data_size < AES_BLOCK_SIZE);
+            memcpy(partial_block, data + data_offset, remaining_data_size);
+            ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
+            RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for last block, offset {}.", file_offset + data_offset);
+            RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
+                              "Unexpected cipher output size for last block, expected {} actual {}",
+                              block_size,
+                              output_size);
+            memcpy(data + data_offset, partial_block, remaining_data_size);
+        }
+#if USE_INTERNAL_SSL_LIBRARY
+    }
+#endif
+#endif
+}
+
+inline void AESCTRCipherStream::initIV(uint64_t block_index, unsigned char * iv) const
+{
     // In CTR mode, OpenSSL EVP API treat the IV as a 128-bit big-endian, and
     // increase it by 1 for each block.
     uint64_t iv_high = initial_iv_high_;
@@ -104,73 +234,8 @@ void AESCTRCipherStream::cipher(uint64_t file_offset, char * data, size_t data_s
     }
     iv_high = toBigEndian(iv_high);
     iv_low = toBigEndian(iv_low);
-    unsigned char iv[block_size];
     memcpy(iv, &iv_high, sizeof(uint64_t));
     memcpy(iv + sizeof(uint64_t), &iv_low, sizeof(uint64_t));
-
-    ret = EVP_CipherInit(ctx, cipher_, reinterpret_cast<const unsigned char *>(key_.data()), iv, (is_encrypt ? 1 : 0));
-    RUNTIME_CHECK_MSG(ret == 1, "Failed to create cipher context.");
-
-    // Disable padding. After disabling padding, data size should always be
-    // multiply of block size.
-    ret = EVP_CIPHER_CTX_set_padding(ctx, 0);
-    RUNTIME_CHECK_MSG(ret == 1, "Failed to disable padding for cipher context.");
-
-    uint64_t data_offset = 0;
-    size_t remaining_data_size = data_size;
-    int output_size = 0;
-    unsigned char partial_block[block_size];
-
-    // In the following we assume EVP_CipherUpdate allow in and out buffer are
-    // the same, to save one memcpy. This is not specified in official man page.
-
-    // Handle partial block at the beginning. The partial block is copied to
-    // buffer to fake a full block.
-    if (block_offset > 0)
-    {
-        size_t partial_block_size = std::min<size_t>(block_size - block_offset, remaining_data_size);
-        memcpy(partial_block + block_offset, data, partial_block_size);
-        ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
-        RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for first block, offset {}.", file_offset);
-        RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
-                          "Unexpected cipher output size for first block, expected {} actual {}",
-                          block_size,
-                          output_size);
-        memcpy(data, partial_block + block_offset, partial_block_size);
-        data_offset += partial_block_size;
-        remaining_data_size -= partial_block_size;
-    }
-
-    // Handle full blocks in the middle.
-    if (remaining_data_size >= block_size)
-    {
-        size_t actual_data_size = remaining_data_size - remaining_data_size % block_size;
-        unsigned char * full_blocks = reinterpret_cast<unsigned char *>(data) + data_offset;
-        ret = EVP_CipherUpdate(ctx, full_blocks, &output_size, full_blocks, static_cast<int>(actual_data_size));
-        RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for offset {}.", file_offset + data_offset);
-        RUNTIME_CHECK_MSG(output_size == static_cast<int>(actual_data_size),
-                          "Unexpected cipher output size for block, expected {} actual {}",
-                          actual_data_size,
-                          output_size);
-        data_offset += actual_data_size;
-        remaining_data_size -= actual_data_size;
-    }
-
-    // Handle partial block at the end. The partial block is copied to buffer to
-    // fake a full block.
-    if (remaining_data_size > 0)
-    {
-        assert(remaining_data_size < AES_BLOCK_SIZE);
-        memcpy(partial_block, data + data_offset, remaining_data_size);
-        ret = EVP_CipherUpdate(ctx, partial_block, &output_size, partial_block, block_size);
-        RUNTIME_CHECK_MSG(ret == 1, "Cipher failed for last block, offset {}.", file_offset + data_offset);
-        RUNTIME_CHECK_MSG(output_size == static_cast<int>(block_size),
-                          "Unexpected cipher output size for last block, expected {} actual {}",
-                          block_size,
-                          output_size);
-        memcpy(data + data_offset, partial_block, remaining_data_size);
-    }
-#endif
 }
 
 BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
@@ -195,7 +260,10 @@ BlockAccessCipherStreamPtr AESCTRCipherStream::createCipherStream(
         cipher = EVP_aes_256_ctr();
         break;
     case EncryptionMethod::SM4Ctr:
-#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+#if USE_INTERNAL_SSL_LIBRARY
+        // Use sm4 in GmSSL, don't need to do anything here
+        break;
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
         throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(encryption_info_.method)),
                                    Errors::Encryption::Internal);
 #else

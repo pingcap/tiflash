@@ -28,7 +28,7 @@ rm -rf $build_dir && mkdir -p $build_dir && cd $build_dir
 
 cmake "$SRCPATH" \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
-      -DUSE_INTERNAL_SSL_LIBRARY=OFF \
+      -DUSE_INTERNAL_SSL_LIBRARY=ON \
       -Wno-dev \
       -DNO_WERROR=ON
 

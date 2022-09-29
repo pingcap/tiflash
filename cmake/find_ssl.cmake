@@ -14,11 +14,7 @@
 
 # Default value on mac is ON to make development easy.
 # On other platform it is OFF because we should release tiflash binary built with openssl.
-if (APPLE)
-    option(USE_INTERNAL_SSL_LIBRARY "Set to FALSE to use system *ssl library instead of bundled" ${NOT_UNBUNDLED})
-else()
-    option(USE_INTERNAL_SSL_LIBRARY "Set to FALSE to use system *ssl library instead of bundled" OFF)
-endif()
+option(USE_INTERNAL_SSL_LIBRARY "Set to FALSE to use system *ssl library instead of bundled" ${NOT_UNBUNDLED})
 
 if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/boringssl/README.md")
     if(USE_INTERNAL_SSL_LIBRARY)

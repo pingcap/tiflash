@@ -215,6 +215,11 @@ target_link_libraries (dbms
     absl::synchronization
 )
 
+if (USE_INTERNAL_SSL_LIBRARY)
+    target_link_libraries(dbms gmssl)
+    target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+endif ()
+
 if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
 endif ()
