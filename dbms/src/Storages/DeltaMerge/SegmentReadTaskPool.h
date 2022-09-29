@@ -113,9 +113,9 @@ private:
 
 enum ReadMode
 {
-    Normal = 0,
-    Fast,
-    Raw,
+    Normal = 0, // Read in Normal Mode.
+    Fast, // Read in Fast Mode, read data without mvcc and sorted merge, but filter the data whose del_mark = 1.
+    Raw, // Just for 'selraw * ', always using in debug code.
 };
 
 class SegmentReadTaskPool : private boost::noncopyable

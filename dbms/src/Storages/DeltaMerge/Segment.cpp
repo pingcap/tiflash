@@ -599,7 +599,7 @@ BlockInputStreamPtr Segment::getInputStreamFast(
 }
 
 /// We call getInputStreamRaw in 'selraw xxxx' statement, which is always in test for debug.
-/// In this case, we will read all the data without mvcc filtering and sorted merging.
+/// In this case, we will read all the data without mvcc filtering and sorted merge.
 BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
                                                const ColumnDefines & columns_to_read,
                                                const SegmentSnapshotPtr & segment_snap,
