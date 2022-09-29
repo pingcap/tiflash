@@ -62,7 +62,7 @@ static SchemaSyncerPtr createSchemaSyncer(bool exist_pd_addr, bool for_unit_test
         std::make_shared<TiDBSchemaSyncer</*mock_getter*/ true, /*mock_mapper*/ false>>(cluster));
 }
 
-TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
+TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config, const ServerInfo & server_info)
     : context(context_)
     , kvstore(std::make_shared<KVStore>(context, raft_config.snapshot_apply_method))
     , region_table(context)
@@ -75,7 +75,8 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
           std::make_unique<MinTSOScheduler>(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
-              context.getSettingsRef().task_scheduler_thread_hard_limit)))
+              context.getSettingsRef().task_scheduler_thread_hard_limit),
+          server_info))
     , engine(raft_config.engine)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)

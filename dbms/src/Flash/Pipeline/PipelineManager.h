@@ -16,8 +16,10 @@
 
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Pipeline/task/TaskScheduler.h>
+#include <Server/ServerInfo.h>
 
 #include <memory>
+#include <shared_mutex>
 #include <unordered_map>
 
 namespace DB
@@ -28,18 +30,15 @@ using DAGSchedulerMap = std::unordered_map<MPPTaskId, DAGSchedulerPtr>;
 
 struct PipelineManager
 {
-    PipelineManager();
-
-    std::unique_ptr<TaskScheduler> task_scheduler;
-    DAGSchedulerMap dag_scheduler_map;
-
-    std::mutex mu;
+    explicit PipelineManager(const ServerInfo & server_info);
 
     DAGSchedulerPtr getDAGScheduler(const MPPTaskId & mpp_task_id);
-
     void registerDAGScheduler(const DAGSchedulerPtr & dag_scheduler);
-
     void unregisterDAGScheduler(const MPPTaskId & mpp_task_id);
+
+    std::shared_mutex rwlock;
+    DAGSchedulerMap dag_scheduler_map;
+    std::unique_ptr<TaskScheduler> task_scheduler;
 };
 
 using PipelineManagerPtr = std::unique_ptr<PipelineManager>;

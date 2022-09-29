@@ -55,7 +55,7 @@ std::pair<bool, String> DAGScheduler::run(
 
     PipelineEvent event;
     String err_msg;
-    while (event_queue.pop(event) == MPMCQueueResult::OK)
+    while (likely(event_queue.pop(event) == MPMCQueueResult::OK))
     {
         switch (event.type)
         {

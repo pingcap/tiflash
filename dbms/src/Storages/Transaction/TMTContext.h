@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Server/ServerInfo.h>
 #include <Storages/GCManager.h>
 #include <Storages/Transaction/PDTiKVClient.h>
 #include <Storages/Transaction/RegionTable.h>
@@ -81,7 +82,7 @@ public:
 
     const Context & getContext() const;
 
-    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_);
+    TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_, const ServerInfo & server_info);
 
     SchemaSyncerPtr getSchemaSyncer() const;
 

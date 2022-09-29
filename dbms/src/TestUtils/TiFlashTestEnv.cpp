@@ -20,6 +20,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Server/RaftConfigParser.h>
+#include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -132,7 +133,8 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     raft_config.ignore_databases = {"system"};
     raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.for_unit_test = true;
-    global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
+    DB::ServerInfo server_info;
+    global_context->createTMTContext(raft_config, pingcap::ClusterConfig(), server_info);
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 

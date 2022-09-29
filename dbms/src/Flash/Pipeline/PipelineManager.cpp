@@ -17,30 +17,26 @@
 
 namespace DB
 {
-PipelineManager::PipelineManager()
-    : task_scheduler(std::make_unique<TaskScheduler>(*this))
+PipelineManager::PipelineManager(const ServerInfo & server_info)
+    : task_scheduler(std::make_unique<TaskScheduler>(*this, server_info))
 {}
 
 DAGSchedulerPtr PipelineManager::getDAGScheduler(const MPPTaskId & mpp_task_id)
 {
-    std::lock_guard lock(mu);
+    std::shared_lock lock(rwlock);
     auto dag_it = dag_scheduler_map.find(mpp_task_id);
-    if (dag_it != dag_scheduler_map.end())
-    {
-        return dag_it->second;
-    }
-    return nullptr;
+    return dag_it != dag_scheduler_map.end() ? dag_it->second : nullptr;
 }
 
 void PipelineManager::registerDAGScheduler(const DAGSchedulerPtr & dag_scheduler)
 {
-    std::lock_guard lock(mu);
+    std::unique_lock lock(rwlock);
     dag_scheduler_map[dag_scheduler->getMPPTaskId()] = dag_scheduler;
 }
 
 void PipelineManager::unregisterDAGScheduler(const MPPTaskId & mpp_task_id)
 {
-    std::lock_guard lock(mu);
+    std::unique_lock lock(rwlock);
     auto dag_it = dag_scheduler_map.find(mpp_task_id);
     if (dag_it != dag_scheduler_map.end())
     {

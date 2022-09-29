@@ -22,6 +22,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
 #include <Interpreters/TimezoneInfo.h>
+#include <Server/ServerInfo.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -389,7 +390,7 @@ public:
     BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBlockableBackgroundPool();
 
-    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config);
+    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, const ServerInfo & server_info);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();

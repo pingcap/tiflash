@@ -16,63 +16,117 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/task/TaskScheduler.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ReadThread/CPU.h>
 #include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
-TaskScheduler::TaskScheduler(PipelineManager & pipeline_manager)
+TaskScheduler::TaskScheduler(PipelineManager & pipeline_manager, const ServerInfo & server_info)
 {
-    auto cores = getNumberOfPhysicalCPUCores();
-    thread_pool_manager = newThreadPoolManager(cores);
-    event_loops.reserve(cores);
-    for (size_t index = 0; index < cores; ++index)
+    auto numa_nodes = DM::getNumaNodes(log->getLog());
+    LOG_FMT_INFO(log, "numa_nodes {} => {}", numa_nodes.size(), numa_nodes);
+    if (numa_nodes.size() == 1 && numa_nodes.back().empty())
     {
-        event_loops.emplace_back(std::make_shared<EventLoop>(index, pipeline_manager));
+        int logical_cores = server_info.cpu_info.logical_cores;
+        RUNTIME_ASSERT(logical_cores > 0);
+        std::vector<EventLoopPtr> event_loops;
+        event_loops.reserve(logical_cores);
+        for (int core = 0; core < logical_cores; ++core)
+            event_loops.emplace_back(std::make_unique<EventLoop>(core, pipeline_manager));
+        total_event_loop_num = event_loops.size();
+        numa_event_loops.emplace_back(std::move(event_loops));
     }
-    for (size_t index = 0; index < cores; ++index)
+    else
     {
-        thread_pool_manager->schedule(false, [&, index]() {
-            event_loops[index]->loop();
-        });
+        total_event_loop_num = 0;
+        for (const auto & node : numa_nodes)
+        {
+            RUNTIME_ASSERT(!node.empty());
+            std::vector<EventLoopPtr> event_loops;
+            event_loops.reserve(node.size());
+            for (auto core : node)
+                event_loops.emplace_back(std::make_unique<EventLoop>(core, pipeline_manager));
+            total_event_loop_num += event_loops.size();
+            numa_event_loops.emplace_back(std::move(event_loops));
+        }
     }
-    LOG_DEBUG(logger, "init {} event loop success", cores);
+
+    thread_pool_manager = newThreadPoolManager(total_event_loop_num);
+    for (const auto & event_loops : numa_event_loops)
+    {
+        for (const auto & event_loop : event_loops)
+        {
+            // TODO 2 thread for per event loop.
+            thread_pool_manager->schedule(false, [&]() {
+                event_loop->loop();
+            });
+        }
+    }
+    LOG_DEBUG(log, "init {} event loop success", total_event_loop_num);
 
     std::random_device rd;
     gen = std::mt19937{rd()};
-    dis = std::uniform_int_distribution<size_t>(0, cores - 1);
+    numa_dis = std::uniform_int_distribution<size_t>(0, numa_event_loops.size() - 1);
+    event_loop_dis.reserve(numa_event_loops.size());
+    for (const auto & event_loops : numa_event_loops)
+        event_loop_dis.emplace_back(std::uniform_int_distribution<size_t>(0, event_loops.size() - 1));
 }
 
 TaskScheduler::~TaskScheduler()
 {
-    for (const auto & event_loop : event_loops)
-        event_loop->finish();
-    event_loops.clear();
+    for (const auto & event_loops : numa_event_loops)
+    {
+        for (const auto & event_loop : event_loops)
+            event_loop->finish();
+    }
     thread_pool_manager->wait();
+    numa_event_loops.clear();
 }
 
 void TaskScheduler::submit(std::vector<PipelineTask> & tasks)
 {
-    if (tasks.size() == event_loops.size())
+    size_t i = 0;
+    while ((tasks.size() - i) >= total_event_loop_num)
     {
-        size_t i = 0;
-        for (auto & task : tasks)
-            event_loops[i++]->submit(std::move(task));
+        for (const auto & event_loops : numa_event_loops)
+        {
+            for (const auto & event_loop : event_loops)
+                event_loop->submit(std::move(tasks[i++]));
+        }
     }
-    else
+
+    auto next_numa_id = [&]() {
+        static size_t j = numa_dis(gen);
+        size_t numa_id = j++;
+        j %= numa_event_loops.size();
+        return numa_id;
+    };
+    while (i < tasks.size())
     {
-        size_t i = dis(gen);
-        auto next_loop = [&]() -> EventLoop & {
-            EventLoop & loop = *event_loops[i++];
-            i %= event_loops.size();
-            return loop;
-        };
-        for (auto & task : tasks)
-            next_loop().submit(std::move(task));
+        auto numa_id = next_numa_id();
+        auto & numa = numa_event_loops[numa_id];
+
+        if ((tasks.size() - i) >= numa.size())
+        {
+            for (const auto & event_loop : numa)
+                event_loop->submit(std::move(tasks[i++]));
+        }
+        else
+        {
+            auto next_loop = [&]() -> EventLoop & {
+                static size_t k = event_loop_dis[numa_id](gen);
+                EventLoop & loop = *numa[k++];
+                k %= numa.size();
+                return loop;
+            };
+            while (i < tasks.size())
+                next_loop().submit(std::move(tasks[i++]));
+        }
     }
 }
 
 size_t TaskScheduler::concurrency() const
 {
-    return event_loops.size();
+    return total_event_loop_num;
 }
 } // namespace DB

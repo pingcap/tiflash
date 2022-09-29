@@ -27,7 +27,7 @@ struct PipelineManager;
 class EventLoop
 {
 public:
-    EventLoop(size_t loop_id_, PipelineManager & pipeline_manager_);
+    EventLoop(int core_, PipelineManager & pipeline_manager_);
 
     void loop();
 
@@ -39,13 +39,13 @@ private:
     void handleTask(PipelineTask & task);
 
 private:
-    size_t loop_id;
+    int core;
     MPMCQueue<PipelineTask> event_queue{499999};
 
     PipelineManager & pipeline_manager;
 
-    LoggerPtr logger = Logger::get(fmt::format("event loop {}", loop_id));
+    LoggerPtr logger = Logger::get(fmt::format("event loop with cpu_core {}", core));
 };
 
-using EventLoopPtr = std::shared_ptr<EventLoop>;
+using EventLoopPtr = std::unique_ptr<EventLoop>;
 } // namespace DB

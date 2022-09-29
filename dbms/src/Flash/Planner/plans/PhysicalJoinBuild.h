@@ -21,6 +21,7 @@
 
 namespace DB
 {
+// TODO two stage join build to reduce the cost of hash map resize.
 class PhysicalJoinBuild : public PhysicalUnary
 {
 public:

@@ -18,6 +18,7 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Flash/Pipeline/task/EventLoop.h>
+#include <Server/ServerInfo.h>
 
 #include <functional>
 #include <random>
@@ -29,7 +30,7 @@ struct PipelineManager;
 class TaskScheduler
 {
 public:
-    TaskScheduler(PipelineManager & pipeline_manager_);
+    TaskScheduler(PipelineManager & pipeline_manager_, const ServerInfo & server_info);
 
     ~TaskScheduler();
 
@@ -40,13 +41,16 @@ public:
     size_t concurrency() const;
 
 private:
-    std::vector<EventLoopPtr> event_loops;
+    // numa nodes<logical cpus>
+    std::vector<std::vector<EventLoopPtr>> numa_event_loops;
+    size_t total_event_loop_num = 0;
 
     std::shared_ptr<ThreadPoolManager> thread_pool_manager;
 
     std::mt19937 gen;
-    std::uniform_int_distribution<size_t> dis;
+    std::uniform_int_distribution<size_t> numa_dis;
+    std::vector<std::uniform_int_distribution<size_t>> event_loop_dis;
 
-    LoggerPtr logger = Logger::get("TaskScheduler");
+    LoggerPtr log = Logger::get("TaskScheduler");
 };
 } // namespace DB

@@ -29,8 +29,9 @@ namespace FailPoints
 extern const char random_task_manager_find_task_failure_failpoint[];
 } // namespace FailPoints
 
-MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
+MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_, const ServerInfo & server_info)
     : scheduler(std::move(scheduler_))
+    , pipeline_manager(std::make_unique<PipelineManager>(server_info))
     , log(Logger::get("TaskManager"))
 {}
 

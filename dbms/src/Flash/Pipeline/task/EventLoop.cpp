@@ -21,8 +21,8 @@
 
 namespace DB
 {
-EventLoop::EventLoop(size_t loop_id_, PipelineManager & pipeline_manager_)
-    : loop_id(loop_id_)
+EventLoop::EventLoop(int core_, PipelineManager & pipeline_manager_)
+    : core(core_)
     , pipeline_manager(pipeline_manager_)
 {}
 
@@ -55,7 +55,7 @@ void EventLoop::handleTask(PipelineTask & task)
     case PipelineTaskResultType::finished:
     {
         LOG_TRACE(logger, "task: {} is finished", task.toString());
-        if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); dag_scheduler)
+        if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); likely(dag_scheduler))
         {
             dag_scheduler->submit(PipelineEvent::finish(task.task_id, task.pipeline_id));
         }
@@ -64,14 +64,14 @@ void EventLoop::handleTask(PipelineTask & task)
     case PipelineTaskResultType::error:
     {
         LOG_TRACE(logger, "task: {} occur error", task.toString());
-        if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); dag_scheduler)
+        if (auto dag_scheduler = pipeline_manager.getDAGScheduler(task.mpp_task_id); likely(dag_scheduler))
         {
             dag_scheduler->submit(PipelineEvent::fail(result.err_msg));
         }
         break;
     }
     default:
-        break;
+        throw Exception("Unknown PipelineTaskResultType");
     }
 }
 
@@ -80,15 +80,15 @@ void EventLoop::loop()
 #ifdef __linux__
     cpu_set_t cpu_set;
     CPU_ZERO(&cpu_set);
-    CPU_SET(loop_id, &cpu_set);
+    CPU_SET(core, &cpu_set);
     int ret = sched_setaffinity(0, sizeof(cpu_set), &cpu_set);
     if (ret != 0)
         throw Exception(fmt::format("sched_setaffinity fail: {}", std::strerror(errno)));
 #endif
-    setThreadName(fmt::format("event loop(%s)", loop_id).c_str());
+    setThreadName(fmt::format("event loop with core: ", core).c_str());
 
     PipelineTask task;
-    while (event_queue.pop(task) == MPMCQueueResult::OK)
+    while (likely(event_queue.pop(task) == MPMCQueueResult::OK))
     {
         handleTask(task);
     }

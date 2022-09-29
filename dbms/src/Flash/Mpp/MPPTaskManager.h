@@ -17,6 +17,7 @@
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <Flash/Pipeline/PipelineManager.h>
+#include <Server/ServerInfo.h>
 #include <common/logger_useful.h>
 #include <kvproto/mpp.pb.h>
 
@@ -62,7 +63,7 @@ class MPPTaskManager : private boost::noncopyable
 {
     MPPTaskSchedulerPtr scheduler;
 
-    PipelineManagerPtr pipeline_manager = std::make_unique<PipelineManager>();
+    PipelineManagerPtr pipeline_manager;
 
     std::mutex mu;
 
@@ -73,7 +74,7 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
 
 public:
-    explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
+    MPPTaskManager(MPPTaskSchedulerPtr scheduler, const ServerInfo & server_info);
 
     ~MPPTaskManager() = default;
 
