@@ -30,7 +30,6 @@ void registerFunctionsNull(FunctionFactory & factory)
     factory.registerFunction<FunctionIsNull>();
     factory.registerFunction<FunctionIsNotNull>();
     factory.registerFunction<FunctionCoalesce>();
-    factory.registerFunction<FunctionIfNull>();
     factory.registerFunction<FunctionNullIf>();
     factory.registerFunction<FunctionAssumeNotNull>();
     factory.registerFunction<FunctionToNullable>();
@@ -65,13 +64,13 @@ void FunctionIsNull::executeImpl(Block & block, const ColumnNumbers & arguments,
     {
         /// Since all element is null, return a one-constant column representing
         /// a one-filled null map.
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), UInt64(1));
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), static_cast<UInt64>(1));
     }
     else
     {
         /// Since no element is nullable, return a zero-constant column representing
         /// a zero-filled null map.
-        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), UInt64(0));
+        block.getByPosition(result).column = DataTypeUInt8().createColumnConst(elem.column->size(), static_cast<UInt64>(0));
     }
 }
 
@@ -239,62 +238,6 @@ void FunctionCoalesce::executeImpl(Block & block, const ColumnNumbers & argument
     block.getByPosition(result).column = std::move(res);
 }
 
-/// Implementation of ifNull.
-
-FunctionPtr FunctionIfNull::create(const Context &)
-{
-    return std::make_shared<FunctionIfNull>();
-}
-
-std::string FunctionIfNull::getName() const
-{
-    return name;
-}
-
-DataTypePtr FunctionIfNull::getReturnTypeImpl(const DataTypes & arguments) const
-{
-    if (arguments[0]->onlyNull())
-        return arguments[1];
-
-    if (!arguments[0]->isNullable())
-        return arguments[0];
-
-    return FunctionIf{}.getReturnTypeImpl({std::make_shared<DataTypeUInt8>(), removeNullable(arguments[0]), arguments[1]});
-}
-
-void FunctionIfNull::executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const
-{
-    /// Always null.
-    if (block.getByPosition(arguments[0]).type->onlyNull())
-    {
-        block.getByPosition(result).column = block.getByPosition(arguments[1]).column;
-        return;
-    }
-
-    /// Could not contain nulls, so nullIf makes no sense.
-    if (!block.getByPosition(arguments[0]).type->isNullable())
-    {
-        block.getByPosition(result).column = block.getByPosition(arguments[0]).column;
-        return;
-    }
-
-    /// ifNull(col1, col2) == if(isNotNull(col1), assumeNotNull(col1), col2)
-
-    Block temp_block = block;
-
-    size_t is_not_null_pos = temp_block.columns();
-    temp_block.insert({nullptr, std::make_shared<DataTypeUInt8>(), ""});
-    size_t assume_not_null_pos = temp_block.columns();
-    temp_block.insert({nullptr, removeNullable(block.getByPosition(arguments[0]).type), ""});
-
-    DefaultExecutable(std::make_shared<FunctionIsNotNull>()).execute(temp_block, {arguments[0]}, is_not_null_pos);
-    DefaultExecutable(std::make_shared<FunctionAssumeNotNull>()).execute(temp_block, {arguments[0]}, assume_not_null_pos);
-
-    DefaultExecutable(std::make_shared<FunctionIf>()).execute(temp_block, {is_not_null_pos, assume_not_null_pos, arguments[1]}, result);
-
-    block.getByPosition(result).column = std::move(temp_block.getByPosition(result).column);
-}
-
 /// Implementation of nullIf.
 
 FunctionPtr FunctionNullIf::create(const Context &)
@@ -363,7 +306,7 @@ void FunctionAssumeNotNull::executeImpl(Block & block, const ColumnNumbers & arg
 
     if (col->isColumnNullable())
     {
-        const ColumnNullable & nullable_col = static_cast<const ColumnNullable &>(*col);
+        const auto & nullable_col = static_cast<const ColumnNullable &>(*col);
         res_col = nullable_col.getNestedColumnPtr();
     }
     else

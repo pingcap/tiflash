@@ -52,14 +52,13 @@ extern const char force_no_local_region_for_mpp_task[];
 } // namespace FailPoints
 
 MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
-    : context(context_)
-    , meta(meta_)
+    : meta(meta_)
     , id(meta.start_ts(), meta.task_id())
+    , context(context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
+    , schedule_entry(manager, id)
     , log(Logger::get("MPPTask", id.toString()))
     , mpp_task_statistics(id, meta.address())
-    , needed_threads(0)
-    , schedule_state(ScheduleState::WAITING)
 {
     current_memory_tracker = nullptr;
 }
@@ -71,13 +70,6 @@ MPPTask::~MPPTask()
     if (process_list_entry != nullptr && current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
         current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
-    if (schedule_state == ScheduleState::SCHEDULED)
-    {
-        /// the threads of this task are not fully freed now, since the BlockIO and DAGContext are not destructed
-        /// TODO: finish all threads before here, except the current one.
-        manager->releaseThreadsFromScheduler(needed_threads);
-        schedule_state = ScheduleState::COMPLETED;
-    }
     LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
@@ -359,8 +351,8 @@ void MPPTask::runImpl()
     {
         LOG_FMT_INFO(log, "task starts preprocessing");
         preprocess();
-        needed_threads = estimateCountOfNewThreads();
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", needed_threads, dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
+        schedule_entry.setNeededThreads(estimateCountOfNewThreads());
+        LOG_FMT_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
 
         scheduleOrWait();
 
@@ -505,41 +497,15 @@ bool MPPTask::switchStatus(TaskStatus from, TaskStatus to)
 
 void MPPTask::scheduleOrWait()
 {
-    if (!manager->tryToScheduleTask(shared_from_this()))
+    if (!manager->tryToScheduleTask(schedule_entry))
     {
-        LOG_FMT_INFO(log, "task waits for schedule");
-        Stopwatch stopwatch;
-        double time_cost = 0;
-        {
-            std::unique_lock lock(schedule_mu);
-            schedule_cv.wait(lock, [&] { return schedule_state != ScheduleState::WAITING; });
-            time_cost = stopwatch.elapsedSeconds();
-            GET_METRIC(tiflash_task_scheduler_waiting_duration_seconds).Observe(time_cost);
-
-            if (schedule_state == ScheduleState::EXCEEDED)
-            {
-                throw Exception(fmt::format("{} is failed to schedule because of exceeding the thread hard limit in min-tso scheduler after waiting for {}s.", id.toString(), time_cost));
-            }
-            else if (schedule_state == ScheduleState::FAILED)
-            {
-                throw Exception(fmt::format("{} is failed to schedule because of being cancelled in min-tso scheduler after waiting for {}s.", id.toString(), time_cost));
-            }
-        }
-        LOG_FMT_INFO(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);
+        schedule_entry.waitForSchedule();
     }
 }
 
 bool MPPTask::scheduleThisTask(ScheduleState state)
 {
-    std::unique_lock lock(schedule_mu);
-    if (schedule_state == ScheduleState::WAITING)
-    {
-        LOG_FMT_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
-        schedule_state = state;
-        schedule_cv.notify_one();
-        return true;
-    }
-    return false;
+    return schedule_entry.schedule(state);
 }
 
 int MPPTask::estimateCountOfNewThreads()
@@ -550,15 +516,6 @@ int MPPTask::estimateCountOfNewThreads()
     // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
     return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
         + dag_context->tunnel_set->getRemoteTunnelCnt();
-}
-
-int MPPTask::getNeededThreads()
-{
-    if (needed_threads == 0)
-    {
-        throw Exception(" the needed_threads of task " + id.toString() + " is not initialized!");
-    }
-    return needed_threads;
 }
 
 } // namespace DB
