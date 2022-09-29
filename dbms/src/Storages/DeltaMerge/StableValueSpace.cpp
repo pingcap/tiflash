@@ -312,11 +312,10 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap = std::make_shared<Snapshot>();
+    auto snap = std::make_shared<Snapshot>(this->shared_from_this());
     snap->id = id;
     snap->valid_rows = valid_rows;
     snap->valid_bytes = valid_bytes;
-    snap->stable = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {

@@ -44,6 +44,7 @@ public:
      */
     StableValueSpace(const std::string & log_prefix_, PageId id_)
         : id(id_)
+        , log_prefix(log_prefix_)
         , log(Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix_)))
     {}
 
@@ -52,8 +53,9 @@ public:
      * We don't know the exact segment id when StableValueSpace is constructed during
      * prepareSplit.
      */
-    void resetLogger(const std::string & log_prefix)
+    void resetLogger(const std::string & log_prefix_)
     {
+        log_prefix = log_prefix_;
         log = Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix));
     }
 
@@ -155,14 +157,14 @@ public:
 
         ColumnCachePtrs column_caches;
 
-        Snapshot()
-            : log(&Poco::Logger::get("StableValueSpace::Snapshot"))
+        Snapshot(StableValueSpacePtr stable_)
+            : stable(stable_)
+            , log(Logger::get("StableValueSpace::Snapshot", fmt::format("<{}>", stable->log_prefix)))
         {}
 
         SnapshotPtr clone() const
         {
-            auto c = std::make_shared<Snapshot>();
-            c->stable = stable;
+            auto c = std::make_shared<Snapshot>(stable);
             c->id = id;
             c->valid_rows = valid_rows;
             c->valid_bytes = valid_bytes;
@@ -237,7 +239,7 @@ public:
         AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
     private:
-        Poco::Logger * log;
+        LoggerPtr log;
     };
 
     SnapshotPtr createSnapshot();
@@ -257,6 +259,7 @@ private:
     StableProperty property;
     std::atomic<bool> is_property_cached = false;
 
+    std::string log_prefix;
     LoggerPtr log;
 };
 
