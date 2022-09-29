@@ -113,17 +113,13 @@ void MinMaxIndex::addPack(const IColumn & column, const ColumnVector<UInt8> * de
 
         if (has_null)
         {
-            auto min_max_pair = details::minmax(column, del_mark, null_mark_data, 0, column.size());
-            min_index = min_max_pair.first;
-            max_index = min_max_pair.second;
+            std::tie(min_index, max_index) = details::minmax(column, del_mark, null_mark_data, 0, column.size());
         }
     }
 
     if (!has_null)
     {
-        auto min_max_pair = details::minmax(column, del_mark, 0, column.size());
-        min_index = min_max_pair.first;
-        max_index = min_max_pair.second;
+        std::tie(min_index, max_index) = details::minmax(column, del_mark, 0, column.size());
     }
 
     if (min_index != NONE_EXIST)

@@ -35,10 +35,8 @@ public:
     Attrs getAttrs() override { return {attr}; }
 
     String toDebugString() override
-    {
-        String s = R"({"op":")" + name() + //
-            R"(","col":")" + attr.col_name + R"("})";
-        return s;
+    {   
+        return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name);
     }
 
     RSResult roughCheck(size_t pack_id, const RSCheckParam & param) override
