@@ -199,13 +199,13 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::NEDuration, "notEquals"},
     {tipb::ScalarFuncSig::NEJson, "notEquals"},
 
-    //{tipb::ScalarFuncSig::NullEQInt, "cast"},
-    //{tipb::ScalarFuncSig::NullEQReal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQString, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDecimal, "cast"},
-    //{tipb::ScalarFuncSig::NullEQTime, "cast"},
-    //{tipb::ScalarFuncSig::NullEQDuration, "cast"},
-    //{tipb::ScalarFuncSig::NullEQJson, "cast"},
+    {tipb::ScalarFuncSig::NullEQInt, "nullEq"},
+    {tipb::ScalarFuncSig::NullEQReal, "nullEq"},
+    {tipb::ScalarFuncSig::NullEQString, "nullEq"},
+    {tipb::ScalarFuncSig::NullEQDecimal, "nullEq"},
+    {tipb::ScalarFuncSig::NullEQTime, "nullEq"},
+    {tipb::ScalarFuncSig::NullEQDuration, "nullEq"},
+    {tipb::ScalarFuncSig::NullEQJson, "nullEq"},
 
     {tipb::ScalarFuncSig::PlusReal, "plus"},
     {tipb::ScalarFuncSig::PlusDecimal, "plus"},
@@ -1094,7 +1094,7 @@ Field decodeLiteral(const tipb::Expr & expr)
     case tipb::ExprType::Uint64:
         return decodeDAGUInt64(expr.val());
     case tipb::ExprType::Float32:
-        return Float64(decodeDAGFloat32(expr.val()));
+        return static_cast<Float64>(decodeDAGFloat32(expr.val()));
     case tipb::ExprType::Float64:
         return decodeDAGFloat64(expr.val());
     case tipb::ExprType::String:
