@@ -145,7 +145,8 @@ protected:
                             /// So they are just substring-relationship.
                             const auto decimal_string_col1 = decimal_string(col1_field);
                             const auto decimal_string_col2 = decimal_string(col2_field);
-                            if (decimal_string_col1.size() > decimal_string_col2.size()) {
+                            if (decimal_string_col1.size() > decimal_string_col2.size())
+                            {
                                 equals = (decimal_string_col1.find(decimal_string_col2) != std::string::npos);
                             }
                             else
@@ -209,18 +210,18 @@ try
     };
     testNullEqFunction(string_input, null_map);
     /// case 4 test NullEqDecimal
-        std::vector<String> decimal_data{"-12.34", "-12.12", "0.00", "12.12", "12.34"};
-        ColumnsWithTypeAndName decimal_input{
-            createColumn<Decimal32>(std::make_tuple(5, 3), decimal_data),
-            createNullableColumn<Decimal32>(std::make_tuple(5, 3), decimal_data, null_map),
-            createColumn<Decimal64>(std::make_tuple(12, 4), decimal_data),
-            createNullableColumn<Decimal64>(std::make_tuple(12, 4), decimal_data, null_map),
-            createColumn<Decimal128>(std::make_tuple(20, 2), decimal_data),
-            createNullableColumn<Decimal128>(std::make_tuple(20, 2), decimal_data, null_map),
-            createColumn<Decimal256>(std::make_tuple(40, 6), decimal_data),
-            createNullableColumn<Decimal256>(std::make_tuple(40, 6), decimal_data, null_map),
-        };
-        testNullEqFunction(decimal_input, null_map);
+    std::vector<String> decimal_data{"-12.34", "-12.12", "0.00", "12.12", "12.34"};
+    ColumnsWithTypeAndName decimal_input{
+        createColumn<Decimal32>(std::make_tuple(5, 3), decimal_data),
+        createNullableColumn<Decimal32>(std::make_tuple(5, 3), decimal_data, null_map),
+        createColumn<Decimal64>(std::make_tuple(12, 4), decimal_data),
+        createNullableColumn<Decimal64>(std::make_tuple(12, 4), decimal_data, null_map),
+        createColumn<Decimal128>(std::make_tuple(20, 2), decimal_data),
+        createNullableColumn<Decimal128>(std::make_tuple(20, 2), decimal_data, null_map),
+        createColumn<Decimal256>(std::make_tuple(40, 6), decimal_data),
+        createNullableColumn<Decimal256>(std::make_tuple(40, 6), decimal_data, null_map),
+    };
+    testNullEqFunction(decimal_input, null_map);
     /// case 5 test NullEqTime
     InferredDataVector<MyDate> date_data{
         MyDate(0, 0, 0).toPackedUInt(),
