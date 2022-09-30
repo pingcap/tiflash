@@ -25,10 +25,11 @@ tiflash-env:
 scripts: tiflash-env
 	cp prepare-sysroot.sh tiflash-env
 	cp loader tiflash-env
+	cp loader-env-dump tiflash-env
 	cp tiflash-linker tiflash-env
 
 tiflash-env-$(ARCH).tar.xz: scripts
-	sudo docker run --rm -v $(MOUNT):/tiflash-env hub.pingcap.net/tiflash/tiflash-llvm-base:$(DOCKER_TAG) /tiflash-env/prepare-sysroot.sh
+	docker run --rm -v $(MOUNT):/tiflash-env hub.pingcap.net/tiflash/tiflash-llvm-base:$(DOCKER_TAG) /tiflash-env/prepare-sysroot.sh
 	tar -cvaf tiflash-env-$(ARCH).tar.xz tiflash-env
 
 clean:
