@@ -92,17 +92,6 @@ public:
         resp_iter.open();
     }
 
-    ~CoprocessorReader()
-    {
-        // TODO: Remove this verbose logging?
-        LOG_FMT_DEBUG(
-            Logger::get(name),
-            "done, wait_pull_channel_ms={} wait_net_ms={} net_recv_bytes={}",
-            total_wait_pull_channel_elapse_ms,
-            resp_iter.total_wait_net_elapse_ms,
-            resp_iter.total_net_recv_bytes);
-    }
-
     const DAGSchema & getOutputSchema() const { return schema; }
 
     void cancel() { resp_iter.cancel(); }
@@ -154,9 +143,7 @@ public:
     // stream_id is only meaningful for ExchagneReceiver.
     CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/)
     {
-        Stopwatch read_watch;
         auto && [result, has_next] = resp_iter.next();
-        total_wait_pull_channel_elapse_ms += read_watch.elapsedMilliseconds();
         if (!result.error.empty())
             return {nullptr, true, result.error.message(), false};
         if (!has_next)

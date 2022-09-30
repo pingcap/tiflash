@@ -540,7 +540,10 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         // build batch cop request streams
         pingcap::kv::Cluster * cluster = tmt.getKVCluster();
         auto req = std::make_shared<pingcap::coprocessor::Request>();
-        remote_requests[0].dag_request.SerializeToString(&req->data); // TODO: Is is ok for partition table?
+        remote_requests[0].dag_request.SerializeToString(&req->data);
+        for (size_t i = 0; i < remote_requests.size(); ++i) {
+            LOG_FMT_DEBUG(log, "gjt debug remote_request dag: {}", remote_requests[0].dag_request.DebugString());
+        }
         req->tp = pingcap::coprocessor::ReqType::DAG;
         req->start_ts = context.getSettingsRef().read_tso;
         req->schema_version = context.getSettingsRef().schema_version;
@@ -558,12 +561,11 @@ void DAGStorageInterpreter::buildRemoteStreams(std::vector<RemoteRequest> && rem
         pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
         pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
         const auto & settings = context.getSettingsRef();
-        const size_t batch_cop_split = settings.rn_batch_cop_split; // TODO: Remove batch_cop_split
         const size_t expect_concurrent_num = settings.max_threads;
         const size_t recv_buffer_size = settings.rn_recv_buffer;
         const std::string log_id = log->identifier();
-        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, batch_cop_split, &Poco::Logger::get("pingcap/coprocessor"));
-        LOG_FMT_INFO(log, "build {} batch cop tasks with [split={}]", all_batch_tasks.size(), batch_cop_split);
+        auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, &Poco::Logger::get("pingcap/coprocessor"));
+        LOG_FMT_INFO(log, "build {} batch cop tasks", all_batch_tasks.size());
         for (size_t i = 0; i < all_batch_tasks.size(); ++i)
         {
             LOG_FMT_DEBUG(log, "batch task[{}], storeAddr: {}, len(RegionInfo): {}", i, all_batch_tasks[i].store_addr, all_batch_tasks[i].region_infos.size());

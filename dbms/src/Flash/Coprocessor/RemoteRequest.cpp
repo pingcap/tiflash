@@ -48,10 +48,19 @@ RemoteRequest RemoteRequest::build(
 
     {
         tipb::Executor * ts_exec = executor;
-        ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+        if (table_scan.isPartitionTableScan())
+        {
+            ts_exec->set_tp(tipb::ExecType::TypePartitionTableScan);
+            auto * mutable_partition_table_scan = ts_exec->mutable_partition_table_scan();
+            table_scan.constructPartitionTableScanForRemoteRead(mutable_partition_table_scan);
+        }
+        else
+        {
+            ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+            auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
+            table_scan.constructTableScanForRemoteRead(mutable_table_scan, table_info.id);
+        }
         ts_exec->set_executor_id(table_scan.getTableScanExecutorID());
-        auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
-        table_scan.constructTableScanForRemoteRead(mutable_table_scan, table_info.id);
 
         String handle_column_name = MutableSupport::tidb_pk_column_name;
         if (auto pk_handle_col = table_info.getPKHandleColumn())

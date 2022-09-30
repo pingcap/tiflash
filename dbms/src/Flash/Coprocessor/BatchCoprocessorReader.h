@@ -72,7 +72,6 @@ struct BatchCoprocessorReaderResult
     }
 };
 
-/// this is an adapter to be used in TiRemoteBlockInputStream
 class BatchCoprocessorReader
 {
 public:
@@ -175,10 +174,9 @@ public:
         {
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
-        // TODO: Remove this verbose logging?
-        LOG_FMT_DEBUG(
+        LOG_FMT_TRACE(
             log,
-            "done, wait_pull_channel_ms={} wait_push_channel_ms={} wait_net_ms={} net_recv_bytes={}",
+            "BatchCoprocessorReader done, wait_pull_channel_ms={} wait_push_channel_ms={} wait_net_ms={} net_recv_bytes={}",
             total_wait_pull_channel_elapse_ms,
             total_wait_push_channel_elapse_ms,
             total_wait_net_elapse_ms,
@@ -209,7 +207,7 @@ public:
                     msg = "Unknown error";
                 return BatchCoprocessorReaderResult::newError(0, name, msg);
             }
-            else /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
+            else // msg_channel is finished, and state is NORMAL, that is the end.
             {
                 return BatchCoprocessorReaderResult::newEOF(name);
             }
@@ -219,7 +217,6 @@ public:
 
         assert(recv_msg != nullptr);
         BatchCoprocessorReaderResult result;
-        // the data of the last packet is serialized from tipb::SelectResponse including execution summaries
         if (!recv_msg->data().empty())
         {
             auto resp_ptr = std::make_shared<tipb::SelectResponse>();
@@ -290,16 +287,16 @@ private:
         size_t total_net_recv_bytes = 0;
         try
         {
-            do
+            for (size_t i = 0; i < max_retry_times; ++i)
             {
-                // build stream reader
+                bool has_data = false;
+                // Build stream reader.
                 call = std::make_shared<pingcap::kv::RpcCall<coprocessor::BatchRequest>>(req);
                 stream_reader = cluster->rpc_client->sendStreamRequest(task.store_addr, &client_context, *call);
 
                 Stopwatch read_watch;
                 while (true)
                 {
-                    LOG_FMT_TRACE(log, "begin next");
                     read_watch.restart();
                     auto rsp = std::make_shared<coprocessor::BatchResponse>();
                     bool success = stream_reader->Read(rsp.get());
@@ -312,13 +309,13 @@ private:
                     }
 
                     read_watch.restart();
+                    has_data = true;
                     if (!msg_channel.push(std::move(rsp)))
                     {
                         meet_error = true;
                         break;
                     }
                     total_wait_push_channel_elapse_ms += read_watch.elapsedMilliseconds();
-                    // else continue to read next response
                 }
                 if (meet_error)
                 {
@@ -327,13 +324,24 @@ private:
                 status = stream_reader->Finish();
                 if (status.ok())
                 {
-                    LOG_FMT_DEBUG(log, "finish read"); // TODO: add identifier
+                    LOG_FMT_DEBUG(log, "BatchCoprocessorReader finish read");
                     break;
                 }
-                // else sleep for a while and retry?
-                using namespace std::chrono_literals;
-                std::this_thread::sleep_for(1s);
-            } while (false);
+                else
+                {
+                    const bool retriable = !has_data && i + 1 < max_retry_times;
+                    LOG_WARNING(
+                        log,
+                        "BatchCoprocessorReader::readLoop meets rpc fail. Err code = {}, err msg = {}, retriable = {}",
+                        status.error_code(),
+                        status.error_message(),
+                        retriable);
+                    if (has_data)
+                        break;
+                    using namespace std::chrono_literals;
+                    std::this_thread::sleep_for(1s);
+                }
+            }
 
             if (!status.ok())
             {
@@ -423,10 +431,10 @@ private:
     }
 
 private:
+    static constexpr size_t max_retry_times = 10;
     DAGSchema schema;
     pingcap::coprocessor::BatchCopTask task;
 
-    // These member are for sync grpc streaming, do we need async grpc streaming?
     pingcap::kv::Cluster * cluster;
     std::shared_ptr<pingcap::kv::RpcCall<coprocessor::BatchRequest>> call;
     grpc::ClientContext client_context;
