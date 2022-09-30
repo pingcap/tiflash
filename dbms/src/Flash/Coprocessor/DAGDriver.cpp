@@ -103,7 +103,7 @@ try
         LOG_DEBUG(log, "setting batch_cop_writer to nullptr");
     }
 
-    BlockIO streams = executeQuery(context, internal, QueryProcessingStage::Complete);
+    BlockIO streams = executeQuery(context, internal);
 
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
@@ -140,7 +140,6 @@ try
         }
         // StreamWriter is constructed in `executeCreatingSets` to make batch cop run in multiple threads.
         dag_output_stream = std::make_shared<NullBlockOutputStream>(streams.in->getHeader());
-
         copyData(*streams.in, *dag_output_stream);
     }
 

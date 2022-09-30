@@ -97,7 +97,7 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto seg = t->segment;
     BlockInputStreamPtr stream;
     if (is_raw)
@@ -109,7 +109,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
         auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
         stream = seg->getInputStream(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
     }
-    LOG_FMT_DEBUG(log, "getInputStream pool {} seg_id {} succ", pool_id, seg->segmentId());
+    LOG_FMT_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, seg->segmentId());
     return stream;
 }
 
@@ -122,7 +122,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
         active_segment_ids.erase(seg->segmentId());
         pool_finished = active_segment_ids.empty() && tasks.empty();
     }
-    LOG_FMT_DEBUG(log, "finishSegment pool {} seg_id {} pool_finished {}", pool_id, seg->segmentId(), pool_finished);
+    LOG_FMT_DEBUG(log, "finishSegment pool_id={} segment_id={} pool_finished={}", pool_id, seg->segmentId(), pool_finished);
     if (pool_finished)
     {
         q.finish();
@@ -136,7 +136,7 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(uint64_t seg_id)
     auto itr = std::find_if(tasks.begin(), tasks.end(), [seg_id](const SegmentReadTaskPtr & task) { return task->segment->segmentId() == seg_id; });
     if (itr == tasks.end())
     {
-        throw Exception(fmt::format("pool {} seg_id {} not found", pool_id, seg_id));
+        throw Exception(fmt::format("{} pool_id={} segment_id={} not found", __PRETTY_FUNCTION__, pool_id, seg_id));
     }
     auto t = *(itr);
     tasks.erase(itr);
@@ -154,22 +154,24 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
     {
         return target;
     }
+    static constexpr int max_iter_count = 32;
+    int iter_count = 0;
     for (const auto & task : tasks)
     {
         auto itr = segments.find(task->segment->segmentId());
         if (itr == segments.end())
         {
-            throw DB::Exception(fmt::format("seg_id {} not found from merging segments", task->segment->segmentId()));
+            throw DB::Exception(fmt::format("segment_id {} not found from merging segments", task->segment->segmentId()));
         }
         if (std::find(itr->second.begin(), itr->second.end(), poolId()) == itr->second.end())
         {
-            throw DB::Exception(fmt::format("pool {} not found from merging segment {}=>{}", poolId(), itr->first, itr->second));
+            throw DB::Exception(fmt::format("pool_id={} not found from merging segment {}=>{}", poolId(), itr->first, itr->second));
         }
         if (target == segments.end() || itr->second.size() > target->second.size())
         {
             target = itr;
         }
-        if (target->second.size() >= expected_merge_count)
+        if (target->second.size() >= expected_merge_count || ++iter_count >= max_iter_count)
         {
             break;
         }
@@ -179,7 +181,7 @@ std::unordered_map<uint64_t, std::vector<uint64_t>>::const_iterator SegmentReadT
 
 bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const SegmentPtr & seg)
 {
-    MemoryTrackerSetter setter(true, mem_tracker);
+    MemoryTrackerSetter setter(true, mem_tracker.get());
     auto block = stream->read();
     if (block)
     {
@@ -222,8 +224,7 @@ int64_t SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 
 int64_t SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    double block_slots_scale = dm_context->db_context.getSettingsRef().dt_block_slots_scale;
-    auto block_slots = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * block_slots_scale));
+    auto block_slots = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
     if (block_slots < 3)
     {
         block_slots = 3;
@@ -233,8 +234,7 @@ int64_t SegmentReadTaskPool::getFreeBlockSlots() const
 
 int64_t SegmentReadTaskPool::getFreeActiveSegmentCountUnlock()
 {
-    double active_segments_scale = dm_context->db_context.getSettingsRef().dt_active_segments_scale;
-    auto active_segment_limit = static_cast<int64_t>(std::ceil(unordered_input_stream_ref_count.load(std::memory_order_relaxed) * active_segments_scale));
+    auto active_segment_limit = unordered_input_stream_ref_count.load(std::memory_order_relaxed);
     if (active_segment_limit < 2)
     {
         active_segment_limit = 2;

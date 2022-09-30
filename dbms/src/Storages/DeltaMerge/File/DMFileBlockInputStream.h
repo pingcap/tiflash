@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
@@ -74,6 +75,7 @@ public:
     explicit DMFileBlockInputStreamBuilder(const Context & context);
 
     // Build the final stream ptr.
+    // Empty `rowkey_ranges` means not filter by rowkey
     // Should not use the builder again after `build` is called.
     DMFileBlockInputStreamPtr build(
         const DMFilePtr & dmfile,
@@ -82,18 +84,20 @@ public:
 
     // **** filters **** //
 
-    // Only set enable param to true when
-    // in normal mode:
-    //    1. There is no delta.
-    //    2. You don't need pk, version and delete_tag columns
-    // in fast mode:
-    //    1. You don't need pk columns
-    // If you have no idea what it means, then simply set it to false.
+    // Only set enable_handle_clean_read_ param to true when
+    //    in normal mode (is_fast_scan_ == false):
+    //      1. There is no delta.
+    //      2. You don't need pk, version and delete_tag columns
+    //    in fast scan mode (is_fast_scan_ == true):
+    //      1. You don't need pk columns
+    //    If you have no idea what it means, then simply set it to false.
+    // Only set enable_del_clean_read_ param to true when you don't need del columns in fast scan.
     // `max_data_version_` is the MVCC filter version for reading. Used by clean read check
-    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable, bool is_fast_mode_, UInt64 max_data_version_)
+    DMFileBlockInputStreamBuilder & enableCleanRead(bool enable_handle_clean_read_, bool is_fast_scan_, bool enable_del_clean_read_, UInt64 max_data_version_)
     {
-        enable_clean_read = enable;
-        is_fast_mode = is_fast_mode_;
+        enable_handle_clean_read = enable_handle_clean_read_;
+        enable_del_clean_read = enable_del_clean_read_;
+        is_fast_scan = is_fast_scan_;
         max_data_version = max_data_version_;
         return *this;
     }
@@ -156,8 +160,10 @@ private:
     FileProviderPtr file_provider;
 
     // clean read
-    bool enable_clean_read = false;
-    bool is_fast_mode = false;
+
+    bool enable_handle_clean_read = false;
+    bool is_fast_scan = false;
+    bool enable_del_clean_read = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
     // Rough set filter
     RSOperatorPtr rs_filter;
@@ -179,19 +185,26 @@ private:
 
 /**
  * Create a simple stream that read all blocks on default.
+ * Only read one pack every time.
  * @param context Database context.
  * @param file DMFile pointer.
+ * @param cols The columns to read. Empty means read all columns.
  * @return A shared pointer of an input stream
  */
-inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context & context, const DMFilePtr & file)
+inline DMFileBlockInputStreamPtr createSimpleBlockInputStream(const DB::Context & context, const DMFilePtr & file, ColumnDefines cols = {})
 {
     // disable clean read is needed, since we just want to read all data from the file, and we do not know about the column handle
     // enable read_one_pack_every_time_ is needed to preserve same block structure as the original file
     DMFileBlockInputStreamBuilder builder(context);
+    if (cols.empty())
+    {
+        // turn into read all columns from file
+        cols = file->getColumnDefines();
+    }
     return builder
         .setRowsThreshold(DMFILE_READ_ROWS_THRESHOLD)
         .onlyReadOnePackEveryTime()
-        .build(file, file->getColumnDefines(), DB::DM::RowKeyRanges{});
+        .build(file, cols, DB::DM::RowKeyRanges{});
 }
 
 } // namespace DM

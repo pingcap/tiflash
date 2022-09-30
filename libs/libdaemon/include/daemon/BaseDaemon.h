@@ -77,7 +77,7 @@ public:
     void defineOptions(Poco::Util::OptionSet & _options) override;
 
     /// Graceful shutdown
-    void terminate();
+    static void terminate();
 
     /// Forceful shutdown
     void kill();

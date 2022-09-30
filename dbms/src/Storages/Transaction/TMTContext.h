@@ -25,6 +25,8 @@ namespace DB
 {
 class Context;
 
+class PathPool;
+
 class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
@@ -41,6 +43,10 @@ class GCManager;
 using GCManagerPtr = std::shared_ptr<GCManager>;
 
 struct TiFlashRaftConfig;
+
+// We define a shared ptr here, because TMTContext / SchemaSyncer / IndexReader all need to
+// `share` the resource of cluster.
+using KVClusterPtr = std::shared_ptr<pingcap::kv::Cluster>;
 
 class TMTContext : private boost::noncopyable
 {
@@ -85,7 +91,7 @@ public:
 
     MPPTaskManagerPtr getMPPTaskManager();
 
-    void restore(const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+    void restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
     const std::unordered_set<std::string> & getIgnoreDatabases() const;
 

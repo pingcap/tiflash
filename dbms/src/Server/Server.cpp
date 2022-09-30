@@ -79,21 +79,21 @@
 #include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <WindowFunctions/registerWindowFunctions.h>
+#include <boost_wrapper/string_split.h>
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
 
 #if Poco_NetSSL_FOUND
+#include <Common/grpcpp.h>
 #include <Poco/Net/Context.h>
 #include <Poco/Net/SecureServerSocket.h>
-#include <grpc++/grpc++.h>
 #endif
 
 #if USE_JEMALLOC
@@ -949,7 +949,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             rlim.rlim_cur = config().getUInt("max_open_files", rlim.rlim_max);
             int rc = setrlimit(RLIMIT_NOFILE, &rlim);
             if (rc != 0)
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Cannot set max number of file descriptors to {}"
                     ". Try to specify max_open_files according to your system limits. error: {}",
@@ -966,7 +966,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize DateLUT early, to not interfere with running time of first query.
     LOG_FMT_DEBUG(log, "Initializing DateLUT.");
     DateLUT::instance();
-    LOG_FMT_TRACE(log, "Initialized DateLUT with time zone `{}`.", DateLUT::instance().getTimeZone());
+    LOG_TRACE(log, "Initialized DateLUT with time zone `{}`.", DateLUT::instance().getTimeZone());
 
     /// Directory with temporary data for processing of heavy queries.
     {
@@ -1015,6 +1015,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
+    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
 
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
@@ -1102,9 +1103,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+    // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
+    DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(server_info);
     DM::SegmentReadTaskScheduler::instance();
-    DM::DMFileReaderPool::instance();
 
     {
         // Note that this must do before initialize schema sync service.
@@ -1166,6 +1168,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
           *  table engines could use Context on destroy.
           */
         LOG_FMT_INFO(log, "Shutting down storages.");
+        // `SegmentReader` threads may hold a segment and its delta-index for read.
+        // `Context::shutdown()` will destroy `DeltaIndexManager`.
+        // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
+        DB::DM::SegmentReaderPoolManager::instance().stop();
         global_context->shutdown();
         LOG_FMT_DEBUG(log, "Shutted down storages.");
     });
@@ -1173,8 +1179,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
             throw Exception("Raft Proxy Helper is not set, should not happen");
+        auto & path_pool = global_context->getPathPool();
         /// initialize TMTContext
-        global_context->getTMTContext().restore(tiflash_instance_wrap.proxy_helper);
+        global_context->getTMTContext().restore(path_pool, tiflash_instance_wrap.proxy_helper);
     }
 
     /// setting up elastic thread pool
@@ -1251,14 +1258,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
             size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
-            tmt_context.getKVStore()->initReadIndexWorkers(
+            auto & kvstore_ptr = tmt_context.getKVStore();
+            kvstore_ptr->initReadIndexWorkers(
                 [&]() {
                     // get from tmt context
                     return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
                 },
                 /*running thread count*/ runner_cnt);
             tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-            WaitCheckRegionReady(tmt_context, terminate_signals_counter);
+            WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
         SCOPE_EXIT({
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)

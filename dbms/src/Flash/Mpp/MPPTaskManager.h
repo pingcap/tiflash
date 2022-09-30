@@ -27,15 +27,26 @@ namespace DB
 {
 struct MPPQueryTaskSet
 {
-    /// to_be_cancelled is kind of lock, if to_be_cancelled is set
-    /// to true, then task_map can only be accessed by query cancel
-    /// thread, which means no task can register/un-register for the
-    /// query, here we do not need mutex because all the write/read
-    /// to MPPQueryTaskSet is protected by the mutex in MPPTaskManager
-    bool to_be_cancelled = false;
+    enum State
+    {
+        Normal,
+        Aborting,
+        Aborted,
+    };
+    /// task can only be registered state is Normal
+    State state = Normal;
+    String error_message;
     MPPTaskMap task_map;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
+    bool isInNormalState() const
+    {
+        return state == Normal;
+    }
+    bool allowUnregisterTask() const
+    {
+        return state == Normal || state == Aborted;
+    }
 };
 
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
@@ -54,7 +65,7 @@ class MPPTaskManager : private boost::noncopyable
 
     MPPQueryMap mpp_query_map;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::condition_variable cv;
 
@@ -65,19 +76,19 @@ public:
 
     MPPQueryTaskSetPtr getQueryTaskSetWithoutLock(UInt64 query_id);
 
-    bool registerTask(MPPTaskPtr task);
+    MPPQueryTaskSetPtr getQueryTaskSet(UInt64 query_id);
 
-    void unregisterTask(MPPTask * task);
+    std::pair<bool, String> registerTask(MPPTaskPtr task);
 
-    bool isQueryToBeCancelled(UInt64 query_id);
+    std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
-    bool tryToScheduleTask(const MPPTaskPtr & task);
+    bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
     void releaseThreadsFromScheduler(int needed_threads);
 
     std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
 
-    void cancelMPPQuery(UInt64 query_id, const String & reason);
+    void abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type);
 
     String toString();
 };

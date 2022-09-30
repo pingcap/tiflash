@@ -18,6 +18,7 @@
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Page/ConfigSettings.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/Snapshot.h>
@@ -127,9 +128,14 @@ void GlobalStoragePool::restore()
         false);
 }
 
+FileUsageStatistics GlobalStoragePool::getLogFileUsage() const
+{
+    return log_storage->getFileUsageStatistics();
+}
+
 bool GlobalStoragePool::gc()
 {
-    return gc(global_context.getSettingsRef(), true, DELTA_MERGE_GC_PERIOD);
+    return gc(global_context.getSettingsRef(), /*immediately=*/true, DELTA_MERGE_GC_PERIOD);
 }
 
 bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Seconds & try_gc_period)
@@ -439,7 +445,7 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current pool.meta translate already done before restored [ns_id={}] ", ns_id);
+            LOG_FMT_INFO(logger, "Current pool.meta transform already done before restored [ns_id={}] ", ns_id);
         }
 
         if (const auto & data_remain_pages = data_storage_v2->getNumberOfPages(); data_remain_pages != 0)
@@ -455,7 +461,7 @@ PageStorageRunMode StoragePool::restore()
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current pool.data translate already done before restored [ns_id={}]", ns_id);
+            LOG_FMT_INFO(logger, "Current pool.data transform already done before restored [ns_id={}]", ns_id);
         }
 
         // Check number of valid pages in v2
@@ -504,13 +510,13 @@ PageStorageRunMode StoragePool::restore()
     default:
         throw Exception(fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)), ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_TRACE(logger, "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
-                          " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
-                  static_cast<UInt8>(run_mode),
-                  ns_id,
-                  max_log_page_id,
-                  max_data_page_id,
-                  max_meta_page_id);
+    LOG_TRACE(logger, "Finished StoragePool restore. [current_run_mode={}] [ns_id={}]"
+                      " [max_log_page_id={}] [max_data_page_id={}] [max_meta_page_id={}]",
+              static_cast<UInt8>(run_mode),
+              ns_id,
+              max_log_page_id,
+              max_data_page_id,
+              max_meta_page_id);
     return run_mode;
 }
 
@@ -538,10 +544,6 @@ void StoragePool::dataRegisterExternalPagesCallbacks(const ExternalPageCallbacks
         break;
     }
     case PageStorageRunMode::ONLY_V3:
-    {
-        data_storage_v3->registerExternalPagesCallbacks(callbacks);
-        break;
-    }
     case PageStorageRunMode::MIX_MODE:
     {
         // We have transformed all pages from V2 to V3 in `restore`, so
@@ -564,13 +566,10 @@ void StoragePool::dataUnregisterExternalPagesCallbacks(NamespaceId ns_id)
         break;
     }
     case PageStorageRunMode::ONLY_V3:
-    {
-        data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
-        break;
-    }
     case PageStorageRunMode::MIX_MODE:
     {
-        // no need unregister callback in V2.
+        // We have transformed all pages from V2 to V3 in `restore`, so
+        // only need to unregister callbacks for V3.
         data_storage_v3->unregisterExternalPagesCallbacks(ns_id);
         break;
     }
@@ -665,11 +664,11 @@ PageId StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, cons
             break;
         }
         // else there is a DTFile with that id, continue to acquire a new ID.
-        LOG_FMT_WARNING(logger,
-                        "The DTFile is already exists, continute to acquire another ID. [call={}][path={}] [id={}]",
-                        who,
-                        existed_path,
-                        dtfile_id);
+        LOG_WARNING(logger,
+                    "The DTFile is already exists, continute to acquire another ID. [call={}][path={}] [id={}]",
+                    who,
+                    existed_path,
+                    dtfile_id);
     } while (true);
     return dtfile_id;
 }

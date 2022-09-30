@@ -16,6 +16,8 @@
 
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/Types.h>
+#include <Debug/MockServerInfo.h>
+#include <Debug/MockStorage.h>
 #include <IO/CompressionSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Settings.h>
@@ -49,7 +51,6 @@ namespace DB
 struct ContextShared;
 class IRuntimeComponentsFactory;
 class QuotaForIntervals;
-class ExternalModels;
 class BackgroundProcessingPool;
 class MergeList;
 class MarkCache;
@@ -97,6 +98,8 @@ class WriteLimiter;
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
 class ReadLimiter;
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
+using MockMPPServerInfo = DB::tests::MockMPPServerInfo;
+using MockStorage = DB::tests::MockStorage;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -158,15 +161,18 @@ private:
     {
         non_test,
         mpp_test,
-        executor_test
+        cop_test,
+        executor_test,
+        cancel_test
     };
     TestMode test_mode = non_test;
+
+    MockStorage mock_storage;
+    MockMPPServerInfo mpp_server_info{};
 
     TimezoneInfo timezone_info;
 
     DAGContext * dag_context = nullptr;
-    // TODO: add MockStorage.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <exector_id, columns>, for multiple sources
     using DatabasePtr = std::shared_ptr<IDatabase>;
     using Databases = std::map<String, std::shared_ptr<IDatabase>>;
 
@@ -280,10 +286,6 @@ public:
     /// Set a setting by name. Read the value in text form from a string (for example, from a config, or from a URL parameter).
     void setSetting(const String & name, const std::string & value);
 
-    const ExternalModels & getExternalModels() const;
-    ExternalModels & getExternalModels();
-    void tryCreateExternalModels() const;
-
     /// I/O formats.
     BlockInputStreamPtr getInputFormat(const String & name, ReadBuffer & buf, const Block & sample, size_t max_block_size) const;
     BlockOutputStreamPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
@@ -326,8 +328,8 @@ public:
     void setQueryContext(Context & context_) { query_context = &context_; }
     void setSessionContext(Context & context_) { session_context = &context_; }
     void setGlobalContext(Context & context_) { global_context = &context_; }
-    const Settings & getSettingsRef() const { return settings; };
-    Settings & getSettingsRef() { return settings; };
+    const Settings & getSettingsRef() const;
+    Settings & getSettingsRef();
 
 
     void setProgressCallback(ProgressCallback callback);
@@ -466,16 +468,21 @@ public:
 
     size_t getMaxStreams() const;
 
-    /// For executor tests and MPPTask tests.
+    /// For executor, MPPTask, CancelMPPTasks tests.
     bool isMPPTest() const;
     void setMPPTest();
+    bool isCancelTest() const;
+    void setCancelTest();
     bool isExecutorTest() const;
     void setExecutorTest();
+    void setCopTest();
+    bool isCopTest() const;
     bool isTest() const;
-    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_);
-    std::unordered_map<String, ColumnsWithTypeAndName> & getColumnsForTestMap();
-    ColumnsWithTypeAndName columnsForTest(String executor_id);
-    bool columnsForTestEmpty();
+
+    void setMockStorage(MockStorage & mock_storage_);
+    MockStorage mockStorage() const;
+    MockMPPServerInfo mockMPPServerInfo() const;
+    void setMockMPPServerInfo(MockMPPServerInfo & info);
 
 private:
     /** Check if the current client has access to the specified database.
@@ -484,14 +491,16 @@ private:
       */
     void checkDatabaseAccessRightsImpl(const std::string & database_name) const;
 
-    ExternalModels & getExternalModelsImpl(bool throw_on_error) const;
-
     StoragePtr getTableImpl(const String & database_name, const String & table_name, Exception * exception) const;
 
     SessionKey getSessionKey(const String & session_id) const;
 
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
+
+    void checkIsConfigLoaded() const;
+
+    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 
 using ContextPtr = std::shared_ptr<Context>;

@@ -64,14 +64,12 @@
 [submodule "contrib/protobuf"]
 	path = contrib/protobuf
 	url = https://github.com/protocolbuffers/protobuf
-	branch = v3.8.0
 [submodule "contrib/abseil-cpp"]
 	path = contrib/abseil-cpp
 	url = https://github.com/abseil/abseil-cpp
 [submodule "contrib/grpc"]
 	path = contrib/grpc
 	url = https://github.com/grpc/grpc
- 	branch = v1.26.0
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
 	url = https://github.com/google/boringssl
@@ -87,3 +85,6 @@
 [submodule "contrib/arm-optimized-routines"]
 	path = contrib/arm-optimized-routines
 	url = https://github.com/ARM-software/optimized-routines
+[submodule "contrib/magic_enum"]
+	path = contrib/magic_enum
+	url = https://github.com/Neargye/magic_enum.git

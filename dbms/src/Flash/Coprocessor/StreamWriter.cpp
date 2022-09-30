@@ -84,7 +84,7 @@ void StreamWriter::write(tipb::SelectResponse & response, [[maybe_unused]] uint1
             throw Exception("write to StreamWriter which is already closed, " + consumer_state.getError());
 
         watch.restart();
-        if (send_queue.push(rsp))
+        if (send_queue.push(rsp) == MPMCQueueResult::OK)
         {
             connection_profile_info.bytes += rsp->ByteSizeLong();
             connection_profile_info.packets += 1;
@@ -117,7 +117,7 @@ void StreamWriter::sendJob()
     {
         BatchResponsePtr rsp;
         send_watch.restart();
-        while (send_queue.pop(rsp))
+        while (send_queue.pop(rsp) == MPMCQueueResult::OK)
         {
             total_wait_pull_channel_elapse_ms += send_watch.elapsedMilliseconds();
             total_net_send_bytes += rsp->ByteSizeLong();

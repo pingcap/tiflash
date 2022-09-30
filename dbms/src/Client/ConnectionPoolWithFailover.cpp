@@ -202,7 +202,7 @@ ConnectionPoolWithFailover::tryGetEntry(
             result.is_up_to_date = false;
             result.staleness = delay;
 
-            LOG_FMT_TRACE(
+            LOG_TRACE(
                 log,
                 "Server {} has unacceptable replica delay for table {}.{}: {}",
                 result.entry->getDescription(),

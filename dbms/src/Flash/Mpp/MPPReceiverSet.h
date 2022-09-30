@@ -29,6 +29,7 @@ public:
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
     void cancel();
+    void close();
 
 private:
     /// two kinds of receiver in MPP

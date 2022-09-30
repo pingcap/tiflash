@@ -28,7 +28,7 @@ extern const int PS_DIR_APPLY_INVALID_STATUS;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
+PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALConfig config)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
     return createFromReader(storage_name, reader, std::move(wal));
@@ -76,7 +76,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
 
 PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALStore::Config());
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadEdit(dir, edit);
@@ -149,7 +149,7 @@ void PageDirectoryFactory::applyRecord(
             if (holder)
             {
                 *holder = r.page_id;
-                dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+                dir->external_ids_by_ns.addExternalIdUnlock(holder);
             }
             break;
         }
@@ -162,7 +162,7 @@ void PageDirectoryFactory::applyRecord(
             if (holder)
             {
                 *holder = r.page_id;
-                dir->external_ids.emplace_back(std::weak_ptr<PageIdV3Internal>(holder));
+                dir->external_ids_by_ns.addExternalIdUnlock(holder);
             }
             break;
         }

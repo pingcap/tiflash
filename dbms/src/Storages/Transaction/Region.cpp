@@ -96,6 +96,17 @@ UInt64 Region::appliedIndex() const
     return meta.appliedIndex();
 }
 
+UInt64 Region::appliedIndexTerm() const
+{
+    return meta.appliedIndexTerm();
+}
+
+void Region::setApplied(UInt64 index, UInt64 term)
+{
+    std::unique_lock lock(mutex);
+    meta.setApplied(index, term);
+}
+
 RegionPtr Region::splitInto(RegionMeta && meta)
 {
     RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
@@ -545,7 +556,7 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
             case WaitIndexResult::Timeout:
             {
                 ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_FMT_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
+                LOG_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
                 return {wait_idx_res, elapsed_secs};
             }
             }
@@ -738,7 +749,7 @@ void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term
         meta.setApplied(index, term);
     }
     LOG_FMT_INFO(log,
-                 "{} finish to ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
+                 "{} finish ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
                  this->toString(false),
                  data.write_cf.getSize(),
                  data.default_cf.getSize(),

@@ -56,8 +56,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
     M(exception_before_mpp_root_task_run)                         \
     M(exception_during_mpp_root_task_run)                         \
-    M(exception_during_mpp_write_err_to_tunnel)                   \
-    M(exception_during_mpp_close_tunnel)                          \
     M(exception_during_write_to_storage)                          \
     M(force_set_sst_to_dtfile_block_size)                         \
     M(force_set_sst_decode_rand)                                  \
@@ -76,6 +74,9 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
+    M(gc_skip_update_safe_point)                             \
+    M(gc_skip_merge_delta)                                   \
+    M(gc_skip_merge)                                         \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
@@ -92,7 +93,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)                   \
-    M(unblock_query_init_after_write)
+    M(unblock_query_init_after_write)                        \
+    M(exception_in_merged_task_init)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -126,7 +128,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(random_aggregate_merge_failpoint)                 \
     M(random_sharedquery_failpoint)                     \
     M(random_interpreter_failpoint)                     \
-    M(random_task_lifecycle_failpoint)                  \
     M(random_task_manager_find_task_failure_failpoint)  \
     M(random_min_tso_scheduler_failpoint)
 

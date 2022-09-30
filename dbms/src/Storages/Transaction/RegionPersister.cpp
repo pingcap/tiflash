@@ -71,7 +71,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     std::tie(region_size, applied_index) = region.serialize(buffer);
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             Logger::get("RegionPersister"),
             "Persisting big region: {} with data info: {}, serialized size {}",
             region.toString(),
@@ -215,15 +215,15 @@ void RegionPersister::forceTransformKVStoreV2toV3()
     page_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
 }
 
-RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, PageStorage::Config config)
+RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper, PageStorage::Config config)
 {
     {
-        auto & path_pool = global_context.getPathPool();
         auto delegator = path_pool.getPSDiskDelegatorRaft();
         auto provider = global_context.getFileProvider();
-        auto run_mode = global_context.getPageStorageRunMode();
+        const auto global_run_mode = global_context.getPageStorageRunMode();
+        auto run_mode = global_run_mode;
 
-        switch (run_mode)
+        switch (global_run_mode)
         {
         case PageStorageRunMode::ONLY_V2:
         {
@@ -245,8 +245,8 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                     config,
                     provider);
                 page_storage_v2->restore();
-                page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, /*storage_v3_*/ nullptr);
-                page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, /*storage_v3_*/ nullptr, /*readlimiter*/ global_context.getReadLimiter());
+                page_writer = std::make_shared<PageWriter>(global_run_mode, page_storage_v2, /*storage_v3_*/ nullptr);
+                page_reader = std::make_shared<PageReader>(global_run_mode, ns_id, page_storage_v2, /*storage_v3_*/ nullptr, /*readlimiter*/ global_context.getReadLimiter());
             }
             else
             {
@@ -270,8 +270,8 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
                 config,
                 provider);
             page_storage_v3->restore();
-            page_writer = std::make_shared<PageWriter>(run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
-            page_reader = std::make_shared<PageReader>(run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
+            page_writer = std::make_shared<PageWriter>(global_run_mode, /*storage_v2_*/ nullptr, page_storage_v3);
+            page_reader = std::make_shared<PageReader>(global_run_mode, ns_id, /*storage_v2_*/ nullptr, page_storage_v3, global_context.getReadLimiter());
             break;
         }
         case PageStorageRunMode::MIX_MODE:
@@ -296,8 +296,8 @@ RegionMap RegionPersister::restore(const TiFlashRaftProxyHelper * proxy_helper, 
 
             if (const auto & kvstore_remain_pages = page_storage_v2->getNumberOfPages(); kvstore_remain_pages != 0)
             {
-                page_writer = std::make_shared<PageWriter>(run_mode, page_storage_v2, page_storage_v3);
-                page_reader = std::make_shared<PageReader>(run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
+                page_writer = std::make_shared<PageWriter>(global_run_mode, page_storage_v2, page_storage_v3);
+                page_reader = std::make_shared<PageReader>(global_run_mode, ns_id, page_storage_v2, page_storage_v3, global_context.getReadLimiter());
 
                 LOG_FMT_INFO(log, "Current kvstore transform to V3 begin [pages_before_transform={}]", kvstore_remain_pages);
                 forceTransformKVStoreV2toV3();

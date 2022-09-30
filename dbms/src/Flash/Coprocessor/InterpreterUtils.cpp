@@ -193,18 +193,24 @@ void executeCreatingSets(
         TiDB::TiDBCollators collators;
         int stream_id = 0;
         pipeline.transform([&](auto & stream) {
-            // construct writer
-            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr, /*enable_fine_grained_shuffle*/ false>>(
+            // // construct writer
+            // std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr, /*enable_fine_grained_shuffle*/ false>>(
+            //     context.getDAGContext()->batch_cop_writer,
+            //     std::vector<Int64>(),
+            //     collators,
+            //     tipb::ExchangeType::PassThrough,
+            //     settings.dag_records_per_chunk,
+            //     settings.batch_send_min_limit,
+            //     stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+            //     dag_context,
+            //     /*fine_grained_shuffle_stream_count=*/0,
+            //     /*fine_grained_shuffle_batch_size=*/0);
+            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
                 context.getDAGContext()->batch_cop_writer,
-                std::vector<Int64>(),
-                collators,
-                tipb::ExchangeType::PassThrough,
-                settings.dag_records_per_chunk,
-                settings.batch_send_min_limit,
-                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-                dag_context,
-                /*fine_grained_shuffle_stream_count=*/0,
-                /*fine_grained_shuffle_batch_size=*/0);
+                context.getSettingsRef().dag_records_per_chunk,
+                context.getSettingsRef().batch_send_min_limit,
+                true,
+                dag_context);
             stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), dag_context.log->identifier());
         });
         executeUnion(pipeline, max_streams, log, /*ignore_block=*/true, "for batch cop");

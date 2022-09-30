@@ -14,9 +14,10 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Stopwatch.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/Utils.h>
+
+#include <ext/scope_guard.h>
 
 namespace DB
 {
@@ -28,21 +29,26 @@ extern const char exception_before_mpp_root_task_run[];
 
 void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 {
-    try
+    if (task)
     {
-        if (task)
+        try
+        {
             task->handleError(error);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, "Fail to handle error and clean task");
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Fail to handle error and clean task");
+        }
+        task->unregisterTask();
     }
 }
 // execute is responsible for making plan , register tasks and tunnels and start the running thread.
 grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
-    current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC
+    SCOPE_EXIT({
+        current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC
+    });
     try
     {
         Stopwatch stopwatch;
