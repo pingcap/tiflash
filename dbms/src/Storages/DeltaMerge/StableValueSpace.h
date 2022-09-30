@@ -42,10 +42,9 @@ public:
      * Note: `StableValueSpace` is a special case, the `log_prefix_` may be not known when it is built
      * (see prepareSplit). So we allow `resetLogger` later.
      */
-    StableValueSpace(const std::string & log_prefix_, PageId id_)
+    StableValueSpace(const std::string & log_prefix, PageId id_)
         : id(id_)
-        , log_prefix(log_prefix_)
-        , log(Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix_)))
+        , log(Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix)))
     {}
 
     /**
@@ -53,9 +52,8 @@ public:
      * We don't know the exact segment id when StableValueSpace is constructed during
      * prepareSplit.
      */
-    void resetLogger(const std::string & log_prefix_)
+    void resetLogger(const std::string & log_prefix)
     {
-        log_prefix = log_prefix_;
         log = Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix));
     }
 
@@ -159,7 +157,7 @@ public:
 
         Snapshot(StableValueSpacePtr stable_)
             : stable(stable_)
-            , log(Logger::get("StableValueSpace::Snapshot", fmt::format("<{}>", stable->log_prefix)))
+            , log(Logger::get("StableValueSpace::Snapshot", stable->log->identifier()))
         {}
 
         SnapshotPtr clone() const
@@ -259,7 +257,6 @@ private:
     StableProperty property;
     std::atomic<bool> is_property_cached = false;
 
-    std::string log_prefix;
     LoggerPtr log;
 };
 

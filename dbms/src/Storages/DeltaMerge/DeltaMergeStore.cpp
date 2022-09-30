@@ -193,7 +193,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , db_name(db_name_)
     , table_name(table_name_)
     , physical_table_id(physical_table_id_)
-    , child_log_prefix(fmt::format("table_id={} ", physical_table_id_))
+    , child_log_prefix(fmt::format("table_id={}", physical_table_id_))
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , original_table_handle_define(handle)

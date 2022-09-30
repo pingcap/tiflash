@@ -101,7 +101,7 @@ const static size_t SEGMENT_BUFFER_SIZE = 128; // More than enough.
 
 std::string getSegmentChildLogPrefix(std::string segment_log_prefix, PageId segment_id)
 {
-    return fmt::format("{}segment_id={}", segment_log_prefix, segment_id);
+    return fmt::format("{} segment_id={}", segment_log_prefix, segment_id);
 }
 
 DMFilePtr writeIntoNewDMFile(DMContext & dm_context, //
@@ -1617,7 +1617,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::logId() const
 {
-    return fmt::format("<{}segment_id={} epoch={}>",
+    return fmt::format("<{} segment_id={} epoch={}>",
                        log_prefix,
                        segment_id,
                        epoch);
