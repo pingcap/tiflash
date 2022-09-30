@@ -81,7 +81,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
 std::tuple<std::optional<LogFilename>, LogFilenameSet>
 WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 {
-    LogFilenameSet::const_iterator latest_checkpoint_iter = all_files.cend();
+    auto latest_checkpoint_iter = all_files.cend();
     for (auto iter = all_files.cbegin(); iter != all_files.cend(); ++iter)
     {
         if (iter->level_num > 0)
