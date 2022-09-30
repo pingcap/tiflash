@@ -199,10 +199,10 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
     return getQueryTaskSetWithoutLock(query_id);
 }
 
-bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
+bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
 {
     std::lock_guard lock(mu);
-    return scheduler->tryToSchedule(task, *this);
+    return scheduler->tryToSchedule(schedule_entry, *this);
 }
 
 void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)
