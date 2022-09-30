@@ -135,10 +135,10 @@ bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & regi
     auto storage = tmt.getStorages().get(table_id);
     if (unlikely(storage == nullptr))
     {
-        LOG_FMT_WARNING(log,
-                        "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
-                        region.toString(),
-                        table_id);
+        LOG_WARNING(log,
+                    "tryFlushRegionCacheInStorage can not get table for region {} with table id {}, ignored",
+                    region.toString(),
+                    table_id);
         return true;
     }
 
@@ -345,7 +345,7 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTCo
         /// The triggered CompactLog will be handled by `handleUselessAdminRaftCmd`,
         /// and result in a `EngineStoreApplyRes::NotFound`.
         /// Proxy will print this message and continue: `region not found in engine-store, maybe have exec `RemoveNode` first`.
-        LOG_FMT_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
+        LOG_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
         return true;
     }
     return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
@@ -469,12 +469,12 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
         const RegionPtr curr_region_ptr = getRegion(curr_region_id);
         if (curr_region_ptr == nullptr)
         {
-            LOG_FMT_WARNING(log,
-                            "[region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
-                            curr_region_id,
-                            term,
-                            index,
-                            raft_cmdpb::AdminCmdType_Name(type));
+            LOG_WARNING(log,
+                        "[region {}] is not found at [term {}, index {}, cmd {}], might be removed already",
+                        curr_region_id,
+                        term,
+                        index,
+                        raft_cmdpb::AdminCmdType_Name(type));
             return EngineStoreApplyRes::NotFound;
         }
 
@@ -594,10 +594,10 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
             {
                 if (auto source_region = getRegion(request.commit_merge().source().id()); source_region)
                 {
-                    LOG_FMT_WARNING(log,
-                                    "Admin cmd {} has been applied, try to remove source {}",
-                                    raft_cmdpb::AdminCmdType_Name(type),
-                                    source_region->toString(false));
+                    LOG_WARNING(log,
+                                "Admin cmd {} has been applied, try to remove source {}",
+                                raft_cmdpb::AdminCmdType_Name(type),
+                                source_region->toString(false));
                     source_region->setPendingRemove();
                     // `source_region` is merged, don't remove its data in storage.
                     removeRegion(source_region->id(), /* remove_data */ false, region_table, task_lock, region_manager.genRegionTaskLock(source_region->id()));
@@ -706,7 +706,7 @@ void WaitCheckRegionReady(
             remain_regions.end(),
             [&](const auto & e, FmtBuffer & b) { b.fmtAppend("{}", e); },
             " ");
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "{} regions CANNOT fetch latest commit-index from TiKV, (region-id): {}",
             remain_regions.size(),
@@ -763,7 +763,7 @@ void WaitCheckRegionReady(
                 }
             },
             " ");
-        LOG_FMT_WARNING(log, "{} regions CANNOT catch up with latest index, (region-id,latest-index,apply-index): {}", regions_to_check.size(), buffer.toString());
+        LOG_WARNING(log, "{} regions CANNOT catch up with latest index, (region-id,latest-index,apply-index): {}", regions_to_check.size(), buffer.toString());
     }
 
     LOG_FMT_INFO(log,

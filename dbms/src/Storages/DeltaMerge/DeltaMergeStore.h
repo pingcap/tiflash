@@ -569,6 +569,7 @@ private:
 
 private:
     void dropAllSegments(bool keep_first_segment);
+    String getLogTracingId(const DMContext & dm_ctx);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

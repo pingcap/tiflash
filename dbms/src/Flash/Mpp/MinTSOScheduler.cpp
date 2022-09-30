@@ -27,15 +27,20 @@ extern const char random_min_tso_scheduler_failpoint[];
 constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();
 constexpr UInt64 OS_THREAD_SOFT_LIMIT = 100000;
 
-MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit)
+MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit_)
     : min_tso(MAX_UINT64)
     , thread_soft_limit(soft_limit)
     , thread_hard_limit(hard_limit)
     , estimated_thread_usage(0)
+    , active_set_soft_limit(active_set_soft_limit_)
     , log(Logger::get("MinTSOScheduler"))
 {
     auto cores = getNumberOfPhysicalCPUCores();
-    active_set_soft_limit = (cores + 2) / 2; /// at least 1
+    if (active_set_soft_limit == 0 || active_set_soft_limit > 10 * cores)
+    {
+        /// set active_set_soft_limit to a reasonable value
+        active_set_soft_limit = (cores + 2) / 2; /// at least 1
+    }
     if (isDisabled())
     {
         LOG_FMT_INFO(log, "MinTSOScheduler is disabled!");
@@ -64,22 +69,22 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit)
     }
 }
 
-bool MinTSOScheduler::tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & task_manager)
+bool MinTSOScheduler::tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTaskManager & task_manager)
 {
     /// check whether this schedule is disabled or not
     if (isDisabled())
     {
         return true;
     }
-    const auto & id = task->getId();
+    const auto & id = schedule_entry.getMPPTaskId();
     auto query_task_set = task_manager.getQueryTaskSetWithoutLock(id.start_ts);
     if (nullptr == query_task_set || !query_task_set->isInNormalState())
     {
-        LOG_FMT_WARNING(log, "{} is scheduled with miss or abort.", id.toString());
+        LOG_WARNING(log, "{} is scheduled with miss or abort.", id.toString());
         return true;
     }
     bool has_error = false;
-    return scheduleImp(id.start_ts, query_task_set, task, false, has_error);
+    return scheduleImp(id.start_ts, query_task_set, schedule_entry, false, has_error);
 }
 
 /// after finishing the query, there would be no threads released soon, so the updated min-tso query with waiting tasks should be scheduled.
@@ -106,7 +111,7 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
             {
                 auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
                 if (task_it != query_task_set->task_map.end() && task_it->second != nullptr)
-                    task_it->second->scheduleThisTask(MPPTask::ScheduleState::FAILED);
+                    task_it->second->scheduleThisTask(ScheduleState::FAILED);
                 query_task_set->waiting_tasks.pop();
                 GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
             }
@@ -162,7 +167,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         {
             auto task_it = query_task_set->task_map.find(query_task_set->waiting_tasks.front());
             bool has_error = false;
-            if (task_it != query_task_set->task_map.end() && task_it->second != nullptr && !scheduleImp(current_query_id, query_task_set, task_it->second, true, has_error))
+            if (task_it != query_task_set->task_map.end() && task_it->second != nullptr && !scheduleImp(current_query_id, query_task_set, task_it->second->getScheduleEntry(), true, has_error))
             {
                 if (has_error)
                 {
@@ -181,23 +186,23 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
 }
 
 /// [directly schedule, from waiting set] * [is min_tso query, not] * [can schedule, can't] totally 8 cases.
-bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting, bool & has_error)
+bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error)
 {
-    auto needed_threads = task->getNeededThreads();
+    auto needed_threads = schedule_entry.getNeededThreads();
     auto check_for_new_min_tso = tso <= min_tso && estimated_thread_usage + needed_threads <= thread_hard_limit;
     auto check_for_not_min_tso = (active_set.size() < active_set_soft_limit || tso <= *active_set.rbegin()) && (estimated_thread_usage + needed_threads <= thread_soft_limit);
     if (check_for_new_min_tso || check_for_not_min_tso)
     {
         updateMinTSO(tso, false, isWaiting ? "from the waiting set" : "when directly schedule it");
         active_set.insert(tso);
-        if (task->scheduleThisTask(MPPTask::ScheduleState::SCHEDULED))
+        if (schedule_entry.schedule(ScheduleState::SCHEDULED))
         {
             estimated_thread_usage += needed_threads;
             GET_METRIC(tiflash_task_scheduler, type_active_tasks_count).Increment();
         }
         GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
         GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-        LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", task->getId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
+        LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", schedule_entry.getMPPTaskId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
         return true;
     }
     else
@@ -213,7 +218,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
             if (isWaiting)
             {
                 /// set this task be failed to schedule, and the task will throw exception, then TiDB will finally notify this tiflash node canceling all tasks of this tso and update metrics.
-                task->scheduleThisTask(MPPTask::ScheduleState::EXCEEDED);
+                schedule_entry.schedule(ScheduleState::EXCEEDED);
                 waiting_set.erase(tso); /// avoid the left waiting tasks of this query reaching here many times.
             }
             else
@@ -225,7 +230,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
         if (!isWaiting)
         {
             waiting_set.insert(tso);
-            query_task_set->waiting_tasks.push(task->getId());
+            query_task_set->waiting_tasks.push(schedule_entry.getMPPTaskId());
             GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Increment();
         }
@@ -235,7 +240,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
 }
 
 /// if return true, then need to schedule the waiting tasks of the min_tso.
-bool MinTSOScheduler::updateMinTSO(const UInt64 tso, const bool retired, const String msg)
+bool MinTSOScheduler::updateMinTSO(const UInt64 tso, const bool retired, const String & msg)
 {
     auto old_min_tso = min_tso;
     bool force_scheduling = false;

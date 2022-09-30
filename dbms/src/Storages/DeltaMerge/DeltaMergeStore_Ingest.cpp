@@ -265,7 +265,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
         // Even if it happened, we could handle it gracefully here. (but it really means somewhere else is broken)
         if (files[file_idx]->getRows() == 0)
         {
-            LOG_FMT_WARNING(
+            LOG_WARNING(
                 log,
                 "Table ingest using split - split ingest phase - Unexpected empty DMFile, skipped. ingest_range={} file_idx={} file={}",
                 ingest_range.toDebugString(),
@@ -448,7 +448,7 @@ void DeltaMergeStore::ingestFiles(
     if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
     {
         const auto msg = fmt::format("Try to ingest files into a shutdown table, store={}", log->identifier());
-        LOG_FMT_WARNING(log, "{}", msg);
+        LOG_WARNING(log, "{}", msg);
         throw Exception(msg);
     }
 

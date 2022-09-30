@@ -239,7 +239,7 @@ std::tuple<bool, ExpressionActionsPtr, ExpressionActionsPtr> addExtraCastsAfterT
     }
 }
 
-void injectFailPointForLocalRead(const SelectQueryInfo & query_info)
+void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_info)
 {
     // Inject failpoint to throw RegionException for testing
     fiu_do_on(FailPoints::region_exception_after_read_from_storage_some_error, {
@@ -651,7 +651,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
-        query_info.query = makeDummyQuery();
+        query_info.query = dagContext().dummy_ast;
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             push_down_filter.conditions,
             analyzer->getPreparedSets(),
@@ -723,7 +723,7 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
                 ++iter;
             }
         }
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "RegionException after read from storage, regions [{}], message: {}{}",
             buffer.toString(),
@@ -745,7 +745,7 @@ bool DAGStorageInterpreter::checkRetriableForBatchCopOrMPP(
                 buffer.fmtAppend("{},", iter->first);
             }
         }
-        LOG_FMT_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
+        LOG_WARNING(log, "RegionException after read from storage, regions [{}], message: {}", buffer.toString(), e.message());
         return false; // break retry loop
     }
 }

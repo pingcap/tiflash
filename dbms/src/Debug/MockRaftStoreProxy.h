@@ -14,8 +14,10 @@
 
 #pragma once
 
+#include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ReadIndexWorker.h>
 #include <kvproto/raft_serverpb.pb.h>
+#include <raft_cmdpb.pb.h>
 
 #include <ext/singleton.h>
 
@@ -26,19 +28,63 @@ kvrpcpb::ReadIndexRequest make_read_index_reqs(uint64_t region_id, uint64_t star
 struct MockProxyRegion : MutexLockWrap
 {
     raft_serverpb::RegionLocalState getState();
-
     raft_serverpb::RaftApplyState getApply();
-
+    void updateAppliedIndex(uint64_t index);
+    uint64_t getLatestAppliedIndex();
+    uint64_t getLatestCommitTerm();
     uint64_t getLatestCommitIndex();
-
     void updateCommitIndex(uint64_t index);
     void setSate(raft_serverpb::RegionLocalState);
-
     explicit MockProxyRegion(uint64_t id);
+
+    struct NormalWrite
+    {
+        std::vector<HandleID> keys;
+        std::vector<std::string> vals;
+        std::vector<WriteCmdType> cmd_types;
+        std::vector<ColumnFamilyType> cmd_cf;
+    };
+
+    struct AdminCommand
+    {
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        raft_cmdpb::AdminCmdType cmd_type() const
+        {
+            return request.cmd_type();
+        }
+    };
+
+    struct CachedCommand
+    {
+        uint64_t term;
+        std::variant<NormalWrite, AdminCommand> inner;
+
+        bool has_admin_request() const
+        {
+            return std::holds_alternative<AdminCommand>(inner);
+        }
+
+        bool has_write_request() const
+        {
+            return std::holds_alternative<NormalWrite>(inner);
+        }
+
+        AdminCommand & admin()
+        {
+            return std::get<AdminCommand>(inner);
+        }
+
+        NormalWrite & write()
+        {
+            return std::get<NormalWrite>(inner);
+        }
+    };
 
     const uint64_t id;
     raft_serverpb::RegionLocalState state;
     raft_serverpb::RaftApplyState apply;
+    std::map<uint64_t, CachedCommand> commands;
 };
 
 using MockProxyRegionPtr = std::shared_ptr<MockProxyRegion>;
@@ -104,6 +150,49 @@ struct MockRaftStoreProxy : MutexLockWrap
     void unsafeInvokeForTest(std::function<void(MockRaftStoreProxy &)> && cb);
 
     static TiFlashRaftProxyHelper SetRaftStoreProxyFFIHelper(RaftStoreProxyPtr);
+    /// Mutation funcs.
+    struct FailCond
+    {
+        enum Type
+        {
+            NORMAL,
+            BEFORE_KVSTORE_WRITE,
+            BEFORE_KVSTORE_ADVANCE,
+            BEFORE_PROXY_ADVANCE,
+        };
+        Type type = NORMAL;
+    };
+
+    /// We assume that we generate one command, and immediately commit.
+    /// boostrap a region
+    void bootstrap(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id);
+
+    /// normal write to a region
+    std::tuple<uint64_t, uint64_t> normalWrite(
+        UInt64 region_id,
+        std::vector<HandleID> && keys,
+        std::vector<std::string> && vals,
+        std::vector<WriteCmdType> && cmd_types,
+        std::vector<ColumnFamilyType> && cmd_cf);
+
+    std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
+
+    void doApply(
+        KVStore & kvs,
+        TMTContext & tmt,
+        const FailCond & cond,
+        UInt64 region_id,
+        uint64_t index);
+
+    void replay(
+        KVStore & kvs,
+        TMTContext & tmt,
+        uint64_t region_id,
+        uint64_t to);
+
 
     std::unordered_set<uint64_t> region_id_to_drop;
     std::unordered_set<uint64_t> region_id_to_error;

@@ -936,7 +936,7 @@ void KVStore::initReadIndexWorkers(ReadIndexWorkerManager::FnGetTickTime && fn_m
 {
     if (!runner_cnt)
     {
-        LOG_FMT_WARNING(log, "Run without read-index workers");
+        LOG_WARNING(log, "Run without read-index workers");
         return;
     }
     auto worker_cnt = worker_coefficient * runner_cnt;

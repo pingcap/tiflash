@@ -308,11 +308,11 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
     char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "[batch_start_pos={}] [meta_size={}] [file={}] ignored.",
-                        meta_file_offset,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "[batch_start_pos={}] [meta_size={}] [file={}] ignored.",
+                    meta_file_offset,
+                    meta_size,
+                    page_file.metaPath());
         return false;
     }
 
@@ -320,11 +320,11 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
     const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "[expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
-                        wb_bytes,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "[expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
+                    wb_bytes,
+                    meta_size,
+                    page_file.metaPath());
         return false;
     }
 
@@ -548,12 +548,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "Incomplete write batch {{{}}} [batch_start_pos={}] [meta_size={}] [file={}] ignored.",
-                        toString(),
-                        meta_file_offset,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "Incomplete write batch {{{}}} [batch_start_pos={}] [meta_size={}] [file={}] ignored.",
+                    toString(),
+                    meta_file_offset,
+                    meta_size,
+                    page_file.metaPath());
         status = Status::Finished;
         return;
     }
@@ -561,12 +561,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "Incomplete write batch {{{}}} [expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
-                        toString(),
-                        wb_bytes,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "Incomplete write batch {{{}}} [expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
+                    toString(),
+                    wb_bytes,
+                    meta_size,
+                    page_file.metaPath());
         status = Status::Finished;
         return;
     }
@@ -813,11 +813,11 @@ size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, cons
                   auto size = f.getSize();
                   f.setSize(size - 2);
                   auto size_after = f.getSize();
-                  LOG_FMT_WARNING(page_file.log,
-                                  "Failpoint truncate [file={}] [origin_size={}] [truncated_size={}]",
-                                  meta_file->getFileName(),
-                                  size,
-                                  size_after);
+                  LOG_WARNING(page_file.log,
+                              "Failpoint truncate [file={}] [origin_size={}] [truncated_size={}]",
+                              meta_file->getFileName(),
+                              size,
+                              size_after);
                   throw Exception(String("Fail point ") + FailPoints::exception_before_page_file_write_sync + " is triggered.",
                                   ErrorCodes::FAIL_POINT_ERROR);
               });
@@ -1305,11 +1305,11 @@ void PageFile::setFileAppendPos(size_t meta_pos, size_t data_pos)
     const auto meta_size_on_disk = meta_on_disk.getSize();
     if (unlikely(meta_size_on_disk != meta_pos))
     {
-        LOG_FMT_WARNING(log,
-                        "Truncate incomplete write batches [orig_size={}] [set_size={}] [file={}]",
-                        meta_size_on_disk,
-                        meta_file_pos,
-                        metaPath());
+        LOG_WARNING(log,
+                    "Truncate incomplete write batches [orig_size={}] [set_size={}] [file={}]",
+                    meta_size_on_disk,
+                    meta_file_pos,
+                    metaPath());
         meta_on_disk.setSize(meta_file_pos);
     }
 }
@@ -1408,7 +1408,7 @@ bool PageFile::linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEn
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_WARNING(page_file.log, "failed to link page file. error message : {}", e.message());
+        LOG_WARNING(page_file.log, "failed to link page file. error message : {}", e.message());
     }
     return false;
 }
