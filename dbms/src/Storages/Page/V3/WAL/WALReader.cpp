@@ -170,7 +170,7 @@ bool WALStoreReader::remained() const
     return false;
 }
 
-std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
+std::optional<String> WALStoreReader::next()
 {
     bool ok = false;
     String record;
@@ -179,14 +179,14 @@ std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
         std::tie(ok, record) = reader->readRecord();
         if (ok)
         {
-            return {true, ser::deserializeFrom(record)};
+            return record;
         }
 
         // Roll to read the next file
         if (bool next_file = openNextFile(); !next_file)
         {
             // No more file to be read.
-            return {false, PageEntriesEdit{}};
+            return std::nullopt;
         }
     } while (true);
 }
