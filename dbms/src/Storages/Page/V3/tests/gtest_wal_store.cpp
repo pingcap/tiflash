@@ -14,6 +14,7 @@
 
 #include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -29,8 +30,6 @@
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <random>
-
-#include "Storages/Page/PageDefines.h"
 
 namespace DB::PS::V3::tests
 {
