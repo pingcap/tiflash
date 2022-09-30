@@ -30,11 +30,11 @@ function bake_llvm_base_aarch64() {
     
     # CMake
     source $SCRIPTPATH/install_cmake.sh
-    install_cmake "3.22.1" "aarch64"
+    install_cmake "3.24.2" "aarch64"
 
     # LLVM
     source $SCRIPTPATH/bootstrap_llvm.sh
-    bootstrap_llvm "15.0.1"
+    bootstrap_llvm "17.0.1"
     export CC=clang
     export CXX=clang++
     export LD=ld.lld
