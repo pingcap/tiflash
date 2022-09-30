@@ -14,6 +14,8 @@
 
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsRegexp.h>
+#include <fmt/core.h>
+#include "Functions/Regexps.h"
 
 namespace DB
 {
@@ -48,7 +50,7 @@ String getMatchType(const String & match_type)
             auto iter_i = applied_flags.find('i');
             if (iter_i != applied_flags.end())
                 applied_flags.erase(iter_i);
-            
+
             continue;
         }
 
@@ -61,6 +63,44 @@ String getMatchType(const String & match_type)
         flags += flag;
 
     return flags;
+}
+
+NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
+{
+    NullPresence res;
+
+    for (const auto & arg : args)
+    {
+        const auto & elem = block.getByPosition(arg);
+        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(elem.column)));
+
+        if (col_const != nullptr)
+        {
+            auto col_const_data = col_const->getDataColumnPtr();
+
+            // It's needless to check if it's a const nullable column when res.has_const_null has been set
+            if (!res.has_const_null_col)
+            {
+                // check const null
+                if (col_const_data->isColumnNullable())
+                {
+                    if (static_cast<const ColumnNullable &>(*col_const_data).isNullAt(0))
+                        res.has_const_null_col = true;
+                }
+            }
+        }
+        else
+        {
+            // It's needless to check if it's a nullable column when res.has_nullable_col has been set
+            if (!res.has_nullable_col)
+            {
+                if ((elem.column)->isColumnNullable())
+                    res.has_nullable_col = true;
+            }
+        }
+    }
+
+    return res;
 }
 
 /** Replace all matches of regexp 'needle' to string 'replacement'. 'needle' and 'replacement' are constants.
@@ -1050,6 +1090,7 @@ struct ReplaceStringImpl
 };
 
 using FunctionTiDBRegexp = FunctionStringRegexp<NameTiDBRegexp>;
+using FunctionRegexpLike = FunctionStringRegexp<NameRegexpLike>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
 using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameReplaceAll>;
 using FunctionReplaceRegexpOne = FunctionStringReplace<ReplaceRegexpImpl<true>, NameReplaceRegexpOne>;
@@ -1062,6 +1103,7 @@ void registerFunctionsRegexp(FunctionFactory & factory)
     factory.registerFunction<FunctionReplaceRegexpOne>();
     factory.registerFunction<FunctionReplaceRegexpAll>();
     factory.registerFunction<FunctionTiDBRegexp>();
+    factory.registerFunction<FunctionRegexpLike>();
 }
 
 } // namespace DB

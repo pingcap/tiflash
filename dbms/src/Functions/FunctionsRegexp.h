@@ -28,6 +28,12 @@
 #include <Common/Volnitsky.h>
 
 #include <memory>
+#include "Columns/ColumnNullable.h"
+#include "Columns/ColumnsNumber.h"
+#include "Common/Exception.h"
+#include "Core/Field.h"
+#include "DataTypes/DataTypeNullable.h"
+#include "common/types.h"
 #include <re2/re2.h>
 
 #if USE_RE2_ST
@@ -70,9 +76,34 @@ struct NameReplaceRegexpAll
     static constexpr auto name = "replaceRegexpAll";
 };
 
-#define SET_FLAGS(flags) ((flags) |= OptimizedRegularExpressionImpl<false>::RE_NO_CAPTURE | OptimizedRegularExpressionImpl<false>::RE_NO_OPTIMIZE)
-
 String getMatchType(const String & match_type);
+
+inline int getDefaultFlags()
+{
+    int flags = 0;
+    flags |= OptimizedRegularExpressionImpl<false>::RE_NO_CAPTURE | OptimizedRegularExpressionImpl<false>::RE_NO_OPTIMIZE;
+    return flags;
+}
+
+struct NullPresence
+{
+    bool has_nullable_col = false;
+    bool has_const_null_col = false;
+};
+
+NullPresence getNullPresense(const Block & block, const ColumnNumbers & args);
+
+inline String addMatchTypeForPattern(const String & pattern, const String & match_type)
+{
+    String flags = getMatchType(match_type);
+    return fmt::format("(?{}){}", flags, pattern);
+}
+
+inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, const String & match_type)
+{
+    String final_pattern = addMatchTypeForPattern(pattern, match_type);
+    return Regexps::get<false, true>(final_pattern, getDefaultFlags());
+}
 
 // Columns may be const, nullable or plain vector, we can conveniently handle
 // these different type columns with Param.
@@ -81,9 +112,9 @@ class Param
 public:
     DISALLOW_COPY_AND_MOVE(Param);
 
-    Param(const ColumnPtr ptr, const StringRef & default_value)
+    Param(const ColumnPtr & ptr, const String & default_value)
         : col_ptr(ptr), col_str(nullptr), col_int64(nullptr), null_map(nullptr),
-        is_const(false), data_stringrf(default_value.data, default_value.size), data_int64(0)
+        is_const(false), data_string(default_value), data_int64(0)
     {
         // arg is not provided and we should use default_value
         if (col_ptr == nullptr) return;
@@ -94,20 +125,44 @@ public:
         if (col_const != nullptr)
         {
             // This is a const column
-            data_stringrf = col_const->getDataAt(0);
+            auto col_const_data = col_const->getDataColumnPtr();
+            if (col_const_data->isColumnNullable())
+            {
+                // This is a const nullable column
+                // const null can't be here as we should have handle it in the previous
+                Field field;
+                auto p = static_cast<const ColumnNullable &>(*col_const_data).getNestedColumnPtr();
+                std::cout << fmt::format("family name: {}", p->getFamilyName()) << std::endl;
+                col_const->get(0, field);
+                std::cout << "type name: " << field.getTypeName() << std::endl;
+                data_string = field.safeGet<String>();
+                null_map = &(static_cast<const ColumnNullable &>(*col_const_data).getNullMapData());
+                std::cout << fmt::format("cons data string1: {}", data_string) << std::endl;
+            }
+            else
+            {
+                StringRef tmp_data = col_const->getDataAt(0);
+                data_string = String(tmp_data.data, tmp_data.size);
+                std::cout << fmt::format("cons data string2: {}", data_string) << std::endl;
+            }
+            
             is_const = true;
         }
+
+        if (col_ptr->isColumnNullable())
+        {
+            // Handle nullable column
+            auto nested_ptr = static_cast<const ColumnNullable &>(*col_ptr).getNestedColumnPtr();
+            col_str = checkAndGetColumn<ColumnString>(&(*nested_ptr));
+            null_map = &(static_cast<const ColumnNullable &>(*col_ptr).getNullMapData());
+        }
         else {
-            // This is a vector column
+            // This is a pure vector column
             col_str = checkAndGetColumn<ColumnString>(&(*col_ptr));
         }
-
-        // Handle nullable
-        if (col_ptr->isColumnNullable())
-            null_map = &(static_cast<const ColumnNullable &>(*col_ptr).getNullMapData());
     }
 
-    Param(const ColumnPtr ptr, Int64 default_value)
+    Param(const ColumnPtr & ptr, Int64 default_value)
         : col_ptr(ptr), col_str(nullptr), col_int64(nullptr), null_map(nullptr),
         is_const(false), data_int64(default_value)
     {
@@ -120,18 +175,38 @@ public:
         if (col_const != nullptr)
         {
             // This is a const column
-            data_int64 = col_const->getValue<Int64>();
+            auto col_const_data = col_const->getDataColumnPtr();
+            if (col_const_data->isColumnNullable())
+            {
+                // This is a const nullable column
+                Field field;
+                col_const->get(0, field);
+                data_int64 = field.get<Int64>();
+                null_map = &(static_cast<const ColumnNullable &>(*col_ptr).getNullMapData());
+                std::cout << fmt::format("cons data int 1: {}", data_int64) << std::endl;
+            }
+            else
+            {
+                data_int64 = col_const->getValue<Int64>();
+                std::cout << fmt::format("cons data int 2: {}", data_int64) << std::endl;
+            }
+
             is_const = true;
+            return;
+        }
+
+        if (col_ptr->isColumnNullable())
+        {
+            // Handle nullable column
+            auto nested_ptr = static_cast<const ColumnNullable &>(*col_ptr).getNestedColumnPtr();
+            col_int64 = checkAndGetColumn<ColumnInt64>(&(*nested_ptr));
+            null_map = &(static_cast<const ColumnNullable &>(*col_ptr).getNullMapData());
         }
         else
         {
-            // This is a vector column
+            // This is a pure vector column
             col_int64 = checkAndGetColumn<ColumnInt64>(&(*col_ptr));
         }
-
-        // Handle nullable
-        if (col_ptr->isColumnNullable())
-            null_map = &(static_cast<const ColumnNullable &>(*col_ptr).getNullMapData());
     }
 
     Int64 getInt64(size_t idx) const
@@ -141,12 +216,35 @@ public:
         return !is_const && col_int64 != nullptr ? col_int64->getInt(idx) : data_int64;
     }
 
-    // @param to: destination that this function should copy data_stringrf to
-    void getString(size_t idx, StringRef & to) const
+    void getStringRef(size_t idx, StringRef & dst) const
     {
         // Use default value when arg is const or not provided.
         // For safety, nullptr should be checked
-        !is_const && col_str != nullptr ? (to = col_str->getDataAt(idx)) : (to = data_stringrf);
+        if (!is_const && col_str != nullptr)
+            dst = col_str->getDataAt(idx);
+        else
+        {
+            dst.data = data_string.c_str();
+            dst.size = data_string.size();
+        }
+    }
+
+    String getString(size_t idx) const
+    {
+        // Use default value when arg is const or not provided.
+        // For safety, nullptr should be checked
+        if (!is_const && col_str != nullptr)
+        {
+            StringRef sr = col_str->getDataAt(idx);
+            String ret_str(sr.data, sr.size);
+            std::cout << fmt::format("getString here1: {}", ret_str) << std::endl;
+            return ret_str;
+        }
+        else {
+            String ret_str(data_string);
+            std::cout << fmt::format("getString here2: {}", ret_str) << std::endl;
+            return ret_str;
+        }
     }
 
     bool isNullAt(size_t idx) const
@@ -165,7 +263,7 @@ private:
     const ColumnInt64 * col_int64;
     ConstNullMapPtr null_map;
     bool is_const; // mark as the const column when it's true
-    StringRef data_stringrf;
+    String data_string;
     Int64 data_int64;
 };
 
@@ -181,16 +279,18 @@ public:
 
     void memorize(const Param & pat_param, const std::unique_ptr<const Param> & match_type_param) const
     {
-        StringRef pat;
-        pat_param.getString(0, pat);
+        String && final_pattern = pat_param.getString(0);
+        if (final_pattern.empty())
+            throw Exception("Empty pattern is invalid");
+
         if (match_type_param != nullptr)
         {
-            // TODO handle match_type_param
+            String && match_type = match_type_param->getString(0);
+            final_pattern = addMatchTypeForPattern(final_pattern, match_type);
         }
 
-        int flags = 0;
-        SET_FLAGS(flags);
-        memorized_re = std::make_unique<Regexps::Regexp>(String(pat.data, pat.size), flags);
+        int flags = getDefaultFlags();
+        memorized_re = std::make_unique<Regexps::Regexp>(final_pattern, flags);
     }
 
     // Check if we can memorize the regexp
@@ -209,17 +309,14 @@ public:
         else
             throw Exception("Unknown regular function.");
         
-        if constexpr (Name::name == NameTiDBRegexp::name)
+        if constexpr (class_name_sv == tidb_regexp_name_sv)
         {
             return pat_param.isConstCol();
         } else
         {
             const bool is_pat_const = pat_param.isConstCol();
-            if ((arg_num < total_param_num && is_pat_const)
-                || (arg_num == total_param_num && is_pat_const && match_type_param->isConstCol()))
-            {
+            if (is_pat_const && (arg_num < total_param_num || (match_type_param->isConstCol())))
                 return true;
-            }
         }
 
         return false;        
@@ -235,6 +332,7 @@ private:
     mutable std::unique_ptr<Regexps::Regexp> memorized_re;
 };
 
+// Implementation of regexp and regexp_like functions
 template<typename Name>
 class FunctionStringRegexp : public FunctionStringRegexpBase, public IFunction
 {
@@ -246,22 +344,49 @@ public:
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
     void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments [[maybe_unused]]) const override { return std::make_shared<DataTypeNumber<ResultType>>(); }
     bool useDefaultImplementationForNulls() const override { return false; }
     size_t getNumberOfArguments() const override { return 0; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments [[maybe_unused]]) const override
+    {
+        size_t args_min_num = 2;
+        size_t args_max_num = 3;
+        if (arguments.size() < args_min_num)
+            throw Exception("Illegal argument number");
+
+        bool has_nullable_col = false;
+        
+        for (size_t i = 0; i < args_min_num; ++i)
+            checkInputArg(arguments[i], &has_nullable_col);
+        
+        constexpr std::string_view class_name_sv(Name::name);
+        constexpr std::string_view regexp_like_name_sv(NameRegexpLike::name);
+
+        // check match_type arg for regexp_like
+        if constexpr (class_name_sv == regexp_like_name_sv)
+            if (arguments.size() == args_max_num && !arguments[args_max_num - 1]->isString())
+                checkInputArg(arguments[args_max_num - 1], &has_nullable_col);
+
+        if (has_nullable_col)
+            return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
+        else
+            return std::make_shared<DataTypeNumber<ResultType>>();
+    }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         // Do something related with nullable columns
         NullPresence null_presence = getNullPresense(block, arguments);
-        if (null_presence.has_null_constant)
+
+        const ColumnPtr & col_expr = block.getByPosition(arguments[0]).column;
+
+        if (null_presence.has_const_null_col)
         {
-            // This is a null constant column
+            // There is a const null column in the input
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }
 
-        const ColumnPtr & col_expr = block.getByPosition(arguments[0]).column;
         const ColumnPtr & col_pat = block.getByPosition(arguments[1]).column;
 
         if (col_expr->empty())
@@ -271,77 +396,84 @@ public:
             return;
         }
 
-        const Param expr_param(col_expr, StringRef(""));
-        const Param pat_param(col_pat, StringRef(""));
+        const Param expr_param(col_expr, String(""));
+        const Param pat_param(col_pat, String(""));
         auto arg_num = arguments.size();
+        size_t col_size = expr_param.getDataNum();
 
-        // Only when this is a regexp_like function, match_type_param will be initialized
+        std::cout << fmt::format("pat_param get string: {}", pat_param.getString(0)) << std::endl;
+
+        // match_type_param will be initialized, only when this is a regexp_like function
         std::unique_ptr<const Param> match_type_param;
 
         constexpr std::string_view class_name(name);
         constexpr std::string_view regexp_like_name(NameRegexpLike::name);
         if constexpr (class_name == regexp_like_name)
         {
-            ColumnPtr col_match_type;
             // Try to get match type column only when it's a regexp_like function
+            ColumnPtr col_match_type;
             if (arg_num > 2)
             {
                 col_match_type = block.getByPosition(arguments[2]).column;
-                match_type_param = std::make_unique<const Param>(*col_match_type, "");
+                match_type_param = std::make_unique<const Param>(col_match_type, String(""));
             }
             else
             {
-                match_type_param = std::make_unique<const Param>(*col_match_type, "");
+                match_type_param = std::make_unique<const Param>(col_match_type, String(""));
             }
         }
 
         // Check if args are all const columns
         if (expr_param.isConstCol() && pat_param.isConstCol())
         {
-#define PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type) \
+#define GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type) \
     do { \
-        int flags = 0; \
-        SET_FLAGS(flags); \
+        int flags = getDefaultFlags(); \
+        String final_pattern = pat; \
+        std::cout << fmt::format("pat: {}", pat) << std::endl; \
         if constexpr (has_match_type) \
         { \
-            /* TODO put match_type into pattern */ \
+            /* put match_type into pattern */ \
+            String match_type = (match_type_param)->getString(0); \
+            std::cout << fmt::format("match_type: {}", match_type) << std::endl; \
+            final_pattern = addMatchTypeForPattern(final_pattern, match_type); \
+            std::cout << fmt::format("final_pattern: {}", final_pattern) << std::endl; \
         } \
-        Regexps::Regexp regexp(String((pat).data, (pat).size), flags); \
-        ResultType res{regexp.match((expr).data, (expr).size)}; \
+        Regexps::Regexp regexp(final_pattern, flags); \
+        ResultType res{regexp.match(expr)}; \
         (block).getByPosition(result).column = (block).getByPosition(result).type->createColumnConst((pat_param).getDataNum(), toField(res)); \
     } while(0)
 
-            StringRef pat;
-            pat_param.getString(0, pat);
-            if (pat.size == 0)
+            String pat = pat_param.getString(0);
+            if (pat.empty())
                 throw Exception("Empty pattern is invalid");
 
-            StringRef expr;
-            expr_param.getString(0, expr);
+            String expr = expr_param.getString(0);
             if constexpr (class_name == regexp_like_name)
             {
+                // regexp_like function
                 if (arg_num > 2 && match_type_param->isConstCol())
                 {
                     constexpr bool has_match_type = true;
-                    PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type);
+                    GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type);
                     return;
                 }
                 else if (arg_num == 2)
                 {
                     constexpr bool has_match_type = false;
-                    PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type);
+                    GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type);
                     return;
                 }
                 // reach here when arg_num == 3 and match_type is not const
             }
             else
             {
+                // regexp function
                 constexpr bool has_match_type = false;
-                PROCESS(block, expr, pat, pat_param, match_type_param, has_match_type);
+                GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type);
                 return;
             }
-
-#undef PROCESS
+#undef GET_CONST_RESULT
         }
 
         // Check memorization
@@ -357,7 +489,7 @@ public:
         if (isMemorized())
         {
             const auto & regexp = getRegexp();            
-            if (null_presence.has_nullable)
+            if (null_presence.has_nullable_col)
             {
                 // expr column must be a nullable column here, so we need to check null for each elems
                 auto nullmap_col = ColumnUInt8::create();
@@ -365,8 +497,9 @@ public:
                 nullmap.resize(expr_param.getDataNum());
 
                 StringRef expr_ref;
-                for (size_t i = 0; i < arg_num; ++i)
+                for (size_t i = 0; i < col_size; ++i)
                 {
+
                     if (expr_param.isNullAt(i))
                     {
                         nullmap[i] = 1;
@@ -374,7 +507,7 @@ public:
                     }
 
                     nullmap[i] = 0;
-                    expr_param.getString(i, expr_ref);
+                    expr_param.getStringRef(i, expr_ref);
                     vec_res[i] = regexp->match(expr_ref.data, expr_ref.size); // match
                 }
 
@@ -384,10 +517,12 @@ public:
             {
                 // expr column is impossible to be a nullable column here
                 StringRef expr_ref;
-                for (size_t i = 0; i < arg_num; ++i)
+                for (size_t i = 0; i < col_size; ++i)
                 {
-                    expr_param.getString(i, expr_ref);
-                    vec_res[i] = regexp->match(expr_ref.data, expr_ref.size); // match
+                    expr_param.getStringRef(i, expr_ref);
+                    auto res = regexp->match(expr_ref.data, expr_ref.size);
+                    std::cout << fmt::format("memorized not null: {}, res: {}", String(expr_ref.data, expr_ref.size), res) << std::endl;
+                    vec_res[i] = res; // match
                 }
 
                 block.getByPosition(result).column = std::move(col_res);
@@ -395,61 +530,66 @@ public:
         }
         else
         {
-            // container used for receiving data
-            StringRef expr;
-            StringRef pat;
-
-            if (null_presence.has_nullable)
+            if (null_presence.has_nullable_col)
             {
                 auto nullmap_col = ColumnUInt8::create();
                 typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
                 nullmap.resize(expr_param.getDataNum());
 
-
-                for (size_t i = 0; i < arg_num; ++i)
+                for (size_t i = 0; i < col_size; ++i)
                 {
                     if (expr_param.isNullAt(i) || pat_param.isNullAt(i))
                     {
+                        // This is a null result
                         nullmap[i] = 1;
                         continue;
                     }
 
-                    expr_param.getString(i, expr);
-                    pat_param.getString(i, pat);
+                    String && expr = expr_param.getString(i);
+                    String && pat = pat_param.getString(i);
+
+                    if (pat.empty())
+                        throw Exception("Empty pattern is invalid");
 
                     if constexpr (class_name == regexp_like_name)
                     {
-                        int flags = 0;
-                        SET_FLAGS(flags);
-                        const auto & regexp = Regexps::get<false, true>(String(pat.data, pat.size), flags);
-                        vec_res[i] = regexp->match(expr.data, expr.size); // match
+                        // regexp_like function
+                        auto regexp = createRegexpWithMatchType(pat, match_type_param->getString(i));
+                        vec_res[i] = regexp->match(expr); // match
                     }
                     else
                     {
-                        // TODO handle match_type first and do match action
+                        // regexp function
+                        int flags = getDefaultFlags();
+                        const auto & regexp = Regexps::get<false, true>(pat, flags);
+                        vec_res[i] = regexp->match(expr); // match
                     }
-                    
                 }
                 
                 block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
             else
             {
-                for (size_t i = 0; i < arg_num; ++i)
+                for (size_t i = 0; i < col_size; ++i)
                 {
-                    expr_param.getString(i, expr);
-                    pat_param.getString(i, pat);
+                    String && expr = expr_param.getString(i);
+                    String && pat = pat_param.getString(i);
+
+                    if (pat.empty())
+                        throw Exception("Empty pattern is invalid");
 
                     if constexpr (class_name == regexp_like_name)
                     {
-                        int flags = 0;
-                        SET_FLAGS(flags);
-                        const auto & regexp = Regexps::get<false, true>(String(pat.data, pat.size), flags);
-                        vec_res[i] = regexp->match(expr.data, expr.size); // match
+                        // regexp_like function
+                        auto regexp = createRegexpWithMatchType(pat, match_type_param->getString(i));
+                        vec_res[i] = regexp->match(expr); // match
                     }
                     else
                     {
-                        // TODO handle match_type first and do match action
+                        // regexp function
+                        int flags = getDefaultFlags();
+                        const auto & regexp = Regexps::get<false, true>(pat, flags);
+                        vec_res[i] = regexp->match(expr); // match
                     }
                 }
 
@@ -458,6 +598,24 @@ public:
         }
     }
 private:
+    void checkInputArg(const DataTypePtr & arg, bool * has_nullable_col) const
+    {
+        std::cout << "type name: " << arg->getName() << std::endl;
+        if (arg->isNullable())
+        {
+            *has_nullable_col = true;
+            const auto & null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+            const auto & nested_type = null_type->getNestedType();
+            if (!nested_type->isString())
+                throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+        else
+        {
+            if (!arg->isString())
+                throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
@@ -721,7 +879,5 @@ private:
 
     TiDB::TiDBCollatorPtr collator{};
 };
-
-#undef SET_FLAGS
 } // namespace DB
 
