@@ -181,7 +181,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
     struct Cf
     {
-        Cf(UInt64 region_id_, ColumnFamilyType type_);
+        Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_);
 
         // Actual data will be stored in MockSSTReader.
         void finish_file();
@@ -201,6 +201,7 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     protected:
         UInt64 region_id;
+        TableID table_id;
         ColumnFamilyType type;
         std::vector<std::string> sst_files;
         std::vector<std::pair<std::string, std::string>> kvs;
@@ -232,6 +233,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     MockRaftStoreProxy()
     {
         log = &Poco::Logger::get("MockRaftStoreProxy");
+        table_id = 1;
     }
 
     std::unordered_set<uint64_t> region_id_to_drop;
@@ -239,6 +241,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::map<uint64_t, MockProxyRegionPtr> regions;
     std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
     AsyncWaker::Notifier notifier;
+    TableID table_id;
     Poco::Logger * log;
 };
 

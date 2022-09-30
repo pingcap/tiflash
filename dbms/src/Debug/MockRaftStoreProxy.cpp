@@ -339,7 +339,7 @@ void MockRaftStoreProxy::bootstrap(
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
     {
-        auto region = tests::makeRegion(region_id, RecordKVFormat::genKey(region_id, 0), RecordKVFormat::genKey(region_id, 10));
+        auto region = tests::makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10));
         lock.regions.emplace(region_id, region);
         lock.index.add(region);
     }
@@ -438,14 +438,14 @@ void MockRaftStoreProxy::doApply(
             if (cmd_types[i] == WriteCmdType::Put)
             {
                 auto cf_name = CFToName(cmd_cf[i]);
-                auto key = RecordKVFormat::genKey(1, keys[i], 1);
+                auto key = RecordKVFormat::genKey(table_id, keys[i], 1);
                 TiKVValue value = std::move(vals[i]);
                 RegionBench::setupPutRequest(request.add_requests(), cf_name, key, value);
             }
             else
             {
                 auto cf_name = CFToName(cmd_cf[i]);
-                auto key = RecordKVFormat::genKey(1, keys[i], 1);
+                auto key = RecordKVFormat::genKey(table_id, keys[i], 1);
                 RegionBench::setupDelRequest(request.add_requests(), cf_name, key);
             }
         }
@@ -521,21 +521,25 @@ void MockRaftStoreProxy::Cf::finish_file()
     }
     auto & mmp = MockSSTReader::getMockSSTData();
     mmp[MockSSTReader::Key{region_id_str, type}] = std::move(kv_list);
+    kvs.clear();
 }
 
 std::vector<SSTView> MockRaftStoreProxy::Cf::ssts() const
 {
     assert(freezed);
     std::vector<SSTView> sst_views;
-    sst_views.push_back(SSTView{
-        type,
-        BaseBuffView{sst_files.back().data(), sst_files.back().length()},
-    });
+    for (auto iter = sst_files.begin(); iter != sst_files.end(); iter++) {
+        sst_views.push_back(SSTView{
+            type,
+            BaseBuffView{iter->c_str(), iter->size()},
+        });
+    }
     return sst_views;
 }
 
-MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, ColumnFamilyType type_)
+MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_)
     : region_id(region_id_)
+    , table_id(table_id_)
     , type(type_)
     , c(0)
     , freezed(false)
@@ -546,7 +550,7 @@ MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, ColumnFamilyType type_)
 
 void MockRaftStoreProxy::Cf::insert(HandleID key, std::string val)
 {
-    auto k = RecordKVFormat::genKey(1, key, 1);
+    auto k = RecordKVFormat::genKey(table_id, key, 1);
     TiKVValue v = std::move(val);
     kvs.emplace_back(k, v);
 }
@@ -591,6 +595,8 @@ void MockRaftStoreProxy::snapshot(
 
     kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{kv_region, std::move(ingest_ids)}, tmt);
     region->updateAppliedIndex(index);
+    // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
+    kv_region->setApplied(index, term);
 }
 
 void GCMonitor::add(RawObjType type, int64_t diff)

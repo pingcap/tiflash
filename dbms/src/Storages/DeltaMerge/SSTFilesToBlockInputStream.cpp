@@ -63,7 +63,24 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix()
 {
-    if (snaps.len > 3)
+    bool use_multi = false;
+    if (snaps.len > 3) {
+        use_multi = true;
+    } else {
+        int c[3] = { 0 };
+        for (UInt64 i = 0; i < snaps.len; ++i)
+        {
+            const auto & snapshot = snaps.views[i];
+            auto t = static_cast<std::underlying_type_t<ColumnFamilyType>>(snapshot.type);
+            LOG_INFO(log, "!!!!! SST {} {}", t, snaps.len);
+            c[t]++;
+            if (c[t] > 1) {
+                use_multi = true;
+                break;
+            }
+        }
+    }
+    if (use_multi)
     {
         LOG_INFO(log, "Read SST Files with MultiSSTReader");
         std::vector<SSTView> ssts;
@@ -72,36 +89,49 @@ void SSTFilesToBlockInputStream::readPrefix()
         int size_write = 0;
         int size_lock = 0;
         int size_default = 0;
+
+        auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
+            LOG_FMT_INFO(log, "!!!! make_inner_func {} {}", snap.path.data, (uint64_t)proxy_helper->sst_reader_interfaces.fn_get_sst_reader);
+            return std::make_unique<SSTReader>(proxy_helper, snap);
+        };
+        auto generate_cf_reader = [&]() {
+            // Generate old cf reader.
+            LOG_FMT_INFO(log, "!!!! Len {}", ssts.size());
+            switch (prev_type)
+            {
+            case ColumnFamilyType::Default:
+                size_default = ssts.size();
+                default_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts);
+                break;
+            case ColumnFamilyType::Write:
+                size_write = ssts.size();
+                write_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts);
+                break;
+            case ColumnFamilyType::Lock:
+                size_lock = ssts.size();
+                lock_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts);
+                break;
+            }
+            ssts.clear();
+        };
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
             const auto & snapshot = snaps.views[i];
-            if (!flag || snapshot.type != prev_type)
-            {
-                auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
-                    return std::make_unique<SSTReader>(proxy_helper, snap);
-                };
-                // Generate old cf reader.
-                switch (prev_type)
-                {
-                case ColumnFamilyType::Default:
-                    size_default = ssts.size();
-                    default_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, snapshot.type, make_inner_func, ssts);
-                    break;
-                case ColumnFamilyType::Write:
-                    size_write = ssts.size();
-                    write_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, snapshot.type, make_inner_func, ssts);
-                    break;
-                case ColumnFamilyType::Lock:
-                    size_lock = ssts.size();
-                    lock_cf_reader = std::make_unique<MultiSSTReader<SSTReader, SSTView>>(proxy_helper, snapshot.type, make_inner_func, ssts);
-                    break;
-                }
-                ssts.clear();
+            if (!flag) {
+                flag = true;
                 prev_type = snapshot.type;
             }
-            LOG_FMT_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {}", size_write, size_lock, size_default);
+            if (snapshot.type != prev_type)
+            {
+                generate_cf_reader();
+                prev_type = snapshot.type;
+            }
             ssts.push_back(snapshot);
         }
+        if (ssts.size()) {
+            generate_cf_reader();
+        }
+        LOG_FMT_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {}", size_write, size_lock, size_default);
     }
     else
     {
