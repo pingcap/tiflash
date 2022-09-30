@@ -402,9 +402,14 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │-------- Ingest Range --------│
          */
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.end, SegmentSplitMode::Logical);
-        // We don't care whether it is succeeded or not, because the caller always need to retry
-        // from the beginning in this case.
-        UNUSED(left, right);
+        if (left == nullptr || right == nullptr)
+        {
+            // Split failed, likely caused by snapshot failed.
+            // Sleep awhile and retry.
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        // Always returning false, because we need to retry to get a new segment (as the old segment is abandoned)
+        // even when split succeeded.
         return false;
     }
     else if (is_end_matching)
@@ -419,7 +424,10 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *             │-------- Ingest Range --------│
          */
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
-        UNUSED(left, right);
+        if (left == nullptr || right == nullptr)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
         return false;
     }
     else
@@ -434,7 +442,10 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *        │-------- Ingest Range --------│
          */
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
-        UNUSED(left, right);
+        if (left == nullptr || right == nullptr)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
         return false;
     }
 }
