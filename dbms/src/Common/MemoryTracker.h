@@ -112,7 +112,9 @@ public:
     /// next should be changed only once: from nullptr to some value.
     void setNext(MemoryTracker * elem)
     {
-        next.store(elem, std::memory_order_relaxed);
+        MemoryTracker * old_val = nullptr;
+        if (!next.compare_exchange_strong(old_val, elem, std::memory_order_seq_cst, std::memory_order_relaxed))
+            return;
         next_holder = elem ? elem->shared_from_this() : nullptr;
     }
 

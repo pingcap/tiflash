@@ -17,6 +17,8 @@
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/Utils.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB
 {
 namespace FailPoints
@@ -44,7 +46,9 @@ void MPPHandler::handleError(const MPPTaskPtr & task, String error)
 grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskResponse * response)
 {
     MPPTaskPtr task = nullptr;
-    current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC
+    SCOPE_EXIT({
+        current_memory_tracker = nullptr; /// to avoid reusing threads in gRPC
+    });
     try
     {
         Stopwatch stopwatch;

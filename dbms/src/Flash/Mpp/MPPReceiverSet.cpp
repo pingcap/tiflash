@@ -44,15 +44,6 @@ void MPPReceiverSet::cancel()
         cop_reader->cancel();
 }
 
-
-void MPPReceiverSet::setUpConnection()
-{
-    for (auto & it : exchange_receiver_map)
-    {
-        it.second->setUpConnection();
-    }
-}
-
 void MPPReceiverSet::close()
 {
     for (auto & it : exchange_receiver_map)

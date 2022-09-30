@@ -14,41 +14,46 @@
 
 #pragma once
 
-#include <Common/Logger.h>
-#include <Core/Types.h>
-#include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
-#include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
-/// Serializes the stream of blocks and sends them to TiDB/TiSpark with different serialization paths.
 template <class StreamWriterPtr>
-class StreamingDAGResponseWriter : public DAGResponseWriter
+class FineGrainedShuffleWriter : public DAGResponseWriter
 {
 public:
-    StreamingDAGResponseWriter(
+    FineGrainedShuffleWriter(
         StreamWriterPtr writer_,
-        Int64 records_per_chunk_,
-        Int64 batch_send_min_limit_,
+        std::vector<Int64> partition_col_ids_,
+        TiDB::TiDBCollators collators_,
         bool should_send_exec_summary_at_last,
-        DAGContext & dag_context_);
+        DAGContext & dag_context_,
+        UInt64 fine_grained_shuffle_stream_count_,
+        UInt64 fine_grained_shuffle_batch_size);
     void write(const Block & block) override;
     void finishWrite() override;
 
 private:
     template <bool send_exec_summary_at_last>
-    void encodeThenWriteBlocks();
+    void batchWriteFineGrainedShuffle();
 
-    Int64 batch_send_min_limit;
-    bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
+    template <bool send_exec_summary_at_last>
+    void writePackets(std::vector<TrackedMppDataPacket> & packets);
+
+    bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
+    std::vector<Int64> partition_col_ids;
+    TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
+    uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
+    UInt64 fine_grained_shuffle_stream_count;
+    UInt64 fine_grained_shuffle_batch_size;
 };
 
 } // namespace DB
