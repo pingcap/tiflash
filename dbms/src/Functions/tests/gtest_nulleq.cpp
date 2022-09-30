@@ -82,6 +82,7 @@ protected:
                 auto result_column = result_type->createColumn();
                 for (size_t i = 0; i < col_1.column->size(); i++)
                 {
+                    /// NullEq logic implementation.
                     Field result;
                     if (col_1.type->isNullable() && null_map[i] && col_2.type->isNullable() && null_map[i])
                     {
@@ -108,7 +109,50 @@ protected:
                         col_1.column->get(i, col1_field);
                         Field col2_field;
                         col_2.column->get(i, col2_field);
-                        const bool equals = (col1_field == col2_field);
+                        bool equals = (col1_field == col2_field);
+                        if (col1_field.toString().find("Decimal") != std::string::npos && col2_field.toString().find("Decimal") != std::string::npos)
+                        {
+                            /// Ugly Fix of Decimal.
+                            auto decimal_string = [&](const Field & value) -> DB::String {
+                                switch (value.getType())
+                                {
+                                case Field::Types::Which::Decimal32:
+                                {
+                                    auto v = safeGet<DecimalField<Decimal32>>(value);
+                                    return v.toString();
+                                }
+                                case Field::Types::Which::Decimal64:
+                                {
+                                    auto v = safeGet<DecimalField<Decimal64>>(value);
+                                    return v.toString();
+                                }
+                                case Field::Types::Which::Decimal128:
+                                {
+                                    auto v = safeGet<DecimalField<Decimal128>>(value);
+                                    return v.toString();
+                                }
+                                case Field::Types::Which::Decimal256:
+                                {
+                                    auto v = safeGet<DecimalField<Decimal256>>(value);
+                                    return v.toString();
+                                }
+                                default:
+                                    throw Exception("Unsupported with data type.");
+                                }
+                            };
+
+                            /// I know all the tested decimal have actually the scale of 2.
+                            /// So they are just substring-relationship.
+                            const auto decimal_string_col1 = decimal_string(col1_field);
+                            const auto decimal_string_col2 = decimal_string(col2_field);
+                            if (decimal_string_col1.size() > decimal_string_col2.size()) {
+                                equals = (decimal_string_col1.find(decimal_string_col2) != std::string::npos);
+                            }
+                            else
+                            {
+                                equals = (decimal_string_col2.find(decimal_string_col1) != std::string::npos);
+                            }
+                        }
                         col_result.column->get(equals, result);
                         result_column->insert(result);
                     }
@@ -165,18 +209,18 @@ try
     };
     testNullEqFunction(string_input, null_map);
     /// case 4 test NullEqDecimal
-    //    std::vector<String> decimal_data{"-12.34", "-12.12", "0.00", "12.12", "12.34"};
-    //    ColumnsWithTypeAndName decimal_input{
-    //        createColumn<Decimal32>(std::make_tuple(5, 3), decimal_data),
-    //        createNullableColumn<Decimal32>(std::make_tuple(5, 3), decimal_data, null_map),
-    //        createColumn<Decimal64>(std::make_tuple(12, 4), decimal_data),
-    //        createNullableColumn<Decimal64>(std::make_tuple(12, 4), decimal_data, null_map),
-    //        createColumn<Decimal128>(std::make_tuple(20, 2), decimal_data),
-    //        createNullableColumn<Decimal128>(std::make_tuple(20, 2), decimal_data, null_map),
-    //        createColumn<Decimal256>(std::make_tuple(40, 6), decimal_data),
-    //        createNullableColumn<Decimal256>(std::make_tuple(40, 6), decimal_data, null_map),
-    //    };
-    //    testNullEqFunction(decimal_input, null_map);
+        std::vector<String> decimal_data{"-12.34", "-12.12", "0.00", "12.12", "12.34"};
+        ColumnsWithTypeAndName decimal_input{
+            createColumn<Decimal32>(std::make_tuple(5, 3), decimal_data),
+            createNullableColumn<Decimal32>(std::make_tuple(5, 3), decimal_data, null_map),
+            createColumn<Decimal64>(std::make_tuple(12, 4), decimal_data),
+            createNullableColumn<Decimal64>(std::make_tuple(12, 4), decimal_data, null_map),
+            createColumn<Decimal128>(std::make_tuple(20, 2), decimal_data),
+            createNullableColumn<Decimal128>(std::make_tuple(20, 2), decimal_data, null_map),
+            createColumn<Decimal256>(std::make_tuple(40, 6), decimal_data),
+            createNullableColumn<Decimal256>(std::make_tuple(40, 6), decimal_data, null_map),
+        };
+        testNullEqFunction(decimal_input, null_map);
     /// case 5 test NullEqTime
     InferredDataVector<MyDate> date_data{
         MyDate(0, 0, 0).toPackedUInt(),
