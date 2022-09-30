@@ -128,13 +128,7 @@ String DAGExpressionAnalyzerHelper::buildNullEqFunction(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
-    /// nullEq(col1, col2) == isNull(col1) AND isNull(col2) OR assumeNotNull(Equal(col1, col2)))
-
-    /// nullEq(col1, col2) == if(isNull(col1) AND isNull(col2),
-    ///                                                      1,
-    ///                                                      if(isNotNull(col1) AND isNotNull(col2),
-    ///                                                                          Equal(col1, col2)),
-    ///                                                                                          0))
+    /// nullEq(col1, col2) == isNull(col1) AND isNull(col2) OR ifNull(Equal(col1, col2), 0)
 
     if (expr.children_size() != 2)
     {
@@ -148,7 +142,8 @@ String DAGExpressionAnalyzerHelper::buildNullEqFunction(
     String and_is_null = analyzer->applyFunction("and", {is_null_col1, is_null_col2}, actions, nullptr);
 
     String equals = analyzer->applyFunction("equals", {col1, col2}, actions, getCollatorFromExpr(expr));
-    String not_null_equals = analyzer->applyFunction("assumeNotNull", {equals}, actions, nullptr);
+    String name = analyzer->getActions(constructInt64LiteralTiExpr(0), actions);
+    String not_null_equals = analyzer->applyFunction("ifNull", {equals, name}, actions, nullptr);
 
     return analyzer->applyFunction("or", {and_is_null, not_null_equals}, actions, nullptr);
 }
