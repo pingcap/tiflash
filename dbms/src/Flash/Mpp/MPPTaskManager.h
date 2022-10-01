@@ -82,7 +82,7 @@ public:
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
-    bool tryToScheduleTask(const MPPTaskPtr & task);
+    bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
     void releaseThreadsFromScheduler(int needed_threads);
 
