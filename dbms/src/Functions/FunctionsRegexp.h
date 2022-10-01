@@ -270,12 +270,14 @@ private:
 class FunctionStringRegexpBase
 {
 public:
+    static constexpr size_t REGEXP_XXX_MIN_PARAM_NUM = 2;
+
     // Max parameter number the regexp_xxx function could receive
-    static constexpr size_t REGEXP_PARAM_NUM = 2;
-    static constexpr size_t REGEXP_LIKE_PARAM_NUM = 3;
-    static constexpr size_t REGEXP_INSTR_PARAM_NUM = 6;
-    static constexpr size_t REGEXP_REPLACE_PARAM_NUM = 6;
-    static constexpr size_t REGEXP_SUBSTR_PARAM_NUM = 5;
+    static constexpr size_t REGEXP_MAX_PARAM_NUM = 2;
+    static constexpr size_t REGEXP_LIKE_MAX_PARAM_NUM = 3;
+    static constexpr size_t REGEXP_INSTR_MAX_PARAM_NUM = 6;
+    static constexpr size_t REGEXP_REPLACE_MAX_PARAM_NUM = 6;
+    static constexpr size_t REGEXP_SUBSTR_MAX_PARAM_NUM = 5;
 
     void memorize(const Param & pat_param, const std::unique_ptr<const Param> & match_type_param) const
     {
@@ -303,9 +305,9 @@ public:
         constexpr std::string_view regexp_like_name_sv(NameRegexpLike::name);
         
         if constexpr (class_name_sv == tidb_regexp_name_sv)
-            total_param_num = REGEXP_PARAM_NUM;
+            total_param_num = REGEXP_MAX_PARAM_NUM;
         else if constexpr (class_name_sv == regexp_like_name_sv)
-            total_param_num = REGEXP_LIKE_PARAM_NUM;
+            total_param_num = REGEXP_LIKE_MAX_PARAM_NUM;
         else
             throw Exception("Unknown regular function.");
         
@@ -347,24 +349,29 @@ public:
     bool useDefaultImplementationForNulls() const override { return false; }
     size_t getNumberOfArguments() const override { return 0; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments [[maybe_unused]]) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        size_t args_min_num = 2;
-        size_t args_max_num = 3;
-        if (arguments.size() < args_min_num)
+        size_t args_max_num;
+        constexpr std::string_view class_name_sv(Name::name);
+        constexpr std::string_view regexp_like_name_sv(NameRegexpLike::name);
+
+        if constexpr (class_name_sv == regexp_like_name_sv)
+            args_max_num = REGEXP_LIKE_MAX_PARAM_NUM;
+        else
+            args_max_num = REGEXP_MAX_PARAM_NUM;
+
+        size_t arg_num = arguments.size();
+        if (arg_num < REGEXP_XXX_MIN_PARAM_NUM)
             throw Exception("Illegal argument number");
 
         bool has_nullable_col = false;
         
-        for (size_t i = 0; i < args_min_num; ++i)
+        for (size_t i = 0; i < REGEXP_XXX_MIN_PARAM_NUM; ++i)
             checkInputArg(arguments[i], &has_nullable_col);
-        
-        constexpr std::string_view class_name_sv(Name::name);
-        constexpr std::string_view regexp_like_name_sv(NameRegexpLike::name);
 
         // check match_type arg for regexp_like
         if constexpr (class_name_sv == regexp_like_name_sv)
-            if (arguments.size() == args_max_num && !arguments[args_max_num - 1]->isString())
+            if (arg_num == args_max_num && !arguments[args_max_num - 1]->isString())
                 checkInputArg(arguments[args_max_num - 1], &has_nullable_col);
 
         if (has_nullable_col)
@@ -483,7 +490,7 @@ public:
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
-        vec_res.resize(expr_param.getDataNum());
+        vec_res.resize(expr_param.getDataNum(), 0);
 
         // Start to match
         if (isMemorized())
@@ -538,13 +545,27 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    if (expr_param.isNullAt(i) || pat_param.isNullAt(i))
+                    if constexpr (class_name == regexp_like_name)
                     {
-                        // This is a null result
-                        nullmap[i] = 1;
-                        continue;
+                        if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || (match_type_param != nullptr && match_type_param->isNullAt(i)))
+                        {
+                            // This is a null result
+                            nullmap[i] = 1;
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        if (expr_param.isNullAt(i) || pat_param.isNullAt(i))
+                        {
+                            // This is a null result
+                            nullmap[i] = 1;
+                            continue;
+                        }
                     }
 
+
+                    nullmap[i] = 0;
                     String && expr = expr_param.getString(i);
                     String && pat = pat_param.getString(i);
 
