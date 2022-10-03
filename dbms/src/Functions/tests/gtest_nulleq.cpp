@@ -240,18 +240,18 @@ try
     {
         for (const auto & col_2 : second_const_arguments)
         {
-            if (col_1.column->isNullAt(0))  /// Null, 2, 3, 4, Null
+            if (col_1.column->isNullAt(0)) /// Null, 2, 3, 4, Null
             {
-                if (col_2.column->isNullAt(0))  /// Null, Null, Null, Null, Null
+                if (col_2.column->isNullAt(0)) /// Null, Null, Null, Null, Null
                 {
                     ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 0, 0, 1}), executeNullEq(col_1, col_2));
                 }
-                else  /// 5, 5, 5, 5, 5
+                else /// 5, 5, 5, 5, 5
                 {
                     ASSERT_COLUMN_EQ(zero_vector, executeNullEq(col_1, col_2));
                 }
             }
-            else  /// 1, 2, 3, 4, 5
+            else /// 1, 2, 3, 4, 5
             {
                 if (col_2.column->isNullAt(0))
                 {
@@ -273,18 +273,18 @@ try
     {
         for (const auto & col_2 : second_vector_arguments)
         {
-            if (col_1.column->isNullAt(0))  /// Null, Null, Null, Null, Null
+            if (col_1.column->isNullAt(0)) /// Null, Null, Null, Null, Null
             {
-                if (col_2.column->isNullAt(0))  /// Null, 4, 3, 2, Null
+                if (col_2.column->isNullAt(0)) /// Null, 4, 3, 2, Null
                 {
                     ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 0, 0, 1}), executeNullEq(col_1, col_2));
                 }
-                else  /// 5, 4, 3, 2, 1
+                else /// 5, 4, 3, 2, 1
                 {
                     ASSERT_COLUMN_EQ(zero_const_vector, executeNullEq(col_1, col_2));
                 }
             }
-            else  /// 1, 1, 1, 1, 1
+            else /// 1, 1, 1, 1, 1
             {
                 if (col_2.column->isNullAt(0))
                 {
@@ -302,18 +302,18 @@ try
     {
         for (const auto & col_2 : second_vector_arguments)
         {
-            if (col_1.column->isNullAt(0))  /// Null, 2, 3, 4, Null
+            if (col_1.column->isNullAt(0)) /// Null, 2, 3, 4, Null
             {
-                if (col_2.column->isNullAt(0))  /// Null, 4, 3, 2, Null
+                if (col_2.column->isNullAt(0)) /// Null, 4, 3, 2, Null
                 {
                     ASSERT_COLUMN_EQ(createColumn<UInt8>({1, 0, 1, 0, 1}), executeNullEq(col_1, col_2));
                 }
-                else  /// 5, 4, 3, 2, 1
+                else /// 5, 4, 3, 2, 1
                 {
                     ASSERT_COLUMN_EQ(createColumn<UInt8>({0, 0, 1, 0, 0}), executeNullEq(col_1, col_2));
                 }
             }
-            else  /// 1, 2, 3, 4, 5
+            else /// 1, 2, 3, 4, 5
             {
                 if (col_2.column->isNullAt(0))
                 {
