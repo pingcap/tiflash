@@ -27,9 +27,11 @@
 #include <Common/Logger.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
+#include <Parsers/makeDummyQuery.h>
 #include <Storages/Transaction/TiDB.h>
 
 namespace DB
@@ -117,13 +119,6 @@ constexpr UInt64 NO_ENGINE_SUBSTITUTION = 1ul << 30ul;
 constexpr UInt64 ALLOW_INVALID_DATES = 1ul << 32ul;
 } // namespace TiDBSQLMode
 
-inline bool enableFineGrainedShuffle(uint64_t stream_count)
-{
-    return stream_count > 0;
-}
-
-static constexpr std::string_view enableFineGrainedShuffleExtraInfo = "enable fine grained shuffle";
-
 /// A context used to track the information that needs to be passed around during DAG planning.
 class DAGContext
 {
@@ -131,6 +126,8 @@ public:
     // for non-mpp(cop/batchCop)
     explicit DAGContext(const tipb::DAGRequest & dag_request_)
         : dag_request(&dag_request_)
+        , dummy_query_string(dag_request->DebugString())
+        , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , is_mpp_task(false)
         , is_root_mpp_task(false)
@@ -149,6 +146,8 @@ public:
     // for mpp
     DAGContext(const tipb::DAGRequest & dag_request_, const mpp::TaskMeta & meta_, bool is_root_mpp_task_)
         : dag_request(&dag_request_)
+        , dummy_query_string(dag_request->DebugString())
+        , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(dag_request->has_collect_execution_summaries() && dag_request->collect_execution_summaries())
         , return_executor_id(true)
         , is_mpp_task(true)
@@ -162,7 +161,6 @@ public:
         , warning_count(0)
     {
         assert(dag_request->has_root_executor() && dag_request->root_executor().has_executor_id());
-
         // only mpp task has join executor.
         initExecutorIdToJoinIdMap();
         initOutputInfo();
@@ -171,6 +169,8 @@ public:
     // for test
     explicit DAGContext(UInt64 max_error_count_)
         : dag_request(nullptr)
+        , dummy_query_string("")
+        , dummy_ast(makeDummyQuery())
         , collect_execution_summaries(false)
         , is_mpp_task(false)
         , is_root_mpp_task(false)
@@ -179,12 +179,13 @@ public:
         , max_recorded_error_count(max_error_count_)
         , warnings(max_recorded_error_count)
         , warning_count(0)
-        , is_test(true)
     {}
 
     // for tests need to run query tasks.
     explicit DAGContext(const tipb::DAGRequest & dag_request_, String log_identifier, size_t concurrency)
         : dag_request(&dag_request_)
+        , dummy_query_string(dag_request->DebugString())
+        , dummy_ast(makeDummyQuery())
         , initialize_concurrency(concurrency)
         , is_mpp_task(true)
         , is_root_mpp_task(false)
@@ -194,7 +195,6 @@ public:
         , max_recorded_error_count(getMaxErrorCount(*dag_request))
         , warnings(max_recorded_error_count)
         , warning_count(0)
-        , is_test(true)
     {
         assert(dag_request->has_root_executor() || dag_request->executors_size() > 0);
         return_executor_id = dag_request->root_executor().has_executor_id() || dag_request->executors(0).has_executor_id();
@@ -309,24 +309,25 @@ public:
 
     void updateFinalConcurrency(size_t cur_streams_size, size_t streams_upper_limit);
 
-    bool isTest() const { return is_test; }
-    void setColumnsForTest(std::unordered_map<String, ColumnsWithTypeAndName> & columns_for_test_map_) { columns_for_test_map = columns_for_test_map_; }
-    ColumnsWithTypeAndName columnsForTest(String executor_id);
-
-    bool columnsForTestEmpty() { return columns_for_test_map.empty(); }
-
     ExchangeReceiverPtr getMPPExchangeReceiver(const String & executor_id) const;
     void setMPPReceiverSet(const MPPReceiverSetPtr & receiver_set)
     {
         mpp_receiver_set = receiver_set;
     }
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
+    std::vector<CoprocessorReaderPtr> & getCoprocessorReaders();
 
     void addSubquery(const String & subquery_id, SubqueryForSet && subquery);
     bool hasSubquery() const { return !subqueries.empty(); }
     std::vector<SubqueriesForSets> && moveSubqueries() { return std::move(subqueries); }
+    void setProcessListEntry(std::shared_ptr<ProcessListEntry> entry) { process_list_entry = entry; }
+    std::shared_ptr<ProcessListEntry> getProcessListEntry() const { return process_list_entry; }
 
     const tipb::DAGRequest * dag_request;
+    /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
+    /// dummy_query_string and dummy_ast is used for that
+    String dummy_query_string;
+    ASTPtr dummy_ast;
     Int64 compile_time_ns = 0;
     size_t final_concurrency = 1;
     size_t initialize_concurrency = 1;
@@ -365,6 +366,7 @@ private:
     void initOutputInfo();
 
 private:
+    std::shared_ptr<ProcessListEntry> process_list_entry;
     /// Hold io for correcting the destruction order.
     BlockIO io;
     /// profile_streams_map is a map that maps from executor_id to profile BlockInputStreams.
@@ -388,12 +390,10 @@ private:
     std::atomic<UInt64> warning_count;
 
     MPPReceiverSetPtr mpp_receiver_set;
+    std::vector<CoprocessorReaderPtr> coprocessor_readers;
     /// vector of SubqueriesForSets(such as join build subquery).
     /// The order of the vector is also the order of the subquery.
     std::vector<SubqueriesForSets> subqueries;
-
-    bool is_test = false; /// switch for test, do not use it in production.
-    std::unordered_map<String, ColumnsWithTypeAndName> columns_for_test_map; /// <executor_id, columns>, for multiple sources
 };
 
 } // namespace DB

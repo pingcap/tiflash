@@ -16,7 +16,7 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Interpreters/IQuerySource.h>
 
 
 namespace DB
@@ -52,7 +52,18 @@ BlockIO executeQuery(
     QueryProcessingStage::Enum stage = QueryProcessingStage::Complete /// To which stage the query must be executed.
 );
 
+std::shared_ptr<ProcessListEntry> setProcessListElement(
+    Context & context,
+    const String & query,
+    const IAST * ast);
 
-BlockIO executeQuery(DAGQuerySource & dag, Context & context, bool internal, QueryProcessingStage::Enum stage);
+void logQueryPipeline(const LoggerPtr & logger, const BlockInputStreamPtr & in);
+
+void logQuery(const String & query, const Context & context, const LoggerPtr & logger);
+
+void prepareForInputStream(
+    Context & context,
+    QueryProcessingStage::Enum stage,
+    const BlockInputStreamPtr & in);
 
 } // namespace DB

@@ -39,7 +39,7 @@ public:
         size_t executor_index = 0;
         DAGRequestBuilder builder(executor_index);
         builder
-            .mockTable("test", "t1", columns)
+            .mockTable("test", "t1", 0 /*table_id=*/, columns)
             .sort({{"c1", false}, {"c2", false}, {"c3", false}}, true, fine_grained_shuffle_stream_count)
             .window(RowNumber(),
                     {{"c1", false}, {"c2", false}, {"c3", false}},

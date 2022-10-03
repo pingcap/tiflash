@@ -14,6 +14,7 @@
 
 #include <Common/Checksum.h>
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
@@ -46,6 +47,7 @@ LogWriter::LogWriter(
         /*create_new_encryption_info_*/ true);
 
     buffer = static_cast<char *>(alloc(buffer_size));
+    RUNTIME_CHECK_MSG(buffer != nullptr, "LogWriter cannot allocate buffer, size={}", buffer_size);
     write_buffer = WriteBuffer(buffer, buffer_size);
 }
 
@@ -67,8 +69,13 @@ size_t LogWriter::writtenBytes() const
     return written_bytes;
 }
 
-void LogWriter::flush(const WriteLimiterPtr & write_limiter, const bool background)
+void LogWriter::flush(const WriteLimiterPtr & write_limiter, bool background)
 {
+    if (write_buffer.offset() == 0)
+    {
+        return;
+    }
+
     PageUtil::writeFile(log_file,
                         written_bytes,
                         write_buffer.buffer().begin(),
@@ -89,43 +96,35 @@ void LogWriter::close()
     log_file->close();
 }
 
-void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter)
+void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const WriteLimiterPtr & write_limiter, bool background)
 {
     // Header size varies depending on whether we are recycling or not.
-    const int header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
+    const UInt32 header_size = recycle_log_files ? Format::RECYCLABLE_HEADER_SIZE : Format::HEADER_SIZE;
 
     // Fragment the record if necessary and emit it. Note that if payload is empty,
     // we still want to iterate once to emit a single zero-length record.
     bool begin = true;
     size_t payload_left = payload_size;
-
-    size_t head_sizes = ((payload_size / Format::BLOCK_SIZE) + 1) * Format::RECYCLABLE_HEADER_SIZE;
-    if (payload_size + head_sizes >= buffer_size)
+    // Padding current block if needed
+    block_offset = block_offset % Format::BLOCK_SIZE; // 0 <= block_offset < Format::BLOCK_SIZE
+    size_t leftover = Format::BLOCK_SIZE - block_offset;
+    assert(leftover > 0);
+    if (leftover < header_size)
     {
-        size_t new_buff_size = payload_size + ((head_sizes / Format::BLOCK_SIZE) + 1) * Format::BLOCK_SIZE;
-
-        buffer = static_cast<char *>(realloc(buffer, buffer_size, new_buff_size));
-        buffer_size = new_buff_size;
-        resetBuffer();
+        // Fill the trailer with all zero
+        static constexpr char MAX_ZERO_HEADER[Format::RECYCLABLE_HEADER_SIZE]{'\x00'};
+        if (unlikely(buffer_size - write_buffer.offset() < leftover))
+        {
+            flush(write_limiter, background);
+        }
+        writeString(MAX_ZERO_HEADER, leftover, write_buffer);
+        block_offset = 0;
     }
-
     do
     {
-        const Int64 leftover = Format::BLOCK_SIZE - block_offset;
-        assert(leftover >= 0);
-        if (leftover < header_size)
-        {
-            // Switch to a new block
-            if (leftover > 0)
-            {
-                // Fill the trailer with all zero
-                static constexpr char MAX_ZERO_HEADER[Format::RECYCLABLE_HEADER_SIZE]{'\x00'};
-                writeString(MAX_ZERO_HEADER, leftover, write_buffer);
-            }
-            block_offset = 0;
-        }
+        block_offset = block_offset % Format::BLOCK_SIZE;
         // Invariant: we never leave < header_size bytes in a block.
-        assert(static_cast<Int64>(Format::BLOCK_SIZE - block_offset) >= header_size);
+        assert(Format::BLOCK_SIZE - block_offset >= header_size);
 
         const size_t avail_payload_size = Format::BLOCK_SIZE - block_offset - header_size;
         const size_t fragment_length = (payload_left < avail_payload_size) ? payload_left : avail_payload_size;
@@ -139,7 +138,21 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
             type = recycle_log_files ? Format::RecordType::RecyclableLastType : Format::RecordType::LastType;
         else
             type = recycle_log_files ? Format::RecordType::RecyclableMiddleType : Format::RecordType::MiddleType;
-        emitPhysicalRecord(type, payload, fragment_length);
+        // Check available space in write_buffer before writing
+        if (buffer_size - write_buffer.offset() < fragment_length + header_size)
+        {
+            flush(write_limiter, background);
+        }
+        try
+        {
+            emitPhysicalRecord(type, payload, fragment_length);
+        }
+        catch (...)
+        {
+            auto message = getCurrentExceptionMessage(true);
+            LOG_FATAL(&Poco::Logger::get("LogWriter"), "Write physical record failed with message: {}", message);
+            std::terminate();
+        }
         payload.ignore(fragment_length);
         payload_left -= fragment_length;
         begin = false;
@@ -147,7 +160,7 @@ void LogWriter::addRecord(ReadBuffer & payload, const size_t payload_size, const
 
     if (!manual_flush)
     {
-        flush(write_limiter, /* background */ false);
+        flush(write_limiter, background);
     }
 }
 

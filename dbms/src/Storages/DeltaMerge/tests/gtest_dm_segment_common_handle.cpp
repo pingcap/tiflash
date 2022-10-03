@@ -70,7 +70,6 @@ protected:
         dm_context_ = std::make_unique<DMContext>(*db_context,
                                                   *path_pool,
                                                   *storage_pool,
-                                                  0,
                                                   /*min_version_*/ 0,
                                                   settings.not_compress_columns,
                                                   is_common_handle,
@@ -706,21 +705,17 @@ try
     ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
 
     // merge segments
-    // TODO: enable merge test!
-    if (false)
+    segment = Segment::merge(dmContext(), tableColumns(), {segment, new_segment});
     {
-        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
-        {
-            // check merged segment range
-            const auto & merged_range = segment->getRowKeyRange();
-            EXPECT_EQ(*merged_range.start.value, *s1_range.start.value);
-            EXPECT_EQ(*merged_range.end.value, *s2_range.end.value);
-            // TODO check segment epoch is increase
-        }
-        {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-            ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
-        }
+        // check merged segment range
+        const auto & merged_range = segment->getRowKeyRange();
+        EXPECT_EQ(*merged_range.start.value, *s1_range.start.value);
+        EXPECT_EQ(*merged_range.end.value, *s2_range.end.value);
+        // TODO check segment epoch is increase
+    }
+    {
+        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 }
 CATCH

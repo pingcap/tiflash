@@ -103,10 +103,7 @@ try
                 else
                     expect_cols.push_back({toNullableVec<String>(single_col_name, ColumnWithString(col0.begin(), col0.begin() + limit_num))});
 
-                ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 2), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 4), expect_cols[0]);
-                ASSERT_COLUMNS_EQ_R(executeStreams(request, 8), expect_cols[0]);
+                executeAndAssertColumnsEqual(request, expect_cols.back());
             }
         }
     }
@@ -139,7 +136,7 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(table_name, order_by_items[i], 100);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
 }
@@ -173,7 +170,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 
@@ -191,7 +188,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 
@@ -209,7 +206,7 @@ try
             func_projection = {col0_ast, col1_ast, col2_ast, col3_ast, func_ast};
 
             request = buildDAGRequest(table_name, order_by_items, 100, func_projection, output_projection);
-            ASSERT_COLUMNS_EQ_R(executeStreams(request), expect_cols[0]);
+            executeAndAssertColumnsEqual(request, expect_cols.back());
         }
     }
 

@@ -14,11 +14,10 @@
 
 #pragma once
 
-#include <Poco/Logger.h>
-#include <Poco/Util/LayeredConfiguration.h>
-
 #include <Common/TiFlashSecurity.h>
 #include <Interpreters/Context.h>
+#include <Poco/Logger.h>
+#include <Poco/Util/LayeredConfiguration.h>
 
 
 namespace DB
@@ -44,4 +43,4 @@ public:
     virtual ~IServer() {}
 };
 
-}
+} // namespace DB

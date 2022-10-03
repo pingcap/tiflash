@@ -19,13 +19,12 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
+#include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
 #include <pingcap/Exception.h>
@@ -89,10 +88,9 @@ void DAGDriver<batch>::execute()
 try
 {
     auto start_time = Clock::now();
-    DAGQuerySource dag(context);
     DAGContext & dag_context = *context.getDAGContext();
 
-    BlockIO streams = executeQuery(dag, context, internal, QueryProcessingStage::Complete);
+    BlockIO streams = executeQuery(context, internal);
     if (!streams.in || streams.out)
         // Only query is allowed, so streams.in must not be null and streams.out must be null
         throw TiFlashException("DAG is not query.", Errors::Coprocessor::Internal);
@@ -130,17 +128,12 @@ try
         auto streaming_writer = std::make_shared<StreamWriter>(writer);
         TiDB::TiDBCollators collators;
 
-        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr, false>>(
+        std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
             streaming_writer,
-            std::vector<Int64>(),
-            collators,
-            tipb::ExchangeType::PassThrough,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
             true,
-            dag_context,
-            /*fine_grained_shuffle_stream_count=*/0,
-            /*fine_grained_shuffle_batch_size=*/0);
+            dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);
     }

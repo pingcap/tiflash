@@ -73,6 +73,10 @@ namespace tests
         FAIL();                                                                        \
     }
 
+/**
+  * GTest related helper functions
+  */
+
 /// helper functions for comparing DataType
 ::testing::AssertionResult DataTypeCompare(
     const char * lhs_expr,
@@ -82,6 +86,15 @@ namespace tests
 
 #define ASSERT_DATATYPE_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
 #define EXPECT_DATATYPE_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::tests::DataTypeCompare, val1, val2)
+
+::testing::AssertionResult fieldCompare(
+    const char * lhs_expr,
+    const char * rhs_expr,
+    const Field & lhs,
+    const Field & rhs);
+
+#define ASSERT_FIELD_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::fieldCompare, val1, val2)
+#define EXPECT_FIELD_EQ(val1, val2) EXPECT_PRED_FORMAT2(::DB::tests::fieldCompare, val1, val2)
 
 // A simple helper for getting DataType from type name
 inline DataTypePtr typeFromString(const String & str)

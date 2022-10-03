@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/SimpleIntrusiveNode.h>
 #include <Common/nocopyable.h>
 #include <common/defines.h>
@@ -47,6 +48,16 @@ enum class MPMCQueueStatus
     FINISHED,
 };
 
+enum class MPMCQueueResult
+{
+    OK,
+    CANCELLED,
+    FINISHED,
+    TIMEOUT,
+    EMPTY,
+    FULL,
+};
+
 /// MPMCQueue is a FIFO queue which supports concurrent operations from
 /// multiple producers and consumers.
 ///
@@ -61,8 +72,9 @@ class MPMCQueue
 {
 public:
     using Status = MPMCQueueStatus;
+    using Result = MPMCQueueResult;
 
-    explicit MPMCQueue(Int64 capacity_)
+    explicit MPMCQueue(size_t capacity_)
         : capacity(capacity_)
         , data(capacity * sizeof(T))
     {
@@ -70,9 +82,7 @@ public:
 
     ~MPMCQueue()
     {
-        std::unique_lock lock(mu);
-        for (; read_pos < write_pos; ++read_pos)
-            destruct(getObj(read_pos));
+        drain();
     }
 
     // Cannot to use copy/move constructor,
@@ -81,22 +91,22 @@ public:
     DISALLOW_COPY_AND_MOVE(MPMCQueue);
 
     /*
-    * | Previous Status  | Empty      | Behavior                 |
+    * | Queue Status     | Empty      | Behavior                 |
     * |------------------|------------|--------------------------|
     * | Normal           | Yes        | Block                    |
-    * | Normal           | No         | Pop and return true      |
-    * | Finished         | Yes        | return false             |
-    * | Finished         | No         | Pop and return true      |
-    * | Cancelled        | Yes/No     | return false             |
+    * | Normal           | No         | Pop and return OK        |
+    * | Finished         | Yes        | return FINISHED          |
+    * | Finished         | No         | Pop and return OK        |
+    * | Cancelled        | Yes/No     | return CANCELLED         |
     * */
-    ALWAYS_INLINE bool pop(T & obj)
+    ALWAYS_INLINE Result pop(T & obj)
     {
         return popObj<true>(obj);
     }
 
-    /// Besides all conditions mentioned at `pop`, `popTimeout` will return false if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `pop`, `popTimeout` will return TIMEOUT if `timeout` is exceeded.
     template <typename Duration>
-    ALWAYS_INLINE bool popTimeout(T & obj, const Duration & timeout)
+    ALWAYS_INLINE Result popTimeout(T & obj, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -104,30 +114,29 @@ public:
     }
 
     /// Non-blocking function.
-    /// Return true if pop succeed.
-    /// else return false.
-    ALWAYS_INLINE bool tryPop(T & obj)
+    /// Besides all conditions mentioned at `pop`, `tryPop` will immediately return EMPTY if queue is `NORMAL` but empty.
+    ALWAYS_INLINE Result tryPop(T & obj)
     {
         return popObj<false>(obj);
     }
 
     /*
-    * | Previous Status  | Full       | Behavior                 |
+    * | Queue Status     | Empty      | Behavior                 |
     * |------------------|------------|--------------------------|
     * | Normal           | Yes        | Block                    |
-    * | Normal           | No         | Push and return true     |
-    * | Finished         | Yes/No     | return false             |
-    * | Cancelled        | Yes/No     | return false             |
+    * | Normal           | No         | Pop and return OK        |
+    * | Finished         | Yes/No     | return FINISHED          |
+    * | Cancelled        | Yes/No     | return CANCELLED         |
     * */
     template <typename U>
-    ALWAYS_INLINE bool push(U && u)
+    ALWAYS_INLINE Result push(U && u)
     {
         return pushObj<true>(std::forward<U>(u));
     }
 
-    /// Besides all conditions mentioned at `push`, `pushTimeout` will return false if `timeout` is exceeded.
+    /// Besides all conditions mentioned at `push`, `pushTimeout` will return TIMEOUT if `timeout` is exceeded.
     template <typename U, typename Duration>
-    ALWAYS_INLINE bool pushTimeout(U && u, const Duration & timeout)
+    ALWAYS_INLINE Result pushTimeout(U && u, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -135,24 +144,23 @@ public:
     }
 
     /// Non-blocking function.
-    /// Return true if push succeed.
-    /// else return false.
+    /// Besides all conditions mentioned at `push`, `tryPush` will immediately return FULL if queue is `NORMAL` and full.
     template <typename U>
-    ALWAYS_INLINE bool tryPush(U && u)
+    ALWAYS_INLINE Result tryPush(U && u)
     {
         return pushObj<false>(std::forward<U>(u));
     }
 
     /// The same as `push` except it will construct the object in place.
     template <typename... Args>
-    ALWAYS_INLINE bool emplace(Args &&... args)
+    ALWAYS_INLINE Result emplace(Args &&... args)
     {
         return emplaceObj<true>(nullptr, std::forward<Args>(args)...);
     }
 
     /// The same as `pushTimeout` except it will construct the object in place.
     template <typename... Args, typename Duration>
-    ALWAYS_INLINE bool emplaceTimeout(Args &&... args, const Duration & timeout)
+    ALWAYS_INLINE Result emplaceTimeout(Args &&... args, const Duration & timeout)
     {
         /// std::condition_variable::wait_until will always use system_clock.
         auto deadline = std::chrono::system_clock::now() + timeout;
@@ -161,7 +169,7 @@ public:
 
     /// The same as `tryPush` except it will construct the object in place.
     template <typename... Args>
-    ALWAYS_INLINE bool tryEmplace(Args &&... args)
+    ALWAYS_INLINE Result tryEmplace(Args &&... args)
     {
         return emplaceObj<false>(nullptr, std::forward<Args>(args)...);
     }
@@ -169,14 +177,17 @@ public:
     /// Cancel a NORMAL queue will wake up all blocking readers and writers.
     /// After `cancel()` the queue can't be pushed or popped any more.
     /// That means some objects may leave at the queue without poped.
-    void cancel()
+    bool cancel()
     {
-        std::unique_lock lock(mu);
-        if (isNormal())
-        {
+        return cancelWith("");
+    }
+
+    bool cancelWith(String reason)
+    {
+        return changeStatus([&] {
             status = Status::CANCELLED;
-            notifyAll();
-        }
+            cancel_reason = std::move(reason);
+        });
     }
 
     /// Finish a NORMAL queue will wake up all blocking readers and writers.
@@ -185,30 +196,12 @@ public:
     /// Return true if the previous status is NORMAL.
     bool finish()
     {
-        std::unique_lock lock(mu);
-        if (isNormal())
-        {
+        return changeStatus([&] {
             status = Status::FINISHED;
-            notifyAll();
-            return true;
-        }
-        else
-            return false;
+        });
     }
 
-    bool isNextPopNonBlocking() const
-    {
-        std::unique_lock lock(mu);
-        return read_pos < write_pos || !isNormal();
-    }
-
-    bool isNextPushNonBlocking() const
-    {
-        std::unique_lock lock(mu);
-        return write_pos - read_pos < capacity || !isNormal();
-    }
-
-    MPMCQueueStatus getStatus() const
+    Status getStatus() const
     {
         std::unique_lock lock(mu);
         return status;
@@ -219,6 +212,13 @@ public:
         std::unique_lock lock(mu);
         assert(write_pos >= read_pos);
         return static_cast<size_t>(write_pos - read_pos);
+    }
+
+    const String & getCancelReason() const
+    {
+        std::unique_lock lock(mu);
+        RUNTIME_ASSERT(isCancelled());
+        return cancel_reason;
     }
 
 private:
@@ -234,7 +234,7 @@ private:
     }
 
     template <typename Pred>
-    ALWAYS_INLINE void wait(
+    ALWAYS_INLINE bool wait(
         std::unique_lock<std::mutex> & lock,
         WaitingNode & head,
         WaitingNode & node,
@@ -249,7 +249,7 @@ private:
                 auto res = node.cv.wait_until(lock, *deadline);
                 node.detach();
                 if (res == std::cv_status::timeout)
-                    break;
+                    return false;
             }
         }
         else
@@ -261,6 +261,7 @@ private:
                 node.detach();
             }
         }
+        return true;
     }
 
     ALWAYS_INLINE void notifyNext(WaitingNode & head)
@@ -274,49 +275,55 @@ private:
     }
 
     template <bool need_wait>
-    bool popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
+    Result popObj(T & res, [[maybe_unused]] const TimePoint * deadline = nullptr)
     {
 #ifdef __APPLE__
         WaitingNode node;
 #else
         thread_local WaitingNode node;
 #endif
+        std::unique_lock lock(mu);
+
+        if constexpr (need_wait)
         {
-            std::unique_lock lock(mu);
-
-            if constexpr (need_wait)
-            {
-                /// read_pos < write_pos means the queue isn't empty
-                auto pred = [&] {
-                    return read_pos < write_pos || !isNormal();
-                };
-                wait(lock, reader_head, node, pred, deadline);
-            }
-
-            if (!isCancelled() && read_pos < write_pos)
-            {
-                auto & obj = getObj(read_pos);
-                res = std::move(obj);
-                destruct(obj);
-
-                /// update pos only after all operations that may throw an exception.
-                ++read_pos;
-
-                /// Notify next writer within the critical area because:
-                /// 1. If we remove the next writer node and notify it later,
-                ///    it may find itself can't obtain the lock while not being in the list.
-                ///    This need carefully procesing in `assignObj`.
-                /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
-                ///    deadlock can be possible because different readers may notify one writer.
-                notifyNext(writer_head);
-                return true;
-            }
+            /// read_pos < write_pos means the queue isn't empty
+            auto pred = [&] {
+                return read_pos < write_pos || !isNormal();
+            };
+            if (!wait(lock, reader_head, node, pred, deadline))
+                return Result::TIMEOUT;
         }
-        return false;
+        if (!isCancelled() && read_pos < write_pos)
+        {
+            auto & obj = getObj(read_pos);
+            res = std::move(obj);
+            destruct(obj);
+
+            /// update pos only after all operations that may throw an exception.
+            ++read_pos;
+
+            /// Notify next writer within the critical area because:
+            /// 1. If we remove the next writer node and notify it later,
+            ///    it may find itself can't obtain the lock while not being in the list.
+            ///    This need carefully procesing in `assignObj`.
+            /// 2. If we do not remove the next writer, only obtain its pointer and notify it later,
+            ///    deadlock can be possible because different readers may notify one writer.
+            notifyNext(writer_head);
+            return Result::OK;
+        }
+        switch (status)
+        {
+        case Status::NORMAL:
+            return Result::EMPTY;
+        case Status::CANCELLED:
+            return Result::CANCELLED;
+        case Status::FINISHED:
+            return Result::FINISHED;
+        }
     }
 
     template <bool need_wait, typename F>
-    bool assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
+    Result assignObj([[maybe_unused]] const TimePoint * deadline, F && assigner)
     {
 #ifdef __APPLE__
         WaitingNode node;
@@ -330,7 +337,8 @@ private:
             auto pred = [&] {
                 return write_pos - read_pos < capacity || !isNormal();
             };
-            wait(lock, writer_head, node, pred, deadline);
+            if (!wait(lock, writer_head, node, pred, deadline))
+                return Result::TIMEOUT;
         }
 
         /// double check status after potential wait
@@ -345,19 +353,27 @@ private:
 
             /// See comments in `popObj`.
             notifyNext(reader_head);
-            return true;
+            return Result::OK;
         }
-        return false;
+        switch (status)
+        {
+        case Status::NORMAL:
+            return Result::FULL;
+        case Status::CANCELLED:
+            return Result::CANCELLED;
+        case Status::FINISHED:
+            return Result::FINISHED;
+        }
     }
 
     template <bool need_wait, typename U>
-    ALWAYS_INLINE bool pushObj(U && u, const TimePoint * deadline = nullptr)
+    ALWAYS_INLINE Result pushObj(U && u, const TimePoint * deadline = nullptr)
     {
         return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<U>(u)); });
     }
 
     template <bool need_wait, typename... Args>
-    ALWAYS_INLINE bool emplaceObj(const TimePoint * deadline, Args &&... args)
+    ALWAYS_INLINE Result emplaceObj(const TimePoint * deadline, Args &&... args)
     {
         return assignObj<need_wait>(deadline, [&](void * addr) { new (addr) T(std::forward<Args>(args)...); });
     }
@@ -389,6 +405,29 @@ private:
             obj.~T();
     }
 
+    void drain()
+    {
+        std::unique_lock lock(mu);
+        for (; read_pos < write_pos; ++read_pos)
+            destruct(getObj(read_pos));
+
+        read_pos = 0;
+        write_pos = 0;
+    }
+
+    template <typename F>
+    ALWAYS_INLINE bool changeStatus(F && action)
+    {
+        std::unique_lock lock(mu);
+        if (isNormal())
+        {
+            action();
+            notifyAll();
+            return true;
+        }
+        return false;
+    }
+
 private:
     const Int64 capacity;
 
@@ -398,6 +437,7 @@ private:
     Int64 read_pos = 0;
     Int64 write_pos = 0;
     Status status = Status::NORMAL;
+    String cancel_reason;
 
     std::vector<UInt8> data;
 };

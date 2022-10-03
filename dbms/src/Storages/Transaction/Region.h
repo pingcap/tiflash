@@ -64,7 +64,7 @@ public:
     class CommittedScanner : private boost::noncopyable
     {
     public:
-        CommittedScanner(const RegionPtr & store_, bool use_lock = true)
+        explicit CommittedScanner(const RegionPtr & store_, bool use_lock = true)
             : store(store_)
         {
             if (use_lock)
@@ -97,7 +97,7 @@ public:
     class CommittedRemover : private boost::noncopyable
     {
     public:
-        CommittedRemover(const RegionPtr & store_, bool use_lock = true)
+        explicit CommittedRemover(const RegionPtr & store_, bool use_lock = true)
             : store(store_)
         {
             if (use_lock)
@@ -167,8 +167,11 @@ public:
     std::tuple<WaitIndexResult, double> waitIndex(UInt64 index, const UInt64 timeout_ms, std::function<bool(void)> && check_running);
 
     UInt64 appliedIndex() const;
+    UInt64 appliedIndexTerm() const;
 
     void notifyApplied() { meta.notifyAll(); }
+    // Export for tests.
+    void setApplied(UInt64 index, UInt64 term);
 
     RegionVersion version() const;
     RegionVersion confVer() const;
@@ -245,10 +248,10 @@ public:
     const RegionRangeKeys & getRange();
     UInt64 appliedIndex();
 
+    RegionRaftCommandDelegate() = delete;
+
 private:
     friend class tests::RegionKVStoreTest;
-
-    RegionRaftCommandDelegate() = delete;
 
     Regions execBatchSplit(
         const raft_cmdpb::AdminRequest & request,

@@ -228,53 +228,15 @@ void StoragePathPool::clearPSV2ObsoleteData()
     drop_instance_data("data");
 }
 
-void StoragePathPool::rename(const String & new_database, const String & new_table, bool clean_rename)
+void StoragePathPool::rename(const String & new_database, const String & new_table)
 {
-    if (unlikely(new_database.empty() || new_table.empty()))
-        throw Exception(fmt::format("Can not rename for PathPool to {}.{}", new_database, new_table));
+    RUNTIME_CHECK(!new_database.empty() && !new_table.empty(), database, table, new_database, new_table);
+    RUNTIME_CHECK(!path_need_database_name, database, table, new_database, new_table);
 
-    if (likely(clean_rename))
-    {
-        // caller ensure that no path need to be renamed.
-        if (unlikely(path_need_database_name))
-            throw Exception("Can not do clean rename with path_need_database_name is true!");
-
-        std::lock_guard lock{mutex};
-        database = new_database;
-        table = new_table;
-    }
-    else
-    {
-        if (unlikely(file_provider->isEncryptionEnabled()))
-            throw Exception("Encryption is only supported when using clean_rename");
-
-        // Note: changing these path is not atomic, we may lost data if process is crash here.
-        std::lock_guard lock{mutex};
-        // Get root path without database and table
-        for (auto & info : main_path_infos)
-        {
-            Poco::Path p(info.path);
-            p = p.parent().parent();
-            if (path_need_database_name)
-                p = p.parent();
-            auto new_path = getStorePath(p.toString() + "/data", new_database, new_table);
-            renamePath(info.path, new_path);
-            info.path = new_path;
-        }
-        for (auto & info : latest_path_infos)
-        {
-            Poco::Path p(info.path);
-            p = p.parent().parent();
-            if (path_need_database_name)
-                p = p.parent();
-            auto new_path = getStorePath(p.toString() + "/data", new_database, new_table);
-            renamePath(info.path, new_path);
-            info.path = new_path;
-        }
-
-        database = new_database;
-        table = new_table;
-    }
+    // The directories for storing table data is not changed, just rename related names.
+    std::lock_guard lock{mutex};
+    database = new_database;
+    table = new_table;
 }
 
 void StoragePathPool::drop(bool recursive, bool must_success)
@@ -297,6 +259,8 @@ void StoragePathPool::drop(bool recursive, bool must_success)
                     total_bytes += file_size;
                 }
                 global_capacity->freeUsedSize(path_info.path, total_bytes);
+                // clear in case delegator->removeDTFile is called after `drop`
+                dt_file_path_map.clear();
             }
         }
         catch (Poco::DirectoryNotEmptyException & e)
@@ -306,7 +270,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             else
             {
                 // just ignore and keep that directory if it is not empty
-                LOG_FMT_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
+                LOG_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
             }
         }
     }
@@ -330,7 +294,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
             else
             {
                 // just ignore and keep that directory if it is not empty
-                LOG_FMT_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
+                LOG_WARNING(log, "Can not remove directory: {}, it is not empty", path_info.path);
             }
         }
     }
@@ -354,7 +318,7 @@ void StoragePathPool::renamePath(const String & old_path, const String & new_pat
     if (auto file = Poco::File{old_path}; file.exists())
         file.renameTo(new_path);
     else
-        LOG_FMT_WARNING(log, "Path \"{}\" is missed.", old_path);
+        LOG_WARNING(log, "Path \"{}\" is missed.", old_path);
 }
 
 String StoragePathPool::getPSV2DeleteMarkFilePath() const
@@ -390,7 +354,7 @@ String genericChoosePath(const std::vector<T> & paths, //
     // If available space is limited by the quota, then write down a GC-ed file can make
     // some files be deleted later.
     if (total_available_size == 0)
-        LOG_FMT_WARNING(log, "No available space for all disks, choose randomly.");
+        LOG_WARNING(log, "No available space for all disks, choose randomly.");
     std::vector<double> ratio;
     for (auto & stat : stats)
     {
@@ -533,7 +497,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
     }
     catch (const Poco::Exception & exp)
     {
-        LOG_FMT_WARNING(pool.log, "failed to get real size info for dtfile. [id={}] [path={}] [err={}]", file_id, path, exp.displayText());
+        LOG_WARNING(pool.log, "failed to get real size info for dtfile. [id={}] [path={}] [err={}]", file_id, path, exp.displayText());
     }
 #endif
 

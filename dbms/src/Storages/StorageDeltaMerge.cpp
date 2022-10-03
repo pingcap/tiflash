@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
@@ -99,7 +100,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     {
         const auto mock_table_id = MockTiDB::instance().newTableID();
         tidb_table_info.id = mock_table_id;
-        LOG_FMT_WARNING(log, "Allocate table id for mock test [id={}]", mock_table_id);
+        LOG_WARNING(log, "Allocate table id for mock test [id={}]", mock_table_id);
     }
 
     table_column_info = std::make_unique<TableColumnInfo>(db_name_, table_name_, primary_expr_ast_);
@@ -258,7 +259,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
             {
                 throw PrimaryKeyNotMatchException(*pks.begin(), actual_pri_keys[0]);
             }
-            // fallover
+            // fallthrough
         }
 
         // Unknown bug, throw an exception.
@@ -638,12 +639,9 @@ BlockInputStreams StorageDeltaMerge::read(
     }
 
     // Read with MVCC filtering
-    if (unlikely(!query_info.mvcc_query_info))
-        throw Exception("mvcc query info is null", ErrorCodes::LOGICAL_ERROR);
-
     TMTContext & tmt = context.getTMTContext();
-    if (unlikely(!tmt.isInitialized()))
-        throw Exception("TMTContext is not initialized", ErrorCodes::LOGICAL_ERROR);
+    RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
+    RUNTIME_CHECK(tmt.isInitialized());
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
     auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
@@ -718,7 +716,7 @@ BlockInputStreams StorageDeltaMerge::read(
                 fb.append(range.toDebugString());
             },
             ",");
-        LOG_FMT_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
+        LOG_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
 
     /// Get Rough set filter from query
@@ -758,7 +756,7 @@ BlockInputStreams StorageDeltaMerge::read(
         rs_operator,
         query_info.req_id,
         query_info.keep_order,
-        /* is_fast_mode */ tidb_table_info.tiflash_mode == TiDB::TiFlashMode::Fast, // read in normal mode or read in fast mode
+        /* is_fast_scan */ query_info.is_fast_scan,
         max_block_size,
         parseSegmentSet(select_query.segment_expression_list),
         extra_table_id_index);
@@ -766,7 +764,7 @@ BlockInputStreams StorageDeltaMerge::read(
     /// Ensure read_tso info after read.
     check_read_tso(mvcc_query_info.read_tso);
 
-    LOG_FMT_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
+    LOG_TRACE(tracing_logger, "[ranges: {}] [streams: {}]", ranges.size(), streams.size());
 
     return streams;
 }
@@ -791,9 +789,9 @@ void StorageDeltaMerge::mergeDelta(const Context & context)
     getAndMaybeInitStore()->mergeDeltaAll(context);
 }
 
-std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key, const DM::DeltaMergeStore::TaskRunThread run_thread)
+std::optional<DM::RowKeyRange> StorageDeltaMerge::mergeDeltaBySegment(const Context & context, const DM::RowKeyValue & start_key)
 {
-    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key, run_thread);
+    return getAndMaybeInitStore()->mergeDeltaBySegment(context, start_key);
 }
 
 void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, const Settings & settings)
@@ -804,7 +802,7 @@ void StorageDeltaMerge::deleteRange(const DM::RowKeyRange & range_to_delete, con
 
 void StorageDeltaMerge::ingestFiles(
     const DM::RowKeyRange & range,
-    const std::vector<UInt64> & file_ids,
+    const std::vector<DM::ExternalDTFileInfo> & external_files,
     bool clear_data_in_range,
     const Settings & settings)
 {
@@ -813,7 +811,7 @@ void StorageDeltaMerge::ingestFiles(
         global_context,
         settings,
         range,
-        file_ids,
+        external_files,
         clear_data_in_range);
 }
 
@@ -904,6 +902,15 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
     size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     if (after_delete_rows != total_rows - delete_rows)
         LOG_FMT_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
+}
+
+DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited()
+{
+    if (storeInited())
+    {
+        return _store;
+    }
+    return nullptr;
 }
 
 std::pair<DB::DecodingStorageSchemaSnapshotConstPtr, BlockUPtr> StorageDeltaMerge::getSchemaSnapshotAndBlockForDecoding(const TableStructureLockHolder & table_structure_lock, bool need_block)
@@ -1076,7 +1083,7 @@ try
                 // this exception and avoid of reading broken data, they have truncate that table.
                 if (table_info && table_info.value().get().replica_info.count == 0)
                 {
-                    LOG_FMT_WARNING(
+                    LOG_WARNING(
                         log,
                         "Accept lossy column data type modification. Table (id:{}) modify column {}({}) from {} to {}",
                         table_info.value().get().id,
@@ -1185,62 +1192,31 @@ void StorageDeltaMerge::rename(
     const String & new_display_table_name)
 {
     tidb_table_info.name = new_display_table_name; // update name in table info
-    // For DatabaseTiFlash, simply update store's database is OK.
-    // `store->getTableName() == new_table_name` only keep for mock test.
-    bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
-    if (likely(clean_rename))
     {
-        if (storeInited())
-        {
-            _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
-            return;
-        }
-        std::lock_guard lock(store_mutex);
-        if (storeInited())
-        {
-            _store->rename(new_path_to_db, clean_rename, new_database_name, new_table_name);
-        }
-        else
-        {
-            table_column_info->db_name = new_database_name;
-            table_column_info->table_name = new_table_name;
-        }
+        // For DatabaseTiFlash, simply update store's database is OK.
+        // `store->getTableName() == new_table_name` only keep for mock test.
+        bool clean_rename = !data_path_contains_database_name && getTableName() == new_table_name;
+        RUNTIME_ASSERT(clean_rename,
+                       log,
+                       "should never rename the directories when renaming table, new_database_name={}, new_table_name={}",
+                       new_database_name,
+                       new_table_name);
+    }
+    if (storeInited())
+    {
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
         return;
     }
-
-    /// Note that this routine is only left for CI tests. `clean_rename` should always be true in production env.
-    auto & store = getAndMaybeInitStore();
-
-    // For DatabaseOrdinary, we need to rename data path, then recreate a new store.
-    const String new_path = new_path_to_db + "/" + new_table_name;
-
-    if (Poco::File{new_path}.exists())
-        throw Exception(
-            fmt::format("Target path already exists: {}", new_path),
-            ErrorCodes::DIRECTORY_ALREADY_EXISTS);
-
-    // flush store and then reset store to new path
-    store->flushCache(global_context, RowKeyRange::newAll(is_common_handle, rowkey_column_size));
-    ColumnDefines table_column_defines = store->getTableColumns();
-    ColumnDefine handle_column_define = store->getHandle();
-    DeltaMergeStore::Settings settings = store->getSettings();
-
-    // remove background tasks
-    store->shutdown();
-    // rename directories for multi disks
-    store->rename(new_path, clean_rename, new_database_name, new_table_name);
-    // generate a new store
-    store = std::make_shared<DeltaMergeStore>(
-        global_context,
-        data_path_contains_database_name,
-        new_database_name,
-        new_table_name,
-        tidb_table_info.id,
-        std::move(table_column_defines),
-        std::move(handle_column_define),
-        is_common_handle,
-        rowkey_column_size,
-        settings);
+    std::lock_guard lock(store_mutex);
+    if (storeInited())
+    {
+        _store->rename(new_path_to_db, new_database_name, new_table_name);
+    }
+    else
+    {
+        table_column_info->db_name = new_database_name;
+        table_column_info->table_name = new_table_name;
+    }
 }
 
 String StorageDeltaMerge::getTableName() const

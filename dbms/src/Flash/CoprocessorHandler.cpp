@@ -53,7 +53,7 @@ CoprocessorHandler::CoprocessorHandler(
     , log(&Poco::Logger::get("CoprocessorHandler"))
 {}
 
-std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> CoprocessorHandler::GenCopKeyRange(
+std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> CoprocessorHandler::genCopKeyRange(
     const ::google::protobuf::RepeatedPtrField<::coprocessor::KeyRange> & ranges)
 {
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
@@ -100,7 +100,7 @@ grpc::Status CoprocessorHandler::execute()
                     cop_context.kv_context.region_id(),
                     cop_context.kv_context.region_epoch().version(),
                     cop_context.kv_context.region_epoch().conf_ver(),
-                    GenCopKeyRange(cop_request->ranges()),
+                    genCopKeyRange(cop_request->ranges()),
                     &bypass_lock_ts));
 
             DAGContext dag_context(dag_request);
@@ -131,7 +131,7 @@ grpc::Status CoprocessorHandler::execute()
     }
     catch (LockException & e)
     {
-        LOG_FMT_WARNING(log, "LockException: region {}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(log, "LockException: region {}, message: {}", cop_request->context().region_id(), e.message());
         cop_response->Clear();
         GET_METRIC(tiflash_coprocessor_request_error, reason_meet_lock).Increment();
         cop_response->set_allocated_locked(e.lock_info.release());
@@ -140,7 +140,7 @@ grpc::Status CoprocessorHandler::execute()
     }
     catch (const RegionException & e)
     {
-        LOG_FMT_WARNING(log, "RegionException: region {}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(log, "RegionException: region {}, message: {}", cop_request->context().region_id(), e.message());
         cop_response->Clear();
         errorpb::Error * region_err;
         switch (e.status)

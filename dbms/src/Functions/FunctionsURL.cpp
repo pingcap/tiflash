@@ -223,10 +223,6 @@ using FunctionCutQueryStringAndFragment = FunctionStringToString<CutSubstringImp
 
 using FunctionExtractURLParameter = FunctionsStringSearchToString<ExtractURLParameterImpl, NameExtractURLParameter>;
 using FunctionCutURLParameter = FunctionsStringSearchToString<CutURLParameterImpl, NameCutURLParameter>;
-using FunctionExtractURLParameters = FunctionTokens<ExtractURLParametersImpl>;
-using FunctionURLHierarchy = FunctionTokens<URLHierarchyImpl>;
-using FunctionURLPathHierarchy = FunctionTokens<URLPathHierarchyImpl>;
-using FunctionExtractURLParameterNames = FunctionTokens<ExtractURLParameterNamesImpl>;
 
 
 void registerFunctionsURL(FunctionFactory & factory)
@@ -242,10 +238,6 @@ void registerFunctionsURL(FunctionFactory & factory)
     factory.registerFunction<FunctionFragment>();
     factory.registerFunction<FunctionQueryStringAndFragment>();
     factory.registerFunction<FunctionExtractURLParameter>();
-    factory.registerFunction<FunctionExtractURLParameters>();
-    factory.registerFunction<FunctionExtractURLParameterNames>();
-    factory.registerFunction<FunctionURLHierarchy>();
-    factory.registerFunction<FunctionURLPathHierarchy>();
     factory.registerFunction<FunctionCutToFirstSignificantSubdomain>();
     factory.registerFunction<FunctionCutWWW>();
     factory.registerFunction<FunctionCutQueryString>();

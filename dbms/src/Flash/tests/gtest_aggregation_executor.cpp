@@ -30,7 +30,7 @@ namespace tests
         types_col_name[a], types_col_name[b] \
     }
 
-class ExecutorAggTestRunner : public DB::tests::ExecutorTest
+class ExecutorAggTestRunner : public ExecutorTest
 {
 public:
     using ColStringNullableType = std::optional<typename TypeTraits<String>::FieldType>;
@@ -56,6 +56,8 @@ public:
     using ColumnWithNullableMyDateTime = std::vector<ColMyDateTimeNullableType>;
     using ColumnWithNullableDecimal = std::vector<ColDecimalNullableType>;
     using ColumnWithUInt64 = std::vector<ColUInt64Type>;
+
+    virtual ~ExecutorAggTestRunner() = default;
 
     void initializeContext() override
     {
@@ -94,17 +96,24 @@ public:
                              {{col_name[0], TiDB::TP::TypeLong},
                               {col_name[1], TiDB::TP::TypeString},
                               {col_name[2], TiDB::TP::TypeString},
-                              {col_name[3], TiDB::TP::TypeDouble}},
+                              {col_name[3], TiDB::TP::TypeDouble},
+                              {col_name[4], TiDB::TP::TypeLong}},
                              /* columns= */
                              {toNullableVec<Int32>(col_name[0], col_age),
                               toNullableVec<String>(col_name[1], col_gender),
                               toNullableVec<String>(col_name[2], col_country),
-                              toNullableVec<Float64>(col_name[3], col_salary)});
+                              toNullableVec<Float64>(col_name[3], col_salary),
+                              toVec<UInt64>(col_name[4], col_pr)});
 
         context.addMockTable({"aggnull_test", "t1"},
                              {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                              {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                               toNullableVec<String>("s2", {"apple", {}, "banana"})});
+
+        context.addMockTable({"test_db", "test_table"},
+                             {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+                             {toVec<Int64>("s1", {1, 2, 3}),
+                              toVec<Int64>("s2", {1, 2, 3})});
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(std::pair<String, String> src, MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
@@ -113,15 +122,6 @@ public:
         /// project is applied to get partial aggregation output, so that we can remove redundant outputs and compare results with less handwriting codes.
         return context.scan(src.first, src.second).aggregation(agg_funcs, group_by_exprs).project(proj).build(context);
     }
-
-    void executeWithConcurrency(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
-    {
-        for (size_t i = 1; i <= max_concurrency; i += step)
-            ASSERT_COLUMNS_EQ_UR(expect_columns, executeStreams(request, i));
-    }
-
-    static const size_t max_concurrency = 10;
-    static const size_t step = 2;
 
     const String db_name{"test_db"};
 
@@ -142,7 +142,7 @@ public:
 
     /// Prepare some data and names for aggregation functions
     const String table_name{"clerk"};
-    const std::vector<String> col_name{"age", "gender", "country", "salary"};
+    const std::vector<String> col_name{"age", "gender", "country", "salary", "pr"};
     ColumnWithNullableInt32 col_age{30, {}, 27, 32, 25, 36, {}, 22, 34};
     ColumnWithNullableString col_gender{
         "male",
@@ -157,6 +157,7 @@ public:
     };
     ColumnWithNullableString col_country{"russia", "korea", "usa", "usa", "usa", "china", "china", "china", "china"};
     ColumnWithNullableFloat64 col_salary{1000.1, 1300.2, 0.3, {}, -200.4, 900.5, -999.6, 2000.7, -300.8};
+    ColumnWithUInt64 col_pr{1, 2, 0, 3290124, 968933, 3125, 31236, 4327, 80000};
 };
 
 /// Guarantee the correctness of group by
@@ -190,7 +191,7 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            executeWithConcurrency(request, expect_cols[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
 
@@ -223,7 +224,7 @@ try
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair(db_name, table_types), {}, group_by_exprs[i], projections[i]);
-            executeWithConcurrency(request, expect_cols[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
 
@@ -255,7 +256,7 @@ try
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), agg_funcs[i], group_by_exprs[i], projections[i]);
-        executeWithConcurrency(request, expect_cols[i]);
+        executeAndAssertColumnsEqual(request, expect_cols[i]);
     }
 
     /// Min function tests
@@ -274,7 +275,7 @@ try
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), agg_funcs[i], group_by_exprs[i], projections[i]);
-        executeWithConcurrency(request, expect_cols[i]);
+        executeAndAssertColumnsEqual(request, expect_cols[i]);
     }
 }
 CATCH
@@ -286,24 +287,37 @@ try
     std::shared_ptr<tipb::DAGRequest> request;
     auto agg_func0 = Count(col(col_name[0])); /// select count(age) from clerk group by country;
     auto agg_func1 = Count(col(col_name[1])); /// select count(gender) from clerk group by country, gender;
-    std::vector<MockAstVec> agg_funcs = {{agg_func0}, {agg_func1}};
+    auto agg_func2 = Count(lit(Field(static_cast<UInt64>(1)))); /// select count(1) from clerk;
+    auto agg_func3 = Count(lit(Field())); /// select count(NULL) from clerk;
+    auto agg_func4 = Count(lit(Field(static_cast<UInt64>(1)))); /// select count(1) from clerk group by country;
+    auto agg_func5 = Count(lit(Field())); /// select count(NULL) from clerk group by country;
+    auto agg_func6 = Count(col(col_name[4])); /// select count(pr) from clerk group by country;
+    std::vector<MockAstVec> agg_funcs = {{agg_func0}, {agg_func1}, {agg_func2}, {agg_func3}, {agg_func4}, {agg_func5}, {agg_func6}};
 
     auto group_by_expr0 = col(col_name[2]);
     auto group_by_expr10 = col(col_name[2]);
     auto group_by_expr11 = col(col_name[1]);
+    auto group_by_expr4 = col(col_name[2]);
+    auto group_by_expr5 = col(col_name[2]);
+    auto group_by_expr6 = col(col_name[2]);
 
     std::vector<ColumnsWithTypeAndName> expect_cols{
         {toVec<UInt64>("count(age)", ColumnWithUInt64{3, 3, 1, 0})},
-        {toVec<UInt64>("count(gender)", ColumnWithUInt64{2, 2, 2, 1, 1, 1})}};
-    std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}};
-    std::vector<MockColumnNameVec> projections{{"count(age)"}, {"count(gender)"}};
+        {toVec<UInt64>("count(gender)", ColumnWithUInt64{2, 2, 2, 1, 1, 1})},
+        {toVec<UInt64>("count(1)", ColumnWithUInt64{9})},
+        {toVec<UInt64>("count(NULL)", ColumnWithUInt64{0})},
+        {toVec<UInt64>("count(1)", ColumnWithUInt64{4, 3, 1, 1})},
+        {toVec<UInt64>("count(NULL)", ColumnWithUInt64{0, 0, 0, 0})},
+        {toVec<UInt64>("count(pr)", ColumnWithUInt64{4, 3, 1, 1})}};
+    std::vector<MockAstVec> group_by_exprs{{group_by_expr0}, {group_by_expr10, group_by_expr11}, {}, {}, {group_by_expr4}, {group_by_expr5}, {group_by_expr6}};
+    std::vector<MockColumnNameVec> projections{{"count(age)"}, {"count(gender)"}, {"count(1)"}, {"count(NULL)"}, {"count(1)"}, {"count(NULL)"}, {"count(pr)"}};
     size_t test_num = expect_cols.size();
 
     /// Start to test
     for (size_t i = 0; i < test_num; ++i)
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), {agg_funcs[i]}, group_by_exprs[i], projections[i]);
-        executeWithConcurrency(request, expect_cols[i]);
+        executeAndAssertColumnsEqual(request, expect_cols[i]);
     }
 }
 CATCH
@@ -315,22 +329,63 @@ try
                        .scan("aggnull_test", "t1")
                        .aggregation({Max(col("s1"))}, {})
                        .build(context);
-    {
-        ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                            createColumns({toNullableVec<String>({"banana"})}));
-    }
+    executeAndAssertColumnsEqual(request, {{toNullableVec<String>({"banana"})}});
 
     request = context
                   .scan("aggnull_test", "t1")
                   .aggregation({}, {col("s1")})
                   .build(context);
-    {
-        ASSERT_COLUMNS_EQ_R(executeStreams(request),
-                            createColumns({toNullableVec<String>("s1", {{}, "banana"})}));
-    }
+    executeAndAssertColumnsEqual(request, {{toNullableVec<String>("s1", {{}, "banana"})}});
 }
 CATCH
 
+TEST_F(ExecutorAggTestRunner, RepeatedAggregateFunction)
+try
+{
+    std::vector<ASTPtr> functions = {Max(col("s1")), Min(col("s1")), Sum(col("s2"))};
+    ColumnsWithTypeAndName functions_result = {toNullableVec<Int64>({3}), toNullableVec<Int64>({1}), toVec<UInt64>({6})};
+    auto test_single_function = [&](size_t index) {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({functions[index]}, {})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {functions_result[index]});
+    };
+    for (size_t i = 0; i < functions.size(); ++i)
+        test_single_function(i);
+
+    std::vector<ASTPtr> funcs;
+    ColumnsWithTypeAndName results;
+    for (size_t i = 0; i < functions.size(); ++i)
+    {
+        funcs.push_back(functions[i]);
+        results.push_back(functions_result[i]);
+        for (size_t j = 0; j < functions.size(); ++j)
+        {
+            funcs.push_back(functions[j]);
+            results.push_back(functions_result[j]);
+            for (size_t k = 0; k < functions.size(); ++k)
+            {
+                funcs.push_back(functions[k]);
+                results.push_back(functions_result[k]);
+
+                auto request = context
+                                   .scan("test_db", "test_table")
+                                   .aggregation(funcs, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, results);
+
+                funcs.pop_back();
+                results.pop_back();
+            }
+            funcs.pop_back();
+            results.pop_back();
+        }
+        funcs.pop_back();
+        results.pop_back();
+    }
+}
+CATCH
 
 // TODO support more type of min, max, count.
 //      support more aggregation functions: sum, forst_row, group_concat

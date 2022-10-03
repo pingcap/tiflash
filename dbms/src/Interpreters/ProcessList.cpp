@@ -153,17 +153,19 @@ ProcessList::EntryPtr ProcessList::insert(
             ///  setting from one query effectively sets values for all other queries.
 
             /// Track memory usage for all simultaneously running queries from single user.
-            user_process_list.user_memory_tracker.setOrRaiseLimit(settings.max_memory_usage_for_user);
-            user_process_list.user_memory_tracker.setDescription("(for user)");
-            current_memory_tracker->setNext(&user_process_list.user_memory_tracker);
+            user_process_list.user_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_user);
+            user_process_list.user_memory_tracker->setDescription("(for user)");
+            current_memory_tracker->setNext(user_process_list.user_memory_tracker.get());
 
             /// Track memory usage for all simultaneously running queries.
             /// You should specify this value in configuration for default profile,
             ///  not for specific users, sessions or queries,
             ///  because this setting is effectively global.
-            total_memory_tracker.setOrRaiseLimit(settings.max_memory_usage_for_all_queries);
-            total_memory_tracker.setDescription("(total)");
-            user_process_list.user_memory_tracker.setNext(&total_memory_tracker);
+            total_memory_tracker->setOrRaiseLimit(settings.max_memory_usage_for_all_queries);
+            total_memory_tracker->setBytesThatRssLargerThanLimit(settings.bytes_that_rss_larger_than_limit);
+            total_memory_tracker->setDescription("(total)");
+            total_memory_tracker->setAccuracyDiffForTest(settings.memory_tracker_accuracy_diff_for_test);
+            user_process_list.user_memory_tracker->setNext(total_memory_tracker.get());
         }
 
         if (!total_network_throttler && settings.max_network_bandwidth_for_all_users)
@@ -243,8 +245,8 @@ ProcessListEntry::~ProcessListEntry()
     if (parent.cur_size == 0)
     {
         /// Reset MemoryTracker, similarly (see above).
-        parent.total_memory_tracker.logPeakMemoryUsage();
-        parent.total_memory_tracker.reset();
+        parent.total_memory_tracker->logPeakMemoryUsage();
+        parent.total_memory_tracker->reset();
         parent.total_network_throttler.reset();
     }
 }

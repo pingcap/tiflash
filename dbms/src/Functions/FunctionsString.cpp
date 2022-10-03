@@ -22,22 +22,17 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/CharUtil.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsRound.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
 #include <Functions/GatherUtils/GatherUtils.h>
 #include <Functions/StringUtil.h>
 #include <Functions/castTypeToEither.h>
-#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <fmt/core.h>
-#include <fmt/format.h>
-#include <fmt/printf.h>
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
-#include <thread>
 
 namespace DB
 {
@@ -1094,10 +1089,6 @@ public:
             ReverseImpl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
-        else if (checkColumn<ColumnArray>(column.get()))
-        {
-            DefaultExecutable(std::make_shared<FunctionArrayReverse>()).execute(block, arguments, result);
-        }
         else
             throw Exception(
                 fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
@@ -1194,9 +1185,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!is_injective && !arguments.empty() && checkDataType<DataTypeArray>(arguments[0].get()))
-            return FunctionArrayConcat(context).getReturnTypeImpl(arguments);
-
         if (arguments.size() < 2)
             throw Exception(
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
@@ -1216,9 +1204,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        if (!is_injective && !arguments.empty() && checkDataType<DataTypeArray>(block.getByPosition(arguments[0]).type.get()))
-            return FunctionArrayConcat(context).executeImpl(block, arguments, result);
-
         if (arguments.size() == 2)
             executeBinary(block, arguments, result);
         else
@@ -4396,6 +4381,183 @@ private:
 };
 
 
+class FunctionSpace : public IFunction
+{
+public:
+    static constexpr auto name = "space";
+
+    // tidb mysql.MaxBlobWidth space max input : space(MAX_BLOB_WIDTH+1) will return NULL
+    static constexpr auto MAX_BLOB_WIDTH = 16777216;
+    static const auto APPROX_STRING_SIZE = 64;
+
+    FunctionSpace() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionSpace>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return arguments[0]->onlyNull()
+            ? makeNullable(std::make_shared<DataTypeNothing>())
+            : makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeSpace<UInt8>(block, arguments, result)
+            || executeSpace<UInt16>(block, arguments, result)
+            || executeSpace<UInt32>(block, arguments, result)
+            || executeSpace<UInt64>(block, arguments, result)
+            || executeSpace<Int8>(block, arguments, result)
+            || executeSpace<Int16>(block, arguments, result)
+            || executeSpace<Int32>(block, arguments, result)
+            || executeSpace<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
+
+private:
+    template <typename IntType>
+    bool executeSpace(
+        Block & block,
+        const ColumnNumbers & arguments,
+        const size_t result) const
+    {
+        auto & c0_col = block.getByPosition(arguments[0]);
+
+        auto c0_col_column = c0_col.column;
+
+        size_t val_num = block.rows();
+        auto result_null_map = ColumnUInt8::create(val_num);
+        auto col_res = ColumnString::create();
+        auto & col_res_data = col_res->getChars();
+        auto & col_res_offsets = col_res->getOffsets();
+
+        col_res_offsets.resize(c0_col_column->size());
+
+
+        if (c0_col_column->isColumnConst())
+        {
+            const ColumnConst * col_const_space_num = checkAndGetColumnConst<ColumnVector<IntType>>(c0_col_column.get());
+            if (col_const_space_num == nullptr)
+            {
+                return false;
+            }
+            auto space_num_values = col_const_space_num->getValue<IntType>();
+            Int64 space_num = accurate::lessOp(INT64_MAX, space_num_values) ? INT64_MAX : space_num_values;
+            executeConst(space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
+        }
+        else
+        {
+            const auto * col_vector_space_num = checkAndGetColumn<ColumnVector<IntType>>(c0_col_column.get());
+            if (col_vector_space_num == nullptr)
+            {
+                return false;
+            }
+            executeVector(col_vector_space_num, val_num, result_null_map->getData(), col_res_data, col_res_offsets);
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(col_res), std::move(result_null_map));
+        return true;
+    }
+
+    static void executeConst(
+        Int64 space_num,
+        size_t val_num,
+        ColumnUInt8::Container & result_null_map_data,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        ColumnString::Offset res_offset = 0;
+        auto is_big = false;
+
+        if (space_num < 0)
+        {
+            space_num = 0;
+        }
+
+        if (space_num > MAX_BLOB_WIDTH)
+        {
+            res_data.reserve(val_num);
+            is_big = true;
+            space_num = 0;
+        }
+        else
+        {
+            res_data.reserve(val_num * (space_num + 1));
+        }
+
+        std::string res_string(space_num, ' ');
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            result_null_map_data[row] = false;
+
+            if (is_big)
+            {
+                result_null_map_data[row] = true;
+            }
+            res_data.resize(res_data.size() + space_num + 1);
+
+            memcpy(&res_data[res_offset], &res_string[0], space_num);
+
+            res_data[res_offset + space_num] = '\0';
+            res_offset += space_num + 1;
+            res_offsets[row] = res_offset;
+        }
+    }
+
+    template <typename IntType>
+    static void executeVector(
+        const IntType * col_vector_space_num,
+        size_t val_num,
+        ColumnUInt8::Container & result_null_map_data,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        ColumnString::Offset res_offset = 0;
+        res_data.reserve(val_num * APPROX_STRING_SIZE);
+        const auto & col_vector_space_num_value = col_vector_space_num->getData();
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            result_null_map_data[row] = false;
+
+            Int64 space_num = accurate::lessOp(INT64_MAX, col_vector_space_num_value[row]) ? INT64_MAX : col_vector_space_num_value[row];
+            if (space_num < 0)
+            {
+                space_num = 0;
+            }
+            if (space_num > MAX_BLOB_WIDTH)
+            {
+                result_null_map_data[row] = true;
+                space_num = 0;
+            }
+            res_data.resize(res_data.size() + space_num + 1);
+
+            std::string res_string(space_num, ' ');
+            memcpy(&res_data[res_offset], &res_string[0], space_num);
+
+            res_data[res_offset + space_num] = '\0';
+            res_offset += space_num + 1;
+            res_offsets[row] = res_offset;
+        }
+    }
+};
+
 class FunctionPosition : public IFunction
 {
 public:
@@ -5415,8 +5577,208 @@ public:
             throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
+};
+
+class FunctionElt : public IFunction
+{
+public:
+    static constexpr auto name = "elt";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionElt>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 0; }
+    bool isVariadic() const override { return true; }
+
+    bool useDefaultImplementationForNulls() const override { return false; }
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (arguments.size() < 2)
+            throw Exception(
+                fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isInteger())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", first_argument->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        for (const auto arg_idx : ext::range(1, arguments.size()))
+        {
+            const auto arg = removeNullable(arguments[arg_idx]);
+            if (!arg->isString())
+                throw Exception(
+                    fmt::format("Illegal type {} of argument {} of function {}", arg->getName(), arg_idx + 1, getName()),
+                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+
+        return makeNullable(std::make_shared<DataTypeString>());
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        if (executeElt<UInt8>(block, arguments, result)
+            || executeElt<UInt16>(block, arguments, result)
+            || executeElt<UInt32>(block, arguments, result)
+            || executeElt<UInt64>(block, arguments, result)
+            || executeElt<Int8>(block, arguments, result)
+            || executeElt<Int16>(block, arguments, result)
+            || executeElt<Int32>(block, arguments, result)
+            || executeElt<Int64>(block, arguments, result))
+        {
+            return;
+        }
+        else
+        {
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
+    }
 
 private:
+    using NullMapMutablePtr = COWPtrHelper<DB::ColumnVectorHelper, DB::ColumnVector<unsigned char>>::MutablePtr;
+
+    template <typename IntType>
+    static bool executeElt(Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto * col_arg0 = block.getByPosition(arguments[0]).column.get();
+
+        if (const auto * col = checkAndGetColumnConst<ColumnVector<IntType>>(col_arg0, true))
+        {
+            return constColumn<IntType>(col, block, arguments, result);
+        }
+        else
+        {
+            return vectorColumn<IntType>(col_arg0, block, arguments, result);
+        }
+    }
+
+    static void fillResultColumnNull(ColumnPtr & dst, size_t nrow)
+    {
+        dst = DataTypeNullable(std::make_shared<DataTypeString>()).createColumnConst(nrow, {});
+    }
+
+    static void fillResultColumnFromOther(ColumnPtr & dst, const ColumnPtr & src)
+    {
+        dst = makeNullable(src->cloneResized(src->size()));
+    }
+
+    /// fill the ith element of result column from the ith element of another column
+    /// Note that for efficiency purpose, following preconditions should be satisfied
+    /// 1. res_null_map should already have enough size to contain the ith element and its default value should be 0
+    /// 2. res_offsets should already be resized to be able to contain the ith element, therefore no `push_back` can be used
+    /// 3. res_chars should **not** be sized already for ith element, but can be reserved to have enough space
+    static void fillResultColumnEntry(NullMapMutablePtr & res_null_map, ColumnString::Chars_t & res_chars, IColumn::Offsets & res_offsets, const ColumnPtr & src, const size_t dsti)
+    {
+        if (src->isNullAt(dsti))
+        {
+            res_null_map->getData()[dsti] = true;
+            res_chars.push_back(0);
+            res_offsets[dsti] = dsti == 0 ? 1 : (res_offsets[dsti - 1] + 1);
+            return;
+        }
+
+        /// no need to set res_null_map, since its default value is 0
+
+        /// src col might be ColumnConst(Nullable(ColumnString)) or ColumnCost(ColumnString) or Nullable(ColumnString) or ColumnString
+        /// if it is ColumnConst(...) then we should treat its first element as the ith element
+        size_t srci = dsti;
+        const auto * col_nullable_str = src->isColumnConst()
+            ? (srci = 0, checkAndGetColumnConst<ColumnString>(src.get(), true)->getDataColumnPtr().get())
+            : src.get();
+
+        const auto * col_str = col_nullable_str->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnString>(col_nullable_str)
+            : checkAndGetColumn<ColumnString>(col_nullable_str);
+
+        const auto & src_data = col_str->getChars();
+        const auto & src_offsets = col_str->getOffsets();
+
+        const auto start_offset = StringUtil::offsetAt(src_offsets, srci);
+        const auto str_size = StringUtil::sizeAt(src_offsets, srci);
+
+        const size_t old_size = res_chars.size();
+        const size_t new_size = old_size + str_size;
+
+        res_chars.resize(new_size);
+        memcpy(&res_chars[old_size], &src_data[start_offset], str_size);
+        res_offsets[dsti] = new_size;
+    }
+
+    template <typename IntType>
+    static bool constColumn(const ColumnConst * col, Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto nrow = col->size();
+
+        if (col->onlyNull())
+        {
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
+            return true;
+        }
+
+        /// get the first argument from the const column which still might be nullable
+        const auto arg0 = col->getDataColumnPtr()->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col->getDataColumnPtr().get())->getInt(0)
+            : col->getInt(0);
+
+        if (arg0 < 1 || arg0 >= static_cast<Int64>(arguments.size()))
+        {
+            fillResultColumnNull(block.getByPosition(result).column, nrow);
+        }
+        else
+        {
+            fillResultColumnFromOther(block.getByPosition(result).column, block.getByPosition(arguments[arg0]).column);
+        }
+        return true;
+    }
+
+    template <typename IntType>
+    static bool vectorColumn(const IColumn * col, Block & block, const ColumnNumbers & arguments, size_t result)
+    {
+        const auto narg = arguments.size();
+        const auto nrow = col->size();
+        const auto col_arg0 = col->isColumnNullable()
+            ? checkAndGetNestedColumn<ColumnVector<IntType>>(col)
+            : checkAndGetColumn<ColumnVector<IntType>>(col);
+
+        if (!col_arg0)
+        {
+            return false;
+        }
+
+        const auto & arg0_vec = col_arg0->getData();
+
+        auto res_null_map = ColumnUInt8::create(nrow, false);
+        auto res_col = ColumnString::create();
+        auto & res_chars = res_col->getChars();
+        auto & res_offsets = res_col->getOffsets();
+
+        res_offsets.resize_fill(nrow);
+
+        for (size_t i = 0; i < nrow; ++i)
+        {
+            const auto arg0 = arg0_vec[i];
+
+            if (col_arg0->isNullAt(i) || arg0 < 1 || static_cast<Int64>(arg0) >= static_cast<Int64>(narg))
+            {
+                res_null_map->getData()[i] = true;
+                res_chars.push_back(0);
+                res_offsets[i] = i == 0 ? 1 : (res_offsets[i - 1] + 1);
+            }
+            else
+            {
+                fillResultColumnEntry(res_null_map, res_chars, res_offsets, block.getByPosition(arguments[arg0]).column, i);
+            }
+        }
+
+        block.getByPosition(result).column = ColumnNullable::create(std::move(res_col), std::move(res_null_map));
+        return true;
+    }
 };
 
 // clang-format off
@@ -5506,6 +5868,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionHexStr>();
     factory.registerFunction<FunctionHexInt>();
     factory.registerFunction<FunctionRepeat>();
+    factory.registerFunction<FunctionSpace>();
     factory.registerFunction<FunctionBin>();
+    factory.registerFunction<FunctionElt>();
 }
 } // namespace DB

@@ -135,6 +135,10 @@ __attribute__((always_inline, pure)) inline bool memoryEqualSSE2(const char * p1
 /// this function tries to utilize runtime available vectorization technology.
 /// it performs better than `std::memcmp`, especially for those OS with a
 /// relatively old libc.
+
+// According to https://github.com/pingcap/tiflash/pull/5658
+// - if size of memory area is bigger than 1M, instructions about avx512 may begin to get better results
+// - otherwise, use `std::memcmp(p1,p2,n) == 0` or `mem_utils::avx2_mem_equal`(under x86-64 with avx2)
 __attribute__((always_inline, pure)) inline bool memoryEqual(const char * p1, const char * p2, size_t size) noexcept
 {
     using namespace common;

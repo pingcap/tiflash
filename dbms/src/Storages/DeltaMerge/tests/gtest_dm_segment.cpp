@@ -90,7 +90,6 @@ protected:
         dm_context = std::make_unique<DMContext>(*db_context,
                                                  *storage_path_pool,
                                                  *storage_pool,
-                                                 0,
                                                  /*min_version_*/ 0,
                                                  settings.not_compress_columns,
                                                  false,
@@ -198,7 +197,7 @@ try
 
         // flush segment and make sure there is two packs in stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+        ASSERT_EQ(segment->getStable()->getDMFilesPacks(), 2);
     }
 
     {
@@ -797,7 +796,7 @@ try
 
     // merge segments
     {
-        segment = Segment::merge(dmContext(), tableColumns(), segment, new_segment);
+        segment = Segment::merge(dmContext(), tableColumns(), {segment, new_segment});
         {
             // check merged segment range
             const auto & merged_range = segment->getRowKeyRange();
@@ -1129,7 +1128,7 @@ try
         split_info->other_stable->enableDMFilesGC();
 
         auto lock = segment->mustGetUpdateLock();
-        std::tie(segment, other_segment) = segment->applySplit(dmContext(), segment_snap, wbs, split_info.value());
+        std::tie(segment, other_segment) = segment->applySplit(lock, dmContext(), segment_snap, wbs, split_info.value());
 
         wbs.writeAll();
     }
@@ -1153,15 +1152,15 @@ try
         write_100_rows(other_segment);
         segment->flushCache(dmContext());
 
-        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), segment, left_snap, other_segment, right_snap, wbs);
+        auto merged_stable = Segment::prepareMerge(dmContext(), tableColumns(), {segment, other_segment}, {left_snap, right_snap}, wbs);
 
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC();
 
-        auto left_lock = segment->mustGetUpdateLock();
-        auto right_lock = other_segment->mustGetUpdateLock();
-
-        segment = Segment::applyMerge(dmContext(), segment, left_snap, other_segment, right_snap, wbs, merged_stable);
+        std::vector<Segment::Lock> locks;
+        locks.emplace_back(segment->mustGetUpdateLock());
+        locks.emplace_back(other_segment->mustGetUpdateLock());
+        segment = Segment::applyMerge(locks, dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
 
         wbs.writeAll();
     }

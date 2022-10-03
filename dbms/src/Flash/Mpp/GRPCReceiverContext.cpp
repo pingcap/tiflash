@@ -63,15 +63,17 @@ struct GrpcExchangePacketReader : public ExchangePacketReader
         call = std::make_shared<pingcap::kv::RpcCall<mpp::EstablishMPPConnectionRequest>>(req.req);
     }
 
-    bool read(MPPDataPacketPtr & packet) override
+    bool read(TrackedMppDataPacketPtr & packet) override
     {
-        return reader->Read(packet.get());
+        return packet->read(reader);
     }
 
     ::grpc::Status finish() override
     {
         return reader->Finish();
     }
+
+    void cancel(const String &) override {}
 };
 
 struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
@@ -101,9 +103,9 @@ struct AsyncGrpcExchangePacketReader : public AsyncExchangePacketReader
             callback);
     }
 
-    void read(MPPDataPacketPtr & packet, UnaryCallback<bool> * callback) override
+    void read(TrackedMppDataPacketPtr & packet, UnaryCallback<bool> * callback) override
     {
-        reader->Read(packet.get(), callback);
+        packet->read(reader, callback);
     }
 
     void finish(::grpc::Status & status, UnaryCallback<bool> * callback) override
@@ -127,24 +129,36 @@ struct LocalExchangePacketReader : public ExchangePacketReader
         if (local_tunnel_sender)
         {
             // In case that ExchangeReceiver throw error before finish reading from mpp_tunnel
-            local_tunnel_sender->consumerFinish("Receiver closed");
+            local_tunnel_sender->consumerFinish("Receiver exists");
+            local_tunnel_sender.reset();
         }
     }
 
-    bool read(MPPDataPacketPtr & packet) override
+    bool read(TrackedMppDataPacketPtr & packet) override
     {
-        MPPDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
+        TrackedMppDataPacketPtr tmp_packet = local_tunnel_sender->readForLocal();
         bool success = tmp_packet != nullptr;
         if (success)
             packet = tmp_packet;
         return success;
     }
 
+    void cancel(const String & reason) override
+    {
+        if (local_tunnel_sender)
+        {
+            local_tunnel_sender->consumerFinish(fmt::format("Receiver cancelled, reason: {}", reason));
+            local_tunnel_sender.reset();
+        }
+    }
+
     ::grpc::Status finish() override
     {
         if (local_tunnel_sender)
+        {
             local_tunnel_sender->consumerFinish("Receiver finished!");
-        local_tunnel_sender.reset();
+            local_tunnel_sender.reset();
+        }
         return ::grpc::Status::OK;
     }
 };
@@ -154,23 +168,14 @@ std::tuple<MPPTunnelPtr, grpc::Status> establishMPPConnectionLocal(
     const std::shared_ptr<MPPTaskManager> & task_manager)
 {
     std::chrono::seconds timeout(10);
-    String err_msg;
-    MPPTunnelPtr tunnel = nullptr;
+    auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
+    if (tunnel == nullptr)
     {
-        MPPTaskPtr sender_task = task_manager->findTaskWithTimeout(request->sender_meta(), timeout, err_msg);
-        if (sender_task != nullptr)
-        {
-            std::tie(tunnel, err_msg) = sender_task->getTunnel(request);
-        }
-        if (tunnel == nullptr)
-        {
-            return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
-        }
+        return std::make_tuple(tunnel, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
     }
     if (!tunnel->isLocal())
     {
-        String err_msg("EstablishMPPConnectionLocal into a remote channel !");
-        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, err_msg));
+        return std::make_tuple(nullptr, grpc::Status(grpc::StatusCode::INTERNAL, "EstablishMPPConnectionLocal into a remote channel!"));
     }
     tunnel->connect(nullptr);
     return std::make_tuple(tunnel, grpc::Status::OK);
@@ -205,8 +210,8 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.send_task_id = sender_task->task_id();
     req.recv_task_id = task_meta.task_id();
     req.req = std::make_shared<mpp::EstablishMPPConnectionRequest>();
-    req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta));
-    req.req->set_allocated_sender_meta(sender_task.release());
+    req.req->set_allocated_receiver_meta(new mpp::TaskMeta(task_meta)); // NOLINT
+    req.req->set_allocated_sender_meta(sender_task.release()); // NOLINT
     return req;
 }
 

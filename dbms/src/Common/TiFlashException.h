@@ -96,6 +96,23 @@ namespace DB
             "This error usually occurs when the TiFlash server is busy or the TiFlash node is down.\n",                              \
             "");                                                                                                                     \
         )                                                                                                                            \
+    C(Planner,                                                                                                                       \
+        E(BadRequest, "Bad TiDB DAGRequest.",                                                                                        \
+            "This error is usually caused by incorrect TiDB DAGRequest. \n"                                                          \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        E(Unimplemented, "Some features are unimplemented.",                                                                         \
+            "This error may caused by unmatched TiDB and TiFlash versions, \n"                                                       \
+            "and should not occur in common case. \n"                                                                                \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        E(Internal, "TiFlash Planner internal error.",                                                                               \
+            "Please contact with developer, \n"                                                                                      \
+            "better providing information about your cluster(log, topology information etc.).",                                      \
+            "");                                                                                                                     \
+        )                                                                                                                            \
     C(Table,                                                                                                                         \
         E(SchemaVersionError, "Schema version of target table in TiFlash is different from that in query.",                          \
             "TiFlash will sync the newest schema from TiDB before processing every query. \n"                                        \
