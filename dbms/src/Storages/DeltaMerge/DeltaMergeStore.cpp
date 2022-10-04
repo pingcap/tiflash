@@ -1051,8 +1051,8 @@ std::vector<SourcePtr> DeltaMergeStore::readSources(const Context & db_context,
     // 'try_split_task' can result in several read tasks with the same id that can cause some trouble.
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
-
-    auto tracing_logger = Logger::get(log->name(), dm_context->tracing_id);
+    auto log_tracing_id = getLogTracingId(*dm_context);
+    auto tracing_logger = Logger::get(log->name(), log_tracing_id);
     LOG_FMT_DEBUG(tracing_logger,
                   "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
                   keep_order,
@@ -1077,10 +1077,8 @@ std::vector<SourcePtr> DeltaMergeStore::readSources(const Context & db_context,
         /* do_delete_mark_filter_for_raw = */ is_fast_scan,
         std::move(tasks),
         after_segment_read,
-        tracing_id);
+        log_tracing_id);
 
-    RUNTIME_CHECK(db_context.getDAGContext() != nullptr && db_context.getDAGContext()->isMPPTask());
-    String req_info = db_context.getDAGContext()->getMPPTaskId().toString();
     RUNTIME_CHECK(enable_read_thread);
     std::vector<SourcePtr> res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1090,10 +1088,9 @@ std::vector<SourcePtr> DeltaMergeStore::readSources(const Context & db_context,
             columns_to_read,
             extra_table_id_index,
             physical_table_id,
-            req_info);
+            log_tracing_id);
         res.push_back(source);
     }
-    SegmentReadTaskScheduler::instance().add(read_task_pool);
     LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
 
     return res;

@@ -19,6 +19,7 @@
 
 namespace DB
 {
+// copy from UnorderedInputStream
 class UnorderSource : public Source
 {
 public:
@@ -34,6 +35,7 @@ public:
         , physical_table_id(physical_table_id)
         , log(Logger::get("UnorderSource", req_id))
         , ref_no(0)
+        , task_pool_added(false)
     {
         if (extra_table_id_index != InvalidColumnID)
         {
