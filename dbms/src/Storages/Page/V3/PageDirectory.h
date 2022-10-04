@@ -134,6 +134,14 @@ struct EntryOrDelete
 class VersionedPageEntries;
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 using PageLock = std::lock_guard<std::mutex>;
+
+enum class ResolveResult
+{
+    FAIL,
+    TO_REF,
+    TO_NORMAL,
+};
+
 class VersionedPageEntries
 {
 public:
@@ -161,12 +169,6 @@ public:
 
     std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
-    enum ResolveResult
-    {
-        RESOLVE_FAIL,
-        RESOLVE_TO_REF,
-        RESOLVE_TO_NORMAL,
-    };
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
     resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
