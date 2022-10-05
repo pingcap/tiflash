@@ -589,10 +589,13 @@ public:
 
     String db_name;
     String table_name;
-    TableID physical_table_id;
 
-    bool is_common_handle;
-    size_t rowkey_column_size;
+    const TableID physical_table_id;
+
+    const std::string child_log_prefix;
+
+    const bool is_common_handle;
+    const size_t rowkey_column_size;
 
     ColumnDefines original_table_columns;
     BlockPtr original_table_header; // Used to speed up getHeader()
