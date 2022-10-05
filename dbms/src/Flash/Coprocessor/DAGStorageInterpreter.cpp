@@ -657,7 +657,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
-        query_info.req_id = fmt::format("{} Table<{}>", log->identifier(), table_id);
+        query_info.req_id = fmt::format("{} table_id={}", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
         query_info.is_fast_scan = table_scan.isFastScan();
         return query_info;

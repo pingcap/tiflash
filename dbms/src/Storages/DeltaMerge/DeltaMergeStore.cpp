@@ -971,7 +971,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
-    auto tracing_logger = Logger::get(log->name(), log_tracing_id);
+    auto tracing_logger = log->getChild(log_tracing_id);
     LOG_FMT_DEBUG(tracing_logger,
                   "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
                   keep_order,
@@ -1767,7 +1767,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         total_ranges += task->ranges.size();
     }
 
-    auto tracing_logger = Logger::get(log->name(), getLogTracingId(dm_context));
+    auto tracing_logger = log->getChild(getLogTracingId(dm_context));
     LOG_FMT_DEBUG(
         tracing_logger,
         "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
@@ -1787,7 +1787,7 @@ String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
     }
     else
     {
-        return fmt::format("Table<{}>", physical_table_id);
+        return fmt::format("table_id={}", physical_table_id);
     }
 }
 } // namespace DM

@@ -471,7 +471,7 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
         dm_context.tracing_id);
 
     LOG_TRACE(
-        Logger::get(log->name(), log->identifier(), dm_context.tracing_id),
+        log->getChild(dm_context.tracing_id),
         "Finish segment create input stream, max_version={} range_size={} ranges={}",
         max_version,
         real_ranges.size(),
@@ -1705,7 +1705,7 @@ Segment::ReadInfo Segment::getReadInfo(const DMContext & dm_context,
                                        const RowKeyRanges & read_ranges,
                                        UInt64 max_version) const
 {
-    auto tracing_logger = Logger::get(log->name(), log->identifier(), dm_context.tracing_id);
+    auto tracing_logger = log->getChild(dm_context.tracing_id);
     LOG_FMT_DEBUG(tracing_logger, "Begin segment getReadInfo");
 
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
