@@ -22,7 +22,7 @@ namespace DB
 namespace DM
 {
 
-static inline DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *
+static inline auto *
 toConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
 {
     return dynamic_cast<DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *>(ptr.get());
@@ -45,7 +45,7 @@ StoreStats DeltaMergeStore::getStoreStats()
     Int64 total_delta_valid_cache_rows = 0;
     for (const auto & [handle, segment] : segments)
     {
-        (void)handle;
+        UNUSED(handle);
         const auto & delta = segment->getDelta();
         const auto & stable = segment->getStable();
 
@@ -119,8 +119,7 @@ StoreStats DeltaMergeStore::getStoreStats()
         stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
         PageStorage::SnapshotPtr stable_snapshot = storage_pool->dataReader()->getSnapshot(useless_tracing_id);
-        const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
-        if (concrete_snap)
+        if (const auto * concrete_snap = toConcreteSnapshot(stable_snapshot); concrete_snap != nullptr)
         {
             if (const auto * const version = concrete_snap->version(); version != nullptr)
             {
@@ -130,7 +129,7 @@ StoreStats DeltaMergeStore::getStoreStats()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=data");
+                LOG_ERROR(log, "Can't get any version from current snapshot, type=data");
             }
         }
     }
@@ -141,8 +140,7 @@ StoreStats DeltaMergeStore::getStoreStats()
         stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
         PageStorage::SnapshotPtr log_snapshot = storage_pool->logReader()->getSnapshot(useless_tracing_id);
-        const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
-        if (concrete_snap)
+        if (const auto * concrete_snap = toConcreteSnapshot(log_snapshot); concrete_snap != nullptr)
         {
             if (const auto * const version = concrete_snap->version(); version != nullptr)
             {
@@ -152,7 +150,7 @@ StoreStats DeltaMergeStore::getStoreStats()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=log");
+                LOG_ERROR(log, "Can't get any version from current snapshot, type=log");
             }
         }
     }
@@ -163,8 +161,7 @@ StoreStats DeltaMergeStore::getStoreStats()
         stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
         stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
         PageStorage::SnapshotPtr meta_snapshot = storage_pool->metaReader()->getSnapshot(useless_tracing_id);
-        const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
-        if (concrete_snap)
+        if (const auto * concrete_snap = toConcreteSnapshot(meta_snapshot); concrete_snap != nullptr)
         {
             if (const auto * const version = concrete_snap->version(); version != nullptr)
             {
@@ -174,7 +171,7 @@ StoreStats DeltaMergeStore::getStoreStats()
             }
             else
             {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=meta");
+                LOG_ERROR(log, "Can't get any version from current snapshot, type=meta");
             }
         }
     }
