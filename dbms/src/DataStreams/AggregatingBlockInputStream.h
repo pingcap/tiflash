@@ -40,7 +40,7 @@ public:
         const FileProviderPtr & file_provider_,
         bool final_,
         const String & req_id)
-        : log(Logger::get(NAME, req_id))
+        : log(Logger::get(req_id))
         , params(params_)
         , aggregator(params, req_id)
         , file_provider{file_provider_}

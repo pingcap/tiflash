@@ -128,7 +128,7 @@ public:
     MultiplexInputStream(
         std::shared_ptr<MultiPartitionStreamPool> & shared_pool,
         const String & req_id)
-        : log(Logger::get(NAME, req_id))
+        : log(Logger::get(req_id))
         , shared_pool(shared_pool)
     {
         shared_pool->exportAddedStreams(children);

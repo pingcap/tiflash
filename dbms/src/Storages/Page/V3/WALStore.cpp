@@ -71,7 +71,7 @@ WALStore::WALStore(
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
-    , logger(Logger::get("WALStore", storage_name))
+    , logger(Logger::get(storage_name))
     , config(config_)
 {
 }

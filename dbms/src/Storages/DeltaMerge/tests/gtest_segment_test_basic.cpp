@@ -47,7 +47,7 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
         random = std::mt19937{seed};
     }
 
-    logger = Logger::get("SegmentTest");
+    logger = Logger::get();
     logger_op = Logger::get("SegmentTestOperation");
 
     TiFlashStorageTestBasic::SetUp();

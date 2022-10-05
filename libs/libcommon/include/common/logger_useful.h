@@ -18,6 +18,7 @@
 
 #include <Poco/Logger.h>
 #include <common/MacroUtils.h>
+#include <fmt/compile.h>
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
@@ -40,14 +41,6 @@ inline constexpr size_t getFileNameOffset(T (&/*str*/)[1])
     return 0;
 }
 
-template <typename S, typename... Args>
-std::string toCheckedFmtStr(const S & format, Args &&... args)
-{
-    // The second arg is the same as `format`, just ignore
-    // Apply `make_args_checked` for checks `format` validity at compile time.
-    // https://fmt.dev/latest/api.html#argument-lists
-    return fmt::vformat(format, fmt::make_args_checked<Args...>(format, args...));
-}
 } // namespace LogFmtDetails
 
 /// Logs a message to a specified logger with that level.
@@ -69,21 +62,26 @@ std::string toCheckedFmtStr(const S & format, Args &&... args)
     } while (false)
 
 
-#define LOG_IMPL_0(logger, PRIORITY, message)        \
-    do                                               \
-    {                                                \
-        if ((logger)->is((PRIORITY)))                \
-            LOG_INTERNAL(logger, PRIORITY, message); \
+#define LOG_IMPL_0(logger, PRIORITY, message) \
+    do                                        \
+    {                                         \
+        if ((logger)->is(PRIORITY))           \
+            LOG_INTERNAL(                     \
+                logger,                       \
+                PRIORITY,                     \
+                message);                     \
     } while (false)
 
-#define LOG_IMPL_1(logger, PRIORITY, fmt_str, ...)                                            \
-    do                                                                                        \
-    {                                                                                         \
-        if ((logger)->is((PRIORITY)))                                                         \
-        {                                                                                     \
-            auto _message = LogFmtDetails::toCheckedFmtStr(FMT_STRING(fmt_str), __VA_ARGS__); \
-            LOG_INTERNAL(logger, PRIORITY, _message);                                         \
-        }                                                                                     \
+#define LOG_IMPL_1(logger, PRIORITY, fmt_str, ...)               \
+    do                                                           \
+    {                                                            \
+        if ((logger)->is(PRIORITY))                              \
+        {                                                        \
+            LOG_INTERNAL(                                        \
+                logger,                                          \
+                PRIORITY,                                        \
+                fmt::format(FMT_COMPILE(fmt_str), __VA_ARGS__)); \
+        }                                                        \
     } while (false)
 
 #define LOG_IMPL_CHOSER(...) TF_GET_29TH_ARG(__VA_ARGS__, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_1, LOG_IMPL_0)

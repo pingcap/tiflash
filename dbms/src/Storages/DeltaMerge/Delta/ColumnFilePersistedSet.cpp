@@ -100,7 +100,7 @@ ColumnFilePersistedSet::ColumnFilePersistedSet( //
     PageId metadata_id_,
     const ColumnFilePersisteds & persisted_column_files)
     : metadata_id(metadata_id_)
-    , log(Logger::get("ColumnFilePersistedSet", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get(log_prefix_))
 {
     // TODO: place column file to different levels, but it seems no need to do it currently because we only do minor compaction on really small files?
     persisted_files_levels.push_back(persisted_column_files);

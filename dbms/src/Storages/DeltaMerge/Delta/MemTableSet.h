@@ -55,7 +55,7 @@ public:
     explicit MemTableSet(const std::string & log_prefix_, const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
         : last_schema(last_schema_)
         , column_files(in_memory_files)
-        , log(Logger::get("MemTableSet", fmt::format("<{}>", log_prefix_)))
+        , log(Logger::get(log_prefix_))
     {
         column_files_count = column_files.size();
         for (const auto & file : column_files)

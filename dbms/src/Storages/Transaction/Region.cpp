@@ -776,7 +776,7 @@ Region::Region(RegionMeta && meta_)
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))
-    , log(&Poco::Logger::get("Region"))
+    , log(Logger::get())
     , mapped_table_id(meta.getRange()->getMappedTableID())
     , proxy_helper(proxy_helper_)
 {}

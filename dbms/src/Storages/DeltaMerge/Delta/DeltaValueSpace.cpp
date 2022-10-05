@@ -34,14 +34,14 @@ DeltaValueSpace::DeltaValueSpace(const std::string & log_prefix_, PageId id_, co
     : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(log_prefix_, id_, persisted_files))
     , mem_table_set(std::make_shared<MemTableSet>(log_prefix_, persisted_file_set->getLastSchema(), in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
-    , log(Logger::get("DeltaValueSpace", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get(log_prefix_))
 {}
 
 DeltaValueSpace::DeltaValueSpace(const std::string & log_prefix_, ColumnFilePersistedSetPtr && persisted_file_set_)
     : persisted_file_set(std::move(persisted_file_set_))
     , mem_table_set(std::make_shared<MemTableSet>(log_prefix_, persisted_file_set->getLastSchema()))
     , delta_index(std::make_shared<DeltaIndex>())
-    , log(Logger::get("DeltaValueSpace", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get(log_prefix_))
 {}
 
 void DeltaValueSpace::abandon(DMContext & context)

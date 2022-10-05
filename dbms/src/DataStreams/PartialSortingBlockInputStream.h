@@ -35,7 +35,7 @@ public:
         size_t limit_ = 0)
         : description(description_)
         , limit(limit_)
-        , log(Logger::get(NAME, req_id))
+        , log(Logger::get(req_id))
     {
         children.push_back(input_);
     }

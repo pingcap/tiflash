@@ -21,7 +21,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & join_probe_actions_,
     const String & req_id)
-    : log(Logger::get(name, req_id))
+    : log(Logger::get(req_id))
     , join_probe_actions(join_probe_actions_)
 {
     children.push_back(input);

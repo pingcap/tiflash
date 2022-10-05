@@ -210,7 +210,7 @@ Segment::Segment( //
     , delta(delta_)
     , stable(stable_)
     , log_prefix(log_prefix_)
-    , log(Logger::get("Segment", logId()))
+    , log(Logger::get(logId()))
 {}
 
 SegmentPtr Segment::newSegment( //
@@ -1617,7 +1617,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context)
 
 String Segment::logId() const
 {
-    return fmt::format("<{} segment_id={} epoch={}>",
+    return fmt::format("{} segment_id={} epoch={}",
                        log_prefix,
                        segment_id,
                        epoch);

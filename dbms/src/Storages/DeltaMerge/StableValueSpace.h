@@ -44,7 +44,7 @@ public:
      */
     StableValueSpace(const std::string & log_prefix, PageId id_)
         : id(id_)
-        , log(Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix)))
+        , log(Logger::get(log_prefix))
     {}
 
     /**
@@ -54,7 +54,7 @@ public:
      */
     void resetLogger(const std::string & log_prefix)
     {
-        log = Logger::get("StableValueSpace", fmt::format("<{}>", log_prefix));
+        log = Logger::get(log_prefix);
     }
 
     // Set DMFiles for this value space.
@@ -157,7 +157,7 @@ public:
 
         Snapshot(StableValueSpacePtr stable_)
             : stable(stable_)
-            , log(Logger::get("StableValueSpace::Snapshot", stable->log->identifier()))
+            , log(stable->log)
         {}
 
         SnapshotPtr clone() const

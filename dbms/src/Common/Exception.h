@@ -203,7 +203,7 @@ const LoggerPtr & getDefaultFatalLogger();
 template <typename... Args>
 inline void log(const char * filename, int lineno, const char * condition, const LoggerPtr & logger, Args &&... args)
 {
-    if (logger->fatal())
+    if (logger->is(Poco::Message::Priority::PRIO_FATAL))
     {
         auto message = generateLogMessage(
             logger->name(),

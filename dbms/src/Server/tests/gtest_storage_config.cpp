@@ -37,7 +37,7 @@ class StorageConfigTest : public ::testing::Test
 {
 public:
     StorageConfigTest()
-        : log(Logger::get("StorageConfigTest"))
+        : log(Logger::get())
     {}
 
     static void SetUpTestCase() {}
@@ -368,7 +368,7 @@ dir = "/data0/tiflash,/data1/tiflash"
         R"(
 [storage]
 [storage.main]
-dir = [ "/data0/tiflash", "/data1/tiflash" ] 
+dir = [ "/data0/tiflash", "/data1/tiflash" ]
 [storage.latest]
 dir = "/data0/tiflash"
         )",
@@ -376,7 +376,7 @@ dir = "/data0/tiflash"
         R"(
 [storage]
 [storage.main]
-dir = [ "/data0/tiflash", "/data1/tiflash" ] 
+dir = [ "/data0/tiflash", "/data1/tiflash" ]
 [storage.raft]
 dir = "/data0/tiflash"
         )",
@@ -449,7 +449,7 @@ dir=["/data0/tiflash"]
 capacity=[ 1024 ]
         )",
     };
-    auto log = Logger::get("PathCapacityMetrics_test");
+    auto log = Logger::get();
 
     for (size_t i = 0; i < tests.size(); ++i)
     {
@@ -603,7 +603,7 @@ background_read_weight=2
         )",
     };
 
-    auto log = Logger::get("StorageIORateLimitConfigTest");
+    auto log = Logger::get();
 
     auto verify_default = [](const StorageIORateLimitConfig & io_config) {
         ASSERT_EQ(io_config.max_bytes_per_sec, 0);

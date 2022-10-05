@@ -290,7 +290,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , table_scan(table_scan_)
     , push_down_filter(push_down_filter_)
     , max_streams(max_streams_)
-    , log(Logger::get("DAGStorageInterpreter", context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
+    , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())

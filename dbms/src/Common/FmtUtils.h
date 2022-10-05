@@ -14,35 +14,43 @@
 
 #pragma once
 
+#include <fmt/compile.h>
 #include <fmt/format.h>
 
 namespace DB
 {
+
 class FmtBuffer
 {
 public:
     FmtBuffer() = default;
 
-    template <typename... Args>
-    FmtBuffer & fmtAppend(std::string_view fmt, Args &&... args)
+    template <typename FmtStr, typename... Args>
+    inline FmtBuffer & fmtAppend(FmtStr fmt, Args &&... args)
     {
-        fmt::vformat_to(std::back_inserter(buffer), fmt, fmt::make_format_args(std::forward<Args>(args)...));
+        fmt::format_to(std::back_inserter(buffer), fmt, std::forward<Args>(args)...);
         return *this;
     }
 
-    FmtBuffer & append(std::string_view s)
+    inline FmtBuffer & append(std::string_view s)
     {
         buffer.append(s.data(), s.data() + s.size());
         return *this;
     }
 
-    std::string toString() const
+    inline FmtBuffer & append(const char & ch)
+    {
+        buffer.push_back(ch);
+        return *this;
+    }
+
+    inline std::string toString() const
     {
         return fmt::to_string(buffer);
     }
 
     template <typename Iter>
-    FmtBuffer & joinStr(
+    inline FmtBuffer & joinStr(
         Iter first,
         Iter end)
     {
@@ -80,9 +88,15 @@ public:
         return *this;
     }
 
-    void resize(size_t count) { buffer.resize(count); }
-    void reserve(size_t capacity) { buffer.reserve(capacity); }
-    void clear() { buffer.clear(); }
+    inline void resize(size_t count) { buffer.resize(count); }
+
+    inline void reserve(size_t capacity) { buffer.reserve(capacity); }
+
+    inline size_t capacity() { return buffer.capacity(); }
+
+    inline size_t size() { return buffer.size(); }
+
+    inline void clear() { buffer.clear(); }
 
 private:
     fmt::memory_buffer buffer;

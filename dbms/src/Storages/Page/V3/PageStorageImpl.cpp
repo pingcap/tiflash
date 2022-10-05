@@ -42,7 +42,7 @@ PageStorageImpl::PageStorageImpl(
     const Config & config_,
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
-    , log(Logger::get("PageStorage", name))
+    , log(Logger::get(name))
     , blob_store(name, file_provider_, delegator, parseBlobConfig(config_))
 {
     LOG_FMT_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());

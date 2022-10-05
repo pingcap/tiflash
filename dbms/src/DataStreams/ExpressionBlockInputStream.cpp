@@ -22,7 +22,7 @@ ExpressionBlockInputStream::ExpressionBlockInputStream(
     const ExpressionActionsPtr & expression_,
     const String & req_id)
     : expression(expression_)
-    , log(Logger::get(NAME, req_id))
+    , log(Logger::get(req_id))
 {
     children.push_back(input);
 }

@@ -45,7 +45,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
 #include <Common/TiFlashBuildInfo.h>
-#include <Common/UnifiedLogPatternFormatter.h>
+#include <Common/UnifiedLogFormatter.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/setThreadName.h>
 #include <Flash/Mpp/getMPPTaskTracingLog.h>
@@ -768,8 +768,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         std::cerr << "Logging " << log_level << " to " << log_path << std::endl;
 
         // Set up two channel chains.
-        Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
-        pf->setProperty("times", "local");
+        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter();
         Poco::AutoPtr<FormattingChannel> log = new FormattingChannel(pf);
         log_file = new Poco::TiFlashLogFileChannel;
         log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(log_path).absolute().toString());
@@ -792,8 +791,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         std::cerr << "Logging errors to " << errorlog_path << std::endl;
         Poco::AutoPtr<Poco::LevelFilterChannel> level = new Poco::LevelFilterChannel;
         level->setLevel(Message::PRIO_NOTICE);
-        Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
-        pf->setProperty("times", "local");
+        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter();
         Poco::AutoPtr<FormattingChannel> errorlog = new FormattingChannel(pf);
         error_log_file = new Poco::TiFlashLogFileChannel;
         error_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(errorlog_path).absolute().toString());
@@ -818,8 +816,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
         /// to filter the tracing log.
         Poco::AutoPtr<Poco::SourceFilterChannel> source = new Poco::SourceFilterChannel;
         source->setSource(DB::tracing_log_source);
-        Poco::AutoPtr<DB::UnifiedLogPatternFormatter> pf = new DB::UnifiedLogPatternFormatter();
-        pf->setProperty("times", "local");
+        Poco::AutoPtr<DB::UnifiedLogFormatter> pf = new DB::UnifiedLogFormatter();
         Poco::AutoPtr<FormattingChannel> tracing_log = new FormattingChannel(pf);
         tracing_log_file = new Poco::TiFlashLogFileChannel;
         tracing_log_file->setProperty(Poco::FileChannel::PROP_PATH, Poco::Path(tracing_log_path).absolute().toString());

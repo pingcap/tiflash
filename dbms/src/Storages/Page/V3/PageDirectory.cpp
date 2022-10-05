@@ -735,7 +735,7 @@ PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 ma
     , sequence(0)
     , wal(std::move(wal_))
     , max_persisted_log_files(max_persisted_log_files_)
-    , log(Logger::get("PageDirectory", std::move(storage_name)))
+    , log(Logger::get(storage_name))
 {
 }
 

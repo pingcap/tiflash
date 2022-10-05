@@ -64,7 +64,7 @@ public:
         , do_delete_mark_filter_for_raw(do_delete_mark_filter_for_raw_)
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(Logger::get(NAME, req_id))
+        , log(Logger::get(req_id))
     {
         if (extra_table_id_index != InvalidColumnID)
         {

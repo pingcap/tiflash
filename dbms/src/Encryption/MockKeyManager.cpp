@@ -42,7 +42,7 @@ MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, co
     , key{key_}
     , iv{iv}
     , encryption_enabled{encryption_enabled_}
-    , logger(DB::Logger::get("MockKeyManager"))
+    , logger(DB::Logger::get())
 {}
 
 FileEncryptionInfo MockKeyManager::newFile(const String & fname)
