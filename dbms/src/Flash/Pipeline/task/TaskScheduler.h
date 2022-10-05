@@ -20,7 +20,6 @@
 #include <Server/ServerInfo.h>
 
 #include <functional>
-#include <random>
 
 namespace DB
 {
@@ -43,10 +42,6 @@ private:
     // numa nodes<logical cpus>
     std::vector<std::vector<EventLoopPtr>> numa_event_loops;
     size_t total_event_loop_num = 0;
-
-    std::mt19937 gen;
-    std::uniform_int_distribution<size_t> numa_dis;
-    std::vector<std::uniform_int_distribution<size_t>> event_loop_dis;
 
     LoggerPtr log = Logger::get("TaskScheduler");
 };
