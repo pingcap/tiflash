@@ -38,23 +38,21 @@ using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
 public:
-    /**
-     * Note: `StableValueSpace` is a special case, the `log_prefix_` may be not known when it is built
-     * (see prepareSplit). So we allow `resetLogger` later.
-     */
-    StableValueSpace(const std::string & log_prefix, PageId id_)
+    StableValueSpace(PageId id_)
         : id(id_)
-        , log(Logger::get(log_prefix))
+        , log(Logger::get())
     {}
 
+    static StableValueSpacePtr restore(DMContext & context, PageId id);
+
     /**
-     * This is a hack to allow reset the logger using a new `log_prefix`.
-     * We don't know the exact segment id when StableValueSpace is constructed during
-     * prepareSplit.
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
      */
-    void resetLogger(const std::string & log_prefix)
+    void resetLogger(const LoggerPtr & segment_log)
     {
-        log = Logger::get(log_prefix);
+        log = segment_log;
     }
 
     // Set DMFiles for this value space.
@@ -106,8 +104,6 @@ public:
     size_t getDMFilesBytes() const;
 
     void enableDMFilesGC();
-
-    static StableValueSpacePtr restore(const std::string & log_prefix, DMContext & context, PageId id);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 

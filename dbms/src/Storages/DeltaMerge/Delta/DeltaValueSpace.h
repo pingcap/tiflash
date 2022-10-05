@@ -99,13 +99,25 @@ private:
     LoggerPtr log;
 
 public:
-    explicit DeltaValueSpace(const std::string & log_prefix_, PageId id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
+    explicit DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
 
-    explicit DeltaValueSpace(const std::string & log_prefix_, ColumnFilePersistedSetPtr && persisted_file_set_);
+    explicit DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_);
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static DeltaValueSpacePtr restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+
+    /**
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
+     */
+    void resetLogger(const LoggerPtr & segment_log)
+    {
+        log = segment_log;
+        mem_table_set->resetLogger(segment_log);
+        persisted_file_set->resetLogger(segment_log);
+    }
 
     /// The following two methods are just for test purposes
     MemTableSetPtr getMemTableSet() const { return mem_table_set; }

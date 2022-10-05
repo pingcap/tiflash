@@ -77,11 +77,21 @@ private:
     void checkColumnFiles(const ColumnFilePersistedLevels & new_column_file_levels);
 
 public:
-    explicit ColumnFilePersistedSet(const std::string & log_prefix_, PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
+    explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static ColumnFilePersistedSetPtr restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+
+    /**
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
+     */
+    void resetLogger(const LoggerPtr & segment_log)
+    {
+        log = segment_log;
+    }
 
     /// Thread safe part start
     String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }
