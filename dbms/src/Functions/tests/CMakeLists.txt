@@ -17,3 +17,6 @@ include_directories (${CMAKE_CURRENT_BINARY_DIR})
 # Do not add this source file to gtests_dbms since it has its own main function.
 add_executable (number_traits number_traits.cpp)
 target_link_libraries (number_traits dbms)
+
+add_executable (strings_bit_length gtest_strings_bit_length.cpp)
+target_link_libraries (strings_bit_length dbms gtest_main clickhouse_functions)
