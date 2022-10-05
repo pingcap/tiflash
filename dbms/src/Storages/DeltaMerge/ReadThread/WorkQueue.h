@@ -136,12 +136,15 @@ public:
         {
             std::unique_lock<std::mutex> lock(mu);
             pop_times++;
-            if (done)
-                return true;
             if (queue.empty())
             {
-                pop_empty_times++;
-                return false;
+                if (done)
+                    return true;
+                else
+                {
+                    pop_empty_times++;
+                    return false;
+                }
             }
             item = std::move(queue.front());
             queue.pop();
