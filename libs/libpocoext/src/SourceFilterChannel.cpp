@@ -61,7 +61,9 @@ const std::string & SourceFilterChannel::getSource() const
 
 void SourceFilterChannel::log(const Message & msg)
 {
-    if ((target_source == msg.getSource()) && channel)
+    // There may be other identifiers in the msg source.
+    // Let's just check whether target_source is contained.
+    if (msg.getSource().find(target_source) != std::string::npos && channel)
         channel->log(msg);
 }
 } // namespace Poco
