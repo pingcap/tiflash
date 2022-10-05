@@ -86,9 +86,9 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
+StableValueSpacePtr StableValueSpace::restore(const std::string & log_prefix, DMContext & context, PageId id)
 {
-    auto stable = std::make_shared<StableValueSpace>(id);
+    auto stable = std::make_shared<StableValueSpace>(log_prefix, id);
 
     Page page = context.storage_pool.metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -312,11 +312,10 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap = std::make_shared<Snapshot>();
+    auto snap = std::make_shared<Snapshot>(this->shared_from_this());
     snap->id = id;
     snap->valid_rows = valid_rows;
     snap->valid_bytes = valid_bytes;
-    snap->stable = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
