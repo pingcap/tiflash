@@ -1362,10 +1362,10 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & name_col = columns[0];
     auto & value_col = columns[1];
 
-    DeltaMergeStoreStat stat;
+    StoreStats stat;
     if (storeInited())
     {
-        stat = _store->getStat();
+        stat = _store->getStoreStats();
     }
 
 #define INSERT_INT(NAME)             \
