@@ -180,6 +180,7 @@ UnifiedLogFormatter::JsonEncodeKind UnifiedLogFormatter::needJsonEncode(const st
         if (unlikely(byte <= 0x20 || byte == 0x22 || byte == 0x3D || byte == 0x5B || byte == 0x5D))
             // See https://github.com/tikv/rfcs/blob/master/text/0018-unified-log-format.md#log-fields-section
             needs_quote = true;
+        // NOLINTNEXTLINE
         if (unlikely(byte <= 0x1F || byte == '\n' || byte == '\r' || byte == '\t' || byte == '\\' || byte == '"'))
             json_encode_cannot_copy = true;
         if (unlikely(needs_quote && json_encode_cannot_copy))

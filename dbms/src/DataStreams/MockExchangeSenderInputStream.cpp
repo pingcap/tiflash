@@ -25,7 +25,7 @@ MockExchangeSenderInputStream::MockExchangeSenderInputStream(
 
 Block MockExchangeSenderInputStream::getTotals()
 {
-    if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
+    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
     {
         totals = child->getTotals();
     }
