@@ -4531,8 +4531,6 @@ public:
 
             String c0_str = c0_field.get<String>();
             String c1_str = c1_field.get<String>();
-            // std::transform(c0_str.begin(), c0_str.end(), c0_str.begin(), asciitolower);
-            // std::transform(c1_str.begin(), c1_str.end(), c1_str.begin(), asciitolower);
 
             Int64 idx = c0_str.find(c1_str);
             col_res->insert(getPositionUTF8(c0_str, idx));
