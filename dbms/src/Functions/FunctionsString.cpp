@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "Columns/ColumnsNumber.h"
 #include <Columns/ColumnArray.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>
@@ -4380,6 +4381,183 @@ private:
     }
 };
 
+class FunctionInstrUTF8 : public IFunction
+{
+public:
+    static constexpr auto name = "instrUTF8";
+
+    FunctionInstrUTF8() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionInstrUTF8>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        auto second_argument = removeNullable(arguments[1]);
+        if (!second_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        
+        auto return_type = std::make_shared<DataTypeInt64>();
+        return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        Field c0_field;
+
+        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
+        const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
+        Field c1_field;
+
+        if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (c0_col->size() != c1_col->size())
+            throw Exception(fmt::format("Function {} column number is inconformity", getName()), ErrorCodes::LOGICAL_ERROR);
+
+        auto col_res = ColumnInt64::create();
+        int val_num = c0_col->size();
+        col_res->reserve(val_num);
+
+        for (int i = 0; i < val_num; i++)
+        {
+            c0_col->get(i, c0_field);
+            c1_col->get(i, c1_field);
+
+            String c0_str = c0_field.get<String>();
+            String c1_str = c1_field.get<String>();
+            std::transform(c0_str.begin(), c0_str.end(), c0_str.begin(), asciitolower);
+            std::transform(c1_str.begin(), c1_str.end(), c1_str.begin(), asciitolower);
+
+            Int64 idx = c0_str.find(c1_str);
+            col_res->insert(getPositionUTF8(c0_str, idx));
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+private:
+    static char asciitolower(char in) {
+        if (in <= 'Z' && in >= 'A')
+            return in - ('Z' - 'z');
+        return in;
+    }
+
+    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
+    {
+        if (idx == -1)
+            return 0;
+
+        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
+        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
+    }
+
+};
+
+class FunctionInstr : public IFunction
+{
+public:
+    static constexpr auto name = "instr";
+
+    FunctionInstr() = default;
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionInstr>();
+    }
+
+    std::string getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 2; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        auto first_argument = removeNullable(arguments[0]);
+        if (!first_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        auto second_argument = removeNullable(arguments[1]);
+        if (!second_argument->isString())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        
+        auto return_type = std::make_shared<DataTypeInt64>();
+        return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const IColumn * c0_col = block.getByPosition(arguments[0]).column.get();
+        const auto * c0_const = checkAndGetColumn<ColumnConst>(c0_col);
+        const auto * c0_string = checkAndGetColumn<ColumnString>(c0_col);
+        Field c0_field;
+
+        const IColumn * c1_col = block.getByPosition(arguments[1]).column.get();
+        const auto * c1_const = checkAndGetColumn<ColumnConst>(c1_col);
+        const auto * c1_string = checkAndGetColumn<ColumnString>(c1_col);
+        Field c1_field;
+
+        if ((c0_const == nullptr && c0_string == nullptr) || (c1_const == nullptr && c1_string == nullptr))
+            throw Exception(fmt::format("Illegal argument of function {}", getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        if (c0_col->size() != c1_col->size())
+            throw Exception(fmt::format("Function {} column number is inconformity", getName()), ErrorCodes::LOGICAL_ERROR);
+
+        auto col_res = ColumnInt64::create();
+        int val_num = c0_col->size();
+        col_res->reserve(val_num);
+
+        for (int i = 0; i < val_num; i++)
+        {
+            c0_col->get(i, c0_field);
+            c1_col->get(i, c1_field);
+
+            String c0_str = c0_field.get<String>();
+            String c1_str = c1_field.get<String>();
+            // std::transform(c0_str.begin(), c0_str.end(), c0_str.begin(), asciitolower);
+            // std::transform(c1_str.begin(), c1_str.end(), c1_str.begin(), asciitolower);
+
+            Int64 idx = c0_str.find(c1_str);
+            col_res->insert(getPositionUTF8(c0_str, idx));
+        }
+
+        block.getByPosition(result).column = std::move(col_res);
+    }
+
+private:
+    static char asciitolower(char in) {
+        if (in <= 'Z' && in >= 'A')
+            return in - ('Z' - 'z');
+        return in;
+    }
+
+    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
+    {
+        if (idx == -1)
+            return 0;
+
+        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
+        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
+    }
+
+};
 
 class FunctionSpace : public IFunction
 {
@@ -5869,6 +6047,8 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionHexInt>();
     factory.registerFunction<FunctionRepeat>();
     factory.registerFunction<FunctionSpace>();
+    factory.registerFunction<FunctionInstr>();
+    factory.registerFunction<FunctionInstrUTF8>();
     factory.registerFunction<FunctionBin>();
     factory.registerFunction<FunctionElt>();
 }

@@ -1,0 +1,88 @@
+// Copyright 2022 PingCAP, Ltd.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsString.h>
+#include <Interpreters/Context.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
+
+#include <string>
+#include <vector>
+
+
+namespace DB::tests
+{
+class StringInstr : public DB::tests::FunctionTest
+{
+public:
+    static constexpr auto func_name_utf8 = "instrUTF8";
+
+    static constexpr auto func_name = "instr";
+
+protected:
+    static ColumnWithTypeAndName toVec(const std::vector<String> & v)
+    {
+        return createColumn<String>(v);
+    }
+    static ColumnWithTypeAndName toNullableVec(const std::vector<std::optional<String>> & v)
+    {
+        return createColumn<Nullable<String>>(v);
+    }
+
+    static ColumnWithTypeAndName toVecInt(const std::vector<std::optional<Int64>> & v)
+    {
+        return createColumn<Nullable<Int64>>(v);
+    }
+
+};
+
+TEST_F(StringInstr, instrUTF8Test)
+try
+{
+    ASSERT_COLUMN_EQ(
+        toVecInt({4, 0, 3, 0, 3, 6, 5, 1, 1, 7, 7, 3, 4, 3}),
+        executeFunction(
+            func_name_utf8,
+            toNullableVec({"foobarbar", "xbar", "中文美好", "中文美好", "中文abc", "live long and prosper", "not binary string", "upper case", "upper case", "UPPER CASE", "UPPER CASE", "中文abc", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ"}),
+            toNullableVec({"bar", "foobar", "美好", "世界", "a", "long", "binary", "upper", "uPpEr", "CASE", "CasE", "abc", "テスト", "ђѓєѕ"})));
+
+    ASSERT_COLUMN_EQ(
+        toVecInt({{}, {}, {}}),
+        executeFunction(
+            func_name_utf8,
+            toNullableVec({"foobar", {}, {}}),
+            toNullableVec({{}, "foobar", {}})));
+}
+CATCH
+
+// // test instr NULL
+// TEST_F(StringSpace, nullTest)
+// try
+// {
+//     ASSERT_COLUMN_EQ(
+//         toNullableVec({{}, "     "}),
+//         executeFunction(
+//             func_name,
+//             toVecInt({{}, 5})));
+
+//     ASSERT_COLUMN_EQ(
+//         toNullableVec({{}}),
+//         executeFunction(
+//             func_name,
+//             toVecInt({16777217})));
+// }
+// CATCH
+
+} // namespace DB::tests
