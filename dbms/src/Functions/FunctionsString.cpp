@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Columns/ColumnsNumber.h"
 #include <Columns/ColumnArray.h>
 #include <Common/TargetSpecific.h>
 #include <Common/UTF8Helpers.h>

@@ -27,6 +27,8 @@ mysql> insert into test.t values('upper case', 'uPpEr');
 mysql> insert into test.t values('UPPER CASE', 'CASE');
 mysql> insert into test.t values('UPPER CASE', 'CasE');
 mysql> insert into test.t values('中文abc', 'abc');
+mysql> insert into test.t values('abcテストabc', 'テスト');
+mysql> insert into test.t values('ѐёђѓєѕіїјљњћќѝўџ', 'ђѓєѕ');
 mysql> insert into test.t values('foobar', NULL);
 mysql> insert into test.t values(NULL, 'foobar');
 mysql> insert into test.t values(NULL, NULL);
@@ -34,13 +36,24 @@ mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select instr(c1,c2) from test.t;
-+------------------+
-| length(space(a)) |
-+------------------+
-|                0 |
-|                0 |
-|             NULL |
-|               10 |
-|         16777216 |
-|             NULL |
-+------------------+
++--------------+
+| instr(c1,c2) |
++--------------+
+|            4 |
+|            0 |
+|            3 |
+|            0 |
+|            3 |
+|            6 |
+|            5 |
+|            1 |
+|            1 |
+|            7 |
+|            7 |
+|            3 |
+|            4 |
+|            3 |
+|         NULL |
+|         NULL |
+|         NULL |
++--------------+
