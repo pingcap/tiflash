@@ -69,7 +69,7 @@ private:
     size_t next_compaction_level = 0;
     UInt64 minor_compaction_version = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 private:
     inline void updateColumnFileStats();
@@ -77,11 +77,11 @@ private:
     void checkColumnFiles(const ColumnFilePersistedLevels & new_column_file_levels);
 
 public:
-    explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
+    explicit ColumnFilePersistedSet(const std::string & log_prefix_, PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static ColumnFilePersistedSetPtr restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id);
 
     /// Thread safe part start
     String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }

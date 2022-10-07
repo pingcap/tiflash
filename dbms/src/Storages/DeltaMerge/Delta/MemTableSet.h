@@ -46,16 +46,16 @@ private:
     std::atomic<size_t> bytes = 0;
     std::atomic<size_t> deletes = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 private:
     void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    explicit MemTableSet(const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
+    explicit MemTableSet(const std::string & log_prefix_, const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
         : last_schema(last_schema_)
         , column_files(in_memory_files)
-        , log(&Poco::Logger::get("MemTableSet"))
+        , log(Logger::get("MemTableSet", fmt::format("<{}>", log_prefix_)))
     {
         column_files_count = column_files.size();
         for (const auto & file : column_files)
