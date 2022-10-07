@@ -5882,7 +5882,7 @@ struct OctStringImpl
     {
         bool is_negative = false, is_overflow = false;
         // Removing the leading space
-        auto begin_pos_iter = std::find_if_not(arg.begin(), arg.end(), isspace);
+        auto begin_pos_iter = std::find_if_not(arg.begin(), arg.end(), isWhitespaceASCII);
         if (begin_pos_iter == arg.end())
         {
             return "0";
@@ -5892,9 +5892,13 @@ struct OctStringImpl
             is_negative = true;
             ++begin_pos_iter;
         }
+        else if (*begin_pos_iter == '+')
+        {
+            ++begin_pos_iter;
+        }
 
         // Special treatment for case `   pingcap16`
-        if (!isdigit(*begin_pos_iter))
+        if (!std::isdigit(*begin_pos_iter))
         {
             return "0";
         }

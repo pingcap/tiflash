@@ -49,7 +49,8 @@ try
                                "10",
                                "20",
                                "0",
-                               "1"}),
+                               "1",
+                               "10"}),
         executeFunction(
             func_name,
             toNullableVec<String>({{},
@@ -60,17 +61,28 @@ try
                                    "8pingcap",
                                    "16 pingcap",
                                    "pingcap16",
-                                   "1ping6 cap"})));
+                                   "1ping6 cap",
+                                   "\n\t\r\f\v8pingcap"})));
 
     ASSERT_COLUMN_EQ(
-        toNullableVec<String>({"1",
+        toNullableVec<String>({"0",
+                               "0",
+                               "0",
+                               "0",
+                               "1",
+                               "10",
                                "1777777777777777777777",
                                "1777777777777777777777",
                                "1777777777777777777777",
                                "1777777777777777777777"}),
         executeFunction(
             func_name,
-            toNullableVec<String>({"1.9",
+            toNullableVec<String>({"-+8",
+                                   "+-8",
+                                   "--8",
+                                   "++8",
+                                   "1.9",
+                                   "+8",
                                    "-1",
                                    "-1.9",
                                    "99999999999999999999999999",
