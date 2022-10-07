@@ -32,10 +32,11 @@ std::set<char> valid_flags{flag_i, flag_c, flag_m, flag_s};
 
 // If characters specifying contradictory options are specified
 // within match_type, the rightmost one takes precedence.
-String getMatchType(const String & match_type)
+String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
-    // TODO handle collation
     std::set<char> applied_flags;
+    if (collator != nullptr && collator->isCI())
+        applied_flags.insert(flag_i);
 
     for (auto flag : match_type)
     {
@@ -47,7 +48,7 @@ String getMatchType(const String & match_type)
         // to enable the case-sensitive for the regexp
         if (flag == flag_c)
         {
-            auto iter_i = applied_flags.find('i');
+            auto iter_i = applied_flags.find(flag_i);
             if (iter_i != applied_flags.end())
                 applied_flags.erase(iter_i);
 

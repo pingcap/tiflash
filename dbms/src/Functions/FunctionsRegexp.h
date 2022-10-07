@@ -76,7 +76,7 @@ struct NameReplaceRegexpAll
     static constexpr auto name = "replaceRegexpAll";
 };
 
-String getMatchType(const String & match_type);
+String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator = nullptr);
 
 inline int getDefaultFlags()
 {
@@ -93,16 +93,22 @@ struct NullPresence
 
 NullPresence getNullPresense(const Block & block, const ColumnNumbers & args);
 
-inline String addMatchTypeForPattern(const String & pattern, const String & match_type)
+inline String addMatchTypeForPattern(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
-    String flags = getMatchType(match_type);
+    String flags = getMatchType(match_type, collator);
     return fmt::format("(?{}){}", flags, pattern);
 }
 
-inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, const String & match_type)
+inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
-    String final_pattern = addMatchTypeForPattern(pattern, match_type);
+    String final_pattern = addMatchTypeForPattern(pattern, match_type, collator);
     return Regexps::get<false, true>(final_pattern, getDefaultFlags());
+}
+
+inline void handleCollatorWithoutMatchType(String & pattern, TiDB::TiDBCollatorPtr collator)
+{
+    if (collator != nullptr && collator->isCI())
+        pattern = fmt::format("(?i){}", pattern);
 }
 
 // Columns may be const, nullable or plain vector, we can conveniently handle
@@ -132,18 +138,14 @@ public:
                 // const null can't be here as we should have handle it in the previous
                 Field field;
                 auto p = static_cast<const ColumnNullable &>(*col_const_data).getNestedColumnPtr();
-                std::cout << fmt::format("family name: {}", p->getFamilyName()) << std::endl;
                 col_const->get(0, field);
-                std::cout << "type name: " << field.getTypeName() << std::endl;
                 data_string = field.safeGet<String>();
                 null_map = &(static_cast<const ColumnNullable &>(*col_const_data).getNullMapData());
-                std::cout << fmt::format("cons data string1: {}", data_string) << std::endl;
             }
             else
             {
                 StringRef tmp_data = col_const->getDataAt(0);
                 data_string = String(tmp_data.data, tmp_data.size);
-                std::cout << fmt::format("cons data string2: {}", data_string) << std::endl;
             }
             
             is_const = true;
@@ -183,12 +185,10 @@ public:
                 col_const->get(0, field);
                 data_int64 = field.get<Int64>();
                 null_map = &(static_cast<const ColumnNullable &>(*col_ptr).getNullMapData());
-                std::cout << fmt::format("cons data int 1: {}", data_int64) << std::endl;
             }
             else
             {
                 data_int64 = col_const->getValue<Int64>();
-                std::cout << fmt::format("cons data int 2: {}", data_int64) << std::endl;
             }
 
             is_const = true;
@@ -237,12 +237,10 @@ public:
         {
             StringRef sr = col_str->getDataAt(idx);
             String ret_str(sr.data, sr.size);
-            std::cout << fmt::format("getString here1: {}", ret_str) << std::endl;
             return ret_str;
         }
         else {
             String ret_str(data_string);
-            std::cout << fmt::format("getString here2: {}", ret_str) << std::endl;
             return ret_str;
         }
     }
@@ -279,7 +277,7 @@ public:
     static constexpr size_t REGEXP_REPLACE_MAX_PARAM_NUM = 6;
     static constexpr size_t REGEXP_SUBSTR_MAX_PARAM_NUM = 5;
 
-    void memorize(const Param & pat_param, const std::unique_ptr<const Param> & match_type_param) const
+    void memorize(const Param & pat_param, const std::unique_ptr<const Param> & match_type_param, TiDB::TiDBCollatorPtr collator) const
     {
         String && final_pattern = pat_param.getString(0);
         if (final_pattern.empty())
@@ -288,7 +286,10 @@ public:
         if (match_type_param != nullptr)
         {
             String && match_type = match_type_param->getString(0);
-            final_pattern = addMatchTypeForPattern(final_pattern, match_type);
+            final_pattern = addMatchTypeForPattern(final_pattern, match_type, collator);
+        } else
+        {
+            handleCollatorWithoutMatchType(final_pattern, collator);
         }
 
         int flags = getDefaultFlags();
@@ -361,7 +362,7 @@ public:
             args_max_num = REGEXP_MAX_PARAM_NUM;
 
         size_t arg_num = arguments.size();
-        if (arg_num < REGEXP_XXX_MIN_PARAM_NUM)
+        if (arg_num < REGEXP_XXX_MIN_PARAM_NUM || arg_num > args_max_num)
             throw Exception("Illegal argument number");
 
         bool has_nullable_col = false;
@@ -408,8 +409,6 @@ public:
         auto arg_num = arguments.size();
         size_t col_size = expr_param.getDataNum();
 
-        std::cout << fmt::format("pat_param get string: {}", pat_param.getString(0)) << std::endl;
-
         // match_type_param will be initialized, only when this is a regexp_like function
         std::unique_ptr<const Param> match_type_param;
 
@@ -433,19 +432,17 @@ public:
         // Check if args are all const columns
         if (expr_param.isConstCol() && pat_param.isConstCol())
         {
-#define GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type) \
+#define GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type, collator) \
     do { \
         int flags = getDefaultFlags(); \
-        String final_pattern = pat; \
-        std::cout << fmt::format("pat: {}", pat) << std::endl; \
+        String final_pattern = (pat); \
         if constexpr (has_match_type) \
         { \
             /* put match_type into pattern */ \
             String match_type = (match_type_param)->getString(0); \
-            std::cout << fmt::format("match_type: {}", match_type) << std::endl; \
-            final_pattern = addMatchTypeForPattern(final_pattern, match_type); \
-            std::cout << fmt::format("final_pattern: {}", final_pattern) << std::endl; \
-        } \
+            final_pattern = addMatchTypeForPattern(final_pattern, match_type, (collator)); \
+        } else \
+            handleCollatorWithoutMatchType(final_pattern, (collator)); \
         Regexps::Regexp regexp(final_pattern, flags); \
         ResultType res{regexp.match(expr)}; \
         (block).getByPosition(result).column = (block).getByPosition(result).type->createColumnConst((pat_param).getDataNum(), toField(res)); \
@@ -462,13 +459,13 @@ public:
                 if (arg_num > 2 && match_type_param->isConstCol())
                 {
                     constexpr bool has_match_type = true;
-                    GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type);
+                    GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type, collator);
                     return;
                 }
                 else if (arg_num == 2)
                 {
                     constexpr bool has_match_type = false;
-                    GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type);
+                    GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type, collator);
                     return;
                 }
                 // reach here when arg_num == 3 and match_type is not const
@@ -477,7 +474,7 @@ public:
             {
                 // regexp function
                 constexpr bool has_match_type = false;
-                GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type);
+                GET_CONST_RESULT(block, expr, pat, pat_param, match_type_param, has_match_type, collator);
                 return;
             }
 #undef GET_CONST_RESULT
@@ -485,7 +482,7 @@ public:
 
         // Check memorization
         if (canMemorize<Name>(arg_num, pat_param, match_type_param))
-            memorize(pat_param, match_type_param);
+            memorize(pat_param, match_type_param, collator);
 
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
@@ -528,7 +525,6 @@ public:
                 {
                     expr_param.getStringRef(i, expr_ref);
                     auto res = regexp->match(expr_ref.data, expr_ref.size);
-                    std::cout << fmt::format("memorized not null: {}, res: {}", String(expr_ref.data, expr_ref.size), res) << std::endl;
                     vec_res[i] = res; // match
                 }
 
@@ -575,12 +571,13 @@ public:
                     if constexpr (class_name == regexp_like_name)
                     {
                         // regexp_like function
-                        auto regexp = createRegexpWithMatchType(pat, match_type_param->getString(i));
+                        auto regexp = createRegexpWithMatchType(pat, match_type_param->getString(i), collator);
                         vec_res[i] = regexp->match(expr); // match
                     }
                     else
                     {
                         // regexp function
+                        handleCollatorWithoutMatchType(pat, collator);
                         int flags = getDefaultFlags();
                         const auto & regexp = Regexps::get<false, true>(pat, flags);
                         vec_res[i] = regexp->match(expr); // match
@@ -602,12 +599,13 @@ public:
                     if constexpr (class_name == regexp_like_name)
                     {
                         // regexp_like function
-                        auto regexp = createRegexpWithMatchType(pat, match_type_param->getString(i));
+                        auto regexp = createRegexpWithMatchType(pat, match_type_param->getString(i), collator);
                         vec_res[i] = regexp->match(expr); // match
                     }
                     else
                     {
                         // regexp function
+                        handleCollatorWithoutMatchType(pat, collator);
                         int flags = getDefaultFlags();
                         const auto & regexp = Regexps::get<false, true>(pat, flags);
                         vec_res[i] = regexp->match(expr); // match
@@ -621,7 +619,6 @@ public:
 private:
     void checkInputArg(const DataTypePtr & arg, bool * has_nullable_col) const
     {
-        std::cout << "type name: " << arg->getName() << std::endl;
         if (arg->isNullable())
         {
             *has_nullable_col = true;
