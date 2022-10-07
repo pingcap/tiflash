@@ -15,6 +15,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsRegexp.h>
 #include <fmt/core.h>
+
 #include "Functions/Regexps.h"
 
 namespace DB
@@ -28,7 +29,7 @@ const char flag_m = 'm';
 const char flag_s = 's';
 
 std::set<char> valid_flags{flag_i, flag_c, flag_m, flag_s};
-}
+} // namespace
 
 // If characters specifying contradictory options are specified
 // within match_type, the rightmost one takes precedence.

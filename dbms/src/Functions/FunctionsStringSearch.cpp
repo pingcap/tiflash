@@ -22,16 +22,17 @@
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
+#include <Functions/re2Util.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
 #include <Storages/Transaction/CollatorUtils.h>
+#include <fmt/core.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
-#include <fmt/core.h>
-#include <Functions/re2Util.h>
 
 #include <memory>
 #include <mutex>
+
 #include "Columns/IColumn.h"
 #include "Common/Exception.h"
 #include "common/defines.h"

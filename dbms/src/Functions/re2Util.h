@@ -15,10 +15,11 @@
 #pragma once
 
 #include <Common/config.h>
-#include <Storages/Transaction/CollatorUtils.h>
 #include <Storages/Transaction/Collator.h>
-#include "Common/Exception.h"
+#include <Storages/Transaction/CollatorUtils.h>
 #include <re2/re2.h>
+
+#include "Common/Exception.h"
 
 
 #if USE_RE2_ST
@@ -33,5 +34,5 @@ namespace re2Util
 {
 re2_st::RE2::Options getDefaultRe2Options();
 String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator);
-}
+} // namespace re2Util
 } // namespace DB

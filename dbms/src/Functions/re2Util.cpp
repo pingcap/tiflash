@@ -77,5 +77,5 @@ String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBColla
     else
         return "";
 }
-}
+} // namespace re2Util
 } // namespace DB
