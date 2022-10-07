@@ -14,11 +14,19 @@
 
 mysql> drop table if exists test.t;
 mysql> create table if not exists test.t(a bigint, b double);
-mysql> insert into test.t values(1,1.9);
-mysql> insert into test.t values(-1,1.9);
-mysql> insert into test.t values(-9999999999999999999999999, -9999999999999999999999999);
-mysql> insert into test.t values(9999999999999999999999999, 9999999999999999999999999);
+mysql> insert into test.t values(1, 1.9);
+mysql> insert into test.t values(-1, 1.9);
+mysql> insert into test.t values(-9999999999999999, -99999999999999999999);
+mysql> insert into test.t values(9999999999999999, 99999999999999999999);
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, oct(a), b, oct(b) from test.t;
++-------------------+------------------------+----------+------------------------+
+| a                 | oct(a)                 | b        | oct(b)                 |
++-------------------+------------------------+----------+------------------------+
+| 1                 | 1                      |      1.9 | 1                      |
+| -1                | 1777777777777777777777 |      1.9 | 1                      |
+| -9999999999999999 | 1777343620662017600001 | -1e+20   | 1777777777777777777777 |
+| 9999999999999999  | 434157115760177777     |  1e+20   | 1777777777777777777777 |
++-------------------+------------------------+----------+------------------------+

@@ -15,27 +15,136 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <ext/range.h>
+#include <limits>
 
 namespace DB
 {
 namespace tests
 {
-class TestFunctionOctInt : public DB::tests::FunctionTest
+class OctIntTest : public DB::tests::FunctionTest
 {
+public:
+    static constexpr auto func_name = "octInt";
 };
 
-TEST_F(TestFunctionOctInt, Positive)
+TEST_F(OctIntTest, Simple)
 try
 {
-    ASSERT_EQ(1, 1);
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({"0",
+                               "1",
+                               "2",
+                               "4",
+                               "10"}),
+        executeFunction(
+            func_name,
+            toNullableVec<UInt64>({0,
+                                   1,
+                                   2,
+                                   4,
+                                   8})));
 }
 CATCH
 
-TEST_F(TestFunctionOctInt, Boundary)
+TEST_F(OctIntTest, Boundary)
 try
 {
-    ASSERT_EQ(1, 1);
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "0",
+                               "377"}),
+        executeFunction(
+            func_name,
+            toNullableVec<UInt8>({{},
+                                  8,
+                                  0,
+                                  255})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "0",
+                               "177777"}),
+        executeFunction(
+            func_name,
+            toNullableVec<UInt16>({{},
+                                   8,
+                                   0,
+                                   65535})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "0",
+                               "37777777777"}),
+        executeFunction(
+            func_name,
+            toNullableVec<UInt32>({{},
+                                   8,
+                                   0,
+                                   4294967295})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "0",
+                               "1777777777777777777777"}),
+        executeFunction(
+            func_name,
+            toNullableVec<UInt64>({{},
+                                   8,
+                                   0,
+                                   std::numeric_limits<UInt64>::max()})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "1777777777777777777600",
+                               "177"}),
+        executeFunction(
+            func_name,
+            toNullableVec<Int8>({{},
+                                 8,
+                                 -128,
+                                 127})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "1777777777777777700000",
+                               "77777"}),
+        executeFunction(
+            func_name,
+            toNullableVec<Int16>({{},
+                                  8,
+                                  std::numeric_limits<Int16>::min(),
+                                  std::numeric_limits<Int16>::max()})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "1777777777760000000000",
+                               "17777777777"}),
+        executeFunction(
+            func_name,
+            toNullableVec<Int32>({{},
+                                  8,
+                                  std::numeric_limits<Int32>::min(),
+                                  std::numeric_limits<Int32>::max()})));
+
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "10",
+                               "1000000000000000000000",
+                               "777777777777777777777"}),
+        executeFunction(
+            func_name,
+            toNullableVec<Int64>({{},
+                                  8,
+                                  std::numeric_limits<Int64>::min(),
+                                  std::numeric_limits<Int64>::max()})));
 }
 CATCH
 } // namespace tests

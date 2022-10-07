@@ -15,12 +15,39 @@
 mysql> drop table if exists test.t;
 mysql> create table if not exists test.t(a varchar(255));
 
-mysql> insert into test.t values("aaaa");
+mysql> insert into test.t values("0");
+mysql> insert into test.t values("1");
+mysql> insert into test.t values("4");
+mysql> insert into test.t values("8");
+mysql> insert into test.t values("16pingcap");
+mysql> insert into test.t values("    16pingcap");
+mysql> insert into test.t values("pingcap16");
+mysql> insert into test.t values("ping16cap");
+mysql> insert into test.t values("ping  16cap");
+mysql> insert into test.t values("1.9");
+mysql> insert into test.t values("-1");
 mysql> insert into test.t values("-1.9");
 mysql> insert into test.t values("-9999999999999999999999999");
 mysql> insert into test.t values("9999999999999999999999999");
-mysql> create table if not exists test.t(a bigint, b double);
 mysql> alter table test.t set tiflash replica 1;
 func> wait_table test t
 
 mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a, oct(a) from test.t;
++----------------------------+------------------------+
+| a                          | oct(a)                 |
++----------------------------+------------------------+
+| 0                          | 0                      |
+| 1                          | 1                      |
+| 4                          | 4                      |
+| 8                          | 10                     |
+| 16pingcap                  | 20                     |
+|     16pingcap              | 20                     |
+| pingcap16                  | 0                      |
+| ping16cap                  | 0                      |
+| ping  16cap                | 0                      |
+| 1.9                        | 1                      |
+| -1                         | 1777777777777777777777 |
+| -1.9                       | 1777777777777777777777 |
+| -9999999999999999999999999 | 1777777777777777777777 |
+| 9999999999999999999999999  | 1777777777777777777777 |
++----------------------------+------------------------+

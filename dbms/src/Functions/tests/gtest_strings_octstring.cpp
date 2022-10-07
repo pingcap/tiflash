@@ -15,27 +15,66 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include <ext/range.h>
-
 namespace DB
 {
 namespace tests
 {
-class TestFunctionOctString : public DB::tests::FunctionTest
+class OctStringTest : public DB::tests::FunctionTest
 {
+public:
+    static constexpr auto func_name = "octString";
 };
 
-TEST_F(TestFunctionOctString, Positive)
+
+TEST_F(OctStringTest, Simple)
 try
 {
-    ASSERT_EQ(1, 1);
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({"0", "1", "2", "10", "12"}),
+        executeFunction(
+            func_name,
+            toNullableVec<String>({"0", "1", "2", "8", "10"})));
 }
 CATCH
 
-TEST_F(TestFunctionOctString, Boundary)
+TEST_F(OctStringTest, Boundary)
 try
 {
-    ASSERT_EQ(1, 1);
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({{},
+                               "0",
+                               "0",
+                               "0",
+                               "0",
+                               "10",
+                               "20",
+                               "0",
+                               "1"}),
+        executeFunction(
+            func_name,
+            toNullableVec<String>({{},
+                                   "",
+                                   "pingcap",
+                                   "    pingcap",
+                                   "ping cap",
+                                   "8pingcap",
+                                   "16 pingcap",
+                                   "pingcap16",
+                                   "1ping6 cap"})));
+
+    ASSERT_COLUMN_EQ(
+        toNullableVec<String>({"1",
+                               "1777777777777777777777",
+                               "1777777777777777777777",
+                               "1777777777777777777777",
+                               "1777777777777777777777"}),
+        executeFunction(
+            func_name,
+            toNullableVec<String>({"1.9",
+                                   "-1",
+                                   "-1.9",
+                                   "99999999999999999999999999",
+                                   "-99999999999999999999999999"})));
 }
 CATCH
 } // namespace tests
