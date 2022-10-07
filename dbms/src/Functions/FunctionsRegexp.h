@@ -34,7 +34,10 @@
 #include "Columns/ColumnsNumber.h"
 #include "Common/Exception.h"
 #include "Core/Field.h"
+#include "Core/Types.h"
+#include "DataTypes/DataTypeNothing.h"
 #include "DataTypes/DataTypeNullable.h"
+#include "Parsers/Lexer.h"
 #include "common/types.h"
 
 #if USE_RE2_ST
@@ -90,6 +93,7 @@ struct NullPresence
 {
     bool has_nullable_col = false;
     bool has_const_null_col = false;
+    bool has_data_type_nothing = false;
 };
 
 NullPresence getNullPresense(const Block & block, const ColumnNumbers & args);
@@ -386,19 +390,28 @@ public:
             throw Exception("Illegal argument number");
 
         bool has_nullable_col = false;
+        bool has_data_type_nothing = false;
 
         for (size_t i = 0; i < REGEXP_XXX_MIN_PARAM_NUM; ++i)
-            checkInputArg(arguments[i], &has_nullable_col);
+            checkInputArg(arguments[i], &has_nullable_col, &has_data_type_nothing);
 
         // check match_type arg for regexp_like
         if constexpr (class_name_sv == regexp_like_name_sv)
             if (arg_num == args_max_num && !arguments[args_max_num - 1]->isString())
-                checkInputArg(arguments[args_max_num - 1], &has_nullable_col);
+                checkInputArg(arguments[args_max_num - 1], &has_nullable_col, &has_data_type_nothing);
 
         if (has_nullable_col)
+        {
+            if (has_data_type_nothing)
+                return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
             return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<ResultType>>());
+        }
         else
+        {
+            if (has_data_type_nothing)
+                return std::make_shared<DataTypeNothing>();
             return std::make_shared<DataTypeNumber<ResultType>>();
+        }
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -408,7 +421,7 @@ public:
 
         const ColumnPtr & col_expr = block.getByPosition(arguments[0]).column;
 
-        if (null_presence.has_const_null_col)
+        if (null_presence.has_const_null_col || null_presence.has_data_type_nothing)
         {
             // There is a const null column in the input
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
@@ -581,7 +594,6 @@ public:
                         }
                     }
 
-
                     nullmap[i] = 0;
                     String && expr = expr_param.getString(i);
                     String && pat = pat_param.getString(i);
@@ -639,7 +651,7 @@ public:
     }
 
 private:
-    void checkInputArg(const DataTypePtr & arg, bool * has_nullable_col) const
+    void checkInputArg(const DataTypePtr & arg, bool * has_nullable_col, bool * has_data_type_nothing) const
     {
         if (arg->isNullable())
         {
@@ -647,12 +659,22 @@ private:
             const auto & null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
             const auto & nested_type = null_type->getNestedType();
             if (!nested_type->isString())
-                throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            {
+                if (nested_type->getTypeId() != TypeIndex::Nothing)
+                    throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                else
+                    *has_data_type_nothing = true;
+            }
         }
         else
         {
             if (!arg->isString())
-                throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            {
+                if (arg->getTypeId() != TypeIndex::Nothing)
+                    throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                else
+                    *has_data_type_nothing = true;
+            }
         }
     }
 

@@ -2061,7 +2061,7 @@ TEST_F(Regexp, RegexpLike)
                              createNullableVectorColumn<String>(match_types, match_type_nulls)));
     }
 
-    /// issue 5984
+    // empty pattern is not allowed
     ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createConstColumn<String>(row_size, "")), Exception);
     ASSERT_THROW(executeFunction("regexp_like", createConstColumn<String>(row_size, ""), createConstColumn<String>(row_size, "")), Exception);
     ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createColumn<String>(std::vector<String>{""})), Exception);

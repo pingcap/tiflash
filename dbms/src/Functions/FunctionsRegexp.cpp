@@ -14,9 +14,8 @@
 
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsRegexp.h>
+#include <Functions/Regexps.h>
 #include <fmt/core.h>
-
-#include "Functions/Regexps.h"
 
 namespace DB
 {
@@ -75,6 +74,12 @@ NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
     {
         const auto & elem = block.getByPosition(arg);
         const auto * col_const = typeid_cast<const ColumnConst *>(&(*(elem.column)));
+
+        if (elem.type->getTypeId() == TypeIndex::Nothing)
+        {
+            res.has_data_type_nothing = true;
+            break;
+        }
 
         if (col_const != nullptr)
         {
