@@ -35,6 +35,7 @@ namespace DM
 
 template <typename ChildStream>
 SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
+    const std::string & log_prefix_,
     ChildStream child_,
     StorageDeltaMergePtr storage_,
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
@@ -51,7 +52,7 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
     , context(context_)
-    , log(Logger::get("SSTFilesToDTFilesOutputStream"))
+    , log(Logger::get("SSTFilesToDTFilesOutputStream", fmt::format("<{}>", log_prefix_)))
 {
 }
 
