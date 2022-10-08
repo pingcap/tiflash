@@ -193,13 +193,14 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , db_name(db_name_)
     , table_name(table_name_)
     , physical_table_id(physical_table_id_)
+    , child_log_prefix(fmt::format("table_id={}", physical_table_id_))
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , original_table_handle_define(handle)
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , log(Logger::get("DeltaMergeStore", fmt::format("<{}.{} table_id={}>", db_name, table_name, physical_table_id_)))
+    , log(Logger::get("DeltaMergeStore", fmt::format("<table_id={}>", physical_table_id_)))
 {
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
@@ -248,8 +249,13 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                 segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             }
 
-            auto first_segment
-                = Segment::newSegment(*dm_context, store_columns, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
+            auto first_segment = Segment::newSegment( //
+                child_log_prefix,
+                *dm_context,
+                store_columns,
+                RowKeyRange::newAll(is_common_handle, rowkey_column_size),
+                segment_id,
+                0);
             segments.emplace(first_segment->getRowKeyRange().getEnd(), first_segment);
             id_to_segment.emplace(segment_id, first_segment);
         }
@@ -258,7 +264,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             while (segment_id)
             {
-                auto segment = Segment::restoreSegment(*dm_context, segment_id);
+                auto segment = Segment::restoreSegment(child_log_prefix, *dm_context, segment_id);
                 segments.emplace(segment->getRowKeyRange().getEnd(), segment);
                 id_to_segment.emplace(segment_id, segment);
 
@@ -1484,206 +1490,6 @@ void DeltaMergeStore::restoreStableFiles()
             path_delegate.addDTFile(file_id, dmfile->getBytesOnDisk(), root_path);
         }
     }
-}
-
-static inline DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *
-toConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
-{
-    return dynamic_cast<DB::PS::V2::PageEntriesVersionSetWithDelta::Snapshot *>(ptr.get());
-}
-
-DeltaMergeStoreStat DeltaMergeStore::getStat()
-{
-    std::shared_lock lock(read_write_mutex);
-
-    DeltaMergeStoreStat stat;
-
-    if (shutdown_called.load(std::memory_order_relaxed))
-        return stat;
-
-    stat.segment_count = segments.size();
-
-    Int64 total_placed_rows = 0;
-    Int64 total_delta_cache_rows = 0;
-    Float64 total_delta_cache_size = 0;
-    Int64 total_delta_valid_cache_rows = 0;
-    for (const auto & [handle, segment] : segments)
-    {
-        (void)handle;
-        const auto & delta = segment->getDelta();
-        const auto & stable = segment->getStable();
-
-        total_placed_rows += delta->getPlacedDeltaRows();
-
-        if (delta->getColumnFileCount())
-        {
-            stat.total_rows += delta->getRows();
-            stat.total_size += delta->getBytes();
-
-            stat.total_delete_ranges += delta->getDeletes();
-
-            stat.delta_count += 1;
-            stat.total_pack_count_in_delta += delta->getColumnFileCount();
-
-            stat.total_delta_rows += delta->getRows();
-            stat.total_delta_size += delta->getBytes();
-
-            stat.delta_index_size += delta->getDeltaIndexBytes();
-
-            total_delta_cache_rows += delta->getTotalCacheRows();
-            total_delta_cache_size += delta->getTotalCacheBytes();
-            total_delta_valid_cache_rows += delta->getValidCacheRows();
-        }
-
-        if (stable->getDMFilesPacks())
-        {
-            stat.total_rows += stable->getRows();
-            stat.total_size += stable->getBytes();
-
-            stat.stable_count += 1;
-            stat.total_pack_count_in_stable += stable->getDMFilesPacks();
-
-            stat.total_stable_rows += stable->getRows();
-            stat.total_stable_size += stable->getBytes();
-            stat.total_stable_size_on_disk += stable->getDMFilesBytesOnDisk();
-        }
-    }
-
-    stat.delta_rate_rows = static_cast<Float64>(stat.total_delta_rows) / stat.total_rows;
-    stat.delta_rate_segments = static_cast<Float64>(stat.delta_count) / stat.segment_count;
-
-    stat.delta_placed_rate = static_cast<Float64>(total_placed_rows) / stat.total_delta_rows;
-    stat.delta_cache_size = total_delta_cache_size;
-    stat.delta_cache_rate = static_cast<Float64>(total_delta_valid_cache_rows) / stat.total_delta_rows;
-    stat.delta_cache_wasted_rate = static_cast<Float64>(total_delta_cache_rows - total_delta_valid_cache_rows) / total_delta_valid_cache_rows;
-
-    stat.avg_segment_rows = static_cast<Float64>(stat.total_rows) / stat.segment_count;
-    stat.avg_segment_size = static_cast<Float64>(stat.total_size) / stat.segment_count;
-
-    stat.avg_delta_rows = static_cast<Float64>(stat.total_delta_rows) / stat.delta_count;
-    stat.avg_delta_size = static_cast<Float64>(stat.total_delta_size) / stat.delta_count;
-    stat.avg_delta_delete_ranges = static_cast<Float64>(stat.total_delete_ranges) / stat.delta_count;
-
-    stat.avg_stable_rows = static_cast<Float64>(stat.total_stable_rows) / stat.stable_count;
-    stat.avg_stable_size = static_cast<Float64>(stat.total_stable_size) / stat.stable_count;
-
-    stat.avg_pack_count_in_delta = static_cast<Float64>(stat.total_pack_count_in_delta) / stat.delta_count;
-    stat.avg_pack_rows_in_delta = static_cast<Float64>(stat.total_delta_rows) / stat.total_pack_count_in_delta;
-    stat.avg_pack_size_in_delta = static_cast<Float64>(stat.total_delta_size) / stat.total_pack_count_in_delta;
-
-    stat.avg_pack_count_in_stable = static_cast<Float64>(stat.total_pack_count_in_stable) / stat.stable_count;
-    stat.avg_pack_rows_in_stable = static_cast<Float64>(stat.total_stable_rows) / stat.total_pack_count_in_stable;
-    stat.avg_pack_size_in_stable = static_cast<Float64>(stat.total_stable_size) / stat.total_pack_count_in_stable;
-
-    static const String useless_tracing_id("DeltaMergeStore::getStat");
-    {
-        auto snaps_stat = storage_pool->dataReader()->getSnapshotsStat();
-        stat.storage_stable_num_snapshots = snaps_stat.num_snapshots;
-        stat.storage_stable_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
-        stat.storage_stable_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
-        stat.storage_stable_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr stable_snapshot = storage_pool->dataReader()->getSnapshot(useless_tracing_id);
-        const auto * concrete_snap = toConcreteSnapshot(stable_snapshot);
-        if (concrete_snap)
-        {
-            if (const auto * const version = concrete_snap->version(); version != nullptr)
-            {
-                stat.storage_stable_num_pages = version->numPages();
-                stat.storage_stable_num_normal_pages = version->numNormalPages();
-                stat.storage_stable_max_page_id = version->maxId();
-            }
-            else
-            {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=data");
-            }
-        }
-    }
-    {
-        auto snaps_stat = storage_pool->logReader()->getSnapshotsStat();
-        stat.storage_delta_num_snapshots = snaps_stat.num_snapshots;
-        stat.storage_delta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
-        stat.storage_delta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
-        stat.storage_delta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr log_snapshot = storage_pool->logReader()->getSnapshot(useless_tracing_id);
-        const auto * concrete_snap = toConcreteSnapshot(log_snapshot);
-        if (concrete_snap)
-        {
-            if (const auto * const version = concrete_snap->version(); version != nullptr)
-            {
-                stat.storage_delta_num_pages = version->numPages();
-                stat.storage_delta_num_normal_pages = version->numNormalPages();
-                stat.storage_delta_max_page_id = version->maxId();
-            }
-            else
-            {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=log");
-            }
-        }
-    }
-    {
-        auto snaps_stat = storage_pool->metaReader()->getSnapshotsStat();
-        stat.storage_meta_num_snapshots = snaps_stat.num_snapshots;
-        stat.storage_meta_oldest_snapshot_lifetime = snaps_stat.longest_living_seconds;
-        stat.storage_meta_oldest_snapshot_thread_id = snaps_stat.longest_living_from_thread_id;
-        stat.storage_meta_oldest_snapshot_tracing_id = snaps_stat.longest_living_from_tracing_id;
-        PageStorage::SnapshotPtr meta_snapshot = storage_pool->metaReader()->getSnapshot(useless_tracing_id);
-        const auto * concrete_snap = toConcreteSnapshot(meta_snapshot);
-        if (concrete_snap)
-        {
-            if (const auto * const version = concrete_snap->version(); version != nullptr)
-            {
-                stat.storage_meta_num_pages = version->numPages();
-                stat.storage_meta_num_normal_pages = version->numNormalPages();
-                stat.storage_meta_max_page_id = version->maxId();
-            }
-            else
-            {
-                LOG_FMT_ERROR(log, "Can't get any version from current snapshot, type=meta");
-            }
-        }
-    }
-
-    stat.background_tasks_length = background_tasks.length();
-
-    return stat;
-}
-
-SegmentStats DeltaMergeStore::getSegmentStats()
-{
-    std::shared_lock lock(read_write_mutex);
-
-    SegmentStats stats;
-    for (const auto & [handle, segment] : segments)
-    {
-        (void)handle;
-
-        SegmentStat stat;
-        const auto & delta = segment->getDelta();
-        const auto & stable = segment->getStable();
-
-        stat.segment_id = segment->segmentId();
-        stat.range = segment->getRowKeyRange();
-
-        stat.rows = segment->getEstimatedRows();
-        stat.size = delta->getBytes() + stable->getBytes();
-        stat.delete_ranges = delta->getDeletes();
-
-        stat.stable_size_on_disk = stable->getDMFilesBytesOnDisk();
-
-        stat.delta_pack_count = delta->getColumnFileCount();
-        stat.stable_pack_count = stable->getDMFilesPacks();
-
-        stat.avg_delta_pack_rows = static_cast<Float64>(delta->getRows()) / stat.delta_pack_count;
-        stat.avg_stable_pack_rows = static_cast<Float64>(stable->getRows()) / stat.stable_pack_count;
-
-        stat.delta_rate = static_cast<Float64>(delta->getRows()) / stat.rows;
-        stat.delta_cache_size = delta->getTotalCacheBytes();
-
-        stat.delta_index_size = delta->getDeltaIndexBytes();
-
-        stats.push_back(stat);
-    }
-    return stats;
 }
 
 SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
