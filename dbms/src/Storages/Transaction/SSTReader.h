@@ -75,7 +75,7 @@ struct MultiSSTReader : public SSTReader
                 // We gc current mono, iif:
                 // 1. We can switch to next reader mono;
                 // 2. We must switch to next reader mono;
-                LOG_FMT_INFO(log, "Swithch to {}", args[current].path.data);
+                LOG_FMT_INFO(log, "Swithch to {}", buffToStrView(args[current].path));
                 mono = initer(proxy_helper, args[current]);
             }
         }
@@ -90,7 +90,7 @@ struct MultiSSTReader : public SSTReader
     {
         assert(args.size() > 0);
         log = &Poco::Logger::get("MultiSSTReader");
-        LOG_FMT_INFO(log, "Init with {}", args[current].path.data);
+        LOG_FMT_INFO(log, "Init with {}", buffToStrView(args[current].path));
         mono = initer(proxy_helper, args[current]);
     }
 

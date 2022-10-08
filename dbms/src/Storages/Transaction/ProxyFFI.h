@@ -179,4 +179,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
     };
 }
+
+std::string_view buffToStrView(const BaseBuffView & buf);
+
 } // namespace DB

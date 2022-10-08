@@ -1468,7 +1468,6 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
             }
             catch (Exception & e)
             {
-                LOG_FMT_INFO(&Poco::Logger::get("!!!!!! AAA"), "Z {}", e.displayText());
                 throw;
             }
 
@@ -1504,13 +1503,12 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
             {
                 counter++;
                 auto v = std::string(reader.value().data);
-                LOG_FMT_INFO(&Poco::Logger::get("!!!!!! AAA"), "Value {}", v);
                 ASSERT_EQ(v, "v" + std::to_string(counter));
                 reader.next();
             }
             ASSERT_EQ(counter, 6);
 
-            kvs.mutProxyHelper()->sst_reader_interfaces = make_mock_sst_reader_interface();
+            kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
             proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 6, 6);
 
             MockRaftStoreProxy::FailCond cond;

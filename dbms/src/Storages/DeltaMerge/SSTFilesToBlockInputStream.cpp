@@ -72,7 +72,6 @@ void SSTFilesToBlockInputStream::readPrefix()
         {
             const auto & snapshot = snaps.views[i];
             auto t = static_cast<std::underlying_type_t<ColumnFamilyType>>(snapshot.type);
-            LOG_INFO(log, "!!!!! SST {} {}", t, snaps.len);
             c[t]++;
             if (c[t] > 1) {
                 use_multi = true;
@@ -91,12 +90,10 @@ void SSTFilesToBlockInputStream::readPrefix()
         int size_default = 0;
 
         auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
-            LOG_FMT_INFO(log, "!!!! make_inner_func {} {}", snap.path.data, (uint64_t)proxy_helper->sst_reader_interfaces.fn_get_sst_reader);
             return std::make_unique<SSTReader>(proxy_helper, snap);
         };
         auto generate_cf_reader = [&]() {
             // Generate old cf reader.
-            LOG_FMT_INFO(log, "!!!! Len {}", ssts.size());
             switch (prev_type)
             {
             case ColumnFamilyType::Default:
