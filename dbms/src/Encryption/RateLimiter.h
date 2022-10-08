@@ -189,7 +189,6 @@ private:
         return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
     }
     TimePoint last_stat_time;
-    Poco::Logger * log;
 
     Int64 get_io_statistic_period_us;
     std::chrono::time_point<std::chrono::system_clock> last_refill_time;
