@@ -4407,7 +4407,7 @@ public:
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        
+
         auto return_type = std::make_shared<DataTypeInt64>();
         return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
     }
@@ -4452,7 +4452,8 @@ public:
     }
 
 private:
-    static char asciitolower(char in) {
+    static char asciitolower(char in)
+    {
         if (in <= 'Z' && in >= 'A')
             return in - ('Z' - 'z');
         return in;
@@ -4466,7 +4467,6 @@ private:
         const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
-
 };
 
 class FunctionInstr : public IFunction
@@ -4496,7 +4496,7 @@ public:
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        
+
         auto return_type = std::make_shared<DataTypeInt64>();
         return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
     }
@@ -4539,7 +4539,8 @@ public:
     }
 
 private:
-    static char asciitolower(char in) {
+    static char asciitolower(char in)
+    {
         if (in <= 'Z' && in >= 'A')
             return in - ('Z' - 'z');
         return in;
@@ -4553,7 +4554,6 @@ private:
         const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
         return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
-
 };
 
 class FunctionSpace : public IFunction

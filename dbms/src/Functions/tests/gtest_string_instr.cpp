@@ -45,7 +45,6 @@ protected:
     {
         return createColumn<Nullable<Int64>>(v);
     }
-
 };
 
 TEST_F(StringInstr, instrUTF8Test)
