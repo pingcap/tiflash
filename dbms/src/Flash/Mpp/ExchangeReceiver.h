@@ -129,12 +129,9 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count,
-        bool setup_conn_manually = false);
+        uint64_t fine_grained_shuffle_stream_count);
 
     ~ExchangeReceiverBase();
-
-    void setUpConnection();
 
     void cancel();
 
@@ -175,6 +172,7 @@ private:
     void readLoop(const Request & req);
     template <bool enable_fine_grained_shuffle>
     void reactor(const std::vector<Request> & async_requests);
+    void setUpConnection();
 
     bool setEndState(ExchangeReceiverState new_state);
     String getStatusString();
@@ -192,6 +190,12 @@ private:
     void finishAllMsgChannels();
     void cancelAllMsgChannels();
 
+    ExchangeReceiverResult toDecodeResult(
+        std::queue<Block> & block_queue,
+        const Block & header,
+        const std::shared_ptr<ReceivedMessage> & recv_msg);
+
+private:
     std::shared_ptr<RPCContext> rpc_context;
 
     const tipb::ExchangeReceiver pb_exchange_receiver;

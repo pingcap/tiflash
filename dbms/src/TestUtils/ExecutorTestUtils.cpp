@@ -98,14 +98,72 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setDAGContext(&dag_context);
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
-    auto res = executeQuery(context.context);
+    auto res = executeQuery(context.context, /*internal=*/true);
     FmtBuffer fb;
     res.in->dumpTree(fb);
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
 }
 
-namespace
+void ExecutorTest::executeExecutor(
+    const std::shared_ptr<tipb::DAGRequest> & request,
+    std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
+    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
+    std::vector<size_t> concurrencies{1, 2, 10};
+    for (auto concurrency : concurrencies)
+    {
+        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        for (auto block_size : block_sizes)
+        {
+            context.context.setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            auto test_info_msg = [&]() {
+                const auto & test_info = testing::UnitTest::GetInstance()->current_test_info();
+                assert(test_info);
+                return fmt::format(
+                    "test info:\n"
+                    "    file: {}\n"
+                    "    line: {}\n"
+                    "    test_case_name: {}\n"
+                    "    test_func_name: {}\n"
+                    "    enable_planner: {}\n"
+                    "    concurrency: {}\n"
+                    "    block_size: {}\n"
+                    "    dag_request: \n{}",
+                    test_info->file(),
+                    test_info->line(),
+                    test_info->test_case_name(),
+                    test_info->name(),
+                    enable_planner,
+                    concurrency,
+                    block_size,
+                    ExecutorSerializer().serialize(request.get()));
+            };
+            ASSERT_TRUE(assert_func(executeStreams(request, concurrency))) << test_info_msg();
+        }
+    }
+    WRAP_FOR_DIS_ENABLE_PLANNER_END
+}
+
+void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
+{
+    executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
+        return columnsEqual(expect_columns, res, /*_restrict=*/false);
+    });
+}
+
+void ExecutorTest::executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows)
+{
+    executeExecutor(request, [&](const ColumnsWithTypeAndName & res) {
+        auto actual_rows = Block(res).rows();
+        if (expect_rows != actual_rows)
+        {
+            String msg = fmt::format("\nColumns rows mismatch\nexpected_rows: {}\nactual_rows: {}", expect_rows, actual_rows);
+            return testing::AssertionFailure() << msg;
+        }
+        return testing::AssertionSuccess();
+    });
+}
+
 Block mergeBlocks(Blocks blocks)
 {
     if (blocks.empty())
@@ -133,7 +191,6 @@ Block mergeBlocks(Blocks blocks)
         actual_columns.push_back({std::move(actual_cols[i]), sample_block.getColumnsWithTypeAndName()[i].type, sample_block.getColumnsWithTypeAndName()[i].name, sample_block.getColumnsWithTypeAndName()[i].column_id});
     return Block(actual_columns);
 }
-} // namespace
 
 void readStream(Blocks & blocks, BlockInputStreamPtr stream)
 {
@@ -170,7 +227,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
-    return readBlock(executeQuery(context.context).in);
+    return readBlock(executeQuery(context.context, /*internal=*/true).in);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)

@@ -14,7 +14,6 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsConditional.h>
 #include <Functions/FunctionsTransform.h>
 #include <Interpreters/castColumn.h>
@@ -31,10 +30,8 @@ void registerFunctionsConditional(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionIf>();
     factory.registerFunction<FunctionMultiIf>();
-    factory.registerFunction<FunctionCaseWithExpression>();
 
     /// These are obsolete function names.
-    factory.registerFunction<FunctionCaseWithExpression>("caseWithExpr");
     factory.registerFunction<FunctionMultiIf>("caseWithoutExpr");
     factory.registerFunction<FunctionMultiIf>("caseWithoutExpression");
 }
@@ -151,8 +148,8 @@ void FunctionMultiIf::executeImpl(Block & block, const ColumnNumbers & args, siz
                 insert = static_cast<const ColumnUInt8 &>(*instruction.condition).getData()[i];
             else
             {
-                const ColumnNullable & condition_nullable = static_cast<const ColumnNullable &>(*instruction.condition);
-                const ColumnUInt8 & condition_nested = static_cast<const ColumnUInt8 &>(condition_nullable.getNestedColumn());
+                const auto & condition_nullable = static_cast<const ColumnNullable &>(*instruction.condition);
+                const auto & condition_nested = static_cast<const ColumnUInt8 &>(condition_nullable.getNestedColumn());
                 const NullMap & condition_null_map = condition_nullable.getNullMapData();
 
                 insert = !condition_null_map[i] && condition_nested.getData()[i];
@@ -202,7 +199,7 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
             if (arg->onlyNull())
                 return;
 
-            const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(*arg);
+            const auto & nullable_type = static_cast<const DataTypeNullable &>(*arg);
             nested_type = nullable_type.getNestedType().get();
         }
         else
@@ -226,116 +223,4 @@ DataTypePtr FunctionMultiIf::getReturnTypeImpl(const DataTypes & args) const
 
     return getLeastSupertype(types_of_branches);
 }
-
-
-FunctionPtr FunctionCaseWithExpression::create(const Context & context_)
-{
-    return std::make_shared<FunctionCaseWithExpression>(context_);
-}
-
-FunctionCaseWithExpression::FunctionCaseWithExpression(const Context & context_)
-    : context{context_}
-{
-}
-
-String FunctionCaseWithExpression::getName() const
-{
-    return name;
-}
-
-DataTypePtr FunctionCaseWithExpression::getReturnTypeImpl(const DataTypes & args) const
-{
-    if (args.empty())
-        throw Exception{"Function " + getName() + " expects at least 1 arguments",
-                        ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
-
-    /// See the comments in executeImpl() to understand why we actually have to
-    /// get the return type of a transform function.
-
-    /// Get the return types of the arrays that we pass to the transform function.
-    ColumnsWithTypeAndName src_array_types;
-    ColumnsWithTypeAndName dst_array_types;
-
-    for (size_t i = 1; i < (args.size() - 1); ++i)
-    {
-        if ((i % 2) != 0)
-            src_array_types.push_back({nullptr, args[i], {}});
-        else
-            dst_array_types.push_back({nullptr, args[i], {}});
-    }
-
-    DefaultFunctionBuilder fun_array(std::make_shared<FunctionArray>(context));
-
-    DataTypePtr src_array_type = fun_array.getReturnType(src_array_types);
-    DataTypePtr dst_array_type = fun_array.getReturnType(dst_array_types);
-
-    /// Finally get the return type of the transform function.
-    DefaultFunctionBuilder fun_transform(std::make_shared<FunctionTransform>());
-    ColumnsWithTypeAndName transform_args = {{nullptr, args.front(), {}}, {nullptr, src_array_type, {}}, {nullptr, dst_array_type, {}}, {nullptr, args.back(), {}}};
-    return fun_transform.getReturnType(transform_args);
-}
-
-void FunctionCaseWithExpression::executeImpl(Block & block, const ColumnNumbers & args, size_t result) const
-{
-    if (args.empty())
-        throw Exception{"Function " + getName() + " expects at least 1 arguments",
-                        ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION};
-
-    /// In the following code, we turn the construction:
-    /// CASE expr WHEN val[0] THEN branch[0] ... WHEN val[N-1] then branch[N-1] ELSE branchN
-    /// into the construction transform(expr, src, dest, branchN)
-    /// where:
-    /// src  = [val[0], val[1], ..., val[N-1]]
-    /// dest = [branch[0], ..., branch[N-1]]
-    /// then we perform it.
-
-    /// Create the arrays required by the transform function.
-    ColumnNumbers src_array_args;
-    ColumnsWithTypeAndName src_array_types;
-
-    ColumnNumbers dst_array_args;
-    ColumnsWithTypeAndName dst_array_types;
-
-    for (size_t i = 1; i < (args.size() - 1); ++i)
-    {
-        if ((i % 2) != 0)
-        {
-            src_array_args.push_back(args[i]);
-            src_array_types.push_back(block.getByPosition(args[i]));
-        }
-        else
-        {
-            dst_array_args.push_back(args[i]);
-            dst_array_types.push_back(block.getByPosition(args[i]));
-        }
-    }
-
-    auto fun_array = std::make_shared<FunctionArray>(context);
-    DefaultFunctionBuilder fun_builder_array(fun_array);
-    DefaultExecutable executable_array(fun_array);
-
-    DataTypePtr src_array_type = fun_builder_array.getReturnType(src_array_types);
-    DataTypePtr dst_array_type = fun_builder_array.getReturnType(dst_array_types);
-
-    Block temp_block = block;
-
-    size_t src_array_pos = temp_block.columns();
-    temp_block.insert({nullptr, src_array_type, ""});
-
-    size_t dst_array_pos = temp_block.columns();
-    temp_block.insert({nullptr, dst_array_type, ""});
-
-    executable_array.execute(temp_block, src_array_args, src_array_pos);
-    executable_array.execute(temp_block, dst_array_args, dst_array_pos);
-
-    /// Execute transform.
-    DefaultExecutable fun_transform(std::make_shared<FunctionTransform>());
-
-    ColumnNumbers transform_args{args.front(), src_array_pos, dst_array_pos, args.back()};
-    fun_transform.execute(temp_block, transform_args, result);
-
-    /// Put the result into the original block.
-    block.getByPosition(result).column = std::move(temp_block.getByPosition(result).column);
-}
-
 } // namespace DB

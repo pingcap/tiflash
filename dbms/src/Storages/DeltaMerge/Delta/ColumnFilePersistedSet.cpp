@@ -95,9 +95,12 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersistedLevels & 
     }
 }
 
-ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files)
+ColumnFilePersistedSet::ColumnFilePersistedSet( //
+    const std::string & log_prefix_,
+    PageId metadata_id_,
+    const ColumnFilePersisteds & persisted_column_files)
     : metadata_id(metadata_id_)
-    , log(&Poco::Logger::get("ColumnFilePersistedSet"))
+    , log(Logger::get("ColumnFilePersistedSet", fmt::format("<{}>", log_prefix_)))
 {
     // TODO: place column file to different levels, but it seems no need to do it currently because we only do minor compaction on really small files?
     persisted_files_levels.push_back(persisted_column_files);
@@ -105,12 +108,16 @@ ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const Column
     updateColumnFileStats();
 }
 
-ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
+ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
+    const std::string & log_prefix,
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    PageId id)
 {
     Page page = context.storage_pool.metaReader()->read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
-    return std::make_shared<ColumnFilePersistedSet>(id, column_files);
+    return std::make_shared<ColumnFilePersistedSet>(log_prefix, id, column_files);
 }
 
 void ColumnFilePersistedSet::saveMeta(WriteBatches & wbs) const
@@ -393,7 +400,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
 {
     if (compaction->getCompactionVersion() != minor_compaction_version)
     {
-        LOG_FMT_WARNING(log, "Structure has been updated during compact");
+        LOG_WARNING(log, "Structure has been updated during compact");
         return false;
     }
     minor_compaction_version += 1;

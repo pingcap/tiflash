@@ -26,8 +26,8 @@
 #include <Poco/Net/MessageHeader.h>
 #include <Poco/Net/PartHandler.h>
 #include <Storages/StorageMemory.h>
+#include <boost_wrapper/string.h>
 
-#include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
 
 

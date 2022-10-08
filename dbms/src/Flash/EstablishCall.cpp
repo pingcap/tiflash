@@ -202,10 +202,19 @@ void EstablishCallData::trySendOneMsg()
     switch (async_tunnel_sender->pop(res, this))
     {
     case GRPCSendQueueRes::OK:
+        /// Note: has to switch the memory tracker before `write`
+        /// because after `write`, `async_tunnel_sender` can be destroyed at any time
+        /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
+        /// is destructed which may cause the memory tracker in `res` become invalid
+        res->switchMemTracker(nullptr);
         write(res->packet);
         return;
     case GRPCSendQueueRes::FINISHED:
         writeDone("", grpc::Status::OK);
+        return;
+    case GRPCSendQueueRes::CANCELLED:
+        RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
+        writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case GRPCSendQueueRes::EMPTY:
         // No new message.

@@ -79,7 +79,7 @@ protected:
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return Segment::newSegment(*dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
+        return Segment::newSegment(/* log_prefix */ "", *dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -197,7 +197,7 @@ try
 
         // flush segment and make sure there is two packs in stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+        ASSERT_EQ(segment->getStable()->getDMFilesPacks(), 2);
     }
 
     {
@@ -899,7 +899,7 @@ try
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
-    SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
+    SegmentPtr new_segment = Segment::restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
 
     {
         // test compare
@@ -912,7 +912,7 @@ try
         // Do some update and restore again
         HandleRange del(0, 32);
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        new_segment = segment->restoreSegment(dmContext(), segment->segmentId());
+        new_segment = segment->restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
     }
 
     {
@@ -1128,14 +1128,14 @@ try
         split_info->other_stable->enableDMFilesGC();
 
         auto lock = segment->mustGetUpdateLock();
-        std::tie(segment, other_segment) = segment->applySplit(dmContext(), segment_snap, wbs, split_info.value());
+        std::tie(segment, other_segment) = segment->applySplit(lock, dmContext(), segment_snap, wbs, split_info.value());
 
         wbs.writeAll();
     }
 
     {
-        SegmentPtr new_segment_1 = Segment::restoreSegment(dmContext(), segment->segmentId());
-        SegmentPtr new_segment_2 = Segment::restoreSegment(dmContext(), other_segment->segmentId());
+        SegmentPtr new_segment_1 = Segment::restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
+        SegmentPtr new_segment_2 = Segment::restoreSegment(/* log_prefix */ "", dmContext(), other_segment->segmentId());
         auto rows1 = read_rows(new_segment_1);
         auto rows2 = read_rows(new_segment_2);
         ASSERT_EQ(rows1 + rows2, (size_t)200);
@@ -1157,16 +1157,16 @@ try
         wbs.writeLogAndData();
         merged_stable->enableDMFilesGC();
 
-        auto left_lock = segment->mustGetUpdateLock();
-        auto right_lock = other_segment->mustGetUpdateLock();
-
-        segment = Segment::applyMerge(dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
+        std::vector<Segment::Lock> locks;
+        locks.emplace_back(segment->mustGetUpdateLock());
+        locks.emplace_back(other_segment->mustGetUpdateLock());
+        segment = Segment::applyMerge(locks, dmContext(), {segment, other_segment}, {left_snap, right_snap}, wbs, merged_stable);
 
         wbs.writeAll();
     }
 
     {
-        SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
+        SegmentPtr new_segment = Segment::restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
         auto rows = read_rows(new_segment);
         ASSERT_EQ(rows, (size_t)300);
     }

@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 
 #include <memory>
@@ -28,7 +29,7 @@ extern const int PS_DIR_APPLY_INVALID_STATUS;
 } // namespace ErrorCodes
 namespace PS::V3
 {
-PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALStore::Config config)
+PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALConfig config)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, config);
     return createFromReader(storage_name, reader, std::move(wal));
@@ -76,7 +77,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
 
 PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
 {
-    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALStore::Config());
+    auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
     loadEdit(dir, edit);
@@ -196,8 +197,8 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
 {
     while (reader->remained())
     {
-        auto [ok, edit] = reader->next();
-        if (!ok)
+        auto record = reader->next();
+        if (!record)
         {
             // TODO: Handle error, some error could be ignored.
             // If the file happened to some error,
@@ -208,6 +209,7 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
         }
 
         // apply the edit read
+        auto edit = ser::deserializeFrom(record.value());
         loadEdit(dir, edit);
     }
 }

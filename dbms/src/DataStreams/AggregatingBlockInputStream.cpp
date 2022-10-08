@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ClickHouseRevision.h>
 #include <DataStreams/AggregatingBlockInputStream.h>
 #include <DataStreams/MergingAggregatedMemoryEfficientBlockInputStream.h>
-#include <DataStreams/NativeBlockInputStream.h>
 
 namespace DB
 {
@@ -65,11 +63,11 @@ Block AggregatingBlockInputStream::readImpl()
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
-            LOG_FMT_TRACE(log,
-                          "Will merge {} temporary files of size {:.2f} MiB compressed, {:.2f} MiB uncompressed.",
-                          files.files.size(),
-                          (files.sum_size_compressed / 1048576.0),
-                          (files.sum_size_uncompressed / 1048576.0));
+            LOG_TRACE(log,
+                      "Will merge {} temporary files of size {:.2f} MiB compressed, {:.2f} MiB uncompressed.",
+                      files.files.size(),
+                      (files.sum_size_compressed / 1048576.0),
+                      (files.sum_size_uncompressed / 1048576.0));
 
             impl = std::make_unique<MergingAggregatedMemoryEfficientBlockInputStream>(input_streams, params, final, 1, 1, log->identifier());
         }
@@ -79,19 +77,6 @@ Block AggregatingBlockInputStream::readImpl()
         return {};
 
     return impl->read();
-}
-
-
-AggregatingBlockInputStream::TemporaryFileStream::TemporaryFileStream(const std::string & path, const FileProviderPtr & file_provider_)
-    : file_provider{file_provider_}
-    , file_in(file_provider, path, EncryptionPath(path, ""))
-    , compressed_in(file_in)
-    , block_in(std::make_shared<NativeBlockInputStream>(compressed_in, ClickHouseRevision::get()))
-{}
-
-AggregatingBlockInputStream::TemporaryFileStream::~TemporaryFileStream()
-{
-    file_provider->deleteRegularFile(file_in.getFileName(), EncryptionPath(file_in.getFileName(), ""));
 }
 
 } // namespace DB
