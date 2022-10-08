@@ -230,6 +230,28 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     return readBlock(executeQuery(context.context, /*internal=*/true).in);
 }
 
+DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)
+{
+    DAGProperties properties;
+    // enable mpp
+    properties.is_mpp_query = false;
+    properties.start_ts = 1;
+    auto [query_tasks, func_wrap_output_stream] = compileQuery(
+        context.context,
+        query,
+        [&](const String & database_name, const String & table_name) {
+            return context.mockStorage().getTableInfo(database_name + "." + table_name);
+        },
+        properties);
+
+    DAGContext dag_context(*query_tasks[0].dag_request, "executor_test", concurrency);
+    context.context.setExecutorTest();
+    context.context.setMockStorage(context.mockStorage());
+    context.context.setDAGContext(&dag_context);
+    // Currently, don't care about regions information in tests.
+    return readBlock(executeQuery(context.context, /*internal=*/true).in);
+}
+
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
 {
     ASSERT_EQ(Poco::trim(expected_string), Poco::trim(ExecutorSerializer().serialize(actual.get())));
