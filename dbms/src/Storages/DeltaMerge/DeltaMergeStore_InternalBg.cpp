@@ -15,6 +15,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -29,9 +30,6 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char gc_skip_update_safe_point[];
-extern const char gc_skip_merge_delta[];
-extern const char gc_skip_merge[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 } // namespace FailPoints
@@ -517,10 +515,6 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 
 SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, const SegmentPtr & segment)
 {
-    fiu_do_on(FailPoints::gc_skip_merge, {
-        return {};
-    });
-
     auto segment_rows = segment->getEstimatedRows();
     auto segment_bytes = segment->getEstimatedBytes();
     if (segment_rows >= dm_context->small_segment_rows || segment_bytes >= dm_context->small_segment_bytes)
@@ -560,10 +554,6 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
 
 SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point)
 {
-    fiu_do_on(FailPoints::gc_skip_merge_delta, {
-        return {};
-    });
-
     SegmentSnapshotPtr segment_snap;
     {
         std::shared_lock lock(read_write_mutex);
@@ -684,20 +674,13 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
     return new_segment;
 }
 
-UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
+UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (shutdown_called.load(std::memory_order_relaxed))
         return 0;
 
-    bool skip_update_safe_point = false;
-    fiu_do_on(FailPoints::gc_skip_update_safe_point, {
-        skip_update_safe_point = true;
-    });
-    if (!skip_update_safe_point)
-    {
-        if (!updateGCSafePoint())
-            return 0;
-    }
+    if (gc_options.update_safe_point && !updateGCSafePoint())
+        return 0;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -711,12 +694,22 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
+<<<<<<< HEAD
     LOG_FMT_TRACE(log,
                   "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
                   table_name,
                   next_gc_check_key.toDebugString(),
                   gc_safe_point,
                   limit);
+=======
+    LOG_TRACE(log,
+              "GC on table start, table={} check_key={} options={} gc_safe_point={} max_gc_limit={}",
+              table_name,
+              next_gc_check_key.toDebugString(),
+              gc_options.toString(),
+              gc_safe_point,
+              limit);
+>>>>>>> 936ff63636 (storage: always flush the delete range when region range changes (#6052))
 
     UInt64 check_segments_num = 0;
     Int64 gc_segments_num = 0;
@@ -764,9 +757,9 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         try
         {
             SegmentPtr new_seg = nullptr;
-            if (!new_seg)
+            if (!new_seg && gc_options.do_merge)
                 new_seg = gcTrySegmentMerge(dm_context, segment);
-            if (!new_seg)
+            if (!new_seg && gc_options.do_merge_delta)
                 new_seg = gcTrySegmentMergeDelta(dm_context, segment, prev_segment, next_segment, gc_safe_point);
 
             if (!new_seg)

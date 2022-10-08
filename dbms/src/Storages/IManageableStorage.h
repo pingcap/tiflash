@@ -37,7 +37,8 @@ class Region;
 namespace DM
 {
 struct RowKeyRange;
-}
+struct GCOptions;
+} // namespace DM
 using BlockUPtr = std::unique_ptr<Block>;
 
 /**
@@ -77,7 +78,7 @@ public:
     virtual void deleteRows(const Context &, size_t /*rows*/) { throw Exception("Unsupported"); }
 
     /// `limit` is the max number of segments to gc, return value is the number of segments gced
-    virtual UInt64 onSyncGc(Int64 /*limit*/) { throw Exception("Unsupported"); }
+    virtual UInt64 onSyncGc(Int64 /*limit*/, const DM::GCOptions &) { throw Exception("Unsupported"); }
 
     /// Return true is data dir exist
     virtual bool initStoreIfDataDirExist() { throw Exception("Unsupported"); }

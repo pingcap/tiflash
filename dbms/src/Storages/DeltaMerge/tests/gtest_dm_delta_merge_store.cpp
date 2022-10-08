@@ -39,7 +39,6 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char gc_skip_update_safe_point[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];

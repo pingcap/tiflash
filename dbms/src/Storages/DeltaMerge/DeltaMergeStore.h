@@ -49,6 +49,7 @@ using DMContextPtr = std::shared_ptr<DMContext>;
 using NotCompress = std::unordered_set<ColId>;
 using SegmentIdSet = std::unordered_set<UInt64>;
 struct ExternalDTFileInfo;
+struct GCOptions;
 
 inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
@@ -331,7 +332,7 @@ public:
     void compact(const Context & context, const RowKeyRange & range);
 
     /// Iterator over all segments and apply gc jobs.
-    UInt64 onSyncGc(Int64 limit);
+    UInt64 onSyncGc(Int64 limit, const GCOptions & gc_options);
 
     /**
      * Try to merge the segment in the current thread as the GC operation.
