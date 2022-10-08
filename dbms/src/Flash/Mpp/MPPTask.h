@@ -21,11 +21,13 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPReceiverSet.h>
 #include <Flash/Mpp/MPPTaskId.h>
+#include <Flash/Mpp/MPPTaskScheduleEntry.h>
 #include <Flash/Mpp/MPPTaskStatistics.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 #include <Flash/Mpp/TaskStatus.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/IQuerySource.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <kvproto/mpp.pb.h>
@@ -71,18 +73,9 @@ public:
 
     void run();
 
-    int getNeededThreads();
-
-    enum class ScheduleState
-    {
-        WAITING,
-        SCHEDULED,
-        FAILED,
-        EXCEEDED,
-        COMPLETED
-    };
-
     bool scheduleThisTask(ScheduleState state);
+
+    MPPTaskScheduleEntry & getScheduleEntry() { return schedule_entry; }
 
     // tunnel and error_message
     std::pair<MPPTunnelPtr, String> getTunnel(const ::mpp::EstablishMPPConnectionRequest * request);
@@ -96,13 +89,10 @@ private:
 
     void unregisterTask();
 
-    /// Similar to `writeErrToAllTunnels`, but it just try to write the error message to tunnel
-    /// without waiting the tunnel to be connected
-    void closeAllTunnels(const String & reason);
-
+    // abort the mpp task, note this function should be non-blocking, it just set some flags
     void abort(const String & message, AbortType abort_type);
 
-    void abortTunnels(const String & message, AbortType abort_type);
+    void abortTunnels(const String & message, bool wait_sender_finish);
     void abortReceivers();
     void abortDataStreams(AbortType abort_type);
 
@@ -121,19 +111,24 @@ private:
     void initExchangeReceivers();
 
     tipb::DAGRequest dag_req;
+    mpp::TaskMeta meta;
+    MPPTaskId id;
 
     ContextPtr context;
+
+    MPPTaskManager * manager;
+    std::atomic<bool> registered{false};
+
+    MPPTaskScheduleEntry schedule_entry;
+
     // `dag_context` holds inputstreams which could hold ref to `context` so it should be destructed
     // before `context`.
     std::unique_ptr<DAGContext> dag_context;
-    MemoryTracker * memory_tracker = nullptr;
+
+    std::shared_ptr<ProcessListEntry> process_list_entry;
 
     std::atomic<TaskStatus> status{INITIALIZING};
     String err_string;
-
-    mpp::TaskMeta meta;
-
-    MPPTaskId id;
 
     std::mutex tunnel_and_receiver_mu;
 
@@ -143,20 +138,12 @@ private:
 
     int new_thread_count_of_exchange_receiver = 0;
 
-    std::atomic<MPPTaskManager *> manager = nullptr;
-
     const LoggerPtr log;
 
     MPPTaskStatistics mpp_task_statistics;
 
     friend class MPPTaskManager;
-    friend class MPPTaskCancelHelper;
-
-    int needed_threads;
-
-    std::mutex schedule_mu;
-    std::condition_variable schedule_cv;
-    ScheduleState schedule_state;
+    friend class MPPHandler;
 };
 
 using MPPTaskPtr = std::shared_ptr<MPPTask>;

@@ -113,6 +113,9 @@ public:
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
 
+    /**
+     * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
+     */
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
@@ -122,7 +125,7 @@ public:
         uint64_t term,
         TMTContext & tmt);
     template <typename RegionPtrWrap>
-    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
@@ -167,6 +170,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    friend struct MockRaftStoreProxy;
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
@@ -198,7 +202,7 @@ private:
         TMTContext & tmt);
 
     template <typename RegionPtrWrap>
-    void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
     template <typename RegionPtrWrap>
     void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 

@@ -96,6 +96,17 @@ UInt64 Region::appliedIndex() const
     return meta.appliedIndex();
 }
 
+UInt64 Region::appliedIndexTerm() const
+{
+    return meta.appliedIndexTerm();
+}
+
+void Region::setApplied(UInt64 index, UInt64 term)
+{
+    std::unique_lock lock(mutex);
+    meta.setApplied(index, term);
+}
+
 RegionPtr Region::splitInto(RegionMeta && meta)
 {
     RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
@@ -545,7 +556,7 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
             case WaitIndexResult::Timeout:
             {
                 ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_FMT_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
+                LOG_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
                 return {wait_idx_res, elapsed_secs};
             }
             }

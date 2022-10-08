@@ -139,7 +139,7 @@ bool pushPacket(size_t source_index,
                 fiu_do_on(FailPoints::random_receiver_async_msg_push_failure_failpoint, push_succeed = false;);
         }
     }
-    LOG_FMT_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
+    LOG_TRACE(log, "push recv_msg to msg_channels(size: {}) succeed:{}, enable_fine_grained_shuffle: {}", msg_channels.size(), push_succeed, enable_fine_grained_shuffle);
     return push_succeed;
 }
 
@@ -222,7 +222,7 @@ public:
     void handle()
     {
         std::string err_info;
-        LOG_FMT_TRACE(log, "stage: {}", stage);
+        LOG_TRACE(log, "stage: {}", stage);
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
@@ -234,19 +234,19 @@ public:
             }
             else
             {
-                LOG_FMT_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
+                LOG_WARNING(log, "MakeReader fail. retry time: {}", retry_times);
                 waitForRetryOrDone("Exchange receiver meet error : send async stream request fail");
             }
             break;
         case AsyncRequestStage::WAIT_BATCH_READ:
-            LOG_FMT_TRACE(log, "Received {} packets.", read_packet_index);
+            LOG_TRACE(log, "Received {} packets.", read_packet_index);
             if (read_packet_index > 0)
                 has_data = true;
 
-            if (auto packet = getErrorPacket())
-                setDone("Exchange receiver meet error : " + packet->error().msg());
-            else if (!sendPackets(err_info))
-                setDone("Exchange receiver meet error : push packets fail, " + err_info);
+            if (auto error_message = getErrorFromPackets(); !error_message.empty())
+                setDone(fmt::format("Exchange receiver meet error : {}", error_message));
+            else if (!sendPackets())
+                setDone("Exchange receiver meet error : push packets fail");
             else if (read_packet_index < batch_packet_count)
             {
                 stage = AsyncRequestStage::WAIT_FINISH;
@@ -263,7 +263,7 @@ public:
                 setDone("");
             else
             {
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "Finish fail. err code: {}, err msg: {}, retry time {}",
                     finish_status.error_code(),
@@ -308,12 +308,20 @@ private:
         notify_queue->push(this);
     }
 
-    TrackedMppDataPacketPtr getErrorPacket() const
+    String getErrorFromPackets()
     {
+        // step 1: check if there is error packet
         // only the last packet may has error, see execute().
         if (read_packet_index != 0 && packets[read_packet_index - 1]->hasError())
-            return packets[read_packet_index - 1];
-        return nullptr;
+            return packets[read_packet_index - 1]->error();
+        // step 2: check memory overflow error
+        for (size_t i = 0; i < read_packet_index; ++i)
+        {
+            packets[i]->recomputeTrackedMem();
+            if (packets[i]->hasError())
+                return packets[i]->error();
+        }
+        return "";
     }
 
     bool retriable() const
@@ -351,29 +359,19 @@ private:
             setDone(done_msg);
     }
 
-    bool sendPackets(std::string & err_info)
+    bool sendPackets()
     {
         // note: no exception should be thrown rudely, since it's called by a GRPC poller.
         for (size_t i = 0; i < read_packet_index; ++i)
         {
             auto & packet = packets[i];
-            // We shouldn't throw error directly, since the caller works in a standalone thread.
-            try
-            {
-                packet->recomputeTrackedMem();
-                if (!pushPacket<enable_fine_grained_shuffle, false>(
-                        request->source_index,
-                        req_info,
-                        packet,
-                        *msg_channels,
-                        log))
-                    return false;
-            }
-            catch (...)
-            {
-                err_info = getCurrentExceptionMessage(false);
+            if (!pushPacket<enable_fine_grained_shuffle, false>(
+                    request->source_index,
+                    req_info,
+                    packet,
+                    *msg_channels,
+                    log))
                 return false;
-            }
             // can't reuse packet since it is sent to readers.
             packet = std::make_shared<TrackedMppDataPacket>();
         }
@@ -415,8 +413,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
-    uint64_t fine_grained_shuffle_stream_count_,
-    bool setup_conn_manually)
+    uint64_t fine_grained_shuffle_stream_count_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
     , max_streams(max_streams_)
@@ -442,11 +439,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
             msg_channels.push_back(std::make_unique<MPMCQueue<std::shared_ptr<ReceivedMessage>>>(max_buffer_size));
         }
         rpc_context->fillSchema(schema);
-        if (!setup_conn_manually)
-        {
-            // In CH client case, we need setUpConn right now. However, MPPTask will setUpConnection manually after ProcEntry is created.
-            setUpConnection();
-        }
+        setUpConnection();
     }
     catch (...)
     {
@@ -494,8 +487,6 @@ void ExchangeReceiverBase<RPCContext>::close()
 template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::setUpConnection()
 {
-    if (thread_count)
-        return;
     mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
     std::vector<Request> async_requests;
 
@@ -618,7 +609,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             bool has_data = false;
             for (;;)
             {
-                LOG_FMT_TRACE(log, "begin next ");
+                LOG_TRACE(log, "begin next ");
                 TrackedMppDataPacketPtr packet = std::make_shared<TrackedMppDataPacket>();
                 bool success = reader->read(packet);
                 if (!success)
@@ -627,7 +618,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
                 if (packet->hasError())
                 {
                     meet_error = true;
-                    local_err_msg = fmt::format("Read error message from mpp packet: {}", packet->getPacket().error().msg());
+                    local_err_msg = fmt::format("Read error message from mpp packet: {}", packet->error());
                     break;
                 }
 
@@ -658,7 +649,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             else
             {
                 bool retriable = !has_data && i + 1 < max_retry_times;
-                LOG_FMT_WARNING(
+                LOG_WARNING(
                     log,
                     "EstablishMPPConnectionRequest meets rpc fail. Err code = {}, err msg = {}, retriable = {}",
                     status.error_code(),

@@ -153,7 +153,7 @@ void HTTPHandler::pushDelayedResults(Output & used_output)
     std::vector<ReadBufferPtr> read_buffers;
     std::vector<ReadBuffer *> read_buffers_raw_ptr;
 
-    auto cascade_buffer = typeid_cast<CascadeWriteBuffer *>(used_output.out_maybe_delayed_and_compressed.get());
+    auto * cascade_buffer = typeid_cast<CascadeWriteBuffer *>(used_output.out_maybe_delayed_and_compressed.get());
     if (!cascade_buffer)
         throw Exception("Expected CascadeWriteBuffer", ErrorCodes::LOGICAL_ERROR);
 
@@ -195,7 +195,7 @@ void HTTPHandler::processQuery(
     Poco::Net::HTTPServerResponse & response,
     Output & used_output)
 {
-    LOG_FMT_TRACE(log, "Request URI: {}", request.getURI());
+    LOG_TRACE(log, "Request URI: {}", request.getURI());
 
     std::istream & istr = request.stream();
 
@@ -350,7 +350,7 @@ void HTTPHandler::processQuery(
         else
         {
             auto push_memory_buffer_and_continue = [next_buffer = used_output.out_maybe_compressed](const WriteBufferPtr & prev_buf) {
-                auto prev_memory_buffer = typeid_cast<MemoryWriteBuffer *>(prev_buf.get());
+                auto * prev_memory_buffer = typeid_cast<MemoryWriteBuffer *>(prev_buf.get());
                 if (!prev_memory_buffer)
                     throw Exception("Expected MemoryWriteBuffer", ErrorCodes::LOGICAL_ERROR);
 
@@ -413,7 +413,7 @@ void HTTPHandler::processQuery(
     std::unique_ptr<ReadBuffer> in;
 
     /// Support for "external data for query processing".
-    if (startsWith(request.getContentType().data(), "multipart/form-data"))
+    if (startsWith(request.getContentType(), "multipart/form-data"))
     {
         in = std::move(in_param);
         ExternalTablesHandler handler(context, params);
@@ -456,17 +456,17 @@ void HTTPHandler::processQuery(
 
     NameSet reserved_param_names{"query", "compress", "decompress", "user", "password", "quota_key", "query_id", "stacktrace", "buffer_size", "wait_end_of_query", "session_id", "session_timeout", "session_check"};
 
-    for (auto it = params.begin(); it != params.end(); ++it)
+    for (const auto & param : params)
     {
-        if (it->first == "database")
+        if (param.first == "database")
         {
-            context.setCurrentDatabase(it->second);
+            context.setCurrentDatabase(param.second);
         }
-        else if (it->first == "default_format")
+        else if (param.first == "default_format")
         {
-            context.setDefaultFormat(it->second);
+            context.setDefaultFormat(param.second);
         }
-        else if (reserved_param_names.find(it->first) != reserved_param_names.end())
+        else if (reserved_param_names.find(param.first) != reserved_param_names.end())
         {
         }
         else
@@ -474,15 +474,15 @@ void HTTPHandler::processQuery(
             /// All other query parameters are treated as settings.
             String value;
             /// Setting is skipped if value wasn't changed.
-            if (!settings.tryGet(it->first, value) || it->second != value)
+            if (!settings.tryGet(param.first, value) || param.second != value)
             {
                 if (readonly_before_query == 1)
-                    throw Exception("Cannot override setting (" + it->first + ") in readonly mode", ErrorCodes::READONLY);
+                    throw Exception("Cannot override setting (" + param.first + ") in readonly mode", ErrorCodes::READONLY);
 
-                if (readonly_before_query && it->first == "readonly")
+                if (readonly_before_query && param.first == "readonly")
                     throw Exception("Setting 'readonly' cannot be overrided in readonly mode", ErrorCodes::READONLY);
 
-                context.setSetting(it->first, it->second);
+                context.setSetting(param.first, param.second);
             }
         }
     }

@@ -12,10 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/GCOptions.h>
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <Storages/PathPool.h>
+#include <Storages/StorageDeltaMerge.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/PartitionStreams.h>
 #include <Storages/Transaction/ProxyFFI.h>
@@ -31,6 +36,20 @@
 
 namespace DB
 {
+
+extern void GenMockSSTData(const TiDB::TableInfo & table_info,
+                           TableID table_id,
+                           const String & store_key,
+                           UInt64 start_handle,
+                           UInt64 end_handle,
+                           UInt64 num_fields = 1,
+                           const std::unordered_set<ColumnFamilyType> & cfs = {ColumnFamilyType::Write, ColumnFamilyType::Default});
+
+namespace FailPoints
+{
+extern const char skip_check_segment_update[];
+}
+
 namespace RegionBench
 {
 extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &, const TiKVValue &);
@@ -43,7 +62,6 @@ extern void ChangeRegionStateRange(RegionState & region_state, bool source_at_le
 
 namespace tests
 {
-
 // TODO: Use another way to workaround calling the private methods on KVStore
 class RegionKVStoreTest : public ::testing::Test
 {
@@ -65,9 +83,18 @@ public:
         proxy_instance = std::make_unique<MockRaftStoreProxy>();
         proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
             RaftStoreProxyPtr{proxy_instance.get()}));
-        proxy_instance->init(100);
-
         kvstore->restore(*path_pool, proxy_helper.get());
+        {
+            auto store = metapb::Store{};
+            store.set_id(1234);
+            kvstore->setStore(store);
+            ASSERT_EQ(kvstore->getStoreID(), store.id());
+        }
+    }
+
+    void create_default_regions()
+    {
+        proxy_instance->init(100);
     }
 
     void TearDown() override {}
@@ -117,15 +144,10 @@ protected:
 
 TEST_F(RegionKVStoreTest, NewProxy)
 {
+    create_default_regions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
-    {
-        auto store = metapb::Store{};
-        store.set_id(1234);
-        kvs.setStore(store);
-        ASSERT_EQ(kvs.getStoreID(), store.id());
-    }
     {
         ASSERT_EQ(kvs.getRegion(0), nullptr);
         auto task_lock = kvs.genTaskLock();
@@ -160,6 +182,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
 
 TEST_F(RegionKVStoreTest, ReadIndex)
 {
+    create_default_regions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     // start mock proxy in other thread
@@ -755,6 +778,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 
 TEST_F(RegionKVStoreTest, Region)
 {
+    create_default_regions();
     TableID table_id = 100;
     {
         auto meta = RegionMeta(createPeer(2, true), createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)), initialApplyState());
@@ -852,6 +876,7 @@ TEST_F(RegionKVStoreTest, Region)
 
 TEST_F(RegionKVStoreTest, KVStore)
 {
+    create_default_regions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -1128,7 +1153,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                     9,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
+                kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
             }
             try
             {
@@ -1139,7 +1164,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                     9,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, but not tombstone
+                kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, but not tombstone
                 ASSERT_TRUE(false);
             }
             catch (Exception & e)
@@ -1163,7 +1188,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                         10,
                         5,
                         ctx.getTMTContext());
-                    kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
+                    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext());
                     ASSERT_TRUE(false);
                 }
                 catch (Exception & e)
@@ -1185,7 +1210,7 @@ TEST_F(RegionKVStoreTest, KVStore)
                     10,
                     5,
                     ctx.getTMTContext());
-                kvs.checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, tombstone, remove previous one
+                kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, std::move(ingest_ids)}, ctx.getTMTContext()); // overlap, tombstone, remove previous one
 
                 auto state = proxy_helper->getRegionLocalState(8192);
                 ASSERT_EQ(state.state(), raft_serverpb::PeerState::Tombstone);
@@ -1262,16 +1287,344 @@ TEST_F(RegionKVStoreTest, KVStore)
     }
 }
 
+
+class ApplySnapshotTest
+    : public RegionKVStoreTest
+    , public testing::WithParamInterface<bool /* ingest_using_split */>
+{
+public:
+    ApplySnapshotTest()
+    {
+        ingest_using_split = GetParam();
+    }
+
+protected:
+    bool ingest_using_split{};
+};
+
+INSTANTIATE_TEST_CASE_P(
+    ByIngestUsingSplit,
+    ApplySnapshotTest,
+    testing::Bool());
+
+TEST_P(ApplySnapshotTest, WithNewRegionRange)
+try
+{
+    using DM::tests::DMTestEnv;
+
+    create_default_regions();
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & kvs = getKVS();
+    auto table_id = 101;
+    auto region_id = 19;
+    auto region_id_str = std::to_string(region_id);
+
+    auto settings_backup = ctx.getGlobalContext().getSettings();
+    ctx.getGlobalContext().getSettingsRef().dt_segment_limit_rows = 50;
+    if (ingest_using_split)
+    {
+        ctx.getGlobalContext().getSettingsRef().dt_segment_delta_small_column_file_size = 50 * 8;
+    }
+    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
+        ctx.getGlobalContext().setSettings(settings_backup);
+    });
+
+    StorageDeltaMergePtr storage;
+    {
+        auto columns = DMTestEnv::getDefaultTableColumns();
+        auto table_info = DMTestEnv::getMinimalTableInfo(table_id);
+        auto astptr = DMTestEnv::getPrimaryKeyExpr("test_table");
+        storage = StorageDeltaMerge::create("TiFlash",
+                                            "default" /* db_name */,
+                                            "test_table" /* table_name */,
+                                            table_info,
+                                            ColumnsDescription{columns},
+                                            astptr,
+                                            0,
+                                            ctx);
+        storage->startup();
+    }
+    SCOPE_EXIT({
+        storage->drop();
+        ctx.getTMTContext().getStorages().remove(table_id);
+    });
+    // Initially region_19 range is [0, 10000)
+    {
+        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10000));
+        GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20, 100, 0);
+        std::vector<SSTView> sst_views{
+            SSTView{
+                ColumnFamilyType::Write,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+            SSTView{
+                ColumnFamilyType::Default,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+        };
+        {
+            RegionMockTest mock_test(kvstore.get(), region);
+
+            kvs.handleApplySnapshot(
+                region->getMetaRegion(),
+                2,
+                SSTViewVec{sst_views.data(), sst_views.size()},
+                8,
+                5,
+                ctx.getTMTContext());
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(8), true);
+        }
+    }
+    {
+        if (ingest_using_split)
+        {
+            auto stats = storage->getStore()->getStoreStats();
+            ASSERT_EQ(3, stats.segment_count);
+        }
+
+        storage->mergeDelta(ctx);
+    }
+    // Later, its range is changed to [20000, 50000)
+    {
+        auto region = makeRegion(region_id, RecordKVFormat::genKey(table_id, 20000), RecordKVFormat::genKey(table_id, 50000));
+        GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20100, 20200, 0);
+        std::vector<SSTView> sst_views{
+            SSTView{
+                ColumnFamilyType::Write,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+            SSTView{
+                ColumnFamilyType::Default,
+                BaseBuffView{region_id_str.data(), region_id_str.length()},
+            },
+        };
+        {
+            RegionMockTest mock_test(kvstore.get(), region);
+
+            kvs.handleApplySnapshot(
+                region->getMetaRegion(),
+                2,
+                SSTViewVec{sst_views.data(), sst_views.size()},
+                9,
+                5,
+                ctx.getTMTContext());
+            ASSERT_EQ(kvs.getRegion(region_id)->checkIndex(9), true);
+        }
+    }
+    {
+        auto stats = storage->getStore()->getStoreStats();
+        ASSERT_NE(0, stats.total_stable_size_on_disk);
+        ASSERT_NE(0, stats.total_rows);
+        ASSERT_NE(0, stats.total_size);
+    }
+    // Finally, the region is migrated out
+    {
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        request.set_cmd_type(raft_cmdpb::AdminCmdType::ChangePeerV2);
+        auto meta = kvs.getRegion(region_id)->getMetaRegion();
+        meta.mutable_peers()->Clear();
+        meta.add_peers()->set_id(3);
+        *response.mutable_change_peer()->mutable_region() = meta;
+        kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest(request), raft_cmdpb::AdminResponse(response), region_id, 10, 6, ctx.getTMTContext());
+        ASSERT_EQ(kvs.getRegion(region_id), nullptr);
+    }
+    {
+        // After several rounds of GC, everything should be reclaimed.
+        for (size_t i = 0; i < 10; ++i)
+        {
+            storage->onSyncGc(100, DM::GCOptions::newAllForTest());
+        }
+
+        auto gc_n = storage->onSyncGc(100, DM::GCOptions::newAllForTest());
+        ASSERT_EQ(0, gc_n);
+
+        auto stats = storage->getStore()->getStoreStats();
+        ASSERT_EQ(1, stats.segment_count);
+        ASSERT_EQ(0, stats.total_stable_size_on_disk);
+        ASSERT_EQ(0, stats.total_rows);
+        ASSERT_EQ(0, stats.total_size);
+    }
+}
+CATCH
+
+
+TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    {
+        auto applied_index = 0;
+        auto region_id = 1;
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            MockRaftStoreProxy::FailCond cond;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_NE(r1, nullptr);
+            ASSERT_NE(kvr1, nullptr);
+            applied_index = r1->getLatestAppliedIndex();
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            auto [index, term] = proxy_instance->normalWrite(region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+            kvs.tryPersist(region_id);
+        }
+        {
+            const KVStore & kvs = reloadKVSFromDisk();
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
+        }
+    }
+
+    {
+        auto applied_index = 0;
+        auto region_id = 2;
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            MockRaftStoreProxy::FailCond cond;
+            cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_WRITE;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            applied_index = r1->getLatestAppliedIndex();
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            auto [index, term] = proxy_instance->normalWrite(region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            // KVStore failed before write and advance.
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+            kvs.tryPersist(region_id);
+        }
+        {
+            KVStore & kvs = reloadKVSFromDisk();
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
+            proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, r1->getLatestCommitIndex());
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+        }
+    }
+
+    {
+        auto applied_index = 0;
+        auto region_id = 3;
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            MockRaftStoreProxy::FailCond cond;
+            cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_KVSTORE_ADVANCE;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            applied_index = r1->getLatestAppliedIndex();
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            auto [index, term] = proxy_instance->normalWrite(region_id, {34}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            // KVStore failed before advance.
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+            kvs.tryPersist(region_id);
+        }
+        {
+            KVStore & kvs = reloadKVSFromDisk();
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex() - 1);
+            EXPECT_THROW(proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, r1->getLatestCommitIndex()), Exception);
+        }
+    }
+
+    {
+        auto applied_index = 0;
+        auto region_id = 4;
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            MockRaftStoreProxy::FailCond cond;
+            cond.type = MockRaftStoreProxy::FailCond::Type::BEFORE_PROXY_ADVANCE;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            applied_index = r1->getLatestAppliedIndex();
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            LOG_FMT_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
+            auto [index, term] = proxy_instance->normalWrite(region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            // KVStore succeed. Proxy failed before advance.
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+            kvs.tryPersist(region_id);
+        }
+        {
+            MockRaftStoreProxy::FailCond cond;
+            KVStore & kvs = reloadKVSFromDisk();
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), r1->getLatestCommitIndex());
+            // Proxy shall replay from handle 35.
+            proxy_instance->replay(kvs, ctx.getTMTContext(), region_id, r1->getLatestCommitIndex());
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            auto [index, term] = proxy_instance->normalWrite(region_id, {36}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);
+        }
+    }
+}
+
+TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
+{
+    auto ctx = TiFlashTestEnv::getGlobalContext();
+    {
+        auto applied_index = 0;
+        auto region_id = 1;
+        {
+            KVStore & kvs = getKVS();
+            proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
+            MockRaftStoreProxy::FailCond cond;
+
+            auto kvr1 = kvs.getRegion(region_id);
+            auto r1 = proxy_instance->getRegion(region_id);
+            ASSERT_NE(r1, nullptr);
+            ASSERT_NE(kvr1, nullptr);
+            applied_index = r1->getLatestAppliedIndex();
+            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
+            auto [index, term] = proxy_instance->normalWrite(region_id, {33}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 1);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
+
+            kvr1->markCompactLog();
+            kvs.setRegionCompactLogConfig(0, 0, 0);
+            auto [index2, term2] = proxy_instance->compactLog(region_id, index);
+            // In tryFlushRegionData we will call handleWriteRaftCmd, which will already cause an advance.
+            ASSERT_TRUE(kvs.tryFlushRegionData(region_id, true, ctx.getTMTContext(), index2, term));
+            proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
+            ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);
+            ASSERT_EQ(kvr1->appliedIndex(), applied_index + 2);
+        }
+    }
+}
+
 TEST_F(RegionKVStoreTest, KVStoreRestore)
 {
     {
         KVStore & kvs = getKVS();
-        {
-            auto store = metapb::Store{};
-            store.set_id(1234);
-            kvs.setStore(store);
-            ASSERT_EQ(kvs.getStoreID(), store.id());
-        }
         {
             ASSERT_EQ(kvs.getRegion(0), nullptr);
             auto task_lock = kvs.genTaskLock();

@@ -56,8 +56,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_before_mpp_register_tunnel_for_root_mpp_task)     \
     M(exception_before_mpp_root_task_run)                         \
     M(exception_during_mpp_root_task_run)                         \
-    M(exception_during_mpp_write_err_to_tunnel)                   \
-    M(exception_during_mpp_close_tunnel)                          \
     M(exception_during_write_to_storage)                          \
     M(force_set_sst_to_dtfile_block_size)                         \
     M(force_set_sst_decode_rand)                                  \
@@ -75,7 +73,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
-    M(gc_skip_update_safe_point)                             \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
@@ -127,7 +124,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(random_aggregate_merge_failpoint)                 \
     M(random_sharedquery_failpoint)                     \
     M(random_interpreter_failpoint)                     \
-    M(random_task_lifecycle_failpoint)                  \
     M(random_task_manager_find_task_failure_failpoint)  \
     M(random_min_tso_scheduler_failpoint)
 

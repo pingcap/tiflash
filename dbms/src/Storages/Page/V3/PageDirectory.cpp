@@ -293,7 +293,7 @@ std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageE
     }
 }
 
-std::tuple<VersionedPageEntries::ResolveResult, PageIdV3Internal, PageVersion>
+std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
 VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry)
 {
     auto page_lock = acquireLock();
@@ -306,7 +306,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
             if (!ignore_delete && iter->second.isDelete())
             {
                 // the page is not visible
-                return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
+                return {ResolveResult::FAIL, buildV3Id(0, 0), PageVersion(0)};
             }
 
             // If `ignore_delete` is true, we need the page entry even if it is logical deleted.
@@ -323,7 +323,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
                 // copy and return the entry
                 if (entry != nullptr)
                     *entry = iter->second.entry;
-                return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
+                return {ResolveResult::TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
             }
             // else fallthrough to FAIL
         } // else fallthrough to FAIL
@@ -335,7 +335,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
         bool ok = ignore_delete || (!is_deleted || seq < delete_ver.sequence);
         if (create_ver.sequence <= seq && ok)
         {
-            return {RESOLVE_TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
+            return {ResolveResult::TO_NORMAL, buildV3Id(0, 0), PageVersion(0)};
         }
     }
     else if (type == EditRecordType::VAR_REF)
@@ -343,15 +343,15 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
         // Return the origin page id if this ref is visible by `seq`.
         if (create_ver.sequence <= seq && (!is_deleted || seq < delete_ver.sequence))
         {
-            return {RESOLVE_TO_REF, ori_page_id, create_ver};
+            return {ResolveResult::TO_REF, ori_page_id, create_ver};
         }
     }
     else
     {
-        LOG_FMT_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
+        LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
     }
 
-    return {RESOLVE_FAIL, buildV3Id(0, 0), PageVersion(0)};
+    return {ResolveResult::FAIL, buildV3Id(0, 0), PageVersion(0)};
 }
 
 std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
@@ -836,10 +836,10 @@ PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const Page
             {
                 if (throw_on_not_exist)
                 {
-                    LOG_FMT_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
+                    LOG_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
                     for (const auto & [dump_id, dump_entry] : mvcc_table_directory)
                     {
-                        LOG_FMT_WARNING(log, "Dumping state [page_id={}] [entry={}]", dump_id, dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
+                        LOG_WARNING(log, "Dumping state [page_id={}] [entry={}]", dump_id, dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
                     }
                     throw Exception(fmt::format("Invalid page id, entry not exist [page_id={}] [resolve_id={}]", page_id, id_to_resolve), ErrorCodes::PS_ENTRY_NOT_EXISTS);
                 }
@@ -852,12 +852,12 @@ PageIDAndEntryV3 PageDirectory::getByIDImpl(PageIdV3Internal page_id, const Page
         auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
         switch (resolve_state)
         {
-        case VersionedPageEntries::RESOLVE_TO_NORMAL:
+        case ResolveResult::TO_NORMAL:
             return PageIDAndEntryV3(page_id, entry_got);
-        case VersionedPageEntries::RESOLVE_FAIL:
+        case ResolveResult::FAIL:
             ok = false;
             break;
-        case VersionedPageEntries::RESOLVE_TO_REF:
+        case ResolveResult::TO_REF:
             if (id_to_resolve == next_id_to_resolve)
             {
                 ok = false;
@@ -912,12 +912,12 @@ std::pair<PageIDAndEntriesV3, PageIds> PageDirectory::getByIDsImpl(const PageIdV
             auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, &entry_got);
             switch (resolve_state)
             {
-            case VersionedPageEntries::RESOLVE_TO_NORMAL:
+            case ResolveResult::TO_NORMAL:
                 return true;
-            case VersionedPageEntries::RESOLVE_FAIL:
+            case ResolveResult::FAIL:
                 ok = false;
                 break;
-            case VersionedPageEntries::RESOLVE_TO_REF:
+            case ResolveResult::TO_REF:
                 if (id_to_resolve == next_id_to_resolve)
                 {
                     ok = false;
@@ -982,13 +982,13 @@ PageIdV3Internal PageDirectory::getNormalPageId(PageIdV3Internal page_id, const 
         auto [resolve_state, next_id_to_resolve, next_ver_to_resolve] = iter->second->resolveToPageId(ver_to_resolve.sequence, /*ignore_delete=*/id_to_resolve != page_id, nullptr);
         switch (resolve_state)
         {
-        case VersionedPageEntries::RESOLVE_TO_NORMAL:
+        case ResolveResult::TO_NORMAL:
             return id_to_resolve;
-        case VersionedPageEntries::RESOLVE_FAIL:
+        case ResolveResult::FAIL:
             // resolve failed
             keep_resolve = false;
             break;
-        case VersionedPageEntries::RESOLVE_TO_REF:
+        case ResolveResult::TO_REF:
             if (id_to_resolve == next_id_to_resolve)
             {
                 // dead-loop, so break the `while(keep_resolve)`
@@ -1087,11 +1087,11 @@ void PageDirectory::applyRefEditRecord(
                 nullptr);
             switch (resolve_state)
             {
-            case VersionedPageEntries::RESOLVE_FAIL:
+            case ResolveResult::FAIL:
                 return {false, id_to_resolve, ver_to_resolve};
-            case VersionedPageEntries::RESOLVE_TO_NORMAL:
+            case ResolveResult::TO_NORMAL:
                 return {true, id_to_resolve, ver_to_resolve};
-            case VersionedPageEntries::RESOLVE_TO_REF:
+            case ResolveResult::TO_REF:
                 if (id_to_resolve == next_id_to_resolve)
                 {
                     return {false, next_id_to_resolve, next_ver_to_resolve};
@@ -1351,7 +1351,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
 
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
-                    LOG_FMT_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
+                    LOG_WARNING(log, "Meet a stale snapshot [thread id={}] [tracing id={}] [seq={}] [alive time(s)={}]", snap->create_thread, snap->tracing_id, snap->sequence, alive_time_seconds);
                     stale_snapshot_nums++;
                 }
 
