@@ -299,17 +299,11 @@ ReadLimiter::ReadLimiter(
     Int64 get_io_stat_period_us,
     UInt64 refill_period_ms_)
     : WriteLimiter(rate_limit_per_sec_, type_, refill_period_ms_)
-<<<<<<< HEAD
     , getIOStatistic(std::move(getIOStatistic_))
     , last_stat_bytes(getIOStatistic())
     , last_stat_time(now())
-    , log(&Poco::Logger::get("ReadLimiter"))
     , get_io_statistic_period_us(get_io_stat_period_us)
-=======
-    , get_read_bytes(std::move(get_read_bytes_))
-    , last_stat_bytes(get_read_bytes())
     , last_refill_time(std::chrono::system_clock::now())
->>>>>>> b232bcd66c (Fix `alloc_bytes` of ReadLimiter (#5852))
 {}
 
 Int64 ReadLimiter::getAvailableBalance()

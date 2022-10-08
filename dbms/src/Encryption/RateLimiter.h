@@ -183,7 +183,6 @@ private:
 
     std::function<Int64()> getIOStatistic;
     Int64 last_stat_bytes;
-<<<<<<< HEAD
     using TimePoint = std::chrono::time_point<std::chrono::system_clock, std::chrono::microseconds>;
     static TimePoint now()
     {
@@ -193,9 +192,7 @@ private:
     Poco::Logger * log;
 
     Int64 get_io_statistic_period_us;
-=======
     std::chrono::time_point<std::chrono::system_clock> last_refill_time;
->>>>>>> b232bcd66c (Fix `alloc_bytes` of ReadLimiter (#5852))
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
