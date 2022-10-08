@@ -138,14 +138,21 @@ std::string getProfile()
 std::optional<std::string> CheckRuntimeValid()
 {
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    bool valid = common::cpu_feature_flags.avx2 && common::cpu_feature_flags.avx;
-    valid &= common::cpu_feature_flags.movbe;
-    // CPU which supports avx2 must have supported sse4, sse...
-    valid &= common::cpu_feature_flags.sse4_1 && common::cpu_feature_flags.sse4_2;
-    valid &= common::cpu_feature_flags.popcnt;
+    bool valid =
+        // CPU must support avx2 instruction sets.
+        common::cpu_feature_flags.avx2 & common::cpu_feature_flags.avx
+        // CPU which supports avx2 must have supported sse4, sse...
+        & common::cpu_feature_flags.sse4_1 & common::cpu_feature_flags.sse4_2
+        // sse4.1 sse4.2 popcnt are required in `cmake/test_cpu.cmake`
+        & common::cpu_feature_flags.popcnt
+        // movbe is necessary for memcmp
+        & common::cpu_feature_flags.movbe
+        //
+        ;
+
     if (!valid)
     {
-        return "Tilash requires CPU support instruction sets: sse4.1, sse4.2, popcnt, avx, avx2, movbe";
+        return "Tilash requires CPU support instruction sets: sse4.1, sse4.2, popcnt, avx, avx2, movbe. Please check `/proc/cpuinfo`.";
     }
 #endif
     return {};
