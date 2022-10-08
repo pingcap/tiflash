@@ -16,7 +16,6 @@
 #include <Common/Logger.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
-#include <Debug/MockTiDB.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -31,7 +30,6 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
-#include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
@@ -1626,34 +1624,11 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
 TEST_F(RegionKVStoreTest, KVStoreSnapshot)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
-    registerStorages();
     {
         UInt64 region_id = 1;
         TableID table_id;
         {
-            String path = TiFlashTestEnv::getContext().getPath();
-            auto p = path + "/metadata/";
-            TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
-            p = path + "/data/";
-            TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
-            KVStore & kvs = getKVS();
-            ColumnsDescription columns;
-            columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", typeFromString("Int64")}});
-            auto tso = ctx.getTMTContext().getPDClient()->getTS();
-            MockTiDB::instance().newDataBase("d");
-            table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
-            try
-            {
-                auto & tmt = ctx.getTMTContext();
-                auto schema_syncer = tmt.getSchemaSyncer();
-                schema_syncer->syncSchemas(ctx);
-            }
-            catch (Exception & e)
-            {
-                throw;
-            }
-
-            proxy_instance->table_id = table_id;
+            proxy_instance->bootstrap_table(kvs, ctx.getTMTContext());
             proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
         }
         {

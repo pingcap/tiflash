@@ -22,6 +22,8 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
+#include <Storages/registerStorages.h>
+#include <Debug/MockTiDB.h>
 
 namespace DB
 {
@@ -600,6 +602,37 @@ void MockRaftStoreProxy::snapshot(
     // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
     kv_region->setApplied(index, term);
 }
+
+void MockRaftStoreProxy::bootstrap_table(
+    KVStore & kvs,
+    TMTContext & tmt) 
+{
+    registerStorages();
+    String path = TiFlashTestEnv::getContext().getPath();
+    auto p = path + "/metadata/";
+    TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+    p = path + "/data/";
+    TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+    KVStore & kvs = getKVS();
+    ColumnsDescription columns;
+    columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", typeFromString("Int64")}});
+    auto tso = ctx.getTMTContext().getPDClient()->getTS();
+    MockTiDB::instance().newDataBase("d");
+    UInt64 table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
+    try
+    {
+        auto & tmt = ctx.getTMTContext();
+        auto schema_syncer = tmt.getSchemaSyncer();
+        schema_syncer->syncSchemas(ctx);
+    }
+    catch (Exception & e)
+    {
+        throw;
+    }
+
+    proxy_instance->table_id = table_id;
+}
+
 
 void GCMonitor::add(RawObjType type, int64_t diff)
 {

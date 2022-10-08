@@ -163,14 +163,20 @@ struct MockRaftStoreProxy : MutexLockWrap
         Type type = NORMAL;
     };
 
-    /// We assume that we generate one command, and immediately commit.
-    /// boostrap a region
+    /// boostrap a region.
     void bootstrap(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id);
 
-    /// normal write to a region
+    /// boostrap a table, since applying snapshot needs table schema.
+    void bootstrap_table(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 table_id);
+
+    /// We assume that we generate one command, and immediately commit.
+    /// normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(
         UInt64 region_id,
         std::vector<HandleID> && keys,
@@ -178,7 +184,9 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<WriteCmdType> && cmd_types,
         std::vector<ColumnFamilyType> && cmd_cf);
 
+    /// Create a compactLog admin command, returns (index, term) of the admin command itself.
     std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
+
     struct Cf
     {
         Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_);
