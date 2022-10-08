@@ -73,9 +73,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
-    M(gc_skip_update_safe_point)                             \
-    M(gc_skip_merge_delta)                                   \
-    M(gc_skip_merge)                                         \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
