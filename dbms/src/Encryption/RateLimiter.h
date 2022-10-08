@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #pragma once
-
+#include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
