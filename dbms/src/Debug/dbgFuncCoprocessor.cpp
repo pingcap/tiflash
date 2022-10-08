@@ -15,6 +15,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Common/typeid_cast.h>
+#include <Core/BlockUtils.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -22,6 +23,7 @@
 #include <Debug/DAGProperties.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgNaturalDag.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
@@ -33,7 +35,6 @@
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
-#include <Interpreters/sortBlock.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -62,7 +63,6 @@ namespace ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;
-extern const int NO_SUCH_COLUMN_IN_TABLE;
 } // namespace ErrorCodes
 
 using DAGColumnInfo = std::pair<String, ColumnInfo>;
@@ -134,8 +134,6 @@ private:
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
 bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
-BlockInputStreamPtr outputDAGResponse(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
-bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
 
 DAGProperties getDAGProperties(const String & prop_string)
 {
@@ -629,7 +627,7 @@ struct QueryFragment
             dag_request.add_output_offsets(i);
         auto * root_tipb_executor = dag_request.mutable_root_executor();
         root_executor->toTiPBExecutor(root_tipb_executor, properties.collator, mpp_info, context);
-        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, mpp_info.sender_target_task_ids.empty() ? DAG : MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
+        return QueryTask(dag_request_ptr, table_id, root_executor->output_schema, mpp_info.sender_target_task_ids.empty() ? QueryTaskType::DAG : QueryTaskType::MPP_DISPATCH, mpp_info.task_id, mpp_info.partition_id, is_top_fragment);
     }
 
     QueryTasks toQueryTasks(const DAGProperties & properties, const Context & context) const
@@ -1025,179 +1023,4 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
     return dag_response;
 }
 
-std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
-{
-    switch (encode_type)
-    {
-    case tipb::EncodeType::TypeDefault:
-        return std::make_unique<DefaultChunkCodec>();
-    case tipb::EncodeType::TypeChunk:
-        return std::make_unique<ArrowChunkCodec>();
-    case tipb::EncodeType::TypeCHBlock:
-        return std::make_unique<CHBlockChunkCodec>();
-    default:
-        throw Exception("Unsupported encode type", ErrorCodes::BAD_ARGUMENTS);
-    }
-}
-
-void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks)
-{
-    auto codec = getCodec(dag_response.encode_type());
-    for (const auto & chunk : dag_response.chunks())
-        blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
-}
-
-BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
-{
-    if (dag_response.has_error())
-        throw Exception(dag_response.error().msg(), dag_response.error().code());
-
-    BlocksList blocks;
-    chunksToBlocks(schema, dag_response, blocks);
-    return std::make_shared<BlocksListBlockInputStream>(std::move(blocks));
-}
-
-DAGSchema getSelectSchema(Context & context)
-{
-    DAGSchema schema;
-    auto * dag_context = context.getDAGContext();
-    auto result_field_types = dag_context->result_field_types;
-    for (int i = 0; i < static_cast<int>(result_field_types.size()); i++)
-    {
-        ColumnInfo info = TiDB::fieldTypeToColumnInfo(result_field_types[i]);
-        String col_name = "col_" + std::to_string(i);
-        schema.push_back(std::make_pair(col_name, info));
-    }
-    return schema;
-}
-
-// Just for test usage, dag_response should not contain result more than 128M
-Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response)
-{
-    auto src = outputDAGResponse(context, schema, dag_response);
-    // Try to merge into big block. 128 MB should be enough.
-    SquashingBlockInputStream squashed_delete_stream(src, 0, 128 * (1UL << 20), /*req_id=*/"");
-    Blocks result_data;
-    while (true)
-    {
-        Block block = squashed_delete_stream.read();
-        if (!block)
-        {
-            if (result_data.empty())
-            {
-                // Ensure that result_data won't be empty in any situation
-                result_data.emplace_back(std::move(block));
-            }
-            break;
-        }
-        else
-        {
-            result_data.emplace_back(std::move(block));
-        }
-    }
-
-    if (result_data.size() > 1)
-        throw Exception("Result block should be less than 128M!", ErrorCodes::BAD_ARGUMENTS);
-    return result_data[0];
-}
-
-bool columnEqual(
-    const ColumnPtr & expected,
-    const ColumnPtr & actual,
-    String & unequal_msg)
-{
-    for (size_t i = 0, size = expected->size(); i < size; ++i)
-    {
-        auto expected_field = (*expected)[i];
-        auto actual_field = (*actual)[i];
-        if (expected_field != actual_field)
-        {
-            unequal_msg = fmt::format("Value {} mismatch {} vs {} ", i, expected_field.toString(), actual_field.toString());
-            return false;
-        }
-    }
-    return true;
-}
-
-bool blockEqual(const Block & expected, const Block & actual, String & unequal_msg)
-{
-    size_t rows_a = expected.rows();
-    size_t rows_b = actual.rows();
-    if (rows_a != rows_b)
-    {
-        unequal_msg = fmt::format("Row counter are not equal: {} vs {} ", rows_a, rows_b);
-        return false;
-    }
-
-    size_t size_a = expected.columns();
-    size_t size_b = actual.columns();
-    if (size_a != size_b)
-    {
-        unequal_msg = fmt::format("Columns size are not equal: {} vs {} ", size_a, size_b);
-        return false;
-    }
-
-    for (size_t i = 0; i < size_a; i++)
-    {
-        bool equal = columnEqual(expected.getByPosition(i).column, actual.getByPosition(i).column, unequal_msg);
-        if (!equal)
-        {
-            unequal_msg = fmt::format("{}th columns are not equal, details: {}", i, unequal_msg);
-            return false;
-        }
-    }
-    return true;
-}
-
-String formatBlockData(const Block & block)
-{
-    size_t rows = block.rows();
-    size_t columns = block.columns();
-    String result;
-    for (size_t i = 0; i < rows; i++)
-    {
-        for (size_t j = 0; j < columns; j++)
-        {
-            auto column = block.getByPosition(j).column;
-            auto field = (*column)[i];
-            if (j + 1 < columns)
-            {
-                // Just use "," as separator now, maybe confusing when string column contains ","
-                result += fmt::format("{},", field.toString());
-            }
-            else
-            {
-                result += fmt::format("{}\n", field.toString());
-            }
-        }
-    }
-    return result;
-}
-
-SortDescription generateSDFromSchema(const DAGSchema & schema)
-{
-    SortDescription sort_desc;
-    sort_desc.reserve(schema.size());
-    for (const auto & col : schema)
-    {
-        sort_desc.emplace_back(col.first, -1, -1, nullptr);
-    }
-    return sort_desc;
-}
-
-bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg)
-{
-    auto schema = getSelectSchema(context);
-    SortDescription sort_desc = generateSDFromSchema(schema);
-    Block block_a = getMergedBigBlockFromDagRsp(context, schema, expected);
-    sortBlock(block_a, sort_desc);
-    Block block_b = getMergedBigBlockFromDagRsp(context, schema, actual);
-    sortBlock(block_b, sort_desc);
-    bool equal = blockEqual(block_a, block_b, unequal_msg);
-    if (!equal)
-    {
-        unequal_msg = fmt::format("{}\nExpected Results: \n{}\nActual Results: \n{}", unequal_msg, formatBlockData(block_a), formatBlockData(block_b));
-    }
-    return equal;
-}
 } // namespace DB

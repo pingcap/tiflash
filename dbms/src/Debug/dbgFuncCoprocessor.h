@@ -54,7 +54,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args);
 
 DAGProperties getDAGProperties(const String & prop_string);
 
-enum QueryTaskType
+enum class QueryTaskType
 {
     DAG,
     MPP_DISPATCH
