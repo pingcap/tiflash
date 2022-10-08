@@ -1,0 +1,63 @@
+// For format details, see https://aka.ms/devcontainer.json.
+{
+  "name": "TiFlash",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "CLANG_VERSION": "14",
+      "CMAKE_VERSION": "3.22.6"
+    }
+  },
+  "hostRequirements": {
+    "cpus": 2,
+    "memory": "8gb"
+  },
+  "mounts": [
+    // Avoid reinstalling vscode extensions
+    "source=tiflash-vscode-extensions,target=/home/vscode/.vscode-server/extensions,type=volume",
+    // Cache Cargo downloaded deps
+    "source=tiflash-cargo-registry,target=/home/vscode/.cargo/registry,type=volume",
+    "source=tiflash-cargo-git,target=/home/vscode/.cargo/git,type=volume",
+    // Cache Rust toolchain
+    // We have to cache the entire directory due to https://github.com/rust-lang/rustup/issues/1239
+    "source=tiflash-rustup,target=/home/vscode/.rustup,type=volume",
+    // Cache ccache results
+    "source=tiflash-ccache,target=/home/vscode/.cache/ccache,type=volume",
+  ],
+  "remoteUser": "vscode",
+  // For using a ptrace-based debugger like C++, Go, and Rust
+  "runArgs": [
+    "--cap-add=SYS_PTRACE",
+    "--security-opt",
+    "seccomp=unconfined"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "llvm-vs-code-extensions.vscode-clangd", // C++ Code Completion
+        "jeff-hykin.better-cpp-syntax", // C++ Syntax
+        "twxs.cmake",
+        "ms-vscode.cmake-tools", // CMake actions in UI
+        "bungcip.better-toml", // TOML Syntax highlighting
+      ],
+      "settings": {
+        "cmake.buildDirectory": "${workspaceFolder}/cmake-build-${buildType}",
+        "cmake.statusbar.visibility": "compact",
+        "cmake.statusbar.advanced": {
+          "ctest": { // We don't use ctest at all
+            "visibility": "hidden"
+          },
+          "kit": { // We rarely change the kit
+            "visibility": "icon"
+          }
+        },
+        "clangd.path": "clangd-14",
+        "clangd.arguments": [
+          "--compile-commands-dir=cmake-build-Debug"
+        ],
+        "cmake.generator": "Ninja",
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  }
+}
