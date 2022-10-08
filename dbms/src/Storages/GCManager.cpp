@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/GCManager.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -76,7 +77,7 @@ bool GCManager::work()
             // Block this thread and do GC on the storage
             // It is OK if any schema changes is apply to the storage while doing GC, so we
             // do not acquire structure lock on the storage.
-            auto gc_segments_num = storage->onSyncGc(gc_segments_limit);
+            auto gc_segments_num = storage->onSyncGc(gc_segments_limit, DM::GCOptions::newAll());
             gc_segments_limit = gc_segments_limit - gc_segments_num;
             LOG_TRACE(log, "GCManager gc {} segments of table {}", gc_segments_num, storage->getTableInfo().id);
             // Reach the limit on the number of segments to be gc, stop here
