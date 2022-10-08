@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <optional>
 #include <ostream>
 #include <string>
 
@@ -29,6 +30,8 @@ std::string getGitHash();
 std::string getGitBranch();
 std::string getUTCBuildTime();
 std::string getProfile();
+/// Return `nullopt` if runtime is valid, else error message
+std::optional<std::string> CheckRuntimeValid();
 
 void outputDetail(std::ostream & os);
 } // namespace TiFlashBuildInfo

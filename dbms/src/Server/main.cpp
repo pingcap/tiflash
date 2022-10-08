@@ -150,6 +150,12 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
 
 int main(int argc_, char ** argv_)
 {
+    if (auto r = TiFlashBuildInfo::CheckRuntimeValid(); r)
+    {
+        std::cerr << *r << std::endl;
+        exit(-1);
+    }
+
     std::vector<char *> argv(argv_, argv_ + argc_);
 
     /// Print a basic help if nothing was matched

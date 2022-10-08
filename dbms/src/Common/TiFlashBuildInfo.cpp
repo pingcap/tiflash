@@ -14,11 +14,13 @@
 
 #include <Common/config_version.h>
 #include <common/config_common.h>
+#include <common/detect_features.h>
 #include <fmt/core.h>
 #include <fmt/format.h>
 #include <openssl/opensslconf.h>
 #include <openssl/opensslv.h>
 
+#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
@@ -82,7 +84,7 @@ std::string getEnabledFeatures()
 
 // SIMD related
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
-            "avx",
+            "avx2",
 #endif
 #ifdef TIFLASH_ENABLE_AVX512_SUPPORT
             "avx512",
@@ -131,6 +133,22 @@ std::string getEnabledFeatures()
 std::string getProfile()
 {
     return TIFLASH_PROFILE;
+}
+
+std::optional<std::string> CheckRuntimeValid()
+{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+    bool valid = common::cpu_feature_flags.avx2 && common::cpu_feature_flags.avx;
+    valid &= common::cpu_feature_flags.movbe;
+    // CPU which supports avx2 must have supported sse4, sse...
+    valid &= common::cpu_feature_flags.sse4_1 && common::cpu_feature_flags.sse4_2;
+    valid &= common::cpu_feature_flags.popcnt;
+    if (!valid)
+    {
+        return "Tilash requires CPU support instruction sets: sse4.1, sse4.2, popcnt, avx, avx2, movbe";
+    }
+#endif
+    return {};
 }
 
 void outputDetail(std::ostream & os)
