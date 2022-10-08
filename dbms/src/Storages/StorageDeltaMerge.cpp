@@ -815,11 +815,11 @@ void StorageDeltaMerge::ingestFiles(
         clear_data_in_range);
 }
 
-UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
+UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (storeInited())
     {
-        return _store->onSyncGc(limit);
+        return _store->onSyncGc(limit, gc_options);
     }
     return 0;
 }
@@ -1362,10 +1362,10 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & name_col = columns[0];
     auto & value_col = columns[1];
 
-    DeltaMergeStoreStat stat;
+    StoreStats stat;
     if (storeInited())
     {
-        stat = _store->getStat();
+        stat = _store->getStoreStats();
     }
 
 #define INSERT_INT(NAME)             \

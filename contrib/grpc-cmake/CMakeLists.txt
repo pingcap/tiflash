@@ -74,15 +74,13 @@ set(gRPC_BUILD_CSHARP_EXT OFF)
 
 add_subdirectory("${_gRPC_SOURCE_DIR}" "${_gRPC_BINARY_DIR}")
 
-# TODO: we had better update and lib to avoid warnings
-# But for now, the warnings are too annoying so we simply remote it
-
-if(TIFLASH_LLVM_TOOLCHAIN)
-  target_compile_options(grpc PRIVATE
-        -Wno-deprecated-declarations -Wno-non-c-typedef-for-linkage -Wno-implicit-const-int-float-conversion)
-  target_compile_options(grpc++ PRIVATE
-        -Wno-deprecated-declarations -Wno-non-c-typedef-for-linkage -Wno-implicit-const-int-float-conversion)
-endif()
+# clean up some clang warnings
+target_no_warning(grpc deprecated-declarations)
+target_no_warning(grpc non-c-typedef-for-linkage)
+target_no_warning(grpc implicit-const-int-float-conversion)
+target_no_warning(grpc++ deprecated-declarations)
+target_no_warning(grpc++ non-c-typedef-for-linkage)
+target_no_warning(grpc++ implicit-const-int-float-conversion)
 
 execute_process(
   COMMAND grep "//gpr_log(GPR_DEBUG, \"cannot set inq fd=%d errno=%d\", tcp->fd, errno);" "${_gRPC_SOURCE_DIR}/src/core/lib/iomgr/tcp_posix.cc"

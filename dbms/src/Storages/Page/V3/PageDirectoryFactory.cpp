@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 
 #include <memory>
@@ -196,8 +197,8 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
 {
     while (reader->remained())
     {
-        auto [ok, edit] = reader->next();
-        if (!ok)
+        auto record = reader->next();
+        if (!record)
         {
             // TODO: Handle error, some error could be ignored.
             // If the file happened to some error,
@@ -208,6 +209,7 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
         }
 
         // apply the edit read
+        auto edit = ser::deserializeFrom(record.value());
         loadEdit(dir, edit);
     }
 }
