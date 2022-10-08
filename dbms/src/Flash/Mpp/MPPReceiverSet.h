@@ -28,7 +28,6 @@ public:
     void addExchangeReceiver(const String & executor_id, const ExchangeReceiverPtr & exchange_receiver);
     void addCoprocessorReader(const CoprocessorReaderPtr & coprocessor_reader);
     ExchangeReceiverPtr getExchangeReceiver(const String & executor_id) const;
-    void setUpConnection();
     void cancel();
     void close();
 

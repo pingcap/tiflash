@@ -39,7 +39,6 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char gc_skip_update_safe_point[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];
@@ -2953,7 +2952,7 @@ try
 
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
-            auto segment_stats = store->getSegmentStats();
+            auto segment_stats = store->getSegmentsStats();
             size_t delta_cache_size = 0;
             for (auto & stat : segment_stats)
             {
