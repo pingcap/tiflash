@@ -567,8 +567,9 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
 }
 
 
-std::string_view buffToStrView(const BaseBuffView & buf) {
-    return std::string_view {buf.data, buf.len};
+std::string_view buffToStrView(const BaseBuffView & buf)
+{
+    return std::string_view{buf.data, buf.len};
 }
 
 } // namespace DB

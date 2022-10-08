@@ -528,7 +528,8 @@ std::vector<SSTView> MockRaftStoreProxy::Cf::ssts() const
 {
     assert(freezed);
     std::vector<SSTView> sst_views;
-    for (auto iter = sst_files.begin(); iter != sst_files.end(); iter++) {
+    for (auto iter = sst_files.begin(); iter != sst_files.end(); iter++)
+    {
         sst_views.push_back(SSTView{
             type,
             BaseBuffView{iter->c_str(), iter->size()},

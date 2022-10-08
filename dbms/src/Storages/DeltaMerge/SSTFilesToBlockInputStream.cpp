@@ -65,16 +65,20 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 void SSTFilesToBlockInputStream::readPrefix()
 {
     bool use_multi = false;
-    if (snaps.len > 3) {
+    if (snaps.len > 3)
+    {
         use_multi = true;
-    } else {
-        int c[3] = { 0 };
+    }
+    else
+    {
+        int c[3] = {0};
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
             const auto & snapshot = snaps.views[i];
             auto t = static_cast<std::underlying_type_t<ColumnFamilyType>>(snapshot.type);
             c[t]++;
-            if (c[t] > 1) {
+            if (c[t] > 1)
+            {
                 use_multi = true;
                 break;
             }
@@ -115,7 +119,8 @@ void SSTFilesToBlockInputStream::readPrefix()
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
             const auto & snapshot = snaps.views[i];
-            if (!flag) {
+            if (!flag)
+            {
                 flag = true;
                 prev_type = snapshot.type;
             }
@@ -126,7 +131,8 @@ void SSTFilesToBlockInputStream::readPrefix()
             }
             ssts.push_back(snapshot);
         }
-        if (ssts.size()) {
+        if (ssts.size())
+        {
             generate_cf_reader();
         }
         LOG_FMT_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {}", size_write, size_lock, size_default);

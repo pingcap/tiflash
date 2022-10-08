@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
 #include <Debug/MockTiDB.h>
@@ -30,16 +31,14 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
+#include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
-#include <Storages/registerStorages.h>
-#include <Common/Logger.h>
 
 #include <memory>
 
 namespace DB
 {
-
 extern void GenMockSSTData(const TiDB::TableInfo & table_info,
                            TableID table_id,
                            const String & store_key,
@@ -1644,7 +1643,8 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
             auto tso = ctx.getTMTContext().getPDClient()->getTS();
             MockTiDB::instance().newDataBase("d");
             table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
-            try {
+            try
+            {
                 auto & tmt = ctx.getTMTContext();
                 auto schema_syncer = tmt.getSchemaSyncer();
                 schema_syncer->syncSchemas(ctx);
