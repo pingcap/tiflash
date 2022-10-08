@@ -542,7 +542,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, RawQuery)
 try
 {
-    const auto * query = "select * from test_db.l_table left outer join test_db.r_table_2 using join_c";
+    String query = "select * from test_db.l_table left outer join test_db.r_table_2 using join_c";
     auto cols = {toNullableVec<String>({"banana", "banana", "banana", "banana"}), toNullableVec<String>({"apple", "apple", "apple", "banana"}), toNullableVec<String>({"banana", "banana", "banana", {}}), toNullableVec<String>({"apple", "apple", "apple", {}})};
     ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
 }
