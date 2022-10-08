@@ -64,7 +64,7 @@ String formatBlockData(const Block & block)
             }
             else
             {
-                 buf.fmtAppend("{}\n", field.toString());
+                buf.fmtAppend("{}\n", field.toString());
             }
         }
     }

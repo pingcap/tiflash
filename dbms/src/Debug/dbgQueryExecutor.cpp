@@ -13,6 +13,9 @@
 // limitations under the License.
 
 #include <Debug/dbgQueryExecutor.h>
+#include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/CoprocessorHandler.h>
+
 namespace DB
 {
 void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
@@ -270,5 +273,64 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
     {
         return executeNonMPPQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
     }
+}
+
+tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
+{
+    static auto log = Logger::get("MockDAG");
+    LOG_FMT_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
+    tipb::SelectResponse dag_response;
+    TablesRegionsInfo tables_regions_info(true);
+    auto & table_regions_info = tables_regions_info.getSingleTableRegions();
+
+    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
+
+    DAGContext dag_context(dag_request);
+    dag_context.tables_regions_info = std::move(tables_regions_info);
+    dag_context.log = log;
+    context.setDAGContext(&dag_context);
+
+    DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+    driver.execute();
+    LOG_FMT_DEBUG(log, "Handle DAG request done");
+    return dag_response;
+}
+
+bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg)
+{
+    const kvrpcpb::Context & req_context = req.context();
+    RegionID region_id = req_context.region_id();
+    tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());
+    RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
+    if (!region)
+        throw Exception(fmt::format("No such region: {}", region_id), ErrorCodes::BAD_ARGUMENTS);
+
+    bool unequal_flag = false;
+    DAGProperties properties = getDAGProperties("");
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::genCopKeyRange(req.ranges());
+    static auto log = Logger::get("MockDAG");
+    LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
+    tipb::SelectResponse dag_response;
+    TablesRegionsInfo tables_regions_info(true);
+    auto & table_regions_info = tables_regions_info.getSingleTableRegions();
+    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
+
+    DAGContext dag_context(dag_request);
+    dag_context.tables_regions_info = std::move(tables_regions_info);
+    dag_context.log = log;
+    context.setDAGContext(&dag_context);
+    DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
+    driver.execute();
+
+    auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+    if (!resp_ptr->ParseFromString(res.data()))
+    {
+        throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
+    }
+    else
+    {
+        unequal_flag |= (!dagRspEqual(context, *resp_ptr, dag_response, unequal_msg));
+    }
+    return unequal_flag;
 }
 } // namespace DB

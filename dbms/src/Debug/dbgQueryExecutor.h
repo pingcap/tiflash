@@ -24,4 +24,15 @@ BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DA
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
 BlockInputStreamPtr executeNonMPPQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
+
+tipb::SelectResponse executeDAGRequest(
+    Context & context,
+    const tipb::DAGRequest & dag_request,
+    RegionID region_id,
+    UInt64 region_version,
+    UInt64 region_conf_version,
+    Timestamp start_ts,
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
+
+bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
 } // namespace DB
