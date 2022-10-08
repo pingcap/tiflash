@@ -16,13 +16,20 @@
 #include <Core/BlockUtils.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
+#include <Debug/DAGProperties.h>
+#include <Debug/dbgTools.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/CoprocessorHandler.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/sortBlock.h>
+#include <Poco/StringTokenizer.h>
+#include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -40,5 +47,15 @@ BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const
 Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
 
+DAGProperties getDAGProperties(const String & prop_string);
+tipb::SelectResponse executeDAGRequest(
+    Context & context,
+    const tipb::DAGRequest & dag_request,
+    RegionID region_id,
+    UInt64 region_version,
+    UInt64 region_conf_version,
+    Timestamp start_ts,
+    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
 
+bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
 } // namespace DB

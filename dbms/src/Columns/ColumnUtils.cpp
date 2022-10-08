@@ -16,8 +16,7 @@
 
 namespace DB
 {
-
-bool columnEqual(const ColumnPtr & expected, const ColumnPtr & actual,String & unequal_msg)
+bool columnEqual(const ColumnPtr & expected, const ColumnPtr & actual, String & unequal_msg)
 {
     for (size_t i = 0, size = expected->size(); i < size; ++i)
     {

@@ -15,23 +15,15 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionUniq.h>
 #include <Common/typeid_cast.h>
-#include <Core/BlockUtils.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/FieldToDataType.h>
-#include <Debug/DAGProperties.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Debug/dbgFuncCoprocessorUtils.h>
 #include <Debug/dbgNaturalDag.h>
-#include <Flash/Coprocessor/ArrowChunkCodec.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/DAGCodec.h>
-#include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/DAGUtils.h>
-#include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Flash/CoprocessorHandler.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
@@ -44,14 +36,10 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Poco/StringTokenizer.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/Transaction/Datum.h>
-#include <Storages/Transaction/KVStore.h>
-#include <Storages/Transaction/Region.h>
-#include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <tipb/select.pb.h>
@@ -69,14 +57,6 @@ using DAGColumnInfo = std::pair<String, ColumnInfo>;
 using DAGSchema = std::vector<DAGColumnInfo>;
 using TiFlashTestEnv = tests::TiFlashTestEnv;
 using ExecutorBinderPtr = mock::ExecutorBinderPtr;
-static const String ENCODE_TYPE_NAME = "encode_type";
-static const String TZ_OFFSET_NAME = "tz_offset";
-static const String TZ_NAME_NAME = "tz_name";
-static const String COLLATOR_NAME = "collator";
-static const String MPP_QUERY = "mpp_query";
-static const String USE_BROADCAST_JOIN = "use_broadcast_join";
-static const String MPP_PARTITION_NUM = "mpp_partition_num";
-static const String MPP_TIMEOUT = "mpp_timeout";
 
 class UniqRawResReformatBlockOutputStream : public IProfilingBlockInputStream
 {
@@ -131,44 +111,6 @@ protected:
 private:
     BlockInputStreamPtr in;
 };
-
-tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges);
-bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg);
-
-DAGProperties getDAGProperties(const String & prop_string)
-{
-    DAGProperties ret;
-    if (prop_string.empty())
-        return ret;
-    std::unordered_map<String, String> properties;
-    Poco::StringTokenizer string_tokens(prop_string, ",");
-    for (const auto & string_token : string_tokens)
-    {
-        Poco::StringTokenizer tokens(string_token, ":");
-        if (tokens.count() != 2)
-            continue;
-        properties[Poco::toLower(tokens[0])] = tokens[1];
-    }
-
-    if (properties.find(ENCODE_TYPE_NAME) != properties.end())
-        ret.encode_type = properties[ENCODE_TYPE_NAME];
-    if (properties.find(TZ_OFFSET_NAME) != properties.end())
-        ret.tz_offset = std::stol(properties[TZ_OFFSET_NAME]);
-    if (properties.find(TZ_NAME_NAME) != properties.end())
-        ret.tz_name = properties[TZ_NAME_NAME];
-    if (properties.find(COLLATOR_NAME) != properties.end())
-        ret.collator = std::stoi(properties[COLLATOR_NAME]);
-    if (properties.find(MPP_QUERY) != properties.end())
-        ret.is_mpp_query = properties[MPP_QUERY] == "true";
-    if (properties.find(USE_BROADCAST_JOIN) != properties.end())
-        ret.use_broadcast_join = properties[USE_BROADCAST_JOIN] == "true";
-    if (properties.find(MPP_PARTITION_NUM) != properties.end())
-        ret.mpp_partition_num = std::stoi(properties[MPP_PARTITION_NUM]);
-    if (properties.find(MPP_TIMEOUT) != properties.end())
-        ret.mpp_timeout = std::stoi(properties[MPP_TIMEOUT]);
-
-    return ret;
-}
 
 void setTipbRegionInfo(coprocessor::RegionInfo * tipb_region_info, const std::pair<RegionID, RegionPtr> & region, TableID table_id)
 {
@@ -482,44 +424,6 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
             "\n");
         throw Exception(fmt_buf.toString(), ErrorCodes::LOGICAL_ERROR);
     }
-}
-
-bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Response & res, Context & context, String & unequal_msg)
-{
-    const kvrpcpb::Context & req_context = req.context();
-    RegionID region_id = req_context.region_id();
-    tipb::DAGRequest dag_request = getDAGRequestFromStringWithRetry(req.data());
-    RegionPtr region = context.getTMTContext().getKVStore()->getRegion(region_id);
-    if (!region)
-        throw Exception(fmt::format("No such region: {}", region_id), ErrorCodes::BAD_ARGUMENTS);
-
-    bool unequal_flag = false;
-    DAGProperties properties = getDAGProperties("");
-    std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::genCopKeyRange(req.ranges());
-    static auto log = Logger::get("MockDAG");
-    LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
-    tipb::SelectResponse dag_response;
-    TablesRegionsInfo tables_regions_info(true);
-    auto & table_regions_info = tables_regions_info.getSingleTableRegions();
-    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
-
-    DAGContext dag_context(dag_request);
-    dag_context.tables_regions_info = std::move(tables_regions_info);
-    dag_context.log = log;
-    context.setDAGContext(&dag_context);
-    DAGDriver driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
-    driver.execute();
-
-    auto resp_ptr = std::make_shared<tipb::SelectResponse>();
-    if (!resp_ptr->ParseFromString(res.data()))
-    {
-        throw Exception("Incorrect json response data!", ErrorCodes::BAD_ARGUMENTS);
-    }
-    else
-    {
-        unequal_flag |= (!dagRspEqual(context, *resp_ptr, dag_response, unequal_msg));
-    }
-    return unequal_flag;
 }
 
 BlockInputStreamPtr dbgFuncTiDBQuery(Context & context, const ASTs & args)
@@ -1000,27 +904,6 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
     root_executor->columnPrune(used_columns);
 
     return std::make_tuple(queryPlanToQueryTasks(properties, root_executor, executor_index, context), func_wrap_output_stream);
-}
-
-tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
-{
-    static auto log = Logger::get("MockDAG");
-    LOG_FMT_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
-    tipb::SelectResponse dag_response;
-    TablesRegionsInfo tables_regions_info(true);
-    auto & table_regions_info = tables_regions_info.getSingleTableRegions();
-
-    table_regions_info.local_regions.emplace(region_id, RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
-
-    DAGContext dag_context(dag_request);
-    dag_context.tables_regions_info = std::move(tables_regions_info);
-    dag_context.log = log;
-    context.setDAGContext(&dag_context);
-
-    DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
-    driver.execute();
-    LOG_FMT_DEBUG(log, "Handle DAG request done");
-    return dag_response;
 }
 
 } // namespace DB

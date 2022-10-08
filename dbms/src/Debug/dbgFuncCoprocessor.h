@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Debug/DAGProperties.h>
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockExecutor/AggregationBinder.h>
 #include <Debug/MockExecutor/AstToPB.h>
@@ -29,7 +28,6 @@
 #include <Debug/MockExecutor/TableScanBinder.h>
 #include <Debug/MockExecutor/TopNBinder.h>
 #include <Debug/MockExecutor/WindowBinder.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Parsers/IAST.h>
 #include <Storages/Transaction/Types.h>
 
@@ -51,8 +49,6 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
 // Usage:
 //   ./storages-client.sh "DBGInvoke mock_dag(query, region_id[, start_ts])"
 BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args);
-
-DAGProperties getDAGProperties(const String & prop_string);
 
 enum class QueryTaskType
 {
@@ -99,8 +95,6 @@ QueryTasks queryPlanToQueryTasks(
 BlockInputStreamPtr executeQuery(Context & context, RegionID region_id, const DAGProperties & properties, QueryTasks & query_tasks, MakeResOutputStream & func_wrap_output_stream);
 BlockInputStreamPtr executeMPPQuery(Context & context, const DAGProperties & properties, QueryTasks & query_tasks);
 std::vector<BlockInputStreamPtr> executeMPPQueryWithMultipleContext(const DAGProperties & properties, QueryTasks & query_tasks, std::unordered_map<size_t, MockServerConfig> & server_config_map);
-DAGSchema getSelectSchema(Context & context);
-std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type);
 
 namespace Debug
 {

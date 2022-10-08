@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Parsers/IAST.h>
+#include <Storages/Transaction/TiDB.h>
 #include <Storages/Transaction/TiKVKeyValue.h>
 #include <kvproto/raft_cmdpb.pb.h>
 

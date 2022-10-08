@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Core/Block.h>
 #include <Columns/ColumnUtils.h>
+#include <Core/Block.h>
 
 namespace DB
 {
