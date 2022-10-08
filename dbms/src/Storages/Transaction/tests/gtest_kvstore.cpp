@@ -1380,7 +1380,7 @@ try
     {
         if (ingest_using_split)
         {
-            auto stats = storage->getStore()->getStat();
+            auto stats = storage->getStore()->getStoreStats();
             ASSERT_EQ(3, stats.segment_count);
         }
 
@@ -1414,7 +1414,7 @@ try
         }
     }
     {
-        auto stats = storage->getStore()->getStat();
+        auto stats = storage->getStore()->getStoreStats();
         ASSERT_NE(0, stats.total_stable_size_on_disk);
         ASSERT_NE(0, stats.total_rows);
         ASSERT_NE(0, stats.total_size);
@@ -1441,7 +1441,7 @@ try
         auto gc_n = storage->onSyncGc(100, DM::GCOptions::newAllForTest());
         ASSERT_EQ(0, gc_n);
 
-        auto stats = storage->getStore()->getStat();
+        auto stats = storage->getStore()->getStoreStats();
         ASSERT_EQ(1, stats.segment_count);
         ASSERT_EQ(0, stats.total_stable_size_on_disk);
         ASSERT_EQ(0, stats.total_rows);
