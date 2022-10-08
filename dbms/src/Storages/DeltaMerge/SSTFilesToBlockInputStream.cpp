@@ -131,7 +131,7 @@ void SSTFilesToBlockInputStream::readPrefix()
             }
             ssts.push_back(snapshot);
         }
-        if (ssts.size())
+        if (!ssts.empty())
         {
             generate_cf_reader();
         }

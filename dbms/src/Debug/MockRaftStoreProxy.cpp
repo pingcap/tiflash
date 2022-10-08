@@ -516,9 +516,9 @@ void MockRaftStoreProxy::Cf::finish_file()
     sst_files.push_back(region_id_str);
     LOG_FMT_INFO(&Poco::Logger::get("MockRaftStoreProxy::cf"), "add {}", region_id_str);
     MockSSTReader::Data kv_list;
-    for (auto it = kvs.begin(); it != kvs.end(); it++)
+    for (auto & kv : kvs)
     {
-        kv_list.emplace_back(it->first, it->second);
+        kv_list.emplace_back(kv.first, kv.second);
     }
     auto & mmp = MockSSTReader::getMockSSTData();
     mmp[MockSSTReader::Key{region_id_str, type}] = std::move(kv_list);
@@ -529,11 +529,11 @@ std::vector<SSTView> MockRaftStoreProxy::Cf::ssts() const
 {
     assert(freezed);
     std::vector<SSTView> sst_views;
-    for (auto iter = sst_files.begin(); iter != sst_files.end(); iter++)
+    for (const auto & sst_file : sst_files)
     {
         sst_views.push_back(SSTView{
             type,
-            BaseBuffView{iter->c_str(), iter->size()},
+            BaseBuffView{sst_file.c_str(), sst_file.size()},
         });
     }
     return sst_views;
@@ -579,12 +579,12 @@ void MockRaftStoreProxy::snapshot(
         kvs.snapshot_apply_method = ori_snapshot_apply_method;
     });
     std::vector<SSTView> ssts;
-    for (auto iter = cfs.begin(); iter != cfs.end(); iter++)
+    for (auto & cf : cfs)
     {
-        auto sst = iter->ssts();
-        for (auto it = sst.begin(); it != sst.end(); it++)
+        auto sst = cf.ssts();
+        for (auto & it : sst)
         {
-            ssts.push_back(*it);
+            ssts.push_back(it);
         }
     }
     SSTViewVec snaps{ssts.data(), ssts.size()};

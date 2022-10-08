@@ -1639,7 +1639,6 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
             KVStore & kvs = getKVS();
             ColumnsDescription columns;
             columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", typeFromString("Int64")}});
-
             auto tso = ctx.getTMTContext().getPDClient()->getTS();
             MockTiDB::instance().newDataBase("d");
             table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
