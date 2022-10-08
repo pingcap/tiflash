@@ -329,11 +329,13 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                                                                        context.getSettingsRef().safe_point_update_interval_seconds);
             }
             physical_table_id = storage->getTableInfo().id;
+            auto log_prefix = fmt::format("table_id={}", physical_table_id);
 
             auto & global_settings = context.getGlobalContext().getSettingsRef();
 
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
+                log_prefix,
                 new_region,
                 snaps,
                 proxy_helper,
@@ -344,6 +346,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 expected_block_size);
             auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
             stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
+                log_prefix,
                 bounded_stream,
                 storage,
                 schema_snap,

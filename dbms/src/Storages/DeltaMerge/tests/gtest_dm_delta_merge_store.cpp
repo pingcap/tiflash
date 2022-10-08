@@ -2952,7 +2952,7 @@ try
 
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
-            auto segment_stats = store->getSegmentStats();
+            auto segment_stats = store->getSegmentsStats();
             size_t delta_cache_size = 0;
             for (auto & stat : segment_stats)
             {

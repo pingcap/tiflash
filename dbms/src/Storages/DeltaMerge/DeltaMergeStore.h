@@ -53,31 +53,40 @@ struct GCOptions;
 
 inline static const PageId DELTA_MERGE_FIRST_SEGMENT_ID = 1;
 
-struct SegmentStat
+struct SegmentStats
 {
     UInt64 segment_id = 0;
     RowKeyRange range;
-
+    UInt64 epoch = 0;
     UInt64 rows = 0;
     UInt64 size = 0;
-    UInt64 delete_ranges = 0;
-
-    UInt64 stable_size_on_disk = 0;
-
-    UInt64 delta_pack_count = 0;
-    UInt64 stable_pack_count = 0;
-
-    Float64 avg_delta_pack_rows = 0;
-    Float64 avg_stable_pack_rows = 0;
 
     Float64 delta_rate = 0;
+    UInt64 delta_memtable_rows = 0;
+    UInt64 delta_memtable_size = 0;
+    UInt64 delta_memtable_column_files = 0;
+    UInt64 delta_memtable_delete_ranges = 0;
+    UInt64 delta_persisted_page_id = 0;
+    UInt64 delta_persisted_rows = 0;
+    UInt64 delta_persisted_size = 0;
+    UInt64 delta_persisted_column_files = 0;
+    UInt64 delta_persisted_delete_ranges = 0;
     UInt64 delta_cache_size = 0;
-
     UInt64 delta_index_size = 0;
-};
-using SegmentStats = std::vector<SegmentStat>;
 
-struct DeltaMergeStoreStat
+    UInt64 stable_page_id = 0;
+    UInt64 stable_rows = 0;
+    UInt64 stable_size = 0;
+    UInt64 stable_dmfiles = 0;
+    UInt64 stable_dmfiles_id_0 = 0;
+    UInt64 stable_dmfiles_rows = 0;
+    UInt64 stable_dmfiles_size = 0;
+    UInt64 stable_dmfiles_size_on_disk = 0;
+    UInt64 stable_dmfiles_packs = 0;
+};
+using SegmentsStats = std::vector<SegmentStats>;
+
+struct StoreStats
 {
     UInt64 segment_count = 0;
 
@@ -386,16 +395,12 @@ public:
     SortDescription getPrimarySortDescription() const;
 
     void check(const Context & db_context);
-    DeltaMergeStoreStat getStat();
-    SegmentStats getSegmentStats();
-    bool isCommonHandle() const
-    {
-        return is_common_handle;
-    }
-    size_t getRowKeyColumnSize() const
-    {
-        return rowkey_column_size;
-    }
+
+    StoreStats getStoreStats();
+    SegmentsStats getSegmentsStats();
+
+    bool isCommonHandle() const { return is_common_handle; }
+    size_t getRowKeyColumnSize() const { return rowkey_column_size; }
 
 public:
     /// Methods mainly used by region split.
@@ -585,10 +590,13 @@ public:
 
     String db_name;
     String table_name;
-    TableID physical_table_id;
 
-    bool is_common_handle;
-    size_t rowkey_column_size;
+    const TableID physical_table_id;
+
+    const std::string child_log_prefix;
+
+    const bool is_common_handle;
+    const size_t rowkey_column_size;
 
     ColumnDefines original_table_columns;
     BlockPtr original_table_header; // Used to speed up getHeader()
