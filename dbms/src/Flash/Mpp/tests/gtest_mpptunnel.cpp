@@ -424,8 +424,8 @@ TEST_F(TestMPPTunnel, WriteError)
 
 TEST_F(TestMPPTunnel, WriteAfterFinished)
 {
-    MPPTunnelPtr mpp_tunnel_ptr = nullptr;
     std::unique_ptr<PacketWriter> writer_ptr = nullptr;
+    MPPTunnelPtr mpp_tunnel_ptr = nullptr;
     try
     {
         mpp_tunnel_ptr = constructRemoteSyncTunnel();
