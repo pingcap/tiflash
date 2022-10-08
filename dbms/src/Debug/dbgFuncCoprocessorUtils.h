@@ -41,13 +41,13 @@ extern const int BAD_ARGUMENTS;
 std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type);
 DAGSchema getSelectSchema(Context & context);
 SortDescription generateSDFromSchema(const DAGSchema & schema);
+DAGProperties getDAGProperties(const String & prop_string);
 void chunksToBlocks(const DAGSchema & schema, const tipb::SelectResponse & dag_response, BlocksList & blocks);
 BlockInputStreamPtr outputDAGResponse(Context &, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 // Just for test usage, dag_response should not contain result more than 128M
 Block getMergedBigBlockFromDagRsp(Context & context, const DAGSchema & schema, const tipb::SelectResponse & dag_response);
 bool dagRspEqual(Context & context, const tipb::SelectResponse & expected, const tipb::SelectResponse & actual, String & unequal_msg);
 
-DAGProperties getDAGProperties(const String & prop_string);
 tipb::SelectResponse executeDAGRequest(
     Context & context,
     const tipb::DAGRequest & dag_request,

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/dbgFuncCoprocessorUtils.h>
+#include <cstddef>
 
 namespace DB
 {
@@ -36,7 +37,7 @@ DAGSchema getSelectSchema(Context & context)
     DAGSchema schema;
     auto * dag_context = context.getDAGContext();
     auto result_field_types = dag_context->result_field_types;
-    for (int i = 0; i < static_cast<int>(result_field_types.size()); i++)
+    for (size_t i = 0; i < result_field_types.size(); ++i)
     {
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(result_field_types[i]);
         String col_name = "col_" + std::to_string(i);
