@@ -233,7 +233,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)
 {
     DAGProperties properties;
-    // enable mpp
+    // disable mpp
     properties.is_mpp_query = false;
     properties.start_ts = 1;
     auto [query_tasks, func_wrap_output_stream] = compileQuery(
@@ -244,12 +244,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, s
         },
         properties);
 
-    DAGContext dag_context(*query_tasks[0].dag_request, "executor_test", concurrency);
-    context.context.setExecutorTest();
-    context.context.setMockStorage(context.mockStorage());
-    context.context.setDAGContext(&dag_context);
-    // Currently, don't care about regions information in tests.
-    return readBlock(executeQuery(context.context, /*internal=*/true).in);
+    return executeStreams(query_tasks[0].dag_request, concurrency);
 }
 
 void ExecutorTest::dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual)
