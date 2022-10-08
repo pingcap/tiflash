@@ -441,9 +441,9 @@ TEST_F(TestMPPTunnel, WriteAfterFinished)
     catch (Exception & e)
     {
         GTEST_ASSERT_EQ(e.message(), "write to tunnel which is already closed,");
-        if (mpp_tunnel_ptr != nullptr)
-            mpp_tunnel_ptr->waitForFinish();
     }
+    if (mpp_tunnel_ptr != nullptr)
+        mpp_tunnel_ptr->waitForFinish();
 }
 
 /// Test Local MPPTunnel
