@@ -23,7 +23,6 @@
 #include <boost/algorithm/string.hpp>
 #include <cassert>
 #include <fstream>
-#include <magic_enum.hpp>
 
 namespace CurrentMetrics
 {
@@ -100,6 +99,23 @@ inline CurrentMetrics::Increment pendingRequestMetrics(LimiterType type)
     }
 }
 
+String getEnumName(LimiterType type)
+{
+    switch (type)
+    {
+    case LimiterType::FG_READ:
+        return "FG_READ";
+    case LimiterType::BG_READ:
+        return "BG_READ";
+    case LimiterType::FG_WRITE:
+        return "FG_WRITE";
+    case LimiterType::BG_WRITE:
+        return "BG_WRITE";
+    default:
+        return "UNKNOWN";
+    }
+}
+
 WriteLimiter::WriteLimiter(Int64 rate_limit_per_sec_, LimiterType type_, UInt64 refill_period_ms_)
     : refill_period_ms{refill_period_ms_}
     , refill_balance_per_period{calculateRefillBalancePerPeriod(rate_limit_per_sec_)}
@@ -108,7 +124,7 @@ WriteLimiter::WriteLimiter(Int64 rate_limit_per_sec_, LimiterType type_, UInt64 
     , requests_to_wait{0}
     , type(type_)
     , alloc_bytes{0}
-    , log(Logger::get(std::string(magic_enum::enum_name(type))))
+    , log(Logger::get(getEnumName(type_)))
 {}
 
 WriteLimiter::~WriteLimiter()
