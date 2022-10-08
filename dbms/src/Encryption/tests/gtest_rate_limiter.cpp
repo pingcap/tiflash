@@ -371,6 +371,7 @@ TEST(ReadLimiterTest, ReadMany)
     ReadLimiter read_limiter(get_read_bytes, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
     ASSERT_EQ(read_limiter.getAvailableBalance(), 100);
     request(read_limiter, 1000);
+    std::this_thread::sleep_for(2ms);
     ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
     ASSERT_EQ(read_limiter.alloc_bytes, 100);
 
