@@ -4503,10 +4503,7 @@ private:
                     auto index = i - str_start_offset - substr_size + 2;
                     for (ColumnString::Offset j = str_start_offset; j < index + str_start_offset; ++j)
                     {
-                        if (static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF))
-                        {
-                            ++res;
-                        }
+                        res += static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF);
                     }
                     break;
                 }
@@ -4703,10 +4700,7 @@ private:
                     auto index = i - str_start_offset - substr_size + 2;
                     for (ColumnString::Offset j = str_start_offset; j < index + str_start_offset; ++j)
                     {
-                        if (static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF))
-                        {
-                            ++res;
-                        }
+                        res += static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF);
                     }
                     break;
                 }
