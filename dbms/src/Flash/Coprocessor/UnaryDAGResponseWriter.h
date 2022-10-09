@@ -37,7 +37,7 @@ public:
         Int64 records_per_chunk_,
         DAGContext & dag_context_);
 
-    void write(const Block & block) override;
+    void write(const Block & block, bool finish) override;
     void finishWrite() override;
     void encodeChunkToDAGResponse();
     void appendWarningsToDAGResponse();

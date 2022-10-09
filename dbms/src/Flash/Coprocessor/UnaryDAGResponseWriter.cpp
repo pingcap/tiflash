@@ -80,8 +80,10 @@ void UnaryDAGResponseWriter::finishWrite()
     addExecuteSummaries(*dag_response, false);
 }
 
-void UnaryDAGResponseWriter::write(const Block & block)
+void UnaryDAGResponseWriter::write(const Block & block, bool finish)
 {
+    if (finish)
+        return;
     if (block.columns() != dag_context.result_field_types.size())
         throw TiFlashException("Output column size mismatch with field type size", Errors::Coprocessor::Internal);
     if (records_per_chunk == -1)

@@ -33,8 +33,11 @@ public:
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
-        UInt64 fine_grained_shuffle_batch_size);
-    void write(const Block & block) override;
+        UInt64 fine_grained_shuffle_batch_size,
+	bool reuse_scattered_columns_flag_,
+	int stream_id_,
+	const String & req_id);
+    void write(const Block & block, bool finish) override;
     void finishWrite() override;
 
 private:
@@ -43,6 +46,8 @@ private:
 
     template <bool send_exec_summary_at_last>
     void writePackets(std::vector<TrackedMppDataPacket> & packets);
+
+    void resetScatterColumns();
 
     bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;
@@ -54,6 +59,18 @@ private:
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
+    
+    bool reuse_scattered_columns_flag = false;
+    bool inited = false;
+    Block header;
+    size_t num_columns, num_bucket;
+    std::vector<String> partition_key_containers_for_reuse;
+    WeakHash32 hash;
+    IColumn::Selector selector;
+    std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
+    int stream_id = 0;
+    size_t cached_block_count = 0;
+    const LoggerPtr log;
 };
 
 } // namespace DB

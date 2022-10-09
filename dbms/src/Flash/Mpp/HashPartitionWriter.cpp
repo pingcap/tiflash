@@ -56,8 +56,10 @@ void HashPartitionWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
+void HashPartitionWriter<StreamWriterPtr>::write(const Block & block, bool finish)
 {
+    if (finish)
+	return;
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");

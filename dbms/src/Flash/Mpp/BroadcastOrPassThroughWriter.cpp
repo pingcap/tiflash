@@ -49,8 +49,10 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block, bool finish)
 {
+    if (finish)
+	return;
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");

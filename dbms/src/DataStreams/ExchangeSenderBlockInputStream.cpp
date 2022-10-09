@@ -40,7 +40,11 @@ Block ExchangeSenderBlockInputStream::readImpl()
     if (block)
     {
         total_rows += block.rows();
-        writer->write(block);
+        writer->write(block, false);
+    }
+    else 
+    {
+	writer->write(block, true);
     }
     return block;
 }
