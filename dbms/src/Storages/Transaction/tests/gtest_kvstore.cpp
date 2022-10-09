@@ -30,6 +30,7 @@
 #include <Storages/Transaction/StorageEngineType.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
+#include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
@@ -1625,10 +1626,19 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
+        registerStorages();
+        String path = TiFlashTestEnv::getContext().getPath();
+        auto p = path + "/metadata/";
+        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+        p = path + "/data/";
+        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+    }
+    {
         UInt64 region_id = 1;
         TableID table_id;
         {
-            proxy_instance->bootstrap_table(kvs, ctx.getTMTContext());
+            KVStore & kvs = getKVS();
+            table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
             proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
         }
         {

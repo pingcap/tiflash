@@ -13,8 +13,11 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Debug/MockRaftStoreProxy.h>
 #include <Debug/MockSSTReader.h>
+#include <Debug/MockTiDB.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
@@ -22,8 +25,7 @@
 #include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
-#include <Storages/registerStorages.h>
-#include <Debug/MockTiDB.h>
+#include <TestUtils/TiFlashTestEnv.h>
 
 namespace DB
 {
@@ -603,25 +605,20 @@ void MockRaftStoreProxy::snapshot(
     kv_region->setApplied(index, term);
 }
 
-void MockRaftStoreProxy::bootstrap_table(
+TableID MockRaftStoreProxy::bootstrap_table(
+    Context & ctx,
     KVStore & kvs,
-    TMTContext & tmt) 
+    TMTContext & tmt)
 {
-    registerStorages();
-    String path = TiFlashTestEnv::getContext().getPath();
-    auto p = path + "/metadata/";
-    TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
-    p = path + "/data/";
-    TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
-    KVStore & kvs = getKVS();
+    UNUSED(kvs);
     ColumnsDescription columns;
-    columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", typeFromString("Int64")}});
-    auto tso = ctx.getTMTContext().getPDClient()->getTS();
+    auto & data_type_factory = DataTypeFactory::instance();
+    columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", data_type_factory.get("Int64")}});
+    auto tso = tmt.getPDClient()->getTS();
     MockTiDB::instance().newDataBase("d");
     UInt64 table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
     try
     {
-        auto & tmt = ctx.getTMTContext();
         auto schema_syncer = tmt.getSchemaSyncer();
         schema_syncer->syncSchemas(ctx);
     }
@@ -630,7 +627,8 @@ void MockRaftStoreProxy::bootstrap_table(
         throw;
     }
 
-    proxy_instance->table_id = table_id;
+    this->table_id = table_id;
+    return table_id;
 }
 
 

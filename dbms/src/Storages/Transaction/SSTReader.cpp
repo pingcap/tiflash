@@ -43,7 +43,10 @@ SSTReader::SSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view)
 {}
 
 SSTReader::SSTReader()
-    : inited(false)
+    : proxy_helper(nullptr)
+    , inner(SSTReaderPtr{nullptr})
+    , type(ColumnFamilyType::Default)
+    , inited(false)
 {
 }
 

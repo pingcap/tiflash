@@ -170,10 +170,10 @@ struct MockRaftStoreProxy : MutexLockWrap
         UInt64 region_id);
 
     /// boostrap a table, since applying snapshot needs table schema.
-    void bootstrap_table(
+    TableID bootstrap_table(
+        Context & ctx,
         KVStore & kvs,
-        TMTContext & tmt,
-        UInt64 table_id);
+        TMTContext & tmt);
 
     /// We assume that we generate one command, and immediately commit.
     /// normal write to a region.
