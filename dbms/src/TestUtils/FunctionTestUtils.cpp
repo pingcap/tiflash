@@ -184,5 +184,58 @@ ColumnWithTypeAndName createOnlyNullColumn(size_t size, const String & name)
     return {std::move(col), data_type, name};
 }
 
+String getColumnsContent(const ColumnsWithTypeAndName & cols)
+{
+    if (cols.empty())
+        return "";
+    return getColumnsContent(cols, 0, cols[0].column->size());
+}
+
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end)
+{
+    const size_t col_num = cols.size();
+    if (col_num <= 0)
+        return "";
+
+    const size_t col_size = cols[0].column->size();
+    assert(begin <= end);
+    assert(col_size >= end);
+    assert(col_size > begin);
+
+    bool is_same = true;
+
+    for (size_t i = 1; i < col_num; ++i)
+    {
+        if (cols[i].column->size() != col_size)
+            is_same = false;
+    }
+
+    assert(is_same); /// Ensure the sizes of columns in cols are the same
+
+    std::vector<std::pair<size_t, String>> col_content;
+    FmtBuffer fmt_buf;
+    for (size_t i = 0; i < col_num; ++i)
+    {
+        /// Push the column name
+        fmt_buf.append(fmt::format("{}: (", cols[i].name));
+        for (size_t j = begin; j < end; ++j)
+            col_content.push_back(std::make_pair(j, (*cols[i].column)[j].toString()));
+
+        /// Add content
+        fmt_buf.joinStr(
+            col_content.begin(),
+            col_content.end(),
+            [](const auto & content, FmtBuffer & fmt_buf) {
+                fmt_buf.append(fmt::format("{}: {}", content.first, content.second));
+            },
+            ", ");
+
+        fmt_buf.append(")\n");
+        col_content.clear();
+    }
+
+    return fmt_buf.toString();
+}
+
 } // namespace tests
 } // namespace DB
