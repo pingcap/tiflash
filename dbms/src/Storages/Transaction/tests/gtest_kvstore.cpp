@@ -93,11 +93,6 @@ public:
         }
     }
 
-    void create_default_regions()
-    {
-        proxy_instance->init(100);
-    }
-
     void TearDown() override {}
 
 protected:
@@ -110,6 +105,19 @@ protected:
         // only recreate kvstore and restore data from disk, don't recreate proxy instance
         kvstore->restore(*path_pool, proxy_helper.get());
         return *kvstore;
+    }
+    void createDefaultRegions()
+    {
+        proxy_instance->init(100);
+    }
+    void initStorages()
+    {   
+        registerStorages();
+        String path = TiFlashTestEnv::getContext().getPath();
+        auto p = path + "/metadata/";
+        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
+        p = path + "/data/";
+        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
     }
 
 protected:
@@ -145,7 +153,7 @@ protected:
 
 TEST_F(RegionKVStoreTest, NewProxy)
 {
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -183,7 +191,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
 
 TEST_F(RegionKVStoreTest, ReadIndex)
 {
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     // start mock proxy in other thread
@@ -779,7 +787,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 
 TEST_F(RegionKVStoreTest, Region)
 {
-    create_default_regions();
+    createDefaultRegions();
     TableID table_id = 100;
     {
         auto meta = RegionMeta(createPeer(2, true), createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)), initialApplyState());
@@ -877,7 +885,7 @@ TEST_F(RegionKVStoreTest, Region)
 
 TEST_F(RegionKVStoreTest, KVStore)
 {
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -1313,7 +1321,7 @@ try
 {
     using DM::tests::DMTestEnv;
 
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     auto & kvs = getKVS();
     auto table_id = 101;
@@ -1626,17 +1634,10 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
     {
-        registerStorages();
-        String path = TiFlashTestEnv::getContext().getPath();
-        auto p = path + "/metadata/";
-        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
-        p = path + "/data/";
-        TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
-    }
-    {
         UInt64 region_id = 1;
         TableID table_id;
         {
+            initStorages();
             KVStore & kvs = getKVS();
             table_id = proxy_instance->bootstrap_table(ctx, kvs, ctx.getTMTContext());
             proxy_instance->bootstrap(kvs, ctx.getTMTContext(), region_id);
