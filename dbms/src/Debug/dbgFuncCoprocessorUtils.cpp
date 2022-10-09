@@ -40,7 +40,7 @@ DAGSchema getSelectSchema(Context & context)
     {
         ColumnInfo info = TiDB::fieldTypeToColumnInfo(result_field_types[i]);
         String col_name = "col_" + std::to_string(i);
-        schema.emplace_back(std::make_pair(col_name, info));
+        schema.emplace_back(col_name, info);
     }
     return schema;
 }
