@@ -40,8 +40,15 @@ private:
     bool inited;
 };
 
+/// MultiSSTReader helps when there are multiple sst files in a column family.
+/// It is derived from virtual class SSTReader, so it can be holded in a SSTReaderPtr.
+/// It also maintains instance of `R` which is normaly SSTReader(and MockSSTReader in tests),
+/// to read a single sst file.
+/// An `Initer` function is need to create a instance of `R` from a instance of `E`,
+/// which is usually path of the SST file.
+/// We introduce `R` and `E` to make this class testable.
 template <typename R, typename E>
-struct MultiSSTReader : public SSTReader
+struct MultiSSTReader : SSTReader
 {
     using Initer = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E)>;
 
@@ -72,9 +79,11 @@ struct MultiSSTReader : public SSTReader
             current++;
             if (current < args.size())
             {
-                // We gc current mono, iif:
+                // We delete current mono, iif:
                 // 1. We can switch to next reader mono;
                 // 2. We must switch to next reader mono;
+                // We don't drop if mono is the last instance for safety,
+                // and it will be dropped as MultiSSTReader is dropped.
                 LOG_FMT_INFO(log, "Swithch to {}", buffToStrView(args[current].path));
                 mono = initer(proxy_helper, args[current]);
             }
