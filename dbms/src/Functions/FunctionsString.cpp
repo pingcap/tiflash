@@ -4456,27 +4456,13 @@ public:
     }
 
 private:
-    static void constConst(
-        String str,
-        String substr,
-        size_t val_num,
-        ColumnInt64::Container & res_vec)
+    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
     {
-        Int64 idx = str.find(substr);
         if (idx == -1)
-        {
-            idx = 0;
-        }
-        else
-        {
-            ++idx;
-        }
-        assert(idx == 4);
+            return 0;
 
-        for (size_t row = 0; row < val_num; ++row)
-        {
-            res_vec[row] = idx;
-        }
+        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
+        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
 
     static Int64 find(
@@ -4514,7 +4500,14 @@ private:
                 sub_search_index++;
                 if (find_in_size == substr_size)
                 {
-                    res = i - str_start_offset - substr_size + 2;
+                    auto index = i - str_start_offset - substr_size + 2;
+                    for (ColumnString::Offset j = str_start_offset; j < index + str_start_offset; ++j)
+                    {
+                        if (static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF))
+                        {
+                            ++res;
+                        }
+                    }
                     break;
                 }
             }
@@ -4525,6 +4518,21 @@ private:
             }
         }
         return res;
+    }
+
+    static void constConst(
+        String str,
+        String substr,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        Int64 idx = str.find(substr);
+        idx = getPositionUTF8(str, idx);
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = idx;
+        }
     }
 
     static void constVector(
@@ -4658,27 +4666,13 @@ public:
     }
 
 private:
-    static void constConst(
-        String str,
-        String substr,
-        size_t val_num,
-        ColumnInt64::Container & res_vec)
+    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
     {
-        Int64 idx = str.find(substr);
         if (idx == -1)
-        {
-            idx = 0;
-        }
-        else
-        {
-            ++idx;
-        }
-        assert(idx == 4);
+            return 0;
 
-        for (size_t row = 0; row < val_num; ++row)
-        {
-            res_vec[row] = idx;
-        }
+        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
+        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
     }
 
     static Int64 find(
@@ -4706,7 +4700,14 @@ private:
                 sub_search_index++;
                 if (find_in_size == substr_size)
                 {
-                    res = i - str_start_offset - substr_size + 2;
+                    auto index = i - str_start_offset - substr_size + 2;
+                    for (ColumnString::Offset j = str_start_offset; j < index + str_start_offset; ++j)
+                    {
+                        if (static_cast<Int8>(col_vector_str_value[j]) > static_cast<Int8>(0xBF))
+                        {
+                            ++res;
+                        }
+                    }
                     break;
                 }
             }
@@ -4717,6 +4718,21 @@ private:
             }
         }
         return res;
+    }
+
+    static void constConst(
+        String str,
+        String substr,
+        size_t val_num,
+        ColumnInt64::Container & res_vec)
+    {
+        Int64 idx = str.find(substr);
+        idx = getPositionUTF8(str, idx);
+
+        for (size_t row = 0; row < val_num; ++row)
+        {
+            res_vec[row] = idx;
+        }
     }
 
     static void constVector(
