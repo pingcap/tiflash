@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #pragma once
-
+#include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
@@ -74,7 +74,10 @@ public:
     void request(Int64 bytes);
 
     // just for test purpose
-    inline UInt64 getTotalBytesThrough() const { return alloc_bytes; }
+    inline UInt64 getTotalBytesThrough() const
+    {
+        return available_balance < 0 ? alloc_bytes - available_balance : alloc_bytes;
+    }
 
     LimiterStat getStat();
 
@@ -134,6 +137,7 @@ protected:
 
     Stopwatch stat_stop_watch;
     UInt64 alloc_bytes;
+    LoggerPtr log;
 };
 
 using WriteLimiterPtr = std::shared_ptr<WriteLimiter>;
@@ -185,9 +189,9 @@ private:
         return std::chrono::time_point_cast<std::chrono::microseconds>(std::chrono::system_clock::now());
     }
     TimePoint last_stat_time;
-    Poco::Logger * log;
 
     Int64 get_io_statistic_period_us;
+    std::chrono::time_point<std::chrono::system_clock> last_refill_time;
 };
 
 using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
