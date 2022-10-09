@@ -49,24 +49,18 @@ bool blockEqual(const Block & expected, const Block & actual, String & unequal_m
 String formatBlockData(const Block & block)
 {
     size_t rows = block.rows();
-    size_t columns = block.columns();
     FmtBuffer buf;
     for (size_t i = 0; i < rows; ++i)
     {
-        for (size_t j = 0; j < columns; ++j)
-        {
-            auto column = block.getByPosition(j).column;
-            auto field = (*column)[i];
-            if (j + 1 < columns)
-            {
-                // Just use "," as separator now, maybe confusing when string column contains ","
-                buf.fmtAppend("{},", field.toString());
-            }
-            else
-            {
-                buf.fmtAppend("{}\n", field.toString());
-            }
-        }
+        buf.joinStr(
+            block.begin(),
+            block.end(),
+            [i](const auto & block, FmtBuffer & fb) {
+                auto column = block.column;
+                auto field = (*column)[i];
+                fb.append(field.toString());
+            },
+            ", ");
     }
     return buf.toString();
 }
