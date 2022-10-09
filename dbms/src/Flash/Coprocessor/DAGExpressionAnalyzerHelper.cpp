@@ -128,7 +128,7 @@ String DAGExpressionAnalyzerHelper::buildNullEqFunction(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions)
 {
-    /// nullEq(col1, col2) == isNull(col1) AND isNull(col2) OR ifNull(Equal(col1, col2), 0)
+    /// nullEq(col1, col2) == isNull(col1) AND isNull(col2) OR coalesce(Equal(col1, col2), 0)
 
     if (expr.children_size() != 2)
     {
@@ -143,7 +143,7 @@ String DAGExpressionAnalyzerHelper::buildNullEqFunction(
 
     String equals = analyzer->applyFunction("equals", {col1, col2}, actions, getCollatorFromExpr(expr));
     String name = analyzer->getActions(constructInt64LiteralTiExpr(0), actions);
-    String not_null_equals = analyzer->applyFunction("ifNull", {equals, name}, actions, nullptr);
+    String not_null_equals = analyzer->applyFunction("coalesce", {equals, name}, actions, nullptr);
 
     return analyzer->applyFunction("or", {and_is_null, not_null_equals}, actions, nullptr);
 }
