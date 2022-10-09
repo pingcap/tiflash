@@ -145,12 +145,6 @@ public:
 
     String toString()
     {
-<<<<<<< HEAD
-        std::stringstream s;
-        s << "{placed rows:" << placed_rows << ", deletes:" << placed_deletes << ", delta tree: " << delta_tree->numEntries() << "|"
-          << delta_tree->numInserts() << "|" << delta_tree->numDeletes() << "}";
-        return s.str();
-=======
         std::scoped_lock lock(mutex);
         return fmt::format("<placed_rows={} placed_deletes={} tree_entries={} tree_inserts={} tree_deletes={}>",
                            placed_rows,
@@ -158,7 +152,6 @@ public:
                            delta_tree->numEntries(),
                            delta_tree->numInserts(),
                            delta_tree->numDeletes());
->>>>>>> f01f4b1ad7 (Fix data race of DeltaIndex::toString  (#5948))
     }
 
     UInt64 getId() const { return id; }
