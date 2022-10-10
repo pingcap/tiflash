@@ -161,8 +161,7 @@ void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & co
     for (const auto & column : columns)
     {
         TiDB::ColumnInfo ret;
-        ret.tp = column.second;
-        ret.name = column.first;
+        std::tie(ret.name, ret.tp) = column;
         // TODO: find a way to assign decimal field's flen.
         if (ret.tp == TiDB::TP::TypeNewDecimal)
             ret.flen = 65;
