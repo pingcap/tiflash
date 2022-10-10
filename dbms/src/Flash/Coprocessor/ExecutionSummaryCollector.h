@@ -32,13 +32,14 @@ public:
         }
     }
 
+    void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
+
+private:
     void fillTiExecutionSummary(
         tipb::ExecutorExecutionSummary * execution_summary,
         ExecutionSummary & current,
         const String & executor_id,
         bool delta_mode);
-
-    void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
 
 private:
     DAGContext & dag_context;
