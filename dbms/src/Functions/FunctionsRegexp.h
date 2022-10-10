@@ -154,9 +154,9 @@ public:
     }
 
     Int64 getInt(size_t) const { return default_int; }
-    String getString(size_t) const { return String(""); }
+    static String getString(size_t) { return String(""); }
     void getStringRef(size_t, StringRef &) const {}
-    constexpr bool isConst() const { return true; }
+    constexpr static bool isConst() { return true; }
 
 private:
     Int64 default_int;
@@ -209,7 +209,7 @@ public:
         if constexpr (is_const)
             return String(const_string.data, const_string.size);
         else
-            return String(&chars[offsetAt(idx)], sizeAt(idx) - 1);
+            return String(reinterpret_cast<const char *>(&chars[offsetAt(idx)]), sizeAt(idx) - 1);
     }
 
     void getStringRef(size_t idx, StringRef & dst) const
@@ -221,13 +221,13 @@ public:
         }
         else
         {
-            auto tmp = StringRef(&chars[offsetAt(idx)], sizeAt(idx) - 1);
+            auto tmp = StringRef(reinterpret_cast<const char *>(&chars[offsetAt(idx)]), sizeAt(idx) - 1);
             dst.data = tmp.data;
             dst.size = tmp.size;
         }
     }
 
-    constexpr bool isConst() const { return is_const; }
+    constexpr static bool isConst() { return is_const; }
 
 private:
     size_t offsetAt(size_t i) const { return i == 0 ? 0 : (*offsets)[i - 1]; }
@@ -286,7 +286,7 @@ public:
 
     String getString(size_t) const { throw Exception("ParamInt not supports this function"); }
     void getStringRef(size_t, StringRef &) const { throw Exception("ParamInt not supports this function"); }
-    constexpr bool isConst() const { return is_const; }
+    constexpr static bool isConst() { return is_const; }
 
 private:
     Int64 const_int_val;
@@ -349,17 +349,17 @@ public:
     void getStringRef(size_t idx, StringRef & dst) const { return data.getStringRef(idx, dst); }
     String getString(size_t idx) const { return data.getString(idx); }
 
-    constexpr bool isNullAt(size_t idx) const
+    bool isNullAt(size_t idx) const
     {
         // null_map works only when we are non-const nullable column
-        if constexpr (is_null && !data.isConst())
+        if constexpr (is_null && !ParamImplType::isConst())
             return (*null_map)[idx];
         return false;
     }
 
-    constexpr bool isNullableCol() const { return is_null; }
     size_t getDataNum() const { return col_size; }
-    constexpr bool isConst() const { return data.isConst(); }
+    constexpr static bool isNullableCol() { return is_null; }
+    constexpr static bool isConst() { return ParamImplType::isConst(); }
 
 private:
     const size_t col_size;
@@ -523,6 +523,7 @@ private:
     mutable std::unique_ptr<Regexps::Regexp> memorized_re;
 };
 
+
 // Implementation of regexp and regexp_like functions
 template <typename Name>
 class FunctionStringRegexp : public FunctionStringRegexpBase
@@ -573,13 +574,15 @@ public:
         }
     }
 
+    constexpr static bool func() { return true; }
+
     template <typename ExprT, typename PatT, typename MatchTypeT>
-    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT &expr_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
     {
         size_t col_size = expr_param.getDataNum();
 
         // Check if args are all const columns
-        if constexpr (expr_param.isConst() && pat_param.isConst() && match_type_param.isConst())
+        if constexpr (ExprT::isConst() && PatT::isConst() && MatchTypeT::isConst())
         {
             int flags = getDefaultFlags();
             String expr = expr_param.getString(0);
@@ -601,7 +604,7 @@ public:
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
         vec_res.resize(expr_param.getDataNum(), 0);
 
-        constexpr bool has_nullable_col = expr_param.isNullableCol() || pat_param.isNullableCol() || match_type_param.isNullableCol();
+        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
 
         // Start to match
         if (isMemorized())
