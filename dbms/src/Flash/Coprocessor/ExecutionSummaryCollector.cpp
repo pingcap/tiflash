@@ -48,7 +48,7 @@ void mergeRemoteExecuteSummaries(
     std::unordered_map<String, std::vector<ExecutionSummary>> & execution_summaries)
 {
     size_t source_num = input_stream->getSourceNum();
-    for (size_t s_index = 0; s_index < source_num; s_index++)
+    for (size_t s_index = 0; s_index < source_num; ++s_index)
     {
         auto remote_execution_summaries = input_stream->getRemoteExecutionSummaries(s_index);
         if (remote_execution_summaries == nullptr)
