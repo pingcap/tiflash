@@ -440,7 +440,7 @@ try
     {
         for (size_t random_round = 0; random_round < 10; random_round++)
         {
-            LOG_FMT_INFO(logger, "Run round #{} for pack_size = {}", random_round, pack_size);
+            LOG_INFO(logger, "Run round #{} for pack_size = {}", random_round, pack_size);
 
             // For each pack_size, we randomize N rounds. We should always expect everything are
             // reclaimed in each round.

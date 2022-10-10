@@ -119,7 +119,7 @@ std::shared_ptr<SharedHandleTable> createHandleTable(WorkloadOptions & opts)
 void run(WorkloadOptions & opts)
 {
     auto * log = &Poco::Logger::get("DTWorkload_main");
-    LOG_FMT_INFO(log, "{}", opts.toString());
+    LOG_INFO(log, "{}", opts.toString());
     std::vector<Statistics> stats;
     try
     {
@@ -135,7 +135,7 @@ void run(WorkloadOptions & opts)
                 DTWorkload workload(opts, handle_table, table_info);
                 workload.run(i);
                 stats.push_back(workload.getStat());
-                LOG_FMT_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
+                LOG_INFO(log, "No.{} Workload {} {}", i, opts.write_key_distribution, stats.back().toStrings());
             }
         };
         run_test();

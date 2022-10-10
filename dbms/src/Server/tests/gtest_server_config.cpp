@@ -120,7 +120,7 @@ dt_enable_rough_set_filter = false
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         auto & global_ctx = TiFlashTestEnv::getGlobalContext();
@@ -210,7 +210,7 @@ dt_compression_level = 1
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         global_ctx.reloadDeltaTreeConfig(*config);
@@ -319,7 +319,7 @@ dt_page_gc_low_write_prob = 0.2
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         global_ctx.reloadDeltaTreeConfig(*config);
@@ -394,7 +394,7 @@ dt_page_gc_low_write_prob = 0.2
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         // Reload users config with test case
         global_ctx.reloadDeltaTreeConfig(*config);
@@ -454,7 +454,7 @@ dt_read_stable_only = true
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         global_ctx.reloadDeltaTreeConfig(*config);
         ASSERT_EQ(global_ctx.getSettingsRef().dt_enable_rough_set_filter, false);
