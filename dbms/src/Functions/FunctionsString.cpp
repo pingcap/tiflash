@@ -5795,7 +5795,7 @@ public:
         return std::make_shared<FunctionOctInt>();
     }
 
-    std::string getName() const override { return name; }
+    String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
@@ -5852,7 +5852,7 @@ private:
         auto col_res = ColumnString::create();
 
         ColumnString::Chars_t & res_chars = col_res->getChars();
-        // Convert a UInt64 to hex, will cost 17 bytes at most
+        // Convert a UInt64 to oct, will cost 23 bytes at most
         res_chars.reserve(size * 23);
         ColumnString::Offsets & res_offsets = col_res->getOffsets();
         res_offsets.resize(size);
@@ -5942,7 +5942,7 @@ struct OctStringImpl
     {
         for (size_t i = 0; i < arg_col0->size(); ++i)
         {
-            // we want some std::string operation in OctStringImpl so we call toString here
+            // we want some String operation in OctStringImpl so we call toString here
             String result = execute(arg_col0->getDataAt(i).toString());
             res_col.insertData(result.c_str(), result.size());
         }
@@ -5959,7 +5959,7 @@ public:
         return std::make_shared<FunctionOctString>();
     }
 
-    std::string getName() const override { return name; }
+    String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }
     bool useDefaultImplementationForConstants() const override { return true; }
 
