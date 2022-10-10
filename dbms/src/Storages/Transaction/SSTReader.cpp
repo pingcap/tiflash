@@ -22,11 +22,11 @@ bool SSTReader::remained() const
 {
     return proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
 }
-BaseBuffView SSTReader::key() const
+BaseBuffView SSTReader::keyView() const
 {
     return proxy_helper->sst_reader_interfaces.fn_key(inner, type);
 }
-BaseBuffView SSTReader::value() const
+BaseBuffView SSTReader::valueView() const
 {
     return proxy_helper->sst_reader_interfaces.fn_value(inner, type);
 }

@@ -228,7 +228,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
             while (reader.remained())
             {
                 counter++;
-                auto v = std::string(reader.value().data);
+                auto v = std::string(reader.valueView().data);
                 ASSERT_EQ(v, "v" + std::to_string(counter));
                 reader.next();
             }

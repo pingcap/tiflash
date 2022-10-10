@@ -189,8 +189,8 @@ Block SSTFilesToBlockInputStream::read()
         // the lock column family, we will load all key-values which rowkeys are equal
         // or less that the last rowkey from the write column family.
         {
-            BaseBuffView key = write_cf_reader->key();
-            BaseBuffView value = write_cf_reader->value();
+            BaseBuffView key = write_cf_reader->keyView();
+            BaseBuffView value = write_cf_reader->valueView();
             region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
             ++process_keys.write_cf;
             if (process_keys.write_cf % expected_size == 0)
@@ -247,8 +247,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
     {
         while (reader && reader->remained())
         {
-            BaseBuffView key = reader->key();
-            BaseBuffView value = reader->value();
+            BaseBuffView key = reader->keyView();
+            BaseBuffView value = reader->valueView();
             // TODO: use doInsert to avoid locking
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
             reader->next();
@@ -280,8 +280,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         while (reader && reader->remained() && *p_process_keys < process_keys_offset_end)
         {
             {
-                BaseBuffView key = reader->key();
-                BaseBuffView value = reader->value();
+                BaseBuffView key = reader->keyView();
+                BaseBuffView value = reader->valueView();
                 // TODO: use doInsert to avoid locking
                 region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
                 (*p_process_keys) += 1;

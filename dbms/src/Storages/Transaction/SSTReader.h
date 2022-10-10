@@ -20,11 +20,12 @@
 
 namespace DB
 {
-struct SSTReader
+class SSTReader
 {
+public:
     virtual bool remained() const;
-    virtual BaseBuffView key() const;
-    virtual BaseBuffView value() const;
+    virtual BaseBuffView keyView() const;
+    virtual BaseBuffView valueView() const;
     virtual void next();
 
     DISALLOW_COPY_AND_MOVE(SSTReader);
@@ -48,8 +49,9 @@ private:
 /// which is usually path of the SST file.
 /// We introduce `R` and `E` to make this class testable.
 template <typename R, typename E>
-struct MultiSSTReader : SSTReader
+class MultiSSTReader : public SSTReader
 {
+public:
     using Initer = std::function<std::unique_ptr<R>(const TiFlashRaftProxyHelper *, E)>;
 
     DISALLOW_COPY_AND_MOVE(MultiSSTReader);
@@ -59,13 +61,13 @@ struct MultiSSTReader : SSTReader
         this->maybe_next_reader();
         return mono->remained();
     }
-    BaseBuffView key() const override
+    BaseBuffView keyView() const override
     {
-        return mono->key();
+        return mono->keyView();
     }
-    BaseBuffView value() const override
+    BaseBuffView valueView() const override
     {
-        return mono->value();
+        return mono->valueView();
     }
     void next() override
     {
@@ -111,9 +113,7 @@ struct MultiSSTReader : SSTReader
 private:
     Poco::Logger * log;
     mutable std::unique_ptr<R> mono;
-    // Overwrite
     const TiFlashRaftProxyHelper * proxy_helper;
-    // Overwrite
     ColumnFamilyType type;
     Initer initer;
     std::vector<E> args;

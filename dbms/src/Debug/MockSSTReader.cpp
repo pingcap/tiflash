@@ -21,7 +21,6 @@ namespace DB
 SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
 {
     std::string s(v.path.data, v.path.len);
-    LOG_FMT_INFO(&Poco::Logger::get("!!!!! fn_get_sst_reader"), "AAAAA {}", s);
     auto iter = MockSSTReader::getMockSSTData().find({s, v.type});
     if (iter == MockSSTReader::getMockSSTData().end())
         throw Exception("Can not find data in MockSSTData, [key=" + s + "] [type=" + CFToName(v.type) + "]");
