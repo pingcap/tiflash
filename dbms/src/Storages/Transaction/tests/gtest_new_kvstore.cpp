@@ -203,6 +203,49 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
         {
             KVStore & kvs = getKVS();
             auto kvr1 = kvs.getRegion(region_id);
+
+            auto validate = [&](MockRaftStoreProxy::Cf & default_cf, int sst_size, int file_size) {
+                auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
+                    RaftStoreProxyPtr{proxy_instance.get()}));
+                proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
+                auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
+                    return std::make_unique<SSTReader>(proxy_helper, snap);
+                };
+                auto ssts = default_cf.ssts();
+                ASSERT_EQ(ssts.size(), sst_size);
+                MultiSSTReader<SSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts};
+                size_t counter = 0;
+                while (reader.remained())
+                {
+                    // repeatedly remained are called.
+                    reader.remained();
+                    reader.remained();
+                    counter++;
+                    auto v = std::string(reader.valueView().data);
+                    ASSERT_EQ(v, "v" + std::to_string(counter));
+                    reader.next();
+                }
+                ASSERT_EQ(counter, file_size);
+            };
+
+            {
+                // Only one file
+                MockRaftStoreProxy::Cf default_cf{900, 800, ColumnFamilyType::Default};
+                default_cf.insert(1, "v1");
+                default_cf.insert(2, "v2");
+                default_cf.finish_file();
+                default_cf.freeze();
+                validate(default_cf, 1, 2);
+            }
+            {
+                // Empty
+                MockRaftStoreProxy::Cf default_cf{901, 800, ColumnFamilyType::Default};
+                default_cf.finish_file();
+                default_cf.freeze();
+                validate(default_cf, 1, 0);
+            }
+
+            // Test of ingesting.
             MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
             default_cf.insert(1, "v1");
             default_cf.insert(2, "v2");
@@ -214,25 +257,7 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
             default_cf.insert(6, "v6");
             default_cf.finish_file();
             default_cf.freeze();
-
-            auto proxy_helper = std::make_unique<TiFlashRaftProxyHelper>(MockRaftStoreProxy::SetRaftStoreProxyFFIHelper(
-                RaftStoreProxyPtr{proxy_instance.get()}));
-            proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
-            auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
-                return std::make_unique<SSTReader>(proxy_helper, snap);
-            };
-            auto ssts = default_cf.ssts();
-            ASSERT_EQ(ssts.size(), 3);
-            MultiSSTReader<SSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts};
-            size_t counter = 0;
-            while (reader.remained())
-            {
-                counter++;
-                auto v = std::string(reader.valueView().data);
-                ASSERT_EQ(v, "v" + std::to_string(counter));
-                reader.next();
-            }
-            ASSERT_EQ(counter, 6);
+            validate(default_cf, 3, 6);
 
             kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
             proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 6, 6);

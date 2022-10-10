@@ -74,6 +74,9 @@ public:
         this->maybe_next_reader();
         mono->next();
     }
+
+    // Switch to next mono reader if current is drained,
+    // and we have a next sst file to read.
     void maybe_next_reader() const
     {
         if (!mono->remained())
@@ -81,9 +84,6 @@ public:
             current++;
             if (current < args.size())
             {
-                // We delete current mono, iif:
-                // 1. We can switch to next reader mono;
-                // 2. We must switch to next reader mono;
                 // We don't drop if mono is the last instance for safety,
                 // and it will be dropped as MultiSSTReader is dropped.
                 LOG_FMT_INFO(log, "Swithch to {}", buffToStrView(args[current].path));
