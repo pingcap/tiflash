@@ -152,7 +152,7 @@ std::optional<std::string> CheckRuntimeValid()
 
     if (!valid)
     {
-        return "Tilash requires CPU support instruction sets: sse4.1, sse4.2, popcnt, avx, avx2, movbe. Please check `/proc/cpuinfo`.";
+        return "TiFlash requires CPU support instruction sets: sse4.1, sse4.2, popcnt, avx, avx2, movbe. Please check CPU info(`/proc/cpuinfo` under Linux).";
     }
 #endif
     return {};
