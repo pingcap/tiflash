@@ -897,4 +897,32 @@ IOLimitTuner::Watermark IOLimitTuner::getWatermark(int pct) const
         return Watermark::Low;
     }
 }
+
+IOLimitTuner::Watermark IOLimitTuner::getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const
+{
+    // There is a cornar case:
+    // 1. Both `fg_mbps` and `bg_mbps` are less than `min_bytes_per_sec`.
+    // 2. `bg` runs out of the quota, but `fg` has not been used.
+    // 3. In this case, `pct` can be less than `medium_pct` and watermark is LOW.
+    // 4. Low watermark means it is unnecessary to increase the quota by descrease the quota of others.
+    // 5. However, because `fg_mbps` is less than `min_bytes_per_sec`, `bg_mbps` cannot be increased by decreasing `fg_mbps`.
+    if (fg != nullptr && bg != nullptr)
+    {
+        auto fg_wm = getWatermark(fg->pct());
+        auto bg_wm = getWatermark(bg->pct());
+        auto fg_mbps = fg->maxBytesPerSec();
+        auto bg_mbps = bg->maxBytesPerSec();
+        // `fg` needs more bandwidth, but `bg`'s bandwidth is small.
+        if (fg_wm > bg_wm && bg_mbps <= io_config.min_bytes_per_sec * 2)
+        {
+            return fg_wm;
+        }
+        // `bg_read` needs more bandwidth, but `fg_read`'s bandwidth is small.
+        else if (bg_wm > fg_wm && fg_mbps <= io_config.min_bytes_per_sec * 2)
+        {
+            return bg_wm;
+        }
+    }
+    return getWatermark(pct);
+}
 } // namespace DB
