@@ -4428,9 +4428,9 @@ public:
         const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
         const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
 
-        if (c0_col_column->isColumnConst())
+        if (str_const_string)
         {
-            if (c1_col_column->isColumnConst())
+            if (substr_const_string)
             {
                 auto str = str_const_string->getValue<String>();
                 auto substr = substr_const_string->getValue<String>();
@@ -4438,14 +4438,16 @@ public:
             }
             else
             {
-                constVector(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+                const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
+                constVector(str_const_string_value->getChars(), str_const_string_value->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
             }
         }
         else
         {
-            if (c1_col_column->isColumnConst())
+            if (substr_const_string)
             {
-                vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+                const auto * substr_const_string_value = checkAndGetColumn<ColumnString>(substr_const_string->getDataColumnPtr().get());
+                vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_const_string_value->getChars(), substr_const_string_value->getOffsets(), val_num, res_vec);
             }
             else
             {
@@ -4467,11 +4469,11 @@ private:
 
     static Int64 find(
         const ColumnString::Chars_t & col_vector_str_value,
-        const ColumnString::Offset str_start_offset,
-        const ColumnString::Offset str_end_offset,
+        const ColumnString::Offset & str_start_offset,
+        const ColumnString::Offset & str_end_offset,
         const ColumnString::Chars_t & col_vector_substr_value,
-        const ColumnString::Offset substr_start_offset,
-        const ColumnString::Offset substr_end_offset)
+        const ColumnString::Offset & substr_start_offset,
+        const ColumnString::Offset & substr_end_offset)
     {
         unsigned int sub_search_index = 0;
         unsigned int find_in_size = 0;
@@ -4558,9 +4560,11 @@ private:
         ColumnInt64::Container & res_vec)
     {
         ColumnString::Offset prev_offset = 0;
+        const ColumnString::Offset substr_start_offset = 0;
+        auto substr_end_offset = col_vector_substr_offsets[0];
         for (size_t row = 0; row < val_num; ++row)
         {
-            res_vec[row] = find(col_vector_str_value, prev_offset, col_vector_str_offsets[row], col_vector_substr_value, 0, col_vector_substr_offsets[0]);
+            res_vec[row] = find(col_vector_str_value, prev_offset, col_vector_str_offsets[row], col_vector_substr_value, substr_start_offset, substr_end_offset);
 
             prev_offset = col_vector_str_offsets[row];
         }
@@ -4635,9 +4639,9 @@ public:
         const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
         const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
 
-        if (c0_col_column->isColumnConst())
+        if (str_const_string)
         {
-            if (c1_col_column->isColumnConst())
+            if (substr_const_string)
             {
                 auto str = str_const_string->getValue<String>();
                 auto substr = substr_const_string->getValue<String>();
@@ -4645,14 +4649,16 @@ public:
             }
             else
             {
-                constVector(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+                const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
+                constVector(str_const_string_value->getChars(), str_const_string_value->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
             }
         }
         else
         {
-            if (c1_col_column->isColumnConst())
+            if (substr_const_string)
             {
-                vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
+                const auto * substr_const_string_value = checkAndGetColumn<ColumnString>(substr_const_string->getDataColumnPtr().get());
+                vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_const_string_value->getChars(), substr_const_string_value->getOffsets(), val_num, res_vec);
             }
             else
             {
@@ -4674,11 +4680,11 @@ private:
 
     static Int64 find(
         const ColumnString::Chars_t & col_vector_str_value,
-        const ColumnString::Offset str_start_offset,
-        const ColumnString::Offset str_end_offset,
+        const ColumnString::Offset & str_start_offset,
+        const ColumnString::Offset & str_end_offset,
         const ColumnString::Chars_t & col_vector_substr_value,
-        const ColumnString::Offset substr_start_offset,
-        const ColumnString::Offset substr_end_offset)
+        const ColumnString::Offset & substr_start_offset,
+        const ColumnString::Offset & substr_end_offset)
     {
         unsigned int sub_search_index = 0;
         unsigned int find_in_size = 0;
@@ -4755,9 +4761,11 @@ private:
         ColumnInt64::Container & res_vec)
     {
         ColumnString::Offset prev_offset = 0;
+        const ColumnString::Offset substr_start_offset = 0;
+        const ColumnString::Offset substr_end_offset = col_vector_substr_offsets[0];
         for (size_t row = 0; row < val_num; ++row)
         {
-            res_vec[row] = find(col_vector_str_value, prev_offset, col_vector_str_offsets[row], col_vector_substr_value, 0, col_vector_substr_offsets[0]);
+            res_vec[row] = find(col_vector_str_value, prev_offset, col_vector_str_offsets[row], col_vector_substr_value, substr_start_offset, substr_end_offset);
 
             prev_offset = col_vector_str_offsets[row];
         }

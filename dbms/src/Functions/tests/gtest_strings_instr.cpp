@@ -45,6 +45,17 @@ protected:
     {
         return createColumn<Nullable<Int64>>(v);
     }
+
+    static ColumnWithTypeAndName toConstString(const String & s)
+    {
+        return createConstColumn<Nullable<String>>(1, s);
+    }
+
+    static ColumnWithTypeAndName toConstInt(const Int64 & s)
+    {
+        return createConstColumn<Int64>(1, s);
+    }
+
 };
 
 TEST_F(StringInstr, instrUTF8Test)
@@ -57,6 +68,26 @@ try
             toNullableVec({"foobarbar", "xbar", "中文美好", "中文美好", "中文abc", "live long and prosper", "not binary string", "upper case", "upper case", "UPPER CASE", "UPPER CASE", "中文abc", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ"}),
             toNullableVec({"bar", "foobar", "美好", "世界", "a", "long", "binary", "upper", "uPpEr", "CASE", "CasE", "abc", "テスト", "ђѓєѕ"})));
 
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({4}),
+        executeFunction(
+            func_name_utf8,
+            toConstString("foobarbar"),
+            toConstString("bar")));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({4}),
+        executeFunction(
+            func_name_utf8,
+            toNullableVec({"foobarbar"}),
+            toConstString("bar")));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({4}),
+        executeFunction(
+            func_name_utf8,
+            toConstString("foobarbar"),
+            toNullableVec({"bar"})));
 
     ASSERT_COLUMN_EQ(
         toVecInt({{}, {}, {}, {}, 1, 1}),
@@ -77,6 +108,27 @@ try
             func_name,
             toNullableVec({"foobarbar", "xbar", "中文美好", "中文美好", "中文abc", "live long and prosper", "not binary string", "upper case", "upper case", "UPPER CASE", "UPPER CASE", "中文abc", "abcテストabc", "ѐёђѓєѕіїјљњћќѝўџ"}),
             toNullableVec({"bar", "foobar", "美好", "世界", "a", "long", "binary", "upper", "uPpEr", "CASE", "CasE", "abc", "テスト", "ђѓєѕ"})));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Int64>({4}),
+        executeFunction(
+            func_name,
+            toConstString("foobarbar"),
+            toConstString("bar")));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({4}),
+        executeFunction(
+            func_name,
+            toNullableVec({"foobarbar"}),
+            toConstString("bar")));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Int64>>({4}),
+        executeFunction(
+            func_name,
+            toConstString("foobarbar"),
+            toNullableVec({"bar"})));
 
     ASSERT_COLUMN_EQ(
         toVecInt({{}, {}, {}, {}, 1, 1, {}}),
