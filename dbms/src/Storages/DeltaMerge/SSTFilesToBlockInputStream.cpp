@@ -86,7 +86,7 @@ void SSTFilesToBlockInputStream::readPrefix()
     }
     if (use_multi)
     {
-        LOG_INFO(log, "Read SST Files with MultiSSTReader");
+        LOG_FMT_INFO(log, "Read SST Files with MultiSSTReader {}", this->region->id());
         std::vector<SSTView> ssts;
         bool flag = false;
         ColumnFamilyType prev_type;
@@ -135,11 +135,11 @@ void SSTFilesToBlockInputStream::readPrefix()
         {
             generate_cf_reader();
         }
-        LOG_FMT_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {}", size_write, size_lock, size_default);
+        LOG_FMT_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", size_write, size_lock, size_default, this->region->id());
     }
     else
     {
-        LOG_INFO(log, "Read SST Files with Normal SSTReader");
+        LOG_INFO(log, "Read SST Files with Normal SSTReader {}", this->region->id());
         for (UInt64 i = 0; i < snaps.len; ++i)
         {
             const auto & snapshot = snaps.views[i];
