@@ -79,7 +79,7 @@ try
         PageEntriesEdit edit;
 
         auto writes = wb.getWrites();
-        for (auto w : writes)
+        for (const auto & w : writes)
         {
             if (w.type == WriteBatch::WriteType::UPSERT)
             {
@@ -101,9 +101,9 @@ try
     // Compare the two versions above
     {
         auto original_snapshot = original_version.getSnapshot();
-        auto original = original_snapshot->version();
+        const auto * original = original_snapshot->version();
         auto restored_snapshot = version_restored_with_snapshot.getSnapshot();
-        auto restored = restored_snapshot->version();
+        const auto * restored = restored_snapshot->version();
 
         auto original_normal_page_ids = original->validNormalPageIds();
         auto restored_normal_page_ids = restored->validNormalPageIds();
@@ -234,7 +234,7 @@ try
             num_pages += 1;
         }
 
-        LOG_FMT_INFO(storage.log, "All {} are consist.", num_pages);
+        LOG_INFO(storage.log, "All {} are consist.", num_pages);
     }
 }
 CATCH

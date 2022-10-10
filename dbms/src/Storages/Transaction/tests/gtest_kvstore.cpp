@@ -92,7 +92,7 @@ public:
         }
     }
 
-    void create_default_regions()
+    void createDefaultRegions()
     {
         proxy_instance->init(100);
     }
@@ -144,7 +144,7 @@ protected:
 
 TEST_F(RegionKVStoreTest, NewProxy)
 {
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -182,7 +182,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
 
 TEST_F(RegionKVStoreTest, ReadIndex)
 {
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     // start mock proxy in other thread
@@ -778,7 +778,7 @@ void RegionKVStoreTest::testRaftMerge(KVStore & kvs, TMTContext & tmt)
 
 TEST_F(RegionKVStoreTest, Region)
 {
-    create_default_regions();
+    createDefaultRegions();
     TableID table_id = 100;
     {
         auto meta = RegionMeta(createPeer(2, true), createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)), initialApplyState());
@@ -876,7 +876,7 @@ TEST_F(RegionKVStoreTest, Region)
 
 TEST_F(RegionKVStoreTest, KVStore)
 {
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
 
     KVStore & kvs = getKVS();
@@ -1312,7 +1312,7 @@ try
 {
     using DM::tests::DMTestEnv;
 
-    create_default_regions();
+    createDefaultRegions();
     auto ctx = TiFlashTestEnv::getGlobalContext();
     auto & kvs = getKVS();
     auto table_id = 101;
@@ -1561,7 +1561,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
             auto r1 = proxy_instance->getRegion(region_id);
             applied_index = r1->getLatestAppliedIndex();
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
-            LOG_FMT_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
+            LOG_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
             auto [index, term] = proxy_instance->normalWrite(region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             // KVStore succeed. Proxy failed before advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);

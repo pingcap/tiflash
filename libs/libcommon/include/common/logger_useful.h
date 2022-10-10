@@ -98,7 +98,3 @@ std::string toCheckedFmtStr(const S & format, Args &&... args)
 #define LOG_WARNING(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_WARNING, __VA_ARGS__)
 #define LOG_ERROR(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_ERROR, __VA_ARGS__)
 #define LOG_FATAL(logger, ...) LOG_IMPL(logger, Poco::Message::PRIO_FATAL, __VA_ARGS__)
-
-#define LOG_FMT_DEBUG(...) LOG_DEBUG(__VA_ARGS__)
-#define LOG_FMT_INFO(...) LOG_INFO(__VA_ARGS__)
-#define LOG_FMT_ERROR(...) LOG_ERROR(__VA_ARGS__)

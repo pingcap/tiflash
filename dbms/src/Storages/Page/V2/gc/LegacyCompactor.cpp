@@ -49,7 +49,7 @@ LegacyCompactor::tryCompact(
     if (page_files_to_compact.size() < config.gc_min_legacy_num)
     {
         // Nothing to compact
-        LOG_FMT_DEBUG(log, "{} LegacyCompactor::tryCompact exit without compaction, candidates size: {}, compact_legacy_min_num: {}", storage_name, page_files_to_compact.size(), config.gc_min_legacy_num);
+        LOG_DEBUG(log, "{} LegacyCompactor::tryCompact exit without compaction, candidates size: {}, compact_legacy_min_num: {}", storage_name, page_files_to_compact.size(), config.gc_min_legacy_num);
         removePageFilesIf(page_files, [&min_writing_file_id_level](const PageFile & pf) -> bool {
             return
                 // Remove page files that maybe writing to
@@ -91,7 +91,7 @@ LegacyCompactor::tryCompact(
         legacy_ss << "]";
         const String old_checkpoint_str = (old_checkpoint ? old_checkpoint->toString() : "(none)");
 
-        LOG_FMT_INFO(log, "{} Compact legacy PageFile {} and old checkpoint: {} into checkpoint PageFile_{}_{} with {} sequence: {}", storage_name, legacy_ss.str(), old_checkpoint_str, checkpoint_id.first, checkpoint_id.second, info.toString(), checkpoint_sequence);
+        LOG_INFO(log, "{} Compact legacy PageFile {} and old checkpoint: {} into checkpoint PageFile_{}_{} with {} sequence: {}", storage_name, legacy_ss.str(), old_checkpoint_str, checkpoint_id.first, checkpoint_id.second, info.toString(), checkpoint_sequence);
     }
 
     size_t bytes_written = 0;
@@ -184,7 +184,7 @@ LegacyCompactor::collectPageFilesToCompact(const PageFileSet & page_files, const
             || reader_wb_seq >= gc_safe_sequence //
             || writing_files.contains(reader->fileIdLevel()))
         {
-            LOG_FMT_DEBUG(log, "{} collectPageFilesToCompact stop on {}, sequence: {} last sequence: {} gc safe squence: {}", storage_name, reader->belongingPageFile().toString(), reader_wb_seq, last_sequence, gc_safe_sequence);
+            LOG_DEBUG(log, "{} collectPageFilesToCompact stop on {}, sequence: {} last sequence: {} gc safe squence: {}", storage_name, reader->belongingPageFile().toString(), reader_wb_seq, last_sequence, gc_safe_sequence);
             break;
         }
 

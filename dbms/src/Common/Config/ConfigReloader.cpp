@@ -84,7 +84,7 @@ void ConfigReloader::reloadIfNewer(bool force, bool throw_on_error)
         ConfigProcessor::LoadedConfig loaded_config;
         try
         {
-            LOG_FMT_DEBUG(log, "Loading config `{}`", path);
+            LOG_DEBUG(log, "Loading config `{}`", path);
 
             loaded_config = config_processor.loadConfig();
         }

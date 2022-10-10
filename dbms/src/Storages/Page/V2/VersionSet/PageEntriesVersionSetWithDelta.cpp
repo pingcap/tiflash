@@ -366,7 +366,7 @@ PageEntriesVersionSetWithDelta::listAllLiveFiles(std::unique_lock<std::shared_mu
         if (stats.longest_living_seconds > exist_stale_snapshot)
             LOG_WARNING(log, STALE_SNAPSHOT_LOG_PARAMS);
         else
-            LOG_FMT_DEBUG(log, STALE_SNAPSHOT_LOG_PARAMS);
+            LOG_DEBUG(log, STALE_SNAPSHOT_LOG_PARAMS);
     }
     // Iterate all snapshots to collect all PageFile in used.
     std::set<PageFileIdAndLevel> live_files;
