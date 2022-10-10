@@ -79,11 +79,11 @@ try
             toNullableVec({"bar", "foobar", "美好", "世界", "a", "long", "binary", "upper", "uPpEr", "CASE", "CasE", "abc", "テスト", "ђѓєѕ"})));
 
     ASSERT_COLUMN_EQ(
-        toVecInt({{}, {}, {}, {}, 1, 1}),
+        toVecInt({{}, {}, {}, {}, 1, 1, {}}),
         executeFunction(
             func_name,
-            toNullableVec({"foobar", {}, {}, "", "", "abc"}),
-            toNullableVec({{}, "foobar", {}, {}, "", ""})));
+            toNullableVec({"foobar", {}, {}, "", "", "abc", "abc"}),
+            toNullableVec({{}, "foobar", {}, {}, "", "", {}})));
 }
 CATCH
 
