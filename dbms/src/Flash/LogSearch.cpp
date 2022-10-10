@@ -354,7 +354,7 @@ LogIterator::~LogIterator()
 {
     if (err_info.has_value())
     {
-        LOG_FMT_DEBUG(log, "LogIterator search end with error {} at line {}.", err_info->second, err_info->first);
+        LOG_DEBUG(log, "LogIterator search end with error {} at line {}.", err_info->second, err_info->first);
     }
 }
 

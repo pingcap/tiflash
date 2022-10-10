@@ -612,7 +612,7 @@ try
         new_seg_id = new_seg_id2_opt.value();
 
         const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
-        LOG_FMT_DEBUG(log, "log valid size on disk: {}", file_usage.total_valid_size);
+        LOG_DEBUG(log, "log valid size on disk: {}", file_usage.total_valid_size);
     }
     // apply delete range && flush && delta-merge on all segments
     for (const auto & [seg_id, seg] : segments)
@@ -640,7 +640,7 @@ try
         }
 
         const auto file_usage = storage_pool->log_storage_reader->getFileUsageStatistics();
-        LOG_FMT_DEBUG(log, "All delta-merged, log valid size on disk: {}", file_usage.total_valid_size);
+        LOG_DEBUG(log, "All delta-merged, log valid size on disk: {}", file_usage.total_valid_size);
         EXPECT_EQ(file_usage.total_valid_size, 0);
     }
 }

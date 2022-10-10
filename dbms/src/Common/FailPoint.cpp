@@ -239,7 +239,7 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
         RUNTIME_ASSERT((0 <= rate && rate <= 1.0), log, "RandomFailPoint trigger rate should in [0,1], while {}", rate);
         enableRandomFailPoint(pair_tokens[0], rate);
     }
-    LOG_FMT_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+    LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)

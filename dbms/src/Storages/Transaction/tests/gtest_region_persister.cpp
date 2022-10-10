@@ -290,7 +290,7 @@ try
             auto new_iter = new_regions.find(i);
             if (new_iter == new_regions.end())
             {
-                LOG_FMT_ERROR(&Poco::Logger::get("RegionPersisterTest"), "Region missed, id={}", i);
+                LOG_ERROR(&Poco::Logger::get("RegionPersisterTest"), "Region missed, id={}", i);
                 ++num_regions_missed;
             }
             else

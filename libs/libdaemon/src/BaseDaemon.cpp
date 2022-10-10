@@ -366,7 +366,7 @@ private:
 private:
     void onTerminate(const std::string & message, ThreadNumber thread_num) const
     {
-        LOG_FMT_ERROR(log, "(from thread {}) {}", thread_num, message);
+        LOG_ERROR(log, "(from thread {}) {}", thread_num, message);
     }
 #if USE_UNWIND
     void onFault(int sig, siginfo_t & info, ucontext_t & context, unw_context_t & unw_context, ThreadNumber thread_num) const
@@ -374,8 +374,8 @@ private:
     void onFault(int sig, siginfo_t & info, ucontext_t & context, ThreadNumber thread_num) const
 #endif
     {
-        LOG_FMT_ERROR(log, "########################################");
-        LOG_FMT_ERROR(log, "(from thread {}) Received signal {}({}).", thread_num, strsignal(sig), sig);
+        LOG_ERROR(log, "########################################");
+        LOG_ERROR(log, "(from thread {}) Received signal {}({}).", thread_num, strsignal(sig), sig);
 
         void * caller_address = nullptr;
 
@@ -405,7 +405,7 @@ private:
             if (nullptr == info.si_addr)
                 LOG_ERROR(log, "Address: NULL pointer.");
             else
-                LOG_FMT_ERROR(log, "Address: {}", info.si_addr);
+                LOG_ERROR(log, "Address: {}", info.si_addr);
 
 #if defined(__x86_64__) && !defined(__FreeBSD__) && !defined(__APPLE__)
             if ((err_mask & 0x02))
@@ -1173,7 +1173,7 @@ void BaseDaemon::handleNotification(Poco::TaskFailedNotification * _tfn)
     task_failed = true;
     AutoPtr<Poco::TaskFailedNotification> fn(_tfn);
     Logger * lg = &(logger());
-    LOG_FMT_ERROR(lg, "Task '{}' failed. Daemon is shutting down. Reason - {}", fn->task()->name(), fn->reason().displayText());
+    LOG_ERROR(lg, "Task '{}' failed. Daemon is shutting down. Reason - {}", fn->task()->name(), fn->reason().displayText());
     ServerApplication::terminate();
 }
 
@@ -1300,7 +1300,7 @@ void BaseDaemon::handleSignal(int signal_id)
 void BaseDaemon::onInterruptSignals(int signal_id)
 {
     is_cancelled = true;
-    LOG_FMT_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id));
+    LOG_INFO(&logger(), "Received termination signal ({})", strsignal(signal_id));
 
     if (sigint_signals_counter >= 2)
     {

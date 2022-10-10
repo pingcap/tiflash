@@ -109,7 +109,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
         auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
         stream = seg->getInputStream(*dm_context, columns_to_read, t->read_snapshot, t->ranges, filter, max_version, block_size);
     }
-    LOG_FMT_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, seg->segmentId());
+    LOG_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, seg->segmentId());
     return stream;
 }
 
@@ -122,7 +122,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
         active_segment_ids.erase(seg->segmentId());
         pool_finished = active_segment_ids.empty() && tasks.empty();
     }
-    LOG_FMT_DEBUG(log, "finishSegment pool_id={} segment_id={} pool_finished={}", pool_id, seg->segmentId(), pool_finished);
+    LOG_DEBUG(log, "finishSegment pool_id={} segment_id={} pool_finished={}", pool_id, seg->segmentId(), pool_finished);
     if (pool_finished)
     {
         q.finish();
