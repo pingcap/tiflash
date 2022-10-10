@@ -667,7 +667,7 @@ try
     EXPECT_EQ(num_edits_read, num_edits_test);
     EXPECT_EQ(num_pages_read, page_id);
 
-    LOG_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
+    LOG_INFO(Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
     // Test for save snapshot (with encryption)
 
