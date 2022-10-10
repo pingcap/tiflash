@@ -99,9 +99,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     {
                         // just ignore
                     }
-                    LOG_FMT_INFO(logger,
-                                 "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
-                                 DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
+                    LOG_INFO(logger,
+                             "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
+                             DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
                 }
                 else if (dmfile->canGC())
                 {
@@ -123,9 +123,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                         err_msg = e.message();
                     }
                     if (err_msg.empty())
-                        LOG_FMT_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
+                        LOG_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
                     else
-                        LOG_FMT_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={} err_msg={}", dmfile->path(), err_msg);
+                        LOG_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={} err_msg={}", dmfile->path(), err_msg);
                 }
             }
         }
@@ -222,7 +222,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
-        LOG_FMT_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
+        LOG_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
     }
 
     SegmentPtr left, right;
@@ -265,7 +265,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     }
     catch (const Exception & e)
     {
-        LOG_FMT_ERROR(
+        LOG_ERROR(
             log,
             "Execute task on segment failed, task={} segment={} err={}",
             magic_enum::enum_name(task.type),
@@ -538,7 +538,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
         return {};
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "GC - Trigger Merge, segment={} table={}",
         segment->simpleInfo(),
@@ -649,7 +649,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
         return {};
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "GC - Trigger MergeDelta, compact_reason={} segment={} table={}",
         GC::toString(compact_reason),
@@ -659,7 +659,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 
     if (!new_segment)
     {
-        LOG_FMT_DEBUG(
+        LOG_DEBUG(
             log,
             "GC - MergeDelta aborted, compact_reason={} segment={} table={}",
             GC::toString(compact_reason),
@@ -773,7 +773,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
     }
 
     if (gc_segments_num != 0)
-        LOG_FMT_DEBUG(log, "Finish GC, gc_segments_num={}", gc_segments_num);
+        LOG_DEBUG(log, "Finish GC, gc_segments_num={}", gc_segments_num);
 
     return gc_segments_num;
 }

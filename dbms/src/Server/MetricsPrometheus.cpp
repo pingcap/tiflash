@@ -160,12 +160,12 @@ MetricsPrometheus::MetricsPrometheus(
         LOG_WARNING(log, "Config Error: {} should <= 120", status_metrics_interval);
         metrics_interval = 120;
     }
-    LOG_FMT_INFO(log, "Config: {} = {}", status_metrics_interval, metrics_interval);
+    LOG_INFO(log, "Config: {} = {}", status_metrics_interval, metrics_interval);
 
     // Usually TiFlash disable prometheus push mode when deployed by TiUP/TiDB-Operator
     if (!conf.hasOption(status_metrics_addr))
     {
-        LOG_FMT_INFO(log, "Disable prometheus push mode, cause {} is not set!", status_metrics_addr);
+        LOG_INFO(log, "Disable prometheus push mode, cause {} is not set!", status_metrics_addr);
     }
     else
     {
@@ -174,7 +174,7 @@ MetricsPrometheus::MetricsPrometheus(
         auto pos = metrics_addr.find(':', 0);
         if (pos == std::string::npos)
         {
-            LOG_FMT_ERROR(log, "Format error: {} = {}", status_metrics_addr, metrics_addr);
+            LOG_ERROR(log, "Format error: {} = {}", status_metrics_addr, metrics_addr);
         }
         else
         {
@@ -193,7 +193,7 @@ MetricsPrometheus::MetricsPrometheus(
             gateway = std::make_shared<prometheus::Gateway>(host, port, job_name, prometheus::Gateway::GetInstanceLabel(hostname));
             gateway->RegisterCollectable(tiflash_metrics.registry);
 
-            LOG_FMT_INFO(log, "Enable prometheus push mode; interval ={}; addr = {}", metrics_interval, metrics_addr);
+            LOG_INFO(log, "Enable prometheus push mode; interval ={}; addr = {}", metrics_interval, metrics_addr);
         }
     }
 
@@ -206,18 +206,18 @@ MetricsPrometheus::MetricsPrometheus(
         {
             server = getHTTPServer(security_config, tiflash_metrics.registry, metrics_port);
             server->start();
-            LOG_FMT_INFO(log, "Enable prometheus secure pull mode; Metrics Port = {}", metrics_port);
+            LOG_INFO(log, "Enable prometheus secure pull mode; Metrics Port = {}", metrics_port);
         }
         else
         {
             exposer = std::make_shared<prometheus::Exposer>(metrics_port);
             exposer->RegisterCollectable(tiflash_metrics.registry);
-            LOG_FMT_INFO(log, "Enable prometheus pull mode; Metrics Port = {}", metrics_port);
+            LOG_INFO(log, "Enable prometheus pull mode; Metrics Port = {}", metrics_port);
         }
     }
     else
     {
-        LOG_FMT_INFO(log, "Disable prometheus pull mode");
+        LOG_INFO(log, "Disable prometheus pull mode");
     }
 
     timer.scheduleAtFixedRate(
