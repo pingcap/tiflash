@@ -21,16 +21,11 @@ namespace DB
 /// do not need be thread safe since it is only used in single thread env
 struct ExecutionSummary
 {
-    UInt64 time_processed_ns;
-    UInt64 num_produced_rows;
-    UInt64 num_iterations;
-    UInt64 concurrency;
-    ExecutionSummary()
-        : time_processed_ns(0)
-        , num_produced_rows(0)
-        , num_iterations(0)
-        , concurrency(0)
-    {}
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_rows = 0;
+    UInt64 num_iterations = 0;
+    UInt64 concurrency = 0;
+    ExecutionSummary() = default;
 
     void merge(const ExecutionSummary & other, bool streaming_call);
 };
