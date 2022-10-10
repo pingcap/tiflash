@@ -16,6 +16,7 @@
 #include <Functions/FunctionsRegexp.h>
 #include <Functions/Regexps.h>
 #include <fmt/core.h>
+#include "Columns/ColumnNullable.h"
 
 namespace DB
 {
@@ -48,10 +49,7 @@ String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator)
         // to enable the case-sensitive for the regexp
         if (flag == flag_c)
         {
-            auto iter_i = applied_flags.find(flag_i);
-            if (iter_i != applied_flags.end())
-                applied_flags.erase(iter_i);
-
+            applied_flags.erase(flag_i);
             continue;
         }
 
@@ -102,7 +100,15 @@ NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
             if (!res.has_nullable_col)
             {
                 if ((elem.column)->isColumnNullable())
+                {
                     res.has_nullable_col = true;
+                    
+                    // Check if nullable column wrap a DataTypeNothing type
+                    const auto * type_null = typeid_cast<const DataTypeNullable *>(&(*elem.type));
+                    const auto & nested_type = type_null->getNestedType();
+                    if (nested_type->getTypeId() == TypeIndex::Nothing)
+                        res.has_data_type_nothing = true;
+                }
             }
         }
     }
