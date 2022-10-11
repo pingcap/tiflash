@@ -122,7 +122,7 @@ public:
     }
 
 private:
-    Poco::Logger * log;
+    LoggerPtr log;
     mutable std::unique_ptr<R> mono;
     const TiFlashRaftProxyHelper * proxy_helper;
     ColumnFamilyType type;
