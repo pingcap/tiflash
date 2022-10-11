@@ -215,7 +215,7 @@ try
         ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
         store->mergeDeltaAll(*db_context);
         auto stable = store->id_to_segment.begin()->second->getStable();
-        ASSERT_EQ(stable->getRows(), 11 * num_rows_write);
+        ASSERT_EQ(stable->getRows(), (NUMBER_OF_BLOCKS_IN_DELTA + NUMBER_OF_BLOCKS_IN_STABLE) * num_rows_write);
 
         dmfile->remove(db_context->getFileProvider());
         ASSERT_NE(dmfile->path(), readable_path);
