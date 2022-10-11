@@ -423,10 +423,7 @@ private:
         High = 3,
         Emergency = 4
     };
-<<<<<<< HEAD
-    Watermark writeWatermark() const { return getWatermark(writePct()); }
-    Watermark readWatermark() const { return getWatermark(readPct()); }
-=======
+
     Watermark writeWatermark() const
     {
         return getWatermark(fg_write_stat, bg_write_stat, writePct());
@@ -435,7 +432,7 @@ private:
     {
         return getWatermark(fg_read_stat, bg_read_stat, readPct());
     }
->>>>>>> 37ed64f647 (Fix I/O limiter auto-tuner. (#6098))
+
     Watermark getWatermark(int pct) const;
     Watermark getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const;
 
