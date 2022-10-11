@@ -119,7 +119,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+    LOG_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
 

@@ -283,7 +283,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
     TableLockHolder lock;
     Int64 storage_schema_version;
     auto log_schema_version = [&](const String & result) {
-        LOG_FMT_DEBUG(log, "Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].", qualified_name, result, storage_schema_version, global_schema_version, query_schema_version);
+        LOG_DEBUG(log, "Table {} schema {} Schema version [storage, global, query]: [{}, {}, {}].", qualified_name, result, storage_schema_version, global_schema_version, query_schema_version);
     };
     bool ok;
     {
@@ -303,7 +303,7 @@ void InterpreterSelectQuery::getAndLockStorageWithSchemaVersion(const String & d
         auto start_time = Clock::now();
         context.getTMTContext().getSchemaSyncer()->syncSchemas(context);
         auto schema_sync_cost = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
-        LOG_FMT_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
+        LOG_DEBUG(log, "Table {} schema sync cost {}ms.", qualified_name, schema_sync_cost);
 
         std::tie(storage_tmp, lock, storage_schema_version, ok) = get_and_lock_storage(true);
         if (ok)

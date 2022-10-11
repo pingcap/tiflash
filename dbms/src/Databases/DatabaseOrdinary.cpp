@@ -94,7 +94,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
     std::sort(file_names.begin(), file_names.end());
 
     size_t total_tables = file_names.size();
-    LOG_FMT_INFO(log, "Total {} tables.", total_tables);
+    LOG_INFO(log, "Total {} tables.", total_tables);
 
     String data_path = context.getPath() + "data/" + escapeForFileName(name) + "/";
 
@@ -109,7 +109,7 @@ void DatabaseOrdinary::loadTables(Context & context, ThreadPool * thread_pool, b
             /// Messages, so that it's not boring to wait for the server to load for a long time.
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_FMT_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
+                LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
                 watch.restart();
             }
 
@@ -226,7 +226,7 @@ void DatabaseOrdinary::renameTable(
     IDatabase & to_database,
     const String & to_table_name)
 {
-    DatabaseOrdinary * to_database_concrete = typeid_cast<DatabaseOrdinary *>(&to_database);
+    auto * to_database_concrete = typeid_cast<DatabaseOrdinary *>(&to_database);
 
     if (!to_database_concrete)
         throw Exception("Moving tables between databases of different engines is not supported", ErrorCodes::NOT_IMPLEMENTED);

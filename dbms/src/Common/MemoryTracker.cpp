@@ -60,7 +60,7 @@ static Poco::Logger * getLogger()
 
 void MemoryTracker::logPeakMemoryUsage() const
 {
-    LOG_FMT_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
+    LOG_DEBUG(getLogger(), "Peak memory usage{}: {}.", (description ? " " + std::string(description) : ""), formatReadableSizeWithBinarySuffix(peak));
 }
 
 void MemoryTracker::alloc(Int64 size, bool check_memory_limit)

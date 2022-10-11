@@ -152,7 +152,7 @@ void StorageSetOrJoinBase::restore()
         return;
     }
 
-    static const auto file_suffix = ".bin";
+    static const auto * const file_suffix = ".bin";
     static const auto file_suffix_size = strlen(".bin");
 
     Poco::DirectoryIterator dir_end;
@@ -165,7 +165,7 @@ void StorageSetOrJoinBase::restore()
             && dir_it->getSize() > 0)
         {
             /// Calculate the maximum number of available files with a backup to add the following files with large numbers.
-            UInt64 file_num = parse<UInt64>(name.substr(0, name.size() - file_suffix_size));
+            auto file_num = parse<UInt64>(name.substr(0, name.size() - file_suffix_size));
             if (file_num > increment)
                 increment = file_num;
 
@@ -187,7 +187,7 @@ void StorageSetOrJoinBase::restoreFromFile(const String & file_path)
     backup_stream.readSuffix();
 
     /// TODO Add speed, compressed bytes, data volume in memory, compression ratio ... Generalize all statistics logging in project.
-    LOG_FMT_INFO(
+    LOG_INFO(
         &Poco::Logger::get("StorageSetOrJoinBase"),
         "Loaded from backup file {}. {} rows, {:.2f} MiB. State has {} unique rows",
         file_path,
