@@ -16,6 +16,7 @@
 #include <Functions/FunctionsRegexp.h>
 #include <Functions/Regexps.h>
 #include <fmt/core.h>
+
 #include "Columns/ColumnNullable.h"
 
 namespace DB
@@ -102,7 +103,7 @@ NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
                 if ((elem.column)->isColumnNullable())
                 {
                     res.has_nullable_col = true;
-                    
+
                     // Check if nullable column wrap a DataTypeNothing type
                     const auto * type_null = typeid_cast<const DataTypeNullable *>(&(*elem.type));
                     const auto & nested_type = type_null->getNestedType();

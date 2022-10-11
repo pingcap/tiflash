@@ -1785,6 +1785,7 @@ TEST_F(Regexp, testRegexpTiDBCase)
     ASSERT_ANY_THROW((DB::MatchImpl<false, false, true>::constantConstant("", "\\", '\\', "", nullptr, res)));
 }
 
+// TODO test empty columns
 // We can only test regexp_like function as regexp is the subset of regexp_like
 TEST_F(Regexp, RegexpLike)
 {
