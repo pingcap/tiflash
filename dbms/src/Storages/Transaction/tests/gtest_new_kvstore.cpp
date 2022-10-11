@@ -296,6 +296,33 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
                     EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
                 }
             }
+            {
+                // Test of ingesting multiple cfs with MultiSSTReader.
+                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                default_cf.insert(20, "v20");
+                default_cf.insert(21, "v21");
+                default_cf.finish_file();
+                default_cf.freeze();
+                MockRaftStoreProxy::Cf write_cf{region_id, table_id, ColumnFamilyType::Write};
+                write_cf.insert(20, "v20");
+                write_cf.insert(21, "v21");
+                write_cf.finish_file();
+                write_cf.freeze();
+
+                kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+                proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 6, 6);
+
+                MockRaftStoreProxy::FailCond cond;
+                {
+                    // Test if write succeed.
+                    auto [index, term] = proxy_instance->normalWrite(region_id, {20}, {"v20"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+                    EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+                }
+                {
+                    auto [index, term] = proxy_instance->normalWrite(region_id, {21}, {"v21"}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+                    EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+                }
+            }
         }
     }
 }
