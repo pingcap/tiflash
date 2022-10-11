@@ -900,12 +900,14 @@ IOLimitTuner::Watermark IOLimitTuner::getWatermark(int pct) const
 
 IOLimitTuner::Watermark IOLimitTuner::getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const
 {
-    // There is a cornar case:
-    // 1. Both `fg_mbps` and `bg_mbps` are less than `min_bytes_per_sec`.
-    // 2. `bg` runs out of the quota, but `fg` has not been used.
-    // 3. In this case, `pct` can be less than `medium_pct` and watermark is LOW.
-    // 4. Low watermark means it is unnecessary to increase the quota by descrease the quota of others.
-    // 5. However, because `fg_mbps` is less than `min_bytes_per_sec`, `bg_mbps` cannot be increased by decreasing `fg_mbps`.
+    // Take `bg_read` and `fg_read` for example:
+    // 1. Both `max_bg_read_bytes_per_sec` and `max_fg_read_bytes_per_sec` are less than `io_config.min_bytes_per_sec`.
+    // 2. `bg_read` runs out of the bandwidth quota, but `fg_read`'s bandwidth quota has not been used.
+    // 3. The usage rate of read is `(max_bg_read_bytes_per_sec + 0 ) / (max_bg_read_bytes_per_sec + max_fg_read_bytes_per_sec)`, about 50%.
+    // 4. 50% is less than `io_config.medium_pct`(60% by default), so watermark is `LOW`.
+    // 5. The `LOW` watermark means that bandwidth quota of read is sufficient since the usage rate is less than 60%, so it is unnessary to increase its bandwidth quota by decreasing the bandwidth quota of write.
+    // 6. In this case, `bg_read` will only try to increase its bandwidth quota by decreasing the bandwidth quota of `fg_read`.
+    // 7. However, `fg_read` is too small to decrease, so `bg_read` cannot be increased neither.
     if (fg != nullptr && bg != nullptr)
     {
         auto fg_wm = getWatermark(fg->pct());
