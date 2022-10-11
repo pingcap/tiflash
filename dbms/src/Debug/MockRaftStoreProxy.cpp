@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Debug/MockRaftStoreProxy.h>
@@ -518,7 +519,6 @@ void MockRaftStoreProxy::Cf::finish_file()
     auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
     c++;
     sst_files.push_back(region_id_str);
-    LOG_FMT_INFO(&Poco::Logger::get("MockRaftStoreProxy::cf"), "add {}", region_id_str);
     MockSSTReader::Data kv_list;
     for (auto & kv : kvs)
     {

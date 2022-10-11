@@ -86,7 +86,7 @@ void SSTFilesToBlockInputStream::readPrefix()
     }
     if (use_multi)
     {
-        LOG_FMT_INFO(log, "Read SST Files with MultiSSTReader {}", this->region->id());
+        LOG_INFO(log, "Read SST Files with MultiSSTReader {}", this->region->id());
         std::vector<SSTView> ssts;
         bool flag = false;
         ColumnFamilyType prev_type;
@@ -135,7 +135,7 @@ void SSTFilesToBlockInputStream::readPrefix()
         {
             generate_cf_reader();
         }
-        LOG_FMT_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", size_write, size_lock, size_default, this->region->id());
+        LOG_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", size_write, size_lock, size_default, this->region->id());
     }
     else
     {

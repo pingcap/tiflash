@@ -86,7 +86,7 @@ public:
             {
                 // We don't drop if mono is the last instance for safety,
                 // and it will be dropped as MultiSSTReader is dropped.
-                LOG_FMT_INFO(log, "Swithch to {}", buffToStrView(args[current].path));
+                LOG_INFO(log, "Swithch to {}", buffToStrView(args[current].path));
                 mono = initer(proxy_helper, args[current]);
             }
         }
@@ -101,7 +101,7 @@ public:
     {
         assert(args.size() > 0);
         log = &Poco::Logger::get("MultiSSTReader");
-        LOG_FMT_INFO(log, "Init with {}", buffToStrView(args[current].path));
+        LOG_INFO(log, "Init with {}", buffToStrView(args[current].path));
         mono = initer(proxy_helper, args[current]);
     }
 

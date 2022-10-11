@@ -128,7 +128,7 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
             auto r1 = proxy_instance->getRegion(region_id);
             applied_index = r1->getLatestAppliedIndex();
             ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
-            LOG_FMT_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
+            LOG_INFO(&Poco::Logger::get("kvstore"), "applied_index {}", applied_index);
             auto [index, term] = proxy_instance->normalWrite(region_id, {35}, {"v1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
             // KVStore succeed. Proxy failed before advance.
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
@@ -245,32 +245,56 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
                 validate(default_cf, 1, 0);
             }
 
-            // Test of ingesting.
-            MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
-            default_cf.insert(1, "v1");
-            default_cf.insert(2, "v2");
-            default_cf.finish_file();
-            default_cf.insert(3, "v3");
-            default_cf.insert(4, "v4");
-            default_cf.insert(5, "v5");
-            default_cf.finish_file();
-            default_cf.insert(6, "v6");
-            default_cf.finish_file();
-            default_cf.freeze();
-            validate(default_cf, 3, 6);
-
-            kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
-            proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 6, 6);
-
-            MockRaftStoreProxy::FailCond cond;
             {
-                auto [index, term] = proxy_instance->normalWrite(region_id, {9}, {"v9"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+                // Test of ingesting multiple files with MultiSSTReader.
+                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                default_cf.insert(1, "v1");
+                default_cf.insert(2, "v2");
+                default_cf.finish_file();
+                default_cf.insert(3, "v3");
+                default_cf.insert(4, "v4");
+                default_cf.insert(5, "v5");
+                default_cf.finish_file();
+                default_cf.insert(6, "v6");
+                default_cf.finish_file();
+                default_cf.freeze();
+                validate(default_cf, 3, 6);
+
+                kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+                proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 6, 6);
+
+                MockRaftStoreProxy::FailCond cond;
+                {
+                    auto [index, term] = proxy_instance->normalWrite(region_id, {9}, {"v9"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+                    proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+                }
+                {
+                    // Test if write succeed.
+                    auto [index, term] = proxy_instance->normalWrite(region_id, {1}, {"fv1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+                    EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+                }
             }
             {
-                // Test if write succeed.
-                auto [index, term] = proxy_instance->normalWrite(region_id, {1}, {"fv1"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-                EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+                // Test of ingesting single files with MultiSSTReader.
+                MockRaftStoreProxy::Cf default_cf{region_id, table_id, ColumnFamilyType::Default};
+                default_cf.insert(10, "v10");
+                default_cf.insert(11, "v11");
+                default_cf.finish_file();
+                default_cf.freeze();
+
+                kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+                proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 6, 6);
+
+                MockRaftStoreProxy::FailCond cond;
+                {
+                    auto [index, term] = proxy_instance->normalWrite(region_id, {19}, {"v19"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+                    proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+                }
+                {
+                    // Test if write succeed.
+                    auto [index, term] = proxy_instance->normalWrite(region_id, {10}, {"v10"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+                    EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+                }
             }
         }
     }
