@@ -586,7 +586,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
                                       page_for_put.data.size());
             }
 
-            LOG_FMT_INFO(
+            LOG_INFO(
                 Logger::get("PageWriter"),
                 "Can't find the origin page in v3, migrate a new being ref page into V3 [page_id={}] [origin_id={}] [field_offsets={}]",
                 write.page_id,

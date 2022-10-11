@@ -216,7 +216,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
         read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, DEFAULT_READ_INDEX_WORKER_TICK_MS);
     }
     {
-        LOG_FMT_INFO(
+        LOG_INFO(
             &Poco::Logger::root(),
             "read-index max thread num: {}, timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; read-index-worker-tick: {}ms",
             replicaReadMaxThread(),

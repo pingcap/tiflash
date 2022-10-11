@@ -505,7 +505,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (!table)
     {
-        LOG_FMT_ERROR(log, "Destination table {}.{} doesn't exist. Block of data is discarded.", destination_database, destination_table);
+        LOG_ERROR(log, "Destination table {}.{} doesn't exist. Block of data is discarded.", destination_database, destination_table);
         return;
     }
 
@@ -527,7 +527,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
         {
             if (!block.getByName(dst_col.name).type->equals(*dst_col.type))
             {
-                LOG_FMT_ERROR(log, "Destination table {}.{} have different type of column {} ({} != {}). Block of data is discarded.", destination_database, destination_table, dst_col.name, block.getByName(dst_col.name).type->getName(), dst_col.type->getName());
+                LOG_ERROR(log, "Destination table {}.{} have different type of column {} ({} != {}). Block of data is discarded.", destination_database, destination_table, dst_col.name, block.getByName(dst_col.name).type->getName(), dst_col.type->getName());
                 return;
             }
 
@@ -537,7 +537,7 @@ void StorageBuffer::writeBlockToDestination(const Block & block, StoragePtr tabl
 
     if (columns_intersection.empty())
     {
-        LOG_FMT_ERROR(log, "Destination table {}.{} have no common columns with block in buffer. Block of data is discarded.", destination_database, destination_table);
+        LOG_ERROR(log, "Destination table {}.{} have no common columns with block in buffer. Block of data is discarded.", destination_database, destination_table);
         return;
     }
 

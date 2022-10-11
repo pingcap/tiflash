@@ -39,7 +39,7 @@ ThreadPool::ThreadPool(size_t m_size, Job pre_worker)
     }
     catch (...)
     {
-        LOG_FMT_ERROR(getLogger(), "ThreadPool failed to allocate threads.");
+        LOG_ERROR(getLogger(), "ThreadPool failed to allocate threads.");
         finalize();
         throw;
     }

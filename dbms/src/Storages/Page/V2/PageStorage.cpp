@@ -200,7 +200,7 @@ toConcreteSnapshot(const DB::PageStorage::SnapshotPtr & ptr)
 
 void PageStorage::restore()
 {
-    LOG_FMT_INFO(log, "{} begin to restore data from disk. [path={}] [num_writers={}]", storage_name, delegator->defaultPath(), write_files.size());
+    LOG_INFO(log, "{} begin to restore data from disk. [path={}] [num_writers={}]", storage_name, delegator->defaultPath(), write_files.size());
 
     /// page_files are in ascending ordered by (file_id, level).
     ListPageFilesOption opt;
@@ -355,7 +355,7 @@ void PageStorage::restore()
 
     auto snapshot = getConcreteSnapshot();
     size_t num_pages = snapshot->version()->numPages();
-    LOG_FMT_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
+    LOG_INFO(log, "{} restore {} pages, write batch sequence: {}, {}", storage_name, num_pages, write_batch_seq, statistics.toString());
 }
 
 PageId PageStorage::getMaxId()
@@ -460,7 +460,7 @@ PageStorage::WriterPtr PageStorage::checkAndRenewWriter( //
             0,
             pf_parent_path,
             /*need_insert_location*/ true);
-        LOG_FMT_DEBUG(log, "{}{} create new PageFile_{}_0 for write [path={}]", storage_name, logging_msg, (max_writing_id_lvl.first + 1), pf_parent_path);
+        LOG_DEBUG(log, "{}{} create new PageFile_{}_0 for write [path={}]", storage_name, logging_msg, (max_writing_id_lvl.first + 1), pf_parent_path);
         // Renew the `file` and `persisted.meta_offset`, keep `persisted.sequence` unchanged.
         writing_file.file
             = PageFile::newPageFile(max_writing_id_lvl.first + 1, 0, pf_parent_path, file_provider, PageFile::Type::Formal, page_file_log);
@@ -867,7 +867,7 @@ void PageStorage::registerExternalPagesCallbacks(const ExternalPageCallbacks & c
 
 void PageStorage::drop()
 {
-    LOG_FMT_INFO(log, "{} is going to drop", storage_name);
+    LOG_INFO(log, "{} is going to drop", storage_name);
 
     ListPageFilesOption opt;
     opt.ignore_checkpoint = false;
@@ -892,7 +892,7 @@ void PageStorage::drop()
             file_provider->deleteDirectory(path, false, true);
     }
 
-    LOG_FMT_INFO(log, "{} drop done.", storage_name);
+    LOG_INFO(log, "{} drop done.", storage_name);
 }
 
 struct GcContext
@@ -1120,7 +1120,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
             if (!has_normal_non_writing_files && has_non_empty_write_file)
             {
                 std::unique_lock lock(write_mutex);
-                LOG_FMT_DEBUG(log, "{} No valid pages in non writing page files and the writing page files are not all empty. Try to roll all {} writing page files", storage_name, write_files.size());
+                LOG_DEBUG(log, "{} No valid pages in non writing page files and the writing page files are not all empty. Try to roll all {} writing page files", storage_name, write_files.size());
                 idle_writers.clear();
                 for (auto & write_file : write_files)
                 {
@@ -1264,7 +1264,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         if (elapsed_sec > EXIST_LONG_GC)
             LOG_WARNING(log, GC_LOG_PARAMS);
         else
-            LOG_FMT_INFO(log, GC_LOG_PARAMS);
+            LOG_INFO(log, GC_LOG_PARAMS);
 #undef GC_LOG_PARAMS
     }
     return gc_context.compact_result.do_compaction;
@@ -1299,7 +1299,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
                 delegator->removePageFile(page_file.fileIdLevel(), file_size, /*meta_left*/ false, /*remove_from_default_path*/ page_file.getType() == PageFile::Type::Checkpoint);
             }
         }
-        LOG_FMT_INFO(log, "{} archive {} files to {}", storage_name, page_files.size(), archive_path.toString());
+        LOG_INFO(log, "{} archive {} files to {}", storage_name, page_files.size(), archive_path.toString());
     } while (false);
 
     // Maybe there are a large number of files left on disk by TiFlash version v4.0.0~v4.0.11, or some files left on disk
@@ -1330,7 +1330,7 @@ void PageStorage::archivePageFiles(const PageFileSet & page_files, bool remove_s
         }
     }
     size_t num_left = archive_page_files.size() > num_removed ? (archive_page_files.size() - num_removed) : 0;
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "{} clean {} files in archive dir, {} files are left to be clean in the next round.",
         storage_name,

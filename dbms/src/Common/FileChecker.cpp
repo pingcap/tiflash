@@ -69,14 +69,14 @@ bool FileChecker::check() const
         Poco::File file(Poco::Path(files_info_path).parent().toString() + "/" + name_size.first);
         if (!file.exists())
         {
-            LOG_FMT_ERROR(log, "File {} doesn't exist", file.path());
+            LOG_ERROR(log, "File {} doesn't exist", file.path());
             return false;
         }
 
         size_t real_size = file.getSize();
         if (real_size != name_size.second)
         {
-            LOG_FMT_ERROR(log, "Size of {} is wrong. Size is {} but should be {}", file.path(), real_size, name_size.second);
+            LOG_ERROR(log, "Size of {} is wrong. Size is {} but should be {}", file.path(), real_size, name_size.second);
             return false;
         }
     }
