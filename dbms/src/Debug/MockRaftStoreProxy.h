@@ -250,7 +250,7 @@ struct MockRaftStoreProxy : MutexLockWrap
     std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
     AsyncWaker::Notifier notifier;
     TableID table_id;
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 enum class RawObjType : uint32_t
