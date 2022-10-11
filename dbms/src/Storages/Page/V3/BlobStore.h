@@ -20,9 +20,11 @@
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/UniversalPage.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/Page/V3/Blob/BlobStat.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
@@ -30,6 +32,9 @@
 #include <Storages/PathPool.h>
 
 #include <mutex>
+
+#include "Storages/Page/UniversalWriteBatch.h"
+#include "Storages/Page/WriteBatch.h"
 
 namespace DB
 {
@@ -63,7 +68,7 @@ public:
        const ReadLimiterPtr & read_limiter = nullptr);
 
     typename Trait::PageEntriesEditType
-    write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    write(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntriesV3 & del_entries);
 
@@ -76,9 +81,10 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    using ExternalIdTrait = typename Trait::ExternalIdTrait;
 
     typename Trait::PageEntriesEditType
-    handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
+    handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(
         const typename Trait::PageId & page_id_v3,
@@ -139,6 +145,9 @@ struct BlobStoreTrait
     using Page = Page;
     using PageMap = PageMap;
 
+    using ExternalIdTrait = ExternalIdTrait;
+    using WriteBatch = DB::WriteBatch;
+
     struct FieldReadInfo
     {
         PageId page_id;
@@ -156,6 +165,41 @@ struct BlobStoreTrait
 
 using BlobStorePtr = std::shared_ptr<BlobStore<BlobStoreTrait>>;
 } // namespace u128
+
+namespace universal
+{
+struct BlobStoreTrait
+{
+    using PageId = UniversalPageId;
+    using PageEntriesEditType = PageEntriesEdit;
+    using GcEntries = std::vector<std::tuple<PageId, PageVersion, PageEntryV3>>;
+    using GcEntriesMap = std::map<BlobFileId, GcEntries>;
+    using PageIdAndEntry = std::pair<PageId, PageEntryV3>;
+    using PageIdAndEntries = std::vector<PageIdAndEntry>;
+    using Page = UniversalPage;
+    // TODO: universal pagemap/handler may should not filter by prefix
+    using PageMap = std::map<DB::PageId, UniversalPage>;
+    using PageHandler = std::function<void(DB::PageId page_id, const UniversalPage &)>;
+
+    using ExternalIdTrait = ExternalIdTrait;
+    using WriteBatch = UniversalWriteBatch;
+
+    struct FieldReadInfo
+    {
+        PageId page_id;
+        PageEntryV3 entry;
+        std::vector<size_t> fields;
+
+        FieldReadInfo(const PageId & id_, PageEntryV3 entry_, std::vector<size_t> fields_)
+            : page_id(id_)
+            , entry(entry_)
+            , fields(std::move(fields_))
+        {}
+    };
+    using FieldReadInfos = std::vector<FieldReadInfo>;
+};
+using BlobStorePtr = std::shared_ptr<BlobStore<BlobStoreTrait>>;
+} // namespace universal
 
 } // namespace PS::V3
 } // namespace DB

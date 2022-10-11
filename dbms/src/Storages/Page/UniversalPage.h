@@ -31,35 +31,23 @@ namespace DB
 struct UniversalPage
 {
 public:
-    struct FieldOffset
+    explicit UniversalPage(const UniversalPageId & page_id_)
+        : page_id(page_id_)
     {
-        size_t index;
-        size_t offset;
-
-        FieldOffset(size_t index_) // NOLINT(google-explicit-constructor)
-            : index(index_)
-            , offset(0)
-        {}
-        FieldOffset(size_t index_, size_t offset_)
-            : index(index_)
-            , offset(offset_)
-        {}
-
-        bool operator<(const FieldOffset & rhs) const { return index < rhs.index; }
-    };
+    }
 
     UniversalPageId page_id;
     ByteBuffer data;
     MemHolder mem_holder;
     // Field offsets inside this page.
-    std::set<FieldOffset> field_offsets;
+    std::set<FieldOffsetInsidePage> field_offsets;
 
 public:
     inline bool isValid() const { return !page_id.empty(); }
 
     ByteBuffer getFieldData(size_t index) const
     {
-        auto iter = field_offsets.find(FieldOffset(index));
+        auto iter = field_offsets.find(FieldOffsetInsidePage(index));
         if (unlikely(iter == field_offsets.end()))
             throw Exception(fmt::format("Try to getFieldData with invalid field index [page_id={}] [field_index={}]", page_id, index),
                             ErrorCodes::LOGICAL_ERROR);

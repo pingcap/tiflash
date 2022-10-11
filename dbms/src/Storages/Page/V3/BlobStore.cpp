@@ -166,7 +166,7 @@ FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const
 
 template <typename Trait>
 typename Trait::PageEntriesEditType
-BlobStore<Trait>::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     typename Trait::PageEntriesEditType edit;
     for (auto & write : wb.getWrites())
@@ -248,7 +248,7 @@ BlobStore<Trait>::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & 
 
 template <typename Trait>
 typename Trait::PageEntriesEditType
-BlobStore<Trait>::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
+BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
@@ -580,7 +580,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
 
     std::set<FieldOffsetInsidePage> fields_offset_in_page;
     char * pos = data_buf;
-    PageMap page_map;
+    typename Trait::PageMap page_map;
     for (const auto & [page_id_v3, entry, fields] : to_read)
     {
         size_t read_size_this_entry = 0;
@@ -622,12 +622,12 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::FieldReadInfos & 
             write_offset += size_to_read;
         }
 
-        Page page(page_id_v3);
+        typename Trait::Page page(page_id_v3);
         page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
         fields_offset_in_page.clear();
-        page_map.emplace(page_id_v3.low, std::move(page));
+        page_map.emplace(ExternalIdTrait::getU64ID(page_id_v3), std::move(page));
 
         pos = write_offset;
     }
@@ -666,13 +666,13 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        PageMap page_map;
+        typename Trait::PageMap page_map;
         for (const auto & [page_id_v3, entry] : entries)
         {
             (void)entry;
             LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page(page_id_v3);
-            page_map.emplace(page_id_v3.low, page);
+            typename Trait::Page page(page_id_v3);
+            page_map.emplace(ExternalIdTrait::getU64ID(page_id_v3), page);
         }
         return page_map;
     }
@@ -683,7 +683,7 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
     });
 
     char * pos = data_buf;
-    PageMap page_map;
+    typename Trait::PageMap page_map;
     for (const auto & [page_id_v3, entry] : entries)
     {
         auto blob_file = read(page_id_v3, entry.file_id, entry.offset, pos, entry.size, read_limiter);
@@ -706,10 +706,10 @@ typename Trait::PageMap BlobStore<Trait>::read(typename Trait::PageIdAndEntries 
             }
         }
 
-        Page page(page_id_v3);
+        typename Trait::Page page(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
-        page_map.emplace(page_id_v3.low, page);
+        page_map.emplace(ExternalIdTrait::getU64ID(page_id_v3), page);
 
         pos += entry.size;
     }
@@ -728,7 +728,7 @@ typename Trait::Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry
 {
     if (!id_entry.second.isValid())
     {
-        Page page_not_found(buildV3Id(id_entry.first.high, INVALID_PAGE_ID));
+        typename Trait::Page page_not_found(ExternalIdTrait::getInvalidID());
         return page_not_found;
     }
 
@@ -740,7 +740,7 @@ typename Trait::Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry
     if (buf_size == 0)
     {
         LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-        Page page(page_id_v3);
+        typename Trait::Page page(page_id_v3);
         return page;
     }
 
@@ -768,7 +768,7 @@ typename Trait::Page BlobStore<Trait>::read(const typename Trait::PageIdAndEntry
         }
     }
 
-    Page page(page_id_v3);
+    typename Trait::Page page(page_id_v3);
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 
@@ -1172,6 +1172,7 @@ BlobFilePtr BlobStore<Trait>::getBlobFile(BlobFileId blob_id)
 }
 
 template class BlobStore<u128::BlobStoreTrait>;
+template class BlobStore<universal::BlobStoreTrait>;
 
 } // namespace PS::V3
 } // namespace DB

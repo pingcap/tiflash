@@ -17,6 +17,7 @@
 #include <IO/ReadBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/WriteBatch.h>
 
 #include <vector>
 
@@ -29,26 +30,10 @@ extern const int LOGICAL_ERROR;
 
 class UniversalWriteBatch : private boost::noncopyable
 {
-public:
-    enum class WriteType : UInt8
-    {
-        DEL = 0,
-        // Create / Update a page, will implicitly create a RefPage{id} -> Page{id}.
-        PUT = 1,
-        // Create a RefPage{ref_id} -> Page{id}
-        REF = 2,
-        // Create an external page.
-        // In V2, it is the same as `PUT`; In V3, we treated it as a different type from `PUT`
-        // to get its lifetime management correct.
-        PUT_EXTERNAL = 4,
-    };
-
-    using SequenceID = UInt64;
-
 private:
     struct Write
     {
-        WriteType type;
+        WriteBatchWriteType type;
         UniversalPageId page_id;
         UInt64 tag;
         // Page's data and size
@@ -95,7 +80,7 @@ public:
                             ErrorCodes::LOGICAL_ERROR);
         }
 
-        Write w{WriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets), 0, 0, {}};
+        Write w{WriteBatchWriteType::PUT, page_id, tag, read_buffer, size, "", std::move(offsets), 0, 0, {}};
         total_data_size += size;
         writes.emplace_back(std::move(w));
     }
@@ -103,20 +88,20 @@ public:
     void putExternal(UniversalPageId page_id, UInt64 tag)
     {
         // External page's data is not managed by PageStorage, which means data is empty.
-        Write w{WriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, "", {}, 0, 0, {}};
+        Write w{WriteBatchWriteType::PUT_EXTERNAL, page_id, tag, nullptr, 0, "", {}, 0, 0, {}};
         writes.emplace_back(std::move(w));
     }
 
     // Add RefPage{ref_id} -> Page{page_id}
     void putRefPage(UniversalPageId ref_id, UniversalPageId page_id)
     {
-        Write w{WriteType::REF, ref_id, 0, nullptr, 0, page_id, {}, 0, 0, {}};
+        Write w{WriteBatchWriteType::REF, ref_id, 0, nullptr, 0, page_id, {}, 0, 0, {}};
         writes.emplace_back(std::move(w));
     }
 
     void delPage(UniversalPageId page_id)
     {
-        Write w{WriteType::DEL, page_id, 0, nullptr, 0, "", {}, 0, 0, {}};
+        Write w{WriteBatchWriteType::DEL, page_id, 0, nullptr, 0, "", {}, 0, 0, {}};
         writes.emplace_back(std::move(w));
     }
 
@@ -138,7 +123,7 @@ public:
     {
         size_t count = 0;
         for (const auto & w : writes)
-            count += (w.type == WriteType::PUT);
+            count += (w.type == WriteBatchWriteType::PUT);
         return count;
     }
 
@@ -160,6 +145,8 @@ public:
         return total_data_size;
     }
 
+    static UniversalPageId getFullPageId(const UniversalPageId & id) { return id; }
+
     String toString() const
     {
         FmtBuffer fmt_buffer;
@@ -169,16 +156,16 @@ public:
             [](const auto & w, FmtBuffer & fb) {
                 switch (w.type)
                 {
-                case WriteType::PUT:
+                case WriteBatchWriteType::PUT:
                     fb.fmtAppend("{}", w.page_id);
                     break;
-                case WriteType::REF:
+                case WriteBatchWriteType::REF:
                     fb.fmtAppend("{} > {}", w.page_id, w.ori_page_id);
                     break;
-                case WriteType::DEL:
+                case WriteBatchWriteType::DEL:
                     fb.fmtAppend("X{}", w.page_id);
                     break;
-                case WriteType::PUT_EXTERNAL:
+                case WriteBatchWriteType::PUT_EXTERNAL:
                     fb.fmtAppend("E{}", w.page_id);
                     break;
                 default:

@@ -16,6 +16,7 @@
 
 #include <Common/nocopyable.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/V3/PageDirectory/ExternalIdTrait.h>
 
 #include <list>
 #include <memory>
@@ -72,52 +73,5 @@ private:
     using NamespaceMap = std::unordered_map<Prefix, ExternalIds>;
     mutable NamespaceMap ids_by_ns;
 };
-
-namespace u128
-{
-struct ExternalIdTrait
-{
-    using U64PageId = DB::PageId;
-    using PageId = PageIdV3Internal;
-    using Prefix = NamespaceId;
-
-    static inline PageId getInvalidID()
-    {
-        return buildV3Id(0, DB::INVALID_PAGE_ID);
-    }
-    static inline U64PageId getU64ID(PageId page_id)
-    {
-        return page_id.low;
-    }
-    static inline Prefix getPrefix(const PageId & page_id)
-    {
-        return page_id.high;
-    }
-};
-} // namespace u128
-namespace universal
-{
-struct ExternalIdTrait
-{
-    using U64PageId = DB::PageId;
-    using PageId = UniversalPageId;
-    using Prefix = String;
-
-    static inline PageId getInvalidID()
-    {
-        return "";
-    }
-    static inline U64PageId getU64ID(const PageId & /*page_id*/)
-    {
-        // FIXME: we need to ignore some page_id with prefix
-        return 0;
-    }
-    static inline Prefix getPrefix(const PageId & /*page_id*/)
-    {
-        // FIXME
-        return "";
-    }
-};
-} // namespace universal
 
 } // namespace DB::PS::V3

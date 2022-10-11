@@ -126,6 +126,7 @@ public:
     FileProviderPtr file_provider;
 
     PS::V3::universal::PageDirectoryPtr page_directory;
+    PS::V3::universal::BlobStorePtr blob_store;
 };
 
 } // namespace DB
