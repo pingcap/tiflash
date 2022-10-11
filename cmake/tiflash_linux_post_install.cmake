@@ -21,5 +21,5 @@ else ()
     set(CMAKE_OBJCOPY ${OBJCOPY_PATH})
 endif ()
 
-message(STATUS "executing: ${CMAKE_OBJCOPY} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/tiflash")
-execute_process(COMMAND ${CMAKE_OBJCOPY} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/tiflash)
+message(STATUS "executing: ${CMAKE_OBJCOPY} --compress-debug-sections ${CMAKE_INSTALL_PREFIX}/tiflash")
+execute_process(COMMAND ${CMAKE_OBJCOPY} --compress-debug-sections ${CMAKE_INSTALL_PREFIX}/tiflash)
