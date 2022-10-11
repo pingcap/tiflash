@@ -89,6 +89,7 @@ TEST(ExternalIdsByNamespaceTest, Simple)
 
     {
         // unregister all ids under the namespace
+        // "50" is erased though the holder is not released.
         external_ids_by_ns.unregisterNamespace(ns_id);
         auto ids = external_ids_by_ns.getAliveIds(ns_id);
         ASSERT_EQ(ids.size(), 0);
