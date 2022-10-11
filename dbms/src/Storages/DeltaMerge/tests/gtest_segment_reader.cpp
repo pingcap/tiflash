@@ -160,6 +160,8 @@ try
         ASSERT_EQ(stable->getRows(), num_rows_write);
     }
 
+    static const size_t NUMBER_OF_BLOCKS_IN_DELTA = 10;
+    static const size_t NUMBER_OF_BLOCKS_IN_STABLE = 1;
     // Ensure delta is not empty.
     {
         for (size_t i = 0; i < NUMBER_OF_BLOCKS_IN_DELTA; ++i)
