@@ -48,7 +48,6 @@ namespace DM
 {
 namespace tests
 {
-
 TEST_P(DeltaMergeStoreRWTest, ExceptionInMergedTaskInit)
 try
 {
@@ -163,20 +162,24 @@ try
 
     // Ensure delta is not empty.
     {
-        auto beg = num_rows_write;
-        auto end = num_rows_write + num_rows_write;
-        auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false);
-        block.insert(DB::tests::createColumn<String>(
-            createNumberStrings(beg, end),
-            col_str_define.name,
-            col_str_define.id));
-        block.insert(DB::tests::createColumn<Int8>(
-            createSignedNumbers(beg, end),
-            col_i8_define.name,
-            col_i8_define.id));
-        store->write(*db_context, db_context->getSettingsRef(), block);
+        for (size_t i = 0; i < 10; i++)
+        {
+            auto beg = num_rows_write * (i + 1);
+            auto end = beg + num_rows_write;
+            auto block = DMTestEnv::prepareSimpleWriteBlock(beg, end, false);
+            block.insert(DB::tests::createColumn<String>(
+                createNumberStrings(beg, end),
+                col_str_define.name,
+                col_str_define.id));
+            block.insert(DB::tests::createColumn<Int8>(
+                createSignedNumbers(beg, end),
+                col_i8_define.name,
+                col_i8_define.id));
+            store->write(*db_context, db_context->getSettingsRef(), block);
+            ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
+        }
         auto delta = store->id_to_segment.begin()->second->getDelta();
-        ASSERT_EQ(delta->getRows(), num_rows_write);
+        ASSERT_EQ(delta->getRows(), num_rows_write * 10);
     }
 
     // Check DMFile
@@ -210,7 +213,7 @@ try
         ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
         store->mergeDeltaAll(*db_context);
         auto stable = store->id_to_segment.begin()->second->getStable();
-        ASSERT_EQ(stable->getRows(), 2 * num_rows_write);
+        ASSERT_EQ(stable->getRows(), 11 * num_rows_write);
 
         dmfile->remove(db_context->getFileProvider());
         ASSERT_NE(dmfile->path(), readable_path);
