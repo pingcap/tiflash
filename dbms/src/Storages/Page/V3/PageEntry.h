@@ -79,7 +79,6 @@ using PageEntriesV3 = std::vector<PageEntryV3>;
 using PageIDAndEntryV3 = std::pair<PageIdV3Internal, PageEntryV3>;
 using PageIDAndEntriesV3 = std::vector<PageIDAndEntryV3>;
 
-
 inline String toDebugString(const PageEntryV3 & entry)
 {
     return fmt::format("PageEntryV3{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets_size: {}}}",

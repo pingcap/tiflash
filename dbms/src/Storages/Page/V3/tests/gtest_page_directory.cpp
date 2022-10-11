@@ -50,7 +50,7 @@ namespace PS::V3::tests
 TEST(ExternalIdsByNamespaceTest, Simple)
 {
     NamespaceId ns_id = 100;
-    ExternalIdsByNamespace external_ids_by_ns;
+    ExternalIdsByNamespace<u128::ExternalIdTrait> external_ids_by_ns;
 
     {
         ASSERT_FALSE(external_ids_by_ns.existNamespace(ns_id));

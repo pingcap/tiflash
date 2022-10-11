@@ -256,6 +256,9 @@ public:
     friend class PageStorageControlV3;
 
 private:
+    using ExternalIdTrait = typename Trait::ExternalIdTrait;
+
+private:
     mutable std::mutex m;
 
     // Valid value of `type` is one of
@@ -383,6 +386,7 @@ private:
     getByIDsImpl(const typename Trait::PageIds & page_ids, const PageDirectorySnapshotPtr & snap, bool throw_on_not_exist) const;
 
 private:
+    using ExternalIdTrait = typename Trait::ExternalIdTrait;
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
     // "No iterators or references are invalidated"
     // https://en.cppreference.com/w/cpp/container/map/insert
@@ -415,7 +419,7 @@ private:
     mutable std::mutex snapshots_mutex;
     mutable std::list<std::weak_ptr<PageDirectorySnapshot>> snapshots;
 
-    mutable ExternalIdsByNamespace external_ids_by_ns;
+    mutable ExternalIdsByNamespace<typename Trait::ExternalIdTrait> external_ids_by_ns;
 
     WALStorePtr wal;
     const UInt64 max_persisted_log_files;
@@ -442,17 +446,7 @@ struct PageDirectoryTrait
     using PageIdAndEntries = std::vector<PageIdAndEntry>;
     using PageIdAndEntriesWithError = std::pair<PageIdAndEntries, PageIds>;
 
-    static inline PageId getInvalidID()
-    {
-        return "";
-    }
-
-    static inline DB::PageId getU64ID(const PageId & page_id)
-    {
-        UNUSED(page_id);
-        // FIXME: we need to ignore some page_id with prefix
-        return 0;
-    }
+    using ExternalIdTrait = ExternalIdTrait;
 
     static inline String serializeTo(const PageEntriesEdit & edit)
     {
@@ -482,15 +476,7 @@ struct PageDirectoryTrait
     using PageIdAndEntries = PageIDAndEntriesV3;
     using PageIdAndEntriesWithError = std::pair<PageIdAndEntries, PageIds>;
 
-    static inline PageId getInvalidID()
-    {
-        return buildV3Id(0, DB::INVALID_PAGE_ID);
-    }
-
-    static inline DB::PageId getU64ID(PageId page_id)
-    {
-        return page_id.low;
-    }
+    using ExternalIdTrait = ExternalIdTrait;
 
     static inline String serializeTo(const PageEntriesEdit & edit)
     {
