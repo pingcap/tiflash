@@ -14,8 +14,9 @@
 
 cmake_minimum_required (VERSION 3.21)
 
-cmake_policy(SET CMP0048 NEW)
 project (TiFlash)
+
+cmake_policy(SET CMP0048 NEW)
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
@@ -39,14 +40,14 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         message (FATAL_ERROR "GCC version must be at least 7! For example, if GCC 7 is available under gcc-7, g++-7 names, do the following: export CC=gcc-7 CXX=g++-7; rm -rf CMakeCache.txt CMakeFiles; and re run cmake or ./release.")
     endif ()
     set(MOST_DEBUGGABLE_LEVEL -Og)
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
     # Require at least clang 5
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5)
         message (FATAL_ERROR "Clang version must be at least 5!")
     endif ()
     set(MOST_DEBUGGABLE_LEVEL -O0)
 else ()
-    message (WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
+    message (FATAL_ERROR "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
 endif ()
 
 # Write compile_commands.json
