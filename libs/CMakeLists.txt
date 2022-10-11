@@ -27,5 +27,4 @@ if (GLIBC_COMPATIBILITY)
     add_subdirectory (libglibc-compatibility)
 endif ()
 
-add_subdirectory (libconsistent-hashing)
 add_subdirectory (libsymbolization)
