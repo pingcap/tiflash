@@ -23,16 +23,27 @@ namespace DB
 class SSTReader
 {
 public:
-    virtual bool remained() const;
-    virtual BaseBuffView keyView() const;
-    virtual BaseBuffView valueView() const;
-    virtual void next();
+    virtual bool remained() const = 0;
+    virtual BaseBuffView keyView() const = 0;
+    virtual BaseBuffView valueView() const = 0;
+    virtual void next() = 0;
 
-    DISALLOW_COPY_AND_MOVE(SSTReader);
-    SSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view);
-    // Should only be used when SSTReader is a base class.
-    SSTReader();
-    virtual ~SSTReader();
+    virtual ~SSTReader(){};
+};
+
+class MonoSSTReader : public SSTReader
+{
+public:
+    bool remained() const override;
+    BaseBuffView keyView() const override;
+    BaseBuffView valueView() const override;
+    void next() override;
+
+    DISALLOW_COPY_AND_MOVE(MonoSSTReader);
+    MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view);
+    // Should only be used when MonoSSTReader is a base class.
+    MonoSSTReader();
+    ~MonoSSTReader() override;
 
 private:
     const TiFlashRaftProxyHelper * proxy_helper;
@@ -105,7 +116,7 @@ public:
         mono = initer(proxy_helper, args[current]);
     }
 
-    ~MultiSSTReader()
+    ~MultiSSTReader() override
     {
         // The last sst reader will be dropped with inner.
     }

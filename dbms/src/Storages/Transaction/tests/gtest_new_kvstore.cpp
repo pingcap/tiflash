@@ -209,11 +209,11 @@ TEST_F(RegionKVStoreTest, KVStoreSnapshot)
                     RaftStoreProxyPtr{proxy_instance.get()}));
                 proxy_helper->sst_reader_interfaces = make_mock_sst_reader_interface();
                 auto make_inner_func = [](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
-                    return std::make_unique<SSTReader>(proxy_helper, snap);
+                    return std::make_unique<MonoSSTReader>(proxy_helper, snap);
                 };
                 auto ssts = default_cf.ssts();
                 ASSERT_EQ(ssts.size(), sst_size);
-                MultiSSTReader<SSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts};
+                MultiSSTReader<MonoSSTReader, SSTView> reader{proxy_helper.get(), ColumnFamilyType::Default, make_inner_func, ssts};
                 size_t counter = 0;
                 while (reader.remained())
                 {

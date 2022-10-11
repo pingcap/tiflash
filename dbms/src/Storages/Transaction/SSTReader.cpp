@@ -18,31 +18,31 @@
 
 namespace DB
 {
-bool SSTReader::remained() const
+bool MonoSSTReader::remained() const
 {
     return proxy_helper->sst_reader_interfaces.fn_remained(inner, type);
 }
-BaseBuffView SSTReader::keyView() const
+BaseBuffView MonoSSTReader::keyView() const
 {
     return proxy_helper->sst_reader_interfaces.fn_key(inner, type);
 }
-BaseBuffView SSTReader::valueView() const
+BaseBuffView MonoSSTReader::valueView() const
 {
     return proxy_helper->sst_reader_interfaces.fn_value(inner, type);
 }
-void SSTReader::next()
+void MonoSSTReader::next()
 {
     return proxy_helper->sst_reader_interfaces.fn_next(inner, type);
 }
 
-SSTReader::SSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view)
+MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view)
     : proxy_helper(proxy_helper_)
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
     , inited(true)
 {}
 
-SSTReader::SSTReader()
+MonoSSTReader::MonoSSTReader()
     : proxy_helper(nullptr)
     , inner(SSTReaderPtr{nullptr})
     , type(ColumnFamilyType::Default)
@@ -50,7 +50,7 @@ SSTReader::SSTReader()
 {
 }
 
-SSTReader::~SSTReader()
+MonoSSTReader::~MonoSSTReader()
 {
     if (inited)
     {
