@@ -88,7 +88,7 @@ void SSTFilesToBlockInputStream::readPrefix()
             break;
         }
     }
-    if (ssts_default.size())
+    if (!ssts_default.empty())
     {
         default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default);
     }
