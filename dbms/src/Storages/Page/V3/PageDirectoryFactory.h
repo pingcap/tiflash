@@ -62,6 +62,8 @@ public:
     }
 
 private:
+    using ExternalIdTrait = typename Trait::ExternalIdTrait;
+
     void loadFromDisk(const typename Trait::PageDirectoryPtr & dir, WALStoreReaderPtr && reader);
     void loadEdit(const typename Trait::PageDirectoryPtr & dir, const typename Trait::PageEntriesEdit & edit);
     static void applyRecord(
@@ -83,6 +85,7 @@ struct FactoryTrait
     using PageDirectoryPtr = DB::PS::V3::universal::PageDirectoryPtr;
     using PageDirectoryType = PageDirectory<DB::PS::V3::universal::PageDirectoryTrait>;
     using PageEntriesEdit = DB::PS::V3::universal::PageEntriesEdit;
+    using ExternalIdTrait = ExternalIdTrait;
 };
 using PageDirectoryFactory = DB::PS::V3::PageDirectoryFactory<FactoryTrait>;
 } // namespace universal
@@ -94,6 +97,7 @@ struct FactoryTrait
     using PageDirectoryPtr = DB::PS::V3::u128::PageDirectoryPtr;
     using PageDirectoryType = PageDirectory<DB::PS::V3::u128::PageDirectoryTrait>;
     using PageEntriesEdit = DB::PS::V3::u128::PageEntriesEdit;
+    using ExternalIdTrait = ExternalIdTrait;
 };
 using PageDirectoryFactory = DB::PS::V3::PageDirectoryFactory<FactoryTrait>;
 } // namespace u128

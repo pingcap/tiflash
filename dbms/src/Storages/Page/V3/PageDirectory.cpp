@@ -847,7 +847,6 @@ void VersionedPageEntries<Trait>::collapseTo(const UInt64 seq, const typename Tr
     throw Exception(fmt::format("Calling collapseTo with invalid state [state={}]", toDebugString()));
 }
 
-template class VersionedPageEntries<u128::PageDirectoryTrait>;
 
 /**************************
   * PageDirectory methods *
@@ -1524,10 +1523,28 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     u128::PageDirectoryFactory factory;
     // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
     // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
-    u128::PageDirectoryPtr collapsed_dir = factory.createFromReader(
-        identifier,
-        std::move(snapshot_reader),
-        /* wal */ nullptr);
+    auto collapsed_dir = [&]() {
+        // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
+        // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
+        static_assert(std::is_same_v<Trait, u128::PageDirectoryTrait> || std::is_same_v<Trait, universal::PageDirectoryTrait>,
+                      "unknown impl");
+        if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
+        {
+            u128::PageDirectoryFactory factory;
+            return factory.createFromReader(
+                identifier,
+                std::move(snapshot_reader),
+                /* wal */ nullptr);
+        }
+        else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+        {
+            universal::PageDirectoryFactory factory;
+            return factory.createFromReader(
+                identifier,
+                std::move(snapshot_reader),
+                /* wal */ nullptr);
+        }
+    };
     // The records persisted in `files_snap` is older than or equal to all records in `edit`
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
     bool done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
@@ -1701,8 +1718,11 @@ typename Trait::PageEntriesEdit PageDirectory<Trait>::dumpSnapshotToEdit(PageDir
     return edit;
 }
 
+template class VersionedPageEntries<u128::PageDirectoryTrait>;
+template class VersionedPageEntries<universal::PageDirectoryTrait>;
+
 template class PageDirectory<u128::PageDirectoryTrait>;
-// template class PageDirectory<universal::PageDirectoryTrait>;
+template class PageDirectory<universal::PageDirectoryTrait>;
 
 } // namespace PS::V3
 } // namespace DB

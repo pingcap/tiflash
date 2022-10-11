@@ -22,6 +22,7 @@
 
 #include <memory>
 #include <optional>
+#include <type_traits>
 
 namespace DB
 {
@@ -153,10 +154,17 @@ void PageDirectoryFactory<Trait>::applyRecord(
     auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
     if (created)
     {
-        iter->second = std::make_shared<VersionedPageEntries<u128::PageDirectoryTrait>>();
+        if constexpr (std::is_same_v<Trait, u128::PageDirectoryFactory>)
+        {
+            iter->second = std::make_shared<VersionedPageEntries<u128::PageDirectoryTrait>>();
+        }
+        else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+        {
+            iter->second = std::make_shared<VersionedPageEntries<universal::PageDirectoryTrait>>();
+        }
     }
 
-    dir->max_page_id = std::max(dir->max_page_id, r.page_id.low);
+    dir->max_page_id = std::max(dir->max_page_id, ExternalIdTrait::getU64ID(r.page_id));
 
     const auto & version_list = iter->second;
     const auto & restored_version = r.version;
@@ -241,12 +249,20 @@ void PageDirectoryFactory<Trait>::loadFromDisk(const typename Trait::PageDirecto
         }
 
         // apply the edit read
-        auto edit = u128::ser::deserializeFrom(record.value());
-        loadEdit(dir, edit);
+        if constexpr (std::is_same_v<Trait, u128::FactoryTrait>)
+        {
+            auto edit = u128::ser::deserializeFrom(record.value());
+            loadEdit(dir, edit);
+        }
+        else if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
+        {
+            auto edit = universal::ser::deserializeFrom(record.value());
+            loadEdit(dir, edit);
+        }
     }
 }
 
 template class PageDirectoryFactory<u128::FactoryTrait>;
-// template class PageDirectoryFactory<universal::FactoryTrait>;
+template class PageDirectoryFactory<universal::FactoryTrait>;
 } // namespace PS::V3
 } // namespace DB
