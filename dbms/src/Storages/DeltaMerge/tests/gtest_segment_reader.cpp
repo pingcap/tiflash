@@ -181,7 +181,7 @@ try
             ASSERT_TRUE(store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())));
         }
         auto delta = store->id_to_segment.begin()->second->getDelta();
-        ASSERT_EQ(delta->getRows(), num_rows_write * 10);
+        ASSERT_EQ(delta->getRows(), num_rows_write * NUMBER_OF_BLOCKS_IN_DELTA);
     }
 
     // Check DMFile
