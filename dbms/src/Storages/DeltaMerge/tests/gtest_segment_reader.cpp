@@ -162,7 +162,7 @@ try
 
     // Ensure delta is not empty.
     {
-        for (size_t i = 0; i < 10; i++)
+        for (size_t i = 0; i < NUMBER_OF_BLOCKS_IN_DELTA; ++i)
         {
             auto beg = num_rows_write * (i + 1);
             auto end = beg + num_rows_write;
