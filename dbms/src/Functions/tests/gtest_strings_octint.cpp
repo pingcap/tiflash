@@ -23,8 +23,13 @@ namespace tests
 {
 class OctIntTest : public DB::tests::FunctionTest
 {
-public:
+protected:
     static constexpr auto func_name = "octInt";
+
+    static ColumnWithTypeAndName toConst(const String & s)
+    {
+        return createConstColumn<String>(1, s);
+    }
 };
 
 TEST_F(OctIntTest, Simple)
@@ -46,7 +51,7 @@ try
 }
 CATCH
 
-TEST_F(OctIntTest, Boundary)
+TEST_F(OctIntTest, AllType)
 try
 {
     ASSERT_COLUMN_EQ(
@@ -60,6 +65,11 @@ try
                                   8,
                                   0,
                                   255})));
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<UInt8>(1, 8)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec<String>({{},
@@ -72,7 +82,12 @@ try
                                    8,
                                    0,
                                    65535})));
-
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<UInt16>(1, 8)));
+    
     ASSERT_COLUMN_EQ(
         toNullableVec<String>({{},
                                "10",
@@ -84,7 +99,12 @@ try
                                    8,
                                    0,
                                    4294967295})));
-
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<UInt32>(1, 8)));
+    
     ASSERT_COLUMN_EQ(
         toNullableVec<String>({{},
                                "10",
@@ -96,7 +116,12 @@ try
                                    8,
                                    0,
                                    std::numeric_limits<UInt64>::max()})));
-
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<UInt64>(1, 8)));
+    
     ASSERT_COLUMN_EQ(
         toNullableVec<String>({{},
                                "10",
@@ -108,7 +133,12 @@ try
                                  8,
                                  -128,
                                  127})));
-
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<Int8>(1, 8)));
+    
     ASSERT_COLUMN_EQ(
         toNullableVec<String>({{},
                                "10",
@@ -120,7 +150,12 @@ try
                                   8,
                                   std::numeric_limits<Int16>::min(),
                                   std::numeric_limits<Int16>::max()})));
-
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<Int16>(1, 8)));
+    
     ASSERT_COLUMN_EQ(
         toNullableVec<String>({{},
                                "10",
@@ -133,6 +168,11 @@ try
                                   std::numeric_limits<Int32>::min(),
                                   std::numeric_limits<Int32>::max()})));
 
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<Int32>(1, 8)));
 
     ASSERT_COLUMN_EQ(
         toNullableVec<String>({{},
@@ -145,6 +185,11 @@ try
                                   8,
                                   std::numeric_limits<Int64>::min(),
                                   std::numeric_limits<Int64>::max()})));
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            createConstColumn<Int64>(1, 8)));
 }
 CATCH
 } // namespace tests

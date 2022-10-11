@@ -21,8 +21,13 @@ namespace tests
 {
 class OctStringTest : public DB::tests::FunctionTest
 {
-public:
+protected:
     static constexpr auto func_name = "octString";
+
+    static ColumnWithTypeAndName toConst(const String & s)
+    {
+        return createConstColumn<String>(1, s);
+    }
 };
 
 
@@ -34,6 +39,12 @@ try
         executeFunction(
             func_name,
             toNullableVec<String>({"0", "1", "2", "8", "10"})));
+
+    ASSERT_COLUMN_EQ(
+        toConst("10"),
+        executeFunction(
+            func_name,
+            toConst("8")));
 }
 CATCH
 
