@@ -48,7 +48,7 @@ TEST(WALSeriTest, AllPuts)
     for (auto & rec : edit.getMutRecords())
         rec.version = ver20;
 
-    auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
@@ -79,7 +79,7 @@ try
     for (auto & rec : edit.getMutRecords())
         rec.version = ver21;
 
-    auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 6);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
@@ -123,7 +123,7 @@ TEST(WALSeriTest, Upserts)
     edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
     edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
 
-    auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
+    auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::UPSERT);
@@ -153,7 +153,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
-        auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
         auto iter = deseri_edit.getRecords().begin();
         EXPECT_EQ(iter->type, EditRecordType::VAR_EXTERNAL);
@@ -178,7 +178,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
         edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
         edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
-        auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
         auto iter = deseri_edit.getRecords().begin();
         EXPECT_EQ(iter->type, EditRecordType::VAR_ENTRY);
@@ -210,7 +210,7 @@ TEST(WALUinversalSeriTest, AllPuts)
     for (auto & rec : edit.getMutRecords())
         rec.version = ver20;
 
-    auto deseri_edit = DB::PS::V3::universal::ser::deserializeFrom(DB::PS::V3::universal::ser::serializeTo(edit));
+    auto deseri_edit = universal::Serializer::deserializeFrom(universal::Serializer::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 2);
     auto iter = deseri_edit.getRecords().begin();
     EXPECT_EQ(iter->type, EditRecordType::PUT);
@@ -344,7 +344,7 @@ protected:
         {
             r.version = version;
         }
-        wal->apply(u128::ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     static void rollToNewLogWriter(const WALStorePtr & wal)
@@ -486,7 +486,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -519,7 +519,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -539,7 +539,7 @@ try
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(u128::ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     wal.reset();
@@ -554,7 +554,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -612,7 +612,7 @@ try
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
         edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
-        wal->apply(u128::ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     wal.reset();
@@ -626,7 +626,7 @@ try
             if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
@@ -646,7 +646,7 @@ try
                 break;
             }
             // Details of each edit is verified in `WALSeriTest`
-            auto edit = u128::ser::deserializeFrom(record.value());
+            auto edit = u128::Serializer::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
@@ -707,7 +707,7 @@ try
             // else it just run to the end of file.
             break;
         }
-        auto edit = u128::ser::deserializeFrom(record.value());
+        auto edit = u128::Serializer::deserializeFrom(record.value());
         num_pages_read += edit.size();
         EXPECT_EQ(size_each_edit[num_edits_read], edit.size()) << fmt::format("at idx={}", num_edits_read);
         num_edits_read += 1;
@@ -731,7 +731,7 @@ try
         snap_edit.varEntry(buildV3Id(TEST_NAMESPACE_ID, d_10000(rd)), PageVersion(345, 22), entry, 1);
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
-    bool done = wal->saveSnapshot(std::move(file_snap), u128::ser::serializeTo(snap_edit), snap_edit.size());
+    bool done = wal->saveSnapshot(std::move(file_snap), u128::Serializer::serializeTo(snap_edit), snap_edit.size());
     ASSERT_TRUE(done);
     wal.reset();
     reader.reset();
@@ -749,7 +749,7 @@ try
             // else it just run to the end of file.
             break;
         }
-        auto edit = u128::ser::deserializeFrom(record.value());
+        auto edit = u128::Serializer::deserializeFrom(record.value());
         num_pages_read += edit.size();
         num_edits_read += 1;
     }

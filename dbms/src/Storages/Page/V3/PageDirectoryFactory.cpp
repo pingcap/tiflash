@@ -249,16 +249,8 @@ void PageDirectoryFactory<Trait>::loadFromDisk(const typename Trait::PageDirecto
         }
 
         // apply the edit read
-        if constexpr (std::is_same_v<Trait, u128::FactoryTrait>)
-        {
-            auto edit = u128::ser::deserializeFrom(record.value());
-            loadEdit(dir, edit);
-        }
-        else if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
-        {
-            auto edit = universal::ser::deserializeFrom(record.value());
-            loadEdit(dir, edit);
-        }
+        auto edit = Trait::Serializer::deserializeFrom(record.value());
+        loadEdit(dir, edit);
     }
 }
 

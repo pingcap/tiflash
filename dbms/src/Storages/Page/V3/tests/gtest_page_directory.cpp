@@ -1803,7 +1803,7 @@ try
     auto s0 = dir->createSnapshot();
     auto edit = dir->dumpSnapshotToEdit(s0);
     auto restore_from_edit = [](const u128::PageEntriesEdit & edit) {
-        auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
@@ -1826,7 +1826,7 @@ TEST_F(PageDirectoryGCTest, DumpAndRestore)
 try
 {
     auto restore_from_edit = [](const u128::PageEntriesEdit & edit) {
-        auto deseri_edit = DB::PS::V3::u128::ser::deserializeFrom(DB::PS::V3::u128::ser::serializeTo(edit));
+        auto deseri_edit = u128::Serializer::deserializeFrom(u128::Serializer::serializeTo(edit));
         auto ctx = DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();

@@ -1303,7 +1303,7 @@ void PageDirectory<Trait>::apply(typename Trait::PageEntriesEdit && edit, const 
         r.version = PageVersion(max_sequence, 0);
     }
 
-    wal->apply(Trait::serializeTo(edit), write_limiter);
+    wal->apply(Trait::Serializer::serializeTo(edit), write_limiter);
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wal).Observe(watch.elapsedSeconds());
     watch.restart();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_write_duration_seconds, type_commit).Observe(watch.elapsedSeconds()); });
@@ -1378,7 +1378,7 @@ void PageDirectory<Trait>::gcApply(typename Trait::PageEntriesEdit && migrated_e
     }
 
     // Apply migrate edit into WAL with the increased epoch version
-    wal->apply(Trait::serializeTo(migrated_edit), write_limiter);
+    wal->apply(Trait::Serializer::serializeTo(migrated_edit), write_limiter);
 
     // Apply migrate edit to the mvcc map
     for (const auto & record : migrated_edit.getRecords())
@@ -1520,7 +1520,6 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
     auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
     auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
-    u128::PageDirectoryFactory factory;
     // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
     // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
     auto collapsed_dir = [&]() {
@@ -1547,7 +1546,7 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
     };
     // The records persisted in `files_snap` is older than or equal to all records in `edit`
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
-    bool done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
+    bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
     return done_any_io;
 }
 

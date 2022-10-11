@@ -450,11 +450,7 @@ struct PageDirectoryTrait
     using PageIdAndEntriesWithError = std::pair<PageIdAndEntries, PageIds>;
 
     using ExternalIdTrait = ExternalIdTrait;
-
-    static inline String serializeTo(const PageEntriesEdit & edit)
-    {
-        return ::DB::PS::V3::universal::ser::serializeTo(edit);
-    }
+    using Serializer = Serializer;
 };
 
 using PageDirectoryPtr = std::unique_ptr<PageDirectory<PageDirectoryTrait>>;
@@ -480,11 +476,7 @@ struct PageDirectoryTrait
     using PageIdAndEntriesWithError = std::pair<PageIdAndEntries, PageIds>;
 
     using ExternalIdTrait = ExternalIdTrait;
-
-    static inline String serializeTo(const PageEntriesEdit & edit)
-    {
-        return ::DB::PS::V3::u128::ser::serializeTo(edit);
-    }
+    using Serializer = Serializer;
 };
 using PageDirectoryPtr = std::unique_ptr<PageDirectory<PageDirectoryTrait>>;
 using VersionedPageEntries = DB::PS::V3::VersionedPageEntries<PageDirectoryTrait>;

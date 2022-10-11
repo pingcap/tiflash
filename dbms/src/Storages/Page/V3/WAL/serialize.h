@@ -20,14 +20,20 @@
 
 namespace DB::PS::V3
 {
-namespace u128::ser
+namespace u128
 {
-String serializeTo(const PageEntriesEdit & edit);
-PageEntriesEdit deserializeFrom(std::string_view record);
-} // namespace u128::ser
-namespace universal::ser
+struct Serializer
 {
-String serializeTo(const PageEntriesEdit & edit);
-PageEntriesEdit deserializeFrom(std::string_view record);
-} // namespace universal::ser
+    static String serializeTo(const PageEntriesEdit & edit);
+    static PageEntriesEdit deserializeFrom(std::string_view record);
+};
+} // namespace u128
+namespace universal
+{
+struct Serializer
+{
+    static String serializeTo(const PageEntriesEdit & edit);
+    static PageEntriesEdit deserializeFrom(std::string_view record);
+};
+} // namespace universal
 } // namespace DB::PS::V3
