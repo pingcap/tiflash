@@ -61,6 +61,14 @@ public:
     grpc_call * grpcCall() override;
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
+    void setToWaitingTunnelState()
+    {
+        state = WAITING_TUNNEL;
+    }
+    bool isWaitingTunnelState()
+    {
+        return state == WAITING_TUNNEL;
+    }
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -79,6 +87,9 @@ private:
     /// Keep it in mind if you want to change any logic here.
 
     void initRpc();
+
+    void tryConnectTunnel();
+
     /// The packet will be written to grpc.
     void write(const mpp::MPPDataPacket & packet);
     /// Called when an application error happens.
@@ -111,6 +122,7 @@ private:
     enum CallStatus
     {
         NEW_REQUEST,
+        WAITING_TUNNEL,
         PROCESSING,
         ERR_HANDLE,
         FINISH

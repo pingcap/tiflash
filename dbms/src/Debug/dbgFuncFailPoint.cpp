@@ -17,11 +17,23 @@
 #include <Debug/dbgFuncFailPoint.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
 
 namespace DB
 {
+void DbgFailPointFunc::dbgInitFailPoint(Context &, const ASTs &, DBGInvoker::Printer)
+{
+    (void)fiu_init(0);
+}
 
-void DbgFailPointFunc::dbgInitFailPoint(Context &, const ASTs &, DBGInvoker::Printer) { (void)fiu_init(0); }
+void DbgFailPointFunc::dbgEnablePauseFailPoint(Context &, const ASTs & args, DBGInvoker::Printer)
+{
+    if (args.size() != 2)
+        throw Exception("Args not matched, should be: name", ErrorCodes::BAD_ARGUMENTS);
+    const String fail_name = typeid_cast<const ASTIdentifier &>(*args[0]).name;
+    auto time = safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    FailPointHelper::enablePauseFailPoint(fail_name, time);
+}
 
 void DbgFailPointFunc::dbgEnableFailPoint(Context &, const ASTs & args, DBGInvoker::Printer)
 {

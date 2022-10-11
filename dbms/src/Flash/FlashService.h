@@ -34,9 +34,12 @@ namespace DB
 {
 class IServer;
 class IAsyncCallData;
+class EstablishCallData;
 
 using MockStorage = tests::MockStorage;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
+
+extern const String mpp_tunnel_not_found;
 
 namespace Management
 {
@@ -72,11 +75,6 @@ public:
         const mpp::IsAliveRequest * request,
         mpp::IsAliveResponse * response) override;
 
-    /// Return grpc::Status::OK when the connection is established.
-    /// Return non-OK grpc::Status when the connection can not be established.
-    /// Return std::string when a error happens in application and it should be sent to the client then close the connection with grpc::Status::OK.
-    std::variant<grpc::Status, std::string> establishMPPConnectionSyncOrAsync(grpc::ServerContext * context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer, IAsyncCallData * call_data);
-
     grpc::Status EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer) override;
 
     grpc::Status CancelMPPTask(grpc::ServerContext * context, const mpp::CancelTaskRequest * request, mpp::CancelTaskResponse * response) override;
@@ -86,6 +84,7 @@ public:
 
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
+    Context * getContext() { return context; }
 
 protected:
     std::tuple<ContextPtr, grpc::Status> createDBContextForTest() const;
@@ -115,5 +114,9 @@ public:
     {
         is_async = true;
     }
+    /// Return grpc::Status::OK when the connection is established.
+    /// Return non-OK grpc::Status when the connection can not be established.
+    /// Return std::string when a error happens in application and it should be sent to the client then close the connection with grpc::Status::OK.
+    std::variant<grpc::Status, std::string> establishMPPConnectionAsync(grpc::ServerContext * context, const mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
 };
 } // namespace DB

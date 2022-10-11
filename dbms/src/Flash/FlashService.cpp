@@ -19,6 +19,7 @@
 #include <Common/VariantOp.h>
 #include <Common/setThreadName.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Management/ManualCompact.h>
 #include <Flash/Mpp/MPPHandler.h>
@@ -39,6 +40,8 @@ namespace ErrorCodes
 {
 extern const int NOT_IMPLEMENTED;
 }
+
+const String mpp_tunnel_not_found = "MPPTunnel not found";
 
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
@@ -235,10 +238,60 @@ grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_un
     return grpc::Status::OK;
 }
 
-std::variant<grpc::Status, std::string> FlashService::establishMPPConnectionSyncOrAsync(grpc::ServerContext * grpc_context,
-                                                                                        const mpp::EstablishMPPConnectionRequest * request,
-                                                                                        grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer,
-                                                                                        IAsyncCallData * call_data)
+std::variant<grpc::Status, std::string> AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext * grpc_context,
+                                                                                       const mpp::EstablishMPPConnectionRequest * request,
+                                                                                       EstablishCallData * call_data,
+                                                                                       grpc::CompletionQueue * cq)
+{
+    CPUAffinityManager::getInstance().bindSelfGrpcThread();
+    // Establish a pipe for data transferring. The pipes have registered by the task in advance.
+    // We need to find it out and bind the grpc stream with it.
+    LOG_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
+
+    // For MPP test, we don't care about security config.
+    if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
+    {
+        return grpc::Status(grpc::PERMISSION_DENIED, tls_err_msg);
+    }
+    GET_METRIC(tiflash_coprocessor_request_count, type_mpp_establish_conn).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Increment();
+    Stopwatch watch;
+    SCOPE_EXIT({
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(watch.elapsedSeconds());
+        // TODO: update the value of metric tiflash_coprocessor_response_bytes.
+    });
+
+    auto [db_context, status] = createDBContext(grpc_context);
+    if (!status.ok())
+    {
+        return status;
+    }
+
+    auto & tmt_context = db_context->getTMTContext();
+    auto task_manager = tmt_context.getMPPTaskManager();
+    auto [tunnel, err_msg] = task_manager->findAsyncTunnel(request, call_data, cq);
+    if (tunnel == nullptr)
+    {
+        if (!err_msg.empty())
+        {
+            LOG_ERROR(log, err_msg);
+            return err_msg;
+        }
+        else
+        {
+            /// if err_msg is empty && tunnel is nullptr, then the call_data itself will be put to cq by alarm
+            return grpc::Status(grpc::StatusCode::NOT_FOUND, mpp_tunnel_not_found);
+        }
+    }
+
+    // In async mode, this function won't wait for the request done and the finish event is handled in IAsyncCallData.
+    tunnel->connectAsync(call_data);
+
+    return grpc::Status::OK;
+}
+
+grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
@@ -280,14 +333,11 @@ std::variant<grpc::Status, std::string> FlashService::establishMPPConnectionSync
     auto [tunnel, err_msg] = task_manager->findTunnelWithTimeout(request, timeout);
     if (tunnel == nullptr)
     {
-        LOG_ERROR(log, err_msg);
-        return err_msg;
-    }
-
-    if (call_data)
-    {
-        // In async mode, this function won't wait for the request done and the finish event is handled in IAsyncCallData.
-        tunnel->connectAsync(call_data);
+        if (!sync_writer->Write(getPacketWithError(err_msg)))
+        {
+            LOG_DEBUG(log, "Write error message failed for unknown reason.");
+            status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
+        }
     }
     else
     {
@@ -297,32 +347,6 @@ std::variant<grpc::Status, std::string> FlashService::establishMPPConnectionSync
         tunnel->waitForFinish();
         LOG_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     }
-
-    // TODO: Check if there are errors in task.
-
-    return grpc::Status::OK;
-}
-
-grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_context, const mpp::EstablishMPPConnectionRequest * request, grpc::ServerWriter<mpp::MPPDataPacket> * sync_writer)
-{
-    auto res = establishMPPConnectionSyncOrAsync(grpc_context, request, sync_writer, nullptr);
-    grpc::Status status;
-    std::visit(variant_op::overloaded{
-                   [&](grpc::Status & stat) {
-                       status = stat;
-                   },
-                   [&](std::string & err_msg) {
-                       if (!sync_writer->Write(getPacketWithError(err_msg)))
-                       {
-                           status = grpc::Status::OK;
-                       }
-                       else
-                       {
-                           LOG_DEBUG(log, "Write error message failed for unknown reason.");
-                           status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
-                       }
-                   }},
-               res);
     return status;
 }
 

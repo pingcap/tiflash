@@ -18,8 +18,10 @@
 #include <Flash/EstablishCall.h>
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/GRPCSendQueue.h>
+#include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/Utils.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -50,6 +52,15 @@ EstablishCallData::~EstablishCallData()
 
 void EstablishCallData::proceed(bool ok)
 {
+    if (state == WAITING_TUNNEL)
+    {
+        /// ok == true means the alarm meet deadline, otherwise means alarm is cancelled
+        /// here we don't care the alarm is cancelled or meet deadline, in both cases just
+        /// try connect tunnel is ok
+        tryConnectTunnel();
+        return;
+    }
+
     if (unlikely(!ok))
     {
         /// state == NEW_REQUEST means the server is shutdown and no new rpc has come.
@@ -114,15 +125,21 @@ void EstablishCallData::initRpc()
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
 
-        auto res = service->establishMPPConnectionSyncOrAsync(&ctx, &request, nullptr, this);
+        auto res = service->establishMPPConnectionAsync(&ctx, &request, this, cq);
 
         bool success = true;
+        bool tunnel_not_found = false;
         std::visit(variant_op::overloaded{
                        [&, this](grpc::Status & status) {
                            if (!status.ok())
                            {
-                               writeDone("initRpc called with no-ok status", status);
-                               success = false;
+                               if (status.error_code() == grpc::StatusCode::NOT_FOUND && status.error_message() == mpp_tunnel_not_found)
+                                   tunnel_not_found = true;
+                               else
+                               {
+                                   writeDone("initRpc called with no-ok status", status);
+                                   success = false;
+                               }
                            }
                        },
                        [&, this](std::string & err_msg) {
@@ -130,6 +147,8 @@ void EstablishCallData::initRpc()
                            success = false;
                        }},
                    res);
+        if (tunnel_not_found)
+            return;
         if (!success)
         {
             // If success is false, return immediately due to calling `write` or `writeErr`.
@@ -153,6 +172,27 @@ void EstablishCallData::initRpc()
     // Try to send one message.
     // If there is no message, the pointer of this class will be saved in `async_tunnel_sender`.
     trySendOneMsg();
+}
+
+void EstablishCallData::tryConnectTunnel()
+{
+    auto * task_manager = service->getContext()->getTMTContext().getMPPTaskManager().get();
+    auto [tunnel, err_msg] = task_manager->findAsyncTunnel(&request, this, cq);
+    if (tunnel != nullptr)
+    {
+        try
+        {
+            tunnel->connectAsync(this);
+            state = PROCESSING;
+            trySendOneMsg();
+            return;
+        }
+        catch (...)
+        {
+            err_msg = getCurrentExceptionMessage(false);
+        }
+    }
+    writeErr(getPacketWithError(err_msg));
 }
 
 void EstablishCallData::write(const mpp::MPPDataPacket & packet)
