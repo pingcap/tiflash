@@ -231,7 +231,7 @@ private:
                       * (for example, the connection is broken for distributed query processing)
                       * - then do not care.
                       */
-                    LOG_FMT_ERROR(log, "Exception while cancelling {}", p_child->getName());
+                    LOG_ERROR(log, "Exception while cancelling {}", p_child->getName());
                 }
             }
         }

@@ -45,7 +45,7 @@ PageStorageImpl::PageStorageImpl(
     , log(Logger::get("PageStorage", name))
     , blob_store(name, file_provider_, delegator, parseBlobConfig(config_))
 {
-    LOG_FMT_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
+    LOG_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
 }
 
 PageStorageImpl::~PageStorageImpl() = default;

@@ -43,17 +43,17 @@ extern const int NOT_IMPLEMENTED;
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
     {                                                                                                                                       \
-        LOG_FMT_ERROR(log, "DB Exception: {}", e.message());                                                                                \
+        LOG_ERROR(log, "DB Exception: {}", e.message());                                                                                    \
         return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message())); \
     }                                                                                                                                       \
     catch (const std::exception & e)                                                                                                        \
     {                                                                                                                                       \
-        LOG_FMT_ERROR(log, "std exception: {}", e.what());                                                                                  \
+        LOG_ERROR(log, "std exception: {}", e.what());                                                                                      \
         return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, e.what()));                    \
     }                                                                                                                                       \
     catch (...)                                                                                                                             \
     {                                                                                                                                       \
-        LOG_FMT_ERROR(log, "other exception");                                                                                              \
+        LOG_ERROR(log, "other exception");                                                                                                  \
         return std::make_tuple(std::make_shared<Context>(*context), grpc::Status(grpc::StatusCode::INTERNAL, "other exception"));           \
     }
 
@@ -77,12 +77,12 @@ void FlashService::init(const TiFlashSecurityConfig & security_config_, Context 
 
     auto cop_pool_size = static_cast<size_t>(settings.cop_pool_size);
     cop_pool_size = cop_pool_size ? cop_pool_size : default_size;
-    LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
+    LOG_INFO(log, "Use a thread pool with {} threads to handle cop requests.", cop_pool_size);
     cop_pool = std::make_unique<ThreadPool>(cop_pool_size, [] { setThreadName("cop-pool"); });
 
     auto batch_cop_pool_size = static_cast<size_t>(settings.batch_cop_pool_size);
     batch_cop_pool_size = batch_cop_pool_size ? batch_cop_pool_size : default_size;
-    LOG_FMT_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
+    LOG_INFO(log, "Use a thread pool with {} threads to handle batch cop requests.", batch_cop_pool_size);
     batch_cop_pool = std::make_unique<ThreadPool>(batch_cop_pool_size, [] { setThreadName("batch-cop-pool"); });
 }
 
@@ -103,7 +103,7 @@ grpc::Status FlashService::Coprocessor(
     coprocessor::Response * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
+    LOG_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
     // For coprocessor test, we don't care about security config.
     if (unlikely(!context->isCopTest() && !security_config->checkGrpcContext(grpc_context)))
@@ -133,14 +133,14 @@ grpc::Status FlashService::Coprocessor(
         return cop_handler.execute();
     });
 
-    LOG_FMT_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
 grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, const coprocessor::BatchRequest * request, grpc::ServerWriter<coprocessor::BatchResponse> * writer)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
+    LOG_DEBUG(log, "Handling coprocessor request: {}", request->DebugString());
 
     if (!security_config->checkGrpcContext(grpc_context))
     {
@@ -167,7 +167,7 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
         return cop_handler.execute();
     });
 
-    LOG_FMT_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
+    LOG_DEBUG(log, "Handle coprocessor request done: {}, {}", ret.error_code(), ret.error_message());
     return ret;
 }
 
@@ -177,7 +177,7 @@ grpc::Status FlashService::DispatchMPPTask(
     mpp::DispatchTaskResponse * response)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
-    LOG_FMT_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
+    LOG_DEBUG(log, "Handling mpp dispatch request: {}", request->DebugString());
     // For MPP test, we don't care about security config.
     if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
     {
@@ -243,7 +243,7 @@ std::variant<grpc::Status, std::string> FlashService::establishMPPConnectionSync
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
     // We need to find it out and bind the grpc stream with it.
-    LOG_FMT_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
+    LOG_DEBUG(log, "Handling establish mpp connection request: {}", request->DebugString());
 
     // For MPP test, we don't care about security config.
     if (!context->isMPPTest() && !security_config->checkGrpcContext(grpc_context))
@@ -295,7 +295,7 @@ std::variant<grpc::Status, std::string> FlashService::establishMPPConnectionSync
         SyncPacketWriter writer(sync_writer);
         tunnel->connect(&writer);
         tunnel->waitForFinish();
-        LOG_FMT_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
+        LOG_INFO(tunnel->getLogger(), "connection for {} cost {} ms.", tunnel->id(), stopwatch.elapsedMilliseconds());
     }
 
     // TODO: Check if there are errors in task.
@@ -318,7 +318,7 @@ grpc::Status FlashService::EstablishMPPConnection(grpc::ServerContext * grpc_con
                        }
                        else
                        {
-                           LOG_FMT_DEBUG(log, "Write error message failed for unknown reason.");
+                           LOG_DEBUG(log, "Write error message failed for unknown reason.");
                            status = grpc::Status(grpc::StatusCode::UNKNOWN, "Write error message failed for unknown reason.");
                        }
                    }},
@@ -333,7 +333,7 @@ grpc::Status FlashService::CancelMPPTask(
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
 
     if (!security_config->checkGrpcContext(grpc_context))
     {
@@ -389,7 +389,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // CancelMPPTask cancels the query of the task.
-    LOG_FMT_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
+    LOG_DEBUG(log, "cancel mpp task request: {}", request->DebugString());
     auto [context, status] = createDBContextForTest();
     if (!status.ok())
     {
@@ -455,7 +455,7 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         if (!max_threads.empty())
         {
             tmp_context->setSetting("max_threads", max_threads);
-            LOG_FMT_INFO(log, "set context setting max_threads to {}", max_threads);
+            LOG_INFO(log, "set context setting max_threads to {}", max_threads);
         }
 
         tmp_context->setSetting("enable_async_server", is_async ? "true" : "false");

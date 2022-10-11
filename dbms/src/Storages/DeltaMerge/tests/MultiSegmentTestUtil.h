@@ -83,7 +83,7 @@ public:
         for (auto & [_key, seg] : store->segments)
         {
             UNUSED(_key);
-            LOG_FMT_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
+            LOG_INFO(log, "Segment #{}: Range = {}", segment_idx, seg->getRowKeyRange().toDebugString());
             rows_by_segments[segment_idx] = seg->getEstimatedRows();
             expected_stable_rows[segment_idx] = seg->getStable()->getRows();
             expected_delta_rows[segment_idx] = seg->getDelta()->getRows();

@@ -407,7 +407,7 @@ public:
     /// The abandon state is usually triggered by the DeltaMergeStore.
     void abandon(DMContext & context)
     {
-        LOG_FMT_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
+        LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);
     }
 

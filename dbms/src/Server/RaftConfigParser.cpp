@@ -46,11 +46,11 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         {
             res.pd_addrs.push_back(string_token);
         }
-        LOG_FMT_INFO(log, "Found pd addrs: {}", pd_service_addrs);
+        LOG_INFO(log, "Found pd addrs: {}", pd_service_addrs);
     }
     else
     {
-        LOG_FMT_INFO(log, "Not found pd addrs.");
+        LOG_INFO(log, "Not found pd addrs.");
     }
 
     if (config.has("raft.ignore_databases"))
@@ -67,7 +67,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
                 fb.append(arg);
             },
             ", ");
-        LOG_FMT_INFO(log, "Found ignore databases: {}", fmt_buf.toString());
+        LOG_INFO(log, "Found ignore databases: {}", fmt_buf.toString());
     }
 
     if (config.has("raft.storage_engine"))
@@ -121,7 +121,7 @@ TiFlashRaftConfig TiFlashRaftConfig::parseSettings(Poco::Util::LayeredConfigurat
         break;
     }
 
-    LOG_FMT_INFO(log, "Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method));
+    LOG_INFO(log, "Default storage engine [type={}] [snapshot.method={}]", static_cast<Int64>(res.engine), applyMethodToString(res.snapshot_apply_method));
 
     return res;
 }
