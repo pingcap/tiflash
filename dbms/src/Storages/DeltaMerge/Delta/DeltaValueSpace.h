@@ -174,7 +174,7 @@ public:
         // Other thread is doing structure update, just return.
         if (!is_updating.compare_exchange_strong(v, true))
         {
-            LOG_FMT_DEBUG(log, "Stop create snapshot because updating, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Stop create snapshot because updating, delta={}", simpleInfo());
             return false;
         }
         return true;
@@ -185,7 +185,7 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_FMT_ERROR(log, "!!!========================= delta={} is expected to be updating=========================!!!", simpleInfo());
+            LOG_ERROR(log, "!!!========================= delta={} is expected to be updating=========================!!!", simpleInfo());
             return false;
         }
         else
