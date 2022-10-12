@@ -551,7 +551,8 @@ MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyTyp
     , freezed(false)
 {
     auto & mmp = MockSSTReader::getMockSSTData();
-    mmp.clear();
+    auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
+    mmp[MockSSTReader::Key{region_id_str, type}].clear();
 }
 
 void MockRaftStoreProxy::Cf::insert(HandleID key, std::string val)

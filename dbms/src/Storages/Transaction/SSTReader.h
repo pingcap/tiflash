@@ -64,9 +64,9 @@ public:
 
     DISALLOW_COPY_AND_MOVE(MultiSSTReader);
 
+    // Whether the current key is valid.
     bool remained() const override
     {
-        this->maybe_next_reader();
         return mono->remained();
     }
     BaseBuffView keyView() const override
@@ -79,8 +79,9 @@ public:
     }
     void next() override
     {
-        this->maybe_next_reader();
         mono->next();
+        // If there are no remained keys, we try to switch to next mono reader.
+        this->maybe_next_reader();
     }
 
     // Switch to next mono reader if current is drained,
