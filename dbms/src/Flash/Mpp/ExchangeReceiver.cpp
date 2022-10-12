@@ -75,10 +75,10 @@ bool pushPacket(size_t source_index,
             {
                 // Fine grained shuffle is enabled in receiver, but sender didn't. We cannot handle this, so return error.
                 // This can happen when there are old version nodes when upgrading.
-                LOG_FMT_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
-                                   "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
-                                   "Cannot handle this.",
-                              source_index);
+                LOG_ERROR(log, "MPPDataPacket.stream_ids empty, it means ExchangeSender is old version of binary "
+                               "(source_index: {}) while fine grained shuffle of ExchangeReceiver is enabled. "
+                               "Cannot handle this.",
+                          source_index);
                 return false;
             }
             // packet.stream_ids[i] is corresponding to packet.chunks[i],
@@ -643,7 +643,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
             status = reader->finish();
             if (status.ok())
             {
-                LOG_FMT_DEBUG(log, "finish read : {}", req.debugString());
+                LOG_DEBUG(log, "finish read : {}", req.debugString());
                 break;
             }
             else
@@ -709,7 +709,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<B
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {
-        LOG_FMT_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
+        LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
         return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
     }
     std::shared_ptr<ReceivedMessage> recv_msg;
@@ -808,7 +808,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
         }
         copy_live_conn = --live_connections;
     }
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "connection end. meet error: {}, err msg: {}, current alive connections: {}",
         meet_error,
@@ -817,7 +817,7 @@ void ExchangeReceiverBase<RPCContext>::connectionDone(
 
     if (copy_live_conn == 0)
     {
-        LOG_FMT_DEBUG(log, "All threads end in ExchangeReceiver");
+        LOG_DEBUG(log, "All threads end in ExchangeReceiver");
     }
     else if (copy_live_conn < 0)
         throw Exception("live_connections should not be less than 0!");

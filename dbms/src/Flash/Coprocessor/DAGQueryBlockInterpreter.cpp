@@ -649,7 +649,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // this log measures the concurrent degree in this mpp task
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,

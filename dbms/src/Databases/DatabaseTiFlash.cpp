@@ -117,7 +117,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
     std::sort(table_files.begin(), table_files.end());
 
     const auto total_tables = table_files.size();
-    LOG_FMT_INFO(log, "Total {} tables in database {}", total_tables, name);
+    LOG_INFO(log, "Total {} tables in database {}", total_tables, name);
 
     AtomicStopwatch watch;
     std::atomic<size_t> tables_processed{0};
@@ -128,7 +128,7 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             /// Messages, so that it's not boring to wait for the server to load for a long time.
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_FMT_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
+                LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
                 watch.restart();
             }
 
@@ -264,7 +264,7 @@ static inline bool isSamePath(const String & lhs, const String & rhs)
 
 void DatabaseTiFlash::renameTable(const Context & context, const String & table_name, IDatabase & to_database, const String & to_table_name, const String & /* display_database */, const String & display_table)
 {
-    DatabaseTiFlash * to_database_concrete = typeid_cast<DatabaseTiFlash *>(&to_database);
+    auto * to_database_concrete = typeid_cast<DatabaseTiFlash *>(&to_database);
     if (!to_database_concrete)
         throw Exception("Moving tables between databases of different engines is not supported", ErrorCodes::NOT_IMPLEMENTED);
 

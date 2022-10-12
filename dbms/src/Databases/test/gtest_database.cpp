@@ -902,7 +902,7 @@ String readFile(Context & ctx, const String & file)
 DatabasePtr detachThenAttach(Context & ctx, const String & db_name, DatabasePtr && db, Poco::Logger * log)
 {
     auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
-    LOG_FMT_DEBUG(log, "After tombstone [meta={}]", meta);
+    LOG_DEBUG(log, "After tombstone [meta={}]", meta);
     {
         // Detach and load again
         auto detach_query = std::make_shared<ASTDropQuery>();
@@ -966,7 +966,7 @@ try
 
         auto db = ctx.getDatabase(db_name);
         auto meta = readFile(ctx, getDatabaseMetadataPath(db->getMetadataPath()));
-        LOG_FMT_DEBUG(log, "After create [meta={}]", meta);
+        LOG_DEBUG(log, "After create [meta={}]", meta);
 
         DB::Timestamp tso = 1000;
         db->alterTombstone(ctx, tso);

@@ -72,7 +72,7 @@ dir=["/data0/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -131,7 +131,7 @@ dir=["/data222/kvstore"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -179,7 +179,7 @@ dir=["/data0/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -228,7 +228,7 @@ dir=["/data0/tiflash", "/data1/tiflash", "/data2/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -282,7 +282,7 @@ dir=["/ssd0/tiflash"]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -405,7 +405,7 @@ dir = [1,2,3]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -456,7 +456,7 @@ capacity=[ 1024 ]
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
@@ -530,7 +530,7 @@ max_bytes_per_sec=1024000
     {
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
         auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
         std::ignore = global_capacity_quota;
         Strings paths;
@@ -706,7 +706,7 @@ background_read_weight=2
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
 
-        LOG_FMT_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
         ASSERT_TRUE(config->has("storage.io_rate_limit"));
 
         StorageIORateLimitConfig io_config;

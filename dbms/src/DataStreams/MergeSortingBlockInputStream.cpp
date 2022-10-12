@@ -128,9 +128,9 @@ Block MergeSortingBlockInputStream::readImpl()
                 NativeBlockOutputStream block_out(compressed_buf, 0, header_without_constants);
                 MergeSortingBlocksBlockInputStream block_in(blocks, description, log->identifier(), max_merged_block_size, limit);
 
-                LOG_FMT_INFO(log, "Sorting and writing part of data into temporary file {}", path);
+                LOG_INFO(log, "Sorting and writing part of data into temporary file {}", path);
                 copyData(block_in, block_out, &is_cancelled); /// NOTE. Possibly limit disk usage.
-                LOG_FMT_INFO(log, "Done writing part of data into temporary file {}", path);
+                LOG_INFO(log, "Done writing part of data into temporary file {}", path);
 
                 blocks.clear();
                 sum_bytes_in_blocks = 0;
@@ -148,7 +148,7 @@ Block MergeSortingBlockInputStream::readImpl()
         {
             /// If there was temporary files.
 
-            LOG_FMT_INFO(log, "There are {} temporary sorted parts to merge.", temporary_files.size());
+            LOG_INFO(log, "There are {} temporary sorted parts to merge.", temporary_files.size());
 
             /// Create sorted streams to merge.
             for (const auto & file : temporary_files)

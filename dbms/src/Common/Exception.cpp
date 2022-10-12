@@ -68,13 +68,13 @@ void tryLogCurrentException(const char * log_name,
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
-#define TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message)                                                                                \
-    try                                                                                                                                    \
-    {                                                                                                                                      \
-        LOG_FMT_ERROR((logger), "{}{}{}", (start_of_message), ((start_of_message).empty() ? "" : ": "), getCurrentExceptionMessage(true)); \
-    }                                                                                                                                      \
-    catch (...)                                                                                                                            \
-    {                                                                                                                                      \
+#define TRY_LOG_CURRENT_EXCEPTION(logger, start_of_message)                                                                            \
+    try                                                                                                                                \
+    {                                                                                                                                  \
+        LOG_ERROR((logger), "{}{}{}", (start_of_message), ((start_of_message).empty() ? "" : ": "), getCurrentExceptionMessage(true)); \
+    }                                                                                                                                  \
+    catch (...)                                                                                                                        \
+    {                                                                                                                                  \
     }
 
 void tryLogCurrentException(const LoggerPtr & logger,

@@ -43,7 +43,7 @@ protected:
     void readSuffixImpl() override
     {
         writer->finishWrite();
-        LOG_FMT_DEBUG(log, "finish write with {} rows", total_rows);
+        LOG_DEBUG(log, "finish write with {} rows", total_rows);
     }
 
 private:

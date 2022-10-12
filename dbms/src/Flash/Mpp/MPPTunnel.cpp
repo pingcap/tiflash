@@ -226,7 +226,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_FMT_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
+    LOG_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
 }
 
 void MPPTunnel::waitForFinish()

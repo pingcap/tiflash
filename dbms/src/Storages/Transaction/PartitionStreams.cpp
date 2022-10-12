@@ -100,7 +100,7 @@ static void writeRegionDataToStorage(
             auto schema_version = storage->getTableInfo().schema_version;
             std::stringstream ss;
             region.pre_decode_cache->toString(ss);
-            LOG_FMT_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}", FUNCTION_NAME, region->toString(), ss.str(), schema_version);
+            LOG_DEBUG(log, "{}: {} got pre-decode cache {}, storage schema version: {}", FUNCTION_NAME, region->toString(), ss.str(), schema_version);
 
             if (region.pre_decode_cache->schema_version == schema_version)
             {
@@ -109,7 +109,7 @@ static void writeRegionDataToStorage(
             }
             else
             {
-                LOG_FMT_DEBUG(log, "{}: schema version not equal, try to re-decode region cache into block", FUNCTION_NAME);
+                LOG_DEBUG(log, "{}: schema version not equal, try to re-decode region cache into block", FUNCTION_NAME);
                 region.pre_decode_cache->block.clear();
             }
         }
@@ -503,7 +503,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
     auto table_id = region->getMappedTableID();
-    LOG_FMT_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
+    LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
     auto context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(table_id);

@@ -126,7 +126,7 @@ std::pair<bool, bool> DeltaMergeStore::MergeDeltaTaskPool::tryAddTask(const Back
         throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
     }
 
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log_,
         "Segment task add to background task pool, segment={} task={} by_whom={}",
         task.segment->simpleInfo(),
@@ -145,7 +145,7 @@ DeltaMergeStore::BackgroundTask DeltaMergeStore::MergeDeltaTaskPool::nextTask(bo
     auto task = tasks.front();
     tasks.pop();
 
-    LOG_FMT_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), magic_enum::enum_name(task.type));
+    LOG_DEBUG(log_, "Segment task pop from background task pool, segment={} task={}", task.segment->simpleInfo(), magic_enum::enum_name(task.type));
 
     return task;
 }
@@ -204,7 +204,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store start");
+    LOG_INFO(log, "Restore DeltaMerge Store start");
 
     storage_pool = std::make_shared<StoragePool>(global_context,
                                                  ns_id,
@@ -279,16 +279,16 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
 
     setUpBackgroundTask(dm_context);
 
-    LOG_FMT_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", static_cast<UInt8>(page_storage_run_mode));
+    LOG_INFO(log, "Restore DeltaMerge Store end, ps_run_mode={}", static_cast<UInt8>(page_storage_run_mode));
 }
 
 DeltaMergeStore::~DeltaMergeStore()
 {
-    LOG_FMT_INFO(log, "Release DeltaMerge Store start");
+    LOG_INFO(log, "Release DeltaMerge Store start");
 
     shutdown();
 
-    LOG_FMT_INFO(log, "Release DeltaMerge Store end");
+    LOG_INFO(log, "Release DeltaMerge Store end");
 }
 
 void DeltaMergeStore::rename(String /*new_path*/, String new_database_name, String new_table_name)
@@ -371,13 +371,13 @@ void DeltaMergeStore::clearData()
 {
     // Remove all background task first
     shutdown();
-    LOG_FMT_INFO(log, "Clear DeltaMerge segments data");
+    LOG_INFO(log, "Clear DeltaMerge segments data");
     // We don't drop the first segment in clearData, because if we drop it and tiflash crashes before drop the table's metadata,
     // when restart the table will try to restore the first segment but failed to do it which cause tiflash crash again.
     // The reason this happens is that even we delete all data in a PageStorage instance,
     // the call to PageStorage::getMaxId is still not 0 so tiflash treat it as an old table and will try to restore it's first segment.
     dropAllSegments(true);
-    LOG_FMT_INFO(log, "Clear DeltaMerge segments data done");
+    LOG_INFO(log, "Clear DeltaMerge segments data done");
 }
 
 void DeltaMergeStore::drop()
@@ -385,13 +385,13 @@ void DeltaMergeStore::drop()
     // Remove all background task first
     shutdown();
 
-    LOG_FMT_INFO(log, "Drop DeltaMerge removing data from filesystem");
+    LOG_INFO(log, "Drop DeltaMerge removing data from filesystem");
     dropAllSegments(false);
     storage_pool->drop();
 
     // Drop data in storage path pool
     path_pool->drop(/*recursive=*/true, /*must_success=*/false);
-    LOG_FMT_INFO(log, "Drop DeltaMerge done");
+    LOG_INFO(log, "Drop DeltaMerge done");
 }
 
 void DeltaMergeStore::shutdown()
@@ -626,7 +626,7 @@ void DeltaMergeStore::write(const Context & db_context, const DB::Settings & db_
 
 void DeltaMergeStore::deleteRange(const Context & db_context, const DB::Settings & db_settings, const RowKeyRange & delete_range)
 {
-    LOG_FMT_INFO(log, "Table delete range, range={}", delete_range.toDebugString());
+    LOG_INFO(log, "Table delete range, range={}", delete_range.toDebugString());
 
     EventRecorder write_block_recorder(ProfileEvents::DMDeleteRange, ProfileEvents::DMDeleteRangeNS);
 
@@ -734,7 +734,7 @@ bool DeltaMergeStore::flushCache(const DMContextPtr & dm_context, const RowKeyRa
 
 void DeltaMergeStore::mergeDeltaAll(const Context & context)
 {
-    LOG_FMT_INFO(log, "Begin table mergeDeltaAll");
+    LOG_INFO(log, "Begin table mergeDeltaAll");
 
     auto dm_context = newDMContext(context, context.getSettingsRef(), /*tracing_id*/ "mergeDeltaAll");
 
@@ -753,12 +753,12 @@ void DeltaMergeStore::mergeDeltaAll(const Context & context)
         segmentMergeDelta(*dm_context, segment, MergeDeltaReason::Manual);
     }
 
-    LOG_FMT_INFO(log, "Finish table mergeDeltaAll");
+    LOG_INFO(log, "Finish table mergeDeltaAll");
 }
 
 std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Context & context, const RowKeyValue & start_key)
 {
-    LOG_FMT_INFO(log, "Table mergeDeltaBySegment, start={}", start_key.toDebugString());
+    LOG_INFO(log, "Table mergeDeltaBySegment, start={}", start_key.toDebugString());
 
     SYNC_FOR("before_DeltaMergeStore::mergeDeltaBySegment");
 
@@ -790,7 +790,7 @@ std::optional<DM::RowKeyRange> DeltaMergeStore::mergeDeltaBySegment(const Contex
                 if (unlikely(*segment_end.value <= *start_key.value))
                 {
                     // The next start key must be > current start key
-                    LOG_FMT_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
+                    LOG_ERROR(log, "Assert new_segment.end {} > start {} failed", segment_end.toDebugString(), start_key.toDebugString());
                     throw Exception("Assert segment range failed", ErrorCodes::LOGICAL_ERROR);
                 }
                 return new_segment->getRowKeyRange();
@@ -971,11 +971,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
     auto tracing_logger = log->getChild(log_tracing_id);
-    LOG_FMT_DEBUG(tracing_logger,
-                  "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
-                  keep_order,
-                  db_context.getSettingsRef().dt_enable_read_thread,
-                  enable_read_thread);
+    LOG_DEBUG(tracing_logger,
+              "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
+              keep_order,
+              db_context.getSettingsRef().dt_enable_read_thread,
+              enable_read_thread);
 
     auto after_segment_read = [&](const DMContextPtr & dm_context_, const SegmentPtr & segment_) {
         // TODO: Update the tracing_id before checkSegmentUpdate?
@@ -1028,7 +1028,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         }
         res.push_back(stream);
     }
-    LOG_FMT_DEBUG(tracing_logger, "Read create stream done");
+    LOG_DEBUG(tracing_logger, "Read create stream done");
 
     return res;
 }
@@ -1215,7 +1215,7 @@ void DeltaMergeStore::checkSegmentUpdate(const DMContextPtr & dm_context, const 
 
             delta_last_try_flush_rows = delta_rows;
             delta_last_try_flush_bytes = delta_bytes;
-            LOG_FMT_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
+            LOG_DEBUG(log, "Foreground flush cache in checkSegmentUpdate, thread={} segment={}", thread_type, segment->info());
             segment->flushCache(*dm_context);
         }
         else if (should_background_flush)
@@ -1474,7 +1474,7 @@ SortDescription DeltaMergeStore::getPrimarySortDescription() const
 
 void DeltaMergeStore::restoreStableFiles()
 {
-    LOG_FMT_DEBUG(log, "Loading dt files");
+    LOG_DEBUG(log, "Loading dt files");
 
     DMFile::ListOptions options;
     options.only_list_can_gc = false; // We need all files to restore the bytes on disk
@@ -1567,7 +1567,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
     }
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         tracing_logger,
         "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
         sorted_ranges.size(),
