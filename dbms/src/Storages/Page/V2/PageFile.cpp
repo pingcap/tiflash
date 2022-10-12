@@ -1022,7 +1022,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     char * pos = data_buf;
     PageMap page_map;
@@ -1093,7 +1093,7 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     Page page_rc;
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     size_t read_size_this_entry = 0;
     char * write_offset = data_buf;

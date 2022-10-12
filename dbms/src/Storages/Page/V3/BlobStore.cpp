@@ -159,7 +159,6 @@ FileUsageStatistics BlobStore::getFileUsageStatistics() const
 
 PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
-    auto ns_id = wb.getNamespaceId();
     PageEntriesEdit edit;
     for (auto & write : wb.getWrites())
     {
@@ -214,21 +213,21 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
                 throw e;
             }
 
-            edit.put(buildV3Id(ns_id, write.page_id), entry);
+            edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
         case WriteBatchWriteType::DEL:
         {
-            edit.del(buildV3Id(ns_id, write.page_id));
+            edit.del(wb.getFullPageId(write.page_id));
             break;
         }
         case WriteBatchWriteType::REF:
         {
-            edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+            edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(buildV3Id(ns_id, write.page_id));
+            edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));
@@ -246,7 +245,6 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     PageEntriesEdit edit;
 
-    auto ns_id = wb.getNamespaceId();
     if (all_page_data_size == 0)
     {
         // Shortcut for WriteBatch that don't need to persist blob data.
@@ -256,18 +254,18 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             {
             case WriteBatchWriteType::DEL:
             {
-                edit.del(buildV3Id(ns_id, write.page_id));
+                edit.del(wb.getFullPageId(write.page_id));
                 break;
             }
             case WriteBatchWriteType::REF:
             {
-                edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+                edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
                 break;
             }
             case WriteBatchWriteType::PUT_EXTERNAL:
             {
                 // putExternal won't have data.
-                edit.putExternal(buildV3Id(ns_id, write.page_id));
+                edit.putExternal(wb.getFullPageId(write.page_id));
                 break;
             }
             case WriteBatchWriteType::PUT:
@@ -352,21 +350,21 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
 
             buffer_pos += write.size;
-            edit.put(buildV3Id(ns_id, write.page_id), entry);
+            edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
         case WriteBatchWriteType::DEL:
         {
-            edit.del(buildV3Id(ns_id, write.page_id));
+            edit.del(wb.getFullPageId(write.page_id));
             break;
         }
         case WriteBatchWriteType::REF:
         {
-            edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+            edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
             break;
         }
         case WriteBatchWriteType::PUT_EXTERNAL:
-            edit.putExternal(buildV3Id(ns_id, write.page_id));
+            edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));
@@ -535,7 +533,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
-    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
+    std::sort(entries.begin(), entries.end(), [](const auto & a, const auto & b) {
         return a.second.offset < b.second.offset;
     });
 
@@ -552,8 +550,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
         {
             (void)entry;
             LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page;
-            page.page_id = page_id_v3.low;
+            Page page(page_id_v3);
             handler(page_id_v3.low, page);
         }
         return;
@@ -586,8 +583,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
             }
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(data_buf, data_buf + entry.size);
         page.mem_holder = mem_holder;
         handler(page_id_v3.low, page);
@@ -634,7 +630,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         free(p, buf_size);
     });
 
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
     char * pos = data_buf;
     PageMap page_map;
     for (const auto & [page_id_v3, entry, fields] : to_read)
@@ -678,8 +674,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             write_offset += size_to_read;
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
@@ -707,7 +702,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
-    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
+    std::sort(entries.begin(), entries.end(), [](const auto & a, const auto & b) {
         return a.second.offset < b.second.offset;
     });
 
@@ -727,8 +722,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         {
             (void)entry;
             LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page;
-            page.page_id = page_id_v3.low;
+            Page page(page_id_v3);
             page_map.emplace(page_id_v3.low, page);
         }
         return page_map;
@@ -763,8 +757,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
             }
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
         page_map.emplace(page_id_v3.low, page);
@@ -785,8 +778,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
 {
     if (!id_entry.second.isValid())
     {
-        Page page_not_found;
-        page_not_found.page_id = INVALID_PAGE_ID;
+        Page page_not_found(buildV3Id(id_entry.first.high, INVALID_PAGE_ID));
         return page_not_found;
     }
 
@@ -798,8 +790,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     if (buf_size == 0)
     {
         LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         return page;
     }
 
@@ -827,8 +818,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         }
     }
 
-    Page page;
-    page.page_id = page_id_v3.low;
+    Page page(page_id_v3);
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 
