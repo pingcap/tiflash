@@ -35,9 +35,9 @@ void SetVariantsTemplate<Variant>::init(Type type_)
     case Type::EMPTY:
         break;
 
-#define M(NAME)                                                           \
-    case Type::NAME:                                                      \
-        NAME = std::make_unique<typename decltype(NAME)::element_type>(); \
+#define M(NAME)                                                             \
+    case Type::NAME:                                                        \
+        (NAME) = std::make_unique<typename decltype(NAME)::element_type>(); \
         break;
         APPLY_FOR_SET_VARIANTS(M)
 #undef M
@@ -57,7 +57,7 @@ size_t SetVariantsTemplate<Variant>::getTotalRowCount() const
 
 #define M(NAME)      \
     case Type::NAME: \
-        return NAME->data.size();
+        return (NAME)->data.size();
         APPLY_FOR_SET_VARIANTS(M)
 #undef M
 
@@ -76,7 +76,7 @@ size_t SetVariantsTemplate<Variant>::getTotalByteCount() const
 
 #define M(NAME)      \
     case Type::NAME: \
-        return NAME->data.getBufferSizeInBytes();
+        return (NAME)->data.getBufferSizeInBytes();
         APPLY_FOR_SET_VARIANTS(M)
 #undef M
 
@@ -86,7 +86,7 @@ size_t SetVariantsTemplate<Variant>::getTotalByteCount() const
 }
 
 template <typename Variant>
-typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
+typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators)
 {
     /// Check if at least one of the specified keys is nullable.
     /// Create a set of nested key columns from the corresponding key columns.
@@ -100,7 +100,7 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
     {
         if (col->isColumnNullable())
         {
-            const ColumnNullable & nullable_col = static_cast<const ColumnNullable &>(*col);
+            const auto & nullable_col = static_cast<const ColumnNullable &>(*col);
             nested_key_columns.push_back(&nullable_col.getNestedColumn());
             has_nullable_key = true;
         }
@@ -186,7 +186,32 @@ typename SetVariantsTemplate<Variant>::Type SetVariantsTemplate<Variant>::choose
     if (keys_size == 1
         && (typeid_cast<const ColumnString *>(nested_key_columns[0])
             || (nested_key_columns[0]->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(nested_key_columns[0])->getDataColumn()))))
-        return Type::key_string;
+    {
+        if (collators.empty() || !collators[0])
+            return Type::key_strbin;
+        else
+        {
+            switch (collators[0]->getCollatorType())
+            {
+            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+            {
+                return Type::key_strbinpadding;
+            }
+            case TiDB::ITiDBCollator::CollatorType::BINARY:
+            {
+                return Type::key_strbin;
+            }
+            default:
+            {
+                // for CI COLLATION, use original way
+                return Type::key_string;
+            }
+            }
+        }
+    }
 
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(nested_key_columns[0]))
         return Type::key_fixed_string;

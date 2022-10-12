@@ -170,7 +170,7 @@ void Join::setBuildTableState(BuildTableState state_)
 }
 
 
-Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
+Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const
 {
     size_t keys_size = key_columns.size();
 
@@ -218,7 +218,32 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
     if (keys_size == 1
         && (typeid_cast<const ColumnString *>(key_columns[0])
             || (key_columns[0]->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(key_columns[0])->getDataColumn()))))
-        return Type::key_string;
+    {
+        if (collators.empty() || !collators[0])
+            return Type::key_strbin;
+        else
+        {
+            switch (collators[0]->getCollatorType())
+            {
+            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+            {
+                return Type::key_strbinpadding;
+            }
+            case TiDB::ITiDBCollator::CollatorType::BINARY:
+            {
+                return Type::key_strbin;
+            }
+            default:
+            {
+                // for CI COLLATION, use original way
+                return Type::key_string;
+            }
+            }
+        }
+    }
 
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(key_columns[0]))
         return Type::key_fixed_string;
@@ -320,6 +345,16 @@ template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<Join::Type::key_string, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodString<Value, Mapped, true, false>;
+};
+template <typename Value, typename Mapped>
+struct KeyGetterForTypeImpl<Join::Type::key_strbinpadding, Value, Mapped>
+{
+    using Type = ColumnsHashing::HashMethodStringBin<Value, Mapped, true>;
+};
+template <typename Value, typename Mapped>
+struct KeyGetterForTypeImpl<Join::Type::key_strbin, Value, Mapped>
+{
+    using Type = ColumnsHashing::HashMethodStringBin<Value, Mapped, false>;
 };
 template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<Join::Type::key_fixed_string, Value, Mapped>

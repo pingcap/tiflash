@@ -117,7 +117,7 @@ void Set::setHeader(const Block & block)
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
 
     /// Choose data structure to use for the set.
-    data.init(data.chooseMethod(key_columns, key_sizes));
+    data.init(data.chooseMethod(key_columns, key_sizes, collators));
 }
 
 
