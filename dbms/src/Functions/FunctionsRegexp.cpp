@@ -1105,6 +1105,7 @@ struct ReplaceStringImpl
 
 using FunctionTiDBRegexp = FunctionStringRegexp<NameTiDBRegexp>;
 using FunctionRegexpLike = FunctionStringRegexp<NameRegexpLike>;
+using FunctionRegexpInstr = FunctionStringRegexpInstr<NameRegexpInstr>;
 using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
 using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameReplaceAll>;
 using FunctionReplaceRegexpOne = FunctionStringReplace<ReplaceRegexpImpl<true>, NameReplaceRegexpOne>;
@@ -1118,6 +1119,7 @@ void registerFunctionsRegexp(FunctionFactory & factory)
     factory.registerFunction<FunctionReplaceRegexpAll>();
     factory.registerFunction<FunctionTiDBRegexp>();
     factory.registerFunction<FunctionRegexpLike>();
+    factory.registerFunction<FunctionRegexpInstr>();
 }
 
 } // namespace DB
