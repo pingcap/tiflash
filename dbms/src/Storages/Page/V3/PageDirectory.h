@@ -153,7 +153,7 @@ public:
         , is_deleted(false)
         , create_ver(0)
         , delete_ver(0)
-        , ori_page_id(0)
+        , ori_page_id{}
         , being_ref_count(1)
     {}
 
@@ -324,6 +324,8 @@ public:
     PageId getMaxId() const;
 
     typename Trait::PageIdSet getAllPageIds();
+
+    typename Trait::PageIdSet getRangePageIds(const typename Trait::PageId & start, const typename Trait::PageId & end);
 
     void apply(typename Trait::PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter = nullptr);
 

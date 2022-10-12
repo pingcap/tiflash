@@ -133,6 +133,15 @@ public:
         std::swap(o.total_data_size, total_data_size);
     }
 
+    void merge(UniversalWriteBatch & rhs)
+    {
+        writes.reserve(writes.size() + rhs.writes.size());
+        for (const auto & r : rhs.writes)
+        {
+            writes.emplace_back(r);
+        }
+    }
+
     void clear()
     {
         Writes tmp;
@@ -145,7 +154,7 @@ public:
         return total_data_size;
     }
 
-    static UniversalPageId getFullPageId(const UniversalPageId & id) { return id; }
+    static const UniversalPageId & getFullPageId(const UniversalPageId & id) { return id; }
 
     String toString() const
     {

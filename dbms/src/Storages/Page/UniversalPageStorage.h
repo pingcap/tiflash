@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
@@ -22,6 +24,7 @@
 #include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/BlobStore.h>
 #include <Storages/Page/V3/PageDirectory.h>
+#include <Storages/Transaction/TiKVRecordFormat.h>
 #include <common/defines.h>
 
 namespace DB
@@ -91,10 +94,7 @@ public:
         return blob_store->getFileUsageStatistics();
     }
 
-    void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
-    {
-        UNUSED(write_batch, write_limiter);
-    }
+    void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
 
     UniversalPageMap read(const UniversalPageId & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
@@ -138,17 +138,23 @@ public:
     PS::V3::universal::BlobStorePtr blob_store;
 };
 
-class KVStoreReader
+class KVStoreReader final
 {
 public:
-    KVStoreReader(UniversalPageStorage & storage)
+    explicit KVStoreReader(UniversalPageStorage & storage)
         : uni_storage(storage)
     {}
+
+    static UniversalPageId toFullPageId(PageId page_id)
+    {
+        // TODO: Does it need to be mem comparable?
+        return fmt::format("k_{}", page_id);
+    }
 
     bool isAppliedIndexExceed(PageId page_id, UInt64 applied_index)
     {
         // assume use this format
-        UniversalPageId uni_page_id = fmt::format("k_{}", page_id);
+        UniversalPageId uni_page_id = toFullPageId(page_id);
         auto snap = uni_storage.getSnapshot("");
         const auto & [id, entry] = uni_storage.page_directory->getByIDOrNull(uni_page_id, snap);
         return (entry.isValid() && entry.tag > applied_index);
@@ -158,6 +164,42 @@ public:
     {
         // Only traverse pages with id prefix
         throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+private:
+    UniversalPageStorage & uni_storage;
+};
+
+class RaftLogReader final
+{
+public:
+    explicit RaftLogReader(UniversalPageStorage & storage)
+        : uni_storage(storage)
+    {}
+
+    static UniversalPageId toFullPageId(NamespaceId ns_id, PageId page_id)
+    {
+        // TODO: Does it need to be mem comparable?
+        WriteBufferFromOwnString buff;
+        writeString("r_", buff);
+        RecordKVFormat::encodeUInt64(ns_id, buff);
+        writeString("_", buff);
+        RecordKVFormat::encodeUInt64(page_id, buff);
+        return buff.releaseStr();
+        // return fmt::format("r_{}_{}", ns_id, page_id);
+    }
+
+    // scan the pages between [start, end)
+    void traverse(const UniversalPageId & start, const UniversalPageId & end, const std::function<void(const DB::UniversalPage & page)> & acceptor)
+    {
+        // always traverse with the latest snapshot
+        auto snapshot = uni_storage.getSnapshot(fmt::format("scan_r_{}_{}", start, end));
+        const auto page_ids = uni_storage.page_directory->getRangePageIds(start, end);
+        for (const auto & page_id : page_ids)
+        {
+            const auto page_id_and_entry = uni_storage.page_directory->getByID(page_id, snapshot);
+            acceptor(uni_storage.blob_store->read(page_id_and_entry));
+        }
     }
 
 private:

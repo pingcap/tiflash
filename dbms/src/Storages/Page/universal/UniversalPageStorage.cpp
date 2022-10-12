@@ -47,4 +47,12 @@ void UniversalPageStorage::restore()
     page_directory = factory.setBlobStore(*blob_store).create(storage_name, file_provider, delegator, wal_config);
 }
 
+void UniversalPageStorage::write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter) const
+{
+    if (unlikely(write_batch.empty()))
+        return;
+
+    auto edit = blob_store->write(write_batch, write_limiter);
+    page_directory->apply(std::move(edit), write_limiter);
+}
 } // namespace DB
