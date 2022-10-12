@@ -770,8 +770,7 @@ public:
 
         // Check memorization
         if constexpr (canMemorize<PatT, MatchTypeT>())
-            if (likely(col_size) > 0)
-                memorize(pat_param, match_type_param, collator);
+            memorize(pat_param, match_type_param, collator);
 
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
@@ -1195,4 +1194,25 @@ private:
 
     TiDB::TiDBCollatorPtr collator{};
 };
+
+#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
+#undef CONVERT_EXPR_COL_TO_PARAM
+#undef CONVERT_PAT_COL_TO_PARAM
+#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
+#undef EXECUTE_REGEXP_LIKE
+#undef CONVERT_CONST_INT_COL_TO_PARAM
+#undef CONVERT_NULL_INT_COL_TO_PARAM
+#undef CONVERT_CONST_STR_COL_TO_PARAM
+#undef CONVERT_NULL_STR_COL_TO_PARAM
+#undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
+#undef ARG_NUM_VAR_NAME
+#undef SELF_CLASS_NAME
+#undef MATCH_TYPE_PARAM_VAR_NAME
+#undef PAT_PARAM_VAR_NAME
+#undef EXPR_PARAM_VAR_NAME
+#undef RES_ARG_VAR_NAME
+#undef MATCH_TYPE_COL_PTR_VAR_NAME
+#undef PAT_COL_PTR_VAR_NAME
+#undef EXPR_COL_PTR_VAR_NAME
+
 } // namespace DB
