@@ -19,6 +19,8 @@
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/RowKeyRangeUtils.h>
 
+#include "Storages/DeltaMerge/Segment.h"
+
 namespace DB
 {
 namespace DM
@@ -123,7 +125,7 @@ enum class ReadMode
      * will be still filtered out.
      */
     Fast,
-    
+
     /**
      * Read in raw mode, for example, for statements like `SELRAW *`. In raw mode, data is not sort merged and all versions
      * are just returned.
@@ -131,6 +133,7 @@ enum class ReadMode
     Raw,
 };
 
+void buildStreamBasedOnReadMode(BlockInputStreamPtr & stream, const ReadMode & read_mode, const SegmentReadTaskPtr & task, const DMContextPtr & dm_context, const ColumnDefines & columns_to_read, const RSOperatorPtr & filter, const uint64_t max_version, const size_t expected_block_size);
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:

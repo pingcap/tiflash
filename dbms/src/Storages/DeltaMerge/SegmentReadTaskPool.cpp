@@ -23,6 +23,40 @@ extern const Metric DT_SegmentReadTasks;
 
 namespace DB::DM
 {
+void buildStreamBasedOnReadMode(BlockInputStreamPtr & stream, const ReadMode & read_mode, const SegmentReadTaskPtr & task, const DMContextPtr & dm_context, const ColumnDefines & columns_to_read, const RSOperatorPtr & filter, const uint64_t max_version, const size_t expected_block_size)
+{
+    auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
+    switch (read_mode)
+    {
+    case ReadMode::Normal:
+        stream = task->segment->getInputStream(
+            *dm_context,
+            columns_to_read,
+            task->read_snapshot,
+            task->ranges,
+            filter,
+            max_version,
+            block_size);
+        break;
+    case ReadMode::Fast:
+        stream = task->segment->getInputStreamFast(
+            *dm_context,
+            columns_to_read,
+            task->read_snapshot,
+            task->ranges,
+            filter,
+            block_size);
+        break;
+    case ReadMode::Raw:
+        stream = task->segment->getInputStreamRaw(
+            *dm_context,
+            columns_to_read,
+            task->read_snapshot,
+            task->ranges);
+        break;
+    }
+}
+
 SegmentReadTask::SegmentReadTask(const SegmentPtr & segment_, //
                                  const SegmentSnapshotPtr & read_snapshot_,
                                  const RowKeyRanges & ranges_)
@@ -98,39 +132,9 @@ SegmentReadTasks SegmentReadTask::trySplitReadTasks(const SegmentReadTasks & tas
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
-    auto seg = t->segment;
     BlockInputStreamPtr stream;
-    auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
-    switch (read_mode)
-    {
-    case ReadMode::Normal:
-        stream = seg->getInputStream(
-            *dm_context,
-            columns_to_read,
-            t->read_snapshot,
-            t->ranges,
-            filter,
-            max_version,
-            block_size);
-        break;
-    case ReadMode::Fast:
-        stream = seg->getInputStreamFast(
-            *dm_context,
-            columns_to_read,
-            t->read_snapshot,
-            t->ranges,
-            filter,
-            block_size);
-        break;
-    case ReadMode::Raw:
-        stream = seg->getInputStreamRaw(
-            *dm_context,
-            columns_to_read,
-            t->read_snapshot,
-            t->ranges);
-        break;
-    }
-    LOG_FMT_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, seg->segmentId());
+    buildStreamBasedOnReadMode(stream, read_mode, t, dm_context, columns_to_read, filter, max_version, expected_block_size);
+    LOG_FMT_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, t->segment->segmentId());
     return stream;
 }
 

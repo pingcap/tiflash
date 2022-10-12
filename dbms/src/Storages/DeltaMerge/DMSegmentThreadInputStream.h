@@ -98,39 +98,8 @@ protected:
                     LOG_FMT_DEBUG(log, "Read done");
                     return {};
                 }
-
-                cur_segment = task->segment;
-                auto block_size = std::max(expected_block_size, static_cast<size_t>(dm_context->db_context.getSettingsRef().dt_segment_stable_pack_rows));
-                switch (read_mode)
-                {
-                case ReadMode::Normal:
-                    cur_stream = cur_segment->getInputStream(
-                        *dm_context,
-                        columns_to_read,
-                        task->read_snapshot,
-                        task->ranges,
-                        filter,
-                        max_version,
-                        block_size);
-                    break;
-                case ReadMode::Fast:
-                    cur_stream = cur_segment->getInputStreamFast(
-                        *dm_context,
-                        columns_to_read,
-                        task->read_snapshot,
-                        task->ranges,
-                        filter,
-                        block_size);
-                    break;
-                case ReadMode::Raw:
-                    cur_stream = cur_segment->getInputStreamRaw(
-                        *dm_context,
-                        columns_to_read,
-                        task->read_snapshot,
-                        task->ranges);
-                    break;
-                }
-                LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
+                buildStreamBasedOnReadMode(cur_stream, read_mode, task, dm_context, columns_to_read, filter, max_version, expected_block_size);
+                LOG_TRACE(log, "Start to read segment, segment={}", task->segment->simpleInfo());
             }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
