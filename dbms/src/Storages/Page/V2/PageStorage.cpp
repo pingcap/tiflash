@@ -66,13 +66,13 @@ void PageStorage::StatisticsInfo::mergeEdits(const PageEntriesEdit & edit)
 {
     for (const auto & record : edit.getRecords())
     {
-        if (record.type == WriteBatch::WriteType::DEL)
+        if (record.type == WriteBatchWriteType::DEL)
             deletes++;
-        else if (record.type == WriteBatch::WriteType::PUT)
+        else if (record.type == WriteBatchWriteType::PUT)
             puts++;
-        else if (record.type == WriteBatch::WriteType::REF)
+        else if (record.type == WriteBatchWriteType::REF)
             refs++;
-        else if (record.type == WriteBatch::WriteType::UPSERT)
+        else if (record.type == WriteBatchWriteType::UPSERT)
             upserts++;
     }
 }

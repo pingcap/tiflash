@@ -81,7 +81,7 @@ try
         auto writes = wb.getWrites();
         for (const auto & w : writes)
         {
-            if (w.type == WriteBatch::WriteType::UPSERT)
+            if (w.type == WriteBatchWriteType::UPSERT)
             {
                 auto entry = snapshot->version()->findNormalPageEntry(w.page_id);
                 if (entry)
@@ -89,7 +89,7 @@ try
                 else
                     FAIL() << "Cannot find specified page";
             }
-            else if (w.type == WriteBatch::WriteType::REF)
+            else if (w.type == WriteBatchWriteType::REF)
                 edit.ref(w.page_id, w.ori_page_id);
             else
                 FAIL() << "Snapshot writes should only contain UPSERT and REF";

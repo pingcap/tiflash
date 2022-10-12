@@ -165,7 +165,7 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
     {
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -217,20 +217,20 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
             edit.put(buildV3Id(ns_id, write.page_id), entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
             edit.del(buildV3Id(ns_id, write.page_id));
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
             edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
             break;
         }
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             edit.putExternal(buildV3Id(ns_id, write.page_id));
             break;
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));
         }
     }
@@ -254,24 +254,24 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         {
             switch (write.type)
             {
-            case WriteBatch::WriteType::DEL:
+            case WriteBatchWriteType::DEL:
             {
                 edit.del(buildV3Id(ns_id, write.page_id));
                 break;
             }
-            case WriteBatch::WriteType::REF:
+            case WriteBatchWriteType::REF:
             {
                 edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
                 break;
             }
-            case WriteBatch::WriteType::PUT_EXTERNAL:
+            case WriteBatchWriteType::PUT_EXTERNAL:
             {
                 // putExternal won't have data.
                 edit.putExternal(buildV3Id(ns_id, write.page_id));
                 break;
             }
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT:
+            case WriteBatchWriteType::PUT:
+            case WriteBatchWriteType::UPSERT:
                 throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
@@ -311,7 +311,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     {
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -355,20 +355,20 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             edit.put(buildV3Id(ns_id, write.page_id), entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
             edit.del(buildV3Id(ns_id, write.page_id));
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
             edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
             break;
         }
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             edit.putExternal(buildV3Id(ns_id, write.page_id));
             break;
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::UPSERT:
             throw Exception(fmt::format("Unknown write type: {}", write.type));
         }
     }

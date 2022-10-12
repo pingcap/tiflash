@@ -22,14 +22,14 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
     {
         switch (rec.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT:
             current_version->put(rec.page_id, rec.entry);
             break;
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             current_version->del(rec.page_id);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             try
             {
                 current_version->ref(rec.page_id, rec.ori_page_id);
@@ -46,7 +46,7 @@ void PageEntriesBuilder::apply(const PageEntriesEdit & edit)
                 }
             }
             break;
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::UPSERT:
             current_version->upsertPage(rec.page_id, rec.entry);
             break;
         }

@@ -501,19 +501,19 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         switch (write.type)
         {
         // PUT/PUT_EXTERNAL only for V3
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::PUT_EXTERNAL:
         {
             page_ids_before_ref.insert(write.page_id);
             break;
         }
         // Both need del in v2 and v3
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
             wb_for_v2.copyWrite(write);
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
             // 1. Try to resolve normal page id
             PageId resolved_page_id = storage_v3->getNormalPageId(ns_id,
