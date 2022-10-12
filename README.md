@@ -228,8 +228,6 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 
   - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
 
-  Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
-
   </details>
 
 ## Run Unit Tests
