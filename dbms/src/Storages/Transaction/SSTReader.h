@@ -41,15 +41,12 @@ public:
 
     DISALLOW_COPY_AND_MOVE(MonoSSTReader);
     MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTView view);
-    // Should only be used when MonoSSTReader is a base class.
-    MonoSSTReader();
     ~MonoSSTReader() override;
 
 private:
     const TiFlashRaftProxyHelper * proxy_helper;
     SSTReaderPtr inner;
     ColumnFamilyType type;
-    bool inited;
 };
 
 /// MultiSSTReader helps when there are multiple sst files in a column family.
@@ -104,14 +101,14 @@ public:
     }
 
     MultiSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, ColumnFamilyType type_, Initer initer_, std::vector<E> args_)
-        : proxy_helper(proxy_helper_)
+        : log(Logger::get("MultiSSTReader"))
+        , proxy_helper(proxy_helper_)
         , type(type_)
         , initer(initer_)
         , args(args_)
         , current(0)
     {
         assert(args.size() > 0);
-        log = &Poco::Logger::get("MultiSSTReader");
         LOG_INFO(log, "Init with {}", buffToStrView(args[current].path));
         mono = initer(proxy_helper, args[current]);
     }

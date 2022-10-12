@@ -92,11 +92,11 @@ void SSTFilesToBlockInputStream::readPrefix()
     {
         default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default);
     }
-    if (ssts_write.size())
+    if (!ssts_write.empty())
     {
         write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts_write);
     }
-    if (ssts_lock.size())
+    if (!ssts_lock.empty())
     {
         lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock);
     }

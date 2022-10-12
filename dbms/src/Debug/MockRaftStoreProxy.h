@@ -240,7 +240,7 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     MockRaftStoreProxy()
     {
-        log = &Poco::Logger::get("MockRaftStoreProxy");
+        log = Logger::get("MockRaftStoreProxy");
         table_id = 1;
     }
 

@@ -39,22 +39,10 @@ MonoSSTReader::MonoSSTReader(const TiFlashRaftProxyHelper * proxy_helper_, SSTVi
     : proxy_helper(proxy_helper_)
     , inner(proxy_helper->sst_reader_interfaces.fn_get_sst_reader(view, proxy_helper->proxy_ptr))
     , type(view.type)
-    , inited(true)
 {}
-
-MonoSSTReader::MonoSSTReader()
-    : proxy_helper(nullptr)
-    , inner(SSTReaderPtr{nullptr})
-    , type(ColumnFamilyType::Default)
-    , inited(false)
-{
-}
 
 MonoSSTReader::~MonoSSTReader()
 {
-    if (inited)
-    {
-        proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
-    }
+    proxy_helper->sst_reader_interfaces.fn_gc(inner, type);
 }
 } // namespace DB
