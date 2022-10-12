@@ -31,7 +31,6 @@ void registerFunctionsTiDBConversion(FunctionFactory &);
 void registerFunctionsDateTime(FunctionFactory &);
 void registerFunctionsFormatting(FunctionFactory &);
 void registerFunctionsHashing(FunctionFactory &);
-void registerFunctionsConsistentHashing(FunctionFactory &);
 void registerFunctionsLogical(FunctionFactory &);
 void registerFunctionsMiscellaneous(FunctionFactory &);
 void registerFunctionsRandom(FunctionFactory &);
@@ -65,7 +64,6 @@ void registerFunctions()
     registerFunctionsDateTime(factory);
     registerFunctionsFormatting(factory);
     registerFunctionsHashing(factory);
-    registerFunctionsConsistentHashing(factory);
     registerFunctionsLogical(factory);
     registerFunctionsMiscellaneous(factory);
     registerFunctionsRandom(factory);
