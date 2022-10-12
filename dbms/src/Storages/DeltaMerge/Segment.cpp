@@ -529,9 +529,9 @@ BlockInputStreamPtr Segment::getInputStreamFast(
 
     /// When we read in fast mode, we can try to do the following optimization:
     /// 1. Handle Column Optimization:
-    ///     when the columns_to_read does not include HANDLE_COLUMN,
-    ///     we can try to skip reading the handle column if the pack's handle range is fully within read range.
-    ///     Thus, in this case, we set enable_handle_clean_read = true.
+    ///    when the columns_to_read does not include HANDLE_COLUMN,
+    ///    we can try to skip reading the handle column if the pack's handle range is fully within read range.
+    ///    Thus, in this case, we set enable_handle_clean_read = true.
     /// 2. Del Column Optimization:
     ///    when the columns_to_read does not include TAG_COLUMN,
     ///    we can try to skip reading the del column if the pack has no deleted rows.
