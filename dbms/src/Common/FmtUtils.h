@@ -25,32 +25,51 @@ class FmtBuffer
 public:
     FmtBuffer() = default;
 
-    template <typename FmtStr, typename... Args>
-    inline FmtBuffer & fmtAppend(FmtStr fmt, Args &&... args)
+    // See https://github.com/fmtlib/fmt/issues/2391 for wrapping the fmt API
+    template <typename... T>
+    FmtBuffer & fmtAppend(fmt::format_string<T...> fmt, T &&... args)
     {
-        fmt::format_to(std::back_inserter(buffer), fmt, std::forward<Args>(args)...);
+        fmt::format_to(std::back_inserter(buffer), fmt, std::forward<T>(args)...);
         return *this;
     }
 
-    inline FmtBuffer & append(std::string_view s)
+    template <typename CompiledFormat, //
+              typename... Args,
+              fmt::enable_if_t<(fmt::detail::is_compiled_format<CompiledFormat>::value), int> = 0>
+    constexpr FmtBuffer & fmtAppend(const CompiledFormat & cf, const Args &... args)
+    {
+        fmt::format_to(std::back_inserter(buffer), cf, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    template <typename S, //
+              typename... Args,
+              fmt::enable_if_t<(fmt::detail::is_compiled_string<S>::value), int> = 0>
+    constexpr FmtBuffer & fmtAppend(const S & s, Args &&... args)
+    {
+        fmt::format_to(std::back_inserter(buffer), s, std::forward<Args>(args)...);
+        return *this;
+    }
+
+    FmtBuffer & append(std::string_view s)
     {
         buffer.append(s.data(), s.data() + s.size());
         return *this;
     }
 
-    inline FmtBuffer & append(const char & ch)
+    FmtBuffer & append(const char ch)
     {
         buffer.push_back(ch);
         return *this;
     }
 
-    inline std::string toString() const
+    std::string toString() const
     {
         return fmt::to_string(buffer);
     }
 
     template <typename Iter>
-    inline FmtBuffer & joinStr(
+    FmtBuffer & joinStr(
         Iter first,
         Iter end)
     {
@@ -88,15 +107,15 @@ public:
         return *this;
     }
 
-    inline void resize(size_t count) { buffer.resize(count); }
+    void resize(size_t count) { buffer.resize(count); }
 
-    inline void reserve(size_t capacity) { buffer.reserve(capacity); }
+    void reserve(size_t capacity) { buffer.reserve(capacity); }
 
-    inline size_t capacity() { return buffer.capacity(); }
+    size_t capacity() { return buffer.capacity(); }
 
-    inline size_t size() { return buffer.size(); }
+    size_t size() { return buffer.size(); }
 
-    inline void clear() { buffer.clear(); }
+    void clear() { buffer.clear(); }
 
 private:
     fmt::memory_buffer buffer;
