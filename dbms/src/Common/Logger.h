@@ -70,22 +70,22 @@ public:
         , id(identifier)
     {}
 
-    inline void log(Poco::Message & msg) const
+    void log(Poco::Message & msg) const
     {
         return logger->log(msg);
     }
 
-    inline bool is(int level) const
+    bool is(int level) const
     {
         return logger->is(level);
     }
 
-    inline const std::string & identifier() const
+    const std::string & identifier() const
     {
         return id;
     }
 
-    inline const std::string & name() const
+    const std::string & name() const
     {
         // This overwrites the default logger name with our identifier.
         return id;
