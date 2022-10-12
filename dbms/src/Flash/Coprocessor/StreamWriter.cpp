@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <common/logger_useful.h>
@@ -43,7 +44,7 @@ StreamWriter::~StreamWriter()
             std::unique_lock lock(mu);
             if (finished)
             {
-                LOG_FMT_TRACE(log, "already finished!");
+                LOG_TRACE(log, "already finished!");
                 return;
             }
 
@@ -51,16 +52,16 @@ StreamWriter::~StreamWriter()
             waitUntilConnectedOrFinished(lock);
             finishSendQueue();
         }
-        LOG_FMT_TRACE(log, "waiting consumer finish!");
+        LOG_TRACE(log, "waiting consumer finish!");
         waitForConsumerFinish(/*allow_throw=*/false);
-        LOG_FMT_TRACE(log, "waiting child thread finished!");
+        LOG_TRACE(log, "waiting child thread finished!");
         thread_manager->wait();
     }
     catch (...)
     {
         tryLogCurrentException(log, "Error in destructor function of StreamWriter");
     }
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "done, wait_pull_channel_ms={} wait_push_channel_ms={} wait_net_ms={} net_send_bytes={}",
         total_wait_pull_channel_elapse_ms,
@@ -98,7 +99,7 @@ void StreamWriter::write(tipb::SelectResponse & response, [[maybe_unused]] uint1
 
 void StreamWriter::writeDone()
 {
-    LOG_FMT_TRACE(log, "ready to finish");
+    LOG_TRACE(log, "ready to finish");
     {
         std::unique_lock lock(mu);
         if (finished)
@@ -149,17 +150,17 @@ void StreamWriter::sendJob()
 
 void StreamWriter::waitForConsumerFinish(bool allow_throw)
 {
-    LOG_FMT_TRACE(log, "start wait for consumer finish!");
+    LOG_TRACE(log, "start wait for consumer finish!");
     String err_msg = consumer_state.getError(); // may blocking
     if (allow_throw && !err_msg.empty())
         throw Exception("Consumer exits unexpected, " + err_msg);
-    LOG_FMT_TRACE(log, "end wait for consumer finish!");
+    LOG_TRACE(log, "end wait for consumer finish!");
 }
 
 void StreamWriter::consumerFinish(const String & err_msg)
 {
     // must finish send_queue outside of the critical area to avoid deadlock with write.
-    LOG_FMT_TRACE(log, "calling consumer finish");
+    LOG_TRACE(log, "calling consumer finish");
     send_queue.finish();
     {
         std::unique_lock lock(mu);
@@ -173,8 +174,6 @@ void StreamWriter::consumerFinish(const String & err_msg)
 
 void StreamWriter::waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk)
 {
-    LOG_FMT_TRACE(log, "start waitUntilConnectedOrFinished");
     cv_for_finished.wait(lk, [&] { return connected || finished; });
-    LOG_FMT_TRACE(log, "end waitUntilConnectedOrFinished");
 }
 } // namespace DB

@@ -174,7 +174,7 @@ public:
         {
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "BatchCoprocessorReader done, wait_pull_channel_ms={} wait_push_channel_ms={} wait_net_ms={} net_recv_bytes={}",
             total_wait_pull_channel_elapse_ms,
@@ -191,7 +191,7 @@ public:
     {
         std::shared_ptr<coprocessor::BatchResponse> recv_msg;
         watch.restart();
-        if (!msg_channel.pop(recv_msg))
+        if (msg_channel.pop(recv_msg) != MPMCQueueResult::OK)
         {
             std::unique_lock lock(mu);
             if (state != ExchangeReceiverState::NORMAL)
@@ -310,7 +310,7 @@ private:
 
                     read_watch.restart();
                     has_data = true;
-                    if (!msg_channel.push(std::move(rsp)))
+                    if (msg_channel.push(std::move(rsp)) != MPMCQueueResult::OK)
                     {
                         meet_error = true;
                         break;
@@ -324,7 +324,7 @@ private:
                 status = stream_reader->Finish();
                 if (status.ok())
                 {
-                    LOG_FMT_DEBUG(log, "BatchCoprocessorReader finish read");
+                    LOG_DEBUG(log, "BatchCoprocessorReader finish read");
                     break;
                 }
                 else

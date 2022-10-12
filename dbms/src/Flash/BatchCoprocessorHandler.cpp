@@ -57,7 +57,7 @@ grpc::Status BatchCoprocessorHandler::execute()
 
             auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
             auto tables_regions_info = TablesRegionsInfo::create(cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 logger,
                 "Handling {} regions from {} physical tables in DAG request: {}",
                 tables_regions_info.regionCount(),
@@ -74,7 +74,7 @@ grpc::Status BatchCoprocessorHandler::execute()
             DAGDriver<true> driver(cop_context.db_context, cop_request->start_ts() > 0 ? cop_request->start_ts() : dag_request.start_ts_fallback(), cop_request->schema_ver(), writer);
             // batch execution;
             driver.execute();
-            LOG_FMT_DEBUG(logger, "Handle DAG request done");
+            LOG_DEBUG(logger, "Handle DAG request done");
             break;
         }
         case COP_REQ_TYPE_ANALYZE:
@@ -87,28 +87,28 @@ grpc::Status BatchCoprocessorHandler::execute()
     }
     catch (const TiFlashException & e)
     {
-        LOG_FMT_ERROR(logger, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
+        LOG_ERROR(logger, "TiFlash Exception: {}\n{}", e.displayText(), e.getStackTrace().toString());
         GET_METRIC(tiflash_coprocessor_request_error, reason_internal_error).Increment();
         return recordError(grpc::StatusCode::INTERNAL, e.standardText());
     }
     catch (const Exception & e)
     {
-        LOG_FMT_ERROR(logger, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+        LOG_ERROR(logger, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
         return recordError(tiflashErrorCodeToGrpcStatusCode(e.code()), e.message());
     }
     catch (const pingcap::Exception & e)
     {
-        LOG_FMT_ERROR(logger, "KV Client Exception: {}", e.message());
+        LOG_ERROR(logger, "KV Client Exception: {}", e.message());
         return recordError(grpc::StatusCode::INTERNAL, e.message());
     }
     catch (const std::exception & e)
     {
-        LOG_FMT_ERROR(logger, "std exception: {}", e.what());
+        LOG_ERROR(logger, "std exception: {}", e.what());
         return recordError(grpc::StatusCode::INTERNAL, e.what());
     }
     catch (...)
     {
-        LOG_FMT_ERROR(logger, "other exception");
+        LOG_ERROR(logger, "other exception");
         return recordError(grpc::StatusCode::INTERNAL, "other exception");
     }
 }

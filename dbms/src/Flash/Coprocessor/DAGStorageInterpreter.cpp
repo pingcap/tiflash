@@ -355,15 +355,11 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
-<<<<<<< HEAD
     {
         if (is_read_node)
             LOG_FMT_DEBUG(log, "building remote streams for read role [num_streams={}]", remote_requests.size());
         buildRemoteStreams(std::move(remote_requests), pipeline);
     }
-=======
-        buildRemoteStreams(remote_requests, pipeline);
->>>>>>> 67b5e876eb945dea5fbbd94a2e114d6b0b763dcc
 
     /// record local and remote io input stream
     auto & table_scan_io_input_streams = dagContext().getInBoundIOInputStreamsMap()[table_scan.getTableScanExecutorID()];
@@ -565,6 +561,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> DAGStorageInterpreter::buildBatc
     {
         LOG_FMT_DEBUG(log, "batch task[{}], storeAddr: {}, len(RegionInfo): {}", i, all_batch_tasks[i].store_addr, all_batch_tasks[i].region_infos.size());
     }
+    return all_batch_tasks;
 }
 
 void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline)

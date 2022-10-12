@@ -58,22 +58,8 @@ struct StreamWriter final
 
     static void write(mpp::MPPDataPacket &, uint16_t)
     {
-<<<<<<< HEAD
-        throw Exception("StreamWriter::write(mpp::MPPDataPacket &, uint16_t) do not support writing MPPDataPacket!");
-=======
         throw Exception("StreamWriter::write(mpp::MPPDataPacket &, [[maybe_unused]] uint16_t) do not support writing MPPDataPacket!");
     }
-    void write(tipb::SelectResponse & response, [[maybe_unused]] uint16_t id = 0)
-    {
-        ::coprocessor::BatchResponse resp;
-        if (!response.SerializeToString(resp.mutable_data()))
-            throw Exception("[StreamWriter]Fail to serialize response, response size: " + std::to_string(response.ByteSizeLong()));
-        std::lock_guard lk(write_mutex);
-        if (!writer->Write(resp))
-            throw Exception("Failed to write resp");
->>>>>>> 67b5e876eb945dea5fbbd94a2e114d6b0b763dcc
-    }
-
     void write(tipb::SelectResponse & response, uint16_t id = 0);
 
     void writeDone();
