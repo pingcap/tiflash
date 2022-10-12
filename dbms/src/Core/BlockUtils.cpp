@@ -18,9 +18,7 @@ namespace DB
 {
 bool blockEqual(const Block & expected, const Block & actual, String & unequal_msg)
 {
-    size_t rows_a = expected.rows();
-    size_t rows_b = actual.rows();
-    if (rows_a != rows_b)
+    if (size_t rows_a = expected.rows(), rows_b = actual.rows(); rows_a != rows_b)
     {
         unequal_msg = fmt::format("Row counter are not equal: {} vs {} ", rows_a, rows_b);
         return false;

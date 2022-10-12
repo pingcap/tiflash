@@ -133,32 +133,29 @@ DAGProperties getDAGProperties(const String & prop_string)
     DAGProperties ret;
     if (prop_string.empty())
         return ret;
-    std::unordered_map<String, String> properties;
     Poco::StringTokenizer string_tokens(prop_string, ",");
     for (const auto & string_token : string_tokens)
     {
         Poco::StringTokenizer tokens(string_token, ":");
         if (tokens.count() != 2)
             continue;
-        properties[Poco::toLower(tokens[0])] = tokens[1];
+        if (Poco::toLower(tokens[0]) == ENCODE_TYPE_NAME)
+            ret.encode_type = tokens[1];
+        else if (Poco::toLower(tokens[0]) == TZ_OFFSET_NAME)
+            ret.tz_offset = std::stol(tokens[1]);
+        else if (Poco::toLower(tokens[0]) == TZ_NAME_NAME)
+            ret.tz_name = tokens[1];
+        else if (Poco::toLower(tokens[0]) == COLLATOR_NAME)
+            ret.collator = std::stoi(tokens[1]);
+        else if (Poco::toLower(tokens[0]) == MPP_QUERY)
+            ret.collator = tokens[1] == "true";
+        else if (Poco::toLower(tokens[0]) == USE_BROADCAST_JOIN)
+            ret.collator = tokens[1] == "true";
+        else if (Poco::toLower(tokens[0]) == MPP_PARTITION_NUM)
+            ret.collator = std::stoi(tokens[1]);
+        else if (Poco::toLower(tokens[0]) == MPP_TIMEOUT)
+            ret.collator = std::stoi(tokens[1]);
     }
-
-    if (properties.find(ENCODE_TYPE_NAME) != properties.end())
-        ret.encode_type = properties[ENCODE_TYPE_NAME];
-    if (properties.find(TZ_OFFSET_NAME) != properties.end())
-        ret.tz_offset = std::stol(properties[TZ_OFFSET_NAME]);
-    if (properties.find(TZ_NAME_NAME) != properties.end())
-        ret.tz_name = properties[TZ_NAME_NAME];
-    if (properties.find(COLLATOR_NAME) != properties.end())
-        ret.collator = std::stoi(properties[COLLATOR_NAME]);
-    if (properties.find(MPP_QUERY) != properties.end())
-        ret.is_mpp_query = properties[MPP_QUERY] == "true";
-    if (properties.find(USE_BROADCAST_JOIN) != properties.end())
-        ret.use_broadcast_join = properties[USE_BROADCAST_JOIN] == "true";
-    if (properties.find(MPP_PARTITION_NUM) != properties.end())
-        ret.mpp_partition_num = std::stoi(properties[MPP_PARTITION_NUM]);
-    if (properties.find(MPP_TIMEOUT) != properties.end())
-        ret.mpp_timeout = std::stoi(properties[MPP_TIMEOUT]);
 
     return ret;
 }
