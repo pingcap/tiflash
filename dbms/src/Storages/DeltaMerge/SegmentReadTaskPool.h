@@ -131,7 +131,8 @@ enum class ReadMode
     Raw,
 };
 
-// `SegmentReadTasksWrapper` likes `SegmentReadTasks` but supports fast access by segment id if `enable_read_thread` is true.
+// If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
+// else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
 // `SegmeneReadTasksWrapper` is not thread-safe.
 class SegmentReadTasksWrapper
 {
