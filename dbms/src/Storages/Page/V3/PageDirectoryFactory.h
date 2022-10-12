@@ -46,6 +46,11 @@ public:
         blob_stats = &blob_store.blob_stats;
         return *this;
     }
+    PageDirectoryFactory & setBlobStore(BlobStore<universal::BlobStoreTrait> & blob_store)
+    {
+        blob_stats = &blob_store.blob_stats;
+        return *this;
+    }
 
     typename Trait::PageDirectoryPtr create(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, WALConfig config);
 

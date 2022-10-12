@@ -21,6 +21,7 @@
 #include <Storages/Page/Page.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/UniversalPage.h>
+#include <Storages/Page/UniversalWriteBatch.h>
 #include <Storages/Page/V3/Blob/BlobConfig.h>
 #include <Storages/Page/V3/Blob/BlobFile.h>
 #include <Storages/Page/V3/Blob/BlobStat.h>
@@ -32,9 +33,6 @@
 #include <Storages/PathPool.h>
 
 #include <mutex>
-
-#include "Storages/Page/UniversalWriteBatch.h"
-#include "Storages/Page/WriteBatch.h"
 
 namespace DB
 {
@@ -61,13 +59,13 @@ public:
 
     std::vector<BlobFileId> getGCStats();
 
-    typename Trait::PageEntriesEditType
+    typename Trait::PageEntriesEdit
     gc(typename Trait::GcEntriesMap & entries_need_gc,
        const PageSize & total_page_size,
        const WriteLimiterPtr & write_limiter = nullptr,
        const ReadLimiterPtr & read_limiter = nullptr);
 
-    typename Trait::PageEntriesEditType
+    typename Trait::PageEntriesEdit
     write(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     void remove(const PageEntriesV3 & del_entries);
@@ -83,7 +81,7 @@ private:
 #endif
     using ExternalIdTrait = typename Trait::ExternalIdTrait;
 
-    typename Trait::PageEntriesEditType
+    typename Trait::PageEntriesEdit
     handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter = nullptr);
 
     BlobFilePtr read(
@@ -137,7 +135,7 @@ namespace u128
 struct BlobStoreTrait
 {
     using PageId = PageIdV3Internal;
-    using PageEntriesEditType = PageEntriesEdit;
+    using PageEntriesEdit = PageEntriesEdit;
     using GcEntries = std::vector<std::tuple<PageId, PageVersion, PageEntryV3>>;
     using GcEntriesMap = std::map<BlobFileId, GcEntries>;
     using PageIdAndEntry = PageIDAndEntryV3;
@@ -171,7 +169,7 @@ namespace universal
 struct BlobStoreTrait
 {
     using PageId = UniversalPageId;
-    using PageEntriesEditType = PageEntriesEdit;
+    using PageEntriesEdit = PageEntriesEdit;
     using GcEntries = std::vector<std::tuple<PageId, PageVersion, PageEntryV3>>;
     using GcEntriesMap = std::map<BlobFileId, GcEntries>;
     using PageIdAndEntry = std::pair<PageId, PageEntryV3>;

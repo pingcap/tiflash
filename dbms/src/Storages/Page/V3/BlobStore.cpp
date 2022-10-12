@@ -165,10 +165,10 @@ FileUsageStatistics BlobStore<Trait>::getFileUsageStatistics() const
 }
 
 template <typename Trait>
-typename Trait::PageEntriesEditType
+typename Trait::PageEntriesEdit
 BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
-    typename Trait::PageEntriesEditType edit;
+    typename Trait::PageEntriesEdit edit;
     for (auto & write : wb.getWrites())
     {
         switch (write.type)
@@ -247,14 +247,14 @@ BlobStore<Trait>::handleLargeWrite(typename Trait::WriteBatch & wb, const WriteL
 }
 
 template <typename Trait>
-typename Trait::PageEntriesEditType
+typename Trait::PageEntriesEdit
 BlobStore<Trait>::write(typename Trait::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
     const size_t all_page_data_size = wb.getTotalDataSize();
 
-    typename Trait::PageEntriesEditType edit;
+    typename Trait::PageEntriesEdit edit;
 
     if (all_page_data_size == 0)
     {
@@ -997,7 +997,7 @@ std::vector<BlobFileId> BlobStore<Trait>::getGCStats()
 
 
 template <typename Trait>
-typename Trait::PageEntriesEditType
+typename Trait::PageEntriesEdit
 BlobStore<Trait>::gc(typename Trait::GcEntriesMap & entries_need_gc,
                      const PageSize & total_page_size,
                      const WriteLimiterPtr & write_limiter,

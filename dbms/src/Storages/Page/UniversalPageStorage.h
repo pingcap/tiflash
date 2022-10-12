@@ -41,8 +41,9 @@ using ReadLimiterPtr = std::shared_ptr<ReadLimiter>;
 class UniversalPageStorage;
 using UniversalPageStoragePtr = std::shared_ptr<UniversalPageStorage>;
 
+class KVStoreReader;
 
-class UniversalPageStorage
+class UniversalPageStorage final
 {
 public:
     using SnapshotPtr = PageStorageSnapshotPtr;
@@ -70,20 +71,25 @@ public:
     {
     }
 
-    virtual ~UniversalPageStorage() = default;
+    ~UniversalPageStorage() = default;
 
-    virtual SnapshotPtr getSnapshot(const String & tracing_id) = 0;
+    void restore();
 
-    // Get some statistics of all living snapshots and the oldest living snapshot.
-    virtual SnapshotsStatistics getSnapshotsStat() const = 0;
-
-    virtual FileUsageStatistics getFileUsageStatistics() const
+    SnapshotPtr getSnapshot(const String & tracing_id) const
     {
-        // return all zeros by default
-        return FileUsageStatistics{};
+        return page_directory->createSnapshot(tracing_id);
     }
 
-    virtual size_t getNumberOfPages() = 0;
+    // Get some statistics of all living snapshots and the oldest living snapshot.
+    SnapshotsStatistics getSnapshotsStat() const
+    {
+        return page_directory->getSnapshotsStat();
+    }
+
+    FileUsageStatistics getFileUsageStatistics() const
+    {
+        return blob_store->getFileUsageStatistics();
+    }
 
     void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr)
     {
@@ -93,6 +99,7 @@ public:
     UniversalPageMap read(const UniversalPageId & page_ids, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
         UNUSED(page_ids, read_limiter, snapshot);
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     using FieldIndices = std::vector<size_t>;
@@ -101,11 +108,13 @@ public:
     UniversalPageMap read(const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
         UNUSED(page_fields, read_limiter, snapshot);
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     UniversalPage read(const PageReadFields & page_field, const ReadLimiterPtr & read_limiter = nullptr, SnapshotPtr snapshot = {})
     {
         UNUSED(page_field, read_limiter, snapshot);
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     // We may skip the GC to reduce useless reading by default.
@@ -117,8 +126,8 @@ public:
 
     // Register and unregister external pages GC callbacks
     // Note that user must ensure that it is safe to call `scanner` and `remover` even after unregister.
-    virtual void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) = 0;
-    virtual void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/){};
+    void registerExternalPagesCallbacks(const ExternalPageCallbacks & callbacks) { UNUSED(callbacks); }
+    void unregisterExternalPagesCallbacks(NamespaceId /*ns_id*/) {}
 
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
@@ -127,6 +136,32 @@ public:
 
     PS::V3::universal::PageDirectoryPtr page_directory;
     PS::V3::universal::BlobStorePtr blob_store;
+};
+
+class KVStoreReader
+{
+public:
+    KVStoreReader(UniversalPageStorage & storage)
+        : uni_storage(storage)
+    {}
+
+    bool isAppliedIndexExceed(PageId page_id, UInt64 applied_index)
+    {
+        // assume use this format
+        UniversalPageId uni_page_id = fmt::format("k_{}", page_id);
+        auto snap = uni_storage.getSnapshot("");
+        const auto & [id, entry] = uni_storage.page_directory->getByIDOrNull(uni_page_id, snap);
+        return (entry.isValid() && entry.tag > applied_index);
+    }
+
+    void traverse(const std::function<void(const DB::UniversalPage & page)> & /*acceptor*/)
+    {
+        // Only traverse pages with id prefix
+        throw Exception("", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+private:
+    UniversalPageStorage & uni_storage;
 };
 
 } // namespace DB
