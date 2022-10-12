@@ -95,7 +95,7 @@ PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * 
         config.gc_max_valid_rate = n;
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger,
         "[gc_min_files={}] [gc_min_bytes={}] [gc_max_valid_rate={:.3f}]",
         config.gc_min_files,
@@ -137,7 +137,7 @@ try
     case LIST_ALL_CAPACITY:
     case LIST_ALL_PAGE_FILE:
     case RUN_GC:
-        LOG_FMT_INFO(logger, "Running with [mode={}]", mode);
+        LOG_INFO(logger, "Running with [mode={}]", mode);
         break;
     default:
         Usage();
@@ -203,9 +203,9 @@ try
         }
         for (Int64 idx = 0; num_gc == -1 || idx < num_gc; ++idx)
         {
-            LOG_FMT_INFO(logger, "Running GC, [round={}] [num_gc={}]", (idx + 1), num_gc);
+            LOG_INFO(logger, "Running GC, [round={}] [num_gc={}]", (idx + 1), num_gc);
             storage.gcImpl(/*not_skip=*/true, nullptr, nullptr);
-            LOG_FMT_INFO(logger, "Run GC done, [round={}] [num_gc={}]", (idx + 1), num_gc);
+            LOG_INFO(logger, "Run GC done, [round={}] [num_gc={}]", (idx + 1), num_gc);
         }
         break;
     }

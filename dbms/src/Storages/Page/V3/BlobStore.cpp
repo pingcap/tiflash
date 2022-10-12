@@ -105,7 +105,7 @@ void BlobStore::registerPaths()
             }
             else
             {
-                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
+                LOG_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
             }
         }
     }
@@ -210,7 +210,7 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
             catch (DB::Exception & e)
             {
                 removePosFromStats(blob_id, offset_in_file, write.size);
-                LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
+                LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
                 throw e;
             }
 
@@ -394,7 +394,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     catch (DB::Exception & e)
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
+        LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
         throw e;
     }
 
@@ -515,7 +515,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     // Because once BlobStat become Read-Only type, Then valid size won't increase.
     if (need_remove_stat)
     {
-        LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+        LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
         auto blob_file = getBlobFile(blob_id);
         auto lock_stats = blob_stats.lock();
@@ -551,7 +551,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
         for (const auto & [page_id_v3, entry] : entries)
         {
             (void)entry;
-            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
             Page page;
             page.page_id = page_id_v3.low;
             handler(page_id_v3.low, page);
@@ -726,7 +726,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         for (const auto & [page_id_v3, entry] : entries)
         {
             (void)entry;
-            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
             Page page;
             page.page_id = page_id_v3.low;
             page_map.emplace(page_id_v3.low, page);
@@ -797,7 +797,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+        LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
         Page page;
         page.page_id = page_id_v3.low;
         return page;
@@ -989,7 +989,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
+                LOG_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
                 blobfile->truncate(right_margin);
                 blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
                 stat->sm_total_size = right_margin;
@@ -1000,7 +1000,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
 
             if (stat->sm_valid_rate > 1.0)
             {
-                LOG_FMT_ERROR(
+                LOG_ERROR(
                     log,
                     "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {} [blob_id={}]",
                     stat->sm_valid_rate,
@@ -1041,7 +1041,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         }
     }
 
-    LOG_FMT_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
+    LOG_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
 
     return blob_need_gc;
 }
@@ -1059,7 +1059,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
+    LOG_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
 
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
                                                                               char * data_begin,
@@ -1071,7 +1071,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             // Should append before calling BlobStore::write, so that we can rollback the
             // first allocated span from stats.
             written_blobs.emplace_back(file_id, file_offset, data_size);
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "BlobStore gc write (partially) done [blob_id={}] [file_offset={}] [size={}] [total_size={}]",
                 file_id,
@@ -1082,7 +1082,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(
+            LOG_ERROR(
                 log,
                 "BlobStore gc write failed [blob_id={}] [offset={}] [size={}] [total_size={}]",
                 file_id,

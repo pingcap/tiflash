@@ -86,9 +86,9 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
+StableValueSpacePtr StableValueSpace::restore(const std::string & log_prefix, DMContext & context, PageId id)
 {
-    auto stable = std::make_shared<StableValueSpace>(id);
+    auto stable = std::make_shared<StableValueSpace>(log_prefix, id);
 
     Page page = context.storage_pool.metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
@@ -208,7 +208,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         DMFile::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
-            LOG_FMT_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
+            LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
             ColumnDefines read_columns;
             read_columns.emplace_back(getExtraHandleColumnDefine(is_common_handle));
             read_columns.emplace_back(getVersionColumnDefine());
@@ -312,11 +312,10 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap = std::make_shared<Snapshot>();
+    auto snap = std::make_shared<Snapshot>(this->shared_from_this());
     snap->id = id;
     snap->valid_rows = valid_rows;
     snap->valid_bytes = valid_bytes;
-    snap->stable = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -347,7 +346,7 @@ StableValueSpace::Snapshot::getInputStream(
     bool is_fast_scan,
     bool enable_del_clean_read)
 {
-    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
+    LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)

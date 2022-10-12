@@ -96,16 +96,16 @@ private:
     // Protects the operations in this instance.
     mutable std::mutex mutex;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 public:
-    explicit DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
+    explicit DeltaValueSpace(const std::string & log_prefix_, PageId id_, const ColumnFilePersisteds & persisted_files = {}, const ColumnFiles & in_memory_files = {});
 
-    explicit DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_);
+    explicit DeltaValueSpace(const std::string & log_prefix_, ColumnFilePersistedSetPtr && persisted_file_set_);
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static DeltaValueSpacePtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static DeltaValueSpacePtr restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id);
 
     /// The following two methods are just for test purposes
     MemTableSetPtr getMemTableSet() const { return mem_table_set; }
@@ -174,7 +174,7 @@ public:
         // Other thread is doing structure update, just return.
         if (!is_updating.compare_exchange_strong(v, true))
         {
-            LOG_FMT_DEBUG(log, "Stop create snapshot because updating, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Stop create snapshot because updating, delta={}", simpleInfo());
             return false;
         }
         return true;
@@ -185,7 +185,7 @@ public:
         bool v = true;
         if (!is_updating.compare_exchange_strong(v, false))
         {
-            LOG_FMT_ERROR(log, "!!!========================= delta={} is expected to be updating=========================!!!", simpleInfo());
+            LOG_ERROR(log, "!!!========================= delta={} is expected to be updating=========================!!!", simpleInfo());
             return false;
         }
         else

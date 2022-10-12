@@ -95,7 +95,7 @@ protected:
                 if (!task)
                 {
                     done = true;
-                    LOG_FMT_DEBUG(log, "Read done");
+                    LOG_DEBUG(log, "Read done");
                     return {};
                 }
                 buildStreamBasedOnReadMode(cur_stream, read_mode, task, dm_context, columns_to_read, filter, max_version, expected_block_size);
@@ -136,7 +136,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        LOG_FMT_DEBUG(log, "finish read {} rows from storage", total_rows);
+        LOG_DEBUG(log, "finish read {} rows from storage", total_rows);
     }
 
 private:

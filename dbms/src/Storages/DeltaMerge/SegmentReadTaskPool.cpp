@@ -134,7 +134,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     MemoryTrackerSetter setter(true, mem_tracker.get());
     BlockInputStreamPtr stream;
     buildStreamBasedOnReadMode(stream, read_mode, t, dm_context, columns_to_read, filter, max_version, expected_block_size);
-    LOG_FMT_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, t->segment->segmentId());
+    LOG_DEBUG(log, "getInputStream succ, pool_id={} segment_id={}", pool_id, t->segment->segmentId());
     return stream;
 }
 
@@ -147,7 +147,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentPtr & seg)
         active_segment_ids.erase(seg->segmentId());
         pool_finished = active_segment_ids.empty() && tasks.empty();
     }
-    LOG_FMT_DEBUG(log, "finishSegment pool_id={} segment_id={} pool_finished={}", pool_id, seg->segmentId(), pool_finished);
+    LOG_DEBUG(log, "finishSegment pool_id={} segment_id={} pool_finished={}", pool_id, seg->segmentId(), pool_finished);
     if (pool_finished)
     {
         q.finish();
