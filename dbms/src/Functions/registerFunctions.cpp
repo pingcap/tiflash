@@ -39,7 +39,6 @@ void registerFunctionsRound(FunctionFactory &);
 void registerFunctionsString(FunctionFactory &);
 void registerFunctionsStringSearch(FunctionFactory &);
 void registerFunctionsURL(FunctionFactory &);
-void registerFunctionsVisitParam(FunctionFactory &);
 void registerFunctionsMath(FunctionFactory &);
 void registerFunctionsTransform(FunctionFactory &);
 void registerFunctionsGeo(FunctionFactory &);
@@ -71,7 +70,6 @@ void registerFunctions()
     registerFunctionsString(factory);
     registerFunctionsStringSearch(factory);
     registerFunctionsURL(factory);
-    registerFunctionsVisitParam(factory);
     registerFunctionsMath(factory);
     registerFunctionsTransform(factory);
     registerFunctionsGeo(factory);
