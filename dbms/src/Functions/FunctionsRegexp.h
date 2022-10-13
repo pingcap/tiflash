@@ -752,12 +752,6 @@ public:
         CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
     }
 
-#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
-#undef CONVERT_EXPR_COL_TO_PARAM
-#undef CONVERT_PAT_COL_TO_PARAM
-#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
-#undef EXECUTE_REGEXP_LIKE
-
 private:
     void checkInputArg(const DataTypePtr & arg, bool * has_nullable_col, bool * has_data_type_nothing) const
     {
@@ -791,6 +785,12 @@ private:
 
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
+
+#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
+#undef CONVERT_EXPR_COL_TO_PARAM
+#undef CONVERT_PAT_COL_TO_PARAM
+#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
+#undef EXECUTE_REGEXP_LIKE
 
 template <typename Impl, typename Name>
 class FunctionStringReplace : public IFunction
