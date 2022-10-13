@@ -40,8 +40,8 @@
 #include <Functions/StringUtil.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadHelpers.h>
-#include <fmt/core.h>
 #include <common/mem_utils.h>
+#include <fmt/core.h>
 
 #include <limits>
 #include <type_traits>
@@ -503,7 +503,7 @@ struct StringEqualsImpl
         RUNTIME_CHECK(size != 0);
 
         ColumnString::Offset b_size = b.size();
-            
+
         {
             size_t a_size = a_offsets[0] - 1;
 
