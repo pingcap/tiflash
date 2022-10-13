@@ -851,7 +851,7 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
     }
 }
 
-// Read data without mvcc filtering && delete mark != 0 filtering.
+// Read data without mvcc filtering.
 // just for debug
 // readRaw is called under 'selraw  xxxx'
 BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
@@ -908,8 +908,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         EMPTY_FILTER,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
-        /* is_raw = */ true,
-        /* do_delete_mark_filter_for_raw = */ false,
+        /* read_mode */ ReadMode::Raw,
         std::move(tasks),
         after_segment_read,
         req_info);
@@ -937,8 +936,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 EMPTY_FILTER,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
-                /* is_raw_ */ true,
-                /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
+                /* read_mode */ ReadMode::Raw,
                 extra_table_id_index,
                 physical_table_id,
                 req_info);
@@ -992,8 +990,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* is_raw = */ is_fast_scan,
-        /* do_delete_mark_filter_for_raw = */ is_fast_scan,
+        /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
         std::move(tasks),
         after_segment_read,
         log_tracing_id);
@@ -1021,8 +1018,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 filter,
                 max_version,
                 expected_block_size,
-                /* is_raw_= */ is_fast_scan,
-                /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id);

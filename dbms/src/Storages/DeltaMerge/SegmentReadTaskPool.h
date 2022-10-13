@@ -111,6 +111,26 @@ private:
     std::atomic<int64_t> total_bytes;
 };
 
+enum class ReadMode
+{
+    /**
+     * Read in normal mode. Data is ordered by PK, and only the most recent version is returned.
+     */
+    Normal,
+
+    /**
+     * Read in fast mode. Data is not sort merged, and all versions are returned. However, deleted records (del_mark=1)
+     * will be still filtered out.
+     */
+    Fast,
+
+    /**
+     * Read in raw mode, for example, for statements like `SELRAW *`. In raw mode, data is not sort merged and all versions
+     * are just returned.
+     */
+    Raw,
+};
+
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
@@ -121,8 +141,7 @@ public:
         const RSOperatorPtr & filter_,
         uint64_t max_version_,
         size_t expected_block_size_,
-        bool is_raw_,
-        bool do_range_filter_for_raw_,
+        ReadMode read_mode_,
         SegmentReadTasks && tasks_,
         AfterSegmentRead after_segment_read_,
         const String & tracing_id)
@@ -133,8 +152,7 @@ public:
         , filter(filter_)
         , max_version(max_version_)
         , expected_block_size(expected_block_size_)
-        , is_raw(is_raw_)
-        , do_range_filter_for_raw(do_range_filter_for_raw_)
+        , read_mode(read_mode_)
         , tasks(std::move(tasks_))
         , after_segment_read(after_segment_read_)
         , log(Logger::get("SegmentReadTaskPool", tracing_id))
@@ -214,8 +232,7 @@ private:
     RSOperatorPtr filter;
     const uint64_t max_version;
     const size_t expected_block_size;
-    const bool is_raw;
-    const bool do_range_filter_for_raw;
+    const ReadMode read_mode;
     SegmentReadTasks tasks;
     AfterSegmentRead after_segment_read;
     std::mutex mutex;
