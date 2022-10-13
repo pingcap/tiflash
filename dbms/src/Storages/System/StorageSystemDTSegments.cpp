@@ -103,7 +103,10 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
             const auto & table_info = dm_storage->getTableInfo();
             auto table_id = table_info.id;
-            auto segment_stats = dm_storage->getStore()->getSegmentsStats();
+            auto store = dm_storage->getStoreIfInited();
+            if (!store)
+                continue;
+            auto segment_stats = store->getSegmentsStats();
             for (auto & stat : segment_stats)
             {
                 size_t j = 0;
