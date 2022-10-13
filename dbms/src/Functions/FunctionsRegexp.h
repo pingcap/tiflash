@@ -417,10 +417,10 @@ private:
 #define SELF_CLASS_NAME (name)
 #define ARG_NUM_VAR_NAME arg_num
 
-#define EXECUTE_REGEXP_LIKE_FUNC_NAME execute_regexp_like
-#define EXECUTE_REGEXP_INSTR_FUNC_NAME execute_regexp_instr
+// Unify the name of functions that actually execute regexp
+#define REGEXP_CLASS_MEM_FUNC_IMPL_NAME process
 
-// Common method to convert nullable string column
+// Method to convert nullable string column
 // processed_col is impossible to be const here
 #define CONVERT_NULL_STR_COL_TO_PARAM(param_name, processed_col, next_process)                                                                                               \
     do                                                                                                                                                                       \
@@ -443,7 +443,7 @@ private:
         }                                                                                                                                                                    \
     } while (0);
 
-// Common method to convert const string column
+// Method to convert const string column
 #define CONVERT_CONST_STR_COL_TO_PARAM(param_name, processed_col, next_process)                                             \
     do                                                                                                                      \
     {                                                                                                                       \
@@ -475,7 +475,7 @@ private:
         }                                                                                                                   \
     } while (0);
 
-// Common method to convert nullable int column
+// Method to convert nullable int column
 // processed_col is impossible to be const here
 #define CONVERT_NULL_INT_COL_TO_PARAM(param_name, processed_col, next_process)                                 \
     do                                                                                                         \
@@ -570,7 +570,7 @@ private:
         }                                                                                                      \
     } while (0);
 
-// Common method to convert const int column
+// Method to convert const int column
 #define CONVERT_CONST_INT_COL_TO_PARAM(param_name, processed_col, next_process)                                                              \
     do                                                                                                                                       \
     {                                                                                                                                        \
@@ -598,9 +598,7 @@ private:
             }                                                                                                                                \
         }                                                                                                                                    \
         else                                                                                                                                 \
-        {                                                                                                                                    \
-            CONVERT_NULL_INT_COL_TO_PARAM((param_name), (processed_col), next_process);                                                      \
-        }                                                                                                                                    \
+            CONVERT_NULL_INT_COL_TO_PARAM((param_name), (processed_col), next_process)                                                      \
     } while (0);
 
 class FunctionStringRegexpBase
@@ -634,6 +632,76 @@ public:
     constexpr static bool canMemorize()
     {
         return (PatT::isConst() && MatchTypeT::isConst());
+    }
+
+    void checkInputArg(const DataTypePtr & arg, bool is_str, bool * has_nullable_col, bool * has_data_type_nothing) const
+    {
+        if (is_str)
+        {
+            // Check string type argument
+            if (arg->isNullable())
+            {
+                *has_nullable_col = true;
+                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+                if (null_type == nullptr)
+                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+
+                const auto & nested_type = null_type->getNestedType();
+
+                // It may be DataTypeNothing if it's not string
+                if (!nested_type->isString())
+                {
+                    if (nested_type->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+            else
+            {
+                if (!arg->isString())
+                {
+                    // It may be DataTypeNothing if it's not string
+                    if (arg->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+        }
+        else
+        {
+            // Check int type argument
+            if (arg->isNullable())
+            {
+                *has_nullable_col = true;
+                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+                if (null_type == nullptr)
+                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+                
+                const auto & nested_type = null_type->getNestedType();
+
+                // It may be DataTypeNothing if it's not string
+                if (!nested_type->isInteger())
+                {
+                    if (nested_type->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+            else
+            {
+                if (!arg->isInteger())
+                {
+                    // It may be DataTypeNothing if it's not string
+                    if (arg->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+        }
     }
 
     bool isMemorized() const { return memorized_re != nullptr; }
@@ -725,7 +793,7 @@ public:
         bool has_data_type_nothing = false;
 
         for (const auto & arg : arguments)
-            checkInputArg(arg, &has_nullable_col, &has_data_type_nothing);
+            checkInputArg(arg, false, &has_nullable_col, &has_data_type_nothing);
 
         if (has_data_type_nothing)
             return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
@@ -737,7 +805,7 @@ public:
     }
 
     template <typename ExprT, typename PatT, typename MatchTypeT>
-    void EXECUTE_REGEXP_LIKE_FUNC_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
     {
         size_t col_size = expr_param.getDataNum();
 
@@ -867,12 +935,6 @@ public:
         }
     }
 
-    template <typename ExprT, typename PatT, typename PosT, typename OccurT, typename RetOpT, typename MatchTypeT>
-    void EXECUTE_REGEXP_INSTR_FUNC_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PosT & pos_param, const OccurT & occur_param, const RetOpT & ret_op_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
-    {
-        throw Exception("Shouldn't call this function");
-    }
-
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         // Do something related with nullable columns
@@ -899,36 +961,6 @@ public:
     }
 
 private:
-    void checkInputArg(const DataTypePtr & arg, bool * has_nullable_col, bool * has_data_type_nothing) const
-    {
-        if (arg->isNullable())
-        {
-            *has_nullable_col = true;
-            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-            if (null_type == nullptr)
-                throw Exception("Get unexpected nullptr in FunctionStringRegexp", ErrorCodes::LOGICAL_ERROR);
-
-            const auto & nested_type = null_type->getNestedType();
-            if (!nested_type->isString())
-            {
-                if (nested_type->getTypeId() != TypeIndex::Nothing)
-                    throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                else
-                    *has_data_type_nothing = true;
-            }
-        }
-        else
-        {
-            if (!arg->isString())
-            {
-                if (arg->getTypeId() != TypeIndex::Nothing)
-                    throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                else
-                    *has_data_type_nothing = true;
-            }
-        }
-    }
-
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
@@ -941,16 +973,13 @@ private:
 #define EXECUTE_REGEXP_INSTR() \
     do \
     { \
-        EXECUTE_REGEXP_INSTR_FUNC_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, POS_PARAM_VAR_NAME, OCCUR_PARAM_VAR_NAME, RET_OP_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
+        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, POS_PARAM_VAR_NAME, OCCUR_PARAM_VAR_NAME, RET_OP_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
     } while (0);
 
 // Method to convert match type column
 #define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
     do                                                                                                                             \
-    {                                                                                                                              \                                                                                                                    \
-        if constexpr (SELF_CLASS_NAME == regexp_instr_name) \
-        { \
-        } \
+    {                                                                                                                              \
     } while (0);
 
 // Method to convert return option column
@@ -1040,14 +1069,8 @@ public:
             return std::make_shared<DataTypeNumber<ResultType>>();
     }
 
-    template <typename ExprT, typename PatT, typename MatchTypeT>
-    void EXECUTE_REGEXP_LIKE_FUNC_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
-    {
-        throw Exception("Shouldn't call this function");
-    }
-
     template <typename ExprT, typename PatT, typename PosT, typename OccurT, typename RetOpT, typename MatchTypeT>
-    void EXECUTE_REGEXP_INSTR_FUNC_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PosT & pos_param, const OccurT & occur_param, const RetOpT & ret_op_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PosT & pos_param, const OccurT & occur_param, const RetOpT & ret_op_param, const PatT & pat_param, const MatchTypeT & match_type_param) const
     {}
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -1090,76 +1113,6 @@ public:
     }
 
 private:
-    void checkInputArg(const DataTypePtr & arg, bool is_str, bool * has_nullable_col, bool * has_data_type_nothing) const
-    {
-        if (is_str)
-        {
-            // Check string type argument
-            if (arg->isNullable())
-            {
-                *has_nullable_col = true;
-                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
-
-                const auto & nested_type = null_type->getNestedType();
-
-                // It may be DataTypeNothing if it's not string
-                if (!nested_type->isString())
-                {
-                    if (nested_type->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-            else
-            {
-                if (!arg->isString())
-                {
-                    // It may be DataTypeNothing if it's not string
-                    if (arg->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-        }
-        else
-        {
-            // Check int type argument
-            if (arg->isNullable())
-            {
-                *has_nullable_col = true;
-                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
-                
-                const auto & nested_type = null_type->getNestedType();
-
-                // It may be DataTypeNothing if it's not string
-                if (!nested_type->isInteger())
-                {
-                    if (nested_type->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-            else
-            {
-                if (!arg->isInteger())
-                {
-                    // It may be DataTypeNothing if it's not string
-                    if (arg->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-        }
-    }
-
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
