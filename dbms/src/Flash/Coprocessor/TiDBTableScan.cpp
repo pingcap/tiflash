@@ -85,6 +85,7 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
 
 void TiDBTableScan::constructPartitionTableScanForRemoteRead(tipb::PartitionTableScan * tipb_partition_table_scan) const
 {
+    // Just send PB constructed by TiDB to TiFlashStorageNode.
     *tipb_partition_table_scan = table_scan->partition_table_scan();
 }
 } // namespace DB

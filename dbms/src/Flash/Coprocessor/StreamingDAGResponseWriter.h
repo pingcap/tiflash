@@ -23,12 +23,6 @@
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <common/logger_useful.h>
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <common/ThreadPool.h>
-#include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
-
 namespace DB
 {
 /// Serializes the stream of blocks and sends them to TiDB/TiSpark with different serialization paths.

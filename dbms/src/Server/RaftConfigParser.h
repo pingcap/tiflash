@@ -61,7 +61,7 @@ struct TiFlashProxyConfig
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
-    TiDB::NodeRole role = TiDB::NodeRole::WriteNode;
+    TiDB::NodeRole role = TiDB::NodeRole::TiFlashStorageNode;
 
     const String config_prefix = "flash.proxy";
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.

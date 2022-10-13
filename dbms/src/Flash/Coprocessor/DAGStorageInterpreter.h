@@ -124,7 +124,8 @@ private:
 
     /// derived from other members, doesn't change during DAGStorageInterpreter's lifetime
 
-    bool is_read_node = false;
+    // For disaggregated tiflash mode.
+    bool is_tiflash_compute_node = false;
     TableID logical_table_id;
     const Settings & settings;
     TMTContext & tmt;

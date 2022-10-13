@@ -48,8 +48,8 @@ const SingleTableRegions & TablesRegionsInfo::getTableRegionInfoByTableID(Int64 
 static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
 {
     fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
-    // If this server serve as a read node, then all regions are read from remote.
-    if (tmt_context.getRole() == TiDB::NodeRole::ReadNode)
+    // If this server serve as a tiflash_compute node, then all regions are read from remote.
+    if (tmt_context.getRole() == TiDB::NodeRole::TiFlashComputeNode)
         return true;
 
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);

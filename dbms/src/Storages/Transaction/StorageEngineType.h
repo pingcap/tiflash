@@ -56,8 +56,10 @@ inline std::string applyMethodToString(SnapshotApplyMethod method)
 
 enum class NodeRole
 {
-    WriteNode,
-    ReadNode,
+    // Is engine-label is 'tiflash_storage'
+    TiFlashStorageNode,
+    // Its engine-label is 'tiflash_compute'
+    TiFlashComputeNode,
 };
 
 } // namespace TiDB

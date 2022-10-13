@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
-#include <Common/formatReadable.h>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
@@ -29,7 +28,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>
-#include <common/logger_useful.h>
 #include <pingcap/Exception.h>
 
 namespace DB
@@ -93,10 +91,9 @@ try
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
 
-    const auto & settings = context.getSettingsRef();
     if constexpr (batch)
     {
-        dag_context.batch_cop_writer = std::make_shared<StreamWriter>(writer, settings.wn_send_buffer);
+        dag_context.batch_cop_writer = std::make_shared<StreamWriter>(writer);
     }
     else
     {

@@ -64,7 +64,7 @@ extern const char pause_with_alter_locks_acquired[];
 extern const char force_remote_read_for_batch_cop[];
 extern const char pause_after_copr_streams_acquired[];
 extern const char pause_after_copr_streams_acquired_once[];
-extern const char force_role_read_node[];
+extern const char force_role_tiflash_compute_node[];
 } // namespace FailPoints
 
 namespace
@@ -313,8 +313,8 @@ DAGStorageInterpreter::DAGStorageInterpreter(
             fmt::format("Dag Request does not have region to read for table: {}", logical_table_id),
             Errors::Coprocessor::BadRequest);
     }
-    is_read_node = tmt.getRole() == TiDB::NodeRole::ReadNode;
-    fiu_do_on(FailPoints::force_role_read_node, { is_read_node = true; });
+    is_tiflash_compute_node = tmt.getRole() == TiDB::NodeRole::TiFlashComputeNode;
+    fiu_do_on(FailPoints::force_role_tiflash_compute_node, { is_tiflash_compute_node = true; });
 }
 
 // Apply learner read to ensure we can get strong consistent with TiKV Region
@@ -331,7 +331,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 {
     if (!mvcc_query_info->regions_query_info.empty())
     {
-        assert(!is_read_node);
+        assert(!is_tiflash_compute_node);
         buildLocalStreams(pipeline, settings.max_block_size);
     }
 
@@ -356,8 +356,8 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     // For those regions which are not presented in this tiflash node, we will try to fetch streams by key ranges from other tiflash nodes, only happens in batch cop / mpp mode.
     if (!remote_requests.empty())
     {
-        if (is_read_node)
-            LOG_FMT_DEBUG(log, "building remote streams for read role [num_streams={}]", remote_requests.size());
+        if (is_tiflash_compute_node)
+            LOG_FMT_DEBUG(log, "building remote streams for tiflash_compute role [num_streams={}]", remote_requests.size());
         buildRemoteStreams(std::move(remote_requests), pipeline);
     }
 
@@ -401,9 +401,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 void DAGStorageInterpreter::prepare()
 {
-    if (!is_read_node)
+    if (!is_tiflash_compute_node)
     {
-        // For write node, apply learner read to ensure we can get strong consistent with TiKV Region
+        // For tiflash_storage node, apply learner read to ensure we can get strong consistent with TiKV Region
         // leaders. If the local regions do not match the requested regions, then
 
         // About why we do learner read before acquiring structure lock on Storage(s).
@@ -430,9 +430,9 @@ void DAGStorageInterpreter::prepare()
     }
     else
     {
-        // For read node, there is no local Region. It build requested to write node according to
+        // For read node, there is no local Region. It build requested to tiflash_storage node according to
         // `table_regions_info.remote_regions`.
-        // We don't need to apply learner read on read node, it is done by write node when building inputstreams.
+        // We don't need to apply learner read on read node, it is done by tiflash_storage node when building inputstreams.
     }
 
     // Acquire read lock on `alter lock` and build the requested inputstreams
@@ -556,10 +556,10 @@ std::vector<pingcap::coprocessor::BatchCopTask> DAGStorageInterpreter::buildBatc
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
     const std::string log_id = log->identifier();
     auto all_batch_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-    LOG_FMT_INFO(log, "build {} batch cop tasks", all_batch_tasks.size());
+    LOG_DEBUG(log, "build {} batch cop tasks", all_batch_tasks.size());
     for (size_t i = 0; i < all_batch_tasks.size(); ++i)
     {
-        LOG_FMT_DEBUG(log, "batch task[{}], storeAddr: {}, len(RegionInfo): {}", i, all_batch_tasks[i].store_addr, all_batch_tasks[i].region_infos.size());
+        LOG_DEBUG(log, "batch task[{}], storeAddr: {}, len(RegionInfo): {}", i, all_batch_tasks[i].store_addr, all_batch_tasks[i].region_infos.size());
     }
     return all_batch_tasks;
 }
@@ -585,7 +585,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     }
 #endif
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    if (!is_read_node)
+    if (!is_tiflash_compute_node)
     {
         // For non-disaggregated tiflash or tiflash-storage, we use Cop protocol.
         std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
@@ -621,13 +621,12 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
 
         const auto & settings = context.getSettingsRef();
         const size_t expect_concurrent_num = settings.max_threads;
-        const size_t recv_buffer_size = settings.rn_recv_buffer;
 
         std::vector<pingcap::coprocessor::BatchCopTask> all_batch_tasks = buildBatchCopTasks(remote_requests);
         for (size_t task_idx = 0; task_idx < all_batch_tasks.size(); ++task_idx)
         {
             const auto & batch_task = all_batch_tasks[task_idx];
-            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, recv_buffer_size, log->identifier());
+            auto coprocessor_reader = std::make_shared<BatchCoprocessorReader>(schema, cluster, batch_task, req, log->identifier());
             size_t idx = 0;
             for (; idx < expect_concurrent_num / all_batch_tasks.size(); ++idx)
             {
@@ -1167,14 +1166,14 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         if (retry_regions.empty())
             continue;
 
-        if (!is_read_node)
+        if (!is_tiflash_compute_node)
         {
-            // For write node, append the region into DAGContext to return them to the upper layer.
+            // For tiflash_storage node, append the region into DAGContext to return them to the upper layer.
             // The upper layer should refresh its cache about these regions.
             for (const auto & r : retry_regions)
                 context.getDAGContext()->retry_regions.push_back(r.get());
         }
-        // else for read node, we don't need to return region error to the upper layer now.
+        // else for tiflash_compute node, we don't need to return region error to the upper layer now.
 
         remote_requests.push_back(RemoteRequest::build(
             retry_regions,

@@ -23,7 +23,6 @@
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-#include <Common/Logger.h>
 
 namespace DB
 {

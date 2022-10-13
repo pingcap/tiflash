@@ -84,13 +84,12 @@ public:
         pingcap::kv::Cluster * cluster_,
         pingcap::coprocessor::BatchCopTask task_,
         const pingcap::coprocessor::RequestPtr & req,
-        Int64 buffer_size,
         const String & log_id)
         : schema(schema_)
         , task(std::move(task_))
         , cluster(cluster_)
         , thread_manager(newThreadManager())
-        , msg_channel(std::max(1, buffer_size)) // min is 1
+        , msg_channel(16)
         , total_wait_pull_channel_elapse_ms(0)
         , total_wait_push_channel_elapse_ms(0)
         , total_wait_net_elapse_ms(0)

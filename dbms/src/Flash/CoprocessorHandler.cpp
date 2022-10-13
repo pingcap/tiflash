@@ -15,8 +15,6 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
-#include <Common/Logger.h>
-#include <common/logger_useful.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/InterpreterDAG.h>
 #include <Flash/CoprocessorHandler.h>
@@ -113,8 +111,9 @@ grpc::Status CoprocessorHandler::execute()
                                    cop_context.kv_context.region_epoch().conf_ver(),
                                    genCopKeyRange(cop_request->ranges()),
                                    &bypass_lock_ts);
-            if (cop_context.db_context.getTMTContext().getRole() == TiDB::NodeRole::ReadNode)
+            if (cop_context.db_context.getTMTContext().getRole() == TiDB::NodeRole::TiFlashComputeNode)
             {
+                // For TiFlashComputeNode all data needs to be fetched from TiFlashStorageNode.
                 table_regions_info.remote_regions.push_back(std::move(region_info));
             }
             else

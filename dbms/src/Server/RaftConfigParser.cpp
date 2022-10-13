@@ -150,16 +150,16 @@ TiFlashProxyConfig::TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config
             args_map[engine_store_advertise_address] = args_map[engine_store_address];
         if (args_map.count(engine_label) == 0)
         {
-            role = TiDB::NodeRole::WriteNode;
+            role = TiDB::NodeRole::TiFlashStorageNode;
             args_map[engine_label] = default_engine_label_value;
         }
         else
         {
             // TODO: validate the value of engine label
             if (args_map[engine_label] == default_engine_label_value)
-                role = TiDB::NodeRole::WriteNode;
+                role = TiDB::NodeRole::TiFlashStorageNode;
             else
-                role = TiDB::NodeRole::ReadNode;
+                role = TiDB::NodeRole::TiFlashComputeNode;
         }
 
         for (auto && [k, v] : args_map)
