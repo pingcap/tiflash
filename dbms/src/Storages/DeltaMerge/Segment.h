@@ -23,12 +23,11 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
-
-#include "Storages/DeltaMerge/SegmentReadTaskPool.h"
 
 namespace DB::DM
 {
