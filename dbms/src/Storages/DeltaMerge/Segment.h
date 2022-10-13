@@ -157,6 +157,16 @@ public:
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
+    BlockInputStreamPtr getInputStream(
+        const ReadMode & read_mode,
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const RSOperatorPtr & filter,
+        UInt64 max_version,
+        size_t expected_block_size);
+
     BlockInputStreamPtr getInputStreamModeNormal(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -183,16 +193,6 @@ public:
         const RowKeyRange & data_range,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         bool reorganize_block = true) const;
-
-    BlockInputStreamPtr getInputStream(
-        const ReadMode & read_mode,
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & read_ranges,
-        const RSOperatorPtr & filter,
-        UInt64 max_version,
-        size_t expected_block_size);
 
     BlockInputStreamPtr getInputStreamModeFast(
         const DMContext & dm_context,
