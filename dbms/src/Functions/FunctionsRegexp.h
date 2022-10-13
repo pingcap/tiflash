@@ -603,87 +603,6 @@ private:
         }                                                                                                                                    \
     } while (0);
 
-// regexp and regexp_like functions are executed in this macro
-#define EXECUTE_REGEXP_LIKE()                                                                                                  \
-    do                                                                                                                         \
-    {                                                                                                                          \
-        EXECUTE_REGEXP_LIKE_FUNC_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
-    } while (0);
-
-#define EXECUTE_REGEXP_INSTR() \
-    do \
-    { \
-        EXECUTE_REGEXP_INSTR_FUNC_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, POS_PARAM_VAR_NAME, OCCUR_PARAM_VAR_NAME, RET_OP_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
-    } while (0);
-
-// Common method to convert match type column
-#define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
-    do                                                                                                                             \
-    {                                                                                                                              \
-        if constexpr (SELF_CLASS_NAME == regexp_name || SELF_CLASS_NAME == regexp_like_name)                                       \
-        {                                                                                                                          \
-            if (ARG_NUM_VAR_NAME == 3)                                                                                             \
-                CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_LIKE()})) \
-            else                                                                                                                   \
-            {                                                                                                                      \
-                /* match_type is not provided here */                                                                              \
-                Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                        \
-                EXECUTE_REGEXP_LIKE()                                                                                             \
-            }                                                                                                                      \
-        }                                                                                                                          \
-        if constexpr (SELF_CLASS_NAME == regexp_instr_name) \
-        { \
-        } \
-    } while (0);
-
-// Common method to convert return option column
-#define CONVERT_RET_OP_COL_TO_PARAM() \
-    do \
-    { \
-        if constexpr (SELF_CLASS_NAME == regexp_instr_name) \
-            CONVERT_CONST_INT_COL_TO_PARAM(RET_OP_PARAM_VAR_NAME, RET_OP_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
-    } while (0);
-
-// Common method to convert occurrence column
-#define CONVERT_OCCUR_COL_TO_PARAM() \
-    do \
-    { \
-        if constexpr (SELF_CLASS_NAME == regexp_instr_name) \
-            CONVERT_CONST_INT_COL_TO_PARAM(OCCUR_PARAM_VAR_NAME, OCCUR_COL_PTR_VAR_NAME, ({CONVERT_RET_OP_COL_TO_PARAM()})) \
-    } while (0);
-
-// Common method to convert position column
-#define CONVERT_POS_COL_TO_PARAM() \
-    do \
-    { \
-        if constexpr (SELF_CLASS_NAME == regexp_instr_name) \
-            CONVERT_CONST_INT_COL_TO_PARAM(POS_PARAM_VAR_NAME, POS_COL_PTR_VAR_NAME, ({CONVERT_OCCUR_COL_TO_PARAM()})) \
-    } while (0);
-
-// Common method to convert pattern column
-#define CONVERT_PAT_COL_TO_PARAM()                                                                                           \
-    do                                                                                                                       \
-    {                                                                                                                        \
-        if constexpr (SELF_CLASS_NAME == regexp_name || SELF_CLASS_NAME == regexp_like_name)                                 \
-            CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
-        else if constexpr (SELF_CLASS_NAME == regexp_instr_name) \
-            CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_POS_COL_TO_PARAM()})) \
-    } while (0);
-
-// Common method to convert expression column
-#define CONVERT_EXPR_COL_TO_PARAM()                                                                                 \
-    do                                                                                                              \
-    {                                                                                                               \
-        CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
-    } while (0);
-
-// The entry to convert columns to params and execute regexp_xxx functions
-#define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
-    do                                       \
-    {                                        \
-        CONVERT_EXPR_COL_TO_PARAM()          \
-    } while (0);
-
 class FunctionStringRegexpBase
 {
 public:
@@ -728,6 +647,47 @@ private:
     mutable std::unique_ptr<Regexps::Regexp> memorized_re;
 };
 
+// regexp and regexp_like functions are executed in this macro
+#define EXECUTE_REGEXP_LIKE()                                                                                                  \
+    do                                                                                                                         \
+    {                                                                                                                          \
+        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
+    } while (0);
+
+// Method to convert match type column
+#define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                     \
+    do                                                                                                                        \
+    {                                                                                                                         \
+        if ((ARG_NUM_VAR_NAME) == 3)                                                                                          \
+            CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_LIKE()})) \
+        else                                                                                                                  \
+        {                                                                                                                     \
+            /* match_type is not provided here */                                                                             \
+            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
+            EXECUTE_REGEXP_LIKE()                                                                                             \
+        }                                                                                                                     \
+    } while (0);
+
+// Method to convert pattern column
+#define CONVERT_PAT_COL_TO_PARAM()                                                                                      \
+    do                                                                                                                  \
+    {                                                                                                                   \
+        CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
+    } while (0);
+
+// Method to convert expression column
+#define CONVERT_EXPR_COL_TO_PARAM()                                                                                \
+    do                                                                                                             \
+    {                                                                                                              \
+        CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
+    } while (0);
+
+// The entry to convert columns to params and execute regexp_xxx functions
+#define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
+    do                                       \
+    {                                        \
+        CONVERT_EXPR_COL_TO_PARAM()          \
+    } while (0);
 
 // Implementation of regexp and regexp_like functions
 template <typename Name>
@@ -756,8 +716,10 @@ public:
             args_max_num = REGEXP_MAX_PARAM_NUM;
 
         size_t arg_num = arguments.size();
-        if (arg_num < REGEXP_MIN_PARAM_NUM || arg_num > args_max_num)
-            throw Exception("Illegal argument number");
+        if (arg_num < REGEXP_MIN_PARAM_NUM)
+            throw Exception("Too few arguments", ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION);
+        else if (arg_num > args_max_num)
+            throw Exception("Too mant arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
         bool has_nullable_col = false;
         bool has_data_type_nothing = false;
@@ -933,11 +895,6 @@ public:
         if ((ARG_NUM_VAR_NAME) == REGEXP_LIKE_MAX_PARAM_NUM)
             MATCH_TYPE_COL_PTR_VAR_NAME = block.getByPosition(arguments[2]).column;
 
-        // For passing compilation
-        ColumnPtr POS_COL_PTR_VAR_NAME;
-        ColumnPtr OCCUR_COL_PTR_VAR_NAME;
-        ColumnPtr RET_OP_COL_PTR_VAR_NAME;
-
         CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
     }
 
@@ -947,7 +904,10 @@ private:
         if (arg->isNullable())
         {
             *has_nullable_col = true;
-            const auto & null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+            if (null_type == nullptr)
+                throw Exception("Get unexpected nullptr in FunctionStringRegexp", ErrorCodes::LOGICAL_ERROR);
+
             const auto & nested_type = null_type->getNestedType();
             if (!nested_type->isString())
             {
@@ -971,6 +931,69 @@ private:
 
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
+
+#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
+#undef CONVERT_EXPR_COL_TO_PARAM
+#undef CONVERT_PAT_COL_TO_PARAM
+#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
+#undef EXECUTE_REGEXP_LIKE
+
+#define EXECUTE_REGEXP_INSTR() \
+    do \
+    { \
+        EXECUTE_REGEXP_INSTR_FUNC_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, POS_PARAM_VAR_NAME, OCCUR_PARAM_VAR_NAME, RET_OP_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
+    } while (0);
+
+// Method to convert match type column
+#define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
+    do                                                                                                                             \
+    {                                                                                                                              \                                                                                                                    \
+        if constexpr (SELF_CLASS_NAME == regexp_instr_name) \
+        { \
+        } \
+    } while (0);
+
+// Method to convert return option column
+#define CONVERT_RET_OP_COL_TO_PARAM() \
+    do \
+    { \
+        CONVERT_CONST_INT_COL_TO_PARAM(RET_OP_PARAM_VAR_NAME, RET_OP_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
+    } while (0);
+
+// Method to convert occurrence column
+#define CONVERT_OCCUR_COL_TO_PARAM() \
+    do \
+    { \
+        CONVERT_CONST_INT_COL_TO_PARAM(OCCUR_PARAM_VAR_NAME, OCCUR_COL_PTR_VAR_NAME, ({CONVERT_RET_OP_COL_TO_PARAM()})) \
+    } while (0);
+
+// Method to convert position column
+#define CONVERT_POS_COL_TO_PARAM() \
+    do \
+    { \
+        CONVERT_CONST_INT_COL_TO_PARAM(POS_PARAM_VAR_NAME, POS_COL_PTR_VAR_NAME, ({CONVERT_OCCUR_COL_TO_PARAM()})) \
+    } while (0);
+
+// Method to convert pattern column
+#define CONVERT_PAT_COL_TO_PARAM()                                                                                           \
+    do                                                                                                                       \
+    {                                                                                                                        \
+        CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_POS_COL_TO_PARAM()})) \
+    } while (0);
+
+// Method to convert expression column
+#define CONVERT_EXPR_COL_TO_PARAM()                                                                                 \
+    do                                                                                                              \
+    {                                                                                                               \
+        CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
+    } while (0);
+
+// The entry to convert columns to params and execute regexp_xxx functions
+#define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
+    do                                       \
+    {                                        \
+        CONVERT_EXPR_COL_TO_PARAM()          \
+    } while (0);
 
 // Implementation of regexp_instr function
 template <typename Name>
@@ -1139,6 +1162,15 @@ private:
 
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
+
+#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
+#undef CONVERT_EXPR_COL_TO_PARAM
+#undef CONVERT_PAT_COL_TO_PARAM
+#undef CONVERT_POS_COL_TO_PARAM
+#undef CONVERT_OCCUR_COL_TO_PARAM
+#undef CONVERT_RET_OP_COL_TO_PARAM
+#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
+#undef EXECUTE_REGEXP_INSTR
 
 template <typename Impl, typename Name>
 class FunctionStringReplace : public IFunction
@@ -1401,13 +1433,6 @@ private:
     TiDB::TiDBCollatorPtr collator{};
 };
 
-#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
-#undef CONVERT_EXPR_COL_TO_PARAM
-#undef CONVERT_PAT_COL_TO_PARAM
-#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
-#undef EXECUTE_REGEXP_LIKE
-#undef CONVERT_CONST_INT_COL_TO_PARAM
-#undef CONVERT_NULL_INT_COL_TO_PARAM
 #undef CONVERT_CONST_STR_COL_TO_PARAM
 #undef CONVERT_NULL_STR_COL_TO_PARAM
 #undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
