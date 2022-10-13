@@ -25,6 +25,13 @@ if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/boringssl/README.md")
     set(MISSING_INTERNAL_SSL_LIBRARY 1)
 endif()
 
+if (NOT APPLE)
+    option(USE_GM_SSL "Set to FALSE to disable GmSSL" ${USE_INTERNAL_SSL_LIBRARY})
+else()
+    # Avoid link to GmSSL when compile on macos because GmSSL only supports dynamic link which complicate the binary package
+    option(USE_GM_SSL "Set to FALSE to disable GmSSL" 0)
+endif()
+
 set (OPENSSL_USE_STATIC_LIBS ${USE_STATIC_LIBRARIES})
 
 if (NOT USE_INTERNAL_SSL_LIBRARY)
@@ -135,4 +142,4 @@ if(OPENSSL_FOUND AND NOT USE_INTERNAL_SSL_LIBRARY)
     endif()
 endif()
 
-message (STATUS "Using ssl=${USE_SSL}: ${OPENSSL_INCLUDE_DIR} : ${OPENSSL_LIBRARIES}")
+message (STATUS "Using ssl=${USE_SSL} gmssl=${USE_GM_SSL}: ${OPENSSL_INCLUDE_DIR} : ${OPENSSL_LIBRARIES}")

@@ -99,7 +99,10 @@ public:
             cipher = EVP_aes_256_ctr();
             break;
         case EncryptionMethod::SM4Ctr:
-#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+#if USE_GM_SSL
+            // Use sm4 in GmSSL, don't need to do anything here
+            break;
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
             throw DB::TiFlashException("Unsupported encryption method: " + std::to_string(static_cast<int>(method)),
                                        Errors::Encryption::Internal);
 #else
@@ -110,8 +113,21 @@ public:
         default:
             DBMS_ASSERT(false);
         }
+#if !USE_GM_SSL
         DBMS_ASSERT(cipher != nullptr);
+#endif
 
+#if USE_GM_SSL
+        if (method == EncryptionMethod::SM4Ctr)
+        {
+            SM4_KEY sm4_key;
+            unsigned char own_iv[16];
+            memcpy(own_iv, iv, 16);
+            sm4_set_encrypt_key(&sm4_key, test::KEY);
+            sm4_ctr_encrypt(&sm4_key, own_iv, plaintext, MAX_SIZE, ciphertext);
+            return;
+        }
+#endif
         int ret = EVP_EncryptInit(ctx, cipher, test::KEY, iv);
         DBMS_ASSERT(ret == 1);
         int output_size = 0;
@@ -200,7 +216,9 @@ TEST_P(EncryptionTest, EncryptionTest)
     EXPECT_TRUE(testEncryption(16, 16 * 2, test::IV_OVERFLOW_FULL));
 }
 
-#if OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
+#if USE_GM_SSL
+INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr, EncryptionMethod::SM4Ctr)));
+#elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
 INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
 #else
 // Openssl support SM4 after 1.1.1 release version.

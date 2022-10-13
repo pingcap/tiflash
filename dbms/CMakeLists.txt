@@ -215,7 +215,7 @@ target_link_libraries (dbms
     absl::synchronization
 )
 
-if (USE_INTERNAL_SSL_LIBRARY)
+if (USE_GM_SSL)
     target_link_libraries(dbms gmssl)
     target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 endif ()
@@ -314,6 +314,11 @@ if (ENABLE_TESTS)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
     target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib)
+
+    if (USE_GM_SSL)
+        target_link_libraries(gtests_dbms gmssl)
+        target_include_directories(gtests_dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+    endif ()
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)

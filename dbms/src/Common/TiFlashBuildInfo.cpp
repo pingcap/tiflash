@@ -67,7 +67,7 @@ std::string getEnabledFeatures()
 #endif
 
 // sm4
-#if USE_INTERNAL_SSL_LIBRARY
+#if USE_GM_SSL
             "sm4(GmSSL)",
 #elif OPENSSL_VERSION_NUMBER >= 0x1010100fL && !defined(OPENSSL_NO_SM4)
             "sm4(OpenSSL)",

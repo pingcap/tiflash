@@ -55,10 +55,13 @@ endif ()
 
 if (USE_INTERNAL_SSL_LIBRARY)
     add_subdirectory (boringssl-cmake)
-    add_subdirectory (GmSSL)
 
     add_library (OpenSSL::Crypto ALIAS crypto)
     add_library (OpenSSL::SSL ALIAS ssl)
+endif ()
+
+if (USE_GM_SSL)
+    add_subdirectory (GmSSL)
 endif ()
 
 if (USE_INTERNAL_POCO_LIBRARY)
