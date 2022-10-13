@@ -331,7 +331,7 @@ struct StringComparisonWithCollatorImpl
         for (size_t i = 1; i < size; ++i)
         {
             size_t a_size = a_offsets[i] - a_offsets[i - 1] - 1;
-            c[i] = Op::apply(collator->compare(a_data.raw_data() + a_offsets[i], a_size, b_data, b_size), 0);
+            c[i] = Op::apply(collator->compare(a_data.raw_data() + a_offsets[i - 1], a_size, b_data, b_size), 0);
         }
     }
 
