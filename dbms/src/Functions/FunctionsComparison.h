@@ -285,7 +285,8 @@ struct StringComparisonWithCollatorImpl
         }
 
         size_t size = a_offsets.size();
-        RUNTIME_CHECK(size != 0);
+        if (size == 0)
+            return;
 
         {
             size_t a_size = a_offsets[0] - 1;
@@ -317,7 +318,8 @@ struct StringComparisonWithCollatorImpl
         }
 
         size_t size = a_offsets.size();
-        RUNTIME_CHECK(size != 0);
+        if (size == 0)
+            return;
 
         ColumnString::Offset b_size = b.size();
         const char * b_data = reinterpret_cast<const char *>(b.data());
@@ -368,7 +370,8 @@ struct StringComparisonImpl
         PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
-        RUNTIME_CHECK(size != 0);
+        if (size == 0)
+            return;
 
         /// Trailing zero byte of the smaller string is included in the comparison.
         {
@@ -405,7 +408,8 @@ struct StringComparisonImpl
         PaddedPODArray<ResultType> & c)
     {
         size_t size = a_offsets.size();
-        RUNTIME_CHECK(size != 0);
+        if (size == 0)
+            return;
 
         ColumnString::Offset b_size = b.size() + 1;
 
@@ -469,7 +473,8 @@ struct StringEqualsImpl
         PaddedPODArray<UInt8> & c)
     {
         size_t size = a_offsets.size();
-        RUNTIME_CHECK(size != 0);
+        if (size == 0)
+            return;
 
         {
             size_t a_size = a_offsets[0] - 1;
@@ -500,7 +505,8 @@ struct StringEqualsImpl
         PaddedPODArray<UInt8> & c)
     {
         size_t size = a_offsets.size();
-        RUNTIME_CHECK(size != 0);
+        if (size == 0)
+            return;
 
         ColumnString::Offset b_size = b.size();
 
