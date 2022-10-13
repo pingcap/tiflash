@@ -178,7 +178,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
     // Write DeleteRange to the covered segments to ensure that all data in the `ingest_range` is cleared.
     {
         RowKeyRange remaining_delete_range = ingest_range;
-        LOG_FMT_INFO(
+        LOG_INFO(
             log,
             "Table ingest using split - delete range phase - begin, remaining_delete_range={}",
             remaining_delete_range.toDebugString());
@@ -200,7 +200,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 delete_range.toDebugString(),
                 segment->simpleInfo(),
                 remaining_delete_range.toDebugString());
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "Table ingest using split - delete range phase - Try to delete range in segment, delete_range={} segment={} remaining_delete_range={} updated_segments_n={}",
                 delete_range.toDebugString(),
@@ -222,7 +222,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
         }
     }
 
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "Table ingest using split - delete range phase - finished, updated_segments_n={}",
         updated_segments.size());
@@ -253,7 +253,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
      *                                  ↑ The segment we ingest DMFile into
      */
 
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "Table ingest using split - split ingest phase - begin, ingest_range={}, files_n={}",
         ingest_range.toDebugString(),
@@ -314,7 +314,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 files[file_idx]->path(),
                 segment->simpleInfo());
 
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "Table ingest using split - split ingest phase - Try to ingest file into segment, file_idx={} file_id=dmf_{} file_ingest_range={} segment={} segment_ingest_range={}",
                 file_idx,
@@ -339,7 +339,7 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
         }
     }
 
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "Table ingest using split - split ingest phase - finished, updated_segments_n={}",
         updated_segments.size());
@@ -402,9 +402,14 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *    │-------- Ingest Range --------│
          */
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.end, SegmentSplitMode::Logical);
-        // We don't care whether it is succeeded or not, because the caller always need to retry
-        // from the beginning in this case.
-        UNUSED(left, right);
+        if (left == nullptr || right == nullptr)
+        {
+            // Split failed, likely caused by snapshot failed.
+            // Sleep awhile and retry.
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
+        // Always returning false, because we need to retry to get a new segment (as the old segment is abandoned)
+        // even when split succeeded.
         return false;
     }
     else if (is_end_matching)
@@ -419,7 +424,10 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *             │-------- Ingest Range --------│
          */
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
-        UNUSED(left, right);
+        if (left == nullptr || right == nullptr)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
         return false;
     }
     else
@@ -434,7 +442,10 @@ bool DeltaMergeStore::ingestDTFileIntoSegmentUsingSplit(
          *        │-------- Ingest Range --------│
          */
         const auto [left, right] = segmentSplit(dm_context, segment, SegmentSplitReason::IngestBySplit, ingest_range.start, SegmentSplitMode::Logical);
-        UNUSED(left, right);
+        if (left == nullptr || right == nullptr)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(15));
+        }
         return false;
     }
 }
@@ -498,7 +509,7 @@ void DeltaMergeStore::ingestFiles(
             fmt_buf.append("]");
             return fmt_buf.toString();
         };
-        LOG_FMT_INFO(
+        LOG_INFO(
             log,
             "Table ingest files - begin, ingest_by_split={} files={} rows={} bytes={} bytes_on_disk={} range={} clear={}",
             ingest_using_split,
@@ -567,7 +578,7 @@ void DeltaMergeStore::ingestFiles(
             return fmt_buf.toString();
         };
 
-        LOG_FMT_INFO(
+        LOG_INFO(
             log,
             "Table ingest files - finished ingested files into segments, {} clear={}",
             get_ingest_info(),

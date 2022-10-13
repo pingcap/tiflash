@@ -114,9 +114,7 @@ set (ENABLE_TESTS ${_save})
 # -------
 add_subdirectory (tipb/cpp)
 
-if (USE_INTERNAL_TIFLASH_PROXY)
-    add_subdirectory (tiflash-proxy-cmake)
-endif ()
+add_subdirectory (tiflash-proxy-cmake)
 
 if (ENABLE_JEMALLOC AND USE_INTERNAL_JEMALLOC_LIBRARY)
     add_subdirectory (jemalloc-cmake)

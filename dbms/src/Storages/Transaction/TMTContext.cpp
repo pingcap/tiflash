@@ -75,7 +75,8 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
     , mpp_task_manager(std::make_shared<MPPTaskManager>(
           std::make_unique<MinTSOScheduler>(
               context.getSettingsRef().task_scheduler_thread_soft_limit,
-              context.getSettingsRef().task_scheduler_thread_hard_limit)))
+              context.getSettingsRef().task_scheduler_thread_hard_limit,
+              context.getSettingsRef().task_scheduler_active_set_soft_limit)))
     , engine(raft_config.engine)
     , replica_read_max_thread(1)
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
@@ -215,7 +216,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
         read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, DEFAULT_READ_INDEX_WORKER_TICK_MS);
     }
     {
-        LOG_FMT_INFO(
+        LOG_INFO(
             &Poco::Logger::root(),
             "read-index max thread num: {}, timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; read-index-worker-tick: {}ms",
             replicaReadMaxThread(),

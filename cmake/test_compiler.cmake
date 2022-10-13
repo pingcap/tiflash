@@ -17,7 +17,7 @@ include (CMakePushCheckState)
 
 cmake_push_check_state ()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
 # clang4 : -no-pie cause error
 # clang6 : -no-pie cause warning
 

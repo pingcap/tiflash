@@ -99,7 +99,7 @@ const BaseRuntimeStatistics & MPPTaskStatistics::collectRuntimeStatistics()
 
 void MPPTaskStatistics::logTracingJson()
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger,
         R"({{"query_tso":{},"task_id":{},"is_root":{},"sender_executor_id":"{}","executors":{},"host":"{}")"
         R"(,"task_init_timestamp":{},"task_start_timestamp":{},"task_end_timestamp":{})"
