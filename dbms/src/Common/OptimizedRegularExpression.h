@@ -16,6 +16,7 @@
 
 #include <Common/config.h>
 #include <re2/re2.h>
+#include <common/types.h>
 
 #include <memory>
 #include <string>
@@ -111,6 +112,8 @@ public:
         out_is_trivial = is_trivial;
         out_required_substring_is_prefix = required_substring_is_prefix;
     }
+
+    Int64 instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op);
 
 private:
     bool is_trivial;

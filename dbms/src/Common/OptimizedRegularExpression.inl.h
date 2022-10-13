@@ -469,5 +469,11 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
     }
 }
 
+template <bool thread_safe>
+Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
+{
+    
+}
+
 #undef MIN_LENGTH_FOR_STRSTR
 #undef MAX_SUBPATTERNS
