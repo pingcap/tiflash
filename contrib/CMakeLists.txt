@@ -60,9 +60,7 @@ if (USE_INTERNAL_SSL_LIBRARY)
     add_library (OpenSSL::SSL ALIAS ssl)
 endif ()
 
-if (USE_GM_SSL)
-    add_subdirectory (GmSSL)
-endif ()
+add_subdirectory (GmSSL)
 
 if (USE_INTERNAL_POCO_LIBRARY)
     set (save_CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})

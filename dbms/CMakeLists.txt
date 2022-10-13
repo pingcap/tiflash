@@ -215,9 +215,10 @@ target_link_libraries (dbms
     absl::synchronization
 )
 
+# always add GmSSL include dir to the include path for static analysis
+target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 if (USE_GM_SSL)
     target_link_libraries(dbms gmssl)
-    target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 endif ()
 
 if (NOT USE_INTERNAL_RE2_LIBRARY)
