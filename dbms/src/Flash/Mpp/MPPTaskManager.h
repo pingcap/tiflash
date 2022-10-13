@@ -39,7 +39,6 @@ struct MPPQueryTaskSet
     State state = Normal;
     String error_message;
     MPPTaskMap task_map;
-    UInt64 query_id;
     std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
@@ -51,9 +50,6 @@ struct MPPQueryTaskSet
     {
         return state == Normal || state == Aborted;
     }
-    MPPQueryTaskSet(UInt64 query_id_)
-        : query_id(query_id_)
-    {}
 };
 
 using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;

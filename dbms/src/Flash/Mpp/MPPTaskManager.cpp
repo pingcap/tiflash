@@ -37,7 +37,7 @@ MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
 
 MPPQueryTaskSetPtr MPPTaskManager::addMPPQueryTaskSet(UInt64 query_id)
 {
-    auto ptr = std::make_shared<MPPQueryTaskSet>(query_id);
+    auto ptr = std::make_shared<MPPQueryTaskSet>();
     mpp_query_map.insert({query_id, ptr});
     GET_METRIC(tiflash_mpp_task_manager, type_mpp_query_count).Set(mpp_query_map.size());
     return ptr;
