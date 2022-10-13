@@ -28,6 +28,8 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WriteBatch.h>
 
+#include "Storages/DeltaMerge/SegmentReadTaskPool.h"
+
 namespace DB::DM
 {
 class Segment;
@@ -155,7 +157,7 @@ public:
 
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
-    BlockInputStreamPtr getInputStream(
+    BlockInputStreamPtr getInputStreamModeNormal(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
@@ -164,7 +166,7 @@ public:
         UInt64 max_version,
         size_t expected_block_size);
 
-    BlockInputStreamPtr getInputStream(
+    BlockInputStreamPtr getInputStreamModeNormal(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
@@ -182,7 +184,17 @@ public:
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         bool reorganize_block = true) const;
 
-    BlockInputStreamPtr getInputStreamFast(
+    BlockInputStreamPtr getInputStream(
+        const ReadMode & read_mode,
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const RSOperatorPtr & filter,
+        UInt64 max_version,
+        size_t expected_block_size);
+
+    BlockInputStreamPtr getInputStreamModeFast(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
@@ -190,14 +202,14 @@ public:
         const RSOperatorPtr & filter,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
-    BlockInputStreamPtr getInputStreamRaw(
+    BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
-    BlockInputStreamPtr getInputStreamRaw(
+    BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read);
 

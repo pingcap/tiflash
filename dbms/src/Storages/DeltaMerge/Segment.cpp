@@ -45,6 +45,8 @@
 #include <memory>
 #include <numeric>
 
+#include "Storages/DeltaMerge/SegmentReadTaskPool.h"
+
 namespace ProfileEvents
 {
 extern const Event DMWriteBlock;
@@ -395,13 +397,37 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
 }
 
-BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
+
+BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
+                                            const DMContext & dm_context,
                                             const ColumnDefines & columns_to_read,
                                             const SegmentSnapshotPtr & segment_snap,
                                             const RowKeyRanges & read_ranges,
                                             const RSOperatorPtr & filter,
                                             UInt64 max_version,
                                             size_t expected_block_size)
+{
+    switch (read_mode)
+    {
+    case ReadMode::Normal:
+        return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
+        break;
+    case ReadMode::Fast:
+        return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter, expected_block_size);
+        break;
+    case ReadMode::Raw:
+        return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, read_ranges, expected_block_size);
+        break;
+    }
+}
+
+BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_context,
+                                                      const ColumnDefines & columns_to_read,
+                                                      const SegmentSnapshotPtr & segment_snap,
+                                                      const RowKeyRanges & read_ranges,
+                                                      const RSOperatorPtr & filter,
+                                                      UInt64 max_version,
+                                                      size_t expected_block_size)
 {
     LOG_TRACE(log, "Begin segment create input stream");
 
@@ -479,17 +505,17 @@ BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
     return stream;
 }
 
-BlockInputStreamPtr Segment::getInputStream(const DMContext & dm_context,
-                                            const ColumnDefines & columns_to_read,
-                                            const RowKeyRanges & read_ranges,
-                                            const RSOperatorPtr & filter,
-                                            UInt64 max_version,
-                                            size_t expected_block_size)
+BlockInputStreamPtr Segment::getInputStreamModeNormal(const DMContext & dm_context,
+                                                      const ColumnDefines & columns_to_read,
+                                                      const RowKeyRanges & read_ranges,
+                                                      const RSOperatorPtr & filter,
+                                                      UInt64 max_version,
+                                                      size_t expected_block_size)
 {
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
     if (!segment_snap)
         return {};
-    return getInputStream(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
+    return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
 }
 
 BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_context,
@@ -527,11 +553,11 @@ BlockInputStreamPtr Segment::getInputStreamForDataExport(const DMContext & dm_co
     return data_stream;
 }
 
-/// We call getInputStreamFast when we read in fast mode.
+/// We call getInputStreamModeFast when we read in fast mode.
 /// In this case, we will read all the data in delta and stable, and then merge them without sorting.
 /// Besides, we will do del_mark != 0 filtering to drop the deleted rows.
 /// In conclusion, the output is unsorted, and does not do mvcc filtering.
-BlockInputStreamPtr Segment::getInputStreamFast(
+BlockInputStreamPtr Segment::getInputStreamModeFast(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
@@ -618,13 +644,13 @@ BlockInputStreamPtr Segment::getInputStreamFast(
     return std::make_shared<ConcatBlockInputStream>(streams, dm_context.tracing_id);
 }
 
-/// We call getInputStreamRaw in 'selraw xxxx' statement, which is always in test for debug.
+/// We call getInputStreamModeRaw in 'selraw xxxx' statement, which is always in test for debug.
 /// In this case, we will read all the data without mvcc filtering and sorted merge.
-BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
-                                               const ColumnDefines & columns_to_read,
-                                               const SegmentSnapshotPtr & segment_snap,
-                                               const RowKeyRanges & data_ranges,
-                                               size_t expected_block_size)
+BlockInputStreamPtr Segment::getInputStreamModeRaw(const DMContext & dm_context,
+                                                   const ColumnDefines & columns_to_read,
+                                                   const SegmentSnapshotPtr & segment_snap,
+                                                   const RowKeyRanges & data_ranges,
+                                                   size_t expected_block_size)
 {
     auto new_columns_to_read = std::make_shared<ColumnDefines>();
 
@@ -673,12 +699,12 @@ BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context,
     return std::make_shared<ConcatBlockInputStream>(streams, dm_context.tracing_id);
 }
 
-BlockInputStreamPtr Segment::getInputStreamRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
+BlockInputStreamPtr Segment::getInputStreamModeRaw(const DMContext & dm_context, const ColumnDefines & columns_to_read)
 {
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfReadRaw);
     if (!segment_snap)
         return {};
-    return getInputStreamRaw(dm_context, columns_to_read, segment_snap, {rowkey_range});
+    return getInputStreamModeRaw(dm_context, columns_to_read, segment_snap, {rowkey_range});
 }
 
 SegmentPtr Segment::mergeDelta(DMContext & dm_context, const ColumnDefinesPtr & schema_snap) const
