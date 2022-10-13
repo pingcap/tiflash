@@ -168,7 +168,7 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
         f();
         auto end_time = Clock ::now();
         auto time_cost = std::chrono::duration_cast<TimeCost>(end_time - start_time);
-        LOG_FMT_INFO(logger, "time cost {}", time_cost);
+        LOG_INFO(logger, "time cost {}", time_cost);
         return time_cost;
     };
     switch (ver)
@@ -176,7 +176,7 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
     case TestType::V1:
         return wrap_time_cost(
             [&]() {
-                LOG_FMT_INFO(logger, "begin to run `{}`: req size {}, ", TestTypeName.at(ver), reqs.size());
+                LOG_INFO(logger, "begin to run `{}`: req size {}, ", TestTypeName.at(ver), reqs.size());
                 kvstore.getProxyHelper()->batchReadIndex_v1(reqs, timeout_ms);
             });
     case TestType::Async:
@@ -184,16 +184,16 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(
             [&]() {
                 if (!kvstore.read_index_worker_manager)
                 {
-                    LOG_FMT_ERROR(logger, "no read_index_worker_manager");
+                    LOG_ERROR(logger, "no read_index_worker_manager");
                     return;
                 }
-                LOG_FMT_INFO(logger, "begin to run `{}`: req size {}", TestTypeName.at(ver), reqs.size());
+                LOG_INFO(logger, "begin to run `{}`: req size {}", TestTypeName.at(ver), reqs.size());
                 for (size_t i = 0; i < reqs.size(); ++i)
                 {
                     auto & req = reqs[i];
                     req.mutable_context()->set_region_id(req.context().region_id() + MockStressTestCfg::RegionIdPrefix * (i + 1));
                 }
-                LOG_FMT_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
+                LOG_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
                 auto resps = kvstore.batchReadIndex(reqs, timeout_ms);
                 for (const auto & resp : resps)
                 {

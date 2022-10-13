@@ -74,12 +74,12 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
         while (!merging_queue.empty() && merging_queue.top()->fileIdLevel() <= last_checkpoint_file_id)
         {
             auto reader = merging_queue.top();
-            LOG_FMT_INFO(logger,
-                         "{} Removing old PageFile: {} after restore checkpoint PageFile_{}_{}",
-                         storage_name,
-                         reader->belongingPageFile().toString(),
-                         last_checkpoint_file_id.first,
-                         last_checkpoint_file_id.second);
+            LOG_INFO(logger,
+                     "{} Removing old PageFile: {} after restore checkpoint PageFile_{}_{}",
+                     storage_name,
+                     reader->belongingPageFile().toString(),
+                     last_checkpoint_file_id.first,
+                     last_checkpoint_file_id.second);
             if (reader->writeBatchSequence() != 0)
             {
                 throw Exception("Try to remove old PageFile: " + reader->belongingPageFile().toString()
@@ -94,13 +94,13 @@ restoreFromCheckpoints(MergineQueue & merging_queue,
             merging_queue.pop();
         }
     }
-    LOG_FMT_INFO(logger,
-                 "{} restore {} from checkpoint PageFile_{}_{} sequence: {}",
-                 storage_name,
-                 info.toString(),
-                 last_checkpoint_file_id.first,
-                 last_checkpoint_file_id.second,
-                 checkpoint_wb_sequence);
+    LOG_INFO(logger,
+             "{} restore {} from checkpoint PageFile_{}_{} sequence: {}",
+             storage_name,
+             info.toString(),
+             last_checkpoint_file_id.first,
+             last_checkpoint_file_id.second,
+             checkpoint_wb_sequence);
     // The latest checkpoint, the WriteBatch's sequence of latest checkpoint, old PageFiles that somehow have not been clean before
     return {checkpoints.back(), checkpoint_wb_sequence, page_files_to_drop};
 }

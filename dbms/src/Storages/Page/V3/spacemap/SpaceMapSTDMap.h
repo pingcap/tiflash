@@ -211,7 +211,7 @@ protected:
 
         if (free_map.empty())
         {
-            LOG_FMT_ERROR(log, "Current space map is full");
+            LOG_ERROR(log, "Current space map is full");
             hint_biggest_cap = 0;
             return std::make_tuple(offset, hint_biggest_cap, false);
         }
@@ -237,13 +237,13 @@ protected:
         // No enough space for insert
         if (it == free_map.end())
         {
-            LOG_FMT_ERROR(log, "Not sure why can't found any place to insert."
-                               "[size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", //
-                          size,
-                          hint_biggest_offset,
-                          hint_biggest_cap,
-                          scan_biggest_offset,
-                          scan_biggest_cap);
+            LOG_ERROR(log, "Not sure why can't found any place to insert."
+                           "[size={}] [old biggest_offset={}] [old biggest_cap={}] [new biggest_offset={}] [new biggest_cap={}]", //
+                      size,
+                      hint_biggest_offset,
+                      hint_biggest_cap,
+                      scan_biggest_offset,
+                      scan_biggest_cap);
             hint_biggest_offset = scan_biggest_offset;
             hint_biggest_cap = scan_biggest_cap;
 

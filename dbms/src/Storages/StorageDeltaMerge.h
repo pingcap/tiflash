@@ -35,6 +35,7 @@ struct RowKeyValue;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 struct ExternalDTFileInfo;
+struct GCOptions;
 } // namespace DM
 
 class StorageDeltaMerge
@@ -91,7 +92,7 @@ public:
         bool clear_data_in_range,
         const Settings & settings);
 
-    UInt64 onSyncGc(Int64) override;
+    UInt64 onSyncGc(Int64, const DM::GCOptions &) override;
 
     void rename(
         const String & new_path_to_db,

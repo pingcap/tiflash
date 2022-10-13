@@ -174,7 +174,7 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
     {
         if (stopwatch)
         {
-            LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
+            LOG_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
         }
 
         RUNTIME_ASSERT(!async_tunnel_sender->isConsumerFinished(), async_tunnel_sender->getLogger(), "tunnel {} consumer finished in advance", async_tunnel_sender->getTunnelId());
@@ -202,6 +202,11 @@ void EstablishCallData::trySendOneMsg()
     switch (async_tunnel_sender->pop(res, this))
     {
     case GRPCSendQueueRes::OK:
+        /// Note: has to switch the memory tracker before `write`
+        /// because after `write`, `async_tunnel_sender` can be destroyed at any time
+        /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
+        /// is destructed which may cause the memory tracker in `res` become invalid
+        res->switchMemTracker(nullptr);
         write(res->packet);
         return;
     case GRPCSendQueueRes::FINISHED:

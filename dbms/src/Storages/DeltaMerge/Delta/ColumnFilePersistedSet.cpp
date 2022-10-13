@@ -90,14 +90,17 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersistedLevels & 
 
     if (unlikely(new_rows != rows || new_deletes != deletes))
     {
-        LOG_FMT_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column files: {}, new column files: {}.", new_rows, new_deletes, rows.load(), deletes.load(), columnFilesToString(flattenColumnFileLevels(persisted_files_levels)), columnFilesToString(flattenColumnFileLevels(new_column_file_levels)));
+        LOG_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column files: {}, new column files: {}.", new_rows, new_deletes, rows.load(), deletes.load(), columnFilesToString(flattenColumnFileLevels(persisted_files_levels)), columnFilesToString(flattenColumnFileLevels(new_column_file_levels)));
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
-ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files)
+ColumnFilePersistedSet::ColumnFilePersistedSet( //
+    const std::string & log_prefix_,
+    PageId metadata_id_,
+    const ColumnFilePersisteds & persisted_column_files)
     : metadata_id(metadata_id_)
-    , log(&Poco::Logger::get("ColumnFilePersistedSet"))
+    , log(Logger::get("ColumnFilePersistedSet", fmt::format("<{}>", log_prefix_)))
 {
     // TODO: place column file to different levels, but it seems no need to do it currently because we only do minor compaction on really small files?
     persisted_files_levels.push_back(persisted_column_files);
@@ -105,12 +108,16 @@ ColumnFilePersistedSet::ColumnFilePersistedSet(PageId metadata_id_, const Column
     updateColumnFileStats();
 }
 
-ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
+ColumnFilePersistedSetPtr ColumnFilePersistedSet::restore( //
+    const std::string & log_prefix,
+    DMContext & context,
+    const RowKeyRange & segment_range,
+    PageId id)
 {
     Page page = context.storage_pool.metaReader()->read(id);
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());
     auto column_files = deserializeSavedColumnFiles(context, segment_range, buf);
-    return std::make_shared<ColumnFilePersistedSet>(id, column_files);
+    return std::make_shared<ColumnFilePersistedSet>(log_prefix, id, column_files);
 }
 
 void ColumnFilePersistedSet::saveMeta(WriteBatches & wbs) const
@@ -180,7 +187,7 @@ ColumnFilePersisteds ColumnFilePersistedSet::checkHeadAndCloneTail(DMContext & c
 
     if (unlikely(!check_success))
     {
-        LOG_FMT_ERROR(log, "{}, Delta Check head failed, unexpected size. head column files: {}, level details: {}", info(), columnFilesToString(head_column_files), levelsInfo());
+        LOG_ERROR(log, "{}, Delta Check head failed, unexpected size. head column files: {}, level details: {}", info(), columnFilesToString(head_column_files), levelsInfo());
         throw Exception("Check head failed, unexpected size", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -293,7 +300,7 @@ bool ColumnFilePersistedSet::checkAndIncreaseFlushVersion(size_t task_flush_vers
 {
     if (task_flush_version != flush_version)
     {
-        LOG_FMT_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
+        LOG_DEBUG(log, "{} Stop flush because structure got updated", simpleInfo());
         return false;
     }
     flush_version += 1;
@@ -323,7 +330,7 @@ bool ColumnFilePersistedSet::appendPersistedColumnFilesToLevel0(const ColumnFile
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
-    LOG_FMT_DEBUG(log, "{}, after append {} column files, level info: {}", info(), column_files.size(), levelsInfo());
+    LOG_DEBUG(log, "{}, after append {} column files, level info: {}", info(), column_files.size(), levelsInfo());
 
     return true;
 }
@@ -397,7 +404,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
         return false;
     }
     minor_compaction_version += 1;
-    LOG_FMT_DEBUG(log, "{}, before commit compaction, level info: {}", info(), levelsInfo());
+    LOG_DEBUG(log, "{}, before commit compaction, level info: {}", info(), levelsInfo());
     ColumnFilePersistedLevels new_persisted_files_levels;
     auto compaction_src_level = compaction->getCompactionSourceLevel();
     // Copy column files in level range [0, compaction_src_level)
@@ -466,7 +473,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     /// Commit updates in memory.
     persisted_files_levels.swap(new_persisted_files_levels);
     updateColumnFileStats();
-    LOG_FMT_DEBUG(log, "{}, after commit compaction, level info: {}", info(), levelsInfo());
+    LOG_DEBUG(log, "{}, after commit compaction, level info: {}", info(), levelsInfo());
 
     return true;
 }
@@ -503,7 +510,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const StorageSna
 
     if (unlikely(total_rows != rows || total_deletes != deletes))
     {
-        LOG_FMT_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}].", total_rows, total_deletes, rows.load(), deletes.load());
+        LOG_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}].", total_rows, total_deletes, rows.load(), deletes.load());
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 

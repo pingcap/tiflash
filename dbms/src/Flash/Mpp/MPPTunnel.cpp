@@ -142,7 +142,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data)
             throw Exception(fmt::format("write to tunnel which is already closed."));
     }
 
-    if (tunnel_sender->push(std::make_shared<DB::TrackedMppDataPacket>(data, getMemTracker())))
+    if (tunnel_sender->push(data))
     {
         connection_profile_info.bytes += data.ByteSizeLong();
         connection_profile_info.packets += 1;
@@ -179,14 +179,14 @@ void MPPTunnel::connect(PacketWriter * writer)
         case TunnelSenderMode::LOCAL:
         {
             RUNTIME_ASSERT(writer == nullptr, log);
-            local_tunnel_sender = std::make_shared<LocalTunnelSender>(queue_size, log, tunnel_id);
+            local_tunnel_sender = std::make_shared<LocalTunnelSender>(queue_size, mem_tracker, log, tunnel_id);
             tunnel_sender = local_tunnel_sender;
             break;
         }
         case TunnelSenderMode::SYNC_GRPC:
         {
             RUNTIME_ASSERT(writer != nullptr, log, "Sync writer shouldn't be null");
-            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, log, tunnel_id);
+            sync_tunnel_sender = std::make_shared<SyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id);
             sync_tunnel_sender->startSendThread(writer);
             tunnel_sender = sync_tunnel_sender;
             break;
@@ -214,11 +214,11 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         auto kick_func_for_test = call_data->getKickFuncForTest();
         if (unlikely(kick_func_for_test.has_value()))
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, kick_func_for_test.value());
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, kick_func_for_test.value());
         }
         else
         {
-            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, log, tunnel_id, call_data->grpcCall());
+            async_tunnel_sender = std::make_shared<AsyncTunnelSender>(queue_size, mem_tracker, log, tunnel_id, call_data->grpcCall());
         }
         call_data->attachAsyncTunnelSender(async_tunnel_sender);
         tunnel_sender = async_tunnel_sender;
@@ -226,7 +226,7 @@ void MPPTunnel::connectAsync(IAsyncCallData * call_data)
         status = TunnelStatus::Connected;
         cv_for_status_changed.notify_all();
     }
-    LOG_FMT_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
+    LOG_DEBUG(log, "Tunnel connected in {} mode", tunnelSenderModeToString(mode));
 }
 
 void MPPTunnel::waitForFinish()
@@ -303,11 +303,6 @@ StringRef MPPTunnel::statusToString()
     default:
         RUNTIME_ASSERT(false, log, "Unknown TaskStatus {}", status);
     }
-}
-
-void MPPTunnel::updateMemTracker()
-{
-    mem_tracker = current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr;
 }
 
 void TunnelSender::consumerFinish(const String & msg)

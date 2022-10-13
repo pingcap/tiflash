@@ -110,6 +110,7 @@ public:
     DISALLOW_COPY_AND_MOVE(Segment);
 
     Segment(
+        const std::string & log_prefix_,
         UInt64 epoch_,
         const RowKeyRange & rowkey_range_,
         PageId segment_id_,
@@ -118,6 +119,7 @@ public:
         const StableValueSpacePtr & stable_);
 
     static SegmentPtr newSegment(
+        const std::string & log_prefix,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
@@ -126,13 +128,14 @@ public:
         PageId delta_id,
         PageId stable_id);
     static SegmentPtr newSegment(
+        const std::string & log_prefix,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
         PageId segment_id,
         PageId next_segment_id);
 
-    static SegmentPtr restoreSegment(DMContext & context, PageId segment_id);
+    static SegmentPtr restoreSegment(const std::string & log_prefix, DMContext & context, PageId segment_id);
 
     void serialize(WriteBatch & wb);
 
@@ -373,6 +376,7 @@ public:
 
     PageId segmentId() const { return segment_id; }
     PageId nextSegmentId() const { return next_segment_id; }
+    UInt64 segmentEpoch() const { return epoch; };
 
     void check(DMContext & dm_context, const String & when) const;
 
@@ -403,7 +407,7 @@ public:
     /// The abandon state is usually triggered by the DeltaMergeStore.
     void abandon(DMContext & context)
     {
-        LOG_FMT_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
+        LOG_DEBUG(log, "Abandon segment, segment={}", simpleInfo());
         delta->abandon(context);
     }
 
@@ -513,6 +517,8 @@ private:
     // This involves to check the valid data ratio in the background gc thread,
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
+
+    const std::string log_prefix;
 
     LoggerPtr log;
 };

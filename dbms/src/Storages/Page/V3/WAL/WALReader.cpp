@@ -81,7 +81,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
 std::tuple<std::optional<LogFilename>, LogFilenameSet>
 WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 {
-    LogFilenameSet::const_iterator latest_checkpoint_iter = all_files.cend();
+    auto latest_checkpoint_iter = all_files.cend();
     for (auto iter = all_files.cbegin(); iter != all_files.cend(); ++iter)
     {
         if (iter->level_num > 0)
@@ -170,7 +170,7 @@ bool WALStoreReader::remained() const
     return false;
 }
 
-std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
+std::optional<String> WALStoreReader::next()
 {
     bool ok = false;
     String record;
@@ -179,14 +179,14 @@ std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
         std::tie(ok, record) = reader->readRecord();
         if (ok)
         {
-            return {true, ser::deserializeFrom(record)};
+            return record;
         }
 
         // Roll to read the next file
         if (bool next_file = openNextFile(); !next_file)
         {
             // No more file to be read.
-            return {false, PageEntriesEdit{}};
+            return std::nullopt;
         }
     } while (true);
 }
@@ -202,7 +202,7 @@ bool WALStoreReader::openNextFile()
         const auto log_num = next_file.log_num;
         const auto filename = next_file.filename(next_file.stage);
         const auto fullname = next_file.fullname(next_file.stage);
-        LOG_FMT_DEBUG(logger, "Open log file for reading [file={}]", fullname);
+        LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
