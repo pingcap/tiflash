@@ -64,7 +64,7 @@ std::set<PageId> ExternalIdsByNamespace::getAliveIds(NamespaceId ns_id) const
     // No valid external pages in this `ns_id`
     if (valid_external_ids.empty())
     {
-        valid_external_ids.erase(ns_id);
+        ids_by_ns.erase(ns_id);
     }
     return valid_external_ids;
 }
