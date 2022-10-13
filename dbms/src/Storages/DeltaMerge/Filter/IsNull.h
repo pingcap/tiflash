@@ -35,7 +35,7 @@ public:
     Attrs getAttrs() override { return {attr}; }
 
     String toDebugString() override
-    {   
+    {
         return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name);
     }
 
