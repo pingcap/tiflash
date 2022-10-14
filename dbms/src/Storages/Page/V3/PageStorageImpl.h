@@ -38,29 +38,6 @@ public:
 
     ~PageStorageImpl() override;
 
-    static BlobConfig parseBlobConfig(const PageStorageConfig & config)
-    {
-        BlobConfig blob_config;
-
-        blob_config.file_limit_size = config.blob_file_limit_size;
-        blob_config.cached_fd_size = config.blob_cached_fd_size;
-        blob_config.spacemap_type = config.blob_spacemap_type;
-        blob_config.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate;
-        blob_config.block_alignment_bytes = config.blob_block_alignment_bytes;
-
-        return blob_config;
-    }
-
-    static WALConfig parseWALConfig(const PageStorageConfig & config)
-    {
-        WALConfig wal_config;
-
-        wal_config.roll_size = config.wal_roll_size;
-        wal_config.max_persisted_log_files = config.wal_max_persisted_log_files;
-
-        return wal_config;
-    }
-
     void reloadConfig() override;
 
     void restore() override;
