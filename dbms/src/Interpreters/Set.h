@@ -75,7 +75,7 @@ public:
     /** Create a Set from stream.
       * Call setHeader, then call insertFromBlock for each block.
       */
-    void setHeader(const Block & header);
+    void setHeader(const Block &);
 
     /// Returns false, if some limit was exceeded and no need to insert more data.
     bool insertFromBlock(const Block & block, bool fill_set_elements);
