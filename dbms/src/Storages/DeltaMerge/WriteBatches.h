@@ -97,7 +97,7 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type == WriteBatch::WriteType::DEL))
+                    if (unlikely(w.type == WriteBatchWriteType::DEL))
                         throw Exception("Unexpected deletes in " + what);
                 }
                 LOG_TRACE(logger, "Write into {} : {}", what, wb.toString());
@@ -142,7 +142,7 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type != WriteBatch::WriteType::DEL))
+                    if (unlikely(w.type != WriteBatchWriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
                 LOG_TRACE(logger, "Rollback remove from {} : {}", what, wb.toString());
@@ -170,7 +170,7 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type != WriteBatch::WriteType::PUT))
+                    if (unlikely(w.type != WriteBatchWriteType::PUT))
                         throw Exception("Expected puts in " + what);
                 }
                 LOG_TRACE(logger, "Write into {} : {}", what, wb.toString());
@@ -194,7 +194,7 @@ struct WriteBatches : private boost::noncopyable
                     return;
                 for (const auto & w : wb.getWrites())
                 {
-                    if (unlikely(w.type != WriteBatch::WriteType::DEL))
+                    if (unlikely(w.type != WriteBatchWriteType::DEL))
                         throw Exception("Expected deletes in " + what);
                 }
                 LOG_TRACE(logger, "Write into {} : {}", what, wb.toString());
