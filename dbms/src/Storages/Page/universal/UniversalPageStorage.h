@@ -16,6 +16,7 @@
 
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <Storages/Page/Config.h>
 #include <Storages/Page/ExternalPageCallbacks.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
@@ -50,22 +51,19 @@ class UniversalPageStorage final
 {
 public:
     using SnapshotPtr = PageStorageSnapshotPtr;
-    struct Config
-    {
-    };
 
 public:
     static UniversalPageStoragePtr
     create(
         String name,
         PSDiskDelegatorPtr delegator,
-        const UniversalPageStorage::Config & config,
+        const PageStorageConfig & config,
         const FileProviderPtr & file_provider);
 
     UniversalPageStorage(
         String name,
         PSDiskDelegatorPtr delegator_,
-        const Config & config_,
+        const PageStorageConfig & config_,
         const FileProviderPtr & file_provider_)
         : storage_name(std::move(name))
         , delegator(std::move(delegator_))
@@ -131,7 +129,7 @@ public:
 
     String storage_name; // Identify between different Storage
     PSDiskDelegatorPtr delegator; // Get paths for storing data
-    Config config;
+    PageStorageConfig config;
     FileProviderPtr file_provider;
 
     PS::V3::universal::PageDirectoryPtr page_directory;

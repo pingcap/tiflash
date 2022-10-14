@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Storages/Page/UniversalPage.h>
-#include <Storages/Page/UniversalPageStorage.h>
 #include <Storages/Page/UniversalWriteBatch.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
 
@@ -43,7 +43,7 @@ public:
         log = Logger::get("PageStorageTest");
     }
 
-    std::shared_ptr<UniversalPageStorage> reopenWithConfig(const UniversalPageStorage::Config & config_)
+    std::shared_ptr<UniversalPageStorage> reopenWithConfig(const PageStorageConfig & config_)
     {
         auto path = getTemporaryPath();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
@@ -55,7 +55,7 @@ public:
 protected:
     FileProviderPtr file_provider;
     PSDiskDelegatorPtr delegator;
-    UniversalPageStorage::Config config;
+    PageStorageConfig config;
     std::shared_ptr<UniversalPageStorage> page_storage;
 
     LoggerPtr log;
