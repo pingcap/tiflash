@@ -289,7 +289,7 @@ dt_page_gc_low_write_prob = 0.2
     auto & global_path_pool = global_ctx.getPathPool();
     RegionManager region_manager;
     RegionPersister persister(global_ctx, region_manager);
-    persister.restore(global_path_pool, nullptr, PageStorage::Config{});
+    persister.restore(global_path_pool, nullptr, PageStorageConfig{});
 
     auto verify_persister_reload_config = [&global_ctx](RegionPersister & persister) {
         DB::Settings & settings = global_ctx.getSettingsRef();

@@ -433,17 +433,17 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
     {
         switch (rec.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT:
             this->applyPut(rec);
             break;
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             this->applyDel(rec);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             this->applyRef(rec);
             break;
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::UPSERT:
             throw Exception("WriteType::UPSERT should only write by gcApply!", ErrorCodes::LOGICAL_ERROR);
             break;
         }
@@ -452,7 +452,7 @@ void DeltaVersionEditAcceptor::apply(PageEntriesEdit & edit)
 
 void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
 {
-    assert(rec.type == WriteBatch::WriteType::PUT);
+    assert(rec.type == WriteBatchWriteType::PUT);
     /// Note that any changes on `current_version` will break the consistency of `view`.
     /// We should postpone changes to the last of this function.
 
@@ -493,7 +493,7 @@ void DeltaVersionEditAcceptor::applyPut(PageEntriesEdit::EditRecord & rec)
 
 void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
 {
-    assert(rec.type == WriteBatch::WriteType::DEL);
+    assert(rec.type == WriteBatchWriteType::DEL);
     /// Note that any changes on `current_version` will break the consistency of `view`.
     /// We should postpone changes to the last of this function.
 
@@ -509,7 +509,7 @@ void DeltaVersionEditAcceptor::applyDel(PageEntriesEdit::EditRecord & rec)
 
 void DeltaVersionEditAcceptor::applyRef(PageEntriesEdit::EditRecord & rec)
 {
-    assert(rec.type == WriteBatch::WriteType::REF);
+    assert(rec.type == WriteBatchWriteType::REF);
     /// Note that any changes on `current_version` will break the consistency of `view`.
     /// We should postpone changes to the last of this function.
 
@@ -563,14 +563,14 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
     {
         switch (rec.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT:
             current->put(rec.page_id, rec.entry);
             break;
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             current->del(rec.page_id);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             // Shorten ref-path in case there is RefPage to RefPage
             try
             {
@@ -581,7 +581,7 @@ void DeltaVersionEditAcceptor::applyInplace(const String & name,
                 LOG_WARNING(log, "{} Ignore invalid RefPage in DeltaVersionEditAcceptor::applyInplace, RefPage{} to non-exist Page{}", name, rec.page_id, rec.ori_page_id);
             }
             break;
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::UPSERT:
             current->upsertPage(rec.page_id, rec.entry);
             break;
         }

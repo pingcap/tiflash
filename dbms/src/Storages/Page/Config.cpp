@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Storages/Page/PageStorage.h>
+#include <Storages/Page/Config.h>
+#include <Storages/Page/PageUtil.h>
 
 namespace DB
 {
-struct Settings;
-
-void mergeConfigFromSettings(const DB::Settings & settings, PageStorageConfig & config);
-
-PageStorageConfig getConfigFromSettings(const DB::Settings & settings);
+namespace MVCC
+{
+bool VersionSetConfig::doCleanup() const
+{
+    return PageUtil::randInt(0, 1000) < prob_cleanup_invalid_snapshot;
+}
+} // namespace MVCC
 
 } // namespace DB

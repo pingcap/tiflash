@@ -88,11 +88,11 @@ TEST(Page_test, GetField)
 
     Page page;
     page.data = ByteBuffer(c_buff, c_buff + buf_sz);
-    std::set<Page::FieldOffset> fields{// {field_index, data_offset}
-                                       {2, 0},
-                                       {3, 20},
-                                       {9, 99},
-                                       {10086, 1000}};
+    std::set<FieldOffsetInsidePage> fields{// {field_index, data_offset}
+                                           {2, 0},
+                                           {3, 20},
+                                           {9, 99},
+                                           {10086, 1000}};
     page.field_offsets = fields;
 
     ASSERT_EQ(page.data.size(), buf_sz);
