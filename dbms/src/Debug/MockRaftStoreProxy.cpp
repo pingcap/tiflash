@@ -631,6 +631,7 @@ void MockRaftStoreProxy::clear_tables(
     TMTContext & tmt)
 {
     UNUSED(kvs);
+    UNUSED(tmt);
     if (this->table_id != 1)
     {
         MockTiDB::instance().dropTable(ctx, "d", "t", false);
