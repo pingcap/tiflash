@@ -64,7 +64,6 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix()
 {
-    LOG_INFO(log, "Read SST Files with MultiSSTReader {}", this->region->id());
     std::vector<SSTView> ssts_default;
     std::vector<SSTView> ssts_write;
     std::vector<SSTView> ssts_lock;

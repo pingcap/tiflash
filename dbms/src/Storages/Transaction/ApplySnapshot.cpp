@@ -276,7 +276,6 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSnapshotToFiles(
     }
     catch (DB::Exception & e)
     {
-        LOG_INFO(log, "!!!! [error={}]", e.displayText());
         e.addMessage(fmt::format("(while preHandleSnapshot region_id={}, index={}, term={})", new_region->id(), index, term));
         e.rethrow();
     }

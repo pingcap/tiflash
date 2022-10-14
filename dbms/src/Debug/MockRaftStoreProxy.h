@@ -175,6 +175,12 @@ struct MockRaftStoreProxy : MutexLockWrap
         KVStore & kvs,
         TMTContext & tmt);
 
+    /// clear tables.
+    void clear_tables(
+        Context & ctx,
+        KVStore & kvs,
+        TMTContext & tmt);
+
     /// We assume that we generate one command, and immediately commit.
     /// normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(

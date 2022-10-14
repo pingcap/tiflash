@@ -618,20 +618,25 @@ TableID MockRaftStoreProxy::bootstrap_table(
     auto tso = tmt.getPDClient()->getTS();
     MockTiDB::instance().newDataBase("d");
     UInt64 table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
-    try
-    {
-        auto schema_syncer = tmt.getSchemaSyncer();
-        schema_syncer->syncSchemas(ctx);
-    }
-    catch (Exception & e)
-    {
-        throw;
-    }
 
+    auto schema_syncer = tmt.getSchemaSyncer();
+    schema_syncer->syncSchemas(ctx);
     this->table_id = table_id;
     return table_id;
 }
 
+void MockRaftStoreProxy::clear_tables(
+    Context & ctx,
+    KVStore & kvs,
+    TMTContext & tmt)
+{
+    UNUSED(kvs);
+    if (this->table_id != 1)
+    {
+        MockTiDB::instance().dropTable(ctx, "d", "t", false);
+    }
+    this->table_id = 1;
+}
 
 void GCMonitor::add(RawObjType type, int64_t diff)
 {

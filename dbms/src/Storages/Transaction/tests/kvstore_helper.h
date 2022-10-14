@@ -112,7 +112,14 @@ protected:
     }
     void initStorages()
     {
-        registerStorages();
+        try
+        {
+            registerStorages();
+        }
+        catch (DB::Exception &)
+        {
+            // Maybe another test has already registed, ignore exception here.
+        }
         String path = TiFlashTestEnv::getContext().getPath();
         auto p = path + "/metadata/";
         TiFlashTestEnv::tryRemovePath(p, /*recreate=*/true);
