@@ -145,8 +145,10 @@ BlockInputStreams StorageSystemDTTables::read(
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
             const auto & table_info = dm_storage->getTableInfo();
             auto table_id = table_info.id;
-            auto stat = dm_storage->getStore()->getStoreStats();
-
+            auto store = dm_storage->getStoreIfInited();
+            if (!store)
+                continue;
+            auto stat = store->getStoreStats();
             size_t j = 0;
             res_columns[j++]->insert(database_name);
             res_columns[j++]->insert(table_name);

@@ -459,7 +459,7 @@ try
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 41); // 41 in memtable
 
     auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
-    auto in_stream = segment->getInputStreamRaw(*dm_context, *tableColumns());
+    auto in_stream = segment->getInputStreamModeRaw(*dm_context, *tableColumns());
 
     // Now let's replace data.
     auto block = prepareWriteBlock(0, 233);
