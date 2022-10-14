@@ -44,6 +44,20 @@ try
             func_name,
             createOnlyNullColumn(2),
             createColumn<Nullable<UInt8>>({1, 0})));
+    // issue 6127
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt8>({0, 1, 0, 0}),
+        executeFunction(
+            func_name,
+            createColumn<Int64>({0, 123, 0, 41}),
+            createColumn<UInt8>({0, 11, 221, 0})));
+    // issue 6127, position of UInt8 column may affect the result
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt8>({0, 1, 0, 0}),
+        executeFunction(
+            func_name,
+            createColumn<UInt8>({0, 123, 0, 41}),
+            createColumn<Int64>({0, 11, 221, 0})));
 }
 CATCH
 
@@ -59,13 +73,6 @@ try
             func_name,
             createColumn<Nullable<UInt8>>({0, 1, 0, 1, {}, 0}),
             createColumn<Nullable<UInt8>>({0, 1, 1, 0, 1, {}})));
-    // issue 5849
-    ASSERT_COLUMN_EQ(
-        createColumn<UInt8>({0, 1, 1, 1}),
-        executeFunction(
-            func_name,
-            createColumn<UInt8>({0, 123, 0, 41}),
-            createColumn<Int64>({0, 11, 221, 0})));
     // column, const
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<UInt8>>({1, 1}),
@@ -87,6 +94,13 @@ try
             func_name,
             createOnlyNullColumn(2),
             createColumn<Nullable<UInt8>>({1, 0})));
+    // issue 5849
+    ASSERT_COLUMN_EQ(
+        createColumn<UInt8>({0, 1, 1, 1}),
+        executeFunction(
+            func_name,
+            createColumn<UInt8>({0, 123, 0, 41}),
+            createColumn<Int64>({0, 11, 221, 0})));
 }
 CATCH
 
