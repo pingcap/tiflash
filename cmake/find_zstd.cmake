@@ -27,6 +27,7 @@ endif ()
 if (ZSTD_LIBRARY AND ZSTD_INCLUDE_DIR)
 else ()
     set (USE_INTERNAL_ZSTD_LIBRARY 1)
+    set (ZSTD_INCLUDE_DIR ${TiFlash_SOURCE_DIR}/contrib/zstd/lib)
     set (ZSTD_LIBRARY zstd)
 endif ()
 

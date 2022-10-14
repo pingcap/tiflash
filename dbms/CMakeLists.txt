@@ -182,6 +182,7 @@ target_link_libraries (clickhouse_common_io
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
     ${LZ4_LIBRARY}
     ${ZSTD_LIBRARY}
+    ${QPL_LIBRARY}
     ${DOUBLE_CONVERSION_LIBRARIES}
     ${Poco_Net_LIBRARY}
     ${Poco_Data_LIBRARY}
@@ -251,6 +252,9 @@ if (NOT USE_INTERNAL_LZ4_LIBRARY)
 endif ()
 if (NOT USE_INTERNAL_ZSTD_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${ZSTD_INCLUDE_DIR})
+endif ()
+if (NOT USE_INTERNAL_QPL_LIBRARY)
+    target_include_directories (dbms BEFORE PRIVATE ${QPL_INCLUDE_DIR})
 endif ()
 
 target_include_directories (dbms PUBLIC ${DBMS_INCLUDE_DIR})

@@ -14,6 +14,10 @@ if (USE_INTERNAL_ZSTD_LIBRARY)
     add_subdirectory (zstd-cmake)
 endif ()
 
+if (ARCH_LINUX AND ARCH_AMD64 AND (TIFLASH_ENABLE_AVX_SUPPORT OR TIFLASH_ENABLE_AVX512_SUPPORT) AND USE_INTERNAL_QPL_LIBRARY)
+    add_subdirectory (qpl-cmake)
+endif ()
+
 if (USE_INTERNAL_RE2_LIBRARY)
     add_subdirectory (re2-cmake)
 endif ()

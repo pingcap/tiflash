@@ -7,6 +7,9 @@
 [submodule "contrib/lz4"]
 	path = contrib/lz4
 	url = https://github.com/lz4/lz4.git
+[submodule "contrib/qpl"]
+ 	path = contrib/qpl
+ 	url = https://github.com/intel/qpl.git
 [submodule "contrib/cctz"]
 	path = contrib/cctz
 	url = https://github.com/google/cctz.git

@@ -414,6 +414,12 @@ if (ENABLE_ODBC)
 endif()
 include (cmake/find_poco.cmake)
 include (cmake/find_lz4.cmake)
+
+option (ENABLE_DEFLATE_QPL "Enable DeflateQpl" OFF)
+if (ENABLE_DEFLATE_QPL)
+    include (cmake/find_qpl.cmake)
+endif ()
+
 include (cmake/find_sparsehash.cmake)
 include (cmake/find_rt.cmake)
 include (cmake/find_execinfo.cmake)
