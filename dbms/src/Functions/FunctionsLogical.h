@@ -198,7 +198,6 @@ struct AssociativeOperationImpl
     {
         if (Op::isSaturable())
         {
-            // cast_bool_reason
             // cast a: UInt8 -> bool -> UInt8 is a trick
             // TiFlash converts columns with non-UInt8 type to UInt8 type and sets value to 0 or 1
             // which correspond to false or true. However, for columns with UInt8 type,
