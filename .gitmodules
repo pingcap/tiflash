@@ -91,4 +91,4 @@
 	url = https://github.com/Neargye/magic_enum.git
 [submodule "contrib/GmSSL"]
 	path = contrib/GmSSL
-	url = git@github.com:guanzhi/GmSSL.git
+	url = https://github.com/guanzhi/GmSSL.git
