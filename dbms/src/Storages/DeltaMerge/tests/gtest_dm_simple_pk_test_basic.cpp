@@ -49,7 +49,6 @@ void SimplePKTestBasic::reload()
                                               DeltaMergeStore::Settings());
     dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
     db_context->dropMinMaxIndexCache();
-    db_context->dropCaches();
 }
 
 SegmentPtr SimplePKTestBasic::getSegmentAt(Int64 key) const
