@@ -14,8 +14,10 @@
 
 #include <Common/OptimizedRegularExpression.h>
 #include <Poco/Exception.h>
+#include <Common/StringUtils/StringUtils.h>
 
 #include <iostream>
+#include "Common/Exception.h"
 
 
 #define MIN_LENGTH_FOR_STRSTR 3
@@ -472,7 +474,26 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
+    Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
     
+    if (pos <= 0 || pos > utf8_total_len)
+        throw DB::Exception("Index out of bounds in regular expression search.");
+
+    String matched_str; // store the matched substring
+    const char * expr = subject; // expr is the string actually passed into regexp to be matched
+    size_t expr_size = subject_size;
+
+    // TODO convert utf8 pos to binary pos.
+    // size_t offset = /*todo*/; // This is a offset for bytes, not utf8
+
+    while (occur > 0)
+    {
+        bool success = RegexType::FindandConsume(StringPieceType(expr, expr_size), *re2, &matched_str);
+        if (!success)
+            return 0;
+        
+        --occur;
+    }
 }
 
 #undef MIN_LENGTH_FOR_STRSTR

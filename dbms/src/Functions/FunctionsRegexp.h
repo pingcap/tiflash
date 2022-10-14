@@ -440,6 +440,7 @@ private:
 #define ARG_NUM_VAR_NAME arg_num
 #define NULL_MAP_VAR_NAME null_map
 #define VEC_RES_VAR_NAME vec_res
+#define COLLATOR_VAR_NAME collator
 
 // Unify the name of functions that actually execute regexp
 #define REGEXP_CLASS_MEM_FUNC_IMPL_NAME process
@@ -467,7 +468,7 @@ private:
         }                                                                                                                                                                    \
     } while (0);
 
-// Method to convert const string column
+// Method to convert const string column to param
 #define CONVERT_CONST_STR_COL_TO_PARAM(param_name, processed_col, next_process)                                             \
     do                                                                                                                      \
     {                                                                                                                       \
@@ -499,7 +500,7 @@ private:
         }                                                                                                                   \
     } while (0);
 
-// Method to convert nullable int column
+// Method to convert nullable int column to param
 // processed_col is impossible to be const here
 #define CONVERT_NULL_INT_COL_TO_PARAM(param_name, processed_col, next_process)                                 \
     do                                                                                                         \
@@ -965,7 +966,7 @@ private:
         REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, POS_PARAM_VAR_NAME, OCCUR_PARAM_VAR_NAME, RET_OP_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
     } while (0);
 
-// Method to convert match type column
+// Method to convert match type column to param
 #define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
     do                                                                                                                             \
     {                                                                                                                              \
@@ -1012,28 +1013,28 @@ private:
         CONVERT_CONST_INT_COL_TO_PARAM(RET_OP_PARAM_VAR_NAME, RET_OP_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
     } while (0);
 
-// Method to convert occurrence column
+// Method to convert occurrence column to param
 #define CONVERT_OCCUR_COL_TO_PARAM() \
     do \
     { \
         CONVERT_CONST_INT_COL_TO_PARAM(OCCUR_PARAM_VAR_NAME, OCCUR_COL_PTR_VAR_NAME, ({CONVERT_RET_OP_COL_TO_PARAM()})) \
     } while (0);
 
-// Method to convert position column
+// Method to convert position column to param
 #define CONVERT_POS_COL_TO_PARAM() \
     do \
     { \
         CONVERT_CONST_INT_COL_TO_PARAM(POS_PARAM_VAR_NAME, POS_COL_PTR_VAR_NAME, ({CONVERT_OCCUR_COL_TO_PARAM()})) \
     } while (0);
 
-// Method to convert pattern column
+// Method to convert pattern column to param
 #define CONVERT_PAT_COL_TO_PARAM()                                                                                           \
     do                                                                                                                       \
     {                                                                                                                        \
         CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_POS_COL_TO_PARAM()})) \
     } while (0);
 
-// Method to convert expression column
+// Method to convert expression column to param
 #define CONVERT_EXPR_COL_TO_PARAM()                                                                                 \
     do                                                                                                              \
     {                                                                                                               \
@@ -1167,7 +1168,7 @@ public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionStringRegexpInstr>(); }
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { COLLATOR_VAR_NAME = collator_; }
     bool useDefaultImplementationForNulls() const override { return false; }
     size_t getNumberOfArguments() const override { return 0; }
 
@@ -1219,7 +1220,7 @@ public:
             Int64 ret_op = RET_OP_PARAM_VAR_NAME.template getInt<Int64>(0);
             String match_type = MATCH_TYPE_PARAM_VAR_NAME.getString(0);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
+            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, COLLATOR_VAR_NAME), flags);
             ResultType res = regexp.instr(expr.c_str(), expr.size(), pos, occur, ret_op);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -1227,7 +1228,7 @@ public:
 
         // Check memorization
         if constexpr (canMemorize<PatT, MatchTypeT>())
-            memorize(PAT_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME, collator);
+            memorize(PAT_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME, COLLATOR_VAR_NAME);
 
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
@@ -1236,13 +1237,16 @@ public:
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullable() || OccurT::isNullable() || RetOpT::isNullable() || MatchTypeT::isNullableCol();
 
-        // Start to instr
+        // Start to execute instr
         if (isMemorized())
         {
+            // Codes in this if-condition execute instr with memorized regexp
 #define REGEXP_VAR_NAME regexp
+
             const auto & REGEXP_VAR_NAME = getRegexp();
             if constexpr (has_nullable_col)
             {
+                // Process nullable columns with memorized regexp
                 auto nullmap_col = ColumnUInt8::create();
                 typename ColumnUInt8::Container & NULL_MAP_VAR_NAME = nullmap_col->getData();
                 NULL_MAP_VAR_NAME.resize(col_size);
@@ -1263,9 +1267,9 @@ public:
             } \
             NULL_MAP_VAR_NAME[i] = 0; \
             EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
-            POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
-            OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
-            RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
+            pos = POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
+            occur = OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
+            ret_op = RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
             VEC_RES_VAR_NAME[i] = REGEXP_VAR_NAME->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
         } \
     } while (0);
@@ -1279,21 +1283,115 @@ public:
             }
             else
             {
-                // expr column is impossible to be a nullable column here
-                StringRef expr_ref;
-                for (size_t i = 0; i < col_size; ++i)
-                {
-                    EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref);
-                    auto res = regexp->match(expr_ref.data, expr_ref.size);
-                    vec_res[i] = res; // match
-                }
+                // Process pure vector columns with memorized regexp
+#define EXECUTE_INSTR(pos_type, occur_type, ret_op_type) \
+    do \
+    { \
+        /* columns are impossible to be a nullable column here */ \
+        StringRef expr_ref; \
+        Int64 pos; \
+        Int64 occur; \
+        Int64 ret_op; \
+        for (size_t i = 0; i < col_size; ++i) \
+        { \
+            EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
+            POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
+            OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
+            RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
+            VEC_RES_VAR_NAME[i] = REGEXP_VAR_NAME->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
+        } \
+    } while (0);
+
+                // Identify int type of position, occurrance and return option, and execute the instr
+                CHOOSE_AND_EXEC_FOR_POS_PARAM()
+
+#undef EXECUTE_INSTR
 
                 res_arg.column = std::move(col_res);
             }
 #undef REGEXP_VAR_NAME
         }
         else
-        {}
+        {
+            // Codes in this if-condition execute instr without memorized regexp
+            if constexpr (has_nullable_col)
+            {
+                // Process nullable columns without memorized regexp
+                auto nullmap_col = ColumnUInt8::create();
+                typename ColumnUInt8::Container & NULL_MAP_VAR_NAME = nullmap_col->getData();
+                NULL_MAP_VAR_NAME.resize(col_size);
+
+#define EXECUTE_INSTR(pos_type, occur_type, ret_op_type) \
+    do \
+    { \
+        StringRef expr_ref; \
+        String pat; \
+        Int64 pos; \
+        Int64 occur; \
+        Int64 ret_op; \
+        String match_type; \
+        for (size_t i = 0; i < col_size; ++i) \
+        { \
+            if (EXPR_PARAM_VAR_NAME.isNullAt(i) || POS_PARAM_VAR_NAME.isNullAt(i) || OCCUR_PARAM_VAR_NAME.isNullAt(i) || RET_OP_PARAM_VAR_NAME.isNullAt(i)) \
+            { \
+                NULL_MAP_VAR_NAME[i] = 1; \
+                continue; \
+            } \
+            NULL_MAP_VAR_NAME[i] = 0; \
+            EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
+            pat = PAT_PARAM_VAR_NAME.getString(i); \
+            if (unlikely(pat.empty())) \
+                throw Exception(EMPTY_PAT_ERR_MSG); \
+            pos = POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
+            occur = OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
+            ret_op = RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
+            match_type = match_type_param.getString(i); \
+            auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME); \
+            VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
+        } \
+    } while (0);
+
+                // Identify int type of position, occurrance and return option, and execute the instr
+                CHOOSE_AND_EXEC_FOR_POS_PARAM()
+
+#undef EXECUTE_INSTR
+
+                res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+            }
+            else
+            {
+                // Process pure vector columns without memorized regexp
+#define EXECUTE_INSTR(pos_type, occur_type, ret_op_type) \
+    do \
+    { \
+        StringRef expr_ref; \
+        String pat; \
+        Int64 pos; \
+        Int64 occur; \
+        Int64 ret_op; \
+        String match_type; \
+        for (size_t i = 0; i < col_size; ++i) \
+        { \
+            EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
+            pat = PAT_PARAM_VAR_NAME.getString(i); \
+            if (unlikely(pat.empty())) \
+                throw Exception(EMPTY_PAT_ERR_MSG); \
+            pos = POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
+            occur = OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
+            ret_op = RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
+            match_type = match_type_param.getString(i); \
+            auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME); \
+            vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
+        } \
+    } while (0);
+
+                // Identify int type of position, occurrance and return option, and execute the instr
+                CHOOSE_AND_EXEC_FOR_POS_PARAM()
+
+#undef EXECUTE_INSTR
+                res_arg.column = std::move(col_res);
+            }
+        }
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -1336,13 +1434,7 @@ public:
     }
 
 private:
-    // Int64 executeRegexpInstr(StringRef & expr, StringRef & pat, Int64 pos, Int64 occur, Int64 ret_op, StringRef & match_type) const
-    // {}
-
-    // Int64 executeMemorizedRegexpInstr(StringRef & expr, Int64 pos, Int64 occur, Int64 ret_op) const
-    // {}
-
-    TiDB::TiDBCollatorPtr collator = nullptr;
+    TiDB::TiDBCollatorPtr COLLATOR_VAR_NAME = nullptr;
 };
 
 #undef CHOOSE_AND_EXEC_FOR_POS_PARAM
@@ -1622,6 +1714,7 @@ private:
 #undef CONVERT_CONST_STR_COL_TO_PARAM
 #undef CONVERT_NULL_STR_COL_TO_PARAM
 #undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
+#undef COLLATOR_VAR_NAME
 #undef VEC_RES_VAR_NAME
 #undef NULL_MAP_VAR_NAME
 #undef ARG_NUM_VAR_NAME
