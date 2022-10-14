@@ -268,12 +268,12 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
 
 inline bool IsTypeInt64(const DataTypePtr & type)
 {
-    return type->isInteger() && type->getSizeOfValueInMemory() == sizeof(uint64_t);
+    return type->isNumber() && type->getSizeOfValueInMemory() == sizeof(uint64_t);
 }
 
 #define APPLY_FOR_AGG_FAST_PATH_TYPES(M) \
     M(Key64)                             \
-    M(String)                            \
+    M(StringBin)                         \
     M(StringBinPadding)
 
 enum class AggFastPathType
@@ -295,20 +295,20 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
         {
         case AggFastPathType::Key64:
             return AggregatedDataVariants::Type::serialized; // unreachable. keys64 or keys128 will be used before
-        case AggFastPathType::String:
-            return AggregatedDataVariants::Type::two_keys_u64_str;
+        case AggFastPathType::StringBin:
+            return AggregatedDataVariants::Type::two_keys_u64_strbin;
         case AggFastPathType::StringBinPadding:
             return AggregatedDataVariants::Type::two_keys_u64_strbinpadding;
         }
     }
-    case AggFastPathType::String:
+    case AggFastPathType::StringBin:
     {
         switch (tp2)
         {
         case AggFastPathType::Key64:
-            return AggregatedDataVariants::Type::two_keys_str_u64;
-        case AggFastPathType::String:
-            return AggregatedDataVariants::Type::two_keys_str_str;
+            return AggregatedDataVariants::Type::two_keys_strbin_u64;
+        case AggFastPathType::StringBin:
+            return AggregatedDataVariants::Type::two_keys_strbin_strbin;
         case AggFastPathType::StringBinPadding:
             return AggregatedDataVariants::Type::serialized; // rare case
         }
@@ -319,7 +319,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
         {
         case AggFastPathType::Key64:
             return AggregatedDataVariants::Type::two_keys_strbinpadding_u64;
-        case AggFastPathType::String:
+        case AggFastPathType::StringBin:
             return AggregatedDataVariants::Type::serialized; // rare case
         case AggFastPathType::StringBinPadding:
             return AggregatedDataVariants::Type::two_keys_strbinpadding_strbinpadding;
@@ -342,7 +342,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodFastPath(size_t keys_size, c
             {
                 if (collators.empty() || !collators[i])
                 {
-                    fast_path_types[i] = AggFastPathType::String;
+                    fast_path_types[i] = AggFastPathType::StringBin;
                 }
                 else
                 {
@@ -358,7 +358,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodFastPath(size_t keys_size, c
                     }
                     case TiDB::ITiDBCollator::CollatorType::BINARY:
                     {
-                        fast_path_types[i] = AggFastPathType::String;
+                        fast_path_types[i] = AggFastPathType::StringBin;
                         break;
                     }
                     default:
@@ -488,7 +488,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     if (params.keys_size == 1 && types_not_null[0]->isString())
     {
         if (params.collators.empty() || !params.collators[0])
-            return AggregatedDataVariants::Type::one_key_str;
+            return AggregatedDataVariants::Type::one_key_strbin;
         else
         {
             switch (params.collators[0]->getCollatorType())
@@ -502,7 +502,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
             }
             case TiDB::ITiDBCollator::CollatorType::BINARY:
             {
-                return AggregatedDataVariants::Type::one_key_str;
+                return AggregatedDataVariants::Type::one_key_strbin;
             }
             default:
             {

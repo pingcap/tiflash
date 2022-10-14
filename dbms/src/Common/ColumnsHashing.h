@@ -253,13 +253,13 @@ protected:
 
 static_assert(std::is_same_v<size_t, decltype(reinterpret_cast<const StringRef *>(0)->size)>);
 
-struct KeyDescUInt64
+struct KeyDescNumber64
 {
     using ColumnType = ColumnUInt64;
     using AllocSize = size_t;
     static constexpr size_t ElementSize = sizeof(ColumnType::value_type);
 
-    explicit KeyDescUInt64(const IColumn * key_column_)
+    explicit KeyDescNumber64(const IColumn * key_column_)
     {
         column = static_cast<const ColumnType *>(key_column_);
     }
@@ -277,12 +277,12 @@ struct KeyDescUInt64
     const ColumnType * column{};
 };
 
-struct KeyDescString
+struct KeyDescStringBin
 {
     using ColumnType = ColumnString;
     using AllocSize = size_t;
 
-    explicit KeyDescString(const IColumn * key_column_)
+    explicit KeyDescStringBin(const IColumn * key_column_)
     {
         column = static_cast<const ColumnType *>(key_column_);
     }
@@ -320,10 +320,10 @@ struct KeyDescString
     const ColumnType * column{};
 };
 
-struct KeyDescStringBinPading : KeyDescString
+struct KeyDescStringBinPadding : KeyDescStringBin
 {
-    explicit KeyDescStringBinPading(const IColumn * key_column_)
-        : KeyDescString(key_column_)
+    explicit KeyDescStringBinPadding(const IColumn * key_column_)
+        : KeyDescStringBin(key_column_)
     {}
 
     ALWAYS_INLINE inline AllocSize getKey(ssize_t row, StringRef & ref) const
