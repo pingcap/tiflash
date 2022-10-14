@@ -219,6 +219,10 @@ public:
         return add_to_scheduler;
     }
 
+    MemoryTrackerPtr & getMemoryTracker()
+    {
+        return mem_tracker;
+    }
 private:
     int64_t getFreeActiveSegmentCountUnlock();
     bool exceptionHappened() const;
