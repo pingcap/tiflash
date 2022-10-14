@@ -585,13 +585,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_hash64, false)                             \
     M(nullable_keys128, false)                              \
     M(nullable_keys256, false)                              \
-    M(two_keys_u64_strbin, false)                              \
+    M(two_keys_u64_strbin, false)                           \
     M(two_keys_u64_strbinpadding, false)                    \
-    M(two_keys_strbin_u64, false)                              \
-    M(two_keys_strbin_strbin, false)                              \
+    M(two_keys_strbin_u64, false)                           \
+    M(two_keys_strbin_strbin, false)                        \
     M(two_keys_strbinpadding_u64, false)                    \
     M(two_keys_strbinpadding_strbinpadding, false)          \
-    M(one_key_strbin, false)                                   \
+    M(one_key_strbin, false)                                \
     M(one_key_strbinpadding, false)                         \
     M(key32_two_level, true)                                \
     M(key64_two_level, true)                                \
@@ -605,13 +605,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_two_level, true)                           \
     M(nullable_keys128_two_level, true)                     \
     M(nullable_keys256_two_level, true)                     \
-    M(two_keys_u64_strbin_two_level, true)                     \
+    M(two_keys_u64_strbin_two_level, true)                  \
     M(two_keys_u64_strbinpadding_two_level, true)           \
-    M(two_keys_strbin_u64_two_level, true)                     \
-    M(two_keys_strbin_strbin_two_level, true)                     \
+    M(two_keys_strbin_u64_two_level, true)                  \
+    M(two_keys_strbin_strbin_two_level, true)               \
     M(two_keys_strbinpadding_u64_two_level, true)           \
     M(two_keys_strbinpadding_strbinpadding_two_level, true) \
-    M(one_key_strbin_two_level, true)                          \
+    M(one_key_strbin_two_level, true)                       \
     M(one_key_strbinpadding_two_level, true)
 
     enum class Type
@@ -752,13 +752,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized)                                      \
     M(nullable_keys128)                                \
     M(nullable_keys256)                                \
-    M(two_keys_u64_strbin)                                \
+    M(two_keys_u64_strbin)                             \
     M(two_keys_u64_strbinpadding)                      \
-    M(two_keys_strbin_u64)                                \
-    M(two_keys_strbin_strbin)                                \
+    M(two_keys_strbin_u64)                             \
+    M(two_keys_strbin_strbin)                          \
     M(two_keys_strbinpadding_u64)                      \
     M(two_keys_strbinpadding_strbinpadding)            \
-    M(one_key_strbin)                                     \
+    M(one_key_strbin)                                  \
     M(one_key_strbinpadding)
 
 
@@ -808,13 +808,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_two_level)                           \
     M(nullable_keys128_two_level)                     \
     M(nullable_keys256_two_level)                     \
-    M(two_keys_u64_strbin_two_level)                     \
+    M(two_keys_u64_strbin_two_level)                  \
     M(two_keys_u64_strbinpadding_two_level)           \
-    M(two_keys_strbin_u64_two_level)                     \
-    M(two_keys_strbin_strbin_two_level)                     \
+    M(two_keys_strbin_u64_two_level)                  \
+    M(two_keys_strbin_strbin_two_level)               \
     M(two_keys_strbinpadding_u64_two_level)           \
     M(two_keys_strbinpadding_strbinpadding_two_level) \
-    M(one_key_strbin_two_level)                          \
+    M(one_key_strbin_two_level)                       \
     M(one_key_strbinpadding_two_level)
 };
 
