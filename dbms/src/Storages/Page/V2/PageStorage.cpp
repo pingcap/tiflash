@@ -159,7 +159,7 @@ PageFileSet PageStorage::listAllPageFiles(const FileProviderPtr & file_provider,
 
 PageStorage::PageStorage(String name,
                          PSDiskDelegatorPtr delegator_, //
-                         const Config & config_,
+                         const PageStorageConfig & config_,
                          const FileProviderPtr & file_provider_,
                          bool no_more_insert_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
@@ -187,7 +187,7 @@ PageStorage::PageStorage(String name,
 }
 
 
-static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorage::Config & config)
+static inline bool isPageFileSizeFitsWritable(const PageFile & pf, const PageStorageConfig & config)
 {
     return pf.getDataFileAppendPos() < config.file_roll_size && pf.getMetaFileAppendPos() < config.file_meta_roll_size;
 }
@@ -917,9 +917,9 @@ struct GcContext
     size_t num_files_remove_data = 0;
     size_t num_bytes_remove_data = 0;
 
-    PageStorage::Config calculateGcConfig(const PageStorage::Config & config) const
+    PageStorageConfig calculateGcConfig(const PageStorageConfig & config) const
     {
-        PageStorage::Config res = config;
+        PageStorageConfig res = config;
         // Each legacy is about serval hundred KiB or serval MiB
         // It means each time `gc` is called, we will read `num_legacy_file` * serval MiB
         // Do more agressive GC if there are too many Legacy files

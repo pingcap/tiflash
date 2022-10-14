@@ -70,11 +70,11 @@ enum DebugMode
 };
 
 void dump_all_entries(PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
-void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config);
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const DB::PageStorageConfig & config);
 
-PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
+DB::PageStorageConfig parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
 {
-    PageStorage::Config config;
+    DB::PageStorageConfig config;
     if (argc > 4)
     {
         size_t num = strtoull(argv[4], nullptr, 10);
@@ -173,7 +173,7 @@ try
         return 0;
     }
 
-    PageStorage::Config config = parse_storage_config(argc, argv, logger);
+    DB::PageStorageConfig config = parse_storage_config(argc, argv, logger);
     PageStorage storage("PageCtl", delegator, config, file_provider);
     storage.restore();
     switch (mode)
@@ -292,7 +292,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
     }
 }
 
-void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config)
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const DB::PageStorageConfig & config)
 {
     static constexpr double MB = 1.0 * 1024 * 1024;
 

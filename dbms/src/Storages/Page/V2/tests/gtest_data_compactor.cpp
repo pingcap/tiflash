@@ -44,7 +44,7 @@ try
 {
     CHECK_TESTS_WITH_DATA_ENABLED;
 
-    PageStorage::Config config;
+    PageStorageConfig config;
     config.num_write_slots = 2;
 #ifndef GENERATE_TEST_DATA
     const Strings test_paths = TiFlashTestEnv::findTestDataPath("page_storage_compactor_migrate");

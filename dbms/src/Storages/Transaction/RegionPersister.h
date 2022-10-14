@@ -51,13 +51,13 @@ public:
     void drop(RegionID region_id, const RegionTaskLock &);
     void persist(const Region & region);
     void persist(const Region & region, const RegionTaskLock & lock);
-    RegionMap restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr, PageStorage::Config config = PageStorage::Config{});
+    RegionMap restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper = nullptr, PageStorageConfig config = PageStorageConfig{});
     bool gc();
 
     using RegionCacheWriteElement = std::tuple<RegionID, MemoryWriteBuffer, size_t, UInt64>;
     static void computeRegionWriteBuffer(const Region & region, RegionCacheWriteElement & region_write_buffer);
 
-    PageStorage::Config getPageStorageSettings() const;
+    PageStorageConfig getPageStorageSettings() const;
 
     FileUsageStatistics getFileUsageStatistics() const;
 

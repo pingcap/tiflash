@@ -33,12 +33,12 @@ public:
     PageStorageImpl(
         String name,
         PSDiskDelegatorPtr delegator,
-        const Config & config_,
+        const PageStorageConfig & config_,
         const FileProviderPtr & file_provider_);
 
     ~PageStorageImpl() override;
 
-    static BlobConfig parseBlobConfig(const Config & config)
+    static BlobConfig parseBlobConfig(const PageStorageConfig & config)
     {
         BlobConfig blob_config;
 
@@ -51,13 +51,12 @@ public:
         return blob_config;
     }
 
-    static WALConfig parseWALConfig(const Config & config)
+    static WALConfig parseWALConfig(const PageStorageConfig & config)
     {
         WALConfig wal_config;
 
         wal_config.roll_size = config.wal_roll_size;
         wal_config.max_persisted_log_files = config.wal_max_persisted_log_files;
-        wal_config.setRecoverMode(config.wal_recover_mode);
 
         return wal_config;
     }

@@ -35,7 +35,7 @@ namespace DB::PS::V2::tests
 TEST(LegacyCompactor_test, WriteMultipleBatchRead)
 try
 {
-    PageStorage::Config config;
+    PageStorageConfig config;
     Poco::Logger * log = &Poco::Logger::get("LegacyCompactor_test");
 
     PageEntriesVersionSetWithDelta original_version("test", config.version_set_config, log);
@@ -173,7 +173,7 @@ try
     const FileProviderPtr file_provider = ctx.getFileProvider();
     StoragePathPool spool = ctx.getPathPool().withTable("test", "t", false);
     auto delegator = spool.getPSDiskDelegatorSingle("meta");
-    PageStorage storage("compact_test", delegator, PageStorage::Config{}, file_provider);
+    PageStorage storage("compact_test", delegator, PageStorageConfig{}, file_provider);
 
     PageStorage::ListPageFilesOption opt;
     opt.ignore_checkpoint = false;

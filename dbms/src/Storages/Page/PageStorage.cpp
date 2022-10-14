@@ -21,7 +21,7 @@ namespace DB
 PageStoragePtr PageStorage::create(
     String name,
     PSDiskDelegatorPtr delegator,
-    const PageStorage::Config & config,
+    const PageStorageConfig & config,
     const FileProviderPtr & file_provider,
     bool use_v3,
     bool no_more_insert_to_v2)
@@ -620,7 +620,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
 }
 
 
-PageStorage::Config PageWriter::getSettings() const
+PageStorageConfig PageWriter::getSettings() const
 {
     switch (run_mode)
     {
@@ -641,7 +641,7 @@ PageStorage::Config PageWriter::getSettings() const
     }
 }
 
-void PageWriter::reloadSettings(const PageStorage::Config & new_config) const
+void PageWriter::reloadSettings(const PageStorageConfig & new_config) const
 {
     switch (run_mode)
     {
