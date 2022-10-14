@@ -151,7 +151,7 @@ struct NotImpl
 {
     using ResultType = UInt8;
 
-    static inline UInt8 apply(A a)
+    static inline bool apply(A a)
     {
         return !a;
     }
@@ -194,7 +194,7 @@ struct AssociativeOperationImpl
     {}
 
     /// Returns a combination of values in the i-th row of all columns stored in the constructor.
-    inline UInt8 apply(size_t i) const
+    inline bool apply(size_t i) const
     {
         if (Op::isSaturable())
         {
@@ -220,8 +220,7 @@ struct AssociativeOperationImpl
         }
         else
         {
-            // Searching keyword "cast_bool_reason" in this file to get the reason for static_cast<bool>
-            return Op::apply(static_cast<bool>(vec[i]), continuation.apply(i));
+            return Op::apply(vec[i], continuation.apply(i));
         }
     }
 };
@@ -240,10 +239,9 @@ struct AssociativeOperationImpl<Op, 1>
         : vec(in[in.size() - 1]->getData())
     {}
 
-    inline UInt8 apply(size_t i) const
+    inline bool apply(size_t i) const
     {
-        // Searching keyword "cast_bool_reason" in this file to get the reason for static_cast<bool>
-        return static_cast<bool>(vec[i]);
+        return vec[i];
     }
 };
 
