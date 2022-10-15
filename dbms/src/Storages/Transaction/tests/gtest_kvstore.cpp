@@ -68,7 +68,7 @@ class RegionKVStoreTest : public ::testing::Test
 public:
     RegionKVStoreTest()
     {
-        test_path = TiFlashTestEnv::getTemporaryPath("region_kvs_test");
+        test_path = TiFlashTestEnv::getTemporaryPath("/region_kvs_test");
     }
 
     static void SetUpTestCase() {}

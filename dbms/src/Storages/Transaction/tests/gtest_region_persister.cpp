@@ -206,7 +206,7 @@ class RegionPersisterTest : public ::testing::Test
 {
 public:
     RegionPersisterTest()
-        : dir_path(TiFlashTestEnv::getTemporaryPath("region_persister_test"))
+        : dir_path(TiFlashTestEnv::getTemporaryPath("/region_persister_test"))
     {
     }
 

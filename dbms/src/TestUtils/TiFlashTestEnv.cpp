@@ -38,7 +38,7 @@ String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool g
         path = DB::String(temp_prefix);
     path += "/tmp/";
     if (!test_case.empty())
-        path += std::string(test_case) + "/";
+        path += std::string(test_case);
 
     Poco::Path poco_path(path);
     if (get_abs)

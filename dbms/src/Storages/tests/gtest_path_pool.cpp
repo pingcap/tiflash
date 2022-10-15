@@ -44,7 +44,7 @@ public:
         Strings paths;
         for (size_t i = 0; i < TEST_NUMBER_FOR_FOLDER; ++i)
             paths.emplace_back(
-                TiFlashTestEnv::getTemporaryPath(fmt::format("path_pool_test/data{}", i)));
+                TiFlashTestEnv::getTemporaryPath(fmt::format("/path_pool_test/data{}", i)));
         return paths;
     }
 

@@ -181,7 +181,7 @@ TEST(PageFileTest, PageFileLink)
     Poco::Logger * log = &Poco::Logger::get("PageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
-    const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("PageFileLink");
+    const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("PageFileLink/");
     DB::tests::TiFlashTestEnv::tryRemovePath(path);
 
     const auto file_provider = DB::tests::TiFlashTestEnv::getGlobalContext().getFileProvider();
@@ -230,7 +230,7 @@ TEST(PageFileTest, EncryptedPageFileLink)
     Poco::Logger * log = &Poco::Logger::get("EncryptedPageFileLink");
     PageId page_id = 55;
     UInt64 tag = 0;
-    const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink");
+    const String path = DB::tests::TiFlashTestEnv::getTemporaryPath("EncryptedPageFileLink/");
     DB::tests::TiFlashTestEnv::tryRemovePath(path);
 
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(true);
