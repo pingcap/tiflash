@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -20,7 +21,6 @@
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/WriteBatches.h>
 #include <Storages/PathPool.h>
-#include <Common/SyncPoint/SyncPoint.h>
 
 #include <ext/scope_guard.h>
 
@@ -189,7 +189,7 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneAllColumnFile
 
     RUNTIME_CHECK(
         mem_table_set->getColumnFileCount() + persisted_file_set->getColumnFileCount() == //
-            new_mem_files.size() + new_persisted_files.size());
+        new_mem_files.size() + new_persisted_files.size());
 
     return {
         CloneColumnFilesHelper<ColumnFilePtr>::clone(context, new_mem_files, target_range, wbs),

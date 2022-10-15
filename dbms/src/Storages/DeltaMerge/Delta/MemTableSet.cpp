@@ -172,10 +172,10 @@ std::pair</* New */ ColumnFiles, /* Flushed */ ColumnFiles> MemTableSet::diffCol
             columnFilesToString(column_files));
     }
     return {
-        /* new */ std::vector<ColumnFilePtr>(
+        /* new */ std::vector<ColumnFilePtr>( //
             column_files.begin() + unflushed_n,
             column_files.end()),
-        /* flushed */ std::vector<ColumnFilePtr>(
+        /* flushed */ std::vector<ColumnFilePtr>( //
             column_files_in_snapshot.begin(),
             column_files_in_snapshot.begin() + flushed_n),
     };
