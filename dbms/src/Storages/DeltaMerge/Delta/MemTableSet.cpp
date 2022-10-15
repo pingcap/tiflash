@@ -64,98 +64,121 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
     deletes += column_file->getDeletes();
 }
 
-std::pair</* New */ ColumnFiles, /* Removed */ ColumnFiles> MemTableSet::diffColumnFiles(
+std::pair</* New */ ColumnFiles, /* Flushed */ ColumnFiles> MemTableSet::diffColumnFiles(
     const ColumnFiles & column_files_in_snapshot) const
 {
-    // Use `ColumnFile *` is sufficient, because we never return it to outside and no need to worry
-    // about the lifetime.
-    std::map<PageId, ColumnFile *> ids_in_snapshot;
-    for (const auto & file : column_files_in_snapshot)
-    {
-        RUNTIME_CHECK(ids_in_snapshot.find(file->getId()) == ids_in_snapshot.end());
-        ids_in_snapshot[file->getId()] = file.get();
-    }
+    /**
+     * Suppose we have A, B, C in the snapshot:
+     * ┌───┬───┬───┐
+     * │ A │ B │ C │
+     * └───┴───┴───┘
+     *
+     * Case #1:
+     *
+     * The most simple case is that, there was no flush happened since the snapshot was created last time.
+     * For example, our memtable may looks like:
+     * ┌───┬───┬───┬───┬───┐
+     * │ A │ B │ C │ D │ E │
+     * └───┴───┴───┴───┴───┘
+     * In this case, we return { D, E } as "new":
+     *             ┌───┬───┐
+     *             │ D │ E │  New Column Files
+     *             └───┴───┘
+     *              (empty)   Flushed Column Files
+     *
+     * Case #2:
+     *
+     * Then, let's think about flush. There could be flush since the snapshot was created last time.
+     * For example, suppose we have these ops since taking the snapshot:
+     * - write D
+     * - flush A B (but not C)
+     * - write E
+     * - write F
+     * Our memtable and persisted looks like this now:
+     *         ┌───┬───┬───┬───┐
+     *         │ C │ D │ E │ F │ MemTable
+     *         └───┴───┴───┴───┘
+     * ┌───┬───┐
+     * │ A │ B │                 Persisted
+     * └───┴───┘
+     *
+     * Remember our snapshot:
+     * ┌───┬───┬───┐
+     * │ A │ B │ C │
+     * └───┴───┴───┘
+     *
+     * Our returned value is very simple. No need to do a full diff:
+     * ┌───┬───┐
+     * │ A │ B │ Flushed Column Files
+     * └───┴───┘
+     *             ┌───┬───┬───┐
+     *             │ D │ E │ F │ New Column Files
+     *             └───┴───┴───┘
+     *
+     * Finally, we can treat case #1 as a special case #2: the flushed_n == 0.
+     */
 
-    std::map<PageId, ColumnFile *> ids_in_memtable;
-    for (const auto & file : column_files)
-    {
-        RUNTIME_CHECK(ids_in_memtable.find(file->getId()) == ids_in_memtable.end());
-        ids_in_memtable[file->getId()] = file.get();
-    }
+    // Note: This implementation does not do a full diff.
+    // It heavily relies on how Flush is working.
 
-    ColumnFiles new_files;
-    new_files.reserve(column_files.size()); // At most, everything in memtable is new
-    for (const auto & file : column_files)
-    {
-        auto it = ids_in_snapshot.find(file->getId());
-        if (it == ids_in_snapshot.end())
-        {
-            new_files.push_back(file);
-        }
-        else
-        {
-            const auto * file_in_snapshot = it->second;
-            RUNTIME_CHECK(
-                file->getId() == file_in_snapshot->getId()
-                    && file->getType() == file_in_snapshot->getType()
-                    && file->getRows() == file_in_snapshot->getRows(),
-                columnFilesToString(column_files_in_snapshot),
-                columnFilesToString(column_files));
-        }
-    }
+    if (column_files_in_snapshot.empty())
+        return {/* new */ column_files, /* flushed */ {}};
 
-    ColumnFiles removed_files;
-    removed_files.reserve(column_files_in_snapshot.size()); // At most, everything in snapshot is removed
-    for (const auto & file : column_files_in_snapshot)
-    {
-        auto it = ids_in_memtable.find(file->getId());
-        if (it == ids_in_memtable.end())
-        {
-            removed_files.push_back(file);
-        }
-        else
-        {
-            const auto * file_in_memtable = it->second;
-            RUNTIME_CHECK(
-                file->getId() == file_in_memtable->getId()
-                    && file->getType() == file_in_memtable->getType()
-                    && file->getRows() == file_in_memtable->getRows(),
-                columnFilesToString(column_files_in_snapshot),
-                columnFilesToString(column_files));
-        }
-    }
+    if (column_files.empty())
+        return {/* new */ {}, /* flushed */ column_files_in_snapshot};
 
-    // In addition to the simple diff, we also verify:
-    //   Either all CFs in the snapshot are still in memtable (not flushed),
-    //   or none CFs in the snapshot is in memtable (flushed).
 
-    if (removed_files.empty())
-    {
-        // There is no flush happened, we expect all CFs in the snapshot are still in memtable, and is its head.
-        RUNTIME_CHECK(column_files.size() >= column_files_in_snapshot.size());
-        for (size_t i = 0; i < column_files_in_snapshot.size(); ++i)
-        {
-            RUNTIME_CHECK(
-                column_files_in_snapshot[i]->getId() == column_files[i]->getId(),
-                columnFilesToString(column_files_in_snapshot),
-                columnFilesToString(column_files));
-        }
-    }
-    else
-    {
-        // There is flush happened, we expect all CFs in the snapshot are removed,
-        // so that `removed_files == column_files_in_snapshot`.
-        RUNTIME_CHECK(removed_files.size() == column_files_in_snapshot.size());
-        for (size_t i = 0; i < column_files_in_snapshot.size(); ++i)
-        {
-            RUNTIME_CHECK(
-                column_files_in_snapshot[i]->getId() == removed_files[i]->getId(),
-                columnFilesToString(column_files_in_snapshot),
-                columnFilesToString(column_files));
-        }
-    }
+    //  ┌───┬───┬───┐
+    //  │ A │ B │ C │               Snapshot
+    //  └───┴───┴───┘
+    //          ┌───┬───┬───┬───┐
+    //          │ C │ D │ E │ F │   MemTable
+    //          └───┴───┴───┴───┘
+    //  ┌───┬───┐
+    //  │ A │ B │                   Persisted
+    //  └───┴───┘
+    //          ^^^^^               unflushed_n = 1
+    //  ^^^^^^^^                    flushed_n = 2
 
-    return {new_files, removed_files};
+
+    // When there is a flush, may be not everything in the Snapshot is flushed.
+    // It is possible that only a prefix of the Snapshot is flushed.
+    // So let's check how long the flushed prefix is. The prefix could be 0.
+    size_t flushed_n = 0;
+    while (flushed_n < column_files_in_snapshot.size())
+    {
+        if (column_files[0]->getId() == column_files_in_snapshot[flushed_n]->getId())
+            break;
+        flushed_n++;
+    }
+    // For Snapshot CFs [0, flushed_n), they are flushed column files.
+    // Remaining Snapshot CFs must be not flushed, remains in the memtable and is the prefix of the memtable.
+    RUNTIME_CHECK(
+        flushed_n <= column_files_in_snapshot.size(),
+        columnFilesToString(column_files_in_snapshot),
+        columnFilesToString(column_files));
+    size_t unflushed_n = column_files_in_snapshot.size() - flushed_n;
+    RUNTIME_CHECK( // Those unflushed CFs must be still in memtable.
+        column_files.size() >= unflushed_n,
+        columnFilesToString(column_files_in_snapshot),
+        columnFilesToString(column_files));
+    for (size_t i = 0; i < unflushed_n; ++i)
+    {
+        RUNTIME_CHECK( // Verify prefix
+            column_files_in_snapshot[flushed_n + i]->getId() == column_files[i]->getId()
+                && column_files_in_snapshot[flushed_n + i]->getType() == column_files[i]->getType()
+                && column_files_in_snapshot[flushed_n + i]->getRows() == column_files[i]->getRows(),
+            columnFilesToString(column_files_in_snapshot),
+            columnFilesToString(column_files));
+    }
+    return {
+        /* new */ std::vector<ColumnFilePtr>(
+            column_files.begin() + unflushed_n,
+            column_files.end()),
+        /* flushed */ std::vector<ColumnFilePtr>(
+            column_files_in_snapshot.begin(),
+            column_files_in_snapshot.begin() + flushed_n),
+    };
 }
 
 void MemTableSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -24,6 +25,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
+#include <future>
 #include <memory>
 
 namespace CurrentMetrics
@@ -973,6 +975,53 @@ try
     ASSERT_EQ(2, new_persisted.size());
     ASSERT_EQ(137, new_persisted[0]->getRows());
     ASSERT_TRUE(new_persisted[1]->isDeleteRange());
+}
+CATCH
+
+TEST_F(DeltaValueSpaceCloneNewlyAppendedTest, FlushPartially)
+try
+{
+    WriteBatches wbs(dmContext().storage_pool, dmContext().getWriteLimiter());
+    wbs.setRollback();
+
+    // 2 CF in mem
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 42);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(10, 50)));
+
+    // Prepare flushing the 2 CF in mem
+    auto sp_flush_prepared = SyncPointCtl::enableInScope("after_DeltaValueSpace::flush|prepare_flush");
+
+    auto th_flush = std::async([&]() {
+        ASSERT_TRUE(delta->flush(dmContext()));
+    });
+
+    sp_flush_prepared.waitAndPause();
+
+    // Append another 2 CF in mem
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 10);
+    delta->appendDeleteRange(dmContext(), RowKeyRange::fromHandleRange(HandleRange(1, 2)));
+
+    auto snapshot = delta->createSnapshot(dmContext(), true, CurrentMetrics::DT_SnapshotOfRead);
+
+    // Append 1 more CF after the snapshot. Now there are 2+2+1 CF in mem.
+    appendBlockToDeltaValueSpace(dmContext(), delta, 0, 7);
+
+    // Continue the flush
+    sp_flush_prepared.next();
+    th_flush.get();
+
+    // Now let's checkout which CFs are newly appended..
+    // We only have 1 CF newly appended since the snapshot.
+    auto lock = delta->getLock();
+    auto [new_mem, new_persisted] = delta->cloneNewlyAppendedColumnFiles(
+        *lock,
+        dmContext(),
+        RowKeyRange::newAll(false, 1),
+        *snapshot,
+        wbs);
+    ASSERT_EQ(1, new_mem.size());
+    ASSERT_EQ(7, new_mem[0]->getRows());
+    ASSERT_EQ(0, new_persisted.size());
 }
 CATCH
 

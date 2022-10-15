@@ -91,7 +91,7 @@ public:
      *
      * @returns two pairs: < NewColumnFiles, RemovedColumnFiles >
      *   NewColumnFiles     -- These CFs in memtable are newly appended compared to the snapshot.
-     *   RemovedColumnFiles -- These CFs in snapshot are removed, no longer exist in memtable.
+     *   FlushedColumnFiles -- These CFs in snapshot were flushed, no longer exist in memtable.
      *
      * Note: there may be CFs newly appended and then removed (e.g. write + flush). These CFs will
      * not be included in the result.

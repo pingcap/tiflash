@@ -155,6 +155,22 @@ protected:
 };
 
 
+TEST_F(DeltaMergeStoreGCMergeDeltaTest, DeleteRangeInMemTable)
+try
+{
+    fill(100, 600);
+    flush();
+    mergeDelta();
+
+    deleteRange(-100, 1000);
+
+    auto gc_n = store->onSyncGc(100, gc_options);
+    ASSERT_EQ(1, gc_n);
+    ASSERT_EQ(0, getSegmentAt(0)->getStable()->getDMFilesRows());
+}
+CATCH
+
+
 TEST_F(DeltaMergeStoreGCMergeDeltaTest, AfterLogicalSplit)
 try
 {
