@@ -97,7 +97,14 @@ struct NotImpl
 {
     using ResultType = UInt8;
 
+<<<<<<< HEAD
     static inline UInt8 apply(A a) { return !a; }
+=======
+    static inline bool apply(A a)
+    {
+        return !a;
+    }
+>>>>>>> 1e0e3c8973 (fix inconsistent result before deleting some rows (#6133))
 };
 
 
@@ -134,7 +141,7 @@ struct AssociativeOperationImpl
     AssociativeOperationImpl(UInt8ColumnPtrs & in) : vec(in[in.size() - N]->getData()), continuation(in) {}
 
     /// Returns a combination of values in the i-th row of all columns stored in the constructor.
-    inline UInt8 apply(size_t i) const
+    inline bool apply(size_t i) const
     {
         if (Op::isSaturable())
         {
@@ -176,7 +183,14 @@ struct AssociativeOperationImpl<Op, 1>
 
     AssociativeOperationImpl(UInt8ColumnPtrs & in) : vec(in[in.size() - 1]->getData()) {}
 
+<<<<<<< HEAD
     inline UInt8 apply(size_t i) const { return vec[i]; }
+=======
+    inline bool apply(size_t i) const
+    {
+        return vec[i];
+    }
+>>>>>>> 1e0e3c8973 (fix inconsistent result before deleting some rows (#6133))
 };
 
 
