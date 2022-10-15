@@ -148,7 +148,7 @@ RegionPersister::RegionPersister(Context & global_context_, const RegionManager 
     , log(Logger::get("RegionPersister"))
 {}
 
-PageStorage::Config RegionPersister::getPageStorageSettings() const
+PageStorageConfig RegionPersister::getPageStorageSettings() const
 {
     if (!page_writer)
     {
@@ -158,7 +158,7 @@ PageStorage::Config RegionPersister::getPageStorageSettings() const
     return page_writer->getSettings();
 }
 
-PS::V1::PageStorage::Config getV1PSConfig(const PS::V2::PageStorage::Config & config)
+PS::V1::PageStorage::Config getV1PSConfig(const PageStorageConfig & config)
 {
     PS::V1::PageStorage::Config c;
     c.sync_on_write = config.sync_on_write;
@@ -215,7 +215,7 @@ void RegionPersister::forceTransformKVStoreV2toV3()
     page_writer->writeIntoV2(std::move(write_batch_del_v2), nullptr);
 }
 
-RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper, PageStorage::Config config)
+RegionMap RegionPersister::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper, PageStorageConfig config)
 {
     {
         auto delegator = path_pool.getPSDiskDelegatorRaft();
@@ -376,7 +376,7 @@ bool RegionPersister::gc()
 {
     if (page_writer)
     {
-        PageStorage::Config config = getConfigFromSettings(global_context.getSettingsRef());
+        PageStorageConfig config = getConfigFromSettings(global_context.getSettingsRef());
         page_writer->reloadSettings(config);
         return page_writer->gc(false, nullptr, nullptr);
     }

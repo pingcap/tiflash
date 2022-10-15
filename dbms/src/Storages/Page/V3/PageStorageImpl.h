@@ -33,34 +33,10 @@ public:
     PageStorageImpl(
         String name,
         PSDiskDelegatorPtr delegator,
-        const Config & config_,
+        const PageStorageConfig & config_,
         const FileProviderPtr & file_provider_);
 
     ~PageStorageImpl() override;
-
-    static BlobConfig parseBlobConfig(const Config & config)
-    {
-        BlobConfig blob_config;
-
-        blob_config.file_limit_size = config.blob_file_limit_size;
-        blob_config.cached_fd_size = config.blob_cached_fd_size;
-        blob_config.spacemap_type = config.blob_spacemap_type;
-        blob_config.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate;
-        blob_config.block_alignment_bytes = config.blob_block_alignment_bytes;
-
-        return blob_config;
-    }
-
-    static WALConfig parseWALConfig(const Config & config)
-    {
-        WALConfig wal_config;
-
-        wal_config.roll_size = config.wal_roll_size;
-        wal_config.max_persisted_log_files = config.wal_max_persisted_log_files;
-        wal_config.setRecoverMode(config.wal_recover_mode);
-
-        return wal_config;
-    }
 
     void reloadConfig() override;
 

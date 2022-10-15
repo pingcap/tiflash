@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/Page/Config.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/spacemap/SpaceMap.h>
 #include <common/defines.h>
@@ -40,6 +41,19 @@ struct BlobConfig
                            cached_fd_size,
                            block_alignment_bytes,
                            heavy_gc_valid_rate);
+    }
+
+    static BlobConfig from(const PageStorageConfig & config)
+    {
+        BlobConfig blob_config;
+
+        blob_config.file_limit_size = config.blob_file_limit_size;
+        blob_config.cached_fd_size = config.blob_cached_fd_size;
+        blob_config.spacemap_type = config.blob_spacemap_type;
+        blob_config.heavy_gc_valid_rate = config.blob_heavy_gc_valid_rate;
+        blob_config.block_alignment_bytes = config.blob_block_alignment_bytes;
+
+        return blob_config;
     }
 };
 } // namespace DB::PS::V3
