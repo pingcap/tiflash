@@ -75,8 +75,8 @@ TEST(ExternalIdsByNamespaceTest, Simple)
         Int32 expect = 0;
         who.compare_exchange_strong(expect, 2);
     });
-    th_get_alive.wait();
-    th_insert.wait();
+    th_get_alive.get();
+    th_insert.get();
 
     {
         // holder keep "50" alive

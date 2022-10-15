@@ -152,7 +152,7 @@ int main(int argc, char ** argv)
         file.remove(true);
 
     // Create PageStorage
-    DB::PageStorage::Config config;
+    DB::PageStorageConfig config;
     config.file_roll_size = 96UL * 1024 * 1024;
     PSPtr ps = std::make_shared<DB::PageStorage>(path, config);
 

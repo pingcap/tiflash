@@ -30,7 +30,7 @@ public:
     void put(PageId page_id, const PageEntry & entry)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::PUT;
+        record.type = WriteBatchWriteType::PUT;
         record.page_id = page_id;
         record.entry = entry;
         records.emplace_back(record);
@@ -39,7 +39,7 @@ public:
     void upsertPage(PageId page_id, const PageEntry & entry)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::UPSERT;
+        record.type = WriteBatchWriteType::UPSERT;
         record.page_id = page_id;
         record.entry = entry;
         records.emplace_back(record);
@@ -48,7 +48,7 @@ public:
     void del(PageId page_id)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::DEL;
+        record.type = WriteBatchWriteType::DEL;
         record.page_id = page_id;
         records.emplace_back(record);
     }
@@ -56,7 +56,7 @@ public:
     void ref(PageId ref_id, PageId page_id)
     {
         EditRecord record{};
-        record.type = WriteBatch::WriteType::REF;
+        record.type = WriteBatchWriteType::REF;
         record.page_id = ref_id;
         record.ori_page_id = page_id;
         records.emplace_back(record);
@@ -76,7 +76,7 @@ public:
 
     struct EditRecord
     {
-        WriteBatch::WriteType type;
+        WriteBatchWriteType type;
         PageId page_id;
         PageId ori_page_id;
         PageEntry entry;

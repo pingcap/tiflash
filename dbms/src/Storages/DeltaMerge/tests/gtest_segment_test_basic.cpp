@@ -64,7 +64,7 @@ size_t SegmentTestBasic::getSegmentRowNumWithoutMVCC(PageId segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
-    auto in = segment->getInputStreamRaw(*dm_context, *tableColumns());
+    auto in = segment->getInputStreamModeRaw(*dm_context, *tableColumns());
     return getInputStreamNRows(in);
 }
 
@@ -72,7 +72,7 @@ size_t SegmentTestBasic::getSegmentRowNum(PageId segment_id)
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
-    auto in = segment->getInputStream(*dm_context, *tableColumns(), {segment->getRowKeyRange()});
+    auto in = segment->getInputStreamModeNormal(*dm_context, *tableColumns(), {segment->getRowKeyRange()});
     return getInputStreamNRows(in);
 }
 

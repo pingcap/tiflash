@@ -65,7 +65,7 @@ void StressWorkload::onDumpResult()
     }
 }
 
-void StressWorkload::initPageStorage(DB::PageStorage::Config & config, String path_prefix)
+void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path_prefix)
 {
     DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
 

@@ -54,7 +54,7 @@ enum class StorageType
     Meta = 3,
 };
 
-PageStorage::Config extractConfig(const Settings & settings, StorageType subtype)
+PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
 {
 #define SET_CONFIG(NAME)                                                            \
     config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;         \
@@ -64,7 +64,7 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate; \
     config.blob_heavy_gc_valid_rate = settings.dt_page_gc_threshold;
 
-    PageStorage::Config config = getConfigFromSettings(settings);
+    PageStorageConfig config = getConfigFromSettings(settings);
 
     switch (subtype)
     {
