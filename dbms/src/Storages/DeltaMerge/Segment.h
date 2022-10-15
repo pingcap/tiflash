@@ -408,14 +408,14 @@ public:
     static String simpleInfo(const std::vector<SegmentPtr> & segments);
     static String info(const std::vector<SegmentPtr> & segments);
 
-    bool getUpdateLock(Lock & lock) const { return delta->getLock(lock); }
+    std::optional<Lock> getUpdateLock() const { return delta->getLock(); }
 
     Lock mustGetUpdateLock() const
     {
-        Lock lock;
-        if (!getUpdateLock(lock))
+        auto lock_opt = getUpdateLock();
+        if (lock_opt == std::nullopt)
             throw Exception(fmt::format("Segment get update lock failed, segment={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
-        return lock;
+        return std::exchange(lock_opt, std::nullopt).value();
     }
 
     /// Marks this segment as abandoned.

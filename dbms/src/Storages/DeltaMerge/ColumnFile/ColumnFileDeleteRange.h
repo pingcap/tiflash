@@ -58,6 +58,14 @@ public:
 
     static ColumnFilePersistedPtr deserializeMetadata(ReadBuffer & buf);
 
+    bool mayBeFlushedFrom(ColumnFile * from_file) const override
+    {
+        if (const auto * other = from_file->tryToDeleteRange(); other)
+            return delete_range == other->delete_range;
+        else
+            return false;
+    }
+
     String toString() const override { return "{delete_range:" + delete_range.toString() + "}"; }
 };
 

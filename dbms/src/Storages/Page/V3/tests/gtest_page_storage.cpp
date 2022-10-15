@@ -1295,7 +1295,7 @@ try
     }
 
     sp_gc.next(); // continue the gc
-    th_gc.wait();
+    th_gc.get();
 
     ASSERT_EQ(*ptr, 100 + 4);
 }
@@ -1336,7 +1336,7 @@ try
     ptr = nullptr;
 
     sp_gc.next(); // continue the gc
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 

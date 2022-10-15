@@ -95,6 +95,14 @@ public:
             + ",bytes:" + DB::toString(getBytes()) + "}"; //
         return s;
     }
+
+    bool mayBeFlushedFrom(ColumnFile * from_file) const override
+    {
+        if (const auto * other = from_file->tryToBigFile(); other)
+            return file->pageId() == other->file->pageId();
+        else
+            return false;
+    }
 };
 
 class ColumnFileBigReader : public ColumnFileReader

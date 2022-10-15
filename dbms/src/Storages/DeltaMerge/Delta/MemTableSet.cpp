@@ -64,55 +64,98 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
     deletes += column_file->getDeletes();
 }
 
-ColumnFiles MemTableSet::cloneColumnFiles(DMContext & context, const RowKeyRange & target_range, WriteBatches & wbs)
+std::pair</* New */ ColumnFiles, /* Removed */ ColumnFiles> MemTableSet::diffColumnFiles(
+    const ColumnFiles & column_files_in_snapshot) const
 {
-    ColumnFiles cloned_column_files;
-    for (const auto & column_file : column_files)
+    // Use `ColumnFile *` is sufficient, because we never return it to outside and no need to worry
+    // about the lifetime.
+    std::map<PageId, ColumnFile *> ids_in_snapshot;
+    for (const auto & file : column_files_in_snapshot)
     {
-        if (auto * dr = column_file->tryToDeleteRange(); dr)
-        {
-            auto new_dr = dr->getDeleteRange().shrink(target_range);
-            if (!new_dr.none())
-            {
-                // Only use the available delete_range column file.
-                cloned_column_files.push_back(dr->cloneWith(new_dr));
-            }
-        }
-        else if (auto * b = column_file->tryToInMemoryFile(); b)
-        {
-            auto new_column_file = b->clone();
+        RUNTIME_CHECK(ids_in_snapshot.find(file->getId()) == ids_in_snapshot.end());
+        ids_in_snapshot[file->getId()] = file.get();
+    }
 
-            // No matter or what, don't append to column files which cloned from old column file again.
-            // Because they could shared the same cache. And the cache can NOT be inserted from different column files in different delta.
-            new_column_file->disableAppend();
-            cloned_column_files.push_back(new_column_file);
-        }
-        else if (auto * t = column_file->tryToTinyFile(); t)
-        {
-            // Use a newly created page_id to reference the data page_id of current column file.
-            PageId new_data_page_id = context.storage_pool.newLogPageId();
-            wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
-            auto new_column_file = t->cloneWith(new_data_page_id);
+    std::map<PageId, ColumnFile *> ids_in_memtable;
+    for (const auto & file : column_files)
+    {
+        RUNTIME_CHECK(ids_in_memtable.find(file->getId()) == ids_in_memtable.end());
+        ids_in_memtable[file->getId()] = file.get();
+    }
 
-            cloned_column_files.push_back(new_column_file);
-        }
-        else if (auto * f = column_file->tryToBigFile(); f)
+    ColumnFiles new_files;
+    new_files.reserve(column_files.size()); // At most, everything in memtable is new
+    for (const auto & file : column_files)
+    {
+        auto it = ids_in_snapshot.find(file->getId());
+        if (it == ids_in_snapshot.end())
         {
-            auto delegator = context.path_pool.getStableDiskDelegator();
-            auto new_page_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
-            // Note that the file id may has already been mark as deleted. We must
-            // create a reference to the page id itself instead of create a reference
-            // to the file id.
-            wbs.data.putRefPage(new_page_id, f->getDataPageId());
-            auto file_id = f->getFile()->fileId();
-            auto file_parent_path = delegator.getDTFilePath(file_id);
-            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
-
-            auto new_column_file = f->cloneWith(context, new_file, target_range);
-            cloned_column_files.push_back(new_column_file);
+            new_files.push_back(file);
+        }
+        else
+        {
+            const auto * file_in_snapshot = it->second;
+            RUNTIME_CHECK(
+                file->getId() == file_in_snapshot->getId()
+                    && file->getType() == file_in_snapshot->getType()
+                    && file->getRows() == file_in_snapshot->getRows(),
+                columnFilesToString(column_files_in_snapshot),
+                columnFilesToString(column_files));
         }
     }
-    return cloned_column_files;
+
+    ColumnFiles removed_files;
+    removed_files.reserve(column_files_in_snapshot.size()); // At most, everything in snapshot is removed
+    for (const auto & file : column_files_in_snapshot)
+    {
+        auto it = ids_in_memtable.find(file->getId());
+        if (it == ids_in_memtable.end())
+        {
+            removed_files.push_back(file);
+        }
+        else
+        {
+            const auto * file_in_memtable = it->second;
+            RUNTIME_CHECK(
+                file->getId() == file_in_memtable->getId()
+                    && file->getType() == file_in_memtable->getType()
+                    && file->getRows() == file_in_memtable->getRows(),
+                columnFilesToString(column_files_in_snapshot),
+                columnFilesToString(column_files));
+        }
+    }
+
+    // In addition to the simple diff, we also verify:
+    //   Either all CFs in the snapshot are still in memtable (not flushed),
+    //   or none CFs in the snapshot is in memtable (flushed).
+
+    if (removed_files.empty())
+    {
+        // There is no flush happened, we expect all CFs in the snapshot are still in memtable, and is its head.
+        RUNTIME_CHECK(column_files.size() >= column_files_in_snapshot.size());
+        for (size_t i = 0; i < column_files_in_snapshot.size(); ++i)
+        {
+            RUNTIME_CHECK(
+                column_files_in_snapshot[i]->getId() == column_files[i]->getId(),
+                columnFilesToString(column_files_in_snapshot),
+                columnFilesToString(column_files));
+        }
+    }
+    else
+    {
+        // There is flush happened, we expect all CFs in the snapshot are removed,
+        // so that `removed_files == column_files_in_snapshot`.
+        RUNTIME_CHECK(removed_files.size() == column_files_in_snapshot.size());
+        for (size_t i = 0; i < column_files_in_snapshot.size(); ++i)
+        {
+            RUNTIME_CHECK(
+                column_files_in_snapshot[i]->getId() == removed_files[i]->getId(),
+                columnFilesToString(column_files_in_snapshot),
+                columnFilesToString(column_files));
+        }
+    }
+
+    return {new_files, removed_files};
 }
 
 void MemTableSet::recordRemoveColumnFilesPages(WriteBatches & wbs) const
@@ -181,8 +224,12 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
     }
 }
 
-ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & storage_snap)
+ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & storage_snap, bool disable_sharing)
 {
+    // Disable append, so that new writes will not touch the content of this snapshot.
+    if (disable_sharing && !column_files.empty() && column_files.back()->isAppendable())
+        column_files.back()->disableAppend();
+
     auto snap = std::make_shared<ColumnFileSetSnapshot>(storage_snap);
     snap->rows = rows;
     snap->bytes = bytes;
@@ -197,9 +244,10 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & 
         // So we only clone the instance of ColumnFileInMemory here.
         if (auto * m = file->tryToInMemoryFile(); m)
         {
-            // Compact threads could update the value of ColumnTinyFile::cache,
+            // Compact threads could update the value of ColumnFileInMemory,
             // and since ColumnFile is not multi-threads safe, we should create a new column file object.
-            snap->column_files.push_back(std::make_shared<ColumnFileInMemory>(*m));
+            // TODO: When `disable_sharing == true`, may be we can safely use the same ptr without the clone.
+            snap->column_files.push_back(m->clone());
         }
         else
         {
@@ -209,11 +257,14 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & 
         total_deletes += file->getDeletes();
     }
 
-    if (unlikely(total_rows != rows || total_deletes != deletes))
-    {
-        LOG_ERROR(log, "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}].", total_rows, total_deletes, rows.load(), deletes.load());
-        throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
-    }
+    // This may indicate that you forget to acquire a lock -- there are modifications
+    // while this function is still running...
+    RUNTIME_CHECK(
+        total_rows == rows && total_deletes == deletes,
+        total_rows,
+        rows.load(),
+        total_deletes,
+        deletes.load());
 
     return snap;
 }
@@ -256,29 +307,27 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(DMContext & context, size_t r
 void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task)
 {
     const auto & tasks = flush_task.getAllTasks();
-    if (unlikely(tasks.size() > column_files.size()))
-        throw Exception("column_files num check failed", ErrorCodes::LOGICAL_ERROR);
-
-    auto column_file_iter = column_files.begin();
-    for (const auto & task : tasks)
+    // There may be new column files appended at back, but should never be files removed.
     {
-        if (unlikely(column_file_iter == column_files.end() || *column_file_iter != task.column_file))
-        {
-            throw Exception("column_files check failed", ErrorCodes::LOGICAL_ERROR);
-        }
-        column_file_iter++;
+        RUNTIME_CHECK(tasks.size() <= column_files.size());
+        for (size_t i = 0; i < tasks.size(); ++i)
+            RUNTIME_CHECK(tasks[i].column_file == column_files[i]);
     }
+
     ColumnFiles new_column_files;
+    if (column_files.size() > tasks.size())
+        new_column_files.reserve(column_files.size() - tasks.size());
+
     size_t new_rows = 0;
     size_t new_bytes = 0;
     size_t new_deletes = 0;
-    while (column_file_iter != column_files.end())
+    for (size_t i = tasks.size(); i < column_files.size(); ++i)
     {
-        new_column_files.emplace_back(*column_file_iter);
-        new_rows += (*column_file_iter)->getRows();
-        new_bytes += (*column_file_iter)->getBytes();
-        new_deletes += (*column_file_iter)->getDeletes();
-        column_file_iter++;
+        auto & column_file = column_files[i];
+        new_column_files.emplace_back(column_file);
+        new_rows += column_file->getRows();
+        new_bytes += column_file->getBytes();
+        new_deletes += column_file->getDeletes();
     }
     column_files.swap(new_column_files);
     column_files_count = column_files.size();

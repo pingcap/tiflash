@@ -41,25 +41,16 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(const DMContext & context, bool
     auto storage_snap = std::make_shared<StorageSnapshot>(context.storage_pool, context.getReadLimiter(), context.tracing_id, /*snapshot_read*/ true);
     snap->persisted_files_snap = persisted_file_set->createSnapshot(storage_snap);
     snap->shared_delta_index = delta_index;
-
-    if (!for_update)
-        snap->mem_table_snap = mem_table_set->createSnapshot(storage_snap);
+    snap->mem_table_snap = mem_table_set->createSnapshot(storage_snap, for_update);
 
     return snap;
 }
 
 RowKeyRange DeltaValueSnapshot::getSquashDeleteRange() const
 {
-    if (mem_table_snap)
-    {
-        auto delete_range1 = mem_table_snap->getSquashDeleteRange();
-        auto delete_range2 = persisted_files_snap->getSquashDeleteRange();
-        return delete_range1.merge(delete_range2);
-    }
-    else
-    {
-        return persisted_files_snap->getSquashDeleteRange();
-    }
+    auto delete_range1 = mem_table_snap->getSquashDeleteRange();
+    auto delete_range2 = persisted_files_snap->getSquashDeleteRange();
+    return delete_range1.merge(delete_range2);
 }
 
 // ================================================
@@ -72,7 +63,7 @@ DeltaValueReader::DeltaValueReader(
     const ColumnDefinesPtr & col_defs_,
     const RowKeyRange & segment_range_)
     : delta_snap(delta_snap_)
-    , mem_table_reader(delta_snap_->getMemTableSetSnapshot() ? std::make_shared<ColumnFileSetReader>(context, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_) : nullptr)
+    , mem_table_reader(std::make_shared<ColumnFileSetReader>(context, delta_snap_->getMemTableSetSnapshot(), col_defs_, segment_range_))
     , persisted_files_reader(std::make_shared<ColumnFileSetReader>(context, delta_snap_->getPersistedFileSetSnapshot(), col_defs_, segment_range_))
     , col_defs(col_defs_)
     , segment_range(segment_range_)
@@ -84,7 +75,7 @@ DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & n
     new_reader->delta_snap = delta_snap;
     new_reader->_compacted_delta_index = _compacted_delta_index;
     new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs);
-    new_reader->mem_table_reader = mem_table_reader ? mem_table_reader->createNewReader(new_col_defs) : nullptr;
+    new_reader->mem_table_reader = mem_table_reader->createNewReader(new_col_defs);
     new_reader->col_defs = new_col_defs;
     new_reader->segment_range = segment_range;
 
@@ -115,8 +106,7 @@ size_t DeltaValueReader::readRows(MutableColumns & output_cols, size_t offset, s
     size_t actual_read = 0;
     if (persisted_files_start < persisted_files_end)
         actual_read += persisted_files_reader->readRows(output_cols, persisted_files_start, persisted_files_end - persisted_files_start, range);
-
-    if ((mem_table_start < mem_table_end) && mem_table_reader)
+    if (mem_table_start < mem_table_end)
         actual_read += mem_table_reader->readRows(output_cols, mem_table_start, mem_table_end - mem_table_start, range);
 
     return actual_read;
@@ -142,8 +132,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(size_t rows_begin, size_t deletes
     auto mem_table_deletes_end = deletes_end <= mem_table_deletes_offset ? 0 : std::min(deletes_end - mem_table_deletes_offset, total_delta_deletes - mem_table_deletes_offset);
 
     persisted_files_reader->getPlaceItems(res, persisted_files_rows_begin, persisted_files_deletes_begin, persisted_files_rows_end, persisted_files_deletes_end);
-    if (mem_table_reader)
-        mem_table_reader->getPlaceItems(res, mem_table_rows_begin, mem_table_deletes_begin, mem_table_rows_end, mem_table_deletes_end, mem_table_rows_offset);
+    mem_table_reader->getPlaceItems(res, mem_table_rows_begin, mem_table_deletes_begin, mem_table_rows_end, mem_table_deletes_end, mem_table_rows_offset);
 
     return res;
 }
@@ -167,7 +156,7 @@ bool DeltaValueReader::shouldPlace(const DMContext & context,
 
     size_t rows_in_persisted_file_snap = delta_snap->getMemTableSetRowsOffset();
     return persisted_files_reader->shouldPlace(context, relevant_range, max_version, placed_rows)
-        || (mem_table_reader && mem_table_reader->shouldPlace(context, relevant_range, max_version, placed_rows <= rows_in_persisted_file_snap ? 0 : placed_rows - rows_in_persisted_file_snap));
+        || mem_table_reader->shouldPlace(context, relevant_range, max_version, placed_rows <= rows_in_persisted_file_snap ? 0 : placed_rows - rows_in_persisted_file_snap);
 }
 
 } // namespace DB::DM

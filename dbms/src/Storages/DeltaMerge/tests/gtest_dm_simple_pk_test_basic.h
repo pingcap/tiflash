@@ -53,6 +53,7 @@ public:
     void flush();
     void mergeDelta(Int64 start_key, Int64 end_key);
     void mergeDelta();
+    bool merge(Int64 start_key, Int64 end_key);
     void deleteRange(Int64 start_key, Int64 end_key);
     size_t getRowsN();
     size_t getRowsN(Int64 start_key, Int64 end_key);

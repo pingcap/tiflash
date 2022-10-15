@@ -172,15 +172,16 @@ TEST_F(SegmentOperationTest, Issue4956)
 try
 {
     // flush data, make the segment can be split.
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     // write data to cache, reproduce the https://github.com/pingcap/tiflash/issues/4956
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
-    auto segment_id = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto segment_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 500, Segment::SplitMode::Physical);
     ASSERT_TRUE(segment_id.has_value());
 
     mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id});
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
 }
 CATCH
 
@@ -304,7 +305,7 @@ try
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_merge_delta_apply.next();
-        th_seg_merge_delta.wait();
+        th_seg_merge_delta.get();
 
         LOG_DEBUG(log, "finishApplyMergeDelta");
     }
@@ -363,7 +364,7 @@ try
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_split_apply.next();
-        th_seg_split.wait();
+        th_seg_split.get();
 
         LOG_DEBUG(log, "finishApplySplit");
         mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id});
@@ -424,7 +425,7 @@ try
         writeSegment(new_seg_id, 100);
         ingestDTFileIntoSegment(new_seg_id, 100);
         sp_seg_merge_apply.next();
-        th_seg_merge.wait();
+        th_seg_merge.get();
 
         LOG_DEBUG(log, "finishApplyMerge");
     }
@@ -530,7 +531,7 @@ try
     // Finish the segment merge
     LOG_DEBUG(log, "continueApplyMerge");
     sp_seg_merge_apply.next();
-    th_seg_merge.wait();
+    th_seg_merge.get();
     LOG_DEBUG(log, "finishApplyMerge");
 
     // logical split
@@ -603,7 +604,7 @@ try
         // Finish the segment merge
         LOG_DEBUG(log, "continueApplyMerge");
         sp_seg_merge_apply.next();
-        th_seg_merge.wait();
+        th_seg_merge.get();
         LOG_DEBUG(log, "finishApplyMerge");
 
         // logical split
@@ -798,8 +799,8 @@ try
     ASSERT_TRUE(new_seg_id_opt.has_value());
     ASSERT_EQ(segments.size(), 2);
     ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
-    ASSERT_EQ(50, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(50 + 70, getSegmentRowNum(*new_seg_id_opt));
+    ASSERT_EQ(85, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(85, getSegmentRowNum(*new_seg_id_opt));
 }
 CATCH
 

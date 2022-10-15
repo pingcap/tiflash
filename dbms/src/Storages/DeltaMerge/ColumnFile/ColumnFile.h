@@ -89,7 +89,7 @@ public:
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
 
 public:
-    /// This id is only used to to do equal check in DeltaValueSpace::checkHeadAndCloneTail.
+    /// This id is only used to to do equal check in isSame().
     UInt64 getId() const { return id; }
 
     virtual size_t getRows() const { return 0; }
@@ -108,6 +108,16 @@ public:
     bool isBigFile() const { return getType() == Type::BIG_FILE; };
     /// Is a ColumnFilePersisted or not
     bool isPersisted() const { return getType() != Type::INMEMORY_FILE; };
+
+    /**
+     * Whether this column file SEEMS TO BE flushed from another.
+     *
+     * As it only compares metadata and never checks real data, it is not accurate
+     * when checking whether a ColumnFileTiny is flushed from a ColumnFileInMemory.
+     */
+    virtual bool mayBeFlushedFrom(ColumnFile *) const { return false; }
+
+    bool isSame(ColumnFile * other) const { return id == other->id; }
 
     ColumnFileInMemory * tryToInMemoryFile();
     ColumnFileTiny * tryToTinyFile();

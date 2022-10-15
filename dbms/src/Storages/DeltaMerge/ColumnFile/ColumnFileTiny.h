@@ -115,6 +115,16 @@ public:
 
     static std::tuple<ColumnFilePersistedPtr, BlockPtr> deserializeMetadata(ReadBuffer & buf, const BlockPtr & last_schema);
 
+    bool mayBeFlushedFrom(ColumnFile * from_file) const override
+    {
+        if (const auto * other_tiny = from_file->tryToTinyFile(); other_tiny)
+            return data_page_id == other_tiny->data_page_id;
+        else if (const auto * other_in_memory = from_file->tryToInMemoryFile(); other_in_memory)
+            return bytes == from_file->getBytes() && rows == from_file->getRows();
+        else
+            return false;
+    }
+
     String toString() const override
     {
         String s = "{tiny_file,rows:" + DB::toString(rows) //
