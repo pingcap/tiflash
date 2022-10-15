@@ -206,8 +206,10 @@ Segment::Segment( //
     , parent_log(parent_log_)
     , log(parent_log_->getChild(fmt::format("segment_id={} epoch={}", segment_id, epoch)))
 {
-    delta->resetLogger(log);
-    stable->resetLogger(log);
+    if (delta != nullptr)
+        delta->resetLogger(log);
+    if (stable != nullptr)
+        stable->resetLogger(log);
 }
 
 SegmentPtr Segment::newSegment( //
