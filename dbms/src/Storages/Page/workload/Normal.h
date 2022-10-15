@@ -44,7 +44,7 @@ public:
     {
         pool.addCapacity(1 + options.num_writers + options.num_readers);
 
-        DB::PageStorage::Config config;
+        DB::PageStorageConfig config;
         config.num_write_slots = options.num_writer_slots;
         initPageStorage(config);
 

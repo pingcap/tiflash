@@ -47,7 +47,7 @@ private:
 
     void run() override
     {
-        DB::PageStorage::Config config;
+        DB::PageStorageConfig config;
         initPageStorage(config, name());
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);

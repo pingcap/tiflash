@@ -65,7 +65,7 @@ public:
     virtual void onDumpResult();
 
 protected:
-    void initPageStorage(DB::PageStorage::Config & config, String path_prefix = "");
+    void initPageStorage(DB::PageStorageConfig & config, String path_prefix = "");
 
     void startBackgroundTimer();
 

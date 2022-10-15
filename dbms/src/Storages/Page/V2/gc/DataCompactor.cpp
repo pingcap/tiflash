@@ -33,7 +33,7 @@ namespace PS::V2
 template <typename SnapshotPtr>
 DataCompactor<SnapshotPtr>::DataCompactor(
     const PageStorage & storage,
-    PageStorage::Config gc_config,
+    PageStorageConfig gc_config,
     const WriteLimiterPtr & write_limiter_,
     const ReadLimiterPtr & read_limiter_)
     : storage_name(storage.storage_name)
