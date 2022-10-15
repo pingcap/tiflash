@@ -82,7 +82,7 @@ LoggerPtr getLogger(const Context & context)
     auto * dag_context = context.getDAGContext();
     return (dag_context && dag_context->log)
         ? dag_context->log
-        : Logger::get("executeQuery");
+        : Logger::get();
 }
 
 

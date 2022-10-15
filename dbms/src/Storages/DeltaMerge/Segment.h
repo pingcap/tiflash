@@ -111,7 +111,7 @@ public:
     DISALLOW_COPY_AND_MOVE(Segment);
 
     Segment(
-        const std::string & log_prefix_,
+        const LoggerPtr & parent_log_,
         UInt64 epoch_,
         const RowKeyRange & rowkey_range_,
         PageId segment_id_,
@@ -120,7 +120,7 @@ public:
         const StableValueSpacePtr & stable_);
 
     static SegmentPtr newSegment(
-        const std::string & log_prefix,
+        const LoggerPtr & parent_log,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
@@ -129,14 +129,14 @@ public:
         PageId delta_id,
         PageId stable_id);
     static SegmentPtr newSegment(
-        const std::string & log_prefix,
+        const LoggerPtr & parent_log,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
         PageId segment_id,
         PageId next_segment_id);
 
-    static SegmentPtr restoreSegment(const std::string & log_prefix, DMContext & context, PageId segment_id);
+    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id);
 
     void serialize(WriteBatch & wb);
 
@@ -534,9 +534,8 @@ private:
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
 
-    const std::string log_prefix;
-
-    LoggerPtr log;
+    const LoggerPtr parent_log; // Used when constructing new segments in split
+    const LoggerPtr log;
 };
 
 } // namespace DB::DM

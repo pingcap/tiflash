@@ -84,7 +84,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     , store_inited(false)
     , max_column_id_used(0)
     , global_context(global_context_.getGlobalContext())
-    , log(Logger::get("StorageDeltaMerge", fmt::format("{}.{}", db_name_, table_name_)))
+    , log(Logger::get(fmt::format("{}.{}", db_name_, table_name_)))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -644,7 +644,7 @@ BlockInputStreams StorageDeltaMerge::read(
     RUNTIME_CHECK(tmt.isInitialized());
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
-    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
+    auto tracing_logger = log->getChild(query_info.req_id);
 
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
@@ -671,7 +671,7 @@ BlockInputStreams StorageDeltaMerge::read(
     check_read_tso(mvcc_query_info.read_tso);
 
     FmtBuffer fmt_buf;
-    if (unlikely(tracing_logger->trace()))
+    if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
     {
         fmt_buf.append("orig, ");
         fmt_buf.joinStr(
@@ -706,7 +706,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*expected_ranges_count*/ num_streams,
         tracing_logger);
 
-    if (unlikely(tracing_logger->trace()))
+    if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
     {
         fmt_buf.append(" merged, ");
         fmt_buf.joinStr(

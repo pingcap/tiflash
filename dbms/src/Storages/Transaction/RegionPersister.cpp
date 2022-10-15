@@ -72,7 +72,7 @@ void RegionPersister::computeRegionWriteBuffer(const Region & region, RegionCach
     if (unlikely(region_size > static_cast<size_t>(std::numeric_limits<UInt32>::max())))
     {
         LOG_WARNING(
-            Logger::get("RegionPersister"),
+            Logger::get(),
             "Persisting big region: {} with data info: {}, serialized size {}",
             region.toString(),
             region.dataInfo(),
@@ -145,7 +145,7 @@ void RegionPersister::doPersist(RegionCacheWriteElement & region_write_buffer, c
 RegionPersister::RegionPersister(Context & global_context_, const RegionManager & region_manager_)
     : global_context(global_context_)
     , region_manager(region_manager_)
-    , log(Logger::get("RegionPersister"))
+    , log(Logger::get())
 {}
 
 PageStorageConfig RegionPersister::getPageStorageSettings() const

@@ -242,7 +242,7 @@ DMFileReader::DMFileReader(
     , column_cache(column_cache_)
     , rows_threshold_per_read(rows_threshold_per_read_)
     , file_provider(file_provider_)
-    , log(Logger::get("DMFileReader", tracing_id_))
+    , log(Logger::get(tracing_id_))
 {
     for (const auto & cd : read_columns)
     {

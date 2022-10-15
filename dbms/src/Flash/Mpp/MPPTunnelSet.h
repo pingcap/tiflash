@@ -34,7 +34,7 @@ class MPPTunnelSetBase : private boost::noncopyable
 public:
     using TunnelPtr = std::shared_ptr<Tunnel>;
     explicit MPPTunnelSetBase(const String & req_id)
-        : log(Logger::get("MPPTunnelSet", req_id))
+        : log(Logger::get(req_id))
     {}
 
     void clearExecutionSummaries(tipb::SelectResponse & response);

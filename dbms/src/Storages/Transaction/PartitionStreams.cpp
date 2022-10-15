@@ -57,7 +57,7 @@ static void writeRegionDataToStorage(
     Context & context,
     const RegionPtrWithBlock & region,
     RegionDataReadInfoList & data_list_read,
-    Poco::Logger * log)
+    const LoggerPtr & log)
 {
     constexpr auto FUNCTION_NAME = __FUNCTION__; // NOLINT(readability-identifier-naming)
     const auto & tmt = context.getTMTContext();
@@ -338,7 +338,7 @@ void RegionTable::writeBlockByRegion(
     Context & context,
     const RegionPtrWithBlock & region,
     RegionDataReadInfoList & data_list_to_remove,
-    Poco::Logger * log,
+    const LoggerPtr & log,
     bool lock_region)
 {
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
@@ -371,7 +371,7 @@ RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegi
                                                                                    const std::unordered_set<UInt64> * bypass_lock_ts,
                                                                                    RegionVersion region_version,
                                                                                    RegionVersion conf_version,
-                                                                                   Poco::Logger * log)
+                                                                                   const LoggerPtr & log)
 {
     auto region_data_lock = resolveLocksAndReadRegionData(table_id,
                                                           region,
@@ -425,7 +425,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
         if (e.code() == ErrorCodes::ILLFORMAT_RAFT_ROW)
         {
             // br or lighting may write illegal data into tikv, skip pre-decode and ingest sst later.
-            LOG_WARNING(&Poco::Logger::get(__PRETTY_FUNCTION__),
+            LOG_WARNING(Logger::get(__PRETTY_FUNCTION__),
                         "Got error while reading region committed cache: {}. Skip pre-decode and keep original cache.",
                         e.displayText());
             // set data_list_read and let apply snapshot process use empty block
@@ -503,7 +503,7 @@ AtomicGetStorageSchema(const RegionPtr & region, TMTContext & tmt)
     DecodingStorageSchemaSnapshotConstPtr schema_snapshot;
 
     auto table_id = region->getMappedTableID();
-    LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
+    LOG_DEBUG(Logger::get(__PRETTY_FUNCTION__), "Get schema for table {}", table_id);
     auto context = tmt.getContext();
     const auto atomic_get = [&](bool force_decode) -> bool {
         auto storage = tmt.getStorages().get(table_id);

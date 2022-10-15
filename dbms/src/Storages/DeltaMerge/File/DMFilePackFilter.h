@@ -121,7 +121,7 @@ private:
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
         , use_packs(dmfile->getPacks())
-        , log(Logger::get("DMFilePackFilter", tracing_id))
+        , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
     {
     }

@@ -82,7 +82,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     size_t reading_threads_,
     size_t merging_threads_,
     const String & req_id)
-    : log(Logger::get(name, req_id))
+    : log(Logger::get(req_id))
     , aggregator(params, req_id)
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))

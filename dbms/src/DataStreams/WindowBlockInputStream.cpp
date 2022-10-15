@@ -24,7 +24,7 @@ extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
 WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : log(Logger::get(req_id))
     , window_description(window_description_)
 {
     children.push_back(input);

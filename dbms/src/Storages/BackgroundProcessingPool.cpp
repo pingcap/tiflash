@@ -87,7 +87,7 @@ BackgroundProcessingPool::BackgroundProcessingPool(int size_, std::string thread
     , thread_prefix(thread_prefix_)
     , thread_ids_counter(size_)
 {
-    LOG_INFO(Logger::get("BackgroundProcessingPool"), "Create BackgroundProcessingPool, prefix={} n_threads={}", thread_prefix, size);
+    LOG_INFO(Logger::get(), "Create BackgroundProcessingPool, prefix={} n_threads={}", thread_prefix, size);
 
     threads.resize(size);
     for (size_t i = 0; i < size; ++i)
@@ -283,7 +283,7 @@ std::vector<pid_t> BackgroundProcessingPool::getThreadIds()
     std::lock_guard lock(thread_ids_mtx);
     if (thread_ids.size() != size)
     {
-        LOG_ERROR(Logger::get("BackgroundProcessingPool"), "thread_ids.size is {}, but {} is required", thread_ids.size(), size);
+        LOG_ERROR(Logger::get(), "thread_ids.size is {}, but {} is required", thread_ids.size(), size);
         throw Exception("Background threads' number not match");
     }
     return thread_ids;

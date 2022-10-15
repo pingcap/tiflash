@@ -101,7 +101,7 @@ class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageDirectoryTest()
-        : log(Logger::get("PageDirectoryTest"))
+        : log(Logger::get())
     {}
 
     void SetUp() override

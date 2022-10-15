@@ -14,7 +14,7 @@
 
 #pragma once
 #include <Common/TiFlashBuildInfo.h>
-#include <Common/UnifiedLogPatternFormatter.h>
+#include <Common/UnifiedLogFormatter.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/ConsoleChannel.h>
@@ -123,8 +123,7 @@ class ImitativeEnv
     static void setupLogger()
     {
         Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cout);
-        Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
-        formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
+        Poco::AutoPtr<UnifiedLogFormatter> formatter(new UnifiedLogFormatter());
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Poco::Logger::root().setChannel(formatting_channel);
         Poco::Logger::root().setLevel("trace");

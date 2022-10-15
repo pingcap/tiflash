@@ -28,7 +28,7 @@ class ConcatBlockInputStream : public IProfilingBlockInputStream
 
 public:
     ConcatBlockInputStream(BlockInputStreams inputs_, const String & req_id)
-        : log(Logger::get(NAME, req_id))
+        : log(Logger::get(req_id))
     {
         children.insert(children.end(), inputs_.begin(), inputs_.end());
         current_stream = children.begin();

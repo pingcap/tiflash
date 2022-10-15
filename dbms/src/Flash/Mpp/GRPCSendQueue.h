@@ -93,7 +93,7 @@ public:
     // For gtest usage.
     GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
         : send_queue(queue_size)
-        , log(Logger::get("GRPCSendQueue", "test"))
+        , log(Logger::get())
         , kick_func(func)
         , kick_tag([this]() { return kickTagAction(); })
     {}

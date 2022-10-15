@@ -290,7 +290,7 @@ DAGStorageInterpreter::DAGStorageInterpreter(
     , table_scan(table_scan_)
     , push_down_filter(push_down_filter_)
     , max_streams(max_streams_)
-    , log(Logger::get("DAGStorageInterpreter", context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
+    , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
     , logical_table_id(table_scan.getLogicalTableID())
     , settings(context.getSettingsRef())
     , tmt(context.getTMTContext())
@@ -657,7 +657,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             analyzer->getPreparedSets(),
             analyzer->getCurrentInputColumns(),
             context.getTimezoneInfo());
-        query_info.req_id = fmt::format("{} Table<{}>", log->identifier(), table_id);
+        query_info.req_id = fmt::format("{} table_id={}", log->identifier(), table_id);
         query_info.keep_order = table_scan.keepOrder();
         query_info.is_fast_scan = table_scan.isFastScan();
         return query_info;

@@ -30,7 +30,7 @@ DAGProperties getDAGPropertiesForTest(int server_num)
 void MPPTaskTestUtils::SetUpTestCase()
 {
     ExecutorTest::SetUpTestCase();
-    log_ptr = Logger::get("compute_test");
+    log_ptr = Logger::get();
     server_num = 1;
 }
 

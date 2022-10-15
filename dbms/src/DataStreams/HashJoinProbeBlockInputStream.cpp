@@ -21,7 +21,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
     const BlockInputStreamPtr & input,
     const ExpressionActionsPtr & join_probe_actions_,
     const String & req_id)
-    : log(Logger::get(name, req_id))
+    : log(Logger::get(req_id))
     , join_probe_actions(join_probe_actions_)
 {
     children.push_back(input);
@@ -35,7 +35,7 @@ HashJoinProbeBlockInputStream::HashJoinProbeBlockInputStream(
 
 Block HashJoinProbeBlockInputStream::getTotals()
 {
-    if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
+    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
     {
         totals = child->getTotals();
         join_probe_actions->executeOnTotals(totals);

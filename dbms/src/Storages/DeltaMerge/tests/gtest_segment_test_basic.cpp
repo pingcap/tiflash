@@ -47,7 +47,7 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
         random = std::mt19937{seed};
     }
 
-    logger = Logger::get("SegmentTest");
+    logger = Logger::get();
     logger_op = Logger::get("SegmentTestOperation");
 
     TiFlashStorageTestBasic::SetUp();
@@ -546,7 +546,7 @@ SegmentPtr SegmentTestBasic::reload(bool is_common_handle, const ColumnDefinesPt
     ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID) : pre_define_columns;
     setColumns(cols);
 
-    return Segment::newSegment(/* log_prefix */ "", *dm_context, table_columns, RowKeyRange::newAll(is_common_handle, 1), storage_pool->newMetaPageId(), 0);
+    return Segment::newSegment(Logger::get(), *dm_context, table_columns, RowKeyRange::newAll(is_common_handle, 1), storage_pool->newMetaPageId(), 0);
 }
 
 void SegmentTestBasic::reloadDMContext()

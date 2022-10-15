@@ -54,7 +54,7 @@ public:
     }
 
     FilterParserTest()
-        : log(Logger::get("FilterParserTest"))
+        : log(Logger::get())
         , ctx(TiFlashTestEnv::getContext())
     {
         default_timezone_info = ctx.getTimezoneInfo();

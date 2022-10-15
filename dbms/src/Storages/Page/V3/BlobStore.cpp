@@ -71,7 +71,7 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
-    , log(Logger::get("BlobStore", std::move(storage_name)))
+    , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
     , cached_files(config.cached_fd_size)
 {

@@ -93,7 +93,7 @@ public:
 
     void tryPersist(RegionID region_id);
 
-    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log, bool try_until_succeed = true);
+    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
@@ -255,7 +255,7 @@ private:
 
     TiDB::SnapshotApplyMethod snapshot_apply_method;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::atomic<UInt64> region_compact_log_period;
     std::atomic<UInt64> region_compact_log_min_rows;

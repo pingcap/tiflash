@@ -30,18 +30,18 @@ namespace DM
 // ================================================
 // Public methods
 // ================================================
-DeltaValueSpace::DeltaValueSpace(const std::string & log_prefix_, PageId id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
-    : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(log_prefix_, id_, persisted_files))
-    , mem_table_set(std::make_shared<MemTableSet>(log_prefix_, persisted_file_set->getLastSchema(), in_memory_files))
+DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
+    : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(id_, persisted_files))
+    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema(), in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
-    , log(Logger::get("DeltaValueSpace", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get())
 {}
 
-DeltaValueSpace::DeltaValueSpace(const std::string & log_prefix_, ColumnFilePersistedSetPtr && persisted_file_set_)
+DeltaValueSpace::DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_)
     : persisted_file_set(std::move(persisted_file_set_))
-    , mem_table_set(std::make_shared<MemTableSet>(log_prefix_, persisted_file_set->getLastSchema()))
+    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema()))
     , delta_index(std::make_shared<DeltaIndex>())
-    , log(Logger::get("DeltaValueSpace", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get())
 {}
 
 void DeltaValueSpace::abandon(DMContext & context)
@@ -54,10 +54,10 @@ void DeltaValueSpace::abandon(DMContext & context)
         manager->deleteRef(delta_index);
 }
 
-DeltaValueSpacePtr DeltaValueSpace::restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id)
+DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
-    auto persisted_file_set = ColumnFilePersistedSet::restore(log_prefix, context, segment_range, id);
-    return std::make_shared<DeltaValueSpace>(log_prefix, std::move(persisted_file_set));
+    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id);
+    return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const

@@ -179,7 +179,7 @@ public:
         , read_mode(read_mode_)
         , tasks_wrapper(enable_read_thread_, std::move(tasks_))
         , after_segment_read(after_segment_read_)
-        , log(Logger::get("SegmentReadTaskPool", tracing_id))
+        , log(Logger::get(tracing_id))
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())

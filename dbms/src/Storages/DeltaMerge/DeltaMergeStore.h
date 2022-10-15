@@ -593,8 +593,6 @@ public:
 
     const TableID physical_table_id;
 
-    const std::string child_log_prefix;
-
     const bool is_common_handle;
     const size_t rowkey_column_size;
 

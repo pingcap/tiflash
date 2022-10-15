@@ -164,7 +164,7 @@ public:
     static void writeBlockByRegion(Context & context,
                                    const RegionPtrWithBlock & region,
                                    RegionDataReadInfoList & data_list_to_remove,
-                                   Poco::Logger * log,
+                                   const LoggerPtr & log,
                                    bool lock_region = true);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
@@ -177,7 +177,7 @@ public:
                                                                     const std::unordered_set<UInt64> * bypass_lock_ts,
                                                                     RegionVersion region_version,
                                                                     RegionVersion conf_version,
-                                                                    Poco::Logger * log);
+                                                                    const LoggerPtr & log);
 
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
@@ -217,7 +217,7 @@ private:
     mutable std::mutex mutex;
     mutable std::shared_mutex rw_lock;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 

@@ -27,7 +27,7 @@ Planner::Planner(
     : context(context_)
     , plan_source(plan_source_)
     , max_streams(context.getMaxStreams())
-    , log(Logger::get("Planner", dagContext().log ? dagContext().log->identifier() : ""))
+    , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
 BlockIO Planner::execute()
