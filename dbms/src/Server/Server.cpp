@@ -803,7 +803,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
-    const auto log = Logger::get("");
+    const auto log = Logger::get();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
     FailPointHelper::initRandomFailPoints(config(), log);
