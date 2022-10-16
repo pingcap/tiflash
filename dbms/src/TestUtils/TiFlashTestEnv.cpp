@@ -23,7 +23,6 @@
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TestUtils/SyncPocoChannel.h>
-#include <TestUtils/SyncTestEventListener.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <memory>
