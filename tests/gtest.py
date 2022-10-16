@@ -55,7 +55,7 @@ class TestRunner(object):
 
         try:
             os.remove(self.TEST_MANIFEST_FILE)
-        except FileNotFoundError:
+        except:
             pass
 
         full_cmd = self.cmd[:]
