@@ -386,7 +386,7 @@ TEST(IORateLimiterTest, IOStat)
     ASSERT_EQ(io_rate_limiter.fg_read_limiter, nullptr);
 
     std::string fname = "/tmp/rate_limit_io_stat_test";
-    int fd = ::open(fname.c_str(), O_CREAT | O_RDWR | O_DIRECT, 0666);
+    int fd = ::open(fname.c_str(), O_CREAT | O_RDWR, 0666);
     ASSERT_GT(fd, 0) << strerror(errno);
     std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](const int * fd) { ::close(*fd); });
 
@@ -428,7 +428,7 @@ TEST(IORateLimiterTest, IOStatMultiThread)
             add_bg_pid(syscall(SYS_gettid));
         }
         std::string fname = "/tmp/rate_limit_io_stat_test_" + std::to_string(id) + (is_bg ? "_bg" : "_fg");
-        int fd = ::open(fname.c_str(), O_CREAT | O_RDWR | O_DIRECT, 0666);
+        int fd = ::open(fname.c_str(), O_CREAT | O_RDWR, 0666);
         ASSERT_GT(fd, 0) << strerror(errno);
         std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](const int * fd) { ::close(*fd); });
 
