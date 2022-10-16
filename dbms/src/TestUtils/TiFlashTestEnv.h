@@ -42,7 +42,7 @@ public:
         return std::make_pair(result, result);
     }
 
-    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr);
+    static void setupLogger(const String & level = "trace", std::ostream & os = std::cerr, std::shared_ptr<std::mutex> log_syncer = nullptr);
 
     // If you want to run these tests, you should set this envrionment variablle
     // For example:

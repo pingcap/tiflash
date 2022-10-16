@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <TestUtils/SyncTestEventListener.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 #include <signal.h>
@@ -58,7 +59,10 @@ int main(int argc, char ** argv)
 {
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
-    DB::tests::TiFlashTestEnv::setupLogger();
+    // Used to make sure there is no interleaved outputs for gtest and poco logging.
+    auto output_syncer = std::make_shared<std::mutex>();
+
+    DB::tests::TiFlashTestEnv::setupLogger("trace", std::cout, output_syncer);
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     DB::ServerInfo server_info;
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
@@ -73,6 +77,11 @@ int main(int argc, char ** argv)
 #endif
 
     ::testing::InitGoogleTest(&argc, argv);
+
+    auto & listeners = ::testing::UnitTest::GetInstance()->listeners();
+    auto * default_printer = listeners.Release(listeners.default_result_printer());
+    listeners.Append(new DB::tests::SyncTestEventListener(output_syncer, default_printer));
+
     ::testing::UnitTest::GetInstance()->listeners().Append(new ThrowListener);
 
     auto ret = RUN_ALL_TESTS();

@@ -22,6 +22,8 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/Transaction/TMTContext.h>
+#include <TestUtils/SyncPocoChannel.h>
+#include <TestUtils/SyncTestEventListener.h>
 #include <TestUtils/TiFlashTestEnv.h>
 
 #include <memory>
@@ -169,9 +171,11 @@ void TiFlashTestEnv::shutdown()
     }
 }
 
-void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
+void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os, std::shared_ptr<std::mutex> log_syncer)
 {
-    Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
+    Poco::AutoPtr<Poco::Channel> channel = new Poco::ConsoleChannel(os);
+    if (log_syncer != nullptr)
+        channel = new SyncPocoChannel(log_syncer, channel);
     Poco::AutoPtr<UnifiedLogFormatter> formatter(new UnifiedLogFormatter());
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
