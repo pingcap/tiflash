@@ -145,7 +145,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     // Load `testdata_path` as path if it is set.
     const String root_path = [&]() {
         const auto root_path = testdata_path.empty()
-            ? getTemporaryPath(DB::toString(getpid()), /*get_abs*/ false)
+            ? getTemporaryPath(fmt::format("{}/", getpid()), /*get_abs*/ false)
             : testdata_path[0];
         return Poco::Path(root_path).absolute().toString();
     }();
