@@ -132,7 +132,7 @@ private:
 
     void setAllStreamsFinished()
     {
-        for (size_t i = 0; i < units.size(); i++)
+        for (size_t i = 0; i < units.size(); ++i)
         {
             setStreamFinished(i);
         }
