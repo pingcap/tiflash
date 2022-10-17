@@ -264,35 +264,35 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
 std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
 {
     auto page_lock = acquireLock();
-    switch(rec.type)
+    switch (rec.type)
     {
-        case EditRecordType::VAR_REF:
-        {
-            type = EditRecordType::VAR_REF;
-            is_deleted = false;
-            create_ver = rec.version;
-            ori_page_id = rec.ori_page_id;
-            return nullptr;
-        }
-        case EditRecordType::VAR_EXTERNAL:
-        {
-            type = EditRecordType::VAR_EXTERNAL;
-            is_deleted = false;
-            create_ver = rec.version;
-            being_ref_count = rec.being_ref_count;
-            external_holder = std::make_shared<PageIdV3Internal>(rec.page_id);
-            return external_holder;
-        }
-        case EditRecordType::VAR_ENTRY:
-        {
-            type = EditRecordType::VAR_ENTRY;
-            entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
-            return nullptr;
-        }
-        default:
-        {
-            throw Exception(fmt::format("Calling VersionedPageEntries::fromRestored with unknown type: {}", static_cast<Int32>(rec.type)));
-        }
+    case EditRecordType::VAR_REF:
+    {
+        type = EditRecordType::VAR_REF;
+        is_deleted = false;
+        create_ver = rec.version;
+        ori_page_id = rec.ori_page_id;
+        return nullptr;
+    }
+    case EditRecordType::VAR_EXTERNAL:
+    {
+        type = EditRecordType::VAR_EXTERNAL;
+        is_deleted = false;
+        create_ver = rec.version;
+        being_ref_count = rec.being_ref_count;
+        external_holder = std::make_shared<PageIdV3Internal>(rec.page_id);
+        return external_holder;
+    }
+    case EditRecordType::VAR_ENTRY:
+    {
+        type = EditRecordType::VAR_ENTRY;
+        entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
+        return nullptr;
+    }
+    default:
+    {
+        throw Exception(fmt::format("Calling VersionedPageEntries::fromRestored with unknown type: {}", static_cast<Int32>(rec.type)));
+    }
     }
 }
 

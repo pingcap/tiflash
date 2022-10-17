@@ -18,11 +18,11 @@
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <fmt/core.h>
-#include <magic_enum.hpp>
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <queue>

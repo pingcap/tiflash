@@ -21,7 +21,8 @@
 #include <Functions/FunctionsConditional.h>
 #include <WindowFunctions/IWindowFunction.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-#include "magic_enum.hpp"
+
+#include <magic_enum.hpp>
 
 namespace DB
 {

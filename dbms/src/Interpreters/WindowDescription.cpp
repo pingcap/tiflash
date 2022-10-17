@@ -15,6 +15,7 @@
 #include <Core/Field.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
+
 #include <magic_enum.hpp>
 
 namespace DB

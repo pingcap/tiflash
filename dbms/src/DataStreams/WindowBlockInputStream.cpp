@@ -14,6 +14,7 @@
 
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
+
 #include <magic_enum.hpp>
 
 namespace DB

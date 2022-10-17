@@ -29,8 +29,8 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>
-#include <magic_enum.hpp>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>

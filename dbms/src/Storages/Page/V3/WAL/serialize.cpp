@@ -20,8 +20,8 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/WriteBatch.h>
+
 #include <magic_enum.hpp>
-#include "common/types.h"
 
 namespace DB::PS::V3::ser
 {
