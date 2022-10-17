@@ -191,7 +191,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
 
 TEST(WALLognameTest, parsing)
 {
-    LoggerPtr log = Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get();
     const String parent_path("/data1");
 
     {
@@ -237,7 +237,7 @@ TEST(WALLognameTest, parsing)
 
 TEST(WALLognameSetTest, ordering)
 {
-    LoggerPtr log = Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get();
     const String parent_path("/data1");
 
     LogFilenameSet filenames;
@@ -277,7 +277,7 @@ class WALStoreTest
 public:
     WALStoreTest()
         : multi_paths(GetParam())
-        , log(Logger::get("WALStoreTest"))
+        , log(Logger::get())
     {
     }
 
@@ -667,7 +667,7 @@ try
     EXPECT_EQ(num_edits_read, num_edits_test);
     EXPECT_EQ(num_pages_read, page_id);
 
-    LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
+    LOG_INFO(Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
     // Test for save snapshot (with encryption)
 

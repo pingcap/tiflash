@@ -39,7 +39,7 @@ namespace DM
 
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at, SegmentSplitMode opt_split_mode)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "Split - Begin, mode={} reason={}{} safe_point={} segment={}",
         magic_enum::enum_name(opt_split_mode),
@@ -56,20 +56,20 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because not valid, segment={}", segment->simpleInfo());
+            LOG_DEBUG(log, "Split - Give up segmentSplit because not valid, segment={}", segment->simpleInfo());
             return {};
         }
 
         segment_snap = segment->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentSplit);
         if (!segment_snap)
         {
-            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because snapshot failed, segment={}", segment->simpleInfo());
+            LOG_DEBUG(log, "Split - Give up segmentSplit because snapshot failed, segment={}", segment->simpleInfo());
             return {};
         }
         if (!opt_split_at.has_value() && !segment_snap->getRows())
         {
             // When opt_split_at is not specified, we skip split for empty segments.
-            LOG_FMT_DEBUG(log, "Split - Give up auto segmentSplit because no row, segment={}", segment->simpleInfo());
+            LOG_DEBUG(log, "Split - Give up auto segmentSplit because no row, segment={}", segment->simpleInfo());
             return {};
         }
         schema_snap = store_columns;
@@ -154,7 +154,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
 
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_DEBUG(log, "Split - Give up segmentSplit because not valid, segment={}", segment->simpleInfo());
+            LOG_DEBUG(log, "Split - Give up segmentSplit because not valid, segment={}", segment->simpleInfo());
             wbs.setRollback();
             return {};
         }
@@ -184,7 +184,7 @@ SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentP
         duplicated_bytes = new_left->getDelta()->getBytes();
         duplicated_rows = new_right->getDelta()->getBytes();
 
-        LOG_FMT_INFO(log, "Split - {} - Finish, segment is split into two, old_segment={} new_left={} new_right={}", split_info.is_logical ? "SplitLogical" : "SplitPhysical", segment->info(), new_left->info(), new_right->info());
+        LOG_INFO(log, "Split - {} - Finish, segment is split into two, old_segment={} new_left={} new_right={}", split_info.is_logical ? "SplitLogical" : "SplitPhysical", segment->info(), new_left->info(), new_right->info());
     }
 
     wbs.writeRemoves();
@@ -212,7 +212,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
 {
     RUNTIME_CHECK(ordered_segments.size() >= 2, ordered_segments.size());
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "Merge - Begin, reason={} safe_point={} segments_to_merge={}",
         magic_enum::enum_name(reason),
@@ -230,7 +230,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         {
             if (seg->hasAbandoned())
             {
-                LOG_FMT_INFO(log, "Merge - Give up segmentMerge because segment abandoned, segment={}", seg->simpleInfo());
+                LOG_INFO(log, "Merge - Give up segmentMerge because segment abandoned, segment={}", seg->simpleInfo());
                 return {};
             }
 
@@ -259,7 +259,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         {
             if (!isSegmentValid(lock, seg))
             {
-                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->simpleInfo());
+                LOG_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->simpleInfo());
                 return {};
             }
         }
@@ -269,7 +269,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
             auto snap = seg->createSnapshot(dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfSegmentMerge);
             if (!snap)
             {
-                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because snapshot failed, segment={}", seg->simpleInfo());
+                LOG_DEBUG(log, "Merge - Give up segmentMerge because snapshot failed, segment={}", seg->simpleInfo());
                 return {};
             }
 
@@ -322,7 +322,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         {
             if (!isSegmentValid(lock, seg))
             {
-                LOG_FMT_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->simpleInfo());
+                LOG_DEBUG(log, "Merge - Give up segmentMerge because not valid, segment={}", seg->simpleInfo());
                 wbs.setRollback();
                 return {};
             }
@@ -350,7 +350,7 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         if constexpr (DM_RUN_CHECK)
             merged->check(dm_context, "After segment merge");
 
-        LOG_FMT_INFO(
+        LOG_INFO(
             log,
             "Merge - Finish, {} segments are merged into one, reason={} merged={} segments_to_merge={}",
             ordered_segments.size(),
@@ -376,7 +376,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
     const MergeDeltaReason reason,
     SegmentSnapshotPtr segment_snap)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "MergeDelta - Begin, reason={} safe_point={} segment={}",
         magic_enum::enum_name(reason),
@@ -390,7 +390,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_DEBUG(log, "MergeDelta - Give up segmentMergeDelta because segment not valid, segment={}", segment->simpleInfo());
+            LOG_DEBUG(log, "MergeDelta - Give up segmentMergeDelta because segment not valid, segment={}", segment->simpleInfo());
             return {};
         }
 
@@ -400,7 +400,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (unlikely(!segment_snap))
         {
-            LOG_FMT_DEBUG(log, "MergeDelta - Give up segmentMergeDelta because snapshot failed, segment={}", segment->simpleInfo());
+            LOG_DEBUG(log, "MergeDelta - Give up segmentMergeDelta because snapshot failed, segment={}", segment->simpleInfo());
             return {};
         }
         schema_snap = store_columns;
@@ -465,7 +465,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
 
         if (!isSegmentValid(read_write_lock, segment))
         {
-            LOG_FMT_DEBUG(log, "MergeDelta - Give up segmentMergeDelta because segment not valid, segment={}", segment->simpleInfo());
+            LOG_DEBUG(log, "MergeDelta - Give up segmentMergeDelta because segment not valid, segment={}", segment->simpleInfo());
             wbs.setRollback();
             return {};
         }
@@ -492,7 +492,7 @@ SegmentPtr DeltaMergeStore::segmentMergeDelta(
             new_segment->check(dm_context, "After segmentMergeDelta");
         }
 
-        LOG_FMT_INFO(
+        LOG_INFO(
             log,
             "MergeDelta - Finish, delta is merged, old_segment={} new_segment={}",
             segment->info(),
@@ -515,7 +515,7 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
     const SegmentPtr & segment,
     const DMFilePtr & data_file)
 {
-    LOG_FMT_INFO(log, "ReplaceData - Begin, segment={} data_file={}", segment->info(), data_file->path());
+    LOG_INFO(log, "ReplaceData - Begin, segment={} data_file={}", segment->info(), data_file->path());
 
     WriteBatches wbs(*storage_pool, dm_context.getWriteLimiter());
 
@@ -524,7 +524,7 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
         std::unique_lock lock(read_write_mutex);
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_DEBUG(log, "ReplaceData - Give up segment replace data because segment not valid, segment={} data_file={}", segment->simpleInfo(), data_file->path());
+            LOG_DEBUG(log, "ReplaceData - Give up segment replace data because segment not valid, segment={} data_file={}", segment->simpleInfo(), data_file->path());
             return {};
         }
 
@@ -541,7 +541,7 @@ SegmentPtr DeltaMergeStore::segmentDangerouslyReplaceData(
         segments[segment->getRowKeyRange().getEnd()] = new_segment;
         id_to_segment[segment->segmentId()] = new_segment;
 
-        LOG_FMT_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
+        LOG_INFO(log, "ReplaceData - Finish, old_segment={} new_segment={}", segment->info(), new_segment->info());
     }
 
     wbs.writeRemoves();
@@ -556,19 +556,19 @@ bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
 {
     if (segment->hasAbandoned())
     {
-        LOG_FMT_DEBUG(log, "Segment instance is abandoned, segment={}", segment->simpleInfo());
+        LOG_DEBUG(log, "Segment instance is abandoned, segment={}", segment->simpleInfo());
         return false;
     }
     // Segment instance could have been removed or replaced.
     auto it = segments.find(segment->getRowKeyRange().getEnd());
     if (it == segments.end())
     {
-        LOG_FMT_DEBUG(log, "Segment not found in segment map, segment={}", segment->simpleInfo());
+        LOG_DEBUG(log, "Segment not found in segment map, segment={}", segment->simpleInfo());
 
         auto it2 = id_to_segment.find(segment->segmentId());
         if (it2 != id_to_segment.end())
         {
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "Found segment with same id in id_to_segment, found_segment={} my_segment={}",
                 it2->second->info(),
@@ -579,7 +579,7 @@ bool DeltaMergeStore::doIsSegmentValid(const SegmentPtr & segment)
     auto & cur_segment = it->second;
     if (cur_segment.get() != segment.get())
     {
-        LOG_FMT_DEBUG(log, "Segment instance has been replaced in segment map, segment={}", segment->simpleInfo());
+        LOG_DEBUG(log, "Segment instance has been replaced in segment map, segment={}", segment->simpleInfo());
         return false;
     }
     return true;

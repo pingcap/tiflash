@@ -24,7 +24,7 @@ MPPTaskScheduleEntry::MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPT
     , id(id_)
     , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
-    , log(Logger::get("MPPTaskScheduleEntry", id.toString()))
+    , log(Logger::get(id.toString()))
 {}
 
 MPPTaskScheduleEntry::~MPPTaskScheduleEntry()
@@ -41,7 +41,7 @@ bool MPPTaskScheduleEntry::schedule(ScheduleState state)
     std::unique_lock lock(schedule_mu);
     if (schedule_state == ScheduleState::WAITING)
     {
-        LOG_FMT_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
+        LOG_INFO(log, "task is {}.", state == ScheduleState::SCHEDULED ? "scheduled" : " failed to schedule");
         schedule_state = state;
         schedule_cv.notify_one();
         return true;
@@ -51,7 +51,7 @@ bool MPPTaskScheduleEntry::schedule(ScheduleState state)
 
 void MPPTaskScheduleEntry::waitForSchedule()
 {
-    LOG_FMT_INFO(log, "task waits for schedule");
+    LOG_INFO(log, "task waits for schedule");
     Stopwatch stopwatch;
     double time_cost = 0;
     {
@@ -69,7 +69,7 @@ void MPPTaskScheduleEntry::waitForSchedule()
             throw Exception(fmt::format("{} is failed to schedule because of being cancelled in min-tso scheduler after waiting for {}s.", id.toString(), time_cost));
         }
     }
-    LOG_FMT_INFO(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);
+    LOG_INFO(log, "task waits for {} s to schedule and starts to run in parallel.", time_cost);
 }
 
 const MPPTaskId & MPPTaskScheduleEntry::getMPPTaskId() const

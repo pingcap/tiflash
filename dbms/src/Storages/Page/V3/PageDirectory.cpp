@@ -735,7 +735,7 @@ PageDirectory::PageDirectory(String storage_name, WALStorePtr && wal_, UInt64 ma
     , sequence(0)
     , wal(std::move(wal_))
     , max_persisted_log_files(max_persisted_log_files_)
-    , log(Logger::get("PageDirectory", std::move(storage_name)))
+    , log(Logger::get(storage_name))
 {
 }
 
@@ -1236,7 +1236,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
         versioned_entries->createNewEntry(record.version, record.entry);
     }
 
-    LOG_FMT_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
+    LOG_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
@@ -1287,9 +1287,9 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
         }
     }
 
-    LOG_FMT_INFO(log, "Get entries by Blob ids done. [total_page_size={}] [total_page_nums={}]", //
-                 total_page_size, //
-                 total_page_nums);
+    LOG_INFO(log, "Get entries by Blob ids done. [total_page_size={}] [total_page_nums={}]", //
+             total_page_size, //
+             total_page_nums);
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
 
@@ -1439,22 +1439,22 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
         }
     }
 
-    LOG_FMT_INFO(log, "After MVCC gc in memory [lowest_seq={}] "
-                      "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-                      "[total_deref_counter={}] [all_del_entries={}]. "
-                      "Still exist [snapshot_nums={}], [page_nums={}]. "
-                      "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-                      "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
-                 lowest_seq,
-                 invalid_snapshot_nums,
-                 invalid_page_nums,
-                 total_deref_counter,
-                 all_del_entries.size(),
-                 valid_snapshot_nums,
-                 valid_page_nums,
-                 longest_alive_snapshot_time,
-                 longest_alive_snapshot_seq,
-                 stale_snapshot_nums);
+    LOG_INFO(log, "After MVCC gc in memory [lowest_seq={}] "
+                  "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
+                  "[total_deref_counter={}] [all_del_entries={}]. "
+                  "Still exist [snapshot_nums={}], [page_nums={}]. "
+                  "Longest alive snapshot: [longest_alive_snapshot_time={}] "
+                  "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+             lowest_seq,
+             invalid_snapshot_nums,
+             invalid_page_nums,
+             total_deref_counter,
+             all_del_entries.size(),
+             valid_snapshot_nums,
+             valid_page_nums,
+             longest_alive_snapshot_time,
+             longest_alive_snapshot_seq,
+             stale_snapshot_nums);
 
     return all_del_entries;
 }
@@ -1486,7 +1486,7 @@ PageEntriesEdit PageDirectory::dumpSnapshotToEdit(PageDirectorySnapshotPtr snap)
         }
     }
 
-    LOG_FMT_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
+    LOG_INFO(log, "Dumped snapshot to edits.[sequence={}]", snap->sequence);
     return edit;
 }
 

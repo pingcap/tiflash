@@ -98,8 +98,8 @@ protected:
 
     UInt64 version = 0;
 
-    LoggerPtr logger = Logger::get("SimplePKTestBasic");
-    LoggerPtr logger_op = Logger::get("SimplePKTestBasicOperations");
+    LoggerPtr logger = Logger::get();
+    LoggerPtr logger_op = Logger::get("SimplePKTestBasicOperation");
 
 protected:
     // Below are options

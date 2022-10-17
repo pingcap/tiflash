@@ -459,14 +459,14 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
     {
-        LOG_FMT_INFO(log, "Not page file, ignored {}", page_file_name);
+        LOG_INFO(log, "Not page file, ignored {}", page_file_name);
         return {{}, Type::Invalid};
     }
     std::vector<std::string> ss;
     boost::split(ss, page_file_name, boost::is_any_of("_"));
     if (ss.size() != 3)
     {
-        LOG_FMT_INFO(log, "Unrecognized file, ignored: {}", page_file_name);
+        LOG_INFO(log, "Unrecognized file, ignored: {}", page_file_name);
         return {{}, Type::Invalid};
     }
 
@@ -475,7 +475,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     PageFile pf(file_id, level, parent_path, file_provider_, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
-        LOG_FMT_INFO(log, "Temporary page file, ignored: {}", page_file_name);
+        LOG_INFO(log, "Temporary page file, ignored: {}", page_file_name);
         pf.type = Type::Temp;
         return {pf, Type::Temp};
     }
@@ -485,7 +485,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         // ensure meta exist
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
+            LOG_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
@@ -496,13 +496,13 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         // ensure both meta && data exist
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
+            LOG_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
         if (!Poco::File(pf.dataPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without data file, ignored: {}", pf.dataPath());
+            LOG_INFO(log, "Broken page without data file, ignored: {}", pf.dataPath());
             return {{}, Type::Invalid};
         }
 
@@ -513,14 +513,14 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         pf.type = Type::Checkpoint;
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
+            LOG_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
         return {pf, Type::Checkpoint};
     }
 
-    LOG_FMT_INFO(log, "Unrecognized file prefix, ignored: {}", page_file_name);
+    LOG_INFO(log, "Unrecognized file prefix, ignored: {}", page_file_name);
     return {{}, Type::Invalid};
 }
 

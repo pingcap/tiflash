@@ -141,7 +141,7 @@ BlobStats::BlobStatPtr BlobStats::createStat(BlobFileId blob_file_id, UInt64 max
 
 BlobStats::BlobStatPtr BlobStats::createStatNotChecking(BlobFileId blob_file_id, UInt64 max_caps, const std::lock_guard<std::mutex> &)
 {
-    LOG_FMT_INFO(log, "Created a new BlobStat [blob_id={}] [capacity={}]", blob_file_id, max_caps);
+    LOG_INFO(log, "Created a new BlobStat [blob_id={}] [capacity={}]", blob_file_id, max_caps);
     // Only BlobFile which total capacity is smaller or equal to config.file_limit_size can be reused for another write
     auto stat_type = max_caps <= config.file_limit_size ? BlobStats::BlobStatType::NORMAL : BlobStats::BlobStatType::READ_ONLY;
     BlobStatPtr stat = std::make_shared<BlobStat>(
@@ -185,11 +185,11 @@ void BlobStats::eraseStat(BlobFileId blob_file_id, const std::lock_guard<std::mu
 
     if (stat == nullptr)
     {
-        LOG_FMT_ERROR(log, "BlobStat not exist [blob_id={}]", blob_file_id);
+        LOG_ERROR(log, "BlobStat not exist [blob_id={}]", blob_file_id);
         return;
     }
 
-    LOG_FMT_DEBUG(log, "Erase BlobStat from maps [blob_id={}]", blob_file_id);
+    LOG_DEBUG(log, "Erase BlobStat from maps [blob_id={}]", blob_file_id);
 
     eraseStat(std::move(stat), lock);
 }

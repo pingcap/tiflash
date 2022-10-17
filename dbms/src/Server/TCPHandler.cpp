@@ -92,7 +92,7 @@ void TCPHandler::runImpl()
     {
         if (e.code() == ErrorCodes::CLIENT_HAS_CONNECTED_TO_WRONG_PORT)
         {
-            LOG_FMT_DEBUG(log, "Client has connected to wrong port.");
+            LOG_DEBUG(log, "Client has connected to wrong port.");
             return;
         }
 
@@ -180,7 +180,7 @@ void TCPHandler::runImpl()
             const Settings & settings = query_context.getSettingsRef();
             if (settings.shared_query_clients && !state.query_id.empty())
             {
-                LOG_FMT_DEBUG(log, "shared query");
+                LOG_DEBUG(log, "shared query");
 
                 state.io = query_context.getSharedQueries()->getOrCreateBlockIO(
                     state.query_id,
@@ -307,7 +307,7 @@ void TCPHandler::runImpl()
 
         watch.stop();
 
-        LOG_FMT_INFO(log, "Processed in {:.3f} sec.", watch.elapsedSeconds());
+        LOG_INFO(log, "Processed in {:.3f} sec.", watch.elapsedSeconds());
 
         if (network_error)
             break;
@@ -800,7 +800,7 @@ bool TCPHandler::isQueryCancelled()
         case Protocol::Client::Cancel:
             if (state.empty())
                 throw NetException("Unexpected packet Cancel received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
-            LOG_FMT_INFO(log, "Query was cancelled.");
+            LOG_INFO(log, "Query was cancelled.");
             state.is_cancelled = true;
             return true;
 
@@ -890,7 +890,7 @@ void TCPHandler::run()
         /// Timeout - not an error.
         if (!strcmp(e.what(), "Timeout"))
         {
-            LOG_FMT_DEBUG(log, "Poco::Exception. Code: {}, e.code() = {}, e.displayText() = {}, e.what() = {}", ErrorCodes::POCO_EXCEPTION, e.code(), e.displayText(), e.what());
+            LOG_DEBUG(log, "Poco::Exception. Code: {}, e.code() = {}, e.displayText() = {}, e.what() = {}", ErrorCodes::POCO_EXCEPTION, e.code(), e.displayText(), e.what());
         }
         else
             throw;

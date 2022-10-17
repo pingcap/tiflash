@@ -47,6 +47,16 @@ public:
     // cleanup all external id ptrs.
     void unregisterNamespace(NamespaceId ns_id);
 
+    // Check whether `ns_id` exist. Expose for testing.
+    // Note that the result is meaningless unless `getAliveIds`
+    // or `unregisterNamespace` is called to cleanup invalid
+    // external ids.
+    bool existNamespace(NamespaceId ns_id) const
+    {
+        std::lock_guard map_guard(mu);
+        return ids_by_ns.count(ns_id) > 0;
+    }
+
     DISALLOW_COPY_AND_MOVE(ExternalIdsByNamespace);
 
 private:

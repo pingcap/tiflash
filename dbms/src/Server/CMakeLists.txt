@@ -69,10 +69,16 @@ target_include_directories(tiflash-dttool-entry-object PUBLIC ${TiFlash_SOURCE_D
 add_executable (tiflash main.cpp)
 
 if (USE_INTERNAL_TIFLASH_PROXY)
-    set(PROXY_LIBRARY_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/target/release")
+    get_target_property(TIFLASH_PROXY_LIB_PATH ${TIFLASH_PROXY_LIBRARY} IMPORTED_LOCATION)
+    cmake_path(GET TIFLASH_PROXY_LIB_PATH PARENT_PATH TIFLASH_PROXY_LIB_DIR)
 else()
-    set(PROXY_LIBRARY_DIR "${PREBUILT_LIBS_ROOT}")
+    set(TIFLASH_PROXY_LIB_DIR "${PREBUILT_LIBS_ROOT}")
 endif()
+
+cmake_path(
+    RELATIVE_PATH TIFLASH_PROXY_LIB_DIR
+    BASE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    OUTPUT_VARIABLE TIFLASH_PROXY_LIB_RPATH)
 
 if (ARCH_LINUX)
     if (ARCH_AARCH64)
@@ -92,8 +98,8 @@ if (ARCH_LINUX)
         set(TIFLASH_DEPENDENCY_DIRECTORIES "")
     endif()
 
-    # set build rpaths, so that executables are be directly called in build tree (easy to debug)
-    set_target_properties(tiflash PROPERTIES BUILD_RPATH "${PROXY_LIBRARY_DIR};${TIFLASH_DEPENDENCY_DIR_HINT}")
+    # set build rpaths, so that executables can be directly called in build tree (easy to debug)
+    set_target_properties(tiflash PROPERTIES BUILD_RPATH "$ORIGIN/;$ORIGIN/${TIFLASH_PROXY_LIB_RPATH}/;${TIFLASH_DEPENDENCY_DIR_HINT}")
     set_target_properties(tiflash PROPERTIES INSTALL_RPATH "$ORIGIN/")
     install (TARGETS tiflash
             COMPONENT tiflash-release
@@ -116,8 +122,8 @@ if (ARCH_LINUX)
 
     install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
 elseif(APPLE)
-    # set build rpaths, so that executables are be directly called in build tree (easy to debug)
-    set_target_properties(tiflash PROPERTIES BUILD_RPATH "${PROXY_LIBRARY_DIR}")
+    # set build rpaths, so that executables can be directly called in build tree (easy to debug)
+    set_target_properties(tiflash PROPERTIES BUILD_RPATH "@executable_path/;@executable_path/${TIFLASH_PROXY_LIB_RPATH}/")
     set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
     install (TARGETS tiflash
             COMPONENT tiflash-release
@@ -128,6 +134,9 @@ elseif(APPLE)
             DESTINATION "."
             PRE_INCLUDE_REGEXES ".*proxy.*")
 endif ()
+
+include(CMakePrintHelpers)
+cmake_print_properties(TARGETS tiflash PROPERTIES BUILD_RPATH INSTALL_RPATH)
 
 target_link_libraries (tiflash clickhouse_common_io)
 target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
