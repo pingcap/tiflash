@@ -669,8 +669,6 @@ TableID findTableIdForQueryFragment(ExecutorBinderPtr root_executor, bool must_h
         {
             if (dynamic_cast<mock::ExchangeReceiverBinder *>(c.get()))
                 continue;
-            if (non_exchange_child != nullptr)
-                throw Exception("More than one non-exchange child, should not happen");
             non_exchange_child = c;
         }
         if (non_exchange_child == nullptr)

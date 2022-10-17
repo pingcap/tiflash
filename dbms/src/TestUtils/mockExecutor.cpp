@@ -151,31 +151,16 @@ QueryTasks DAGRequestBuilder::buildMPPTasks(MockDAGRequestContext & mock_context
     return query_tasks;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, Int64 table_id, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const String & db, const String & table, TableInfo & table_info, const MockColumnInfoVec & columns)
 {
     assert(!columns.empty());
-    TableInfo table_info;
-    table_info.name = db + "." + table;
-    table_info.id = table_id;
-    int i = 0;
-    for (const auto & column : columns)
-    {
-        TiDB::ColumnInfo ret;
-        ret.tp = column.second;
-        ret.name = column.first;
-        // TODO: find a way to assign decimal field's flen.
-        if (ret.tp == TiDB::TP::TypeNewDecimal)
-            ret.flen = 65;
-        ret.id = i++;
-        table_info.columns.push_back(std::move(ret));
-    }
     root = mock::compileTableScan(getExecutorIndex(), table_info, db, table, false);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, Int64 table_id, const MockColumnInfoVec & columns)
+DAGRequestBuilder & DAGRequestBuilder::mockTable(const MockTableName & name, TableInfo & table_info, const MockColumnInfoVec & columns)
 {
-    return mockTable(name.first, name.second, table_id, columns);
+    return mockTable(name.first, name.second, table_info, columns);
 }
 
 DAGRequestBuilder & DAGRequestBuilder::exchangeReceiver(const MockColumnInfoVec & columns, uint64_t fine_grained_shuffle_stream_count)
@@ -412,8 +397,8 @@ void MockDAGRequestContext::addExchangeReceiver(const String & name, MockColumnI
 
 DAGRequestBuilder MockDAGRequestContext::scan(const String & db_name, const String & table_name)
 {
-    auto table_id = mock_storage.getTableId(db_name + "." + table_name);
-    return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_id, mock_storage.getTableSchema(db_name + "." + table_name));
+    auto table_info = mock_storage.getTableInfo(db_name + "." + table_name);
+    return DAGRequestBuilder(index, collation).mockTable({db_name, table_name}, table_info, mock_storage.getTableSchema(db_name + "." + table_name));
 }
 
 DAGRequestBuilder MockDAGRequestContext::receive(const String & exchange_name, uint64_t fine_grained_shuffle_stream_count)
