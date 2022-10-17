@@ -103,7 +103,7 @@ uint64_t DTWorkload::updateBlock(Block & block, uint64_t key)
         auto & cd = (*table_info->columns)[0];
         if (cd.type->getTypeId() != TypeIndex::Int64)
         {
-            LOG_ERROR(log, "Column type not match: {} but {} is required", cd.type->getTypeId(), TypeIndex::Int64);
+            LOG_ERROR(log, "Column type not match: {} but {} is required", magic_enum::enum_name(cd.type->getTypeId()), magic_enum::enum_name(TypeIndex::Int64));
             throw std::invalid_argument("Column type not match");
         }
 

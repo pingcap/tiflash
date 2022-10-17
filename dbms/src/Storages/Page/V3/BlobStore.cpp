@@ -230,7 +230,7 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 
@@ -367,7 +367,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 
