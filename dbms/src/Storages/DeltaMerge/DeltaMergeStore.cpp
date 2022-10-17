@@ -193,14 +193,13 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , db_name(db_name_)
     , table_name(table_name_)
     , physical_table_id(physical_table_id_)
-    , child_log_prefix(fmt::format("table_id={}", physical_table_id_))
     , is_common_handle(is_common_handle_)
     , rowkey_column_size(rowkey_column_size_)
     , original_table_handle_define(handle)
     , background_pool(db_context.getBackgroundPool())
     , blockable_background_pool(db_context.getBlockableBackgroundPool())
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
-    , log(Logger::get("DeltaMergeStore", fmt::format("<table_id={}>", physical_table_id_)))
+    , log(Logger::get(fmt::format("table_id={}", physical_table_id_)))
 {
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
@@ -250,7 +249,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             }
 
             auto first_segment = Segment::newSegment( //
-                child_log_prefix,
+                log,
                 *dm_context,
                 store_columns,
                 RowKeyRange::newAll(is_common_handle, rowkey_column_size),
@@ -264,7 +263,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
             auto segment_id = DELTA_MERGE_FIRST_SEGMENT_ID;
             while (segment_id)
             {
-                auto segment = Segment::restoreSegment(child_log_prefix, *dm_context, segment_id);
+                auto segment = Segment::restoreSegment(log, *dm_context, segment_id);
                 segments.emplace(segment->getRowKeyRange().getEnd(), segment);
                 id_to_segment.emplace(segment_id, segment);
 
@@ -851,7 +850,7 @@ void DeltaMergeStore::compact(const Context & db_context, const RowKeyRange & ra
     }
 }
 
-// Read data without mvcc filtering && delete mark != 0 filtering.
+// Read data without mvcc filtering.
 // just for debug
 // readRaw is called under 'selraw  xxxx'
 BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
@@ -908,11 +907,11 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
         EMPTY_FILTER,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
-        /* is_raw = */ true,
-        /* do_delete_mark_filter_for_raw = */ false,
+        /* read_mode */ ReadMode::Raw,
         std::move(tasks),
         after_segment_read,
-        req_info);
+        req_info,
+        enable_read_thread);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -937,8 +936,7 @@ BlockInputStreams DeltaMergeStore::readRaw(const Context & db_context,
                 EMPTY_FILTER,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
-                /* is_raw_ */ true,
-                /* do_delete_mark_filter_for_raw_ */ false, // don't do filter based on del_mark = 1
+                /* read_mode */ ReadMode::Raw,
                 extra_table_id_index,
                 physical_table_id,
                 req_info);
@@ -971,7 +969,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
     // Also, too many read tasks of a segment with different small ranges is not good for data sharing cache.
     SegmentReadTasks tasks = getReadTasksByRanges(*dm_context, sorted_ranges, num_streams, read_segments, /*try_split_task =*/!enable_read_thread);
     auto log_tracing_id = getLogTracingId(*dm_context);
-    auto tracing_logger = Logger::get(log->name(), log_tracing_id);
+    auto tracing_logger = log->getChild(log_tracing_id);
     LOG_DEBUG(tracing_logger,
               "Read create segment snapshot done, keep_order={} dt_enable_read_thread={} enable_read_thread={}",
               keep_order,
@@ -992,11 +990,11 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
         filter,
         max_version,
         expected_block_size,
-        /* is_raw = */ is_fast_scan,
-        /* do_delete_mark_filter_for_raw = */ is_fast_scan,
+        /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
         std::move(tasks),
         after_segment_read,
-        log_tracing_id);
+        log_tracing_id,
+        enable_read_thread);
 
     BlockInputStreams res;
     for (size_t i = 0; i < final_num_stream; ++i)
@@ -1021,8 +1019,7 @@ BlockInputStreams DeltaMergeStore::read(const Context & db_context,
                 filter,
                 max_version,
                 expected_block_size,
-                /* is_raw_= */ is_fast_scan,
-                /* do_delete_mark_filter_for_raw_= */ is_fast_scan,
+                /* read_mode = */ is_fast_scan ? ReadMode::Fast : ReadMode::Normal,
                 extra_table_id_index,
                 physical_table_id,
                 log_tracing_id);
@@ -1567,7 +1564,7 @@ SegmentReadTasks DeltaMergeStore::getReadTasksByRanges(
         total_ranges += task->ranges.size();
     }
 
-    auto tracing_logger = Logger::get(log->name(), getLogTracingId(dm_context));
+    auto tracing_logger = log->getChild(getLogTracingId(dm_context));
     LOG_DEBUG(
         tracing_logger,
         "[sorted_ranges: {}] [tasks before split: {}] [tasks final: {}] [ranges final: {}]",
@@ -1587,7 +1584,7 @@ String DeltaMergeStore::getLogTracingId(const DMContext & dm_ctx)
     }
     else
     {
-        return fmt::format("Table<{}>", physical_table_id);
+        return fmt::format("table_id={}", physical_table_id);
     }
 }
 } // namespace DM

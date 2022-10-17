@@ -47,10 +47,18 @@ namespace DB
 {
 namespace PS::V3::tests
 {
-TEST(ExternalIdsByNamespace, Simple)
+TEST(ExternalIdsByNamespaceTest, Simple)
 {
     NamespaceId ns_id = 100;
     ExternalIdsByNamespace external_ids_by_ns;
+
+    {
+        ASSERT_FALSE(external_ids_by_ns.existNamespace(ns_id));
+        std::shared_ptr<PageIdV3Internal> holder0 = std::make_shared<PageIdV3Internal>(buildV3Id(ns_id, 10));
+        holder0.reset();
+        // though holder0 is released, but the ns_id still exist
+        // until we call getAliveIds. So not check the ns_id here.
+    }
 
     std::atomic<Int32> who(0);
 
@@ -67,20 +75,25 @@ TEST(ExternalIdsByNamespace, Simple)
         Int32 expect = 0;
         who.compare_exchange_strong(expect, 2);
     });
-    th_get_alive.wait();
-    th_insert.wait();
+    th_get_alive.get();
+    th_insert.get();
 
     {
+        // holder keep "50" alive
         auto ids = external_ids_by_ns.getAliveIds(ns_id);
         LOG_DEBUG(&Poco::Logger::root(), "{} end first, size={}", who.load(), ids.size());
         ASSERT_EQ(ids.size(), 1);
         ASSERT_EQ(*ids.begin(), 50);
+        ASSERT_TRUE(external_ids_by_ns.existNamespace(ns_id));
     }
 
     {
+        // unregister all ids under the namespace
+        // "50" is erased though the holder is not released.
         external_ids_by_ns.unregisterNamespace(ns_id);
         auto ids = external_ids_by_ns.getAliveIds(ns_id);
         ASSERT_EQ(ids.size(), 0);
+        ASSERT_FALSE(external_ids_by_ns.existNamespace(ns_id));
     }
 }
 
@@ -88,7 +101,7 @@ class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageDirectoryTest()
-        : log(Logger::get("PageDirectoryTest"))
+        : log(Logger::get())
     {}
 
     void SetUp() override

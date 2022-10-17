@@ -24,7 +24,7 @@ MPPTaskScheduleEntry::MPPTaskScheduleEntry(MPPTaskManager * manager_, const MPPT
     , id(id_)
     , needed_threads(0)
     , schedule_state(ScheduleState::WAITING)
-    , log(Logger::get("MPPTaskScheduleEntry", id.toString()))
+    , log(Logger::get(id.toString()))
 {}
 
 MPPTaskScheduleEntry::~MPPTaskScheduleEntry()

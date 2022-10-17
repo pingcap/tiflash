@@ -145,7 +145,7 @@ Join::Join(
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
     , build_table_state(BuildTableState::SUCCEED)
-    , log(Logger::get("Join", req_id))
+    , log(Logger::get(req_id))
     , limits(limits)
 {
     if (other_condition_ptr != nullptr)

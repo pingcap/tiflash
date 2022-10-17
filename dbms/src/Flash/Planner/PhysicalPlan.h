@@ -29,7 +29,7 @@ class PhysicalPlan
 public:
     explicit PhysicalPlan(Context & context_, const String & req_id)
         : context(context_)
-        , log(Logger::get("PhysicalPlan", req_id))
+        , log(Logger::get(req_id))
     {}
 
     void build(const tipb::DAGRequest * dag_request);
