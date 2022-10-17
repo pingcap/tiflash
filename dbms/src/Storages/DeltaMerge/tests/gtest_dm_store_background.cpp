@@ -171,11 +171,11 @@ try
     // Finish the flush.
     sp_flush_commit.next();
     sp_flush_commit.disable();
-    th_flush.wait();
+    th_flush.get();
 
     // The merge in GC should continue without any further retries.
     sp_merge_flush_retry.next();
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 

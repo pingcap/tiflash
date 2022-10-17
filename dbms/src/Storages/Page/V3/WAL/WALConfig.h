@@ -16,6 +16,7 @@
 
 #include <Common/Exception.h>
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/Page/Config.h>
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/WALRecoveryMode.h>
 
@@ -44,6 +45,16 @@ public:
     WALRecoveryMode getRecoverMode()
     {
         return static_cast<WALRecoveryMode>(wal_recover_mode.get());
+    }
+
+    static WALConfig from(const PageStorageConfig & config)
+    {
+        WALConfig wal_config;
+
+        wal_config.roll_size = config.wal_roll_size;
+        wal_config.max_persisted_log_files = config.wal_max_persisted_log_files;
+
+        return wal_config;
     }
 };
 

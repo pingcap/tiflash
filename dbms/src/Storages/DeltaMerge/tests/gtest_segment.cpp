@@ -304,7 +304,7 @@ try
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_merge_delta_apply.next();
-        th_seg_merge_delta.wait();
+        th_seg_merge_delta.get();
 
         LOG_DEBUG(log, "finishApplyMergeDelta");
     }
@@ -363,7 +363,7 @@ try
         writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
         sp_seg_split_apply.next();
-        th_seg_split.wait();
+        th_seg_split.get();
 
         LOG_DEBUG(log, "finishApplySplit");
         mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, new_seg_id});
@@ -424,7 +424,7 @@ try
         writeSegment(new_seg_id, 100);
         ingestDTFileIntoSegment(new_seg_id, 100);
         sp_seg_merge_apply.next();
-        th_seg_merge.wait();
+        th_seg_merge.get();
 
         LOG_DEBUG(log, "finishApplyMerge");
     }
@@ -530,7 +530,7 @@ try
     // Finish the segment merge
     LOG_DEBUG(log, "continueApplyMerge");
     sp_seg_merge_apply.next();
-    th_seg_merge.wait();
+    th_seg_merge.get();
     LOG_DEBUG(log, "finishApplyMerge");
 
     // logical split
@@ -603,7 +603,7 @@ try
         // Finish the segment merge
         LOG_DEBUG(log, "continueApplyMerge");
         sp_seg_merge_apply.next();
-        th_seg_merge.wait();
+        th_seg_merge.get();
         LOG_DEBUG(log, "finishApplyMerge");
 
         // logical split

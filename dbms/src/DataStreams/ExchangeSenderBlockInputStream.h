@@ -30,7 +30,7 @@ public:
         std::unique_ptr<DAGResponseWriter> writer,
         const String & req_id)
         : writer(std::move(writer))
-        , log(Logger::get(name, req_id))
+        , log(Logger::get(req_id))
     {
         children.push_back(input);
     }

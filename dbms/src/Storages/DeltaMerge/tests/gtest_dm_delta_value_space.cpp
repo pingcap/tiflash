@@ -88,7 +88,7 @@ protected:
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return std::make_unique<DeltaValueSpace>(/* log_prefix */ "", delta_id);
+        return std::make_unique<DeltaValueSpace>(delta_id);
     }
 
     // setColumns should update dm_context at the same time
@@ -452,7 +452,7 @@ TEST_F(DeltaValueSpaceTest, Restore)
         }
         Blocks new_delta_blocks;
         {
-            auto new_delta = delta->restore(/* log_prefix */ "", dmContext(), RowKeyRange::newAll(false, 1), delta_id);
+            auto new_delta = delta->restore(dmContext(), RowKeyRange::newAll(false, 1), delta_id);
             auto new_delta_snapshot = new_delta->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
             DeltaValueInputStream new_delta_stream(dmContext(), new_delta_snapshot, table_columns, RowKeyRange::newAll(false, 1));
             new_delta_stream.readPrefix();
