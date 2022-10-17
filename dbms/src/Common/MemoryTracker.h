@@ -19,7 +19,7 @@
 
 #include <atomic>
 
-extern std::atomic<Int64> real_rss;
+extern std::atomic<Int64> real_rss, proc_num_threads;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;
@@ -140,6 +140,8 @@ extern __thread MemoryTracker * current_memory_tracker;
 #else
 extern thread_local MemoryTracker * current_memory_tracker;
 #endif
+
+extern std::shared_ptr<MemoryTracker> root_of_mem_trackers_not_managed_by_process_list;
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker

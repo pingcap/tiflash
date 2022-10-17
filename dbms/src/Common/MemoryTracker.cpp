@@ -22,7 +22,7 @@
 
 #include <iomanip>
 
-std::atomic<Int64> real_rss{0};
+std::atomic<Int64> real_rss{0}, proc_num_threads{1};
 MemoryTracker::~MemoryTracker()
 {
     if (peak)
@@ -85,9 +85,12 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
-            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({})",
+            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, peak memory usage not tracked by ProcessList: {} ",
                               formatReadableSizeWithBinarySuffix(real_rss),
-                              formatReadableSizeWithBinarySuffix(current_limit));
+                              formatReadableSizeWithBinarySuffix(current_limit),
+                              proc_num_threads.load(),
+                              (root_of_mem_trackers_not_managed_by_process_list? formatReadableSizeWithBinarySuffix(root_of_mem_trackers_not_managed_by_process_list->peak): "0")
+                              );
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
 
@@ -206,6 +209,8 @@ __thread MemoryTracker * current_memory_tracker = nullptr;
 #else
 thread_local MemoryTracker * current_memory_tracker = nullptr;
 #endif
+
+std::shared_ptr<MemoryTracker> root_of_mem_trackers_not_managed_by_process_list = MemoryTracker::create();
 
 namespace CurrentMemoryTracker
 {
