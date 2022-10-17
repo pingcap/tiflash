@@ -18,6 +18,7 @@
 #include <Common/nocopyable.h>
 #include <Server/StorageConfigParser.h>
 #include <fmt/core.h>
+#include <magic_enum.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -458,7 +459,7 @@ private:
                 "max {} avg {} watermark {} config_max {}",
                 max_bytes_per_sec,
                 avg_bytes_per_sec,
-                watermark,
+                magic_enum::enum_name(watermark),
                 config_max_bytes_per_sec);
         }
     };

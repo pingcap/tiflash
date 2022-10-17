@@ -21,6 +21,7 @@
 #include <Functions/FunctionsConditional.h>
 #include <WindowFunctions/IWindowFunction.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
+#include "magic_enum.hpp"
 
 namespace DB
 {
@@ -273,7 +274,7 @@ private:
                 M(Int64)
 #undef M
             default:
-                throw Exception(fmt::format("the argument type of {} is invalid, expect integer, got {}", name, type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                throw Exception(fmt::format("the argument type of {} is invalid, expect integer, got {}", name, magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             };
         }
     }

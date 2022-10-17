@@ -15,6 +15,7 @@
 #include <Core/Field.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -90,7 +91,7 @@ String frameTypeToString(const WindowFrame::FrameType & type)
     default:
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Unknown frame type {}",
-                        type);
+                        static_cast<Int32>(type));
     }
 }
 
@@ -107,7 +108,7 @@ String boundaryTypeToString(const WindowFrame::BoundaryType & type)
     default:
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
                         "Unknown boundary type {}",
-                        type);
+                        magic_enum::enum_name(type));
     }
 }
 } // namespace DB

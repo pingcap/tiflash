@@ -29,6 +29,7 @@
 #include <Storages/Page/V3/PageEntry.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>
+#include <magic_enum.hpp>
 
 #include <memory>
 #include <mutex>
@@ -231,7 +232,7 @@ public:
             "type:{}, create_ver: {}, is_deleted: {}, delete_ver: {}, "
             "ori_page_id: {}, being_ref_count: {}, num_entries: {}"
             "}}",
-            type,
+            magic_enum::enum_name(type),
             create_ver,
             is_deleted,
             delete_ver,
