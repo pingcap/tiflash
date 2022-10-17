@@ -79,7 +79,7 @@ protected:
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return Segment::newSegment(/* log_prefix */ "", *dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
+        return Segment::newSegment(Logger::get(), *dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -899,7 +899,7 @@ try
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
-    SegmentPtr new_segment = Segment::restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
+    SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
 
     {
         // test compare
@@ -912,7 +912,7 @@ try
         // Do some update and restore again
         HandleRange del(0, 32);
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        new_segment = segment->restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
+        new_segment = segment->restoreSegment(Logger::get(), dmContext(), segment->segmentId());
     }
 
     {
@@ -1134,8 +1134,8 @@ try
     }
 
     {
-        SegmentPtr new_segment_1 = Segment::restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
-        SegmentPtr new_segment_2 = Segment::restoreSegment(/* log_prefix */ "", dmContext(), other_segment->segmentId());
+        SegmentPtr new_segment_1 = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
+        SegmentPtr new_segment_2 = Segment::restoreSegment(Logger::get(), dmContext(), other_segment->segmentId());
         auto rows1 = read_rows(new_segment_1);
         auto rows2 = read_rows(new_segment_2);
         ASSERT_EQ(rows1 + rows2, (size_t)200);
@@ -1166,7 +1166,7 @@ try
     }
 
     {
-        SegmentPtr new_segment = Segment::restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
+        SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
         auto rows = read_rows(new_segment);
         ASSERT_EQ(rows, (size_t)300);
     }

@@ -131,10 +131,33 @@ enum class ReadMode
     Raw,
 };
 
+// If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
+// else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
+// `SegmeneReadTasksWrapper` is not thread-safe.
+class SegmentReadTasksWrapper
+{
+public:
+    SegmentReadTasksWrapper(bool enable_read_thread_, SegmentReadTasks && ordered_tasks_);
+
+    // `nextTask` pops task sequentially. This function is used when `enable_read_thread` is false.
+    SegmentReadTaskPtr nextTask();
+
+    // `getTask` and `getTasks` are used when `enable_read_thread` is true.
+    SegmentReadTaskPtr getTask(UInt64 seg_id);
+    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks() const;
+
+    bool empty() const;
+
+private:
+    bool enable_read_thread;
+    SegmentReadTasks ordered_tasks;
+    std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
+};
+
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
-    explicit SegmentReadTaskPool(
+    SegmentReadTaskPool(
         int64_t table_id_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
@@ -144,7 +167,8 @@ public:
         ReadMode read_mode_,
         SegmentReadTasks && tasks_,
         AfterSegmentRead after_segment_read_,
-        const String & tracing_id)
+        const String & tracing_id,
+        bool enable_read_thread_)
         : pool_id(nextPoolId())
         , table_id(table_id_)
         , dm_context(dm_context_)
@@ -153,9 +177,9 @@ public:
         , max_version(max_version_)
         , expected_block_size(expected_block_size_)
         , read_mode(read_mode_)
-        , tasks(std::move(tasks_))
+        , tasks_wrapper(enable_read_thread_, std::move(tasks_))
         , after_segment_read(after_segment_read_)
-        , log(Logger::get("SegmentReadTaskPool", tracing_id))
+        , log(Logger::get(tracing_id))
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
@@ -182,21 +206,13 @@ public:
                   total_bytes / 1024.0 / 1024.0);
     }
 
-    SegmentReadTaskPtr nextTask()
-    {
-        std::lock_guard lock(mutex);
-        if (tasks.empty())
-            return {};
-        auto task = tasks.front();
-        tasks.pop_front();
-        return task;
-    }
+    SegmentReadTaskPtr nextTask();
+    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
+    SegmentReadTaskPtr getTask(UInt64 seg_id);
 
     uint64_t poolId() const { return pool_id; }
 
     int64_t tableId() const { return table_id; }
-
-    const SegmentReadTasks & getTasks() const { return tasks; }
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
@@ -212,7 +228,6 @@ public:
     int64_t getFreeBlockSlots() const;
     bool valid() const;
     void setException(const DB::Exception & e);
-    SegmentReadTaskPtr getTask(uint64_t seg_id);
 
     std::once_flag & addToSchedulerFlag()
     {
@@ -233,7 +248,7 @@ private:
     const uint64_t max_version;
     const size_t expected_block_size;
     const ReadMode read_mode;
-    SegmentReadTasks tasks;
+    SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;
