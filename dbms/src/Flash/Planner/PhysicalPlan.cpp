@@ -228,13 +228,13 @@ void PhysicalPlan::outputAndOptimize()
     root_node = popBack();
     addRootFinalProjectionIfNeed();
 
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "build unoptimized physical plan: \n{}",
         toString());
 
     root_node = optimize(context, root_node, log);
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "build optimized physical plan: \n{}",
         toString());

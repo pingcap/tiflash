@@ -81,7 +81,7 @@ PathCapacityMetrics::PathCapacityMetrics(
 
     for (auto && [path, quota] : all_paths)
     {
-        LOG_FMT_INFO(log, "Init capacity [path={}] [capacity={}]", path, formatReadableSizeWithBinarySuffix(quota));
+        LOG_INFO(log, "Init capacity [path={}] [capacity={}]", path, formatReadableSizeWithBinarySuffix(quota));
         path_infos.emplace_back(CapacityInfo{path, quota});
     }
 }
@@ -91,7 +91,7 @@ void PathCapacityMetrics::addUsedSize(std::string_view file_path, size_t used_by
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_FMT_ERROR(log, "Can not locate path in addUsedSize. File: {}", file_path);
+        LOG_ERROR(log, "Can not locate path in addUsedSize. File: {}", file_path);
         return;
     }
 
@@ -104,7 +104,7 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_FMT_ERROR(log, "Can not locate path in removeUsedSize. File: {}", file_path);
+        LOG_ERROR(log, "Can not locate path in removeUsedSize. File: {}", file_path);
         return;
     }
 
@@ -208,7 +208,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::getFsStatsOfPath(std::s
     ssize_t path_idx = locatePath(file_path);
     if (unlikely(path_idx == INVALID_INDEX))
     {
-        LOG_FMT_ERROR(log, "Can not locate path in getFsStatsOfPath. File: {}", file_path);
+        LOG_ERROR(log, "Can not locate path in getFsStatsOfPath. File: {}", file_path);
         return {FsStats{}, {}};
     }
 
@@ -261,7 +261,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     {
         if (log)
         {
-            LOG_FMT_ERROR(log, "Could not calculate available disk space (statvfs) of path: {}, errno: {}", path, errno);
+            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: {}, errno: {}", path, errno);
         }
         return {};
     }

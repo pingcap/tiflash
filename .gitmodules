@@ -68,6 +68,9 @@
 [submodule "contrib/grpc"]
 	path = contrib/grpc
 	url = https://github.com/grpc/grpc
+	# ignore dirty status since we apply a patch to
+	# suppress a verbose logging
+	ignore = dirty
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
 	url = https://github.com/google/boringssl

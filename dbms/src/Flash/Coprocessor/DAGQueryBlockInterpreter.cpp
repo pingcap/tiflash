@@ -67,7 +67,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
     , max_streams(max_streams_)
-    , log(Logger::get("DAGQueryBlockInterpreter", dagContext().log ? dagContext().log->identifier() : ""))
+    , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
 namespace
@@ -649,7 +649,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // this log measures the concurrent degree in this mpp task
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,

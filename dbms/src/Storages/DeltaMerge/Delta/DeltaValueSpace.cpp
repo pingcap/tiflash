@@ -30,18 +30,18 @@ namespace DM
 // ================================================
 // Public methods
 // ================================================
-DeltaValueSpace::DeltaValueSpace(const std::string & log_prefix_, PageId id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
-    : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(log_prefix_, id_, persisted_files))
-    , mem_table_set(std::make_shared<MemTableSet>(log_prefix_, persisted_file_set->getLastSchema(), in_memory_files))
+DeltaValueSpace::DeltaValueSpace(PageId id_, const ColumnFilePersisteds & persisted_files, const ColumnFiles & in_memory_files)
+    : persisted_file_set(std::make_shared<ColumnFilePersistedSet>(id_, persisted_files))
+    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema(), in_memory_files))
     , delta_index(std::make_shared<DeltaIndex>())
-    , log(Logger::get("DeltaValueSpace", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get())
 {}
 
-DeltaValueSpace::DeltaValueSpace(const std::string & log_prefix_, ColumnFilePersistedSetPtr && persisted_file_set_)
+DeltaValueSpace::DeltaValueSpace(ColumnFilePersistedSetPtr && persisted_file_set_)
     : persisted_file_set(std::move(persisted_file_set_))
-    , mem_table_set(std::make_shared<MemTableSet>(log_prefix_, persisted_file_set->getLastSchema()))
+    , mem_table_set(std::make_shared<MemTableSet>(persisted_file_set->getLastSchema()))
     , delta_index(std::make_shared<DeltaIndex>())
-    , log(Logger::get("DeltaValueSpace", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get())
 {}
 
 void DeltaValueSpace::abandon(DMContext & context)
@@ -54,10 +54,10 @@ void DeltaValueSpace::abandon(DMContext & context)
         manager->deleteRef(delta_index);
 }
 
-DeltaValueSpacePtr DeltaValueSpace::restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id)
+DeltaValueSpacePtr DeltaValueSpace::restore(DMContext & context, const RowKeyRange & segment_range, PageId id)
 {
-    auto persisted_file_set = ColumnFilePersistedSet::restore(log_prefix, context, segment_range, id);
-    return std::make_shared<DeltaValueSpace>(log_prefix, std::move(persisted_file_set));
+    auto persisted_file_set = ColumnFilePersistedSet::restore(context, segment_range, id);
+    return std::make_shared<DeltaValueSpace>(std::move(persisted_file_set));
 }
 
 void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
@@ -147,7 +147,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     if (!is_flushing.compare_exchange_strong(v, true))
     {
         // other thread is flushing, just return.
-        LOG_FMT_DEBUG(log, "Flush stop because other thread is flushing, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Flush stop because other thread is flushing, delta={}", simpleInfo());
         return false;
     }
     SCOPE_EXIT({
@@ -156,7 +156,7 @@ bool DeltaValueSpace::flush(DMContext & context)
             throw Exception(fmt::format("Delta is expected to be flushing, delta={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
     });
 
-    LOG_FMT_DEBUG(log, "Flush start, delta={}", info());
+    LOG_DEBUG(log, "Flush start, delta={}", info());
 
     /// We have two types of data needed to flush to disk:
     ///  1. The cache data in ColumnFileInMemory
@@ -170,7 +170,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-            LOG_FMT_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
             return false;
         }
         flush_task = mem_table_set->buildFlushTask(context, persisted_file_set->getRows(), persisted_file_set->getDeletes(), persisted_file_set->getCurrentFlushVersion());
@@ -180,7 +180,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     // No update, return successfully.
     if (!flush_task)
     {
-        LOG_FMT_DEBUG(log, "Flush cancel because nothing to flush, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Flush cancel because nothing to flush, delta={}", simpleInfo());
         return true;
     }
 
@@ -189,9 +189,9 @@ bool DeltaValueSpace::flush(DMContext & context)
     DeltaIndexPtr new_delta_index;
     if (!delta_index_updates.empty())
     {
-        LOG_FMT_DEBUG(log, "Update index start, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Update index start, delta={}", simpleInfo());
         new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
-        LOG_FMT_DEBUG(log, "Update index done, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Update index done, delta={}", simpleInfo());
     }
 
     {
@@ -201,14 +201,14 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             // Delete written data.
             wbs.setRollback();
-            LOG_FMT_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
             return false;
         }
 
         if (!flush_task->commit(persisted_file_set, wbs))
         {
             wbs.rollbackWrittenLogAndData();
-            LOG_FMT_DEBUG(log, "Flush stop because structure got updated, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because structure got updated, delta={}", simpleInfo());
             return false;
         }
 
@@ -216,7 +216,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         if (new_delta_index)
             delta_index = new_delta_index;
 
-        LOG_FMT_DEBUG(log, "Flush end, flush_tasks={} flush_rows={} flush_deletes={} delta={}", flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushDeletes(), info());
+        LOG_DEBUG(log, "Flush end, flush_tasks={} flush_rows={} flush_deletes={} delta={}", flush_task->getTaskNum(), flush_task->getFlushRows(), flush_task->getFlushDeletes(), info());
     }
     return true;
 }
@@ -227,7 +227,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     // Other thread is doing structure update, just return.
     if (!is_updating.compare_exchange_strong(v, true))
     {
-        LOG_FMT_DEBUG(log, "Compact stop because updating, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Compact stop because updating, delta={}", simpleInfo());
         return true;
     }
     SCOPE_EXIT({
@@ -236,7 +236,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             throw Exception(fmt::format("Delta is expected to be flushing, delta={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
     });
 
-    LOG_FMT_DEBUG(log, "Compact start, delta={}", info());
+    LOG_DEBUG(log, "Compact start, delta={}", info());
 
     MinorCompactionPtr compaction_task;
     PageStorage::SnapshotPtr log_storage_snap;
@@ -244,13 +244,13 @@ bool DeltaValueSpace::compact(DMContext & context)
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-            LOG_FMT_DEBUG(log, "Compact stop because abandoned, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Compact stop because abandoned, delta={}", simpleInfo());
             return false;
         }
         compaction_task = persisted_file_set->pickUpMinorCompaction(context);
         if (!compaction_task)
         {
-            LOG_FMT_DEBUG(log, "Compact cancel because nothing to compact, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Compact cancel because nothing to compact, delta={}", simpleInfo());
             return true;
         }
         log_storage_snap = context.storage_pool.logReader()->getSnapshot(/*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
@@ -268,18 +268,18 @@ bool DeltaValueSpace::compact(DMContext & context)
         if (abandoned.load(std::memory_order_relaxed))
         {
             wbs.rollbackWrittenLogAndData();
-            LOG_FMT_DEBUG(log, "Compact stop because abandoned, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Compact stop because abandoned, delta={}", simpleInfo());
             return false;
         }
         if (!compaction_task->commit(persisted_file_set, wbs))
         {
             LOG_WARNING(log, "Structure has been updated during compact, delta={}", simpleInfo());
             wbs.rollbackWrittenLogAndData();
-            LOG_FMT_DEBUG(log, "Compact stop because structure got updated, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Compact stop because structure got updated, delta={}", simpleInfo());
             return false;
         }
 
-        LOG_FMT_DEBUG(log, "{} delta={}", compaction_task->info(), info());
+        LOG_DEBUG(log, "{} delta={}", compaction_task->info(), info());
     }
     wbs.writeRemoves();
 

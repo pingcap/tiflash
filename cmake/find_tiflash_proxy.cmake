@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-option(USE_INTERNAL_TIFLASH_PROXY "Set to FALSE to use external tiflash proxy instead of bundled. (Experimental. Set to FALSE on your own risk)" ${NOT_UNBUNDLED})
+option(USE_INTERNAL_TIFLASH_PROXY "Set to FALSE to use external tiflash proxy instead of bundled. (Only used in CI. Set to FALSE on your own risk)" ${NOT_UNBUNDLED})
 
 if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/Makefile")
     if(USE_INTERNAL_TIFLASH_PROXY)

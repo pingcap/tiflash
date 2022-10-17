@@ -82,7 +82,7 @@ LoggerPtr getLogger(const Context & context)
     auto * dag_context = context.getDAGContext();
     return (dag_context && dag_context->log)
         ? dag_context->log
-        : Logger::get("executeQuery");
+        : Logger::get();
 }
 
 
@@ -106,7 +106,7 @@ void setExceptionStackTrace(QueryLogElement & elem)
 /// Log exception (with query info) into text log (not into system table).
 void logException(Context & context, QueryLogElement & elem, const LoggerPtr & logger)
 {
-    LOG_FMT_ERROR(
+    LOG_ERROR(
         logger,
         "{} (from {}) (in query: {}){}",
         elem.exception,
@@ -301,7 +301,7 @@ std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (elem.read_rows != 0)
                 {
-                    LOG_FMT_INFO(
+                    LOG_INFO(
                         execute_query_logger,
                         "Read {} rows, {} in {:.3f} sec., {} rows/sec., {}/sec.",
                         elem.read_rows,
@@ -376,7 +376,7 @@ void logQuery(const String & query, const Context & context, const LoggerPtr & l
     const auto & initial_query_id = context.getClientInfo().initial_query_id;
     const auto & current_user = context.getClientInfo().current_user;
 
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         logger,
         "(from {}{}, query_id: {}{}) {}",
         context.getClientInfo().current_address.toString(),
