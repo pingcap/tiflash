@@ -14,6 +14,7 @@
 
 #include <Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/PageDirectory.h>
@@ -38,8 +39,8 @@ TEST(WALSeriTest, AllPuts)
     PageEntryV3 entry_p2{.file_id = 1, .size = 2, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver20(/*seq=*/20);
     PageEntriesEdit edit;
-    edit.put(1, entry_p1);
-    edit.put(2, entry_p2);
+    edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_p1);
+    edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_p2);
 
     for (auto & rec : edit.getMutRecords())
         rec.version = ver20;
@@ -60,12 +61,12 @@ try
     PageEntryV3 entry_p5{.file_id = 1, .size = 5, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageVersion ver21(/*seq=*/21);
     PageEntriesEdit edit;
-    edit.put(3, entry_p3);
-    edit.ref(4, 3);
-    edit.put(5, entry_p5);
-    edit.del(2);
-    edit.del(1);
-    edit.del(987);
+    edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry_p3);
+    edit.ref(buildV3Id(TEST_NAMESPACE_ID, 4), buildV3Id(TEST_NAMESPACE_ID, 3));
+    edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_p5);
+    edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
+    edit.del(buildV3Id(TEST_NAMESPACE_ID, 1));
+    edit.del(buildV3Id(TEST_NAMESPACE_ID, 987));
 
     for (auto & rec : edit.getMutRecords())
         rec.version = ver21;
@@ -110,9 +111,9 @@ TEST(WALSeriTest, Upserts)
     PageVersion ver20_1(/*seq=*/20, /*epoch*/ 1);
     PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     PageEntriesEdit edit;
-    edit.upsertPage(1, ver20_1, entry_p1_2);
-    edit.upsertPage(3, ver21_1, entry_p3_2);
-    edit.upsertPage(5, ver21_1, entry_p5_2);
+    edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 1), ver20_1, entry_p1_2);
+    edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
+    edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
 
     auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
     ASSERT_EQ(deseri_edit.size(), 3);
@@ -140,9 +141,9 @@ TEST(WALSeriTest, RefExternalAndEntry)
     PageVersion ver3_0(/*seq=*/3, /*epoch*/ 0);
     {
         PageEntriesEdit edit;
-        edit.varExternal(1, ver1_0, 2);
-        edit.varDel(1, ver2_0);
-        edit.varRef(2, ver3_0, 1);
+        edit.varExternal(buildV3Id(TEST_NAMESPACE_ID, 1), ver1_0, 2);
+        edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
+        edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
@@ -165,9 +166,9 @@ TEST(WALSeriTest, RefExternalAndEntry)
     {
         PageEntriesEdit edit;
         PageEntryV3 entry_p1_2{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
-        edit.varEntry(1, ver1_0, entry_p1_2, 2);
-        edit.varDel(1, ver2_0);
-        edit.varRef(2, ver3_0, 1);
+        edit.varEntry(buildV3Id(TEST_NAMESPACE_ID, 1), ver1_0, entry_p1_2, 2);
+        edit.varDel(buildV3Id(TEST_NAMESPACE_ID, 1), ver2_0);
+        edit.varRef(buildV3Id(TEST_NAMESPACE_ID, 2), ver3_0, buildV3Id(TEST_NAMESPACE_ID, 1));
 
         auto deseri_edit = DB::PS::V3::ser::deserializeFrom(DB::PS::V3::ser::serializeTo(edit));
         ASSERT_EQ(deseri_edit.size(), 3);
@@ -190,7 +191,7 @@ TEST(WALSeriTest, RefExternalAndEntry)
 
 TEST(WALLognameTest, parsing)
 {
-    LoggerPtr log = Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get();
     const String parent_path("/data1");
 
     {
@@ -236,7 +237,7 @@ TEST(WALLognameTest, parsing)
 
 TEST(WALLognameSetTest, ordering)
 {
-    LoggerPtr log = Logger::get("WALLognameTest");
+    LoggerPtr log = Logger::get();
     const String parent_path("/data1");
 
     LogFilenameSet filenames;
@@ -276,7 +277,7 @@ class WALStoreTest
 public:
     WALStoreTest()
         : multi_paths(GetParam())
-        , log(Logger::get("WALStoreTest"))
+        , log(Logger::get())
     {
     }
 
@@ -379,9 +380,8 @@ TEST_P(WALStoreTest, Empty)
     ASSERT_NE(wal, nullptr);
     while (reader->remained())
     {
-        auto [ok, edit] = reader->next();
-        (void)edit;
-        if (!ok)
+        auto record = reader->next();
+        if (!record)
         {
             reader->throwIfError();
             // else it just run to the end of file.
@@ -420,8 +420,8 @@ try
     PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
-        edit.put(1, entry_p1);
-        edit.put(2, entry_p2);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_p1);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_p2);
         size_each_edit.emplace_back(edit.size());
         applyWithSameVersion(wal, edit, ver20);
     }
@@ -434,10 +434,11 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto & [ok, edit] = reader->next();
-            if (!ok)
+            const auto record = reader->next();
+            if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
+            auto edit = ser::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -450,10 +451,10 @@ try
     PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
-        edit.put(3, entry_p3);
-        edit.ref(4, 3);
-        edit.put(5, entry_p5);
-        edit.del(2);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry_p3);
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 4), buildV3Id(TEST_NAMESPACE_ID, 3));
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_p5);
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
         size_each_edit.emplace_back(edit.size());
         applyWithSameVersion(wal, edit, ver21);
     }
@@ -466,10 +467,11 @@ try
         size_t num_applied_edit = 0;
         while (reader->remained())
         {
-            const auto & [ok, edit] = reader->next();
-            if (!ok)
+            const auto record = reader->next();
+            if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
+            auto edit = ser::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -485,9 +487,9 @@ try
     PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
-        edit.upsertPage(1, ver20_1, entry_p1_2);
-        edit.upsertPage(3, ver21_1, entry_p3_2);
-        edit.upsertPage(5, ver21_1, entry_p5_2);
+        edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 1), ver20_1, entry_p1_2);
+        edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
+        edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(ser::serializeTo(edit));
     }
@@ -500,10 +502,11 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto & [ok, edit] = reader->next();
-            if (!ok)
+            const auto record = reader->next();
+            if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
+            auto edit = ser::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size());
             num_applied_edit += 1;
         }
@@ -529,8 +532,8 @@ try
     PageVersion ver20(/*seq=*/20);
     {
         PageEntriesEdit edit;
-        edit.put(1, entry_p1);
-        edit.put(2, entry_p2);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 1), entry_p1);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 2), entry_p2);
         size_each_edit.emplace_back(edit.size());
         applyWithSameVersion(wal, edit, ver20);
     }
@@ -541,10 +544,10 @@ try
     PageVersion ver21(/*seq=*/21);
     {
         PageEntriesEdit edit;
-        edit.put(3, entry_p3);
-        edit.ref(4, 3);
-        edit.put(5, entry_p5);
-        edit.del(2);
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 3), entry_p3);
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 4), buildV3Id(TEST_NAMESPACE_ID, 3));
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 5), entry_p5);
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 2));
         size_each_edit.emplace_back(edit.size());
         applyWithSameVersion(wal, edit, ver21);
     }
@@ -557,9 +560,9 @@ try
     PageVersion ver21_1(/*seq=*/21, /*epoch*/ 1);
     {
         PageEntriesEdit edit;
-        edit.upsertPage(1, ver20_1, entry_p1_2);
-        edit.upsertPage(3, ver21_1, entry_p3_2);
-        edit.upsertPage(5, ver21_1, entry_p5_2);
+        edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 1), ver20_1, entry_p1_2);
+        edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 3), ver21_1, entry_p3_2);
+        edit.upsertPage(buildV3Id(TEST_NAMESPACE_ID, 5), ver21_1, entry_p5_2);
         size_each_edit.emplace_back(edit.size());
         wal->apply(ser::serializeTo(edit));
     }
@@ -571,10 +574,11 @@ try
         auto reader = WALStoreReader::create(getCurrentTestName(), provider, delegator);
         while (reader->remained())
         {
-            const auto & [ok, edit] = reader->next();
-            if (!ok)
+            const auto record = reader->next();
+            if (!record)
                 break;
             // Details of each edit is verified in `WALSeriTest`
+            auto edit = ser::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
@@ -586,14 +590,15 @@ try
         std::tie(wal, reader) = WALStore::create(getCurrentTestName(), provider, delegator, config);
         while (reader->remained())
         {
-            auto [ok, edit] = reader->next();
-            if (!ok)
+            auto record = reader->next();
+            if (!record)
             {
                 reader->throwIfError();
                 // else it just run to the end of file.
                 break;
             }
             // Details of each edit is verified in `WALSeriTest`
+            auto edit = ser::deserializeFrom(record.value());
             EXPECT_EQ(size_each_edit[num_applied_edit], edit.size()) << fmt::format("edit size not match at idx={}", num_applied_edit);
             num_applied_edit += 1;
         }
@@ -632,7 +637,7 @@ try
         {
             page_id += 1;
             entry.size = page_id;
-            edit.put(page_id, entry);
+            edit.put(buildV3Id(TEST_NAMESPACE_ID, page_id), entry);
         }
         applyWithSameVersion(wal, edit, ver);
 
@@ -647,13 +652,14 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto [ok, edit] = reader->next();
-        if (!ok)
+        auto record = reader->next();
+        if (!record)
         {
             reader->throwIfError();
             // else it just run to the end of file.
             break;
         }
+        auto edit = ser::deserializeFrom(record.value());
         num_pages_read += edit.size();
         EXPECT_EQ(size_each_edit[num_edits_read], edit.size()) << fmt::format("at idx={}", num_edits_read);
         num_edits_read += 1;
@@ -661,7 +667,7 @@ try
     EXPECT_EQ(num_edits_read, num_edits_test);
     EXPECT_EQ(num_pages_read, page_id);
 
-    LOG_FMT_INFO(&Poco::Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
+    LOG_INFO(Logger::get("WALStoreTest"), "Done test for {} persist pages in {} edits", num_pages_read, num_edits_test);
 
     // Test for save snapshot (with encryption)
 
@@ -675,7 +681,7 @@ try
     // just fill in some random entry
     for (size_t i = 0; i < 70; ++i)
     {
-        snap_edit.varEntry(d_10000(rd), PageVersion(345, 22), entry, 1);
+        snap_edit.varEntry(buildV3Id(TEST_NAMESPACE_ID, d_10000(rd)), PageVersion(345, 22), entry, 1);
     }
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     bool done = wal->saveSnapshot(std::move(file_snap), ser::serializeTo(snap_edit), snap_edit.size());
@@ -689,13 +695,14 @@ try
     std::tie(wal, reader) = WALStore::create(getCurrentTestName(), enc_provider, delegator, config);
     while (reader->remained())
     {
-        auto [ok, edit] = reader->next();
-        if (!ok)
+        auto record = reader->next();
+        if (!record)
         {
             reader->throwIfError();
             // else it just run to the end of file.
             break;
         }
+        auto edit = ser::deserializeFrom(record.value());
         num_pages_read += edit.size();
         num_edits_read += 1;
     }

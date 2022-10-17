@@ -44,8 +44,8 @@
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Coprocessor/PushDownFilter.h>
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
+#include <Flash/Mpp/newMPPExchangeWriter.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
@@ -67,7 +67,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
     , max_streams(max_streams_)
-    , log(Logger::get("DAGQueryBlockInterpreter", dagContext().log ? dagContext().log->identifier() : ""))
+    , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
 namespace
@@ -649,7 +649,7 @@ void DAGQueryBlockInterpreter::executeImpl(DAGPipeline & pipeline)
     }
 
     // this log measures the concurrent degree in this mpp task
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "execution stream size for query block(before aggregation) {} is {}",
         query_block.qb_column_prefix,
@@ -738,44 +738,31 @@ void DAGQueryBlockInterpreter::handleExchangeSender(DAGPipeline & pipeline)
     const uint64_t stream_count = query_block.exchange_sender->fine_grained_shuffle_stream_count();
     const uint64_t batch_size = query_block.exchange_sender->fine_grained_shuffle_batch_size();
 
-    if (enableFineGrainedShuffle(stream_count))
+    auto enable_fine_grained_shuffle = enableFineGrainedShuffle(stream_count);
+    String extra_info;
+    if (enable_fine_grained_shuffle)
     {
-        pipeline.transform([&](auto & stream) {
-            // construct writer
-            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, true>>(
-                context.getDAGContext()->tunnel_set,
-                partition_col_ids,
-                partition_col_collators,
-                exchange_sender.tp(),
-                context.getSettingsRef().dag_records_per_chunk,
-                context.getSettingsRef().batch_send_min_limit,
-                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-                dagContext(),
-                stream_count,
-                batch_size);
-            stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-            stream->setExtraInfo(String(enableFineGrainedShuffleExtraInfo));
-        });
+        extra_info = String(enableFineGrainedShuffleExtraInfo);
         RUNTIME_CHECK(exchange_sender.tp() == tipb::ExchangeType::Hash, ExchangeType_Name(exchange_sender.tp()));
         RUNTIME_CHECK(stream_count <= 1024, stream_count);
     }
-    else
-    {
-        pipeline.transform([&](auto & stream) {
-            std::unique_ptr<DAGResponseWriter> response_writer = std::make_unique<StreamingDAGResponseWriter<MPPTunnelSetPtr, false>>(
-                context.getDAGContext()->tunnel_set,
-                partition_col_ids,
-                partition_col_collators,
-                exchange_sender.tp(),
-                context.getSettingsRef().dag_records_per_chunk,
-                context.getSettingsRef().batch_send_min_limit,
-                stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
-                dagContext(),
-                stream_count,
-                batch_size);
-            stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
-        });
-    }
+    pipeline.transform([&](auto & stream) {
+        // construct writer
+        std::unique_ptr<DAGResponseWriter> response_writer = newMPPExchangeWriter(
+            context.getDAGContext()->tunnel_set,
+            partition_col_ids,
+            partition_col_collators,
+            exchange_sender.tp(),
+            context.getSettingsRef().dag_records_per_chunk,
+            context.getSettingsRef().batch_send_min_limit,
+            stream_id++ == 0, /// only one stream needs to sending execution summaries for the last response
+            dagContext(),
+            enable_fine_grained_shuffle,
+            stream_count,
+            batch_size);
+        stream = std::make_shared<ExchangeSenderBlockInputStream>(stream, std::move(response_writer), log->identifier());
+        stream->setExtraInfo(extra_info);
+    });
 }
 
 void DAGQueryBlockInterpreter::handleMockExchangeSender(DAGPipeline & pipeline)

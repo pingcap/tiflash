@@ -31,7 +31,7 @@ extern const char random_task_manager_find_task_failure_failpoint[];
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
-    , log(Logger::get("TaskManager"))
+    , log(Logger::get())
 {}
 
 std::pair<MPPTunnelPtr, String> MPPTaskManager::findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout)
@@ -199,10 +199,10 @@ MPPQueryTaskSetPtr MPPTaskManager::getQueryTaskSet(UInt64 query_id)
     return getQueryTaskSetWithoutLock(query_id);
 }
 
-bool MPPTaskManager::tryToScheduleTask(const MPPTaskPtr & task)
+bool MPPTaskManager::tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry)
 {
     std::lock_guard lock(mu);
-    return scheduler->tryToSchedule(task, *this);
+    return scheduler->tryToSchedule(schedule_entry, *this);
 }
 
 void MPPTaskManager::releaseThreadsFromScheduler(const int needed_threads)

@@ -46,35 +46,35 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
     auto fp = context.getFileProvider();
     auto dmfile = DB::DM::DMFile::restore(fp, args.file_id, 0, args.workdir, DB::DM::DMFile::ReadMetaMode::all());
 
-    LOG_FMT_INFO(logger, "bytes on disk: {}", dmfile->getBytesOnDisk());
-    LOG_FMT_INFO(logger, "single file: {}", dmfile->isSingleFileMode());
+    LOG_INFO(logger, "bytes on disk: {}", dmfile->getBytesOnDisk());
+    LOG_INFO(logger, "single file: {}", dmfile->isSingleFileMode());
 
     // if the DMFile has a config file, there may be additional debugging information
     // we also log the content of dmfile checksum config
     if (auto conf = dmfile->getConfiguration())
     {
-        LOG_FMT_INFO(logger, "with new checksum: true");
+        LOG_INFO(logger, "with new checksum: true");
         switch (conf->getChecksumAlgorithm())
         {
         case DB::ChecksumAlgo::None:
-            LOG_FMT_INFO(logger, "checksum algorithm: none");
+            LOG_INFO(logger, "checksum algorithm: none");
             break;
         case DB::ChecksumAlgo::CRC32:
-            LOG_FMT_INFO(logger, "checksum algorithm: crc32");
+            LOG_INFO(logger, "checksum algorithm: crc32");
             break;
         case DB::ChecksumAlgo::CRC64:
-            LOG_FMT_INFO(logger, "checksum algorithm: crc64");
+            LOG_INFO(logger, "checksum algorithm: crc64");
             break;
         case DB::ChecksumAlgo::City128:
-            LOG_FMT_INFO(logger, "checksum algorithm: city128");
+            LOG_INFO(logger, "checksum algorithm: city128");
             break;
         case DB::ChecksumAlgo::XXH3:
-            LOG_FMT_INFO(logger, "checksum algorithm: xxh3");
+            LOG_INFO(logger, "checksum algorithm: xxh3");
             break;
         }
         for (const auto & [name, msg] : conf->getDebugInfo())
         {
-            LOG_FMT_INFO(logger, "{}: {}", name, msg);
+            LOG_INFO(logger, "{}: {}", name, msg);
         }
     }
 
@@ -94,7 +94,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                     auto full_path = prefix;
                     full_path += "/";
                     full_path += i;
-                    LOG_FMT_INFO(logger, "checking {}: ", i);
+                    LOG_INFO(logger, "checking {}: ", i);
                     if (dmfile->getConfiguration())
                     {
                         consume(*DB::createReadBufferFromFileBaseByFileProvider(
@@ -116,13 +116,13 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                             0,
                             nullptr));
                     }
-                    LOG_FMT_INFO(logger, "[success]");
+                    LOG_INFO(logger, "[success]");
                 }
             }
         }
         // for both directory file and single mode file, we can read out all blocks from the file.
         // this procedure will also trigger the checksum checking in the compression buffer.
-        LOG_FMT_INFO(logger, "examine all data blocks: ");
+        LOG_INFO(logger, "examine all data blocks: ");
         {
             auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile);
             size_t counter = 0;
@@ -132,13 +132,13 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                 counter++;
             }
             stream->readSuffix();
-            LOG_FMT_INFO(logger, "[success] ( {} blocks )", counter);
+            LOG_INFO(logger, "[success] ( {} blocks )", counter);
         }
     } // end of (arg.check)
 
     if (args.dump_columns)
     {
-        LOG_FMT_INFO(logger, "dumping values from all data blocks");
+        LOG_INFO(logger, "dumping values from all data blocks");
         // Only dump the extra-handle, version, tag
         const auto all_cols = dmfile->getColumnDefines();
         DB::DM::ColumnDefines cols_to_dump;
@@ -171,7 +171,7 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                         DB::applyVisitor(DB::FieldVisitorDump(), f),
                         ((col_no < block.columns() - 1) ? "," : ""));
                 }
-                LOG_FMT_INFO(logger, "pack_no={}, row_no={}, fields=[{}]", block_no, row_no, buff.toString());
+                LOG_INFO(logger, "pack_no={}, row_no={}, fields=[{}]", block_no, row_no, buff.toString());
             }
             block_no++;
         }

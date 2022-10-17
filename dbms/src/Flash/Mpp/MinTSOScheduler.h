@@ -35,11 +35,11 @@ using MPPQueryTaskSetPtr = std::shared_ptr<MPPQueryTaskSet>;
 class MinTSOScheduler : private boost::noncopyable
 {
 public:
-    MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit);
+    MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 active_set_soft_limit_);
     ~MinTSOScheduler() = default;
     /// try to schedule this task if it is the min_tso query or there are enough threads, otherwise put it into the waiting set.
     /// NOTE: call tryToSchedule under the lock protection of MPPTaskManager
-    bool tryToSchedule(const MPPTaskPtr & task, MPPTaskManager & task_manager);
+    bool tryToSchedule(MPPTaskScheduleEntry & schedule_entry, MPPTaskManager & task_manager);
 
     /// delete this to-be cancelled/finished query from scheduler and update min_tso if needed, so that there aren't cancelled/finished queries in the scheduler.
     /// NOTE: call deleteQuery under the lock protection of MPPTaskManager
@@ -49,8 +49,8 @@ public:
     void releaseThreadsThenSchedule(const int needed_threads, MPPTaskManager & task_manager);
 
 private:
-    bool scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, const MPPTaskPtr & task, const bool isWaiting, bool & has_error);
-    bool updateMinTSO(const UInt64 tso, const bool retired, const String msg);
+    bool scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & query_task_set, MPPTaskScheduleEntry & schedule_entry, const bool isWaiting, bool & has_error);
+    bool updateMinTSO(const UInt64 tso, const bool retired, const String & msg);
     void scheduleWaitingQueries(MPPTaskManager & task_manager);
     bool isDisabled()
     {

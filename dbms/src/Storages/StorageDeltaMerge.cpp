@@ -84,7 +84,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     , store_inited(false)
     , max_column_id_used(0)
     , global_context(global_context_.getGlobalContext())
-    , log(Logger::get("StorageDeltaMerge", fmt::format("{}.{}", db_name_, table_name_)))
+    , log(Logger::get(fmt::format("{}.{}", db_name_, table_name_)))
 {
     if (primary_expr_ast_->children.empty())
         throw Exception("No primary key");
@@ -112,7 +112,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_FMT_INFO(log, "updateTableColumnInfo: TableName {} ordinary {} materialized {}", table_column_info->table_name, columns.ordinary.toString(), columns.materialized.toString());
+    LOG_INFO(log, "updateTableColumnInfo: TableName {} ordinary {} materialized {}", table_column_info->table_name, columns.ordinary.toString(), columns.materialized.toString());
 
     auto & pk_expr_ast = table_column_info->pk_expr_ast;
     auto & handle_column_define = table_column_info->handle_column_define;
@@ -644,9 +644,9 @@ BlockInputStreams StorageDeltaMerge::read(
     RUNTIME_CHECK(tmt.isInitialized());
 
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
-    auto tracing_logger = Logger::get("StorageDeltaMerge", log->identifier(), query_info.req_id);
+    auto tracing_logger = log->getChild(query_info.req_id);
 
-    LOG_FMT_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
+    LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
 
     // Check whether tso is smaller than TiDB GcSafePoint
     const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {
@@ -671,7 +671,7 @@ BlockInputStreams StorageDeltaMerge::read(
     check_read_tso(mvcc_query_info.read_tso);
 
     FmtBuffer fmt_buf;
-    if (unlikely(tracing_logger->trace()))
+    if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
     {
         fmt_buf.append("orig, ");
         fmt_buf.joinStr(
@@ -706,7 +706,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*expected_ranges_count*/ num_streams,
         tracing_logger);
 
-    if (unlikely(tracing_logger->trace()))
+    if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
     {
         fmt_buf.append(" merged, ");
         fmt_buf.joinStr(
@@ -741,10 +741,10 @@ BlockInputStreams StorageDeltaMerge::read(
             rs_operator = FilterParser::parseDAGQuery(*query_info.dag_query, columns_to_read, std::move(create_attr_by_column_id), log);
         }
         if (likely(rs_operator != DM::EMPTY_FILTER))
-            LOG_FMT_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
+            LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
     }
     else
-        LOG_FMT_DEBUG(tracing_logger, "Rough set filter is disabled.");
+        LOG_DEBUG(tracing_logger, "Rough set filter is disabled.");
 
     auto streams = store->read(
         context,
@@ -815,11 +815,11 @@ void StorageDeltaMerge::ingestFiles(
         clear_data_in_range);
 }
 
-UInt64 StorageDeltaMerge::onSyncGc(Int64 limit)
+UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (storeInited())
     {
-        return _store->onSyncGc(limit);
+        return _store->onSyncGc(limit, gc_options);
     }
     return 0;
 }
@@ -895,13 +895,13 @@ void StorageDeltaMerge::deleteRows(const Context & context, size_t delete_rows)
     auto delete_range = getRange(store, context, total_rows, delete_rows);
     size_t actual_delete_rows = getRows(store, context, delete_range);
     if (actual_delete_rows != delete_rows)
-        LOG_FMT_ERROR(log, "Expected delete rows: {}, got: {}", delete_rows, actual_delete_rows);
+        LOG_ERROR(log, "Expected delete rows: {}, got: {}", delete_rows, actual_delete_rows);
 
     store->deleteRange(context, context.getSettingsRef(), delete_range);
 
     size_t after_delete_rows = getRows(store, context, DM::RowKeyRange::newAll(is_common_handle, rowkey_column_size));
     if (after_delete_rows != total_rows - delete_rows)
-        LOG_FMT_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
+        LOG_ERROR(log, "Rows after delete range not match, expected: {}, got: {}", (total_rows - delete_rows), after_delete_rows);
 }
 
 DM::DeltaMergeStorePtr StorageDeltaMerge::getStoreIfInited()
@@ -1362,10 +1362,10 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     auto & name_col = columns[0];
     auto & value_col = columns[1];
 
-    DeltaMergeStoreStat stat;
+    StoreStats stat;
     if (storeInited())
     {
-        stat = _store->getStat();
+        stat = _store->getStoreStats();
     }
 
 #define INSERT_INT(NAME)             \

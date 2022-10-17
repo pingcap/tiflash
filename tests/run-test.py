@@ -46,6 +46,8 @@ LINE_PH = '{#LINE}'
 REGEXP_MATCH = '{#REGEXP}'
 CURL_TIDB_STATUS_PREFIX = 'curl_tidb> '
 
+# Some third-party module might output messge directly to stderr/stdin, use this list to ignore such outputs
+IGNORED_CLIENT_OUTPUTS = ['<jemalloc>: Number of CPUs detected is not deterministic. Per-CPU arena disabled.']
 verbose = False
 
 def exec_func(cmd):
@@ -304,6 +306,8 @@ class Matcher:
             # for commands ignore errors since they may be part of the test logic.
             self.outputs, _ = self.executor.exe(self.query)
             self.outputs = [x.strip() for x in self.outputs if len(x.strip()) != 0]
+            for ignored_output in IGNORED_CLIENT_OUTPUTS:
+                self.outputs = [x for x in self.outputs if x.find(ignored_output) < 0]
             self.matches = []
         elif line.startswith(CMD_PREFIX_FUNC):
             if verbose: print('running', line)

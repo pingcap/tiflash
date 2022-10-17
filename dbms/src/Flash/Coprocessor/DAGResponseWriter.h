@@ -14,15 +14,9 @@
 
 #pragma once
 
-#include <Core/Types.h>
-#include <DataTypes/IDataType.h>
-#include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
-#include <common/logger_useful.h>
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Flash/Coprocessor/DAGContext.h>
+#include <common/types.h>
 #include <tipb/select.pb.h>
-#pragma GCC diagnostic pop
 
 namespace DB
 {
@@ -40,23 +34,7 @@ struct ExecutionSummary
         , concurrency(0)
     {}
 
-    void merge(const ExecutionSummary & other, bool streaming_call)
-    {
-        if (streaming_call)
-        {
-            time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
-            num_produced_rows = std::max(num_produced_rows, other.num_produced_rows);
-            num_iterations = std::max(num_iterations, other.num_iterations);
-            concurrency = std::max(concurrency, other.concurrency);
-        }
-        else
-        {
-            time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
-            num_produced_rows += other.num_produced_rows;
-            num_iterations += other.num_iterations;
-            concurrency += other.concurrency;
-        }
-    }
+    void merge(const ExecutionSummary & other, bool streaming_call);
 };
 
 class DAGResponseWriter

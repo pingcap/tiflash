@@ -214,7 +214,7 @@ void StoragePathPool::clearPSV2ObsoleteData()
                 {
                     // This function is used to clean obsolete data in ps v2 instance at restart,
                     // so no need to update global_capacity here.
-                    LOG_FMT_INFO(log, "Begin to drop obsolete data [dir={}]", path);
+                    LOG_INFO(log, "Begin to drop obsolete data[dir={}]", path);
                     file_provider->deleteDirectory(dir.path(), false, true);
                 }
             }
@@ -249,7 +249,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
         {
             if (Poco::File dir(path_info.path); dir.exists())
             {
-                LOG_FMT_INFO(log, "Begin to drop [dir={}] from main_path_infos", path_info.path);
+                LOG_INFO(log, "Begin to drop [dir={}] from main_path_infos", path_info.path);
                 file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // update global used size
@@ -281,7 +281,7 @@ void StoragePathPool::drop(bool recursive, bool must_success)
         {
             if (Poco::File dir(path_info.path); dir.exists())
             {
-                LOG_FMT_INFO(log, "Begin to drop [dir={}] from latest_path_infos", path_info.path);
+                LOG_INFO(log, "Begin to drop [dir={}] from latest_path_infos", path_info.path);
                 file_provider->deleteDirectory(dir.path(), false, recursive);
 
                 // When PageStorage is dropped, it will update the size in global_capacity.
@@ -315,7 +315,7 @@ String StoragePathPool::getStorePath(const String & extra_path_root, const Strin
 
 void StoragePathPool::renamePath(const String & old_path, const String & new_path)
 {
-    LOG_FMT_INFO(log, "Renaming {} to {}", old_path, new_path);
+    LOG_INFO(log, "Renaming {} to {}", old_path, new_path);
     if (auto file = Poco::File{old_path}; file.exists())
         file.renameTo(new_path);
     else
@@ -375,7 +375,7 @@ String genericChoosePath(const std::vector<T> & paths,
         ratio_sum += ratio[i];
         if ((rand_number < ratio_sum) || (i == ratio.size() - 1))
         {
-            LOG_FMT_INFO(log, "Choose path [index={}] {}", i, log_msg);
+            LOG_INFO(log, "Choose path [index={}] {}", i, log_msg);
             return path_generator(paths, i);
         }
     }
@@ -454,7 +454,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
         Poco::File dmf_file = {dmf_path};
         if (dmf_file.isFile())
         {
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 pool.log,
                 "added new dtfile. [id={}] [path={}] [real_size={}] [reported_size={}]",
                 file_id,
@@ -484,7 +484,7 @@ void StableDiskDelegator::addDTFile(UInt64 file_id, size_t file_size, std::strin
                 get_folder_size_impl(target, counter, get_folder_size_impl);
             };
             get_folder_size(dmf_file, size_sum);
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 pool.log,
                 "added new dtfile. [id={}] [path={}] [real_size={}] [reported_size={}]",
                 file_id,

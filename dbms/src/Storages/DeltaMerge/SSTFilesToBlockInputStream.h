@@ -53,14 +53,16 @@ using BoundedSSTFilesToBlockInputStreamPtr = std::shared_ptr<BoundedSSTFilesToBl
 class SSTFilesToBlockInputStream final : public IBlockInputStream
 {
 public:
-    SSTFilesToBlockInputStream(RegionPtr region_,
-                               const SSTViewVec & snaps_,
-                               const TiFlashRaftProxyHelper * proxy_helper_,
-                               DecodingStorageSchemaSnapshotConstPtr schema_snap_,
-                               Timestamp gc_safepoint_,
-                               bool force_decode_,
-                               TMTContext & tmt_,
-                               size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
+    SSTFilesToBlockInputStream( //
+        const std::string & log_prefix_,
+        RegionPtr region_,
+        const SSTViewVec & snaps_,
+        const TiFlashRaftProxyHelper * proxy_helper_,
+        DecodingStorageSchemaSnapshotConstPtr schema_snap_,
+        Timestamp gc_safepoint_,
+        bool force_decode_,
+        TMTContext & tmt_,
+        size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
     ~SSTFilesToBlockInputStream() override;
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
@@ -94,7 +96,7 @@ private:
     TMTContext & tmt;
     const Timestamp gc_safepoint;
     size_t expected_size;
-    Poco::Logger * log;
+    LoggerPtr log;
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
     SSTReaderPtr write_cf_reader;

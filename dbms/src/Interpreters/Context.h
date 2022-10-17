@@ -344,7 +344,6 @@ public:
 
     void setDAGContext(DAGContext * dag_context);
     DAGContext * getDAGContext() const;
-    bool isMPPTask() const;
 
     /// List all queries.
     ProcessList & getProcessList();
@@ -500,10 +499,6 @@ private:
 
     void checkIsConfigLoaded() const;
 
-#ifndef NDEBUG
-    // access it only in TiFlashTestEnv, in order to skip checkIsConfigLoaded.
-public:
-#endif
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 

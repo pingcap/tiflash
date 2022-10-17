@@ -39,6 +39,7 @@ extern const int ILLFORMAT_RAFT_ROW;
 namespace DM
 {
 SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
+    const std::string & log_prefix_,
     RegionPtr region_,
     const SSTViewVec & snaps_,
     const TiFlashRaftProxyHelper * proxy_helper_,
@@ -54,7 +55,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , tmt(tmt_)
     , gc_safepoint(gc_safepoint_)
     , expected_size(expected_size_)
-    , log(&Poco::Logger::get("SSTFilesToBlockInputStream"))
+    , log(Logger::get(log_prefix_))
     , force_decode(force_decode_)
 {
 }
@@ -176,9 +177,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
             reader->next();
             (*p_process_keys) += 1;
         }
-#ifndef NDEBUG
-        LOG_FMT_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
-#endif
+        LOG_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
         return;
     }
 
@@ -189,8 +188,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
-#ifndef NDEBUG
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] [rowkey_to_be_included={}]",
                 CFToName(cf),
@@ -198,7 +196,6 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
                 process_keys.write_cf,
                 Redact::keyToDebugString(last_loaded_rowkey->data(), last_loaded_rowkey->size()),
                 (rowkey_to_be_included ? Redact::keyToDebugString(rowkey_to_be_included->data(), rowkey_to_be_included->size()) : "<end>"));
-#endif
             break;
         }
 

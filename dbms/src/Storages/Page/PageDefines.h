@@ -61,6 +61,12 @@ static constexpr PageId INVALID_PAGE_ID = 0;
 using PageIdV3Internal = UInt128;
 using PageIdV3Internals = std::vector<PageIdV3Internal>;
 
+inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageId p_id)
+{
+    // low bits first
+    return PageIdV3Internal(p_id, n_id);
+}
+
 using PageFieldOffset = UInt64;
 using PageFieldOffsets = std::vector<PageFieldOffset>;
 using PageFieldSizes = std::vector<UInt64>;

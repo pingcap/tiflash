@@ -48,6 +48,7 @@ void SimplePKTestBasic::reload()
                                               1,
                                               DeltaMergeStore::Settings());
     dm_context = store->newDMContext(*db_context, db_context->getSettingsRef(), DB::base::TiFlashStorageTestBasic::getCurrentFullTestName());
+    db_context->dropMinMaxIndexCache();
 }
 
 SegmentPtr SimplePKTestBasic::getSegmentAt(Int64 key) const
@@ -63,7 +64,7 @@ SegmentPtr SimplePKTestBasic::getSegmentAt(Int64 key) const
 
 void SimplePKTestBasic::ensureSegmentBreakpoints(const std::vector<Int64> & breakpoints, bool use_logical_split)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "ensureSegmentBreakpoints [{}] logical_split={}",
         fmt::join(breakpoints, ","),
@@ -179,7 +180,7 @@ Block SimplePKTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool 
 
 void SimplePKTestBasic::fill(Int64 start_key, Int64 end_key)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "fill [{}, {})",
         start_key,
@@ -191,7 +192,7 @@ void SimplePKTestBasic::fill(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::fillDelete(Int64 start_key, Int64 end_key)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "fillDelete [{}, {})",
         start_key,
@@ -203,7 +204,7 @@ void SimplePKTestBasic::fillDelete(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::flush(Int64 start_key, Int64 end_key)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "flush [{}, {})",
         start_key,
@@ -215,7 +216,7 @@ void SimplePKTestBasic::flush(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::flush()
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "flushAll");
 
@@ -225,7 +226,7 @@ void SimplePKTestBasic::flush()
 
 void SimplePKTestBasic::mergeDelta(Int64 start_key, Int64 end_key)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "mergeDelta [{}, {})",
         start_key,
@@ -242,7 +243,7 @@ void SimplePKTestBasic::mergeDelta(Int64 start_key, Int64 end_key)
 
 void SimplePKTestBasic::mergeDelta()
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "mergeDeltaAll");
 
@@ -252,7 +253,7 @@ void SimplePKTestBasic::mergeDelta()
 
 void SimplePKTestBasic::deleteRange(Int64 start_key, Int64 end_key)
 {
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger_op,
         "deleteRange [{}, {})",
         start_key,
@@ -304,7 +305,7 @@ void SimplePKTestBasic::debugDumpAllSegments() const
     for (auto [key, segment] : store->segments)
     {
         UNUSED(key);
-        LOG_FMT_INFO(logger, "debugDumpAllSegments: {}", segment->info());
+        LOG_INFO(logger, "debugDumpAllSegments: {}", segment->info());
     }
 }
 

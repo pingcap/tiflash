@@ -173,6 +173,7 @@ try
 
     auto mock_stream = makeMockChild(prepareBlocks(100, 100, /*block_size=*/5));
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,
@@ -200,6 +201,7 @@ try
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/5));
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,
@@ -229,6 +231,7 @@ try
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1000));
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,
@@ -259,6 +262,7 @@ try
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/1));
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,
@@ -295,6 +299,7 @@ try
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,
@@ -327,6 +332,7 @@ try
 
     auto mock_stream = makeMockChild(prepareBlocks(50, 100, /*block_size=*/20));
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,
@@ -360,6 +366,7 @@ try
     auto mock_stream = makeMockChild(blocks1);
 
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,
@@ -399,6 +406,7 @@ try
     auto mock_stream = makeMockChild(blocks1);
 
     auto stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::MockSSTFilesToDTFilesOutputStreamChildPtr>>(
+        /* log_prefix */ "",
         mock_stream,
         storage,
         schema_snapshot,

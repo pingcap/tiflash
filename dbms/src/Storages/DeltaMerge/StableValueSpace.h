@@ -40,15 +40,27 @@ class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 public:
     StableValueSpace(PageId id_)
         : id(id_)
-        , log(&Poco::Logger::get("StableValueSpace"))
+        , log(Logger::get())
     {}
+
+    static StableValueSpacePtr restore(DMContext & context, PageId id);
+
+    /**
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
+     */
+    void resetLogger(const LoggerPtr & segment_log)
+    {
+        log = segment_log;
+    }
 
     // Set DMFiles for this value space.
     // If this value space is logical split, specify `range` and `dm_context` so that we can get more precise
     // bytes and rows.
     void setFiles(const DMFiles & files_, const RowKeyRange & range, DMContext * dm_context = nullptr);
 
-    PageId getId() { return id; }
+    PageId getId() const { return id; }
     void saveMeta(WriteBatch & meta_wb);
 
     size_t getRows() const;
@@ -92,8 +104,6 @@ public:
     size_t getDMFilesBytes() const;
 
     void enableDMFilesGC();
-
-    static StableValueSpacePtr restore(DMContext & context, PageId id);
 
     void recordRemovePacksPages(WriteBatches & wbs) const;
 
@@ -141,14 +151,14 @@ public:
 
         ColumnCachePtrs column_caches;
 
-        Snapshot()
-            : log(&Poco::Logger::get("StableValueSpace::Snapshot"))
+        Snapshot(StableValueSpacePtr stable_)
+            : stable(stable_)
+            , log(stable->log)
         {}
 
         SnapshotPtr clone() const
         {
-            auto c = std::make_shared<Snapshot>();
-            c->stable = stable;
+            auto c = std::make_shared<Snapshot>(stable);
             c->id = id;
             c->valid_rows = valid_rows;
             c->valid_bytes = valid_bytes;
@@ -223,7 +233,7 @@ public:
         AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
     private:
-        Poco::Logger * log;
+        LoggerPtr log;
     };
 
     SnapshotPtr createSnapshot();
@@ -243,7 +253,7 @@ private:
     StableProperty property;
     std::atomic<bool> is_property_cached = false;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 using StableSnapshot = StableValueSpace::Snapshot;

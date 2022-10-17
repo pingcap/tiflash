@@ -48,7 +48,7 @@ private:
     void run() override
     {
         pool.addCapacity(1 + options.num_writers + options.num_readers);
-        DB::PageStorage::Config config;
+        DB::PageStorageConfig config;
         initPageStorage(config, name());
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);

@@ -18,6 +18,24 @@
 
 namespace DB
 {
+void ExecutionSummary::merge(const ExecutionSummary & other, bool streaming_call)
+{
+    if (streaming_call)
+    {
+        time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+        num_produced_rows = std::max(num_produced_rows, other.num_produced_rows);
+        num_iterations = std::max(num_iterations, other.num_iterations);
+        concurrency = std::max(concurrency, other.concurrency);
+    }
+    else
+    {
+        time_processed_ns = std::max(time_processed_ns, other.time_processed_ns);
+        num_produced_rows += other.num_produced_rows;
+        num_iterations += other.num_iterations;
+        concurrency += other.concurrency;
+    }
+}
+
 /// delta_mode means when for a streaming call, return the delta execution summary
 /// because TiDB is not aware of the streaming call when it handle the execution summaries
 /// so we need to "pretend to be a unary call", can be removed if TiDB support streaming
@@ -179,7 +197,8 @@ DAGResponseWriter::DAGResponseWriter(
     {
         records_per_chunk = -1;
     }
-    if (dag_context.encode_type != tipb::EncodeType::TypeCHBlock && dag_context.encode_type != tipb::EncodeType::TypeChunk
+    if (dag_context.encode_type != tipb::EncodeType::TypeCHBlock
+        && dag_context.encode_type != tipb::EncodeType::TypeChunk
         && dag_context.encode_type != tipb::EncodeType::TypeDefault)
     {
         throw TiFlashException(

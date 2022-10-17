@@ -448,7 +448,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
         bool unequal_flag = false;
         bool failed_flag = false;
         String unequal_msg;
-        static auto log = Logger::get("MockDAG");
+        static auto log = Logger::get();
         try
         {
             unequal_flag = runAndCompareDagReq(req, res, context, unequal_msg);
@@ -498,8 +498,8 @@ bool runAndCompareDagReq(const coprocessor::Request & req, const coprocessor::Re
     bool unequal_flag = false;
     DAGProperties properties = getDAGProperties("");
     std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges = CoprocessorHandler::genCopKeyRange(req.ranges());
-    static auto log = Logger::get("MockDAG");
-    LOG_FMT_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
+    static auto log = Logger::get();
+    LOG_INFO(log, "Handling DAG request: {}", dag_request.DebugString());
     tipb::SelectResponse dag_response;
     TablesRegionsInfo tables_regions_info(true);
     auto & table_regions_info = tables_regions_info.getSingleTableRegions();
@@ -1006,8 +1006,8 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
 
 tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest & dag_request, RegionID region_id, UInt64 region_version, UInt64 region_conf_version, Timestamp start_ts, std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
 {
-    static auto log = Logger::get("MockDAG");
-    LOG_FMT_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
+    static auto log = Logger::get();
+    LOG_DEBUG(log, "Handling DAG request: {}", dag_request.DebugString());
     tipb::SelectResponse dag_response;
     TablesRegionsInfo tables_regions_info(true);
     auto & table_regions_info = tables_regions_info.getSingleTableRegions();
@@ -1021,7 +1021,7 @@ tipb::SelectResponse executeDAGRequest(Context & context, const tipb::DAGRequest
 
     DAGDriver driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
     driver.execute();
-    LOG_FMT_DEBUG(log, "Handle DAG request done");
+    LOG_DEBUG(log, "Handle DAG request done");
     return dag_response;
 }
 
