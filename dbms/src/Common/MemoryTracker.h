@@ -20,6 +20,7 @@
 #include <atomic>
 
 extern std::atomic<Int64> real_rss, proc_num_threads;
+extern std::atomic<UInt64> proc_virt_size;
 namespace CurrentMetrics
 {
 extern const Metric MemoryTracking;
