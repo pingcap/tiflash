@@ -2157,6 +2157,11 @@ TEST_F(Regexp, testRegexpCustomerCases)
     }
 }
 
+TEST_F(Regexp, RegexpInstr)
+{
+    
+}
+
 TEST_F(Regexp, testRegexpReplaceMatchType)
 {
     String res;

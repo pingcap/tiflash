@@ -162,7 +162,7 @@ inline size_t getUtf8Len(uint8_t utf8_first_byte)
         flag >>= 1;
     }
 
-    return flag == 128 ? 0 : len;
+    return flag == 128 ? 1 : len;
 }
 
 inline size_t getStringUtf8Len(const char * str, size_t total_len)

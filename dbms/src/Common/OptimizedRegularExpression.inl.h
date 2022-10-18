@@ -18,6 +18,7 @@
 
 #include <iostream>
 #include "Common/Exception.h"
+#include "common/types.h"
 
 
 #define MIN_LENGTH_FOR_STRSTR 3
@@ -471,29 +472,118 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
     }
 }
 
+// Convert utf8 position to byte position.
+// For Example:
+//   Taking string "ni好a" as an example. utf8 position 4 is corresponding to byte position 6.
+static inline size_t utf8Pos2bytePos(const char * str, size_t utf8_pos)
+{
+    size_t byte_index = 0;
+    utf8_pos--;
+    while (utf8_pos > 0)
+    {
+        byte_index += getUtf8Len(str[byte_index]);
+        utf8_pos--;
+    }
+    return byte_index + 1;
+}
+
+static inline size_t bytePos2Utf8Pos(const char * str, size_t byte_pos)
+{
+    // byte_num means the number of byte before this byte_pos
+    size_t byte_num = byte_pos - 1;
+    size_t utf8_num = getStringUtf8Len(str, byte_num);
+    return utf8_num + 1;
+}
+
+static inline size_t getMatchedIndex(const char * str, const char * sub_str, size_t sub_str_size)
+{
+    const size_t stride = sizeof(int64_t);
+    size_t single_checked_num = sub_str_size >= stride ? sub_str_size % stride : sub_str_size;
+    size_t start_offset = -1; // offset that the head of sub_str in the str
+    size_t str_offset = 0;
+    size_t sub_str_offset = 0;
+
+    // sub_str must be in the str, so while loop condition could be true
+    while (true)
+    {
+        // PRINT("while");
+        sub_str_offset = 0;
+        start_offset += 1;
+        str_offset = start_offset;
+
+        bool is_same = true;
+        while (sub_str_offset < single_checked_num)
+        {
+            if (str[str_offset++] != sub_str[sub_str_offset++])
+            {
+                is_same = false;
+                break;
+            }
+        }
+
+        if (!is_same)
+            continue;
+
+        while (sub_str_offset < sub_str_size && is_same)
+        {
+            if (static_cast<uint64_t>(str[str_offset]) == static_cast<uint64_t>(sub_str[str_offset]))
+            {
+                is_same = false;
+                break;
+            }
+
+            sub_str_offset += stride;
+            str_offset += stride;
+        }
+
+        if (sub_str_offset >= sub_str_size)
+            break;
+    }
+
+    return start_offset;
+}
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
-    Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
+    int64_t utf8_total_len = getStringUtf8Len(subject, subject_size);
     
     if (pos <= 0 || pos > utf8_total_len)
         throw DB::Exception("Index out of bounds in regular expression search.");
 
     String matched_str; // store the matched substring
-    const char * expr = subject; // expr is the string actually passed into regexp to be matched
-    size_t expr_size = subject_size;
 
-    // TODO convert utf8 pos to binary pos.
-    // size_t offset = /*todo*/; // This is a offset for bytes, not utf8
+    // This is a offset for bytes, not utf8
+    size_t byte_pos = utf8Pos2bytePos(subject, pos);
+    size_t byte_offset = byte_pos - 1;
+
+    const char * expr = subject + byte_offset; // expr is the string actually passed into regexp to be matched
+    size_t expr_size = subject_size - byte_offset;
+
+    size_t ret_pos = 0;
+    size_t matched_index = 0;
+    StringPieceType expr_sp(expr, expr_size);
+    size_t matched_str_size = 0;
 
     while (occur > 0)
     {
-        bool success = RegexType::FindandConsume(StringPieceType(expr, expr_size), *re2, &matched_str);
+        bool success = re2::RE2::FindAndConsume(&expr_sp, *re2, &matched_str);
         if (!success)
             return 0;
-        
+
+        matched_str_size = matched_str.size();
+
+        // get the start index of matched string in expr
+        matched_index = getMatchedIndex(expr, matched_str.c_str(), matched_str_size);
+        byte_offset += matched_index + matched_str_size;
+
+        // expr is truncated each time we get a matched string
+        expr = subject + byte_offset;
+
         --occur;
     }
+
+    byte_offset -= matched_str_size;
+    return ret_op == 0 ? bytePos2Utf8Pos(subject, byte_offset + 1) : bytePos2Utf8Pos(subject, byte_offset + matched_str.size() + 1);
 }
 
 #undef MIN_LENGTH_FOR_STRSTR
