@@ -22,6 +22,7 @@ namespace DB::tests
 {
 using MockColumnInfo = std::pair<String, TiDB::TP>;
 using MockColumnInfoVec = std::vector<MockColumnInfo>;
+using TableInfo = TiDB::TableInfo;
 using CutColumnInfo = std::pair<int, int>; // <start_idx, row_num>
 
 class MockTableIdGenerator : public ext::Singleton<MockTableIdGenerator>
@@ -73,15 +74,21 @@ public:
     /// for MPP Tasks, it will split data by partition num, then each MPP service will have a subset of mock data.
     ColumnsWithTypeAndName getColumnsForMPPTableScan(Int64 table_id, Int64 partition_id, Int64 partition_num);
 
+    TableInfo getTableInfo(const String & name);
+
 private:
     /// for mock table scan
     std::unordered_map<String, Int64> name_to_id_map; /// <table_name, table_id>
     std::unordered_map<Int64, MockColumnInfoVec> table_schema; /// <table_id, columnInfo>
     std::unordered_map<Int64, ColumnsWithTypeAndName> table_columns; /// <table_id, columns>
+    std::unordered_map<String, TableInfo> table_infos;
 
     /// for mock exchange receiver
     std::unordered_map<String, String> executor_id_to_name_map; /// <executor_id, exchange name>
     std::unordered_map<String, MockColumnInfoVec> exchange_schemas; /// <exchange_name, columnInfo>
     std::unordered_map<String, ColumnsWithTypeAndName> exchange_columns; /// <exchange_name, columns>
+
+private:
+    void addTableInfo(const String & name, const MockColumnInfoVec & columns);
 };
 } // namespace DB::tests
