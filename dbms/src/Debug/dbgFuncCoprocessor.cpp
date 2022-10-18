@@ -994,10 +994,14 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
         };
 
     /// finalize
-    std::unordered_set<String> used_columns;
-    for (auto & schema : root_executor->output_schema)
-        used_columns.emplace(schema.first);
-    root_executor->columnPrune(used_columns);
+    if (!context.isExecutorTest())
+    {
+        std::unordered_set<String> used_columns;
+        for (auto & schema : root_executor->output_schema)
+            used_columns.emplace(schema.first);
+
+        root_executor->columnPrune(used_columns);
+    }
 
     return std::make_tuple(queryPlanToQueryTasks(properties, root_executor, executor_index, context), func_wrap_output_stream);
 }
