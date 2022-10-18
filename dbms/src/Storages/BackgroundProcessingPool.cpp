@@ -155,7 +155,7 @@ void BackgroundProcessingPool::threadFunction(size_t thread_idx)
     }
 
     auto memory_tracker = MemoryTracker::create();
-    memory_tracker->setNext(root_of_mem_trackers_not_managed_by_process_list.get());
+    memory_tracker->setNext(root_of_non_query_mem_trackers.get());
     memory_tracker->setMetric(CurrentMetrics::MemoryTrackingInBackgroundProcessingPool);
     current_memory_tracker = memory_tracker.get();
 

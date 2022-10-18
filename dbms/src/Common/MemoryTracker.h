@@ -141,7 +141,7 @@ extern __thread MemoryTracker * current_memory_tracker;
 extern thread_local MemoryTracker * current_memory_tracker;
 #endif
 
-extern std::shared_ptr<MemoryTracker> root_of_mem_trackers_not_managed_by_process_list;
+extern std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers;
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker

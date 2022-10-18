@@ -89,7 +89,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               formatReadableSizeWithBinarySuffix(real_rss),
                               formatReadableSizeWithBinarySuffix(current_limit),
                               proc_num_threads.load(),
-                              (root_of_mem_trackers_not_managed_by_process_list? formatReadableSizeWithBinarySuffix(root_of_mem_trackers_not_managed_by_process_list->peak): "0")
+                              (root_of_non_query_mem_trackers? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak): "0")
                               );
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
@@ -210,7 +210,7 @@ __thread MemoryTracker * current_memory_tracker = nullptr;
 thread_local MemoryTracker * current_memory_tracker = nullptr;
 #endif
 
-std::shared_ptr<MemoryTracker> root_of_mem_trackers_not_managed_by_process_list = MemoryTracker::create();
+std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::create();
 
 namespace CurrentMemoryTracker
 {
