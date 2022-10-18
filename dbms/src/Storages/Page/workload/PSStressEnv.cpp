@@ -15,13 +15,13 @@
 
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
-#include <Common/UnifiedLogPatternFormatter.h>
+#include <Common/UnifiedLogFormatter.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
 #include <Poco/File.h>
+#include <Poco/Formatter.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
-#include <Poco/PatternFormatter.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <Storages/Page/workload/PSWorkload.h>
 #include <signal.h>
@@ -34,7 +34,7 @@ Poco::Logger * StressEnv::logger;
 void StressEnv::initGlobalLogger()
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
-    Poco::AutoPtr<Poco::PatternFormatter> formatter(new DB::UnifiedLogPatternFormatter);
+    Poco::AutoPtr<Poco::Formatter> formatter(new DB::UnifiedLogFormatter);
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel("trace");

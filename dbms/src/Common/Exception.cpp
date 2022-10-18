@@ -271,7 +271,7 @@ namespace exception_details
 {
 const LoggerPtr & getDefaultFatalLogger()
 {
-    static const auto logger = std::make_shared<Logger>("DefaultFatal", "");
+    static const auto logger = Logger::get("Fatal");
     return logger;
 }
 } // namespace exception_details

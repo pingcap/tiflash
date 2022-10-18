@@ -67,7 +67,7 @@ DAGQueryBlockInterpreter::DAGQueryBlockInterpreter(
     , input_streams_vec(input_streams_vec_)
     , query_block(query_block_)
     , max_streams(max_streams_)
-    , log(Logger::get("DAGQueryBlockInterpreter", dagContext().log ? dagContext().log->identifier() : ""))
+    , log(Logger::get(dagContext().log ? dagContext().log->identifier() : ""))
 {}
 
 namespace
