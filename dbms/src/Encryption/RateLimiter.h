@@ -22,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -458,7 +459,7 @@ private:
                 "max {} avg {} watermark {} config_max {}",
                 max_bytes_per_sec,
                 avg_bytes_per_sec,
-                watermark,
+                magic_enum::enum_name(watermark),
                 config_max_bytes_per_sec);
         }
     };

@@ -138,7 +138,7 @@ WALStoreReaderPtr WALStoreReader::create(
     WALRecoveryMode recovery_mode_,
     const ReadLimiterPtr & read_limiter)
 {
-    LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name));
+    LogFilenameSet log_files = listAllFiles(delegator, Logger::get(storage_name));
     return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
@@ -155,7 +155,7 @@ WALStoreReader::WALStoreReader(String storage_name,
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
     , recovery_mode(recovery_mode_)
-    , logger(Logger::get("WALStore", std::move(storage_name)))
+    , logger(Logger::get(storage_name))
 {}
 
 bool WALStoreReader::remained() const

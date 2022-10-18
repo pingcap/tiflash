@@ -52,7 +52,7 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
     , context(context_)
-    , log(Logger::get("SSTFilesToDTFilesOutputStream", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get(log_prefix_))
 {
 }
 
