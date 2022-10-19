@@ -17,7 +17,7 @@
 #include <fstream>
 namespace DB
 {
-bool process_mem_usage(double & resident_set, Int64 &cur_proc_num_threads, UInt64 &cur_virt_size)
+bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
 {
     resident_set = 0.0;
 
@@ -82,6 +82,7 @@ void CollectProcInfoBackgroundTask::memCheckJob()
         real_rss = static_cast<Int64>(resident_set);
         proc_num_threads = cur_proc_num_threads;
         proc_virt_size = cur_virt_size;
+        baseline_of_query_mem_tracker = root_of_query_mem_trackers->get();
         usleep(10000); // sleep 10ms
     }
     end_fin = true;

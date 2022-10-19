@@ -22,7 +22,7 @@
 
 #include <iomanip>
 
-std::atomic<Int64> real_rss{0}, proc_num_threads{1};
+std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_tracker{0};
 std::atomic<UInt64> proc_virt_size{0};
 MemoryTracker::~MemoryTracker()
 {
@@ -90,10 +90,9 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
                               formatReadableSizeWithBinarySuffix(real_rss),
                               formatReadableSizeWithBinarySuffix(current_limit),
                               proc_num_threads.load(),
-                              (root_of_non_query_mem_trackers? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak): "0"),
-                              (root_of_non_query_mem_trackers? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount): "0"),
-                              proc_virt_size.load()
-                              );
+                              (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak) : "0"),
+                              (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount) : "0"),
+                              proc_virt_size.load());
             throw DB::TiFlashException(fmt_buf.toString(), DB::Errors::Coprocessor::MemoryLimitExceeded);
         }
 
@@ -117,7 +116,7 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
         Int64 current_bytes_rss_larger_than_limit = bytes_rss_larger_than_limit.load(std::memory_order_relaxed);
         bool is_rss_too_large = (!next.load(std::memory_order_relaxed) && current_limit
                                  && real_rss > current_limit + current_bytes_rss_larger_than_limit
-                                 && will_be > current_limit - (real_rss - current_limit - current_bytes_rss_larger_than_limit));
+                                 && will_be > baseline_of_query_mem_tracker);
         if (is_rss_too_large
             || unlikely(current_limit && will_be > current_limit))
         {
@@ -214,6 +213,7 @@ thread_local MemoryTracker * current_memory_tracker = nullptr;
 #endif
 
 std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::create();
+std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::create();
 
 namespace CurrentMemoryTracker
 {

@@ -19,7 +19,7 @@
 
 #include <atomic>
 
-extern std::atomic<Int64> real_rss, proc_num_threads;
+extern std::atomic<Int64> real_rss, proc_num_threads, baseline_of_query_mem_tracker;
 extern std::atomic<UInt64> proc_virt_size;
 namespace CurrentMetrics
 {
@@ -143,6 +143,7 @@ extern thread_local MemoryTracker * current_memory_tracker;
 #endif
 
 extern std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers;
+extern std::shared_ptr<MemoryTracker> root_of_query_mem_trackers;
 
 /// Convenience methods, that use current_memory_tracker if it is available.
 namespace CurrentMemoryTracker
