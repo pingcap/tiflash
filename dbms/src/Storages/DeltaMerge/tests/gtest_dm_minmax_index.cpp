@@ -115,6 +115,7 @@ bool checkMatch(
         "test_database",
         name,
         /*table_id*/ 100,
+        true,
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
         is_common_handle,
