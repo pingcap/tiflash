@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Encryption/FileProvider.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
@@ -154,6 +155,8 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
         return WALStore::FilesSnapshot{};
     }
 
+    SYNC_FOR("before_WALStore::tryGetFilesSnapshot_getLastPersistedLogNum");
+
     Format::LogNumberType last_persisted_log_num = 0;
     {
         std::lock_guard lock(log_file_mutex); // block other writes
@@ -164,8 +167,9 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
             // if `force == false`.
             return WALStore::FilesSnapshot{};
         }
-        // Move to a new log_file and update the `last_persisted_log_num`
-        last_persisted_log_num = rollToNewLogWriter(lock);
+        // Reset the `log_file` so that next edit will be written to a new file and update the `last_log_num`
+        last_persisted_log_num = last_log_num;
+        log_file.reset();
     }
 
     // Scan the log file list after we confirm the `last_persisted_log_num`,
