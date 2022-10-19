@@ -185,7 +185,7 @@ bool WALStore::saveSnapshot(
     if (files_snap.persisted_log_files.empty())
         return false;
 
-    LOG_INFO(logger, "Saving directory snapshot");
+    LOG_INFO(logger, "Saving directory snapshot [num_records={}]", num_records);
 
     // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
@@ -226,7 +226,7 @@ bool WALStore::saveSnapshot(
             files_snap.persisted_log_files.begin(),
             files_snap.persisted_log_files.end(),
             [](const auto & arg, FmtBuffer & fb) {
-                fb.fmtAppend("{}", arg.filename(arg.stage));
+                fb.append(arg.filename(arg.stage));
             },
             ", ");
         fmt_buf.fmtAppend("] [num_records={}] [file={}] [size={}].",

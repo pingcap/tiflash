@@ -672,8 +672,7 @@ try
     // Test for save snapshot (with encryption)
 
     LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, log);
-    WALStore::FilesSnapshot file_snap{.current_writing_log_num = 100, // just a fake value
-                                      .persisted_log_files = persisted_log_files};
+    WALStore::FilesSnapshot file_snap{.persisted_log_files = persisted_log_files};
 
     PageEntriesEdit snap_edit;
     PageEntryV3 entry{.file_id = 2, .size = 1, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
