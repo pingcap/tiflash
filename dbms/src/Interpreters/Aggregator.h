@@ -545,18 +545,18 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_nullable_keys256_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel, true>;
 
     // 2 keys
-    using AggregationMethod_two_keys_u64_strbin = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBin, AggregatedDataWithStringKey>;
-    using AggregationMethod_two_keys_u64_strbinpadding = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBinPadding, AggregatedDataWithStringKey>;
-    using AggregationMethod_two_keys_strbin_u64 = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBin, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKey>;
+    using AggregationMethod_two_keys_num64_strbin = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBin, AggregatedDataWithStringKey>;
+    using AggregationMethod_two_keys_num64_strbinpadding = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBinPadding, AggregatedDataWithStringKey>;
+    using AggregationMethod_two_keys_strbin_num64 = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBin, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKey>;
     using AggregationMethod_two_keys_strbin_strbin = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBin, ColumnsHashing::KeyDescStringBin, AggregatedDataWithStringKey>;
-    using AggregationMethod_two_keys_strbinpadding_u64 = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBinPadding, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKey>;
+    using AggregationMethod_two_keys_strbinpadding_num64 = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBinPadding, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKey>;
     using AggregationMethod_two_keys_strbinpadding_strbinpadding = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBinPadding, ColumnsHashing::KeyDescStringBinPadding, AggregatedDataWithStringKey>;
 
-    using AggregationMethod_two_keys_u64_strbin_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBin, AggregatedDataWithStringKeyTwoLevel>;
-    using AggregationMethod_two_keys_u64_strbinpadding_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBinPadding, AggregatedDataWithStringKeyTwoLevel>;
-    using AggregationMethod_two_keys_strbin_u64_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBin, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKeyTwoLevel>;
+    using AggregationMethod_two_keys_num64_strbin_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBin, AggregatedDataWithStringKeyTwoLevel>;
+    using AggregationMethod_two_keys_num64_strbinpadding_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescNumber64, ColumnsHashing::KeyDescStringBinPadding, AggregatedDataWithStringKeyTwoLevel>;
+    using AggregationMethod_two_keys_strbin_num64_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBin, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKeyTwoLevel>;
     using AggregationMethod_two_keys_strbin_strbin_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBin, ColumnsHashing::KeyDescStringBin, AggregatedDataWithStringKeyTwoLevel>;
-    using AggregationMethod_two_keys_strbinpadding_u64_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBinPadding, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKeyTwoLevel>;
+    using AggregationMethod_two_keys_strbinpadding_num64_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBinPadding, ColumnsHashing::KeyDescNumber64, AggregatedDataWithStringKeyTwoLevel>;
     using AggregationMethod_two_keys_strbinpadding_strbinpadding_two_level = AggregationMethodFastPathTwoKeysNoCache<ColumnsHashing::KeyDescStringBinPadding, ColumnsHashing::KeyDescStringBinPadding, AggregatedDataWithStringKeyTwoLevel>;
 
     // 3 keys
@@ -585,11 +585,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_hash64, false)                             \
     M(nullable_keys128, false)                              \
     M(nullable_keys256, false)                              \
-    M(two_keys_u64_strbin, false)                           \
-    M(two_keys_u64_strbinpadding, false)                    \
-    M(two_keys_strbin_u64, false)                           \
+    M(two_keys_num64_strbin, false)                         \
+    M(two_keys_num64_strbinpadding, false)                  \
+    M(two_keys_strbin_num64, false)                         \
     M(two_keys_strbin_strbin, false)                        \
-    M(two_keys_strbinpadding_u64, false)                    \
+    M(two_keys_strbinpadding_num64, false)                  \
     M(two_keys_strbinpadding_strbinpadding, false)          \
     M(one_key_strbin, false)                                \
     M(one_key_strbinpadding, false)                         \
@@ -605,11 +605,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_two_level, true)                           \
     M(nullable_keys128_two_level, true)                     \
     M(nullable_keys256_two_level, true)                     \
-    M(two_keys_u64_strbin_two_level, true)                  \
-    M(two_keys_u64_strbinpadding_two_level, true)           \
-    M(two_keys_strbin_u64_two_level, true)                  \
+    M(two_keys_num64_strbin_two_level, true)                \
+    M(two_keys_num64_strbinpadding_two_level, true)         \
+    M(two_keys_strbin_num64_two_level, true)                \
     M(two_keys_strbin_strbin_two_level, true)               \
-    M(two_keys_strbinpadding_u64_two_level, true)           \
+    M(two_keys_strbinpadding_num64_two_level, true)         \
     M(two_keys_strbinpadding_strbinpadding_two_level, true) \
     M(one_key_strbin_two_level, true)                       \
     M(one_key_strbinpadding_two_level, true)
@@ -752,11 +752,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized)                                      \
     M(nullable_keys128)                                \
     M(nullable_keys256)                                \
-    M(two_keys_u64_strbin)                             \
-    M(two_keys_u64_strbinpadding)                      \
-    M(two_keys_strbin_u64)                             \
+    M(two_keys_num64_strbin)                           \
+    M(two_keys_num64_strbinpadding)                    \
+    M(two_keys_strbin_num64)                           \
     M(two_keys_strbin_strbin)                          \
-    M(two_keys_strbinpadding_u64)                      \
+    M(two_keys_strbinpadding_num64)                    \
     M(two_keys_strbinpadding_strbinpadding)            \
     M(one_key_strbin)                                  \
     M(one_key_strbinpadding)
@@ -808,11 +808,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_two_level)                           \
     M(nullable_keys128_two_level)                     \
     M(nullable_keys256_two_level)                     \
-    M(two_keys_u64_strbin_two_level)                  \
-    M(two_keys_u64_strbinpadding_two_level)           \
-    M(two_keys_strbin_u64_two_level)                  \
+    M(two_keys_num64_strbin_two_level)                \
+    M(two_keys_num64_strbinpadding_two_level)         \
+    M(two_keys_strbin_num64_two_level)                \
     M(two_keys_strbin_strbin_two_level)               \
-    M(two_keys_strbinpadding_u64_two_level)           \
+    M(two_keys_strbinpadding_num64_two_level)         \
     M(two_keys_strbinpadding_strbinpadding_two_level) \
     M(one_key_strbin_two_level)                       \
     M(one_key_strbinpadding_two_level)

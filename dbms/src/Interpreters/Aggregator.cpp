@@ -266,7 +266,7 @@ Aggregator::Aggregator(const Params & params_, const String & req_id)
 }
 
 
-inline bool IsTypeInt64(const DataTypePtr & type)
+inline bool IsTypeNumber64(const DataTypePtr & type)
 {
     return type->isNumber() && type->getSizeOfValueInMemory() == sizeof(uint64_t);
 }
@@ -296,9 +296,9 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
         case AggFastPathType::Number64:
             return AggregatedDataVariants::Type::serialized; // unreachable. keys64 or keys128 will be used before
         case AggFastPathType::StringBin:
-            return AggregatedDataVariants::Type::two_keys_u64_strbin;
+            return AggregatedDataVariants::Type::two_keys_num64_strbin;
         case AggFastPathType::StringBinPadding:
-            return AggregatedDataVariants::Type::two_keys_u64_strbinpadding;
+            return AggregatedDataVariants::Type::two_keys_num64_strbinpadding;
         }
     }
     case AggFastPathType::StringBin:
@@ -306,7 +306,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
         switch (tp2)
         {
         case AggFastPathType::Number64:
-            return AggregatedDataVariants::Type::two_keys_strbin_u64;
+            return AggregatedDataVariants::Type::two_keys_strbin_num64;
         case AggFastPathType::StringBin:
             return AggregatedDataVariants::Type::two_keys_strbin_strbin;
         case AggFastPathType::StringBinPadding:
@@ -318,7 +318,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
         switch (tp2)
         {
         case AggFastPathType::Number64:
-            return AggregatedDataVariants::Type::two_keys_strbinpadding_u64;
+            return AggregatedDataVariants::Type::two_keys_strbinpadding_num64;
         case AggFastPathType::StringBin:
             return AggregatedDataVariants::Type::serialized; // rare case
         case AggFastPathType::StringBinPadding:
@@ -369,7 +369,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodFastPath(size_t keys_size, c
                     }
                 }
             }
-            else if (IsTypeInt64(type))
+            else if (IsTypeNumber64(type))
             {
                 fast_path_types[i] = AggFastPathType::Number64;
             }
@@ -2373,7 +2373,7 @@ Block Aggregator::mergeBlocks(BlocksList & blocks, bool final)
     auto bucket_num = blocks.front().info.bucket_num;
     bool is_overflows = blocks.front().info.is_overflows;
 
-    LOG_TRACE(log, "Merging partially aggregated blocks (bucket = {}).", bucket_num);
+    LOG_TRACE(log, "Merging partially aggregated blocks (bucket = {}). Original method `{}`.", bucket_num, AggregatedDataVariants::getMethodName(method_chosen));
     Stopwatch watch;
 
     /** If possible, change 'method' to some_hash64. Otherwise, leave as is.
