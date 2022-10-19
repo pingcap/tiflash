@@ -50,7 +50,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     auto & tmt = *server->tmt;
 
     std::vector<RegionID> region_list;
-    size_t count = 0;
+    size_t ready_region_count = 0;
 
     // print 30 lag regions per table per 5min.
     const size_t max_print_region = 30;
@@ -75,16 +75,19 @@ HttpRequestRes HandleHttpRequestSyncStatus(
                 }
                 else if (can_log && print_count < max_print_region)
                 {
-                    lag_regions_log.fmtAppend("lag_region_id: {}, leader_safe_ts: {}, self_safe_ts: {}; ", region.first, leader_safe_ts, self_safe_ts);
+                    lag_regions_log.fmtAppend("lag_region_id={}, leader_safe_ts={}, self_safe_ts={}; ", region.first, leader_safe_ts, self_safe_ts);
                     print_count++;
                     last_print_log_time = Clock::now();
                 }
             }
-            count = region_list.size();
-            LOG_DEBUG(&Poco::Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}, lag_region_info={}", table_id, regions.size(), count, lag_regions_log.toString());
+            ready_region_count = region_list.size();
+            if (ready_region_count < regions.size())
+            {
+                LOG_DEBUG(Logger::get(__FUNCTION__), "table_id={}, total_region_count={}, ready_region_count={}, lag_region_info={}", table_id, regions.size(), ready_region_count, lag_regions_log.toString());
+            }
         });
     }
-    ss << count << std::endl;
+    ss << ready_region_count << std::endl;
     for (const auto & region_id : region_list)
         ss << region_id << ' ';
     ss << std::endl;

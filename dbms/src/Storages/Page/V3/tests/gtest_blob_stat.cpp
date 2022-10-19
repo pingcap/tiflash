@@ -31,7 +31,7 @@ public:
 
 public:
     BlobStoreStatsTest()
-        : logger(Logger::get("BlobStoreStatsTest"))
+        : logger(Logger::get())
     {
         auto path = getTemporaryPath();
         DB::tests::TiFlashTestEnv::tryRemovePath(path);
@@ -221,7 +221,7 @@ TEST_F(BlobStoreStatsTest, testStat)
 
     /**
      * now used space looks like:
-     *  [0,10) [10,100) [110,130) 
+     *  [0,10) [10,100) [110,130)
      * And total size still is 10 + 100 + 20 + 110
      * Then after we add a range which size is 120
      * Total size should plus 10, rather than 120.
