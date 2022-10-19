@@ -82,18 +82,25 @@ void WALStore::apply(String && serialized_edit, const WriteLimiterPtr & write_li
 
     {
         std::lock_guard lock(log_file_mutex);
-        // Roll to a new log file
         // TODO: Make it configurable
         if (log_file == nullptr || log_file->writtenBytes() > config.roll_size)
         {
-            auto log_num = last_log_num++;
-            auto [new_log_file, filename] = createLogWriter({log_num, 0}, false);
-            (void)filename;
-            log_file.swap(new_log_file);
+            // Roll to a new log file
+            rollToNewLogWriter(lock);
         }
 
         log_file->addRecord(payload, serialized_edit.size(), write_limiter);
     }
+}
+
+Format::LogNumberType WALStore::rollToNewLogWriter(const std::lock_guard<std::mutex> &)
+{
+    // Roll to a new log file
+    auto log_num = last_log_num++;
+    auto [new_log_file, filename] = createLogWriter({log_num, 0}, false);
+    UNUSED(filename);
+    log_file.swap(new_log_file);
+    return log_num;
 }
 
 std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
@@ -135,41 +142,46 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
         new_log_lvl.first,
         /*recycle*/ true,
         /*manual_flush*/ manual_flush);
-    return {
-        std::move(log_writer),
-        log_filename};
+    return {std::move(log_writer), log_filename};
 }
 
-WALStore::FilesSnapshot WALStore::getFilesSnapshot() const
+WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_files, bool force)
 {
-    const auto [ok, current_writing_log_num] = [this]() -> std::tuple<bool, Format::LogNumberType> {
-        std::lock_guard lock(log_file_mutex);
-        if (!log_file)
-        {
-            return {false, 0};
-        }
-        return {true, log_file->logNumber()};
-    }();
-    // Return empty set if `log_file` is not ready
-    if (!ok)
+    // First we simply check whether the number of files is able for compaction
+    LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
+    if (!force && persisted_log_files.size() <= max_persisted_log_files)
     {
-        return WALStore::FilesSnapshot{
-            .current_writing_log_num = 0,
-            .persisted_log_files = {},
-        };
+        return WALStore::FilesSnapshot{};
     }
 
-    // Only those files are totally persisted
-    LogFilenameSet persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
+    Format::LogNumberType last_persisted_log_num = 0;
+    {
+        std::lock_guard lock(log_file_mutex); // block other writes
+        if (log_file == nullptr && !force)
+        {
+            // `log_file` is empty means there is no new writes
+            // after WALStore created. Just return an invalid snapshot
+            // if `force == false`.
+            return WALStore::FilesSnapshot{};
+        }
+        // Move to a new log_file and update the `last_persisted_log_num`
+        last_persisted_log_num = rollToNewLogWriter(lock);
+    }
+
+    // Scan the log file list after we confirm the `last_persisted_log_num`,
+    // cause there could be new log files created between the last `listAllFiles`
+    // and acquiring `log_file_mutex`.
+    // We need to compact all log files before `last_persisted_log_num` so
+    // that it contains all entries changes we need.
+    persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
     for (auto iter = persisted_log_files.begin(); iter != persisted_log_files.end(); /*empty*/)
     {
-        if (iter->log_num >= current_writing_log_num)
+        if (iter->log_num >= last_persisted_log_num)
             iter = persisted_log_files.erase(iter);
         else
             ++iter;
     }
     return WALStore::FilesSnapshot{
-        .current_writing_log_num = current_writing_log_num,
         .persisted_log_files = std::move(persisted_log_files),
     };
 }
