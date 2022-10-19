@@ -41,7 +41,10 @@ private:
     HasValueMarkPtr has_value_marks;
     MutableColumnPtr minmaxes;
 
+public:
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     MinMaxIndex(HasNullMarkPtr has_null_marks_, HasValueMarkPtr has_value_marks_, MutableColumnPtr && minmaxes_)
         : has_null_marks(has_null_marks_)
         , has_value_marks(has_value_marks_)
