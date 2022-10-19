@@ -225,6 +225,7 @@ public:
                     const String & db_name,
                     const String & table_name_,
                     TableID physical_table_id_,
+                    bool has_replica,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,

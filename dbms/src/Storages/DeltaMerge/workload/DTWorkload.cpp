@@ -76,6 +76,7 @@ DTWorkload::DTWorkload(const WorkloadOptions & opts_, std::shared_ptr<SharedHand
         table_info->db_name,
         table_info->table_name,
         table_info->table_id,
+        true,
         *table_info->columns,
         table_info->handle,
         table_info->is_common_handle,

@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 namespace FailPoints
 {
 extern const char skip_check_segment_update[];
@@ -26,10 +25,8 @@ extern const char skip_check_segment_update[];
 
 namespace DM
 {
-
 namespace tests
 {
-
 void SimplePKTestBasic::reload()
 {
     TiFlashStorageTestBasic::SetUp();
@@ -42,6 +39,7 @@ void SimplePKTestBasic::reload()
                                               "test",
                                               DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
                                               101,
+                                              true,
                                               *cols,
                                               (*cols)[0],
                                               is_common_handle,
