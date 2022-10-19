@@ -1121,7 +1121,7 @@ private:
     } while (0);
 
 // Choose int type for position param and execute
-#define CHOOSE_AND_EXEC_FOR_POS_PARAM(execute) \
+#define CHOOSE_AND_EXEC_FOR_POS_PARAM() \
     do \
     { \
         switch (POS_PARAM_VAR_NAME.getIntType()) \
@@ -1235,7 +1235,7 @@ public:
         typename ColumnVector<ResultType>::Container & VEC_RES_VAR_NAME = col_res->getData();
         VEC_RES_VAR_NAME.resize(col_size, 0);
 
-        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullable() || OccurT::isNullable() || RetOpT::isNullable() || MatchTypeT::isNullableCol();
+        constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
         // Start to execute instr
         if (isMemorized())
@@ -1352,7 +1352,7 @@ public:
     } while (0);
 
                 // Identify int type of position, occurrance and return option, and execute the instr
-                CHOOSE_AND_EXEC_FOR_POS_PARAM()
+                // CHOOSE_AND_EXEC_FOR_POS_PARAM()
 
 #undef EXECUTE_INSTR
 
@@ -1386,7 +1386,7 @@ public:
     } while (0);
 
                 // Identify int type of position, occurrance and return option, and execute the instr
-                CHOOSE_AND_EXEC_FOR_POS_PARAM()
+                // CHOOSE_AND_EXEC_FOR_POS_PARAM()
 
 #undef EXECUTE_INSTR
                 res_arg.column = std::move(col_res);
@@ -1430,7 +1430,7 @@ public:
             POS_COL_PTR_VAR_NAME = block.getByPosition(arguments[2]).column;
         };
 
-        // CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
+        CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
     }
 
 private:

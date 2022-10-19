@@ -559,14 +559,13 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
     const char * expr = subject + byte_offset; // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
 
-    size_t ret_pos = 0;
     size_t matched_index = 0;
     StringPieceType expr_sp(expr, expr_size);
     size_t matched_str_size = 0;
 
     while (occur > 0)
     {
-        bool success = re2::RE2::FindAndConsume(&expr_sp, *re2, &matched_str);
+        bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
         if (!success)
             return 0;
 
