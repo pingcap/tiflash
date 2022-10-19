@@ -141,6 +141,89 @@ inline constexpr bool check_int_type()
 
 enum class IntType { UInt8 = 0, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64 };
 
+Int64 getUInt8(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt8>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getUInt16(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt16>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getUInt32(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt32>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getUInt64(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt64>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getUInt128(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<UInt128>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getInt8(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int8>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getInt16(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int16>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getInt32(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int32>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+Int64 getInt64(const void * container, size_t idx)
+{
+    const auto * tmp = reinterpret_cast<const typename ColumnVector<Int64>::Container *>(container);
+    return static_cast<Int64>((*tmp)[idx]);
+}
+
+using GetIntFuncPointerType = Int64 (*)(const void *, size_t);
+
+GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
+{
+    switch (int_type)
+    {
+    case IntType::UInt8:
+        return getUInt8;
+    case IntType::UInt16:
+        return getUInt16;
+    case IntType::UInt32:
+        return getUInt32;
+    case IntType::UInt64:
+        return getUInt64;
+    case IntType::UInt128:
+        return getUInt128;
+    case IntType::Int8:
+        return getInt8;
+    case IntType::Int16:
+        return getInt16;
+    case IntType::Int32:
+        return getInt32;
+    case IntType::Int64:
+        return getInt64;
+    default:
+        throw Exception("Unexpected int type");
+    }
+}
+
 // Use this type when param is not provided
 class ParamDefault
 {
@@ -177,6 +260,7 @@ public:
     static String getString(size_t) { return String(""); }
     void getStringRef(size_t, StringRef &) const {}
     constexpr static bool isConst() { return true; }
+    static const void * getContainer() { throw Exception("ParamDefault not supports this function"); }
 
 private:
     Int64 default_int;
@@ -258,6 +342,8 @@ public:
 
     constexpr static bool isConst() { return is_const; }
 
+    const void * getContainer() const { return nullptr; }
+
 private:
     size_t offsetAt(size_t i) const { return i == 0 ? 0 : (*offsets)[i - 1]; }
     size_t sizeAt(size_t i) const { return i == 0 ? (*offsets)[0] : ((*offsets)[i] - (*offsets)[i - 1]); }
@@ -328,6 +414,7 @@ public:
     String getString(size_t) const { throw Exception("ParamInt not supports this function"); }
     void getStringRef(size_t, StringRef &) const { throw Exception("ParamInt not supports this function"); }
     constexpr static bool isConst() { return is_const; }
+    const void * getContainer() const { return int_container; }
 
 private:
     Int64 const_int_val;
@@ -412,6 +499,7 @@ public:
     size_t getDataNum() const { return col_size; }
     constexpr static bool isNullableCol() { return is_null; }
     constexpr static bool isConst() { return ParamImplType::isConst(); }
+    const void * getContainer() const { return data.getContainer(); }
 
 private:
     const size_t col_size;
@@ -438,7 +526,6 @@ private:
 
 #define SELF_CLASS_NAME (name)
 #define ARG_NUM_VAR_NAME arg_num
-#define NULL_MAP_VAR_NAME null_map
 #define VEC_RES_VAR_NAME vec_res
 #define COLLATOR_VAR_NAME collator
 
@@ -947,7 +1034,7 @@ public:
         if ((ARG_NUM_VAR_NAME) == REGEXP_LIKE_MAX_PARAM_NUM)
             MATCH_TYPE_COL_PTR_VAR_NAME = block.getByPosition(arguments[2]).column;
 
-        // CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
+        CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1048,114 +1135,6 @@ private:
         CONVERT_EXPR_COL_TO_PARAM()          \
     } while (0);
 
-// Choose int type for return option param and execute
-#define CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, occur_type) \
-    do \
-    { \
-        switch (RET_OP_PARAM_VAR_NAME.getIntType()) \
-        { \
-        case IntType::UInt8: \
-            EXECUTE_INSTR(pos_type, occur_type, UInt8) \
-            break; \
-        case IntType::UInt16: \
-            EXECUTE_INSTR(pos_type, occur_type, UInt16) \
-            break; \
-        case IntType::UInt32: \
-            EXECUTE_INSTR(pos_type, occur_type, UInt32) \
-            break; \
-        case IntType::UInt64: \
-            EXECUTE_INSTR(pos_type, occur_type, UInt64) \
-            break; \
-        case IntType::UInt128: \
-            EXECUTE_INSTR(pos_type, occur_type, UInt128) \
-            break; \
-        case IntType::Int8: \
-            EXECUTE_INSTR(pos_type, occur_type, Int8) \
-            break; \
-        case IntType::Int16: \
-            EXECUTE_INSTR(pos_type, occur_type, Int16) \
-            break; \
-        case IntType::Int32: \
-            EXECUTE_INSTR(pos_type, occur_type, Int32) \
-            break; \
-        case IntType::Int64: \
-            EXECUTE_INSTR(pos_type, occur_type, Int64) \
-            break; \
-        } \
-    } while (0);
-
-// Choose int type for occurrance param and execute
-#define CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(pos_type) \
-    do \
-    { \
-        switch (OCCUR_PARAM_VAR_NAME.getIntType()) \
-        { \
-        case IntType::UInt8: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, UInt8) \
-            break; \
-        case IntType::UInt16: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, UInt16) \
-            break; \
-        case IntType::UInt32: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, UInt32) \
-            break; \
-        case IntType::UInt64: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, UInt64) \
-            break; \
-        case IntType::UInt128: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, UInt128) \
-            break; \
-        case IntType::Int8: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, Int8) \
-            break; \
-        case IntType::Int16: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, Int16) \
-            break; \
-        case IntType::Int32: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, Int32) \
-            break; \
-        case IntType::Int64: \
-            CHOOSE_AND_EXEC_FOR_RET_OP_PARAM(pos_type, Int64) \
-            break; \
-        } \
-    } while (0);
-
-// Choose int type for position param and execute
-#define CHOOSE_AND_EXEC_FOR_POS_PARAM() \
-    do \
-    { \
-        switch (POS_PARAM_VAR_NAME.getIntType()) \
-        { \
-        case IntType::UInt8: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(UInt8) \
-            break; \
-        case IntType::UInt16: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(UInt16) \
-            break; \
-        case IntType::UInt32: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(UInt32) \
-            break; \
-        case IntType::UInt64: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(UInt64) \
-            break; \
-        case IntType::UInt128: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(UInt128) \
-            break; \
-        case IntType::Int8: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(Int8) \
-            break; \
-        case IntType::Int16: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(Int16) \
-            break; \
-        case IntType::Int32: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(Int32) \
-            break; \
-        case IntType::Int64: \
-            CHOOSE_AND_EXEC_FOR_OCCUR_PARAM(Int64) \
-            break; \
-        } \
-    } while (0);
-
 // Implementation of regexp_instr function
 template <typename Name>
 class FunctionStringRegexpInstr : public FunctionStringRegexpBase
@@ -1202,23 +1181,23 @@ public:
     }
 
     template <typename ExprT, typename PatT, typename PosT, typename OccurT, typename RetOpT, typename MatchTypeT>
-    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & EXPR_PARAM_VAR_NAME, const PatT & PAT_PARAM_VAR_NAME, const PosT & POS_PARAM_VAR_NAME, const OccurT & OCCUR_PARAM_VAR_NAME, const RetOpT & RET_OP_PARAM_VAR_NAME, const MatchTypeT & MATCH_TYPE_PARAM_VAR_NAME) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expar_param, const PatT & par_param, const PosT & pos_param, const OccurT & occur_param, const RetOpT & ret_op_param, const MatchTypeT & match_type_param) const
     {
-        size_t col_size = EXPR_PARAM_VAR_NAME.getDataNum();
+        size_t col_size = expar_param.getDataNum();
 
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && PosT::isConst() && OccurT::isConst() && RetOpT::isConst() && MatchTypeT::isConst())
         {
             int flags = getDefaultFlags();
-            String expr = EXPR_PARAM_VAR_NAME.getString(0);
-            String pat = PAT_PARAM_VAR_NAME.getString(0);
+            String expr = expar_param.getString(0);
+            String pat = par_param.getString(0);
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            Int64 pos = POS_PARAM_VAR_NAME.template getInt<Int64>(0);
-            Int64 occur = OCCUR_PARAM_VAR_NAME.template getInt<Int64>(0);
-            Int64 ret_op = RET_OP_PARAM_VAR_NAME.template getInt<Int64>(0);
-            String match_type = MATCH_TYPE_PARAM_VAR_NAME.getString(0);
+            Int64 pos = pos_param.template getInt<Int64>(0);
+            Int64 occur = occur_param.template getInt<Int64>(0);
+            Int64 ret_op = ret_op_param.template getInt<Int64>(0);
+            String match_type = match_type_param.getString(0);
 
             Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, COLLATOR_VAR_NAME), flags);
             ResultType res = regexp.instr(expr.c_str(), expr.size(), pos, occur, ret_op);
@@ -1228,7 +1207,7 @@ public:
 
         // Check memorization
         if constexpr (canMemorize<PatT, MatchTypeT>())
-            memorize(PAT_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME, COLLATOR_VAR_NAME);
+            memorize(par_param, match_type_param, COLLATOR_VAR_NAME);
 
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
@@ -1237,79 +1216,96 @@ public:
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
+        // Get function pointers to process the specific int type
+        GetIntFuncPointerType get_pos_func = getGetIntFuncPointer(pos_param.getIntType());
+        GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
+        GetIntFuncPointerType get_ret_op_func = getGetIntFuncPointer(ret_op_param.getIntType());
+
+        const void * pos_container =  pos_param.getContainer();
+        const void * occur_container =  occur_param.getContainer();
+        const void * ret_op_container =  ret_op_param.getContainer();
+
+        Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
+        Int64 occur_const_val = OccurT::isConst() ? occur_param. template getInt<Int64>(0) : -1;
+        Int64 ret_op_const_val = RetOpT::isConst() ? ret_op_param. template getInt<Int64>(0) : -1;
+
+#define GET_POS_VALUE(idx) \
+    do \
+    { \
+        if constexpr (PosT::isConst()) \
+            pos = pos_const_val; \
+        else \
+            pos = get_pos_func(pos_container, idx); \
+    } while (0);
+
+#define GET_OCCUR_VALUE(idx) \
+    do \
+    { \
+        if constexpr (OccurT::isConst()) \
+            occur = occur_const_val; \
+        else \
+            occur = get_occur_func(occur_container, idx); \
+    } while (0);
+
+#define GET_RET_OP_VALUE(idx) \
+    do \
+    { \
+        if constexpr (RetOpT::isConst()) \
+            ret_op = ret_op_const_val; \
+        else \
+            ret_op = get_ret_op_func(ret_op_container, idx); \
+    } while (0);
+
+        StringRef expr_ref;
+        String pat;
+        Int64 pos;
+        Int64 occur;
+        Int64 ret_op;
+        String match_type;
+
         // Start to execute instr
         if (isMemorized())
         {
             // Codes in this if-condition execute instr with memorized regexp
-#define REGEXP_VAR_NAME regexp
-
-            const auto & REGEXP_VAR_NAME = getRegexp();
+            const auto & regexp = getRegexp();
             if constexpr (has_nullable_col)
             {
                 // Process nullable columns with memorized regexp
                 auto nullmap_col = ColumnUInt8::create();
-                typename ColumnUInt8::Container & NULL_MAP_VAR_NAME = nullmap_col->getData();
-                NULL_MAP_VAR_NAME.resize(col_size);
+                typename ColumnUInt8::Container & null_map = nullmap_col->getData();
+                null_map.resize(col_size);
 
-#define EXECUTE_INSTR(pos_type, occur_type, ret_op_type) \
-    do \
-    { \
-        StringRef expr_ref; \
-        Int64 pos; \
-        Int64 occur; \
-        Int64 ret_op; \
-        for (size_t i = 0; i < col_size; ++i) \
-        { \
-            if (EXPR_PARAM_VAR_NAME.isNullAt(i) || POS_PARAM_VAR_NAME.isNullAt(i) || OCCUR_PARAM_VAR_NAME.isNullAt(i) || RET_OP_PARAM_VAR_NAME.isNullAt(i)) \
-            { \
-                NULL_MAP_VAR_NAME[i] = 1; \
-                continue; \
-            } \
-            NULL_MAP_VAR_NAME[i] = 0; \
-            EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
-            pos = POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
-            occur = OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
-            ret_op = RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
-            VEC_RES_VAR_NAME[i] = REGEXP_VAR_NAME->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
-        } \
-    } while (0);
-
-                // Identify int type of position, occurrance and return option, and execute the instr
-                CHOOSE_AND_EXEC_FOR_POS_PARAM()
-
-#undef EXECUTE_INSTR
-
+                for (size_t i = 0; i < col_size; ++i)
+                {
+                    if (expar_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i))
+                    {
+                        null_map[i] = 1;
+                        continue;
+                    }
+                    null_map[i] = 0;
+                    expar_param.getStringRef(i, expr_ref);
+                    GET_POS_VALUE(i)
+                    GET_OCCUR_VALUE(i)
+                    GET_RET_OP_VALUE(i)
+                    VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                }
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
             else
             {
-                // Process pure vector columns with memorized regexp
-#define EXECUTE_INSTR(pos_type, occur_type, ret_op_type) \
-    do \
-    { \
-        /* columns are impossible to be a nullable column here */ \
-        StringRef expr_ref; \
-        Int64 pos; \
-        Int64 occur; \
-        Int64 ret_op; \
-        for (size_t i = 0; i < col_size; ++i) \
-        { \
-            EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
-            POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
-            OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
-            RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
-            VEC_RES_VAR_NAME[i] = REGEXP_VAR_NAME->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
-        } \
-    } while (0);
+                // Process pure vector columns with memorized regexp.
+                // columns are impossible to be a nullable column here.
 
-                // Identify int type of position, occurrance and return option, and execute the instr
-                CHOOSE_AND_EXEC_FOR_POS_PARAM()
-
-#undef EXECUTE_INSTR
-
+                for (size_t i = 0; i < col_size; ++i)
+                {
+                    expar_param.getStringRef(i, expr_ref);
+                    GET_POS_VALUE(i)
+                    GET_OCCUR_VALUE(i)
+                    GET_RET_OP_VALUE(i)
+                    VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                }
                 res_arg.column = std::move(col_res);
             }
-#undef REGEXP_VAR_NAME
         }
         else
         {
@@ -1318,80 +1314,55 @@ public:
             {
                 // Process nullable columns without memorized regexp
                 auto nullmap_col = ColumnUInt8::create();
-                typename ColumnUInt8::Container & NULL_MAP_VAR_NAME = nullmap_col->getData();
-                NULL_MAP_VAR_NAME.resize(col_size);
+                typename ColumnUInt8::Container & null_map = nullmap_col->getData();
+                null_map.resize(col_size);
 
-#define EXECUTE_INSTR(pos_type, occur_type, ret_op_type) \
-    do \
-    { \
-        StringRef expr_ref; \
-        String pat; \
-        Int64 pos; \
-        Int64 occur; \
-        Int64 ret_op; \
-        String match_type; \
-        for (size_t i = 0; i < col_size; ++i) \
-        { \
-            if (EXPR_PARAM_VAR_NAME.isNullAt(i) || POS_PARAM_VAR_NAME.isNullAt(i) || OCCUR_PARAM_VAR_NAME.isNullAt(i) || RET_OP_PARAM_VAR_NAME.isNullAt(i)) \
-            { \
-                NULL_MAP_VAR_NAME[i] = 1; \
-                continue; \
-            } \
-            NULL_MAP_VAR_NAME[i] = 0; \
-            EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
-            pat = PAT_PARAM_VAR_NAME.getString(i); \
-            if (unlikely(pat.empty())) \
-                throw Exception(EMPTY_PAT_ERR_MSG); \
-            pos = POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
-            occur = OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
-            ret_op = RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
-            match_type = match_type_param.getString(i); \
-            auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME); \
-            VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
-        } \
-    } while (0);
-
-                // Identify int type of position, occurrance and return option, and execute the instr
-                // CHOOSE_AND_EXEC_FOR_POS_PARAM()
-
-#undef EXECUTE_INSTR
+                for (size_t i = 0; i < col_size; ++i)
+                {
+                    if (expar_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i))
+                    {
+                        null_map[i] = 1;
+                        continue;
+                    }
+                    null_map[i] = 0;
+                    expar_param.getStringRef(i, expr_ref);
+                    pat = par_param.getString(i);
+                    if (unlikely(pat.empty()))
+                        throw Exception(EMPTY_PAT_ERR_MSG);
+                    GET_POS_VALUE(i)
+                    GET_OCCUR_VALUE(i)
+                    GET_RET_OP_VALUE(i)
+                    match_type = match_type_param.getString(i);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME);
+                    VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                }
 
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
             else
             {
                 // Process pure vector columns without memorized regexp
-#define EXECUTE_INSTR(pos_type, occur_type, ret_op_type) \
-    do \
-    { \
-        StringRef expr_ref; \
-        String pat; \
-        Int64 pos; \
-        Int64 occur; \
-        Int64 ret_op; \
-        String match_type; \
-        for (size_t i = 0; i < col_size; ++i) \
-        { \
-            EXPR_PARAM_VAR_NAME.getStringRef(i, expr_ref); \
-            pat = PAT_PARAM_VAR_NAME.getString(i); \
-            if (unlikely(pat.empty())) \
-                throw Exception(EMPTY_PAT_ERR_MSG); \
-            pos = POS_PARAM_VAR_NAME.template getInt<pos_type>(i); \
-            occur = OCCUR_PARAM_VAR_NAME.template getInt<occur_type>(i); \
-            ret_op = RET_OP_PARAM_VAR_NAME.template getInt<ret_op_type>(i); \
-            match_type = match_type_param.getString(i); \
-            auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME); \
-            vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op); \
-        } \
-    } while (0);
+                for (size_t i = 0; i < col_size; ++i)
+                {
+                    expar_param.getStringRef(i, expr_ref);
+                    pat = par_param.getString(i);
+                    if (unlikely(pat.empty()))
+                        throw Exception(EMPTY_PAT_ERR_MSG);
+                    GET_POS_VALUE(i)
+                    GET_OCCUR_VALUE(i)
+                    GET_RET_OP_VALUE(i)
+                    match_type = match_type_param.getString(i);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME);
+                    vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                }
 
-                // Identify int type of position, occurrance and return option, and execute the instr
-                // CHOOSE_AND_EXEC_FOR_POS_PARAM()
-
-#undef EXECUTE_INSTR
                 res_arg.column = std::move(col_res);
             }
         }
+
+#undef GET_RET_OP_VALUE
+#undef GET_OCCUR_VALUE
+#undef GET_POS_VALUE
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -1437,6 +1408,7 @@ private:
     TiDB::TiDBCollatorPtr COLLATOR_VAR_NAME = nullptr;
 };
 
+#undef CHOOSE_TYPE_AND_EXECUTE
 #undef CHOOSE_AND_EXEC_FOR_POS_PARAM
 #undef CHOOSE_AND_EXEC_FOR_OCCUR_PARAM
 #undef CHOOSE_AND_EXEC_FOR_RET_OP_PARAM
@@ -1716,7 +1688,6 @@ private:
 #undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
 #undef COLLATOR_VAR_NAME
 #undef VEC_RES_VAR_NAME
-#undef NULL_MAP_VAR_NAME
 #undef ARG_NUM_VAR_NAME
 #undef SELF_CLASS_NAME
 #undef MATCH_TYPE_PARAM_VAR_NAME
