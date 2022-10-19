@@ -272,7 +272,7 @@ inline bool IsTypeInt64(const DataTypePtr & type)
 }
 
 #define APPLY_FOR_AGG_FAST_PATH_TYPES(M) \
-    M(Key64)                             \
+    M(Number64)                          \
     M(StringBin)                         \
     M(StringBinPadding)
 
@@ -289,11 +289,11 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
     auto tp2 = fast_path_types[1];
     switch (tp1)
     {
-    case AggFastPathType::Key64:
+    case AggFastPathType::Number64:
     {
         switch (tp2)
         {
-        case AggFastPathType::Key64:
+        case AggFastPathType::Number64:
             return AggregatedDataVariants::Type::serialized; // unreachable. keys64 or keys128 will be used before
         case AggFastPathType::StringBin:
             return AggregatedDataVariants::Type::two_keys_u64_strbin;
@@ -305,7 +305,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
     {
         switch (tp2)
         {
-        case AggFastPathType::Key64:
+        case AggFastPathType::Number64:
             return AggregatedDataVariants::Type::two_keys_strbin_u64;
         case AggFastPathType::StringBin:
             return AggregatedDataVariants::Type::two_keys_strbin_strbin;
@@ -317,7 +317,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathTyp
     {
         switch (tp2)
         {
-        case AggFastPathType::Key64:
+        case AggFastPathType::Number64:
             return AggregatedDataVariants::Type::two_keys_strbinpadding_u64;
         case AggFastPathType::StringBin:
             return AggregatedDataVariants::Type::serialized; // rare case
@@ -371,7 +371,7 @@ AggregatedDataVariants::Type ChooseAggregationMethodFastPath(size_t keys_size, c
             }
             else if (IsTypeInt64(type))
             {
-                fast_path_types[i] = AggFastPathType::Key64;
+                fast_path_types[i] = AggFastPathType::Number64;
             }
             else
             {

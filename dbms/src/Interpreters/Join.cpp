@@ -169,10 +169,15 @@ void Join::setBuildTableState(BuildTableState state_)
     build_table_cv.notify_all();
 }
 
+bool CanAsColumnString(const IColumn * column)
+{
+    return typeid_cast<const ColumnString *>(column)
+        || (column->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(column)->getDataColumn()));
+}
 
 Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const
 {
-    size_t keys_size = key_columns.size();
+    const size_t keys_size = key_columns.size();
 
     if (keys_size == 0)
         return Type::CROSS;
@@ -215,9 +220,7 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
         return Type::keys256;
 
     /// If there is single string key, use hash table of it's values.
-    if (keys_size == 1
-        && (typeid_cast<const ColumnString *>(key_columns[0])
-            || (key_columns[0]->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(key_columns[0])->getDataColumn()))))
+    if (keys_size == 1 && CanAsColumnString(key_columns[0]))
     {
         if (collators.empty() || !collators[0])
             return Type::key_strbin;
