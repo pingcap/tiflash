@@ -83,7 +83,6 @@ void WALStore::apply(String && serialized_edit, const WriteLimiterPtr & write_li
 
     {
         std::lock_guard lock(log_file_mutex);
-        // TODO: Make it configurable
         if (log_file == nullptr || log_file->writtenBytes() > config.roll_size)
         {
             // Roll to a new log file
@@ -157,7 +156,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
 
     SYNC_FOR("before_WALStore::tryGetFilesSnapshot_getLastPersistedLogNum");
 
-    Format::LogNumberType current_persisted_log_num = 0;
+    Format::LogNumberType current_writing_log_num = 0;
     {
         std::lock_guard lock(log_file_mutex); // block other writes
         if (log_file == nullptr && !force)
@@ -169,7 +168,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
         }
         // Reset the `log_file` so that next edit will be written to a
         // new file and update the `last_log_num`
-        current_persisted_log_num = last_log_num;
+        current_writing_log_num = last_log_num;
         log_file.reset();
     }
 
@@ -181,7 +180,7 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
     persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
     for (auto iter = persisted_log_files.begin(); iter != persisted_log_files.end(); /*empty*/)
     {
-        if (iter->log_num >= current_persisted_log_num)
+        if (iter->log_num >= current_writing_log_num)
             iter = persisted_log_files.erase(iter);
         else
             ++iter;

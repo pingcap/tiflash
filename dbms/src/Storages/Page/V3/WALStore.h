@@ -90,7 +90,11 @@ public:
     friend class tests::WALStoreTest; // for testing
 
 private:
-    WALStore(String storage_name, const PSDiskDelegatorPtr & delegator_, const FileProviderPtr & provider_, Format::LogNumberType last_log_num_, WALConfig config);
+    WALStore(String storage_name,
+             const PSDiskDelegatorPtr & delegator_,
+             const FileProviderPtr & provider_,
+             Format::LogNumberType last_log_num_,
+             WALConfig config);
 
     std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
