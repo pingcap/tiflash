@@ -82,7 +82,7 @@ void CollectProcInfoBackgroundTask::memCheckJob()
         real_rss = static_cast<Int64>(resident_set);
         proc_num_threads = cur_proc_num_threads;
         proc_virt_size = cur_virt_size;
-        usleep(100000); // sleep 100ms
+        usleep(10000); // sleep 10ms
     }
     end_fin = true;
 }
