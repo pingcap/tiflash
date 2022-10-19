@@ -312,12 +312,7 @@ public:
     std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
     getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) const;
 
-    // After full-gc on BlobStore, we migrate some pages to another location.
-    // This function will commit the changes to PageDirectory if the page_id
-    // is not deleted. If the page_id is already deleted before apply these
-    // migration, it will return the entries and BlobSotre need to rollback
-    // the entries from its SpaceMap
-    [[nodiscard]] PageEntriesV3 tryCommitFullGC(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
+    void gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter = nullptr);
 
     /// When create PageDirectory for dump snapshot, we should keep the last valid var_entry when it is deleted.
     /// Because there may be some upsert entry in later wal files, and we should keep the valid var_entry and the delete entry to delete the later upsert entry.

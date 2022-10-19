@@ -1206,78 +1206,36 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     sequence.fetch_add(1);
 }
 
-PageEntriesV3 PageDirectory::tryCommitFullGC(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
+void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
 {
     // Increase the epoch for migrated records
-    size_t total_edit_size = 0;
     for (auto & record : migrated_edit.getMutRecords())
     {
         record.version.epoch += 1;
-        total_edit_size += 1;
-    }
-
-    bool need_rollback = false;
-    std::vector<UInt8> still_exist(migrated_edit.size(), 1);
-    // Apply migrate edit to the mvcc map
-    for (size_t idx = 0; idx < migrated_edit.size(); ++idx)
-    {
-        const auto record = migrated_edit.getRecords()[idx];
-        MVCCMapType::const_iterator iter;
-        UInt64 latest_seq = 0;
-        {
-            std::shared_lock read_lock(table_rw_mutex);
-            latest_seq = sequence.load();
-            iter = mvcc_table_directory.find(record.page_id);
-            if (unlikely(iter == mvcc_table_directory.end()))
-            {
-                still_exist[idx] = 0;
-                need_rollback = true;
-            }
-        } // release the read lock on `table_rw_mutex`
-        if (still_exist[idx] == 0)
-            continue;
-
-        // Append the gc version to version list
-        const auto & versioned_entries = iter->second;
-        if (!versioned_entries->isVisible(latest_seq))
-        {
-            still_exist[idx] = 0;
-            need_rollback = true;
-        }
-        else
-        {
-            versioned_entries->createNewEntry(record.version, record.entry);
-        }
     }
 
     // Apply migrate edit into WAL with the increased epoch version
-    // If the page_id has been deleted before commiting full gc, then
-    // applying the edit to WAL could make the log being more confusing.
-    // So if the page_id has been deleted, we do NOT commit the new entries
-    // to `PageDirectory`. And BlobStore need to rollback these entries in
-    // the `SpaceMap` to reuse the disk space for storing data.
-    PageEntriesV3 rollback_entries;
-    PageEntriesEdit commit_edit;
-    if (likely(!need_rollback))
-    {
-        commit_edit = std::move(migrated_edit);
-    }
-    else
-    {
-        for (size_t idx = 0; idx < migrated_edit.size(); ++idx)
-        {
-            const auto & rec = migrated_edit.getRecords()[idx];
-            if (still_exist[idx] == 0 && rec.type == EditRecordType::UPSERT)
-                rollback_entries.emplace_back(rec.entry);
-            else
-                commit_edit.appendRecord(rec);
-        }
-    }
-    wal->apply(ser::serializeTo(commit_edit), write_limiter);
+    wal->apply(ser::serializeTo(migrated_edit), write_limiter);
 
-    LOG_INFO(log, "GC apply done. [edit size={}] [commit={}] [rollback={}]", total_edit_size, commit_edit.size(), rollback_entries.size());
-    RUNTIME_CHECK(total_edit_size == commit_edit.size() + rollback_entries.size(), commit_edit.size(), rollback_entries.size());
-    return rollback_entries;
+    // Apply migrate edit to the mvcc map
+    for (const auto & record : migrated_edit.getRecords())
+    {
+        MVCCMapType::const_iterator iter;
+        {
+            std::shared_lock read_lock(table_rw_mutex);
+            iter = mvcc_table_directory.find(record.page_id);
+            if (unlikely(iter == mvcc_table_directory.end()))
+            {
+                throw Exception(fmt::format("Can't find [page_id={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
+            }
+        } // release the read lock on `table_rw_mutex`
+
+        // Append the gc version to version list
+        const auto & versioned_entries = iter->second;
+        versioned_entries->createNewEntry(record.version, record.entry);
+    }
+
+    LOG_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());
 }
 
 std::pair<std::map<BlobFileId, PageIdAndVersionedEntries>, PageSize>
@@ -1302,7 +1260,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
     UInt64 total_page_nums = 0;
     while (true)
     {
-        // `iter` is an iter that won't be invalid cause by `apply`/`tryCommitFullGC`.
+        // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do scan on the version list without lock on `mvcc_table_directory`.
         auto page_id = iter->first;
         const auto & version_entries = iter->second;
@@ -1421,7 +1379,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
     // Iterate all page_id and try to clean up useless var entries
     while (true)
     {
-        // `iter` is an iter that won't be invalid cause by `apply`/`tryCommitFullGC`.
+        // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do gc on the version list without lock on `mvcc_table_directory`.
         const bool all_deleted = iter->second->cleanOutdatedEntries(
             lowest_seq,
