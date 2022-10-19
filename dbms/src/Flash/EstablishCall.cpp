@@ -118,6 +118,11 @@ EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::
     return new EstablishCallData(service, cq, notify_cq, is_shutdown);
 }
 
+bool isTunnelNotFound(grpc::Status status)
+{
+    return status.error_code() == grpc::StatusCode::NOT_FOUND && status.error_message() == mpp_tunnel_not_found;
+}
+
 void EstablishCallData::initRpc()
 {
     std::exception_ptr eptr = nullptr;
@@ -133,7 +138,7 @@ void EstablishCallData::initRpc()
                        [&, this](grpc::Status & status) {
                            if (!status.ok())
                            {
-                               if (status.error_code() == grpc::StatusCode::NOT_FOUND && status.error_message() == mpp_tunnel_not_found)
+                               if (isTunnelNotFound(status))
                                    tunnel_not_found = true;
                                else
                                {
@@ -148,6 +153,7 @@ void EstablishCallData::initRpc()
                        }},
                    res);
         if (tunnel_not_found)
+            // if tunnel is not found, the call data will be put back to cq by alarm, so just return to wait the next call from grpc thread is enough
             return;
         if (!success)
         {
