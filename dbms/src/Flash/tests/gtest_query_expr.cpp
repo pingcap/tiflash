@@ -81,7 +81,7 @@ public:
                              {{"id", TiDB::TP::TypeLongLong}, {"c1", TiDB::TP::TypeLongLong}, {"c2", TiDB::TP::TypeLongLong}, {"c3", TiDB::TP::TypeLongLong}, {"c4", TiDB::TP::TypeLongLong}},
                              {toNullableVec<Int64>("id", {0, 1, 2, 3, 4, 5, 6, 7, 8}),
                               toNullableVec<Int64>("c1", {1, 1, 1, 0, 0, 0, {}, {}, {}}),
-                              toNullableVec<Int64>("c2", {1, 0, {}, 1, 0, {}, {}, 0, {}}),
+                              toNullableVec<Int64>("c2", {1, 0, {}, 1, 0, {}, 1, 0, {}}),
                               toNullableVec<Int64>("c3", {1, 1, 1, 0, 0, 0, 0, 0, 0}),
                               toNullableVec<Int64>("c4", {1, 0, 0, 1, 0, 0, 1, 0, 0})});
     }
@@ -543,7 +543,7 @@ try
             toNullableVec<UInt64>({0, 1, 1, 1, 0, 0, 1, 0, 0}),
             toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, {}, {}, {}}),
             toNullableVec<UInt64>({0, 0, 0, 1, 1, 1, {}, {}, {}}),
-            toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 1, 1, 1})};
+            toNullableVec<UInt64>({0, 0, 0, 1, 1, 1, 1, 1, 1})};
         ASSERT_COLUMNS_EQ_UR(
             cols,
             executeRawQuery(
