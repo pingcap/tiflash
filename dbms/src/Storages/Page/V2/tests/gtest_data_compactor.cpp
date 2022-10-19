@@ -44,7 +44,7 @@ try
 {
     CHECK_TESTS_WITH_DATA_ENABLED;
 
-    PageStorage::Config config;
+    PageStorageConfig config;
     config.num_write_slots = 2;
 #ifndef GENERATE_TEST_DATA
     const Strings test_paths = TiFlashTestEnv::findTestDataPath("page_storage_compactor_migrate");
@@ -135,7 +135,7 @@ try
         for (size_t i = 0; i < records.size(); ++i)
         {
             const auto & rec = records[i];
-            EXPECT_EQ(rec.type, WriteBatch::WriteType::UPSERT);
+            EXPECT_EQ(rec.type, WriteBatchWriteType::UPSERT);
             // Page 1, 2, 6 is moved to PageFile{2,1}
             if (rec.page_id == 1 || rec.page_id == 2 || rec.page_id == 6)
             {
