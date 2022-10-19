@@ -64,6 +64,8 @@ public:
                              {{"a", TiDB::TP::TypeBit}},
                              {toNullableVec<UInt64>("a", {0, 4, 5, 4999999999999999999, 5000000000000000000, {}})});
 
+
+        // table t for round_with_frac tests
         std::vector<std::optional<TypeTraits<Int64>::FieldType>> inputs;
         for (Int64 i = -66; i <= 32; ++i)
             inputs.emplace_back(i);
@@ -73,6 +75,15 @@ public:
         context.addMockTable({"default", "t"},
                              {{"i", TiDB::TP::TypeLongLong}},
                              {toNullableVec<Int64>("a", inputs)});
+
+
+        context.addMockTable({"default", "logical_op_test"},
+                             {{"id", TiDB::TP::TypeLongLong}, {"c1", TiDB::TP::TypeLongLong}, {"c2", TiDB::TP::TypeLongLong}, {"c3", TiDB::TP::TypeLongLong}, {"c4", TiDB::TP::TypeLongLong}},
+                             {toNullableVec<Int64>("id", {0, 1, 2, 3, 4, 5, 6, 7, 8}),
+                              toNullableVec<Int64>("c1", {1, 1, 1, 0, 0, 0, {}, {}, {}}),
+                              toNullableVec<Int64>("c2", {1, 0, {}, 1, 0, {}, {}, 0, {}}),
+                              toNullableVec<Int64>("c3", {1, 1, 1, 0, 0, 0, 0, 0, 0}),
+                              toNullableVec<Int64>("c4", {1, 0, 0, 1, 0, 0, 1, 0, 0})});
     }
 };
 
@@ -514,6 +525,30 @@ try
     // #+-----------------------+
     // #| 520000000000000000274 |
     // #+-----------------------+
+}
+CATCH
+
+TEST_F(QueryExprTestRunner, logicalOp)
+try
+{
+    {
+        auto cols = {
+            toNullableVec<UInt64>({1, 0, {}, 0, 0, 0, {}, 0, {}}),
+            toNullableVec<UInt64>({1, 0, 0, 0, 0, 0, 0, 0, 0}),
+            toNullableVec<UInt64>({1, 1, 1, 0, 0, 0, 0, 0, 0}),
+            toNullableVec<UInt64>({1, 1, 1, 1, 0, {}, 1, {}, {}}),
+            toNullableVec<UInt64>({1, 1, 1, 1, 0, 0, 1, 0, 0}),
+            toNullableVec<UInt64>({1, 1, 1, 0, 0, 0, {}, {}, {}}),
+            toNullableVec<UInt64>({0, 1, {}, 1, 0, {}, {}, {}, {}}),
+            toNullableVec<UInt64>({0, 1, 1, 1, 0, 0, 1, 0, 0}),
+            toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, {}, {}, {}}),
+            toNullableVec<UInt64>({0, 0, 0, 1, 1, 1, {}, {}, {}}),
+            toNullableVec<UInt64>({0, 0, 0, 0, 0, 0, 1, 1, 1})};
+        ASSERT_COLUMNS_EQ_UR(
+            cols,
+            executeRawQuery(
+                "select and(c1,c2), and(c3,c4), and(c1,c3), or(c1,c2), or(c3,c4), or(c1,c3), xor(c1,c2), xor(c3,c4), xor(c1,c3), not(c1), not(c3) from default.logical_op_test order by id"));
+    }
 }
 CATCH
 } // namespace tests
