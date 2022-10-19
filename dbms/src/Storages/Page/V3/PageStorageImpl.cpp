@@ -465,7 +465,13 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // be reset to correct state during restore. If any exception thrown, then some BlobFiles
     // will be remained as "read-only" files while entries in them are useless in actual.
     // Those BlobFiles should be cleaned during next restore.
-    page_directory->gcApply(std::move(gc_edit), write_limiter);
+    auto rollback_entries = page_directory->tryCommitFullGC(std::move(gc_edit), write_limiter);
+    if (!rollback_entries.empty())
+    {
+        // if the page_id has been deleted before full gc commit, then it is not committed to
+        // the `page_directory` (and wal), we need to rollback the entries from BlobStore's SpaceMaps.
+        blob_store.remove(rollback_entries);
+    }
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
     cleanExternalPage(gc_watch, statistics);

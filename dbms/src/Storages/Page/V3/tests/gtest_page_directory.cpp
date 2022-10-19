@@ -1410,22 +1410,23 @@ try
     }
 
     // Full GC execute apply
-    dir->gcApply(std::move(gc_migrate_entries));
+    auto rollback = dir->tryCommitFullGC(std::move(gc_migrate_entries));
+    ASSERT_TRUE(rollback.empty());
 }
 CATCH
 
 TEST_F(PageDirectoryGCTest, MVCCAndFullGCInConcurrent)
 try
 {
-    PageId page_id = 50;
-    PageId another_page_id = 512;
+    const PageId page_id = 50;
+    const PageId another_page_id = 512;
     INSERT_ENTRY_TO(page_id, 1, 1);
     INSERT_ENTRY_TO(page_id, 2, 2);
     INSERT_ENTRY_TO(page_id, 3, 2);
     INSERT_ENTRY_TO(page_id, 4, 1);
     INSERT_ENTRY_TO(page_id, 5, 3);
     INSERT_ENTRY_TO(another_page_id, 6, 1);
-    INSERT_DELETE(page_id);
+    INSERT_DELETE(page_id); // the page id is deleted
 
     EXPECT_EQ(dir->numPages(), 2);
 
@@ -1442,31 +1443,40 @@ try
     EXPECT_EQ(entries_in_file2.size(), 2); // 2 entries for 1 page id
     EXPECT_EQ(entries_in_file3.size(), 1); // 1 entry for 1 page_id
 
-    // 2.1 Execute GC
+    // 2.1 Execute GC, `page_id` get removed
     dir->gcInMemEntries();
-    // `page_id` get removed
     EXPECT_EQ(dir->numPages(), 1);
+
+    PageEntriesV3 entries_should_be_rollback;
 
     PageEntriesEdit gc_migrate_entries;
     for (const auto & [file_id, entries] : candidate_entries_1.first)
     {
         (void)file_id;
-        for (const auto & [page_id, ver, entry] : entries)
+        for (const auto & [pid, ver, entry] : entries)
         {
-            gc_migrate_entries.upsertPage(page_id, ver, entry);
+            gc_migrate_entries.upsertPage(pid, ver, entry);
+            if (pid == buildV3Id(TEST_NAMESPACE_ID, page_id))
+                entries_should_be_rollback.emplace_back(entry);
         }
     }
     for (const auto & [file_id, entries] : candidate_entries_2_3.first)
     {
         (void)file_id;
-        for (const auto & [page_id, ver, entry] : entries)
+        for (const auto & [pid, ver, entry] : entries)
         {
-            gc_migrate_entries.upsertPage(page_id, ver, entry);
+            gc_migrate_entries.upsertPage(pid, ver, entry);
+            if (pid == buildV3Id(TEST_NAMESPACE_ID, page_id))
+                entries_should_be_rollback.emplace_back(entry);
         }
     }
 
     // 1.2 Full GC execute apply
-    ASSERT_THROW({ dir->gcApply(std::move(gc_migrate_entries)); }, DB::Exception);
+    auto rollback = dir->tryCommitFullGC(std::move(gc_migrate_entries));
+    ASSERT_EQ(rollback.size(), 5);
+    ASSERT_EQ(entries_should_be_rollback.size(), 5);
+    for (size_t i = 0; i < rollback.size(); ++i)
+        ASSERT_SAME_ENTRY(rollback[i], entries_should_be_rollback[i]);
 }
 CATCH
 
@@ -1581,11 +1591,14 @@ try
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
         PageEntriesEdit edit;
-        auto full_gc_entries = dir->getEntriesByBlobIds({1});
-        auto ids = full_gc_entries.first.at(1);
+        auto full_gc_entries = dir->getEntriesByBlobIds({1}).first;
+        auto ids = full_gc_entries.at(1); // the <id, ver, entry> in blobfile1
         ASSERT_EQ(ids.size(), 1);
+        ASSERT_EQ(std::get<0>(ids[0]), 10);
         edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
-        dir->gcApply(std::move(edit));
+        // id=10 is deleted, so the movement will be rollback
+        auto rollback = dir->tryCommitFullGC(std::move(edit));
+        ASSERT_EQ(rollback.size(), 1);
     }
 
     auto removed_entries = dir->gcInMemEntries();
