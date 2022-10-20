@@ -365,9 +365,11 @@ struct Settings
     M(SettingUInt64, async_pollers_per_cq, 200, "grpc async pollers per cqs")                                                                                                                                                           \
     M(SettingUInt64, async_cqs, 1, "grpc async cqs")                                                                                                                                                                                    \
     M(SettingUInt64, preallocated_request_count_per_poller, 20, "grpc preallocated_request_count_per_poller")                                                                                                                           \
+                                                                                                                                                                                                                                        \
     M(SettingUInt64, manual_compact_pool_size, 1, "The number of worker threads to handle manual compact requests.")                                                                                                                    \
     M(SettingUInt64, manual_compact_max_concurrency, 10, "Max concurrent tasks. It should be larger than pool size.")                                                                                                                   \
     M(SettingUInt64, manual_compact_more_until_ms, 60000, "Continuously compact more segments until reaching specified elapsed time. If 0 is specified, only one segment will be compacted each round.")                                \
+                                                                                                                                                                                                                                        \
     M(SettingBool, enable_planner, true, "Enable planner")
 // clang-format on
 #define DECLARE(TYPE, NAME, DEFAULT, DESCRIPTION) TYPE NAME{DEFAULT};
