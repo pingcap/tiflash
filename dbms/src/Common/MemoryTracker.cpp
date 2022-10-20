@@ -28,7 +28,7 @@ MemoryTracker::~MemoryTracker()
 {
     // Destruction of global root mem tracker means the process is shutting down, log and metrics models may have been released!
     // So we just skip operations of log or metrics for global root mem trackers.
-    if (createGlobalRoot)
+    if (is_global_root)
         return;
 
     if (peak)
