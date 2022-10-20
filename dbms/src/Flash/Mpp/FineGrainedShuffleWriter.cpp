@@ -154,7 +154,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
                 }
             }
         }
-	    blocks.clear();
+        blocks.clear();
         rows_in_blocks = 0;
         cached_block_count = 0;
     }
