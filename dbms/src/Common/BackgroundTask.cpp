@@ -73,7 +73,7 @@ void CollectProcInfoBackgroundTask::begin()
 void CollectProcInfoBackgroundTask::memCheckJob()
 {
     double resident_set;
-    Int64 cur_proc_num_threads;
+    Int64 cur_proc_num_threads = 1;
     UInt64 cur_virt_size;
     while (!end_syn)
     {
