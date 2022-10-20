@@ -151,7 +151,7 @@ try
             should_send_exec_summary_at_last,
             *dag_context_ptr);
         for (const auto & block : blocks)
-            dag_writer->write(block);
+            dag_writer->write(block, false);
         dag_writer->finishWrite();
 
         // 4. Start to check write_report.
