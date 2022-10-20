@@ -19,6 +19,7 @@ void MockStorage::addTableSchema(const String & name, const MockColumnInfoVec & 
 {
     name_to_id_map[name] = MockTableIdGenerator::instance().nextTableId();
     table_schema[getTableId(name)] = columnInfos;
+    addTableInfo(name, columnInfos);
 }
 
 void MockStorage::addTableData(const String & name, const ColumnsWithTypeAndName & columns)
@@ -149,5 +150,29 @@ ColumnsWithTypeAndName MockStorage::getColumnsForMPPTableScan(Int64 table_id, In
         return res;
     }
     throw Exception(fmt::format("Failed to get table columns by table_id '{}'", table_id));
+}
+
+void MockStorage::addTableInfo(const String & name, const MockColumnInfoVec & columns)
+{
+    TableInfo table_info;
+    table_info.name = name;
+    table_info.id = getTableId(name);
+    int i = 0;
+    for (const auto & column : columns)
+    {
+        TiDB::ColumnInfo ret;
+        std::tie(ret.name, ret.tp) = column;
+        // TODO: find a way to assign decimal field's flen.
+        if (ret.tp == TiDB::TP::TypeNewDecimal)
+            ret.flen = 65;
+        ret.id = i++;
+        table_info.columns.push_back(std::move(ret));
+    }
+    table_infos[name] = table_info;
+}
+
+TableInfo MockStorage::getTableInfo(const String & name)
+{
+    return table_infos[name];
 }
 } // namespace DB::tests
