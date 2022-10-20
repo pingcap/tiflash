@@ -26,6 +26,11 @@ std::atomic<Int64> real_rss{0}, proc_num_threads{1}, baseline_of_query_mem_track
 std::atomic<UInt64> proc_virt_size{0};
 MemoryTracker::~MemoryTracker()
 {
+    // Destruction of global root mem tracker means the process is shutting down, log and metrics models may have been released!
+    // So we just skip operations of log or metrics for global root mem trackers.
+    if (createGlobalRoot)
+        return;
+
     if (peak)
     {
         try
@@ -214,8 +219,8 @@ __thread MemoryTracker * current_memory_tracker = nullptr;
 thread_local MemoryTracker * current_memory_tracker = nullptr;
 #endif
 
-std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::create();
-std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::create();
+std::shared_ptr<MemoryTracker> root_of_non_query_mem_trackers = MemoryTracker::createGlobalRoot();
+std::shared_ptr<MemoryTracker> root_of_query_mem_trackers = MemoryTracker::createGlobalRoot();
 
 namespace CurrentMemoryTracker
 {

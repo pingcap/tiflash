@@ -45,6 +45,8 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
     /// To test exception safety of calling code, memory tracker throws an exception on each memory allocation with specified probability.
     double fault_probability = 0;
 
+    bool is_global_root = false;
+
     /// To test the accuracy of memory track, it throws an exception when the part exceeding the tracked amount is greater than accuracy_diff_for_test.
     std::atomic<Int64> accuracy_diff_for_test{0};
 
@@ -65,6 +67,11 @@ class MemoryTracker : public std::enable_shared_from_this<MemoryTracker>
         : limit(limit_)
     {}
 
+    explicit MemoryTracker(Int64 limit_, bool is_global_root)
+        : limit(limit_)
+        , is_global_root(is_global_root)
+    {}
+
 public:
     /// Using `std::shared_ptr` and `new` instread of `std::make_shared` is because `std::make_shared` cannot call private constructors.
     static MemoryTrackerPtr create(Int64 limit = 0)
@@ -77,6 +84,11 @@ public:
         {
             return std::shared_ptr<MemoryTracker>(new MemoryTracker(limit));
         }
+    }
+
+    static MemoryTrackerPtr createGlobalRoot()
+    {
+        return std::shared_ptr<MemoryTracker>(new MemoryTracker(0, true));
     }
 
     ~MemoryTracker();
