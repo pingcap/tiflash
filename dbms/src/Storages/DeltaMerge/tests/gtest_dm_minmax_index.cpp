@@ -29,9 +29,6 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
-
-#include "Storages/DeltaMerge/Index/RSResult.h"
-
 namespace DB
 {
 namespace DM

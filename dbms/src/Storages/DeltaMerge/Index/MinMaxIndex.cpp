@@ -29,8 +29,6 @@
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
 #include <Storages/DeltaMerge/Index/RoughCheck.h>
 
-#include "common/types.h"
-
 namespace DB
 {
 namespace DM
