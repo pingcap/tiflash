@@ -44,7 +44,7 @@ Block ExchangeSenderBlockInputStream::readImpl()
     }
     else 
     {
-	writer->write(block, true);
+        writer->write(block, true);
     }
     return block;
 }

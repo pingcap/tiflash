@@ -29,7 +29,6 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const tipb::Aggregation & aggregation,
-	const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & child);
 
     PhysicalAggregation(
@@ -42,8 +41,7 @@ public:
         const TiDB::TiDBCollators & aggregation_collators_,
         bool is_final_agg_,
         const AggregateDescriptions & aggregate_descriptions_,
-        const ExpressionActionsPtr & expr_after_agg_,
-	const FineGrainedShuffle & fine_grained_shuffle_)
+        const ExpressionActionsPtr & expr_after_agg_)
         : PhysicalUnary(executor_id_, PlanType::Aggregation, schema_, req_id, child_)
         , before_agg_actions(before_agg_actions_)
         , aggregation_keys(aggregation_keys_)
@@ -51,7 +49,6 @@ public:
         , is_final_agg(is_final_agg_)
         , aggregate_descriptions(aggregate_descriptions_)
         , expr_after_agg(expr_after_agg_)
-	, fine_grained_shuffle(fine_grained_shuffle_)
     {}
 
     void finalize(const Names & parent_require) override;
@@ -67,6 +64,5 @@ private:
     bool is_final_agg;
     AggregateDescriptions aggregate_descriptions;
     ExpressionActionsPtr expr_after_agg;
-    FineGrainedShuffle fine_grained_shuffle;
 };
 } // namespace DB

@@ -104,7 +104,7 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     }
     case tipb::ExecType::TypeAggregation:
     case tipb::ExecType::TypeStreamAgg:
-        pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), FineGrainedShuffle(executor), popBack()));
+        pushBack(PhysicalAggregation::build(context, executor_id, log, executor->aggregation(), popBack()));
         break;
     case tipb::ExecType::TypeExchangeSender:
     {

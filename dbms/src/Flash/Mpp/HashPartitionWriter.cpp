@@ -56,10 +56,15 @@ void HashPartitionWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::write(const Block & block, bool finish)
+void HashPartitionWriter<StreamWriterPtr>::write(const Block & block, bool last_null_block)
 {
-    if (finish)
-	return;
+    if unlikely(last_null_block)
+    {
+        if (rows_in_blocks > 0)
+            partitionAndEncodeThenWriteBlocks<false>();
+        return;
+    }
+
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
@@ -92,7 +97,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::computeHash(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)

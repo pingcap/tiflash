@@ -33,11 +33,8 @@ public:
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
-        UInt64 fine_grained_shuffle_batch_size,
-	bool reuse_scattered_columns_flag_,
-	int stream_id_,
-	const String & req_id);
-    void write(const Block & block, bool finish) override;
+        UInt64 fine_grained_shuffle_batch_size);
+    void write(const Block & block, bool last_null_block) override;
     void finishWrite() override;
 
 private:
@@ -54,13 +51,13 @@ private:
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
-    size_t rows_in_blocks;
+    size_t rows_in_blocks = 0;
+    size_t cached_block_count = 0;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
-    
-    bool reuse_scattered_columns_flag = false;
+
     bool inited = false;
     Block header;
     size_t num_columns, num_bucket;
@@ -68,9 +65,7 @@ private:
     WeakHash32 hash;
     IColumn::Selector selector;
     std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
-    int stream_id = 0;
-    size_t cached_block_count = 0;
-    const LoggerPtr log;
+
 };
 
 } // namespace DB

@@ -33,10 +33,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
-    UInt64 fine_grained_shuffle_batch_size,
-    bool reuse_scattered_columns_flag,
-    int stream_id,
-    const String & req_id = "")
+    UInt64 fine_grained_shuffle_batch_size)
 {
     RUNTIME_CHECK(dag_context.isMPPTask());
     if (dag_context.isRootMPPTask())
@@ -63,10 +60,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                     should_send_exec_summary_at_last,
                     dag_context,
                     fine_grained_shuffle_stream_count,
-                    fine_grained_shuffle_batch_size,
-		    reuse_scattered_columns_flag,
-		    stream_id,
-		    req_id);
+                    fine_grained_shuffle_batch_size);
             }
             else
             {

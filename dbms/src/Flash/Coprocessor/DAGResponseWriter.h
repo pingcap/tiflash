@@ -49,7 +49,8 @@ public:
         const String & executor_id,
         bool delta_mode);
     void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
-    virtual void write(const Block & block, bool finish) = 0;
+    /// 'last_null_block' is used for batch writer to flush cached blocks
+    virtual void write(const Block & block, bool last_null_block) = 0;
     virtual void finishWrite() = 0;
     virtual ~DAGResponseWriter() = default;
     const DAGContext & dagContext() const { return dag_context; }
