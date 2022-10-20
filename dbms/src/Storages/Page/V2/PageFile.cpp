@@ -65,7 +65,7 @@ namespace PageMetaFormat
 using WBSize = UInt32;
 // TODO we should align these alias with type in PageCache
 using PageTag = UInt64;
-using IsPut = std::underlying_type<WriteBatch::WriteType>::type;
+using IsPut = std::underlying_type<WriteBatchWriteType>::type;
 using PageOffset = UInt64;
 using Checksum = UInt64;
 
@@ -98,28 +98,28 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     {
         meta_write_bytes += sizeof(IsPut);
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
-        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
-            write.type = WriteBatch::WriteType::PUT;
+        if (write.type == WriteBatchWriteType::PUT_EXTERNAL)
+            write.type = WriteBatchWriteType::PUT;
 
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
             if (write.read_buffer)
                 data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
             meta_write_bytes += sizeof(UInt64); // size of field_offsets + checksum
             meta_write_bytes += ((sizeof(UInt64) + sizeof(UInt64)) * write.offsets.size());
             break;
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             // For delete page, store page id only. And don't need to write data file.
             meta_write_bytes += sizeof(PageId);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             // For ref page, store RefPageId -> PageId. And don't need to write data file.
             meta_write_bytes += (sizeof(PageId) + sizeof(PageId));
             break;
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
         }
@@ -141,17 +141,17 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     for (auto & write : wb.getWrites())
     {
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
-        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
-            write.type = WriteBatch::WriteType::PUT;
+        if (write.type == WriteBatchWriteType::PUT_EXTERNAL)
+            write.type = WriteBatchWriteType::PUT;
 
         PageUtil::put(meta_pos, static_cast<IsPut>(write.type));
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
         {
             PageFlags flags;
             Checksum page_checksum = 0;
@@ -188,8 +188,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
             // UPSERT may point to another PageFile
             PageEntry entry;
-            entry.file_id = (write.type == WriteBatch::WriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
-            entry.level = (write.type == WriteBatch::WriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
+            entry.file_id = (write.type == WriteBatchWriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
+            entry.level = (write.type == WriteBatchWriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
             entry.tag = write.tag;
             entry.size = write.size;
             entry.offset = page_offset;
@@ -215,19 +215,19 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
                 PageUtil::put(meta_pos, static_cast<UInt64>(field_offset.second));
             }
 
-            if (write.type == WriteBatch::WriteType::PUT)
+            if (write.type == WriteBatchWriteType::PUT)
                 edit.put(write.page_id, entry);
-            else if (write.type == WriteBatch::WriteType::UPSERT)
+            else if (write.type == WriteBatchWriteType::UPSERT)
                 edit.upsertPage(write.page_id, entry);
 
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
 
             edit.del(write.page_id);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
             PageUtil::put(meta_pos, static_cast<PageId>(write.ori_page_id));
 
@@ -369,14 +369,14 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
     // recover WriteBatch
     while (pos < wb_start_pos + wb_bytes_without_checksum)
     {
-        const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
+        const auto write_type = static_cast<WriteBatchWriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not deserialize with PUT_EXTERNAL");
             break;
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
         {
             PageMetaFormat::PageFlags flags;
             auto page_id = PageUtil::get<PageId>(pos);
@@ -425,12 +425,12 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
             edit.upsertPage(page_id, entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
             pos += sizeof(PageId);
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
             // ref_id
             pos += sizeof(PageId);
@@ -608,14 +608,14 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     size_t curr_wb_data_offset = 0;
     while (pos < wb_start_pos + wb_bytes_without_checksum)
     {
-        const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
+        const auto write_type = static_cast<WriteBatchWriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not deserialize with PUT_EXTERNAL");
             break;
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
         {
             PageMetaFormat::PageFlags flags;
 
@@ -659,12 +659,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                 }
             }
 
-            if (write_type == WriteBatch::WriteType::PUT)
+            if (write_type == WriteBatchWriteType::PUT)
             {
                 curr_edit.put(page_id, entry);
                 curr_wb_data_offset += entry.size;
             }
-            else if (write_type == WriteBatch::WriteType::UPSERT)
+            else if (write_type == WriteBatchWriteType::UPSERT)
             {
                 curr_edit.upsertPage(page_id, entry);
                 // If it is a deatch page, don't move data offset.
@@ -672,13 +672,13 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
             const auto ref_id = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
@@ -1022,7 +1022,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     char * pos = data_buf;
     PageMap page_map;
@@ -1093,7 +1093,7 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     Page page_rc;
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     size_t read_size_this_entry = 0;
     char * write_offset = data_buf;

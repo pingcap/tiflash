@@ -235,6 +235,7 @@ public:
                     const String & db_name,
                     const String & table_name_,
                     TableID physical_table_id_,
+                    bool has_replica,
                     const ColumnDefines & columns,
                     const ColumnDefine & handle,
                     bool is_common_handle_,
@@ -592,8 +593,6 @@ public:
     String table_name;
 
     const TableID physical_table_id;
-
-    const std::string child_log_prefix;
 
     const bool is_common_handle;
     const size_t rowkey_column_size;

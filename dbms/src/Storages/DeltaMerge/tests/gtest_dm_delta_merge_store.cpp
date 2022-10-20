@@ -123,7 +123,7 @@ try
     store = nullptr;
 
     sp_gc.next(); // continue the page storage gc
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 
@@ -155,7 +155,7 @@ try
     store = nullptr;
 
     sp_gc.next(); // continue removing dtfiles
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 
@@ -185,6 +185,7 @@ try
                                                       "test",
                                                       "t_200",
                                                       200,
+                                                      true,
                                                       *new_cols,
                                                       handle_column_define,
                                                       false,
@@ -196,7 +197,7 @@ try
     }
 
     sp_gc.next(); // continue the page storage gc
-    th_gc.wait();
+    th_gc.get();
 
     BlockInputStreamPtr in = new_store->read(*db_context,
                                              db_context->getSettingsRef(),
@@ -3045,6 +3046,7 @@ public:
                                                   "test",
                                                   DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
                                                   101,
+                                                  true,
                                                   *cols,
                                                   (*cols)[0],
                                                   pk_type == DMTestEnv::PkType::CommonHandle,
@@ -3308,11 +3310,11 @@ try
 
     // Let's finish the flush.
     sp_flush_commit.next();
-    th_flush.wait();
+    th_flush.get();
 
     // Proceed the mergeDelta retry. Retry should succeed without triggering any new flush.
     sp_merge_delta_retry.next();
-    th_merge_delta.wait();
+    th_merge_delta.get();
 }
 CATCH
 
@@ -3364,7 +3366,7 @@ try
 
     // Proceed and finish the split.
     sp_split_prepare.next();
-    th_split.wait();
+    th_split.get();
     {
         // Write to the new segment1 + segment2 after split.
         auto newly_written_rows = helper->rows_by_segments[1] + helper->rows_by_segments[2];
@@ -3377,7 +3379,7 @@ try
 
     // This time the retry should succeed without any future retries.
     sp_merge_delta_retry.next();
-    th_merge_delta.wait();
+    th_merge_delta.get();
 }
 CATCH
 

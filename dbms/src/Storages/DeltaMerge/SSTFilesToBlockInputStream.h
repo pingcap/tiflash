@@ -35,7 +35,7 @@ using RegionPtr = std::shared_ptr<Region>;
 
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
-struct SSTReader;
+class SSTReader;
 class StorageDeltaMerge;
 
 namespace DM

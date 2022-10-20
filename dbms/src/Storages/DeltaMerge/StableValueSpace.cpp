@@ -86,9 +86,9 @@ void StableValueSpace::saveMeta(WriteBatch & meta_wb)
     meta_wb.putPage(id, 0, buf.tryGetReadBuffer(), data_size);
 }
 
-StableValueSpacePtr StableValueSpace::restore(const std::string & log_prefix, DMContext & context, PageId id)
+StableValueSpacePtr StableValueSpace::restore(DMContext & context, PageId id)
 {
-    auto stable = std::make_shared<StableValueSpace>(log_prefix, id);
+    auto stable = std::make_shared<StableValueSpace>(id);
 
     Page page = context.storage_pool.metaReader()->read(id); // not limit restore
     ReadBufferFromMemory buf(page.data.begin(), page.data.size());

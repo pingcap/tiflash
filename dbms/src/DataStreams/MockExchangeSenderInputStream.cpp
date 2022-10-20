@@ -18,14 +18,14 @@ namespace DB
 MockExchangeSenderInputStream::MockExchangeSenderInputStream(
     const BlockInputStreamPtr & input,
     const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : log(Logger::get(req_id))
 {
     children.push_back(input);
 }
 
 Block MockExchangeSenderInputStream::getTotals()
 {
-    if (IProfilingBlockInputStream * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
+    if (auto * child = dynamic_cast<IProfilingBlockInputStream *>(&*children.back()))
     {
         totals = child->getTotals();
     }
