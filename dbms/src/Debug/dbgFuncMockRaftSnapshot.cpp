@@ -256,41 +256,6 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 
 std::map<MockSSTReader::Key, MockSSTReader::Data> MockSSTReader::MockSSTData;
 
-SSTReaderPtr fn_get_sst_reader(SSTView v, RaftStoreProxyPtr)
-{
-    std::string s(v.path.data, v.path.len);
-    auto iter = MockSSTReader::getMockSSTData().find({s, v.type});
-    if (iter == MockSSTReader::getMockSSTData().end())
-        throw Exception("Can not find data in MockSSTData, [key=" + s + "] [type=" + CFToName(v.type) + "]");
-    auto & d = iter->second;
-    return MockSSTReader::ffi_get_cf_file_reader(d);
-}
-uint8_t fn_remained(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    return reader->ffi_remained();
-}
-BaseBuffView fn_key(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    return reader->ffi_key();
-}
-BaseBuffView fn_value(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    return reader->ffi_val();
-}
-void fn_next(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    reader->ffi_next();
-}
-void fn_gc(SSTReaderPtr ptr, ColumnFamilyType)
-{
-    auto * reader = reinterpret_cast<MockSSTReader *>(ptr.inner);
-    delete reader;
-}
-
 RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
     : kvstore(kvstore_)
     , region(region_)
@@ -300,14 +265,7 @@ RegionMockTest::RegionMockTest(KVStore * kvstore_, RegionPtr region_)
         ori_proxy_helper = kvstore->getProxyHelper();
         std::memcpy(&mock_proxy_helper, ori_proxy_helper, sizeof(mock_proxy_helper));
     }
-    mock_proxy_helper.sst_reader_interfaces = SSTReaderInterfaces{
-        .fn_get_sst_reader = fn_get_sst_reader,
-        .fn_remained = fn_remained,
-        .fn_key = fn_key,
-        .fn_value = fn_value,
-        .fn_next = fn_next,
-        .fn_gc = fn_gc,
-    };
+    mock_proxy_helper.sst_reader_interfaces = make_mock_sst_reader_interface();
     kvstore->proxy_helper = &mock_proxy_helper;
     region->proxy_helper = &mock_proxy_helper;
 }

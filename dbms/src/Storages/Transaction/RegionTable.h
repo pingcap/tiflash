@@ -189,15 +189,16 @@ public:
     static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
     bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
 
+
 private:
     friend class MockTiDB;
     friend class StorageDeltaMerge;
 
     Table & getOrCreateTable(TableID table_id);
     void removeTable(TableID table_id);
-    InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
     RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
