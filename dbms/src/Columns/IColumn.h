@@ -287,6 +287,7 @@ public:
                 column->reserve(reserve_size);
     }
 
+    /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
     virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;    
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
@@ -404,7 +405,7 @@ public:
     String dumpStructure() const;
 
 protected:
-    /// Template is to devirtualize calls to insertFrom method.
+    /// Template is to de-virtualize calls to insertFrom method.
     /// In derived classes (that use final keyword), implement scatter method as call to scatterImpl.
     template <typename Derived>
     std::vector<MutablePtr> scatterImpl(ColumnIndex num_columns, const Selector & selector) const
