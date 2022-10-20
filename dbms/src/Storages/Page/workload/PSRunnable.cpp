@@ -20,11 +20,16 @@
 #include <Poco/File.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/PageDefines.h>
+#include <Storages/Page/Snapshot.h>
+#include <Storages/Page/UniversalPage.h>
+#include <Storages/Page/UniversalWriteBatch.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
+#include <google/protobuf/stubs/common.h>
 
 #include <mutex>
 #include <random>
@@ -42,6 +47,7 @@ void GlobalStat::commit(const RandomPageId & c)
         pending_remove_ids.erase(id);
     }
 }
+using UniReader = KVStoreReader;
 
 void PSRunnable::run()
 try
@@ -108,12 +114,22 @@ void PSWriter::write(const RandomPageId & r)
 {
     auto buff_ptr = getRandomData();
 
-    DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
-    wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());
-    for (const auto id : r.page_id_to_remove)
-        wb.delPage(id);
-    ps->write(std::move(wb));
-
+    if (ps)
+    {
+        DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
+        wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());
+        for (const auto id : r.page_id_to_remove)
+            wb.delPage(id);
+        ps->write(std::move(wb));
+    }
+    else
+    {
+        DB::UniversalWriteBatch wb;
+        wb.putPage(UniReader::toFullPageId(r.page_id), 0, buff_ptr, buff_ptr->buffer().size());
+        for (const auto id : r.page_id_to_remove)
+            wb.delPage(UniReader::toFullPageId(id));
+        uni_ps->write(std::move(wb));
+    }
     pages_used += 1;
     bytes_used += buff_ptr->buffer().size();
 
@@ -160,27 +176,54 @@ bool PSCommonWriter::runImpl()
 
     size_t page_write = 0;
     size_t bytes_write = 0;
-    // FIXME: update one page_id by multiple data in one write batch?
-    DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
-    for (size_t i = 0; i < batch_buffer_nums; ++i)
+    if (ps)
     {
-        auto buff_ptr = getRandomData();
-        if (data_sizes.empty())
+        // FIXME: update one page_id by multiple data in one write batch?
+        DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
+        for (size_t i = 0; i < batch_buffer_nums; ++i)
         {
-            wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());
+            auto buff_ptr = getRandomData();
+            if (data_sizes.empty())
+            {
+                wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());
+            }
+            else
+            {
+                // mock test for wide table that store many in-page-offsets
+                wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size(), data_sizes);
+            }
+            page_write += 1;
+            bytes_write += buff_ptr->buffer().size();
         }
-        else
-        {
-            // mock test for wide table that store many in-page-offsets
-            wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size(), data_sizes);
-        }
-        page_write += 1;
-        bytes_write += buff_ptr->buffer().size();
-    }
-    for (const auto & page_id : r.page_id_to_remove)
-        wb.delPage(page_id);
+        for (const auto & page_id : r.page_id_to_remove)
+            wb.delPage(page_id);
 
-    ps->write(std::move(wb));
+        ps->write(std::move(wb));
+    }
+    else
+    {
+        RUNTIME_ASSERT(uni_ps != nullptr);
+        DB::UniversalWriteBatch wb;
+        for (size_t i = 0; i < batch_buffer_nums; ++i)
+        {
+            auto buff_ptr = getRandomData();
+            if (data_sizes.empty())
+            {
+                wb.putPage(UniReader::toFullPageId(r.page_id), 0, buff_ptr, buff_ptr->buffer().size());
+            }
+            else
+            {
+                // mock test for wide table that store many in-page-offsets
+                wb.putPage(UniReader::toFullPageId(r.page_id), 0, buff_ptr, buff_ptr->buffer().size(), data_sizes);
+            }
+            page_write += 1;
+            bytes_write += buff_ptr->buffer().size();
+        }
+        for (const auto & page_id : r.page_id_to_remove)
+            wb.delPage(UniReader::toFullPageId(page_id));
+
+        uni_ps->write(std::move(wb));
+    }
 
     pages_used += page_write;
     bytes_used += bytes_write;
@@ -233,15 +276,29 @@ bool PSReader::runImpl()
     if (page_ids.empty())
         return true;
 
-    auto page_map = ps->read(DB::TEST_NAMESPACE_ID, page_ids);
-    for (const auto & page : page_map)
+    if (ps)
     {
-        if (heavy_read_delay_ms > 0)
+        auto page_map = ps->read(DB::TEST_NAMESPACE_ID, page_ids);
+        for (const auto & page : page_map)
         {
-            usleep(heavy_read_delay_ms * 1000);
+            if (heavy_read_delay_ms > 0)
+            {
+                usleep(heavy_read_delay_ms * 1000);
+            }
+            ++pages_used;
+            bytes_used += page.second.data.size();
         }
-        ++pages_used;
-        bytes_used += page.second.data.size();
+    }
+    else
+    {
+        auto handler = [&](const PageId &, const UniversalPage & page) {
+            if (heavy_read_delay_ms > 0)
+                usleep(heavy_read_delay_ms * 1000);
+            ++pages_used;
+            bytes_used += page.data.size();
+        };
+        UniReader reader(*uni_ps);
+        reader.read(page_ids, handler);
     }
     return true;
 }
@@ -363,9 +420,16 @@ DB::PageIds PSWindowReader::genRandomPageIds()
     return page_ids;
 }
 
+/// PSSnapshotReader ///
+
 bool PSSnapshotReader::runImpl()
 {
-    snapshots.emplace_back(ps->getSnapshot(""));
+    PageStorageSnapshotPtr snap;
+    if (ps)
+        snap = ps->getSnapshot("");
+    else
+        snap = uni_ps->getSnapshot("");
+    snapshots.emplace_back(snap);
     usleep(snapshot_get_interval_ms * 1000);
     return true;
 }
@@ -374,6 +438,8 @@ void PSSnapshotReader::setSnapshotGetIntervalMs(size_t snapshot_get_interval_ms_
 {
     snapshot_get_interval_ms = snapshot_get_interval_ms_;
 }
+
+/// PSIncreaseWriter ///
 
 bool PSIncreaseWriter::runImpl()
 {

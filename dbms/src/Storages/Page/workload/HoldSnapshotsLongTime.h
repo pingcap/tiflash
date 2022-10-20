@@ -71,7 +71,7 @@ private:
             stop_watch.stop();
         }
 
-        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
+        gc = std::make_shared<PSGc>(ps, uni_ps, options.gc_interval_s);
         // Normal GC
         gc->doGcOnce();
 

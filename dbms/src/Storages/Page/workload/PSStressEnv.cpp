@@ -31,7 +31,7 @@
 
 namespace DB::PS::tests
 {
-Poco::Logger * StressEnv::logger;
+LoggerPtr StressEnv::logger;
 void StressEnv::initGlobalLogger()
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cerr);
@@ -39,7 +39,7 @@ void StressEnv::initGlobalLogger()
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel("trace");
-    logger = &Poco::Logger::get("root");
+    logger = Logger::get("root");
 }
 
 StressEnv StressEnv::parse(int argc, char ** argv)
@@ -90,9 +90,9 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     opt.verify = options["verify"].as<bool>();
     opt.running_ps_version = options["running_ps_version"].as<UInt16>();
 
-    if (opt.running_ps_version != 2 && opt.running_ps_version != 3)
+    if (opt.running_ps_version != 2 && opt.running_ps_version != 3 && opt.running_ps_version != 4)
     {
-        std::cerr << "Invalid running_ps_version, this arg should be 2 or 3." << std::endl;
+        std::cerr << "Invalid running_ps_version, this arg should be 2/3/4" << std::endl;
         std::cerr << desc << std::endl;
         exit(0);
     }
@@ -121,15 +121,14 @@ void setupSignal()
 void StressEnv::setup()
 {
     CurrentMemoryTracker::disableThreshold();
+
 #ifdef FIU_ENABLE
     fiu_init(0);
-#endif
-
-
     for (const auto & fp : failpoints)
     {
         DB::FailPointHelper::enableFailPoint(fp);
     }
+#endif
 
     // drop dir if exists
     bool all_directories_not_exist = true;

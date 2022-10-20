@@ -96,7 +96,7 @@ public:
             onDumpResult();
         }
 
-        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
+        gc = std::make_shared<PSGc>(ps, uni_ps, options.gc_interval_s);
         gc->doGcOnce();
         gc_time_ms = gc->getElapsedMilliseconds();
         {

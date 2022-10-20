@@ -73,18 +73,16 @@ struct GlobalStat
 class PSWriter : public PSRunnable
 {
 public:
-    PSWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+    PSWriter(const PSPtr & ps_, const UniPSPtr & uni_ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
         : ps(ps_)
+        , uni_ps(uni_ps_)
         , index(index_)
         , global_stat(global_stat_)
     {
         gen.seed(time(nullptr));
     }
 
-    ~PSWriter() override
-    {
-        memory.reset();
-    }
+    ~PSWriter() override = default;
 
     String description() override
     {
@@ -104,6 +102,7 @@ protected:
 
 protected:
     PSPtr ps;
+    UniPSPtr uni_ps;
     DB::UInt32 index = 0;
     std::mt19937 gen;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
@@ -121,8 +120,8 @@ protected:
 class PSCommonWriter : public PSWriter
 {
 public:
-    PSCommonWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
-        : PSWriter(ps_, index_, global_stat_)
+    PSCommonWriter(const PSPtr & ps_, const UniPSPtr & uni_ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSWriter(ps_, uni_ps_, index_, global_stat_)
     {}
 
     DB::ReadBufferPtr getRandomData() override;
@@ -165,8 +164,8 @@ protected:
 class PSWindowWriter : public PSCommonWriter
 {
 public:
-    PSWindowWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
-        : PSCommonWriter(ps_, index_, global_stat_)
+    PSWindowWriter(const PSPtr & ps_, const UniPSPtr & uni_ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSCommonWriter(ps_, uni_ps_, index_, global_stat_)
     {}
 
     String description() override { return fmt::format("(Stress Test Window Writer {})", index); }
@@ -184,8 +183,8 @@ protected:
 class PSIncreaseWriter : public PSCommonWriter
 {
 public:
-    PSIncreaseWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
-        : PSCommonWriter(ps_, index_, global_stat_)
+    PSIncreaseWriter(const PSPtr & ps_, const UniPSPtr & uni_ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSCommonWriter(ps_, uni_ps_, index_, global_stat_)
     {}
 
     String description() override { return fmt::format("(Stress Test Increase Writer {})", index); }
@@ -205,8 +204,9 @@ protected:
 class PSReader : public PSRunnable
 {
 public:
-    PSReader(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+    PSReader(const PSPtr & ps_, const UniPSPtr & uni_ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
         : ps(ps_)
+        , uni_ps(uni_ps_)
         , index(index_)
         , global_stat(global_stat_)
     {
@@ -228,6 +228,7 @@ protected:
 
 protected:
     PSPtr ps;
+    UniPSPtr uni_ps;
     std::mt19937 gen;
     size_t heavy_read_delay_ms = 0;
     size_t num_pages_read = 5;
@@ -251,8 +252,8 @@ protected:
 class PSWindowReader : public PSReader
 {
 public:
-    PSWindowReader(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
-        : PSReader(ps_, index_, global_stat_)
+    PSWindowReader(const PSPtr & ps_, const UniPSPtr & uni_ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSReader(ps_, uni_ps_, index_, global_stat_)
     {}
 
     void setNormalDistributionSigma(size_t sigma);
@@ -271,8 +272,8 @@ protected:
 class PSSnapshotReader : public PSReader
 {
 public:
-    PSSnapshotReader(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
-        : PSReader(ps_, index_, global_stat_)
+    PSSnapshotReader(const PSPtr & ps_, const UniPSPtr & uni_ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
+        : PSReader(ps_, uni_ps_, index_, global_stat_)
     {}
 
     bool runImpl() override;

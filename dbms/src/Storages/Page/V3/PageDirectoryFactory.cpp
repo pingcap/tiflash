@@ -154,11 +154,11 @@ void PageDirectoryFactory<Trait>::applyRecord(
     auto [iter, created] = dir->mvcc_table_directory.insert(std::make_pair(r.page_id, nullptr));
     if (created)
     {
-        if constexpr (std::is_same_v<Trait, u128::PageDirectoryFactory>)
+        if constexpr (std::is_same_v<Trait, u128::FactoryTrait>)
         {
             iter->second = std::make_shared<VersionedPageEntries<u128::PageDirectoryTrait>>();
         }
-        else if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+        else if constexpr (std::is_same_v<Trait, universal::FactoryTrait>)
         {
             iter->second = std::make_shared<VersionedPageEntries<universal::PageDirectoryTrait>>();
         }

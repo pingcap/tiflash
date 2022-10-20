@@ -17,6 +17,7 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/universal/UniversalPageStorage.h>
 #include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSWorkload.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -96,7 +97,7 @@ void StressWorkload::onDumpResult()
 
 void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path_prefix)
 {
-    DB::FileProviderPtr file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
+    auto file_provider = std::make_shared<DB::FileProvider>(std::make_shared<DB::MockKeyManager>(false), false);
 
     if (path_prefix.empty())
     {
@@ -122,21 +123,28 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
     {
         ps = std::make_shared<DB::PS::V3::PageStorageImpl>("stress_test", delegator, config, file_provider);
     }
+    else if (options.running_ps_version == 4)
+    {
+        uni_ps = DB::UniversalPageStorage::create("stress_test", delegator, config, file_provider);
+    }
     else
     {
         throw DB::Exception(fmt::format("Invalid PageStorage version {}",
                                         options.running_ps_version));
     }
 
-    ps->restore();
-
+    size_t num_of_pages = 0;
+    if (ps)
     {
-        size_t num_of_pages = 0;
-        ps->traverse([&num_of_pages](const DB::Page & page) {
-            (void)page;
+        ps->restore();
+        ps->traverse([&num_of_pages](const DB::Page &) {
             num_of_pages++;
         });
         LOG_INFO(StressEnv::logger, "Recover {} pages.", num_of_pages);
+    }
+    else
+    {
+        uni_ps->restore();
     }
 
     runtime_stat = std::make_unique<GlobalStat>();
@@ -144,7 +152,7 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
 
 void StressWorkload::initPages(const DB::PageId & max_page_id)
 {
-    auto writer = std::make_shared<PSWriter>(ps, 0, runtime_stat);
+    auto writer = std::make_shared<PSWriter>(ps, uni_ps, 0, runtime_stat);
     for (DB::PageId page_id = 0; page_id <= max_page_id; ++page_id)
     {
         RandomPageId r(page_id);
@@ -159,14 +167,14 @@ void StressWorkload::startBackgroundTimer()
     // A background thread that do GC
     if (options.gc_interval_s > 0)
     {
-        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
+        gc = std::make_shared<PSGc>(ps, uni_ps, options.gc_interval_s);
         gc->start();
     }
 
     // A background thread that get snapshot statics,
     // mock `AsynchronousMetrics` that report metrics
     // to grafana.
-    scanner = std::make_shared<PSSnapStatGetter>(ps);
+    scanner = std::make_shared<PSSnapStatGetter>(ps, uni_ps);
     scanner->start();
 
     if (options.status_interval > 0)

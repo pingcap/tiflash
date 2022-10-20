@@ -15,6 +15,7 @@
 #include <Common/MemoryTracker.h>
 #include <Poco/Logger.h>
 #include <Poco/Timer.h>
+#include <Storages/Page/Snapshot.h>
 #include <Storages/Page/workload/PSBackground.h>
 #include <fmt/format.h>
 
@@ -54,7 +55,10 @@ void PSGc::doGcOnce()
         auto tracker = MemoryTracker::create();
         tracker->setDescription("(Stress Test GC)");
         current_memory_tracker = tracker.get();
-        ps->gc();
+        if (ps)
+            ps->gc();
+        else
+            uni_ps->gc();
         current_memory_tracker = nullptr;
     }
     catch (...)
@@ -76,7 +80,11 @@ void PSSnapStatGetter::onTime(Poco::Timer & /*timer*/)
     try
     {
         LOG_INFO(StressEnv::logger, "Scanner start");
-        auto stat = ps->getSnapshotsStat();
+        SnapshotsStatistics stat;
+        if (ps)
+            stat = ps->getSnapshotsStat();
+        else
+            stat = uni_ps->getSnapshotsStat();
         LOG_INFO(
             StressEnv::logger,
             "Scanner get {} snapshots, longest lifetime: {:.3f}s longest from thread: {}, tracing_id: {}",
