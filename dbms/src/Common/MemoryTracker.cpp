@@ -86,10 +86,12 @@ void MemoryTracker::alloc(Int64 size, bool check_memory_limit)
             if (description)
                 fmt_buf.fmtAppend(" {}", description);
 
-            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, memory usage not tracked by ProcessList: peak {}, current {} . Virtual memory size: {}",
+            fmt_buf.fmtAppend(": fault injected. real_rss ({}) is much larger than limit ({}). Debug info, threads of process: {}, memory usage tracked by ProcessList: peak {}, current {}, memory usage not tracked by ProcessList: peak {}, current {} . Virtual memory size: {}",
                               formatReadableSizeWithBinarySuffix(real_rss),
                               formatReadableSizeWithBinarySuffix(current_limit),
                               proc_num_threads.load(),
+                              (root_of_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_query_mem_trackers->peak) : "0"),
+                              (root_of_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_query_mem_trackers->amount) : "0"),
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->peak) : "0"),
                               (root_of_non_query_mem_trackers ? formatReadableSizeWithBinarySuffix(root_of_non_query_mem_trackers->amount) : "0"),
                               proc_virt_size.load());
