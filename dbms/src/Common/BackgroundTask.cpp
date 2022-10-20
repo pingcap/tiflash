@@ -83,7 +83,7 @@ void CollectProcInfoBackgroundTask::memCheckJob()
         proc_num_threads = cur_proc_num_threads;
         proc_virt_size = cur_virt_size;
         baseline_of_query_mem_tracker = root_of_query_mem_trackers->get();
-        usleep(10000); // sleep 10ms
+        usleep(100000); // sleep 100ms
     }
     end_fin = true;
 }
