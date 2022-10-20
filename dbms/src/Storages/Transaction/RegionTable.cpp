@@ -161,7 +161,7 @@ RegionTable::RegionTable(Context & context_)
         {FTH_BYTES_3, FTH_PERIOD_3},
         {FTH_BYTES_4, FTH_PERIOD_4}})
     , context(&context_)
-    , log(&Poco::Logger::get("RegionTable"))
+    , log(Logger::get())
 {}
 
 void RegionTable::restore()

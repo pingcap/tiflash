@@ -41,7 +41,7 @@ public:
         , header(toEmptyBlock(columns_to_read_))
         , extra_table_id_index(extra_table_id_index)
         , physical_table_id(physical_table_id)
-        , log(Logger::get(NAME, req_id))
+        , log(Logger::get(req_id))
         , ref_no(0)
         , task_pool_added(false)
     {

@@ -55,7 +55,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , tmt(tmt_)
     , gc_safepoint(gc_safepoint_)
     , expected_size(expected_size_)
-    , log(Logger::get("SSTFilesToBlockInputStream", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get(log_prefix_))
     , force_decode(force_decode_)
 {
 }

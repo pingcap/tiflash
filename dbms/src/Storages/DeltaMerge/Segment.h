@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/Page/PageDefines.h>
@@ -110,7 +111,7 @@ public:
     DISALLOW_COPY_AND_MOVE(Segment);
 
     Segment(
-        const std::string & log_prefix_,
+        const LoggerPtr & parent_log_,
         UInt64 epoch_,
         const RowKeyRange & rowkey_range_,
         PageId segment_id_,
@@ -119,7 +120,7 @@ public:
         const StableValueSpacePtr & stable_);
 
     static SegmentPtr newSegment(
-        const std::string & log_prefix,
+        const LoggerPtr & parent_log,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
@@ -128,14 +129,14 @@ public:
         PageId delta_id,
         PageId stable_id);
     static SegmentPtr newSegment(
-        const std::string & log_prefix,
+        const LoggerPtr & parent_log,
         DMContext & context,
         const ColumnDefinesPtr & schema,
         const RowKeyRange & rowkey_range,
         PageId segment_id,
         PageId next_segment_id);
 
-    static SegmentPtr restoreSegment(const std::string & log_prefix, DMContext & context, PageId segment_id);
+    static SegmentPtr restoreSegment(const LoggerPtr & parent_log, DMContext & context, PageId segment_id);
 
     void serialize(WriteBatch & wb);
 
@@ -156,6 +157,7 @@ public:
     SegmentSnapshotPtr createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const;
 
     BlockInputStreamPtr getInputStream(
+        const ReadMode & read_mode,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
@@ -164,7 +166,16 @@ public:
         UInt64 max_version,
         size_t expected_block_size);
 
-    BlockInputStreamPtr getInputStream(
+    BlockInputStreamPtr getInputStreamModeNormal(
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const RSOperatorPtr & filter,
+        UInt64 max_version,
+        size_t expected_block_size);
+
+    BlockInputStreamPtr getInputStreamModeNormal(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
@@ -182,19 +193,24 @@ public:
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         bool reorganize_block = true) const;
 
-    BlockInputStreamPtr getInputStreamRaw(
+    BlockInputStreamPtr getInputStreamModeFast(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & data_ranges,
         const RSOperatorPtr & filter,
-        bool filter_delete_mark = true,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
-    BlockInputStreamPtr getInputStreamRaw(
+    BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
-        bool filter_delete_mark = false);
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & data_ranges,
+        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
+
+    BlockInputStreamPtr getInputStreamModeRaw(
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read);
 
     /// For those split, merge and mergeDelta methods, we should use prepareXXX/applyXXX combo in real production.
     /// split(), merge() and mergeDelta() are only used in test cases.
@@ -518,9 +534,8 @@ private:
     // and to avoid doing this check repeatedly, we add this flag to indicate whether the valid data ratio has already been checked.
     std::atomic<bool> check_valid_data_ratio = false;
 
-    const std::string log_prefix;
-
-    LoggerPtr log;
+    const LoggerPtr parent_log; // Used when constructing new segments in split
+    const LoggerPtr log;
 };
 
 } // namespace DB::DM

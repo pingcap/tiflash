@@ -111,21 +111,64 @@ private:
     std::atomic<int64_t> total_bytes;
 };
 
+enum class ReadMode
+{
+    /**
+     * Read in normal mode. Data is ordered by PK, and only the most recent version is returned.
+     */
+    Normal,
+
+    /**
+     * Read in fast mode. Data is not sort merged, and all versions are returned. However, deleted records (del_mark=1)
+     * will be still filtered out.
+     */
+    Fast,
+
+    /**
+     * Read in raw mode, for example, for statements like `SELRAW *`. In raw mode, data is not sort merged and all versions
+     * are just returned.
+     */
+    Raw,
+};
+
+// If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
+// else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
+// `SegmeneReadTasksWrapper` is not thread-safe.
+class SegmentReadTasksWrapper
+{
+public:
+    SegmentReadTasksWrapper(bool enable_read_thread_, SegmentReadTasks && ordered_tasks_);
+
+    // `nextTask` pops task sequentially. This function is used when `enable_read_thread` is false.
+    SegmentReadTaskPtr nextTask();
+
+    // `getTask` and `getTasks` are used when `enable_read_thread` is true.
+    SegmentReadTaskPtr getTask(UInt64 seg_id);
+    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks() const;
+
+    bool empty() const;
+
+private:
+    bool enable_read_thread;
+    SegmentReadTasks ordered_tasks;
+    std::unordered_map<UInt64, SegmentReadTaskPtr> unordered_tasks;
+};
+
 class SegmentReadTaskPool : private boost::noncopyable
 {
 public:
-    explicit SegmentReadTaskPool(
+    SegmentReadTaskPool(
         int64_t table_id_,
         const DMContextPtr & dm_context_,
         const ColumnDefines & columns_to_read_,
         const RSOperatorPtr & filter_,
         uint64_t max_version_,
         size_t expected_block_size_,
-        bool is_raw_,
-        bool do_range_filter_for_raw_,
+        ReadMode read_mode_,
         SegmentReadTasks && tasks_,
         AfterSegmentRead after_segment_read_,
-        const String & tracing_id)
+        const String & tracing_id,
+        bool enable_read_thread_)
         : pool_id(nextPoolId())
         , table_id(table_id_)
         , dm_context(dm_context_)
@@ -133,11 +176,10 @@ public:
         , filter(filter_)
         , max_version(max_version_)
         , expected_block_size(expected_block_size_)
-        , is_raw(is_raw_)
-        , do_range_filter_for_raw(do_range_filter_for_raw_)
-        , tasks(std::move(tasks_))
+        , read_mode(read_mode_)
+        , tasks_wrapper(enable_read_thread_, std::move(tasks_))
         , after_segment_read(after_segment_read_)
-        , log(Logger::get("SegmentReadTaskPool", tracing_id))
+        , log(Logger::get(tracing_id))
         , unordered_input_stream_ref_count(0)
         , exception_happened(false)
         , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
@@ -164,21 +206,13 @@ public:
                   total_bytes / 1024.0 / 1024.0);
     }
 
-    SegmentReadTaskPtr nextTask()
-    {
-        std::lock_guard lock(mutex);
-        if (tasks.empty())
-            return {};
-        auto task = tasks.front();
-        tasks.pop_front();
-        return task;
-    }
+    SegmentReadTaskPtr nextTask();
+    const std::unordered_map<UInt64, SegmentReadTaskPtr> & getTasks();
+    SegmentReadTaskPtr getTask(UInt64 seg_id);
 
     uint64_t poolId() const { return pool_id; }
 
     int64_t tableId() const { return table_id; }
-
-    const SegmentReadTasks & getTasks() const { return tasks; }
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
 
@@ -194,11 +228,15 @@ public:
     int64_t getFreeBlockSlots() const;
     bool valid() const;
     void setException(const DB::Exception & e);
-    SegmentReadTaskPtr getTask(uint64_t seg_id);
 
     std::once_flag & addToSchedulerFlag()
     {
         return add_to_scheduler;
+    }
+
+    MemoryTrackerPtr & getMemoryTracker()
+    {
+        return mem_tracker;
     }
 
 private:
@@ -214,9 +252,8 @@ private:
     RSOperatorPtr filter;
     const uint64_t max_version;
     const size_t expected_block_size;
-    const bool is_raw;
-    const bool do_range_filter_for_raw;
-    SegmentReadTasks tasks;
+    const ReadMode read_mode;
+    SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     std::mutex mutex;
     std::unordered_set<uint64_t> active_segment_ids;

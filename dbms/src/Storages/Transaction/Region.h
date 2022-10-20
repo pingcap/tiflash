@@ -228,7 +228,7 @@ private:
 
     RegionMeta meta;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     const TableID mapped_table_id;
 

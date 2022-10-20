@@ -185,7 +185,7 @@ private:
         }
         BlobConfig blob_config;
 
-        PageStorage::Config config;
+        PageStorageConfig config;
         PageStorageImpl ps_v3("PageStorageControlV3", delegator, config, file_provider_ptr);
         ps_v3.restore();
         PageDirectory::MVCCMapType & mvcc_table_directory = ps_v3.page_directory->mvcc_table_directory;
