@@ -275,7 +275,7 @@ public:
     static String getString(size_t) { return String(""); }
     void getStringRef(size_t, StringRef &) const {}
     constexpr static bool isConst() { return true; }
-    static const void * getContainer() { throw Exception("ParamDefault not supports this function"); }
+    static const void * getContainer() { return nullptr; }
 
 private:
     Int64 default_int;
@@ -1237,10 +1237,12 @@ public:
         GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
         GetIntFuncPointerType get_ret_op_func = getGetIntFuncPointer(ret_op_param.getIntType());
 
+        // Container will not be used when parm is const
         const void * pos_container =  pos_param.getContainer();
         const void * occur_container =  occur_param.getContainer();
         const void * ret_op_container =  ret_op_param.getContainer();
 
+        // Const value will not be used when the param is not const
         Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
         Int64 occur_const_val = OccurT::isConst() ? occur_param. template getInt<Int64>(0) : -1;
         Int64 ret_op_const_val = RetOpT::isConst() ? ret_op_param. template getInt<Int64>(0) : -1;

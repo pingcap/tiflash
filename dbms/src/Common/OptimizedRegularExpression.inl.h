@@ -18,6 +18,7 @@
 
 #include <iostream>
 #include "Common/Exception.h"
+#include "common/defines.h"
 #include "common/types.h"
 
 
@@ -547,7 +548,7 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
 {
     int64_t utf8_total_len = getStringUtf8Len(subject, subject_size);
     
-    if (pos <= 0 || pos > utf8_total_len)
+    if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
         throw DB::Exception("Index out of bounds in regular expression search.");
 
     String matched_str; // store the matched substring
