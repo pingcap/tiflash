@@ -441,13 +441,12 @@ private:
         if (col_const != nullptr)                                                                                           \
         {                                                                                                                   \
             auto col_const_data = col_const->getDataColumnPtr();                                                            \
+            Field field;                                                                                                \
+            col_const->get(0, field);                                                                                   \
+            String tmp = field.isNull() ? String("") : field.safeGet<String>();                                                                       \
             if (col_const_data->isColumnNullable())                                                                         \
             {                                                                                                               \
                 /* This is a const column and it can't be const null column as we should have handled it in the previous */ \
-                Field field;                                                                                                \
-                col_const->get(0, field);                                                                                   \
-                String tmp = field.safeGet<String>();                                                                       \
-                /* const col */                                                                                             \
                 Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()));                    \
                 next_process;                                                                                               \
             }                                                                                                               \
@@ -459,7 +458,9 @@ private:
             }                                                                                                               \
         }                                                                                                                   \
         else                                                                                                                \
-            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (processed_col), next_process)                                      \
+        {                                                                                                                   \
+            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (processed_col), next_process)                                     \
+        }                                                                                                                   \
     } while (0);
 
 class FunctionStringRegexpBase
