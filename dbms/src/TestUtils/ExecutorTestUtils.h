@@ -29,8 +29,8 @@ namespace DB::tests
 {
 TiDB::TP dataTypeToTP(const DataTypePtr & type);
 
-DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
-DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
+ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
+ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 Block mergeBlocks(Blocks blocks);
 
 
@@ -69,7 +69,7 @@ public:
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
-
+    ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
 

@@ -31,6 +31,7 @@ std::unordered_map<String, tipb::ScalarFuncSig> func_name_to_sig({
     {"lessorequals", tipb::ScalarFuncSig::LEInt},
     {"in", tipb::ScalarFuncSig::InInt},
     {"notin", tipb::ScalarFuncSig::InInt},
+    {"isnull", tipb::ScalarFuncSig::IntIsNull},
     {"date_format", tipb::ScalarFuncSig::DateFormatSig},
     {"if", tipb::ScalarFuncSig::IfInt},
     {"from_unixtime", tipb::ScalarFuncSig::FromUnixTime2Arg},

@@ -163,14 +163,26 @@ struct MockRaftStoreProxy : MutexLockWrap
         Type type = NORMAL;
     };
 
-    /// We assume that we generate one command, and immediately commit.
-    /// boostrap a region
+    /// boostrap a region.
     void bootstrap(
         KVStore & kvs,
         TMTContext & tmt,
         UInt64 region_id);
 
-    /// normal write to a region
+    /// boostrap a table, since applying snapshot needs table schema.
+    TableID bootstrap_table(
+        Context & ctx,
+        KVStore & kvs,
+        TMTContext & tmt);
+
+    /// clear tables.
+    void clear_tables(
+        Context & ctx,
+        KVStore & kvs,
+        TMTContext & tmt);
+
+    /// We assume that we generate one command, and immediately commit.
+    /// normal write to a region.
     std::tuple<uint64_t, uint64_t> normalWrite(
         UInt64 region_id,
         std::vector<HandleID> && keys,
@@ -178,7 +190,46 @@ struct MockRaftStoreProxy : MutexLockWrap
         std::vector<WriteCmdType> && cmd_types,
         std::vector<ColumnFamilyType> && cmd_cf);
 
+    /// Create a compactLog admin command, returns (index, term) of the admin command itself.
     std::tuple<uint64_t, uint64_t> compactLog(UInt64 region_id, UInt64 compact_index);
+
+    struct Cf
+    {
+        Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_);
+
+        // Actual data will be stored in MockSSTReader.
+        void finish_file();
+        void freeze() { freezed = true; }
+
+        void insert(HandleID key, std::string val);
+
+        ColumnFamilyType cf_type() const
+        {
+            return type;
+        }
+
+        // Only use this after all sst_files is generated.
+        // vector::push_back can cause destruction of std::string,
+        // which is referenced by SSTView.
+        std::vector<SSTView> ssts() const;
+
+    protected:
+        UInt64 region_id;
+        TableID table_id;
+        ColumnFamilyType type;
+        std::vector<std::string> sst_files;
+        std::vector<std::pair<std::string, std::string>> kvs;
+        int c;
+        bool freezed;
+    };
+
+    void snapshot(
+        KVStore & kvs,
+        TMTContext & tmt,
+        UInt64 region_id,
+        std::vector<Cf> && cfs,
+        uint64_t index,
+        uint64_t term);
 
     void doApply(
         KVStore & kvs,
@@ -193,12 +244,19 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t region_id,
         uint64_t to);
 
+    MockRaftStoreProxy()
+    {
+        log = Logger::get("MockRaftStoreProxy");
+        table_id = 1;
+    }
 
     std::unordered_set<uint64_t> region_id_to_drop;
     std::unordered_set<uint64_t> region_id_to_error;
     std::map<uint64_t, MockProxyRegionPtr> regions;
     std::list<std::shared_ptr<RawMockReadIndexTask>> tasks;
     AsyncWaker::Notifier notifier;
+    TableID table_id;
+    LoggerPtr log;
 };
 
 enum class RawObjType : uint32_t

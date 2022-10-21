@@ -222,7 +222,7 @@ public:
     void handle()
     {
         std::string err_info;
-        LOG_TRACE(log, "stage: {}", stage);
+        LOG_TRACE(log, "stage: {}", magic_enum::enum_name(stage));
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:

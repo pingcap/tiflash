@@ -77,5 +77,14 @@ try
 }
 CATCH
 
+TEST_F(ExecutorLimitTestRunner, RawQuery)
+try
+{
+    String query = "select * from test_db.projection_test_table limit 1";
+    auto cols = {toNullableVec<String>(col_name, ColumnWithData(col0.begin(), col0.begin() + 1))};
+    ASSERT_COLUMNS_EQ_R(executeRawQuery(query, 1), cols);
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

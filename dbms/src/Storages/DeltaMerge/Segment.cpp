@@ -1127,7 +1127,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplit(DMContext & dm_context,
     case SplitMode::Physical:
         return prepareSplitPhysical(dm_context, schema_snap, segment_snap, opt_split_at, wbs);
     default:
-        RUNTIME_CHECK(false, try_split_mode);
+        RUNTIME_CHECK(false, static_cast<Int32>(try_split_mode));
     }
 }
 

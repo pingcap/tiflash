@@ -264,7 +264,9 @@ bool VersionedPageEntries::createNewRef(const PageVersion & ver, PageIdV3Interna
 std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageEntriesEdit::EditRecord & rec)
 {
     auto page_lock = acquireLock();
-    if (rec.type == EditRecordType::VAR_REF)
+    switch (rec.type)
+    {
+    case EditRecordType::VAR_REF:
     {
         type = EditRecordType::VAR_REF;
         is_deleted = false;
@@ -272,7 +274,7 @@ std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageE
         ori_page_id = rec.ori_page_id;
         return nullptr;
     }
-    else if (rec.type == EditRecordType::VAR_EXTERNAL)
+    case EditRecordType::VAR_EXTERNAL:
     {
         type = EditRecordType::VAR_EXTERNAL;
         is_deleted = false;
@@ -281,15 +283,16 @@ std::shared_ptr<PageIdV3Internal> VersionedPageEntries::fromRestored(const PageE
         external_holder = std::make_shared<PageIdV3Internal>(rec.page_id);
         return external_holder;
     }
-    else if (rec.type == EditRecordType::VAR_ENTRY)
+    case EditRecordType::VAR_ENTRY:
     {
         type = EditRecordType::VAR_ENTRY;
         entries.emplace(rec.version, EntryOrDelete::newFromRestored(rec.entry, rec.being_ref_count));
         return nullptr;
     }
-    else
+    default:
     {
-        throw Exception(fmt::format("Calling VersionedPageEntries::fromRestored with unknown type: {}", rec.type));
+        throw Exception(fmt::format("Calling VersionedPageEntries::fromRestored with unknown type: {}", static_cast<Int32>(rec.type)));
+    }
     }
 }
 
@@ -348,7 +351,7 @@ VersionedPageEntries::resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV
     }
     else
     {
-        LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", type);
+        LOG_WARNING(&Poco::Logger::get("VersionedPageEntries"), "Can't resolve the EditRecordType {}", static_cast<Int32>(type));
     }
 
     return {ResolveResult::FAIL, buildV3Id(0, 0), PageVersion(0)};
@@ -1193,12 +1196,12 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             case EditRecordType::VAR_ENTRY:
             case EditRecordType::VAR_EXTERNAL:
             case EditRecordType::VAR_REF:
-                throw Exception(fmt::format("should not handle edit with invalid type [type={}]", r.type));
+                throw Exception(fmt::format("should not handle edit with invalid type [type={}]", magic_enum::enum_name(r.type)));
             }
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", r.type, r.page_id, new_version, edit.size()));
+            e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, new_version, edit.size()));
             e.rethrow();
         }
     }
