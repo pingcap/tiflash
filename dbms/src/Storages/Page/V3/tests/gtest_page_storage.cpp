@@ -422,18 +422,11 @@ try
         ASSERT_EQ(page_maps[4].page_id, 4);
         ASSERT_FALSE(page_maps[6].isValid());
 
-        PageIds page_ids_not_found = page_storage->readImpl(
-            TEST_NAMESPACE_ID,
-            page_ids,
-            [](PageId /*page_id*/, const Page & /*page*/) {},
-            nullptr,
-            nullptr,
-            false);
-
-        std::sort(page_ids_not_found.begin(), page_ids_not_found.end());
-        ASSERT_EQ(page_ids_not_found.size(), 2);
-        ASSERT_EQ(page_ids_not_found[0], 2);
-        ASSERT_EQ(page_ids_not_found[1], 5);
+        // the invalid page ids in input param are returned with INVALID_ID
+        ASSERT_GT(page_maps.count(2), 0);
+        ASSERT_EQ(page_maps[2].page_id, INVALID_PAGE_ID);
+        ASSERT_GT(page_maps.count(5), 0);
+        ASSERT_EQ(page_maps[5].page_id, INVALID_PAGE_ID);
     }
 }
 CATCH

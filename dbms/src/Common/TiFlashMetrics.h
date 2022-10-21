@@ -234,11 +234,14 @@ namespace DB
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
 // clang-format on
 
+/// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
 struct ExpBuckets
 {
     const double start;
     const int base;
     const size_t size;
+
+    // NOLINTNEXTLINE(google-explicit-constructor)
     inline operator prometheus::Histogram::BucketBoundaries() const &&
     {
         prometheus::Histogram::BucketBoundaries buckets(size);
@@ -257,6 +260,8 @@ struct EqualWidthBuckets
     const size_t start;
     const int num_buckets;
     const size_t step;
+
+    // NOLINTNEXTLINE(google-explicit-constructor)
     inline operator prometheus::Histogram::BucketBoundaries() const &&
     {
         // up to `num_buckets` * `step`
@@ -382,12 +387,17 @@ public:
 APPLY_FOR_METRICS(MAKE_METRIC_ENUM_M, MAKE_METRIC_ENUM_F)
 #undef APPLY_FOR_METRICS
 
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_MACRO(_1, _2, NAME, ...) NAME
 #ifndef GTEST_TIFLASH_METRICS
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TiFlashMetrics::instance().family.get()
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TiFlashMetrics::instance().family.get(family##_metrics::metric)
 #else
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_0(family) TestMetrics::instance().family.get()
+// NOLINTNEXTLINE(bugprone-reserved-identifier)
 #define __GET_METRIC_1(family, metric) TestMetrics::instance().family.get(family##_metrics::metric)
 #endif
 #define GET_METRIC(...)                                             \

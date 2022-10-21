@@ -108,7 +108,6 @@ public:
 
 using Pages = std::vector<Page>;
 using PageMap = std::map<PageId, Page>;
-using PageHandler = std::function<void(PageId page_id, const Page &)>;
 
 // TODO: Move it into V2
 // Indicate the page size && offset in PageFile.
