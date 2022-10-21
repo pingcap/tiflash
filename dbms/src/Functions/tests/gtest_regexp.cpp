@@ -2159,7 +2159,54 @@ TEST_F(Regexp, testRegexpCustomerCases)
 
 TEST_F(Regexp, RegexpInstr)
 {
-    
+    {
+        // Test: All parameters are const
+        std::cout << "here1\n";
+        size_t row_size = 2;
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 1),
+                            executeFunction(
+                                "regexp_instr",
+                                createConstColumn<String>(row_size, "123"),
+                                createConstColumn<String>(row_size, "12.")));
+        std::cout << "here2\n";
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 0),
+                            executeFunction(
+                                "regexp_instr",
+                                createConstColumn<String>(row_size, "123"),
+                                createConstColumn<String>(row_size, "12."),
+                                createConstColumn<UInt64>(row_size, 2)));
+        std::cout << "here3\n";
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 4),
+                            executeFunction(
+                                "regexp_instr",
+                                createConstColumn<String>(row_size, "11212"),
+                                createConstColumn<String>(row_size, "12"),
+                                createConstColumn<UInt8>(row_size, 2),
+                                createConstColumn<UInt64>(row_size, 2)));
+        std::cout << "here4\n";
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 6),
+                            executeFunction(
+                                "regexp_instr",
+                                createConstColumn<String>(row_size, "11212"),
+                                createConstColumn<String>(row_size, "12"),
+                                createConstColumn<UInt64>(row_size, 2),
+                                createConstColumn<Int16>(row_size, 2),
+                                createConstColumn<Int32>(row_size, 1)));
+        std::cout << "here5\n";
+        ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 6),
+                            executeFunction(
+                                "regexp_instr",
+                                createConstColumn<String>(row_size, "aabab"),
+                                createConstColumn<String>(row_size, "aB"),
+                                createConstColumn<UInt16>(row_size, 2),
+                                createConstColumn<Int8>(row_size, 2),
+                                createConstColumn<UInt32>(row_size, 1),
+                                createConstColumn<String>(row_size, "i")));
+    }
+
+    {
+        // Test: null const
+    }
 }
 
 TEST_F(Regexp, testRegexpReplaceMatchType)

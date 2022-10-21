@@ -139,6 +139,21 @@ inline constexpr bool check_int_type()
     return static_cast<bool>(std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, UInt128> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>);
 }
 
+// Field field;
+// field.safeGet<Int64
+
+Int64 getIntFromField(Field & field)
+{
+    switch (field.getType()) {
+    case Field::Types::Which::Int64:
+        return field.safeGet<Int64>();
+    case Field::Types::Which::UInt64:
+        return field.safeGet<UInt64>();
+    default:
+        throw Exception("Unexpected int type");
+    }
+}
+
 enum class IntType { UInt8 = 0, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64 };
 
 Int64 getUInt8(const void * container, size_t idx)
@@ -564,13 +579,12 @@ private:
         if (col_const != nullptr)                                                                                           \
         {                                                                                                                   \
             auto col_const_data = col_const->getDataColumnPtr();                                                            \
+            Field field;                                                                                                \
+            col_const->get(0, field);                                                                                   \
+            String tmp = field.isNull() ? String("") : field.safeGet<String>();                                                                       \
             if (col_const_data->isColumnNullable())                                                                         \
             {                                                                                                               \
                 /* This is a const column and it can't be const null column as we should have handled it in the previous */ \
-                Field field;                                                                                                \
-                col_const->get(0, field);                                                                                   \
-                String tmp = field.safeGet<String>();                                                                       \
-                /* const col */                                                                                             \
                 Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()));                    \
                 next_process;                                                                                               \
             }                                                                                                               \
@@ -650,25 +664,24 @@ private:
 #define CONVERT_CONST_INT_COL_TO_PARAM(param_name, processed_col, next_process)                                                              \
     do                                                                                                                                       \
     {                                                                                                                                        \
+        std::cout << "CONVERT_CONST_INT_COL_TO_PARAM1\n"; \
         size_t col_size = (processed_col)->size();                                                                                           \
         const auto * col_const = typeid_cast<const ColumnConst *>(&(*(processed_col)));                                                      \
         if (col_const != nullptr)                                                                                                            \
         {                                                                                                                                    \
+            std::cout << "CONVERT_CONST_INT_COL_TO_PARAM4\n"; \
+            Field field;                                                                                                                 \
+            col_const->get(0, field);                                                                                                    \
+            auto data_int64 = field.isNull() ? -1 : getIntFromField(field);                                                                                             \
             auto col_const_data = col_const->getDataColumnPtr();                                                                             \
             if (col_const_data->isColumnNullable())                                                                                          \
             {                                                                                                                                \
                 /* This is a const nullable column */                                                                                        \
-                Field field;                                                                                                                 \
-                col_const->get(0, field);                                                                                                    \
-                auto data_int64 = field.get<Int64>();                                                                                             \
-                /* type template of ParamInt is useless when column is const, so we can arbitrary designate a valid as template parameter */ \
                 Param<ParamInt<true>, true>(param_name)(col_size, data_int64);                                                        \
                 next_process;                                                                                                                \
             }                                                                                                                                \
             else                                                                                                                             \
             {                                                                                                                                \
-                /* type template of ParamInt is useless when column is const, so we can arbitrary designate a valid as template parameter */ \
-                auto data_int64 = col_const->getValue<Int64>();                                                                                   \
                 Param<ParamInt<true>, false>(param_name)(col_size, data_int64);                                                       \
                 next_process;                                                                                                                \
             }                                                                                                                                \
@@ -1034,7 +1047,7 @@ public:
         if ((ARG_NUM_VAR_NAME) == REGEXP_LIKE_MAX_PARAM_NUM)
             MATCH_TYPE_COL_PTR_VAR_NAME = block.getByPosition(arguments[2]).column;
 
-        CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
+        // CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
     }
 
 private:
@@ -1056,39 +1069,16 @@ private:
 // Method to convert match type column to param
 #define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
     do                                                                                                                             \
-    {                                                                                                                              \
+    { \
+                std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME == REGEXP_INSTR_MAX_PARAM_NUM) \
         { \
+                std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM2\n"; \
             CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_INSTR()})) \
         } \
-        else if (ARG_NUM_VAR_NAME == REGEXP_MIN_PARAM_NUM + 3) \
+        else                                                                          \
         { \
-            /* match_type is not provided here and set default values */                                                                             \
-            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
-            EXECUTE_REGEXP_INSTR() \
-        } \
-        else if (ARG_NUM_VAR_NAME == REGEXP_MIN_PARAM_NUM + 2) \
-        { \
-            /* return_option and match_type are not provided here and set default values */                                                                             \
-            Param<ParamDefault, false> RET_OP_PARAM_VAR_NAME(-1, 0); \
-            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
-            EXECUTE_REGEXP_INSTR() \
-        } \
-        else if (ARG_NUM_VAR_NAME == REGEXP_MIN_PARAM_NUM + 1) \
-        { \
-            /* occurrence, return_option and match_type are not provided here and set default values */                                                                             \
-            Param<ParamDefault, false> OCCUR_PARAM_VAR_NAME(-1, 1); \
-            Param<ParamDefault, false> RET_OP_PARAM_VAR_NAME(-1, 0); \
-            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
-            EXECUTE_REGEXP_INSTR() \
-        } \
-        else \
-        { \
-            /* position, occurrence, return_option and match_type are not provided here and set default values */                                                                             \
-            Param<ParamDefault, false> POS_PARAM_VAR_NAME(-1, 1); \
-            Param<ParamDefault, false> OCCUR_PARAM_VAR_NAME(-1, 1); \
-            Param<ParamDefault, false> RET_OP_PARAM_VAR_NAME(-1, 0); \
-            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
+            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0)); \
             EXECUTE_REGEXP_INSTR() \
         } \
     } while (0);
@@ -1097,27 +1087,52 @@ private:
 #define CONVERT_RET_OP_COL_TO_PARAM() \
     do \
     { \
-        CONVERT_CONST_INT_COL_TO_PARAM(RET_OP_PARAM_VAR_NAME, RET_OP_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
+            std::cout << "CONVERT_RET_OP_COL_TO_PARAM1\n"; \
+        if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 3) \
+        { \
+                std::cout << "CONVERT_RET_OP_COL_TO_PARAM2\n"; \
+            Param<ParamDefault, false> RET_OP_PARAM_VAR_NAME(-1, 0); \
+            CONVERT_MATCH_TYPE_COL_TO_PARAM() \
+        } \
+        else \
+            CONVERT_CONST_INT_COL_TO_PARAM(RET_OP_PARAM_VAR_NAME, RET_OP_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
     } while (0);
 
 // Method to convert occurrence column to param
 #define CONVERT_OCCUR_COL_TO_PARAM() \
     do \
     { \
-        CONVERT_CONST_INT_COL_TO_PARAM(OCCUR_PARAM_VAR_NAME, OCCUR_COL_PTR_VAR_NAME, ({CONVERT_RET_OP_COL_TO_PARAM()})) \
+            std::cout << "CONVERT_OCCUR_COL_TO_PARAM1\n"; \
+        if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 2) \
+        { \
+                std::cout << "CONVERT_OCCUR_COL_TO_PARAM2\n"; \
+            Param<ParamDefault, false> OCCUR_PARAM_VAR_NAME(-1, 1); \
+            CONVERT_RET_OP_COL_TO_PARAM() \
+        } \
+        else \
+            CONVERT_CONST_INT_COL_TO_PARAM(OCCUR_PARAM_VAR_NAME, OCCUR_COL_PTR_VAR_NAME, ({CONVERT_RET_OP_COL_TO_PARAM()})) \
     } while (0);
 
 // Method to convert position column to param
 #define CONVERT_POS_COL_TO_PARAM() \
     do \
     { \
-        CONVERT_CONST_INT_COL_TO_PARAM(POS_PARAM_VAR_NAME, POS_COL_PTR_VAR_NAME, ({CONVERT_OCCUR_COL_TO_PARAM()})) \
+            std::cout << "CONVERT_POS_COL_TO_PARAM1\n"; \
+        if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 1) \
+        { \
+                std::cout << "CONVERT_POS_COL_TO_PARAM2\n"; \
+            Param<ParamDefault, false> POS_PARAM_VAR_NAME(-1, 1); \
+            CONVERT_OCCUR_COL_TO_PARAM() \
+        } \
+        else \
+            CONVERT_CONST_INT_COL_TO_PARAM(POS_PARAM_VAR_NAME, POS_COL_PTR_VAR_NAME, ({CONVERT_OCCUR_COL_TO_PARAM()})) \
     } while (0);
 
 // Method to convert pattern column to param
 #define CONVERT_PAT_COL_TO_PARAM()                                                                                           \
     do                                                                                                                       \
     {                                                                                                                        \
+        std::cout << "CONVERT_PAT_COL_TO_PARAM\n"; \
         CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_POS_COL_TO_PARAM()})) \
     } while (0);
 
@@ -1125,6 +1140,7 @@ private:
 #define CONVERT_EXPR_COL_TO_PARAM()                                                                                 \
     do                                                                                                              \
     {                                                                                                               \
+        std::cout << "CONVERT_EXPR_COL_TO_PARAM\n"; \
         CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
     } while (0);
 
