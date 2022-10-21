@@ -163,15 +163,23 @@ public:
         }
     }
 
-    void insertData(const char * pos, size_t length) override
+    template <bool add_terminating_zero>
+    ALWAYS_INLINE inline void insertDataImpl(const char * pos, size_t length)
     {
         const size_t old_size = chars.size();
-        const size_t new_size = old_size + length + 1;
+        const size_t new_size = old_size + length + (add_terminating_zero ? 1 : 0);
 
         chars.resize(new_size);
         inline_memcpy(&chars[old_size], pos, length);
-        chars[old_size + length] = 0;
+
+        if constexpr (add_terminating_zero)
+            chars[old_size + length] = 0;
         offsets.push_back(new_size);
+    }
+
+    void insertData(const char * pos, size_t length) override
+    {
+        return insertDataImpl<true>(pos, length);
     }
 
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
@@ -182,12 +190,7 @@ public:
 
     void insertDataWithTerminatingZero(const char * pos, size_t length) override
     {
-        const size_t old_size = chars.size();
-        const size_t new_size = old_size + length;
-
-        chars.resize(new_size);
-        inline_memcpy(&chars[old_size], pos, length);
-        offsets.push_back(new_size);
+        return insertDataImpl<false>(pos, length);
     }
 
     void popBack(size_t n) override
