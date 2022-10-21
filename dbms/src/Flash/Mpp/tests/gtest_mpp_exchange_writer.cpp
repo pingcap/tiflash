@@ -168,7 +168,6 @@ try
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size);
     dag_writer->write(block);
-    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.

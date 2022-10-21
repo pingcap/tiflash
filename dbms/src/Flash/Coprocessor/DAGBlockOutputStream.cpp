@@ -28,7 +28,7 @@ void DAGBlockOutputStream::writePrefix()
 
 void DAGBlockOutputStream::write(const Block & block)
 {
-    response_writer->write(block, false);
+    response_writer->write(block);
 }
 
 void DAGBlockOutputStream::writeSuffix()
