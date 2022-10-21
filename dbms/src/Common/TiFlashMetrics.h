@@ -155,8 +155,15 @@ namespace DB
         F(type_v3_mvcc_dumped, {"type", "v3_mvcc_dumped"}),                                                                               \
         F(type_v3_bs_full_gc, {"type", "v3_bs_full_gc"}))                                                                                 \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
-        F(type_exec, {{"type", "exec"}}, ExpBuckets{0.0005, 2, 20}),                                                                      \
+        F(type_v2, {{"type", "v2"}}, ExpBuckets{0.0005, 2, 20}),                                                                          \
         F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+        /* Below are metrics for PageStorage V3 */                                                                                        \
+        F(type_compact_wal, {{"type", "compact_wal"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
+        F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets{0.0005, 2, 20}),                                            \
+        F(type_compact_spacemap, {{"type", "compact_spacemap"}}, ExpBuckets{0.0005, 2, 20}),                                              \
+        F(type_fullgc_disk, {{"type", "fullgc_disk"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
+        F(type_fullgc_apply, {{"type", "fullgc_apply"}}, ExpBuckets{0.0005, 2, 20}),                                                      \
+        F(type_clean_external, {{"type", "clean_external"}}, ExpBuckets{0.0005, 2, 20}),                                                \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                          \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                        \
@@ -233,8 +240,8 @@ namespace DB
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
-        F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
-// clang-format on
+        F(type_mpp_query_count, {"type", "mpp_query_count"})) \
+    // clang-format on
 
 struct ExpBuckets
 {

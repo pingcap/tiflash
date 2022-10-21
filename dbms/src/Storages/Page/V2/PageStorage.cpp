@@ -1178,7 +1178,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         GET_METRIC(tiflash_storage_page_gc_count, type_low_write).Increment();
     else
         GET_METRIC(tiflash_storage_page_gc_count, type_exec).Increment();
-    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_exec).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2).Observe(watch.elapsedSeconds()); });
 
 
 #if !defined(NDEBUG)

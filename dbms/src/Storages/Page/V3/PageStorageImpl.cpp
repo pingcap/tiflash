@@ -310,21 +310,26 @@ String PageStorageImpl::GCTimeStatistics::toLogging() const
     };
     return fmt::format("GC finished{}."
                        " [total time={}ms]"
-                       " [dump snapshots={}ms] [gc in mem entries={}ms]"
-                       " [blobstore remove entries={}ms] [blobstore get status={}ms]"
-                       " [get gc entries={}ms] [blobstore full gc={}ms]"
+                       " [compact wal={}ms] [compact directory={}ms] [compact spacemap={}ms]"
+                       " [gc status={}ms] [gc entries={}ms] [gc data={}ms]"
                        " [gc apply={}ms]"
                        "{}", // a placeholder for external page gc at last
                        stage_suffix,
                        total_cost_ms,
-                       dump_snapshots_ms,
-                       gc_in_mem_entries_ms,
-                       blobstore_remove_entries_ms,
-                       blobstore_get_gc_stats_ms,
+                       compact_wal_ms,
+                       compact_directory_ms,
+                       compact_spacemap_ms,
+                       full_gc_prepare_ms,
                        full_gc_get_entries_ms,
                        full_gc_blobstore_copy_ms,
                        full_gc_apply_ms,
                        get_external_msg());
+}
+
+void PageStorageImpl::GCTimeStatistics::finishCleanExternalPage(UInt64 clean_cost_ms)
+{
+    clean_external_page_ms = clean_cost_ms;
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_clean_external).Observe(clean_external_page_ms / 1000.0);
 }
 
 bool PageStorageImpl::gcImpl(bool /*not_skip*/, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
@@ -356,7 +361,7 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         auto iter = callbacks_container.begin();
         if (iter == callbacks_container.end()) // empty
         {
-            statistics.clean_external_page_ms = gc_watch.elapsedMillisecondsFromLastTime();
+            statistics.finishCleanExternalPage(gc_watch.elapsedMillisecondsFromLastTime());
             return;
         }
 
@@ -397,7 +402,7 @@ void PageStorageImpl::cleanExternalPage(Stopwatch & gc_watch, GCTimeStatistics &
         }
     }
 
-    statistics.clean_external_page_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.finishCleanExternalPage(gc_watch.elapsedMillisecondsFromLastTime());
 }
 
 PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter)
@@ -422,10 +427,12 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     {
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }
-    statistics.dump_snapshots_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_directory_ms / 1000.0);
 
     const auto & del_entries = page_directory->gcInMemEntries();
-    statistics.gc_in_mem_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_directory).Observe(statistics.compact_directory_ms / 1000.0);
 
     SYNC_FOR("before_PageStorageImpl::doGC_fullGC_prepare");
 
@@ -433,12 +440,17 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // It won't delete the data on the disk.
     // It will only update the SpaceMap which in memory.
     blob_store.remove(del_entries);
-    statistics.blobstore_remove_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.compact_spacemap_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_spacemap).Observe(statistics.compact_spacemap_ms / 1000.0);
 
-    // 3. Analyze the status of each Blob in order to obtain the Blobs that need to do `full GC`.
-    // Blobs that do not need to do full GC will also do ftruncate to reduce space amplification.
+    // Note that if full GC is not executed, below metrics won't be shown on grafana but it should
+    // only take few ms to fininsh these in-memory operations. Check them out by the logs if
+    // the total time cost not match.
+
+    // 3. Check whether there are BlobFiles that need to do `full GC`.
+    // This function will also try to use `ftruncate` to reduce space amplification.
     const auto & blob_ids_need_gc = blob_store.getGCStats();
-    statistics.blobstore_get_gc_stats_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    statistics.full_gc_prepare_ms = gc_watch.elapsedMillisecondsFromLastTime();
     if (blob_ids_need_gc.empty())
     {
         cleanExternalPage(gc_watch, statistics);
@@ -469,6 +481,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Then we should notify MVCC apply the change.
     PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
     statistics.full_gc_blobstore_copy_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_disk).Observe( //
+        (statistics.full_gc_prepare_ms + statistics.full_gc_get_entries_ms + statistics.full_gc_blobstore_copy_ms) / 1000.0);
     RUNTIME_CHECK_MSG(!gc_edit.empty(), "Something wrong after BlobStore GC");
 
     // 6. MVCC gc apply
@@ -480,6 +494,7 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_apply).Observe(statistics.full_gc_apply_ms / 1000.0);
 
     SYNC_FOR("after_PageStorageImpl::doGC_fullGC_commit");
 
