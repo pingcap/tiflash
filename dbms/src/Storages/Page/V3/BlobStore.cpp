@@ -71,7 +71,7 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
-    , log(Logger::get("BlobStore", std::move(storage_name)))
+    , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
     , cached_files(config.cached_fd_size)
 {
@@ -105,7 +105,7 @@ void BlobStore::registerPaths()
             }
             else
             {
-                LOG_FMT_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
+                LOG_INFO(log, "Ignore not blob file [dir={}] [file={}] [err_msg={}]", path, blob_name, err_msg);
             }
         }
     }
@@ -159,13 +159,12 @@ FileUsageStatistics BlobStore::getFileUsageStatistics() const
 
 PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
-    auto ns_id = wb.getNamespaceId();
     PageEntriesEdit edit;
     for (auto & write : wb.getWrites())
     {
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -210,28 +209,28 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
             catch (DB::Exception & e)
             {
                 removePosFromStats(blob_id, offset_in_file, write.size);
-                LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
+                LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] write failed.", blob_id, offset_in_file, write.size);
                 throw e;
             }
 
-            edit.put(buildV3Id(ns_id, write.page_id), entry);
+            edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
-            edit.del(buildV3Id(ns_id, write.page_id));
+            edit.del(wb.getFullPageId(write.page_id));
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
-            edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+            edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
             break;
         }
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-            edit.putExternal(buildV3Id(ns_id, write.page_id));
+        case WriteBatchWriteType::PUT_EXTERNAL:
+            edit.putExternal(wb.getFullPageId(write.page_id));
             break;
-        case WriteBatch::WriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+        case WriteBatchWriteType::UPSERT:
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 
@@ -246,7 +245,6 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
 
     PageEntriesEdit edit;
 
-    auto ns_id = wb.getNamespaceId();
     if (all_page_data_size == 0)
     {
         // Shortcut for WriteBatch that don't need to persist blob data.
@@ -254,24 +252,24 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
         {
             switch (write.type)
             {
-            case WriteBatch::WriteType::DEL:
+            case WriteBatchWriteType::DEL:
             {
-                edit.del(buildV3Id(ns_id, write.page_id));
+                edit.del(wb.getFullPageId(write.page_id));
                 break;
             }
-            case WriteBatch::WriteType::REF:
+            case WriteBatchWriteType::REF:
             {
-                edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+                edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
                 break;
             }
-            case WriteBatch::WriteType::PUT_EXTERNAL:
+            case WriteBatchWriteType::PUT_EXTERNAL:
             {
                 // putExternal won't have data.
-                edit.putExternal(buildV3Id(ns_id, write.page_id));
+                edit.putExternal(wb.getFullPageId(write.page_id));
                 break;
             }
-            case WriteBatch::WriteType::PUT:
-            case WriteBatch::WriteType::UPSERT:
+            case WriteBatchWriteType::PUT:
+            case WriteBatchWriteType::UPSERT:
                 throw Exception(fmt::format("write batch have a invalid total size [write_type={}]", static_cast<Int32>(write.type)),
                                 ErrorCodes::LOGICAL_ERROR);
             }
@@ -311,7 +309,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     {
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
+        case WriteBatchWriteType::PUT:
         {
             ChecksumClass digest;
             PageEntryV3 entry;
@@ -352,24 +350,24 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             }
 
             buffer_pos += write.size;
-            edit.put(buildV3Id(ns_id, write.page_id), entry);
+            edit.put(wb.getFullPageId(write.page_id), entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
-            edit.del(buildV3Id(ns_id, write.page_id));
+            edit.del(wb.getFullPageId(write.page_id));
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
-            edit.ref(buildV3Id(ns_id, write.page_id), buildV3Id(ns_id, write.ori_page_id));
+            edit.ref(wb.getFullPageId(write.page_id), wb.getFullPageId(write.ori_page_id));
             break;
         }
-        case WriteBatch::WriteType::PUT_EXTERNAL:
-            edit.putExternal(buildV3Id(ns_id, write.page_id));
+        case WriteBatchWriteType::PUT_EXTERNAL:
+            edit.putExternal(wb.getFullPageId(write.page_id));
             break;
-        case WriteBatch::WriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+        case WriteBatchWriteType::UPSERT:
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 
@@ -394,7 +392,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
     catch (DB::Exception & e)
     {
         removePosFromStats(blob_id, offset_in_file, actually_allocated_size);
-        LOG_FMT_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
+        LOG_ERROR(log, "[blob_id={}] [offset_in_file={}] [size={}] [actually_allocated_size={}] write failed [error={}]", blob_id, offset_in_file, all_page_data_size, actually_allocated_size, e.message());
         throw e;
     }
 
@@ -515,7 +513,7 @@ void BlobStore::removePosFromStats(BlobFileId blob_id, BlobFileOffset offset, si
     // Because once BlobStat become Read-Only type, Then valid size won't increase.
     if (need_remove_stat)
     {
-        LOG_FMT_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
+        LOG_INFO(log, "Removing BlobFile [blob_id={}]", blob_id);
 
         auto blob_file = getBlobFile(blob_id);
         auto lock_stats = blob_stats.lock();
@@ -535,7 +533,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
-    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
+    std::sort(entries.begin(), entries.end(), [](const auto & a, const auto & b) {
         return a.second.offset < b.second.offset;
     });
 
@@ -551,9 +549,8 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
         for (const auto & [page_id_v3, entry] : entries)
         {
             (void)entry;
-            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page;
-            page.page_id = page_id_v3.low;
+            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            Page page(page_id_v3);
             handler(page_id_v3.low, page);
         }
         return;
@@ -586,8 +583,7 @@ void BlobStore::read(PageIDAndEntriesV3 & entries, const PageHandler & handler, 
             }
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(data_buf, data_buf + entry.size);
         page.mem_holder = mem_holder;
         handler(page_id_v3.low, page);
@@ -634,7 +630,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
         free(p, buf_size);
     });
 
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
     char * pos = data_buf;
     PageMap page_map;
     for (const auto & [page_id_v3, entry, fields] : to_read)
@@ -678,8 +674,7 @@ PageMap BlobStore::read(FieldReadInfos & to_read, const ReadLimiterPtr & read_li
             write_offset += size_to_read;
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(pos, write_offset);
         page.mem_holder = mem_holder;
         page.field_offsets.swap(fields_offset_in_page);
@@ -707,7 +702,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
     ProfileEvents::increment(ProfileEvents::PSMReadPages, entries.size());
 
     // Sort in ascending order by offset in file.
-    std::sort(entries.begin(), entries.end(), [](const PageIDAndEntryV3 & a, const PageIDAndEntryV3 & b) {
+    std::sort(entries.begin(), entries.end(), [](const auto & a, const auto & b) {
         return a.second.offset < b.second.offset;
     });
 
@@ -726,9 +721,8 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
         for (const auto & [page_id_v3, entry] : entries)
         {
             (void)entry;
-            LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-            Page page;
-            page.page_id = page_id_v3.low;
+            LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+            Page page(page_id_v3);
             page_map.emplace(page_id_v3.low, page);
         }
         return page_map;
@@ -763,8 +757,7 @@ PageMap BlobStore::read(PageIDAndEntriesV3 & entries, const ReadLimiterPtr & rea
             }
         }
 
-        Page page;
-        page.page_id = page_id_v3.low;
+        Page page(page_id_v3);
         page.data = ByteBuffer(pos, pos + entry.size);
         page.mem_holder = mem_holder;
         page_map.emplace(page_id_v3.low, page);
@@ -785,8 +778,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
 {
     if (!id_entry.second.isValid())
     {
-        Page page_not_found;
-        page_not_found.page_id = INVALID_PAGE_ID;
+        Page page_not_found(buildV3Id(id_entry.first.high, INVALID_PAGE_ID));
         return page_not_found;
     }
 
@@ -797,9 +789,8 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
     // The `buf_size` will be 0, we need avoid calling malloc/free with size 0.
     if (buf_size == 0)
     {
-        LOG_FMT_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
-        Page page;
-        page.page_id = page_id_v3.low;
+        LOG_DEBUG(log, "Read entry [page_id={}] without entry size.", page_id_v3);
+        Page page(page_id_v3);
         return page;
     }
 
@@ -827,8 +818,7 @@ Page BlobStore::read(const PageIDAndEntryV3 & id_entry, const ReadLimiterPtr & r
         }
     }
 
-    Page page;
-    page.page_id = page_id_v3.low;
+    Page page(page_id_v3);
     page.data = ByteBuffer(data_buf, data_buf + buf_size);
     page.mem_holder = mem_holder;
 
@@ -989,7 +979,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
                 // If current blob empty, the size of in disk blob may not empty
                 // So we need truncate current blob, and let it be reused.
                 auto blobfile = getBlobFile(stat->id);
-                LOG_FMT_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
+                LOG_INFO(log, "Current blob file is empty, truncated to zero [blob_id={}] [total_size={}] [valid_rate={}]", stat->id, stat->sm_total_size, stat->sm_valid_rate);
                 blobfile->truncate(right_margin);
                 blobstore_gc_info.appendToTruncatedBlob(stat->id, stat->sm_total_size, right_margin, stat->sm_valid_rate);
                 stat->sm_total_size = right_margin;
@@ -1000,7 +990,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
 
             if (stat->sm_valid_rate > 1.0)
             {
-                LOG_FMT_ERROR(
+                LOG_ERROR(
                     log,
                     "Current blob got an invalid rate {:.2f}, total size is {}, valid size is {}, right margin is {} [blob_id={}]",
                     stat->sm_valid_rate,
@@ -1041,7 +1031,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
         }
     }
 
-    LOG_FMT_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
+    LOG_INFO(log, "BlobStore gc get status done. gc info: {}", blobstore_gc_info.toString());
 
     return blob_need_gc;
 }
@@ -1059,7 +1049,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_FMT_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
+    LOG_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
 
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
                                                                               char * data_begin,
@@ -1071,7 +1061,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
             // Should append before calling BlobStore::write, so that we can rollback the
             // first allocated span from stats.
             written_blobs.emplace_back(file_id, file_offset, data_size);
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "BlobStore gc write (partially) done [blob_id={}] [file_offset={}] [size={}] [total_size={}]",
                 file_id,
@@ -1082,7 +1072,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
         }
         catch (DB::Exception & e)
         {
-            LOG_FMT_ERROR(
+            LOG_ERROR(
                 log,
                 "BlobStore gc write failed [blob_id={}] [offset={}] [size={}] [total_size={}]",
                 file_id,

@@ -208,7 +208,7 @@ void StableValueSpace::calculateStableProperty(const DMContext & context, const 
         DMFile::PackProperties new_pack_properties;
         if (pack_properties.property_size() == 0)
         {
-            LOG_FMT_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
+            LOG_DEBUG(log, "Try to calculate StableProperty from column data for stable {}", id);
             ColumnDefines read_columns;
             read_columns.emplace_back(getExtraHandleColumnDefine(is_common_handle));
             read_columns.emplace_back(getVersionColumnDefine());
@@ -312,11 +312,10 @@ using SnapshotPtr = std::shared_ptr<Snapshot>;
 
 SnapshotPtr StableValueSpace::createSnapshot()
 {
-    auto snap = std::make_shared<Snapshot>();
+    auto snap = std::make_shared<Snapshot>(this->shared_from_this());
     snap->id = id;
     snap->valid_rows = valid_rows;
     snap->valid_bytes = valid_bytes;
-    snap->stable = this->shared_from_this();
 
     for (size_t i = 0; i < files.size(); i++)
     {
@@ -347,7 +346,7 @@ StableValueSpace::Snapshot::getInputStream(
     bool is_fast_scan,
     bool enable_del_clean_read)
 {
-    LOG_FMT_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
+    LOG_DEBUG(log, "max_data_version: {}, enable_handle_clean_read: {}, is_fast_mode: {}, enable_del_clean_read: {}", max_data_version, enable_handle_clean_read, is_fast_scan, enable_del_clean_read);
     SkippableBlockInputStreams streams;
 
     for (size_t i = 0; i < stable->files.size(); i++)

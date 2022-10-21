@@ -487,7 +487,7 @@ bool IDAsPathUpgrader::needUpgrade()
         if (db_info.engine != "TiFlash")
         {
             has_old_db_engine = true;
-            LOG_FMT_INFO(log, "Find old style of database engine, doing upgrade [path={}] [engine={}]", database_metadata_file, db_info.engine);
+            LOG_INFO(log, "Find old style of database engine, doing upgrade [path={}] [engine={}]", database_metadata_file, db_info.engine);
         }
     }
 
@@ -508,7 +508,7 @@ std::vector<TiDB::DBInfoPtr> IDAsPathUpgrader::fetchInfosFromTiDB() const
         catch (Poco::Exception & e)
         {
             const int wait_seconds = 3;
-            LOG_FMT_ERROR(
+            LOG_ERROR(
                 log,
                 "Upgrade failed because fetch schema error: {}\nWe will sleep for {} seconds and try again.",
                 e.displayText(),
@@ -622,7 +622,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
         // only need to create data path
         if (db_name != db_name_escaped)
         {
-            LOG_FMT_INFO(log, "database `{}` fixing name escape to `{}`", db_name, db_name_escaped);
+            LOG_INFO(log, "database `{}` fixing name escape to `{}`", db_name, db_name_escaped);
             // Create directory for escaped database
             auto escaped_db_data_dir = db_info.getDataDirectory(root_path, /*escape=*/true);
             if (Poco::File dir(escaped_db_data_dir); !dir.exists())
@@ -644,7 +644,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
             if (db_name_escaped == db_name && table_name_escaped == table.name())
                 continue;
 
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "table `{}`.`{}` fixing name escape to `{}`.`{}`",
                 db_name,
@@ -691,7 +691,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
                 auto escaped_extra_path = table.getExtraDirectory(extra_root_path, db_info, /*escape_db*/ true, /*escape_tbl*/ true);
                 renamePath(not_escaped_extra_path, escaped_extra_path, log, false);
             }
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "table `{}`.`{}` fixing name escape to `{}`.`{}` done.",
                 db_name,
@@ -714,7 +714,7 @@ void IDAsPathUpgrader::fixNotEscapedDirectories()
                 tryRemoveDirectory(not_escaped_extra_data_dir, log);
             }
         }
-        LOG_FMT_INFO(log, "database `{}` fixing name escape to `{}` done.", db_name, db_name_escaped);
+        LOG_INFO(log, "database `{}` fixing name escape to `{}` done.", db_name, db_name_escaped);
     }
 }
 
@@ -731,7 +731,7 @@ void IDAsPathUpgrader::resolveConflictDirectories()
             if (auto iter = databases.find(new_tbl_name); iter != databases.end())
             {
                 conflict_databases.insert(iter->first);
-                LOG_FMT_INFO(
+                LOG_INFO(
                     log,
                     "Detect cyclic renaming between table `{}`.`{}`(new name:{}) and database `{}`",
                     db_name,
@@ -747,7 +747,7 @@ void IDAsPathUpgrader::resolveConflictDirectories()
         if (auto iter = databases.find(new_database_name); iter != databases.end())
         {
             conflict_databases.insert(iter->first);
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "Detect cyclic renaming between database `{}`(new name:{}) and database `{}`",
                 db_name,
@@ -755,12 +755,12 @@ void IDAsPathUpgrader::resolveConflictDirectories()
                 iter->first);
         }
     }
-    LOG_FMT_INFO(log, "Detect {} cyclic renaming", conflict_databases.size());
+    LOG_INFO(log, "Detect {} cyclic renaming", conflict_databases.size());
     for (const auto & db_name : conflict_databases)
     {
         auto iter = databases.find(db_name);
         auto & db_info = iter->second;
-        LOG_FMT_INFO(log, "Move {} to tmp directories..", db_name);
+        LOG_INFO(log, "Move {} to tmp directories..", db_name);
         db_info.renameToTmpDirectories(global_context, log);
     }
 }
@@ -790,7 +790,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
     }
 
     // Then rename database
-    LOG_FMT_INFO(log, "database `{}` to `{}` renaming", db_name, mapped_db_name);
+    LOG_INFO(log, "database `{}` to `{}` renaming", db_name, mapped_db_name);
     {
         // Recreate metadata file for database
         const String new_meta_file = db_info.getNewMetaFilePath(root_path);
@@ -819,7 +819,7 @@ void IDAsPathUpgrader::renameDatabase(const String & db_name, const DatabaseDisk
             tryRemoveDirectory(db_info.getExtraDirectory(extra_root_path), log);
         }
     }
-    LOG_FMT_INFO(log, "database `{}` to `{}` rename done.", db_name, mapped_db_name);
+    LOG_INFO(log, "database `{}` to `{}` rename done.", db_name, mapped_db_name);
 }
 
 void IDAsPathUpgrader::renameTable(
@@ -829,7 +829,7 @@ void IDAsPathUpgrader::renameTable(
     const TableDiskInfo & table)
 {
     const auto mapped_table_name = table.newName();
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "table `{}`.`{}` to `{}`.`{}` renaming",
         db_name,
@@ -871,7 +871,7 @@ void IDAsPathUpgrader::renameTable(
         TiDB::TableInfo table_info = table.getInfo(); // get a copy
         if (table_info.is_partition_table)
         {
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "partition table `{}`.`{}` to `{}`.`{}` update table info",
                 db_name,
@@ -906,7 +906,7 @@ void IDAsPathUpgrader::renameTable(
             file.remove();
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "table `{}`.`{}` to `{}`.`{}` rename done.",
         db_name,

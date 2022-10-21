@@ -1223,11 +1223,6 @@ DAGContext * Context::getDAGContext() const
     return dag_context;
 }
 
-bool Context::isMPPTask() const
-{
-    return dag_context != nullptr && dag_context->is_mpp_task;
-}
-
 void Context::setUncompressedCache(size_t max_size_in_bytes)
 {
     auto lock = getLock();

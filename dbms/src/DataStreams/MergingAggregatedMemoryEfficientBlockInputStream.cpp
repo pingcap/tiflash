@@ -82,7 +82,7 @@ MergingAggregatedMemoryEfficientBlockInputStream::MergingAggregatedMemoryEfficie
     size_t reading_threads_,
     size_t merging_threads_,
     const String & req_id)
-    : log(Logger::get(name, req_id))
+    : log(Logger::get(req_id))
     , aggregator(params, req_id)
     , final(final_)
     , reading_threads(std::min(reading_threads_, inputs_.size()))
@@ -161,7 +161,7 @@ void MergingAggregatedMemoryEfficientBlockInputStream::cancel(bool kill)
                   * (example: connection reset during distributed query execution)
                   * - then don't care.
                   */
-                LOG_FMT_ERROR(log, "Exception while cancelling {}", child->getName());
+                LOG_ERROR(log, "Exception while cancelling {}", child->getName());
             }
         }
     }

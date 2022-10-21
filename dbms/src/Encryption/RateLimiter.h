@@ -22,6 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -412,13 +413,14 @@ private:
     };
     Watermark writeWatermark() const
     {
-        return getWatermark(writePct());
+        return getWatermark(fg_write_stat, bg_write_stat, writePct());
     }
     Watermark readWatermark() const
     {
-        return getWatermark(readPct());
+        return getWatermark(fg_read_stat, bg_read_stat, readPct());
     }
     Watermark getWatermark(int pct) const;
+    Watermark getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const;
 
     // Returns <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>
     std::tuple<Int64, Int64, bool> tuneReadWrite() const;
@@ -457,7 +459,7 @@ private:
                 "max {} avg {} watermark {} config_max {}",
                 max_bytes_per_sec,
                 avg_bytes_per_sec,
-                watermark,
+                magic_enum::enum_name(watermark),
                 config_max_bytes_per_sec);
         }
     };

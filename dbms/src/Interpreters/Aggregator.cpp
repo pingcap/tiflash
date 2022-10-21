@@ -153,7 +153,7 @@ Block Aggregator::Params::getHeader(
 
 Aggregator::Aggregator(const Params & params_, const String & req_id)
     : params(params_)
-    , log(Logger::get("Aggregator", req_id))
+    , log(Logger::get(req_id))
     , isCancelled([]() { return false; })
 {
     if (current_memory_tracker)
@@ -664,7 +664,7 @@ void Aggregator::writeToTemporaryFile(AggregatedDataVariants & data_variants, co
     CompressedWriteBuffer compressed_buf(file_buf);
     NativeBlockOutputStream block_out(compressed_buf, ClickHouseRevision::get(), getHeader(false));
 
-    LOG_FMT_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
+    LOG_DEBUG(log, "Writing part of aggregation data into temporary file {}.", path);
 
     /// Flush only two-level data and possibly overflow data.
 
@@ -1486,7 +1486,7 @@ public:
       *  which are all either single-level, or are two-level.
       */
     MergingAndConvertingBlockInputStream(const Aggregator & aggregator_, ManyAggregatedDataVariants & data_, bool final_, size_t threads_)
-        : log(Logger::get("MergingAndConvertingBlockInputStream", aggregator_.log ? aggregator_.log->identifier() : ""))
+        : log(Logger::get(aggregator_.log ? aggregator_.log->identifier() : ""))
         , aggregator(aggregator_)
         , data(data_)
         , final(final_)

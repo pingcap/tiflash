@@ -69,7 +69,7 @@ private:
     size_t next_compaction_level = 0;
     UInt64 minor_compaction_version = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 private:
     inline void updateColumnFileStats();
@@ -82,6 +82,16 @@ public:
     /// Restore the metadata of this instance.
     /// Only called after reboot.
     static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+
+    /**
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
+     */
+    void resetLogger(const LoggerPtr & segment_log)
+    {
+        log = segment_log;
+    }
 
     /// Thread safe part start
     String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }

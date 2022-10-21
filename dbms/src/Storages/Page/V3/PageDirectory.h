@@ -30,6 +30,7 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -134,6 +135,14 @@ struct EntryOrDelete
 class VersionedPageEntries;
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 using PageLock = std::lock_guard<std::mutex>;
+
+enum class ResolveResult
+{
+    FAIL,
+    TO_REF,
+    TO_NORMAL,
+};
+
 class VersionedPageEntries
 {
 public:
@@ -161,12 +170,6 @@ public:
 
     std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
-    enum ResolveResult
-    {
-        RESOLVE_FAIL,
-        RESOLVE_TO_REF,
-        RESOLVE_TO_NORMAL,
-    };
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
     resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
@@ -229,7 +232,7 @@ public:
             "type:{}, create_ver: {}, is_deleted: {}, delete_ver: {}, "
             "ori_page_id: {}, being_ref_count: {}, num_entries: {}"
             "}}",
-            type,
+            magic_enum::enum_name(type),
             create_ver,
             is_deleted,
             delete_ver,

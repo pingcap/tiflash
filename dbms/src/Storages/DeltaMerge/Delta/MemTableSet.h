@@ -46,7 +46,7 @@ private:
     std::atomic<size_t> bytes = 0;
     std::atomic<size_t> deletes = 0;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
 private:
     void appendColumnFileInner(const ColumnFilePtr & column_file);
@@ -55,7 +55,7 @@ public:
     explicit MemTableSet(const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
         : last_schema(last_schema_)
         , column_files(in_memory_files)
-        , log(&Poco::Logger::get("MemTableSet"))
+        , log(Logger::get())
     {
         column_files_count = column_files.size();
         for (const auto & file : column_files)
@@ -64,6 +64,16 @@ public:
             bytes += file->getBytes();
             deletes += file->getDeletes();
         }
+    }
+
+    /**
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
+     */
+    void resetLogger(const LoggerPtr & segment_log)
+    {
+        log = segment_log;
     }
 
     /// Thread safe part start
