@@ -222,7 +222,7 @@ struct AggregationMethodOneKeyStringNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    FLATTEN_INLINE static inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
         static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
@@ -277,7 +277,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    FLATTEN_INLINE static inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
         const auto * pos = key.data;
         {

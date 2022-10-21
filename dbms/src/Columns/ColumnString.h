@@ -19,7 +19,7 @@
 #include <Common/PODArray.h>
 #include <Common/SipHash.h>
 #include <Common/memcpySmall.h>
-#include <string.h>
+#include <common/memcpy.h>
 
 
 class ICollator;
@@ -119,13 +119,7 @@ public:
     void insert(const Field & x) override
     {
         const auto & s = DB::get<const String &>(x);
-        const size_t old_size = chars.size();
-        const size_t size_to_append = s.size() + 1;
-        const size_t new_size = old_size + size_to_append;
-
-        chars.resize(new_size);
-        memcpy(&chars[old_size], s.c_str(), size_to_append);
-        offsets.push_back(new_size);
+        insertData(s.data(), s.size());
     }
 
 #if !__clang__
@@ -175,7 +169,7 @@ public:
         const size_t new_size = old_size + length + 1;
 
         chars.resize(new_size);
-        memcpy(&chars[old_size], pos, length);
+        inline_memcpy(&chars[old_size], pos, length);
         chars[old_size + length] = 0;
         offsets.push_back(new_size);
     }
@@ -192,7 +186,7 @@ public:
         const size_t new_size = old_size + length;
 
         chars.resize(new_size);
-        memcpy(&chars[old_size], pos, length);
+        inline_memcpy(&chars[old_size], pos, length);
         offsets.push_back(new_size);
     }
 
@@ -220,13 +214,13 @@ public:
         }
         res.size = sizeof(string_size) + string_size;
         char * pos = arena.allocContinue(res.size, begin);
-        memcpy(pos, &string_size, sizeof(string_size));
-        memcpy(pos + sizeof(string_size), src, string_size);
+        std::memcpy(pos, &string_size, sizeof(string_size));
+        inline_memcpy(pos + sizeof(string_size), src, string_size);
         res.data = pos;
         return res;
     }
 
-    const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
+    inline const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
@@ -234,7 +228,7 @@ public:
         const size_t old_size = chars.size();
         const size_t new_size = old_size + string_size;
         chars.resize(new_size);
-        memcpy(&chars[old_size], pos, string_size);
+        inline_memcpy(&chars[old_size], pos, string_size);
 
         offsets.push_back(new_size);
         return pos + string_size;
