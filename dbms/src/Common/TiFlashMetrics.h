@@ -156,26 +156,28 @@ namespace DB
         F(type_v3_bs_full_gc, {"type", "v3_bs_full_gc"}))                                                                                 \
     M(tiflash_storage_page_gc_duration_seconds, "Bucketed histogram of page's gc task duration", Histogram,                               \
         F(type_v2, {{"type", "v2"}}, ExpBuckets{0.0005, 2, 20}),                                                                          \
-        F(type_migrate, {{"type", "migrate"}}, ExpBuckets{0.0005, 2, 20}),                                                                \
+        F(type_v2_compact, {{"type", "v2_compact"}}, ExpBuckets{0.0005, 2, 20}),                                                          \
         /* Below are metrics for PageStorage V3 */                                                                                        \
         F(type_compact_wal, {{"type", "compact_wal"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
         F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets{0.0005, 2, 20}),                                            \
         F(type_compact_spacemap, {{"type", "compact_spacemap"}}, ExpBuckets{0.0005, 2, 20}),                                              \
         F(type_fullgc_disk, {{"type", "fullgc_disk"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
         F(type_fullgc_apply, {{"type", "fullgc_apply"}}, ExpBuckets{0.0005, 2, 20}),                                                      \
-        F(type_clean_external, {{"type", "clean_external"}}, ExpBuckets{0.0005, 2, 20}),                                                \
+        F(type_clean_external, {{"type", "clean_external"}}, ExpBuckets{0.0005, 2, 20}),                                                  \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                          \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{4 * 1024, 4, 10}))                                                                        \
     M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                         \
         F(type_total, {{"type", "total"}}, ExpBuckets{0.0001, 2, 20}),                                                                    \
-        F(type_blob, {{"type", "blob"}}, ExpBuckets{0.0001, 2, 20}),                                                                      \
-        F(type_wal, {{"type", "wal"}}, ExpBuckets{0.0001, 2, 20}),                                                                        \
-        F(type_apply, {{"type", "apply"}}, ExpBuckets{0.0001, 2, 20}))                                                                    \
+        F(type_blob,  {{"type", "blob"}},  ExpBuckets{0.0001, 2, 20}),                                                                    \
+        F(type_wal,   {{"type", "wal"}},   ExpBuckets{0.0001, 2, 20}),                                                                    \
+        /* the bucket range for apply in memory is 50us ~ 216s */                                                                         \
+        F(type_apply, {{"type", "apply"}}, ExpBuckets{0.00005, 1.8, 26}))                                                                 \
     M(tiflash_storage_page_read_duration_seconds, "The duration of each read", Histogram,                                                 \
-        F(type_total, {{"type", "total"}}, ExpBuckets{0.0001, 2, 20}),                                                                    \
-        F(type_directory, {{"type", "directory"}}, ExpBuckets{0.0001, 2, 20}),                                                            \
-        F(type_blob, {{"type", "blob"}}, ExpBuckets{0.0001, 2, 20}))                                                                      \
+        /* the bucket range is 50us ~ 216s */                                                                                             \
+        F(type_total,     {{"type", "total"}},     ExpBuckets{0.00005, 1.8, 26}),                                                         \
+        F(type_blob,      {{"type", "blob"}},      ExpBuckets{0.00005, 1.8, 26}),                                                         \
+        F(type_directory, {{"type", "directory"}}, ExpBuckets{0.00005, 1.8, 26}))                                                         \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
     M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
@@ -249,13 +251,13 @@ namespace DB
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
         F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
-        F(type_mpp_query_count, {"type", "mpp_query_count"})) \
-    // clang-format on
+        F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
+// clang-format on
 
 struct ExpBuckets
 {
     const double start;
-    const int base;
+    const double base;
     const size_t size;
     inline operator prometheus::Histogram::BucketBoundaries() const &&
     {

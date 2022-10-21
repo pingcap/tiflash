@@ -1232,7 +1232,7 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
         // We only care about those time cost in actually doing compaction on page data.
         if (gc_context.compact_result.do_compaction)
         {
-            GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_migrate).Observe(watch_migrate.elapsedSeconds());
+            GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2_compact).Observe(watch_migrate.elapsedSeconds());
         }
     }
 

@@ -132,8 +132,9 @@ private:
         UInt64 external_page_scan_ns = 0;
         UInt64 external_page_get_alive_ns = 0;
         UInt64 external_page_remove_ns = 0;
-        // Total time of cleaning external pages
+
     private:
+        // Total time of cleaning external pages
         UInt64 clean_external_page_ms = 0;
 
     public:

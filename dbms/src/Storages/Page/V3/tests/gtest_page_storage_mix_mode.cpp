@@ -273,7 +273,6 @@ try
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps[7], 7);
     }
 
-
     {
         PageIds page_ids = {1, 2, 3, 4};
         PageHandler hander = [](DB::PageId /*page_id*/, const Page & /*page*/) {
