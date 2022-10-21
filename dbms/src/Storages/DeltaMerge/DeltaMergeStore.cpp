@@ -182,6 +182,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
                                  const String & db_name_,
                                  const String & table_name_,
                                  TableID physical_table_id_,
+                                 bool has_replica,
                                  const ColumnDefines & columns,
                                  const ColumnDefine & handle,
                                  bool is_common_handle_,
@@ -201,6 +202,7 @@ DeltaMergeStore::DeltaMergeStore(Context & db_context,
     , next_gc_check_key(is_common_handle ? RowKeyValue::COMMON_HANDLE_MIN_KEY : RowKeyValue::INT_HANDLE_MIN_KEY)
     , log(Logger::get(fmt::format("table_id={}", physical_table_id_)))
 {
+    replica_exist.store(has_replica);
     // for mock test, table_id_ should be DB::InvalidTableID
     NamespaceId ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
