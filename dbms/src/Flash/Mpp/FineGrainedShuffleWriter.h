@@ -34,7 +34,8 @@ public:
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
         UInt64 fine_grained_shuffle_batch_size);
-    void write(const Block & block, bool last_null_block) override;
+    void write(const Block & block) override;
+    void flush() override;
     void finishWrite() override;
 
 private:

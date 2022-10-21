@@ -167,7 +167,8 @@ try
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size);
-    dag_writer->write(block, false);
+    dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -227,7 +228,8 @@ try
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size);
     for (const auto & block : blocks)
-        dag_writer->write(block, false);
+        dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -322,7 +324,8 @@ try
         should_send_exec_summary_at_last,
         *dag_context_ptr);
     for (const auto & block : blocks)
-        dag_writer->write(block, false);
+        dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.
@@ -407,7 +410,8 @@ try
         should_send_exec_summary_at_last,
         *dag_context_ptr);
     for (const auto & block : blocks)
-        dag_writer->write(block, false);
+        dag_writer->write(block);
+    dag_writer->flush();
     dag_writer->finishWrite();
 
     // 4. Start to check write_report.

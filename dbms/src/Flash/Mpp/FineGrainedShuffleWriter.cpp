@@ -59,15 +59,15 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
-void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block, bool last_null_block)
+void FineGrainedShuffleWriter<StreamWriterPtr>::flush()
 {
-    if unlikely(last_null_block)
-    {
-        if (cached_block_count > 0)
-            batchWriteFineGrainedShuffle<false>();
-        return;
-    }
+    if (cached_block_count > 0)
+        batchWriteFineGrainedShuffle<false>();
+}
 
+template <class StreamWriterPtr>
+void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
+{
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");

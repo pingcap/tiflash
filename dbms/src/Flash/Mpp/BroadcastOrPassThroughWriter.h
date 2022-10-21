@@ -31,7 +31,8 @@ public:
         Int64 batch_send_min_limit_,
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
-    void write(const Block & block, bool last_null_block) override;
+    void write(const Block & block) override;
+    void flush() override;
     void finishWrite() override;
 
 private:

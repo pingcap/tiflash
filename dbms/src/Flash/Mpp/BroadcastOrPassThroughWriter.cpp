@@ -49,15 +49,15 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
-void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block, bool last_null_block)
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::flush()
 {
-    if unlikely(last_null_block)
-    {
-        if (rows_in_blocks > 0)
-            encodeThenWriteBlocks<false>();
-        return;
-    }
+    if (rows_in_blocks > 0)
+        encodeThenWriteBlocks<false>();
+}
 
+template <class StreamWriterPtr>
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
+{
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
