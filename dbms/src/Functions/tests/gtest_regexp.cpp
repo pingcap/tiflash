@@ -1786,6 +1786,7 @@ TEST_F(Regexp, testRegexpTiDBCase)
 }
 
 // TODO test empty columns
+// TODO test const null
 // We can only test regexp_like function as regexp is the subset of regexp_like
 TEST_F(Regexp, RegexpLike)
 {
