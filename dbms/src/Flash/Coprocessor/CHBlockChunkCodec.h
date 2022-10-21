@@ -15,16 +15,26 @@
 #pragma once
 
 #include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/CodecUtils.h>
 
 namespace DB
 {
-class CHBlockChunkCodec : public ChunkCodec
+class CHBlockChunkCodec final : public ChunkCodec
 {
 public:
     CHBlockChunkCodec() = default;
+    CHBlockChunkCodec(const Block & header_);
+    CHBlockChunkCodec(const DAGSchema & schema);
+
     Block decode(const String &, const DAGSchema & schema) override;
     static Block decode(const String &, const Block & header);
     std::unique_ptr<ChunkCodecStream> newCodecStream(const std::vector<tipb::FieldType> & field_types) override;
+
+private:
+    Block decodeImpl(ReadBuffer & istr);
+    Block header;
+    std::vector<CodecUtils::DataTypeWithTypeName> header_datatypes;
+    std::vector<String> output_names;
 };
 
 } // namespace DB

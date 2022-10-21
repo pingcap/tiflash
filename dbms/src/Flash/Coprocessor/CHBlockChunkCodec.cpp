@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <IO/ReadBufferFromString.h>
+#include <DataTypes/DataTypeFactory.h>
 
 namespace DB
 {
@@ -47,6 +48,20 @@ public:
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
 };
+
+CHBlockChunkCodec::CHBlockChunkCodec(
+    const Block & header_)
+    : header(header_)
+{
+    for (const auto & column : header)
+        header_datatypes.emplace_back(column.type, column.type->getName());
+}
+
+CHBlockChunkCodec::CHBlockChunkCodec(const DAGSchema & schema)
+{
+    for (const auto & c : schema)
+        output_names.push_back(c.first);
+}
 
 size_t getExtraInfoSize(const Block & block)
 {
@@ -81,6 +96,14 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
         return &ostr;
     };
     type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {});
+}
+
+void readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
+{
+    IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
+        return &istr;
+    };
+    type.deserializeBinaryBulkWithMultipleStreams(column, input_stream_getter, rows, 0, false, {});
 }
 
 void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t end)
@@ -120,21 +143,69 @@ std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::v
     return std::make_unique<CHBlockChunkCodecStream>(field_types);
 }
 
+Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr)
+{
+    Block res;
+    if (istr.eof())
+    {
+        return res;
+    }
+
+    /// Dimensions
+    size_t columns = 0;
+    size_t rows = 0;
+    readVarUInt(columns, istr);
+    readVarUInt(rows, istr);
+
+    if (header)
+        CodecUtils::checkColumnSize(header.columns(), columns);
+    else if (!output_names.empty())
+        CodecUtils::checkColumnSize(output_names.size(), columns);
+
+    for (size_t i = 0; i < columns; ++i)
+    {
+        ColumnWithTypeAndName column;
+        /// Name
+        readBinary(column.name, istr);
+        if (header)
+            column.name = header.getByPosition(i).name;
+        else if (!output_names.empty())
+            column.name = output_names[i];
+
+        /// Type
+        String type_name;
+        readBinary(type_name, istr);
+        const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+        if (header)
+        {
+            CodecUtils::checkDataTypeName(i, header_datatypes[i].name, type_name);
+            column.type = header_datatypes[i].type;
+        }
+        else
+        {
+            column.type = data_type_factory.get(type_name);
+        }
+
+        /// Data
+        MutableColumnPtr read_column = column.type->createColumn();
+        if (rows) /// If no rows, nothing to read.
+            readData(*column.type, *read_column, istr, rows);
+
+        column.column = std::move(read_column);
+        res.insert(std::move(column));
+    }
+    return res;
+}
+
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 {
     ReadBufferFromString read_buffer(str);
-    std::vector<String> output_names;
-    for (const auto & c : schema)
-        output_names.push_back(c.first);
-    NativeBlockInputStream block_in(read_buffer, 0, std::move(output_names));
-    return block_in.read();
+    return CHBlockChunkCodec(schema).decodeImpl(read_buffer);
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const Block & header)
 {
     ReadBufferFromString read_buffer(str);
-    NativeBlockInputStream block_in(read_buffer, header, 0, /*align_column_name_with_header=*/true);
-    return block_in.read();
+    return CHBlockChunkCodec(header).decodeImpl(read_buffer);
 }
-
 } // namespace DB
