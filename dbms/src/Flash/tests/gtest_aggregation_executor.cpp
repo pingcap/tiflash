@@ -44,6 +44,8 @@ public:
     using ColMyDateTimeNullableType = std::optional<typename TypeTraits<MyDateTime>::FieldType>;
     using ColDecimalNullableType = std::optional<typename TypeTraits<Decimal32>::FieldType>;
     using ColUInt64Type = typename TypeTraits<UInt64>::FieldType;
+    using ColFloat64Type = typename TypeTraits<Float64>::FieldType;
+    using ColStringType = typename TypeTraits<String>::FieldType;
 
     using ColumnWithNullableString = std::vector<ColStringNullableType>;
     using ColumnWithNullableInt8 = std::vector<ColInt8NullableType>;
@@ -56,8 +58,10 @@ public:
     using ColumnWithNullableMyDateTime = std::vector<ColMyDateTimeNullableType>;
     using ColumnWithNullableDecimal = std::vector<ColDecimalNullableType>;
     using ColumnWithUInt64 = std::vector<ColUInt64Type>;
+    using ColumnWithFloat64 = std::vector<ColFloat64Type>;
+    using ColumnWithString = std::vector<ColStringType>;
 
-    virtual ~ExecutorAggTestRunner() = default;
+    ~ExecutorAggTestRunner() override = default;
 
     void initializeContext() override
     {
@@ -114,6 +118,22 @@ public:
                              {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
                              {toVec<Int64>("s1", {1, 2, 3}),
                               toVec<Int64>("s2", {1, 2, 3})});
+
+        context.addMockTable({"test_db", "test_table_not_null"},
+                             {
+                                 {"c1_i64", TiDB::TP::TypeLongLong},
+                                 {"c2_f64", TiDB::TP::TypeDouble},
+                                 {"c3_str", TiDB::TP::TypeString},
+                                 {"c4_str", TiDB::TP::TypeString},
+                                 {"c5_date_time", TiDB::TP::TypeDatetime},
+                             },
+                             {
+                                 toVec<Int64>("c1_i64", {1, 2, 2}),
+                                 toVec<Float64>("c2_f64", {1, 3, 3}),
+                                 toVec<String>("c3_str", {"1", "4", "4"}),
+                                 toVec<String>("c4_str", {"1", "1", "1"}),
+                                 toVec<MyDateTime>("c5_date_time", {2000000, 12000000, 12000000}),
+                             });
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(std::pair<String, String> src, MockAstVec agg_funcs, MockAstVec group_by_exprs, MockColumnNameVec proj)
@@ -318,6 +338,84 @@ try
     {
         request = buildDAGRequest(std::make_pair(db_name, table_name), {agg_funcs[i]}, group_by_exprs[i], projections[i]);
         executeAndAssertColumnsEqual(request, expect_cols[i]);
+    }
+}
+CATCH
+
+TEST_F(ExecutorAggTestRunner, AggregationCounttzg)
+try
+{
+    /// Prepare some data
+    std::shared_ptr<tipb::DAGRequest> request;
+    auto agg_func = Count(lit(Field(static_cast<UInt64>(1)))); /// select count(1) from `test_table_not_null` group by ``;
+    std::string agg_func_res_name = "count(1)";
+
+    auto group_by_expr_c1_i64 = col("c1_i64");
+    auto group_by_expr_c2_f64 = col("c2_f64");
+    auto group_by_expr_c3_str = col("c3_str");
+    auto group_by_expr_c4_str = col("c4_str");
+    auto group_by_expr_c5_date_time = col("c5_date_time");
+
+    std::vector<MockAstVec> group_by_exprs{
+        {group_by_expr_c3_str, group_by_expr_c2_f64, group_by_expr_c1_i64},
+        {group_by_expr_c1_i64, group_by_expr_c2_f64},
+        {group_by_expr_c1_i64, group_by_expr_c3_str},
+        {group_by_expr_c3_str, group_by_expr_c2_f64},
+        {group_by_expr_c3_str, group_by_expr_c4_str},
+        {group_by_expr_c1_i64},
+        {group_by_expr_c3_str},
+        {group_by_expr_c3_str, group_by_expr_c5_date_time},
+    };
+
+    std::vector<ColumnsWithTypeAndName> expect_cols{
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+        {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 2})},
+    };
+
+    std::vector<MockColumnNameVec> projections{
+        {agg_func_res_name},
+        {agg_func_res_name},
+        {agg_func_res_name},
+        {agg_func_res_name},
+        {agg_func_res_name},
+        {agg_func_res_name},
+        {agg_func_res_name},
+        {agg_func_res_name},
+    };
+    size_t test_num = expect_cols.size();
+
+    ASSERT_EQ(test_num, projections.size());
+    ASSERT_EQ(test_num, group_by_exprs.size());
+
+    {
+        context.setCollation(TiDB::ITiDBCollator::UTF8MB4_BIN);
+        for (size_t i = 0; i < test_num; ++i)
+        {
+            request = buildDAGRequest(std::make_pair("test_db", "test_table_not_null"), {agg_func}, group_by_exprs[i], projections[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
+        }
+    }
+    {
+        context.setCollation(TiDB::ITiDBCollator::BINARY);
+        for (size_t i = 0; i < test_num; ++i)
+        {
+            request = buildDAGRequest(std::make_pair("test_db", "test_table_not_null"), {agg_func}, group_by_exprs[i], projections[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
+        }
+    }
+    {
+        context.setCollation(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
+        for (size_t i = 0; i < test_num; ++i)
+        {
+            request = buildDAGRequest(std::make_pair("test_db", "test_table_not_null"), {agg_func}, group_by_exprs[i], projections[i]);
+            executeAndAssertColumnsEqual(request, expect_cols[i]);
+        }
     }
 }
 CATCH
