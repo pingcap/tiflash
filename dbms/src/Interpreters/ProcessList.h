@@ -299,7 +299,7 @@ public:
     ProcessList(size_t max_size_ = 0)
         : cur_size(0)
         , max_size(max_size_)
-        , total_memory_tracker(MemoryTracker::create())
+        , total_memory_tracker(root_of_query_mem_trackers)
     {}
 
     using EntryPtr = std::shared_ptr<ProcessListEntry>;

@@ -32,7 +32,11 @@ std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
 
 String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
 {
-    String path = "./tmp/";
+    String path = ".";
+    const char * temp_prefix = getenv("TIFLASH_TEMP_DIR");
+    if (temp_prefix != nullptr)
+        path = DB::String(temp_prefix);
+    path += "/tmp/";
     if (!test_case.empty())
         path += std::string(test_case);
 
@@ -141,7 +145,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     // Load `testdata_path` as path if it is set.
     const String root_path = [&]() {
         const auto root_path = testdata_path.empty()
-            ? (DB::toString(getpid()) + "/" + getTemporaryPath("", /*get_abs*/ false))
+            ? getTemporaryPath(fmt::format("{}/", getpid()), /*get_abs*/ false)
             : testdata_path[0];
         return Poco::Path(root_path).absolute().toString();
     }();
