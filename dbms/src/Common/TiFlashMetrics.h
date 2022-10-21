@@ -174,9 +174,8 @@ namespace DB
         F(type_apply, {{"type", "apply"}}, ExpBuckets{0.0001, 2, 20}))                                                                    \
     M(tiflash_storage_page_read_duration_seconds, "The duration of each read", Histogram,                                                 \
         F(type_total, {{"type", "total"}}, ExpBuckets{0.0001, 2, 20}),                                                                    \
-        F(type_blob, {{"type", "blob"}}, ExpBuckets{0.0001, 2, 20}),                                                                      \
-        F(type_wal, {{"type", "wal"}}, ExpBuckets{0.0001, 2, 20}),                                                                        \
-        F(type_apply, {{"type", "apply"}}, ExpBuckets{0.0001, 2, 20}))                                                                    \
+        F(type_directory, {{"type", "directory"}}, ExpBuckets{0.0001, 2, 20}),                                                            \
+        F(type_blob, {{"type", "blob"}}, ExpBuckets{0.0001, 2, 20}))                                                                      \
     M(tiflash_storage_logical_throughput_bytes, "The logical throughput of read tasks of storage in bytes", Histogram,                    \
         F(type_read, {{"type", "read"}}, EqualWidthBuckets{1 * 1024 * 1024, 60, 50 * 1024 * 1024}))                                       \
     M(tiflash_storage_io_limiter, "Storage I/O limiter metrics", Counter, F(type_fg_read_req_bytes, {"type", "fg_read_req_bytes"}),       \
