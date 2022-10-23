@@ -36,6 +36,7 @@
 #include <charconv>
 #endif
 #include <ext/range.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -3476,7 +3477,7 @@ private:
             TidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
             break;
         default:
-            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         };
     }
 };
@@ -4071,7 +4072,7 @@ private:
             TidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
             break;
         default:
-            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 };
