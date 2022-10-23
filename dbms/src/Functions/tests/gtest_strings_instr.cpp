@@ -55,7 +55,6 @@ protected:
     {
         return createConstColumn<Int64>(1, s);
     }
-
 };
 
 TEST_F(StringInstr, instrUTF8Test)
@@ -69,7 +68,7 @@ try
             toNullableVec({"bar", "foobar", "美好", "世界", "a", "long", "binary", "upper", "uPpEr", "CASE", "CasE", "abc", "テスト", "ђѓєѕ"})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({4}),
+        toConstInt(4),
         executeFunction(
             func_name_utf8,
             toConstString("foobarbar"),
@@ -110,7 +109,7 @@ try
             toNullableVec({"bar", "foobar", "美好", "世界", "a", "long", "binary", "upper", "uPpEr", "CASE", "CasE", "abc", "テスト", "ђѓєѕ"})));
 
     ASSERT_COLUMN_EQ(
-        createColumn<Int64>({4}),
+        toConstInt(4),
         executeFunction(
             func_name,
             toConstString("foobarbar"),

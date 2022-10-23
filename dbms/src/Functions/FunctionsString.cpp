@@ -4395,6 +4395,8 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         auto first_argument = removeNullable(arguments[0]);
@@ -4423,14 +4425,9 @@ public:
         ColumnInt64::Container & res_vec = col_res->getData();
         res_vec.resize(val_num);
 
-        const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get());
-        const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get());
-        const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
-        const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
-
-        if (str_const_string)
+        if (const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get()))
         {
-            if (substr_const_string)
+            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
             {
                 auto str = str_const_string->getValue<String>();
                 auto substr = substr_const_string->getValue<String>();
@@ -4438,22 +4435,26 @@ public:
             }
             else
             {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
                 const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
                 constVector(str_const_string_value->getChars(), str_const_string_value->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
             }
         }
         else
         {
-            if (substr_const_string)
+            const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
+            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
             {
                 const auto * substr_const_string_value = checkAndGetColumn<ColumnString>(substr_const_string->getDataColumnPtr().get());
                 vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_const_string_value->getChars(), substr_const_string_value->getOffsets(), val_num, res_vec);
             }
             else
             {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
                 vectorVector(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
             }
         }
+
         block.getByPosition(result).column = std::move(col_res);
     }
 
@@ -4606,6 +4607,8 @@ public:
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
 
+    bool useDefaultImplementationForConstants() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         auto first_argument = removeNullable(arguments[0]);
@@ -4634,14 +4637,9 @@ public:
         ColumnInt64::Container & res_vec = col_res->getData();
         res_vec.resize(val_num);
 
-        const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get());
-        const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get());
-        const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
-        const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
-
-        if (str_const_string)
+        if (const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get()))
         {
-            if (substr_const_string)
+            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
             {
                 auto str = str_const_string->getValue<String>();
                 auto substr = substr_const_string->getValue<String>();
@@ -4649,22 +4647,26 @@ public:
             }
             else
             {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
                 const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
                 constVector(str_const_string_value->getChars(), str_const_string_value->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
             }
         }
         else
         {
-            if (substr_const_string)
+            const auto * str_vector_string = checkAndGetColumn<ColumnString>(c0_col_column.get());
+            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
             {
                 const auto * substr_const_string_value = checkAndGetColumn<ColumnString>(substr_const_string->getDataColumnPtr().get());
                 vectorConst(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_const_string_value->getChars(), substr_const_string_value->getOffsets(), val_num, res_vec);
             }
             else
             {
+                const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
                 vectorVector(str_vector_string->getChars(), str_vector_string->getOffsets(), substr_vector_string->getChars(), substr_vector_string->getOffsets(), val_num, res_vec);
             }
         }
+
         block.getByPosition(result).column = std::move(col_res);
     }
 
