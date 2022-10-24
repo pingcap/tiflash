@@ -65,3 +65,5 @@ mysql> set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select
 |            1 | abc                              |           |
 |         NULL | abc                              | NULL      |
 +--------------+----------------------------------+-----------+
+
+mysql> drop table test.t;
