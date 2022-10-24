@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Page/workload/PSStressEnv.h>
 #include <Storages/Page/workload/PSWorkload.h>
 
 namespace DB::PS::tests
@@ -38,8 +39,8 @@ private:
     String desc() override
     {
         return fmt::format("Some of options will be ignored"
-                           "`paths` will only used first one. which is {}. Data will store in {} ."
-                           "Please cleanup folder after this test."
+                           "`paths` will only used first one. which is {}. Data will store in {}. "
+                           "Please cleanup folder after this test. "
                            "The current workload will elapse near 60 seconds",
                            options.paths[0],
                            options.paths[0] + "/" + name());
@@ -72,6 +73,10 @@ private:
             pool.joinAll();
             stop_watch.stop();
         }
+
+        // ps->traverse([](const DB::Page & page) {
+        //     LOG_INFO(StressEnv::logger, "page_id={}", page.page_id);
+        // });
     }
 
     bool verify() override

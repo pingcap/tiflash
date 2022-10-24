@@ -57,11 +57,14 @@ struct GlobalStat
     // shared status between PSWindowWriter and PSWindowReader
     std::mutex mtx_page_id;
     // The page ids between [left_id_boundary, right_id_boundary)
-    // and not exists in `writing_page` is readable
+    // and exists in `commit_ids` && not exists in `pending_remove_ids`
+    // is readable
     std::atomic<DB::PageId> right_id_boundary = 0;
     std::atomic<DB::PageId> left_id_boundary = 0;
-    DB::PageId last_removed_page_id = 0;
-    DB::PageId writing_page[1000];
+    std::set<DB::PageId> commit_ids;
+    std::set<DB::PageId> pending_remove_ids;
+
+    void commit(const RandomPageId & c);
 };
 
 class PSWriter : public PSRunnable

@@ -1124,12 +1124,13 @@ PageId PageDirectory::getMaxId() const
 std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
 {
     std::set<PageIdV3Internal> page_ids;
-    std::shared_lock read_lock(table_rw_mutex);
 
+    std::shared_lock read_lock(table_rw_mutex);
+    const auto seq = sequence.load();
     for (auto & [page_id, versioned] : mvcc_table_directory)
     {
-        (void)versioned;
-        page_ids.insert(page_id);
+        if (versioned->isVisible(seq))
+            page_ids.insert(page_id);
     }
     return page_ids;
 }

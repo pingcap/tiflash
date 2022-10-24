@@ -26,10 +26,23 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
+#include <mutex>
 #include <random>
 
 namespace DB::PS::tests
 {
+
+void GlobalStat::commit(const RandomPageId & c)
+{
+    std::lock_guard lock(mtx_page_id);
+    commit_ids.insert(c.page_id);
+    for (const auto & id : c.page_id_to_remove)
+    {
+        commit_ids.erase(id);
+        pending_remove_ids.erase(id);
+    }
+}
+
 void PSRunnable::run()
 try
 {
@@ -142,6 +155,8 @@ bool PSWriter::runImpl()
 
     // verbose logging for debug
     // LOG_TRACE(StressEnv::logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
+
+    global_stat->commit(r);
     return true;
 }
 
@@ -200,7 +215,8 @@ bool PSCommonWriter::runImpl()
 
     ps->write(std::move(wb));
     // verbose logging for debug
-    // LOG_DEBUG(StressEnv::logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
+    // LOG_TRACE(StressEnv::logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
+    global_stat->commit(r);
     return (batch_buffer_limit == 0 || bytes_used < batch_buffer_limit);
 }
 
@@ -340,17 +356,19 @@ RandomPageId PSWindowWriter::genRandomPageId()
         global_stat->left_id_boundary = left_boundary;
 
         // Remove the page id that is not likely update/read any more
-        const auto old_removed_id = global_stat->last_removed_page_id;
-        for (size_t i = old_removed_id; i < left_boundary; ++i)
-            ids_to_del.insert(i);
-        global_stat->last_removed_page_id = left_boundary;
+        for (const auto & id : global_stat->commit_ids)
+        {
+            if (id >= left_boundary)
+                break;
+            ids_to_del.insert(id);
+            global_stat->pending_remove_ids.insert(id);
+        }
 
         auto page_id = global_stat->right_id_boundary++;
         if (page_id % 200 == 0)
-            LOG_INFO(StressEnv::logger, "Remove old id range [{}, {}), update boundary to [{}, {})", old_removed_id, left_boundary, left_boundary, global_stat->right_id_boundary);
+            LOG_INFO(StressEnv::logger, "Update boundary to [{}, {})", left_boundary, global_stat->right_id_boundary);
         return page_id;
     }();
-    global_stat->writing_page[index] = page_id;
     return RandomPageId(page_id, ids_to_del);
 }
 
@@ -370,8 +388,6 @@ DB::PageIds PSWindowReader::genRandomPageIds()
     // Nothing to read
     if (page_id_boundary_copy < (writer_nums + num_pages_read))
         return {};
-    if (global_stat->left_id_boundary.load() == 0)
-        return {};
 
     const size_t read_right_boundary = page_id_boundary_copy - writer_nums - num_pages_read;
 
@@ -388,21 +404,16 @@ DB::PageIds PSWindowReader::genRandomPageIds()
     rand_id = std::min(rand_id, read_right_boundary);
 
     DB::PageIds page_ids;
-    for (size_t id = rand_id; id < num_pages_read + rand_id; ++id)
+    std::lock_guard lock(global_stat->mtx_page_id);
     {
-        bool is_being_write = [this](DB::PageId page_id) {
-            std::lock_guard page_id_lock(global_stat->mtx_page_id);
-            for (size_t j = 0; j < writer_nums; j++)
+        for (size_t id = rand_id; id < num_pages_read + rand_id; ++id)
+        {
+            if (global_stat->commit_ids.find(id) != global_stat->commit_ids.end()
+                && global_stat->pending_remove_ids.find(id) == global_stat->pending_remove_ids.end())
             {
-                if (page_id == global_stat->writing_page[j])
-                {
-                    return true;
-                }
+                page_ids.emplace_back(id);
             }
-            return false;
-        }(id);
-        if (!is_being_write)
-            page_ids.emplace_back(id);
+        }
     }
 
     return page_ids;
