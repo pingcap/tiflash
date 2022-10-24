@@ -58,6 +58,11 @@ public:
 
     void start();
 
+    void stop()
+    {
+        timer_status.stop();
+    }
+
     UInt32 getMemoryPeak() const
     {
         auto info = metrics.find(CurrentMetrics::MemoryTracking);
@@ -113,6 +118,11 @@ public:
 
     void start();
 
+    void stop()
+    {
+        gc_timer.stop();
+    }
+
     UInt64 getElapsedMilliseconds()
     {
         return gc_stop_watch.elapsedMilliseconds();
@@ -142,6 +152,11 @@ public:
 
     void start();
 
+    void stop()
+    {
+        scanner_timer.stop();
+    }
+
 private:
     Poco::Timer scanner_timer;
 };
@@ -159,6 +174,10 @@ public:
 
     void onTime(Poco::Timer & timer);
     void start();
+    void stop()
+    {
+        timeout_timer.stop();
+    }
 
 private:
     Poco::Timer timeout_timer;

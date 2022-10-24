@@ -89,7 +89,6 @@ private:
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(1);
                 writer->setBatchBufferSize(buffer_size);
-                writer->setWindowSize(500);
                 writer->setNormalDistributionSigma(13);
             });
 
@@ -111,7 +110,6 @@ private:
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(20);
                 writer->setBatchBufferSize(buffer_size);
-                writer->setWindowSize(500);
                 writer->setNormalDistributionSigma(13);
             });
 
@@ -133,7 +131,6 @@ private:
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(1);
                 writer->setBatchBufferSize(buffer_size);
-                writer->setWindowSize(500);
                 writer->setNormalDistributionSigma(13);
             });
 
@@ -155,7 +152,6 @@ private:
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(20);
                 writer->setBatchBufferSize(buffer_size);
-                writer->setWindowSize(500);
                 writer->setNormalDistributionSigma(13);
             });
 

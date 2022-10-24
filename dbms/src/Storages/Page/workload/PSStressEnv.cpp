@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/MemoryTracker.h>
 #include <Common/UnifiedLogFormatter.h>
@@ -27,7 +28,6 @@
 #include <signal.h>
 
 #include <boost/program_options.hpp>
-#include "Common/Exception.h"
 
 namespace DB::PS::tests
 {
@@ -72,7 +72,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
     if (options.count("help") > 0)
     {
         std::cerr << desc << std::endl;
-        std::cerr << StressWorkloadManger::getInstance().toDebugStirng() << std::endl;
+        std::cerr << PageWorkloadFactory::getInstance().toDebugStirng() << std::endl;
         exit(0);
     }
 
@@ -114,8 +114,9 @@ StressEnv StressEnv::parse(int argc, char ** argv)
 void setupSignal()
 {
     signal(SIGINT, [](int /*signal*/) {
-        LOG_ERROR(StressEnv::logger, "Receive finish signal. Wait for the GC threads to end.");
+        LOG_INFO(StressEnv::logger, "Receive finish signal. Wait for the threads finish");
         StressEnvStatus::getInstance().setStat(STATUS_INTERRUPT);
+        PageWorkloadFactory::getInstance().stopWorkload();
     });
 }
 

@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
 #include <Common/formatReadable.h>
 #include <Encryption/MockKeyManager.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <Poco/File.h>
 #include <Poco/Logger.h>
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/workload/PSRunnable.h>
+#include <Storages/Page/workload/PSStressEnv.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <common/logger_useful.h>
 #include <fmt/format.h>
 
 #include <random>
@@ -43,6 +47,8 @@ try
 }
 catch (...)
 {
+    // stop the whole testing
+    StressEnvStatus::getInstance().setStat(StressEnvStat::STATUS_EXCEPTION);
     DB::tryLogCurrentException(StressEnv::logger);
 }
 
@@ -123,21 +129,26 @@ void PSWriter::fillAllPages(const PSPtr & ps)
 
 bool PSWriter::runImpl()
 {
-    const DB::PageId page_id = genRandomPageId();
+    const auto r = genRandomPageId();
     updatedRandomData();
 
     DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
-    wb.putPage(page_id, 0, buff_ptr, buff_ptr->buffer().size());
+    wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());
+    for (const auto id : r.page_id_to_remove)
+        wb.delPage(id);
     ps->write(std::move(wb));
     ++pages_used;
     bytes_used += buff_ptr->buffer().size();
+
+    // verbose logging for debug
+    // LOG_TRACE(StressEnv::logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
     return true;
 }
 
-DB::PageId PSWriter::genRandomPageId()
+RandomPageId PSWriter::genRandomPageId()
 {
     std::normal_distribution<> distribution{static_cast<double>(max_page_id) / 2, 150};
-    return static_cast<DB::PageId>(std::round(distribution(gen))) % max_page_id;
+    return RandomPageId(static_cast<DB::PageId>(std::round(distribution(gen))) % max_page_id);
 }
 
 void PSCommonWriter::updatedRandomData()
@@ -170,23 +181,26 @@ void PSCommonWriter::updatedRandomData()
     }
 }
 
-DB::PageId writing_page[1000];
-
 bool PSCommonWriter::runImpl()
 {
-    const DB::PageId page_id = genRandomPageId();
+    const auto r = genRandomPageId();
 
     DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
     updatedRandomData();
 
+    // FIXME: update one page_id by multiple data in one write batch?
     for (auto & buffptr : buff_ptrs)
     {
-        wb.putPage(page_id, 0, buffptr, buffptr->buffer().size());
+        wb.putPage(r.page_id, 0, buffptr, buffptr->buffer().size());
         ++pages_used;
         bytes_used += buffptr->buffer().size();
     }
+    for (const auto & page_id : r.page_id_to_remove)
+        wb.delPage(page_id);
 
     ps->write(std::move(wb));
+    // verbose logging for debug
+    // LOG_DEBUG(StressEnv::logger, "write done, page_id={}, remove={}", r.page_id, r.page_id_to_remove);
     return (batch_buffer_limit == 0 || bytes_used < batch_buffer_limit);
 }
 
@@ -210,19 +224,17 @@ void PSCommonWriter::setBatchBufferPageRange(size_t max_page_id_)
     max_page_id = max_page_id_;
 }
 
-DB::PageId PSCommonWriter::genRandomPageId()
+RandomPageId PSCommonWriter::genRandomPageId()
 {
     std::uniform_int_distribution<> dist(0, max_page_id);
-    return static_cast<DB::PageId>(dist(gen));
+    return RandomPageId(static_cast<DB::PageId>(dist(gen)));
 }
 
 void PSCommonWriter::setBatchBufferRange(size_t min, size_t max)
 {
-    if (max > min && min > 0)
-    {
-        buffer_size_min = min;
-        buffer_size_max = max;
-    }
+    RUNTIME_CHECK(max >= min);
+    buffer_size_min = std::max(1, min);
+    buffer_size_max = max;
 }
 
 void PSCommonWriter::setFieldSize(const DB::PageFieldSizes & data_sizes_)
@@ -245,7 +257,7 @@ size_t PSCommonWriter::genBufferSize()
 DB::PageIds PSReader::genRandomPageIds()
 {
     DB::PageIds page_ids;
-    for (size_t i = 0; i < page_read_once; ++i)
+    for (size_t i = 0; i < num_pages_read; ++i)
     {
         std::uniform_int_distribution<> dist(0, max_page_id);
         page_ids.emplace_back(static_cast<DB::PageId>(dist(gen)));
@@ -256,6 +268,8 @@ DB::PageIds PSReader::genRandomPageIds()
 bool PSReader::runImpl()
 {
     DB::PageIds page_ids = genRandomPageIds();
+    if (page_ids.empty())
+        return true;
 
     auto page_map = ps->read(DB::TEST_NAMESPACE_ID, page_ids);
     for (const auto & page : page_map)
@@ -272,7 +286,7 @@ bool PSReader::runImpl()
 
 void PSReader::setPageReadOnce(size_t page_read_once_)
 {
-    page_read_once = page_read_once_;
+    num_pages_read = page_read_once_;
 }
 
 void PSReader::setReadDelay(size_t delay_ms)
@@ -287,12 +301,7 @@ void PSReader::setReadPageRange(size_t max_page_id_)
 
 void PSReader::setReadPageNums(size_t page_read_once_)
 {
-    page_read_once = page_read_once_;
-}
-
-void PSWindowWriter::setWindowSize(size_t window_size_)
-{
-    window_size = window_size_;
+    num_pages_read = page_read_once_;
 }
 
 void PSWindowWriter::setNormalDistributionSigma(size_t sigma_)
@@ -300,32 +309,49 @@ void PSWindowWriter::setNormalDistributionSigma(size_t sigma_)
     sigma = sigma_;
 }
 
-UInt64 pageid_boundary = 0;
-std::mutex page_id_mutex;
-
-DB::PageId PSWindowWriter::genRandomPageId()
+RandomPageId PSWindowWriter::genRandomPageId()
 {
-    std::lock_guard page_id_lock(page_id_mutex);
-    if (pageid_boundary < (window_size / 2))
-    {
-        writing_page[index] = pageid_boundary++;
-        return static_cast<DB::PageId>(writing_page[index]);
-    }
+    std::lock_guard page_id_lock(global_stat->mtx_page_id);
+    DB::PageIdSet ids_to_del;
+    DB::PageId page_id = [this, &ids_to_del]() {
+        if (global_stat->right_id_boundary < 4 * sigma)
+        {
+            return global_stat->right_id_boundary++;
+        }
 
-    // Generate a random number in the window
-    std::normal_distribution<> distribution{static_cast<double>(window_size), static_cast<double>(sigma)};
-    auto random = std::round(distribution(gen));
-    // Move this "random" near the pageid_boundary, If "random" is still negative, then make it positive
-    random = std::abs(random + pageid_boundary);
+        // Generate a random number in the window, normal dist by μ=0 and σ=sigma
+        std::normal_distribution distribution{0.0, static_cast<double>(sigma)};
+        auto random = std::round(distribution(gen));
+        // 100 - (100 - 68)/2 == 84% probability that update the existing page id
+        if (random <= sigma)
+        {
+            // Move this "random" near the right boundary - σ, (mock a hot write in an id range)
+            // we will update the data in this page_id
+            DB::PageId page_id = std::abs(global_stat->right_id_boundary - sigma + random);
+            return std::max(page_id, global_stat->left_id_boundary.load());
+        }
 
-    auto page_id = static_cast<DB::PageId>(random > pageid_boundary ? pageid_boundary++ : random);
-    writing_page[index] = page_id;
-    return page_id;
-}
+        // Else it is about 16% probability that we create a new page.
+        // Also we consider the pages with id less than (right boundary - 4σ) have no chance (less than 0.01%
+        // by the definition of normal distribution) for being read later, remove the pages.
+        DB::PageId left_boundary = 0;
+        if (global_stat->right_id_boundary > 3 * sigma) // ensure the new left boundary is not negative
+            left_boundary = global_stat->right_id_boundary - 3 * sigma;
+        global_stat->left_id_boundary = left_boundary;
 
-void PSWindowReader::setWindowSize(size_t window_size_)
-{
-    window_size = window_size_;
+        // Remove the page id that is not likely update/read any more
+        const auto old_removed_id = global_stat->last_removed_page_id;
+        for (size_t i = old_removed_id; i < left_boundary; ++i)
+            ids_to_del.insert(i);
+        global_stat->last_removed_page_id = left_boundary;
+
+        auto page_id = global_stat->right_id_boundary++;
+        if (page_id % 200 == 0)
+            LOG_INFO(StressEnv::logger, "Remove old id range [{}, {}), update boundary to [{}, {})", old_removed_id, left_boundary, left_boundary, global_stat->right_id_boundary);
+        return page_id;
+    }();
+    global_stat->writing_page[index] = page_id;
+    return RandomPageId(page_id, ids_to_del);
 }
 
 void PSWindowReader::setNormalDistributionSigma(size_t sigma_)
@@ -340,50 +366,43 @@ void PSWindowReader::setWriterNums(size_t writer_nums_)
 
 DB::PageIds PSWindowReader::genRandomPageIds()
 {
-    std::vector<DB::PageId> page_ids;
+    const auto page_id_boundary_copy = global_stat->right_id_boundary.load();
+    // Nothing to read
+    if (page_id_boundary_copy < (writer_nums + num_pages_read))
+        return {};
+    if (global_stat->left_id_boundary.load() == 0)
+        return {};
 
-    if (pageid_boundary <= (writer_nums + page_read_once))
+    const size_t read_right_boundary = page_id_boundary_copy - writer_nums - num_pages_read;
+
+    // Generate a random number in the window, normal dist by μ=0 and σ=sigma
+    std::normal_distribution<> distribution{0.0, static_cast<double>(sigma)};
+    double r = distribution(gen);
+    // id > (right boundary+σ) is likely not written, turn the `r` into the left side of boundary
+    // for reading
+    if (r > sigma)
+        r = -r;
+    double rand_id = std::round(read_right_boundary - sigma + r); // the rand_id is double since it could be < 0.0
+    // Limit by boundary
+    rand_id = std::max(rand_id, global_stat->left_id_boundary.load());
+    rand_id = std::min(rand_id, read_right_boundary);
+
+    DB::PageIds page_ids;
+    for (size_t id = rand_id; id < num_pages_read + rand_id; ++id)
     {
-        // Nothing to read
-        return page_ids;
-    }
-
-    size_t read_boundary = pageid_boundary - writer_nums - page_read_once;
-    if (read_boundary < window_size)
-    {
-        return page_ids;
-    }
-
-    std::normal_distribution<> distribution{static_cast<double>(window_size),
-                                            static_cast<double>(sigma)};
-    auto rand_id = std::round(distribution(gen));
-
-    rand_id = read_boundary - window_size + rand_id;
-
-    // Bigger than window right boundary
-    if (rand_id > read_boundary)
-    {
-        rand_id = read_boundary;
-    }
-
-    // Smaller than window left boundary
-    if (rand_id < 0)
-    {
-        rand_id = std::abs(rand_id);
-    }
-
-    for (size_t i = rand_id; i < page_read_once + rand_id; ++i)
-    {
-        bool writing = false;
-        for (size_t j = 0; j < writer_nums; j++)
-        {
-            if (i == writing_page[j])
+        bool is_being_write = [this](DB::PageId page_id) {
+            std::lock_guard page_id_lock(global_stat->mtx_page_id);
+            for (size_t j = 0; j < writer_nums; j++)
             {
-                writing = true;
+                if (page_id == global_stat->writing_page[j])
+                {
+                    return true;
+                }
             }
-        }
-        if (!writing)
-            page_ids.emplace_back(i);
+            return false;
+        }(id);
+        if (!is_being_write)
+            page_ids.emplace_back(id);
     }
 
     return page_ids;
@@ -412,8 +431,8 @@ void PSIncreaseWriter::setPageRange(size_t page_range)
     end_page_id = (index + 1) * page_range + 1;
 }
 
-DB::PageId PSIncreaseWriter::genRandomPageId()
+RandomPageId PSIncreaseWriter::genRandomPageId()
 {
-    return static_cast<DB::PageId>(begin_page_id++);
+    return RandomPageId(begin_page_id++);
 }
 } // namespace DB::PS::tests

@@ -60,7 +60,6 @@ private:
             startWriter<PSWindowWriter>(options.num_writers, [](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
                 writer->setBatchBufferRange(10 * 1024, 1 * DB::MB);
-                writer->setWindowSize(500);
                 writer->setNormalDistributionSigma(13);
             });
 

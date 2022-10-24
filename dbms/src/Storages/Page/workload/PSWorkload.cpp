@@ -20,6 +20,8 @@
 #include <Storages/Page/workload/PSWorkload.h>
 #include <TestUtils/MockDiskDelegator.h>
 
+#include <ext/scope_guard.h>
+
 namespace DB::PS::tests
 {
 void StressWorkload::onDumpResult()
@@ -107,6 +109,8 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
         });
         LOG_INFO(StressEnv::logger, "Recover {} pages.", num_of_pages);
     }
+
+    runtime_stat = std::make_unique<GlobalStat>();
 }
 
 void StressWorkload::startBackgroundTimer()
@@ -139,19 +143,19 @@ void StressWorkload::startBackgroundTimer()
     }
 }
 
-void StressWorkloadManger::runWorkload()
+void PageWorkloadFactory::runWorkload()
 {
     if (options.just_init_pages || options.situation_mask == NORMAL_WORKLOAD)
     {
         String name;
         WorkloadCreator func;
         std::tie(name, func) = get(NORMAL_WORKLOAD);
-        auto workload = std::shared_ptr<StressWorkload>(func(options));
-        LOG_INFO(StressEnv::logger, "Start Running {} , {}", name, workload->desc());
-        workload->run();
+        running_workload = std::shared_ptr<StressWorkload>(func(options));
+        LOG_INFO(StressEnv::logger, "Start Running {}, {}", name, running_workload->desc());
+        running_workload->run();
         if (!options.just_init_pages)
         {
-            workload->onDumpResult();
+            running_workload->onDumpResult();
         }
         return;
     }
@@ -166,18 +170,19 @@ void StressWorkloadManger::runWorkload()
         {
             auto & name = it.second.first;
             auto & creator = it.second.second;
-            auto workload = creator(options);
-            LOG_INFO(StressEnv::logger, "Start Running {} , {}", name, workload->desc());
-            workload->run();
-            if (options.verify && !workload->verify())
+            running_workload = creator(options);
+            SCOPE_EXIT({ running_workload.reset(); });
+            LOG_INFO(StressEnv::logger, "Start Running {}, {}", name, running_workload->desc());
+            running_workload->run();
+            if (options.verify && !running_workload->verify())
             {
-                LOG_WARNING(StressEnv::logger, "work load : {} failed.", name);
-                workload->onFailed();
+                LOG_WARNING(StressEnv::logger, "work load: {} failed.", name);
+                running_workload->onFailed();
                 break;
             }
             else
             {
-                workload->onDumpResult();
+                running_workload->onDumpResult();
             }
         }
     }

@@ -24,6 +24,8 @@
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <fmt/format.h>
 
+#include <memory>
+
 #define NORMAL_WORKLOAD 0
 namespace DB::PS::tests
 {
@@ -64,6 +66,18 @@ public:
     virtual void onFailed() {}
     virtual void onDumpResult();
 
+    void stop()
+    {
+        if (stress_time)
+            stress_time->stop();
+        if (scanner)
+            scanner->stop();
+        if (gc)
+            gc->stop();
+        if (metrics_dumper)
+            metrics_dumper->stop();
+    }
+
 protected:
     void initPageStorage(DB::PageStorageConfig & config, String path_prefix = "");
 
@@ -75,7 +89,7 @@ protected:
         writers.clear();
         for (size_t i = 0; i < nums_writers; ++i)
         {
-            auto writer = std::make_shared<T>(ps, i);
+            auto writer = std::make_shared<T>(ps, i, runtime_stat);
             if (writer_configure)
             {
                 writer_configure(writer);
@@ -91,7 +105,7 @@ protected:
         readers.clear();
         for (size_t i = 0; i < nums_readers; ++i)
         {
-            auto reader = std::make_shared<T>(ps, i);
+            auto reader = std::make_shared<T>(ps, i, runtime_stat);
             if (reader_configure)
             {
                 reader_configure(reader);
@@ -108,6 +122,8 @@ protected:
     PSPtr ps;
     DB::PSDiskDelegatorPtr delegator;
 
+    std::unique_ptr<GlobalStat> runtime_stat;
+
     std::list<std::shared_ptr<PSRunnable>> writers;
     std::list<std::shared_ptr<PSRunnable>> readers;
 
@@ -120,7 +136,7 @@ protected:
 };
 
 
-class StressWorkloadManger
+class PageWorkloadFactory
 {
 private:
     using WorkloadCreator = std::function<std::shared_ptr<StressWorkload>(const StressEnv &)>;
@@ -128,14 +144,14 @@ private:
     std::map<UInt64, std::pair<String, WorkloadCreator>> funcs;
     UInt64 registed_masks = 0;
 
-    StressWorkloadManger() = default;
+    PageWorkloadFactory() = default;
 
 public:
-    DISALLOW_COPY_AND_MOVE(StressWorkloadManger);
+    DISALLOW_COPY_AND_MOVE(PageWorkloadFactory);
 
-    static StressWorkloadManger & getInstance()
+    static PageWorkloadFactory & getInstance()
     {
-        static StressWorkloadManger instance;
+        static PageWorkloadFactory instance;
         return instance;
     }
 
@@ -189,14 +205,21 @@ public:
 
     void runWorkload();
 
+    void stopWorkload()
+    {
+        if (running_workload)
+            running_workload->stop();
+    }
+
 private:
     StressEnv options;
+    std::shared_ptr<StressWorkload> running_workload;
 };
 
 template <class Workload>
 void work_load_register()
 {
-    StressWorkloadManger::getInstance().reg(
+    PageWorkloadFactory::getInstance().reg(
         Workload::nameFunc(),
         Workload::maskFunc(),
         [](const StressEnv & opts) -> std::shared_ptr<StressWorkload> {
