@@ -276,11 +276,6 @@ struct KeyDescNumber64
         ref = {reinterpret_cast<const char *>(&element), ElementSize};
         return ElementSize;
     }
-    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumn(const char * pos, IColumn * key_column)
-    {
-        auto * column = static_cast<ColumnType *>(key_column);
-        return column->deserializeAndInsertFromArena(pos, nullptr);
-    }
     const ColumnType * column{};
 };
 
@@ -315,18 +310,6 @@ struct KeyDescStringBin
         key = fn_handle_key(key);
 
         return key.size + sizeof(key.size);
-    }
-
-    // Only update offsets but DO NOT insert string data.
-    // Because of https://github.com/pingcap/tiflash/blob/84c2650bc4320919b954babeceb5aeaadb845770/dbms/src/Columns/IColumn.h#L160-L173, such column will be discarded.
-    // Make column size same as previous way
-    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumn(const char * pos, IColumn * key_column)
-    {
-        auto * column = static_cast<ColumnType *>(key_column);
-        const size_t string_size = *reinterpret_cast<const size_t *>(pos);
-        pos += sizeof(string_size);
-        column->getOffsets().push_back(0);
-        return pos + string_size;
     }
 
     ALWAYS_INLINE inline AllocSize getKey(ssize_t row, StringRef & ref) const

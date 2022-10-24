@@ -342,7 +342,8 @@ AggregatedDataVariants::Type ChooseAggregationMethodFastPath(size_t keys_size, c
             {
                 if (collators.empty() || !collators[i])
                 {
-                    fast_path_types[i] = AggFastPathType::StringBin;
+                    // use original way
+                    return AggregatedDataVariants::Type::serialized;
                 }
                 else
                 {
@@ -1161,6 +1162,67 @@ inline void Aggregator::insertAggregatesIntoColumns(
         std::rethrow_exception(exception);
 }
 
+template <typename Method>
+struct AggregatorMethodInitKeyColumnHelper
+{
+    Method & method;
+    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
+        : method(method_)
+    {}
+    ALWAYS_INLINE inline void initAggKeys(size_t, std::vector<IColumn *> &) {}
+    template <typename Key>
+    ALWAYS_INLINE inline void insertKeyIntoColumns(const Key & key, std::vector<IColumn *> & key_columns, const Sizes & sizes, const TiDB::TiDBCollators & collators)
+    {
+        method.insertKeyIntoColumns(key, key_columns, sizes, collators);
+    }
+};
+
+template <typename Key1Desc, typename Key2Desc, typename TData>
+struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>>
+{
+    using Method = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>;
+    size_t index{};
+
+    Method & method;
+    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
+        : method(method_)
+    {}
+
+    ALWAYS_INLINE inline void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
+    {
+        Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
+        Method::template initAggKeys<Key2Desc>(rows, key_columns[1]);
+        index = 0;
+    }
+    ALWAYS_INLINE inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    {
+        method.insertKeyIntoColumns(key, key_columns, index);
+        ++index;
+    }
+};
+
+template <bool bin_padding, typename TData>
+struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<bin_padding, TData>>
+{
+    using Method = AggregationMethodOneKeyStringNoCache<bin_padding, TData>;
+    size_t index{};
+
+    Method & method;
+    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
+        : method(method_)
+    {}
+
+    void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
+    {
+        Method::initAggKeys(rows, key_columns[0]);
+        index = 0;
+    }
+    ALWAYS_INLINE inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    {
+        method.insertKeyIntoColumns(key, key_columns, index);
+        ++index;
+    }
+};
 
 template <typename Method, typename Table>
 void NO_INLINE Aggregator::convertToBlockImplFinal(
@@ -1173,8 +1235,11 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
     auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
+    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
+    agg_keys_helper.initAggKeys(data.size(), key_columns);
+
     data.forEachValue([&](const auto & key, auto & mapped) {
-        method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+        agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
         insertAggregatesIntoColumns(mapped, final_aggregate_columns, arena);
     });
 }
@@ -1189,8 +1254,11 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
     const auto & key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
 
+    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
+    agg_keys_helper.initAggKeys(data.size(), key_columns);
+
     data.forEachValue([&](const auto & key, auto & mapped) {
-        method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+        agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
 
         /// reserved, so push_back does not throw exceptions
         for (size_t i = 0; i < params.aggregates_size; ++i)

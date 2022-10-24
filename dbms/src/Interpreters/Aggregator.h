@@ -222,11 +222,14 @@ struct AggregationMethodOneKeyStringNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    FLATTEN_INLINE static inline void insertKeyIntoColumns(const StringRef &, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    ALWAYS_INLINE static inline void insertKeyIntoColumns(const StringRef &, std::vector<IColumn *> &, size_t)
     {
         // insert empty because such column will be discarded.
-        // make column size same as previous way
-        static_cast<ColumnString *>(key_columns[0])->getOffsets().push_back(0);
+    }
+    // resize offsets for column string
+    ALWAYS_INLINE static inline void initAggKeys(size_t rows, IColumn * key_column)
+    {
+        static_cast<ColumnString *>(key_column)->getOffsets().resize_fill(rows, 0);
     }
 };
 
@@ -281,14 +284,65 @@ struct AggregationMethodFastPathTwoKeysNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    FLATTEN_INLINE static inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    template <typename KeyType>
+    ALWAYS_INLINE static inline void initAggKeys(size_t rows, IColumn * key_column)
+    {
+        auto * column = static_cast<typename KeyType::ColumnType *>(key_column);
+        column->getData().resize_fill(rows, 0);
+    }
+
+    // Only update offsets but DO NOT insert string data.
+    // Because of https://github.com/pingcap/tiflash/blob/84c2650bc4320919b954babeceb5aeaadb845770/dbms/src/Columns/IColumn.h#L160-L173, such column will be discarded.
+    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumnString(const char * pos, IColumn *)
+    {
+        const size_t string_size = *reinterpret_cast<const size_t *>(pos);
+        pos += sizeof(string_size);
+        return pos + string_size;
+    }
+    // resize offsets for column string
+    ALWAYS_INLINE static inline void initAggKeyString(size_t rows, IColumn * key_column)
+    {
+        auto * column = static_cast<ColumnString *>(key_column);
+        column->getOffsets().resize_fill(rows, 0);
+    }
+
+    template <>
+    ALWAYS_INLINE static inline void initAggKeys<ColumnsHashing::KeyDescStringBin>(size_t rows, IColumn * key_column)
+    {
+        return initAggKeyString(rows, key_column);
+    }
+    template <>
+    ALWAYS_INLINE static inline void initAggKeys<ColumnsHashing::KeyDescStringBinPadding>(size_t rows, IColumn * key_column)
+    {
+        return initAggKeyString(rows, key_column);
+    }
+
+    template <typename KeyType>
+    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumn(const char * pos, IColumn * key_column, size_t index)
+    {
+        auto * column = static_cast<typename KeyType::ColumnType *>(key_column);
+        column->getElement(index) = *reinterpret_cast<const typename KeyType::ColumnType::value_type *>(pos);
+        return pos + KeyType::ElementSize;
+    }
+    template <>
+    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumn<ColumnsHashing::KeyDescStringBin>(const char * pos, IColumn * key_column, size_t)
+    {
+        return insertAggKeyIntoColumnString(pos, key_column);
+    }
+    template <>
+    ALWAYS_INLINE static inline const char * insertAggKeyIntoColumn<ColumnsHashing::KeyDescStringBinPadding>(const char * pos, IColumn * key_column, size_t)
+    {
+        return insertAggKeyIntoColumnString(pos, key_column);
+    }
+
+    ALWAYS_INLINE static inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, size_t index)
     {
         const auto * pos = key.data;
         {
-            pos = Key1Desc::insertAggKeyIntoColumn(pos, key_columns[0]);
+            pos = insertAggKeyIntoColumn<Key1Desc>(pos, key_columns[0], index);
         }
         {
-            pos = Key2Desc::insertAggKeyIntoColumn(pos, key_columns[1]);
+            pos = insertAggKeyIntoColumn<Key2Desc>(pos, key_columns[1], index);
         }
     }
 };
