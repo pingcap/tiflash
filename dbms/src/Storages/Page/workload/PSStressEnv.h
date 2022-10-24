@@ -79,10 +79,11 @@ struct StressEnv
     bool init_pages = false;
     bool just_init_pages = false;
     bool clean_before_run = false;
+    size_t gc_interval_s = 30;
     size_t timeout_s = 0;
     size_t read_delay_ms = 0;
     size_t num_writer_slots = 1;
-    size_t avg_page_size_mb = 1;
+    size_t avg_page_size = 1024 * 1024;
     size_t status_interval = 1;
     size_t situation_mask = 0;
     bool verify = true;
@@ -97,9 +98,11 @@ struct StressEnv
             "{{ "
             "num_writers: {}, num_readers: {}, init_pages: {}, just_init_pages: {}"
             ", clean_before_run: {}, timeout_s: {}, read_delay_ms: {}, num_writer_slots: {}"
-            ", avg_page_size_mb: {}, paths: [{}], failpoints: [{}]"
-            ", status_interval: {}, situation_mask: {}, verify: {}"
-            ", running_pagestorage_version : {}."
+            ", avg_page_size: {}, paths: [{}], failpoints: [{}]"
+            ", gc_interval_s: {}"
+            ", status_interval: {}, verify: {}"
+            ", situation_mask: {}"
+            ", running_pagestorage_version: {}"
             "}}",
             num_writers,
             num_readers,
@@ -109,14 +112,14 @@ struct StressEnv
             timeout_s,
             read_delay_ms,
             num_writer_slots,
-            avg_page_size_mb,
+            avg_page_size,
             fmt::join(paths.begin(), paths.end(), ","),
             fmt::join(failpoints.begin(), failpoints.end(), ","),
+            gc_interval_s,
             status_interval,
-            situation_mask,
             verify,
-            running_ps_version
-            //
+            situation_mask,
+            running_ps_version //
         );
     }
 

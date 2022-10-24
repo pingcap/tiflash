@@ -51,21 +51,17 @@ private:
         DB::PageStorageConfig config;
         initPageStorage(config, name());
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
+        startBackgroundTimer();
 
-        stress_time = std::make_shared<StressTimeout>(60);
-        stress_time->start();
         {
             stop_watch.start();
-            startWriter<PSWindowWriter>(options.num_writers, [](std::shared_ptr<PSWindowWriter> writer) -> void {
+            const auto num_writers = options.num_writers;
+            startWriter<PSWindowWriter>(num_writers, [&](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferRange(10 * 1024, 1 * DB::MB);
+                writer->setBatchBufferRange(0, options.avg_page_size * 2);
                 writer->setWindowSize(500);
                 writer->setNormalDistributionSigma(13);
             });
-
-            auto num_writers = options.num_writers;
 
             startReader<PSWindowReader>(options.num_readers, [num_writers](std::shared_ptr<PSWindowReader> reader) -> void {
                 reader->setPageReadOnce(5);

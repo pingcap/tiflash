@@ -96,7 +96,7 @@ public:
             onDumpResult();
         }
 
-        gc = std::make_shared<PSGc>(ps);
+        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
         gc->doGcOnce();
         gc_time_ms = gc->getElapsedMilliseconds();
         {
@@ -123,7 +123,7 @@ public:
 
     void onFailed() override
     {
-        LOG_WARNING(StressEnv::logger, fmt::format("GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000));
+        LOG_WARNING(StressEnv::logger, "GC time is {} , it should not bigger than {} ", gc_time_ms, 1 * 1000);
     }
 
 private:

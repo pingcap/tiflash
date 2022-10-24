@@ -114,7 +114,7 @@ protected:
     Stopwatch stop_watch;
 
     StressTimeoutPtr stress_time;
-    PSScannerPtr scanner;
+    PSSnapStatGetterPtr scanner;
     PSGcPtr gc;
     PSMetricsDumperPtr metrics_dumper;
 };

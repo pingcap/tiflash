@@ -55,7 +55,7 @@ public:
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);
         metrics_dumper->start();
 
-        stress_time = std::make_shared<StressTimeout>(30);
+        stress_time = std::make_shared<StressTimeout>(options.timeout_s);
         stress_time->start();
 
         startWriter<PSCommonWriter>(options.num_writers, [](std::shared_ptr<PSCommonWriter> writer) -> void {
@@ -66,7 +66,7 @@ public:
         pool.joinAll();
         stop_watch.stop();
 
-        gc = std::make_shared<PSGc>(ps);
+        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
         gc->doGcOnce();
     }
 
@@ -78,7 +78,9 @@ public:
     void onFailed() override
     {
         LOG_WARNING(StressEnv::logger,
-                    fmt::format("Memory Peak is {} , it should not bigger than {} ", metrics_dumper->getMemoryPeak(), 5 * 1024 * 1024));
+                    "Memory Peak is {}, it should not bigger than {}",
+                    metrics_dumper->getMemoryPeak(),
+                    5 * 1024 * 1024);
     }
 };
 } // namespace DB::PS::tests

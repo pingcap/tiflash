@@ -25,7 +25,7 @@ namespace DB::PS::tests
 void StressWorkload::onDumpResult()
 {
     UInt64 time_interval = stop_watch.elapsedMilliseconds();
-    LOG_INFO(options.logger, fmt::format("result in {}ms", time_interval));
+    LOG_INFO(options.logger, "result in {}ms", time_interval);
     double seconds_run = 1.0 * time_interval / 1000;
 
     size_t total_pages_written = 0;
@@ -47,17 +47,15 @@ void StressWorkload::onDumpResult()
     }
 
     LOG_INFO(options.logger,
-             fmt::format(
-                 "W: {} pages, {:.4f} GB, {:.4f} GB/s",
-                 total_pages_written,
-                 static_cast<double>(total_bytes_written) / DB::GB,
-                 static_cast<double>(total_bytes_written) / DB::GB / seconds_run));
+             "W: {} pages, {:.4f} GB, {:.4f} GB/s",
+             total_pages_written,
+             static_cast<double>(total_bytes_written) / DB::GB,
+             static_cast<double>(total_bytes_written) / DB::GB / seconds_run);
     LOG_INFO(options.logger,
-             fmt::format(
-                 "R: {} pages, {:.4f} GB, {:.4f} GB/s",
-                 total_pages_read,
-                 static_cast<double>(total_bytes_read) / DB::GB,
-                 static_cast<double>(total_bytes_read) / DB::GB / seconds_run));
+             "R: {} pages, {:.4f} GB, {:.4f} GB/s",
+             total_pages_read,
+             static_cast<double>(total_bytes_read) / DB::GB,
+             static_cast<double>(total_bytes_read) / DB::GB / seconds_run);
 
     if (options.status_interval != 0)
     {
@@ -107,18 +105,23 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
             (void)page;
             num_of_pages++;
         });
-        LOG_INFO(StressEnv::logger, fmt::format("Recover {} pages.", num_of_pages));
+        LOG_INFO(StressEnv::logger, "Recover {} pages.", num_of_pages);
     }
 }
 
 void StressWorkload::startBackgroundTimer()
 {
     // A background thread that do GC
-    gc = std::make_shared<PSGc>(ps);
-    gc->start();
+    if (options.gc_interval_s > 0)
+    {
+        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
+        gc->start();
+    }
 
-    // A background thread that scan all pages
-    scanner = std::make_shared<PSScanner>(ps);
+    // A background thread that get snapshot statics,
+    // mock `AsynchronousMetrics` that report metrics
+    // to grafana.
+    scanner = std::make_shared<PSSnapStatGetter>(ps);
     scanner->start();
 
     if (options.status_interval > 0)
@@ -144,7 +147,7 @@ void StressWorkloadManger::runWorkload()
         WorkloadCreator func;
         std::tie(name, func) = get(NORMAL_WORKLOAD);
         auto workload = std::shared_ptr<StressWorkload>(func(options));
-        LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
+        LOG_INFO(StressEnv::logger, "Start Running {} , {}", name, workload->desc());
         workload->run();
         if (!options.just_init_pages)
         {
@@ -164,11 +167,11 @@ void StressWorkloadManger::runWorkload()
             auto & name = it.second.first;
             auto & creator = it.second.second;
             auto workload = creator(options);
-            LOG_INFO(StressEnv::logger, fmt::format("Start Running {} , {}", name, workload->desc()));
+            LOG_INFO(StressEnv::logger, "Start Running {} , {}", name, workload->desc());
             workload->run();
             if (options.verify && !workload->verify())
             {
-                LOG_WARNING(StressEnv::logger, fmt::format("work load : {} failed.", name));
+                LOG_WARNING(StressEnv::logger, "work load : {} failed.", name);
                 workload->onFailed();
                 break;
             }

@@ -57,10 +57,10 @@ size_t PSRunnable::getPagesUsed() const
 }
 
 size_t PSWriter::approx_page_mb = 2;
-void PSWriter::setApproxPageSize(size_t size_mb)
+void PSWriter::setApproxPageSize(size_t size)
 {
-    LOG_INFO(StressEnv::logger, "Page approx size is set to {} MB", size_mb);
-    approx_page_mb = size_mb;
+    LOG_INFO(StressEnv::logger, "Page approx size is set to {} MB", formatReadableSizeWithBinarySuffix(size));
+    approx_page_mb = size * 1024 * 1024;
 }
 
 DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder & holder)

@@ -48,9 +48,9 @@ public:
         config.num_write_slots = options.num_writer_slots;
         initPageStorage(config);
 
-        if (options.avg_page_size_mb != 0)
+        if (options.avg_page_size != 0)
         {
-            PSWriter::setApproxPageSize(options.avg_page_size_mb);
+            PSWriter::setApproxPageSize(options.avg_page_size);
         }
 
         // init all pages in PageStorage

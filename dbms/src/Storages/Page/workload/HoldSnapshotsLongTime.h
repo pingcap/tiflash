@@ -52,14 +52,7 @@ private:
         DB::PageStorageConfig config;
         initPageStorage(config, name());
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
-
-        stress_time = std::make_shared<StressTimeout>(60);
-        stress_time->start();
-
-        scanner = std::make_shared<PSScanner>(ps);
-        scanner->start();
+        startBackgroundTimer();
 
         // 90-100 snapshots will be generated.
         {
@@ -79,7 +72,7 @@ private:
             stop_watch.stop();
         }
 
-        gc = std::make_shared<PSGc>(ps);
+        gc = std::make_shared<PSGc>(ps, options.gc_interval_s);
         // Normal GC
         gc->doGcOnce();
 
