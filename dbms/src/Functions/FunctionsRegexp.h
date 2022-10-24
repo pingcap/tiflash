@@ -1201,18 +1201,48 @@ public:
     {
         size_t col_size = expar_param.getDataNum();
 
+        // Get function pointers to process the specific int type
+        GetIntFuncPointerType get_pos_func = getGetIntFuncPointer(pos_param.getIntType());
+        GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
+        GetIntFuncPointerType get_ret_op_func = getGetIntFuncPointer(ret_op_param.getIntType());
+
+        // Container will not be used when parm is const
+        const void * pos_container =  pos_param.getContainer();
+        const void * occur_container =  occur_param.getContainer();
+        const void * ret_op_container =  ret_op_param.getContainer();
+
+        // Const value will not be used when the param is not const
+        Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
+        Int64 occur_const_val = OccurT::isConst() ? occur_param. template getInt<Int64>(0) : -1;
+        Int64 ret_op_const_val = RetOpT::isConst() ? ret_op_param. template getInt<Int64>(0) : -1;
+
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && PosT::isConst() && OccurT::isConst() && RetOpT::isConst() && MatchTypeT::isConst())
         {
+            // TODO check
+            if (expar_param.isNullAt(0) || par_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
+            {
+                auto col_res = ColumnVector<ResultType>::create();
+                typename ColumnVector<ResultType>::Container & VEC_RES_VAR_NAME = col_res->getData();
+                VEC_RES_VAR_NAME.resize(col_size, 0);
+
+                auto nullmap_col = ColumnUInt8::create();
+                typename ColumnUInt8::Container & null_map = nullmap_col->getData();
+                null_map.resize(col_size, 1);
+
+                res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+                res_arg.column = res_arg.type->createColumn();
+            }
+            
             int flags = getDefaultFlags();
             String expr = expar_param.getString(0);
             String pat = par_param.getString(0);
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            Int64 pos = pos_param.template getInt<Int64>(0);
-            Int64 occur = occur_param.template getInt<Int64>(0);
-            Int64 ret_op = ret_op_param.template getInt<Int64>(0);
+            Int64 pos = if PosT::isConst() ? pos_const_val : get_pos_func(pos_container, idx);
+            Int64 occur = if OccurT::isConst() ? occur_const_val : get_occur_func(occur_container, idx);
+            Int64 ret_op = if RetOpT::isConst() ? ret_op_const_val : get_ret_op_func(ret_op_container, idx);
             String match_type = match_type_param.getString(0);
 
             Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, COLLATOR_VAR_NAME), flags);
@@ -1231,21 +1261,6 @@ public:
         VEC_RES_VAR_NAME.resize(col_size, 0);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
-
-        // Get function pointers to process the specific int type
-        GetIntFuncPointerType get_pos_func = getGetIntFuncPointer(pos_param.getIntType());
-        GetIntFuncPointerType get_occur_func = getGetIntFuncPointer(occur_param.getIntType());
-        GetIntFuncPointerType get_ret_op_func = getGetIntFuncPointer(ret_op_param.getIntType());
-
-        // Container will not be used when parm is const
-        const void * pos_container =  pos_param.getContainer();
-        const void * occur_container =  occur_param.getContainer();
-        const void * ret_op_container =  ret_op_param.getContainer();
-
-        // Const value will not be used when the param is not const
-        Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
-        Int64 occur_const_val = OccurT::isConst() ? occur_param. template getInt<Int64>(0) : -1;
-        Int64 ret_op_const_val = RetOpT::isConst() ? ret_op_param. template getInt<Int64>(0) : -1;
 
 #define GET_POS_VALUE(idx) \
     do \

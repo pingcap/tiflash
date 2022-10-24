@@ -2265,14 +2265,22 @@ TEST_F(Regexp, RegexpInstr)
         std::vector<UInt32> positions{};
         results = {};
 
+        // test regexp_instr(vector, vector, vector)
+
         std::vector<Int64> occurs{};
         results = {};
+
+        // test regexp_instr(vector, vector, vector, vector)
 
         std::vector<UInt8> return_options{};
         results = {};
 
+        // test regexp_instr(vector, vector, vector, vector, vector)
+
         std::vector<String> match_types{};
         results = {};
+
+        // test regexp_instr(vector, vector, vector, vector, vector, vector)
 
         // TODO collation
     }
