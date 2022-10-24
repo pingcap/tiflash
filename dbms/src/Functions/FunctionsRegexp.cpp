@@ -65,58 +65,6 @@ String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator)
     return flags;
 }
 
-NullPresence getNullPresense(const Block & block, const ColumnNumbers & args)
-{
-    NullPresence res;
-
-    for (const auto & arg : args)
-    {
-        const auto & elem = block.getByPosition(arg);
-        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(elem.column)));
-
-        if (elem.type->getTypeId() == TypeIndex::Nothing)
-        {
-            res.has_data_type_nothing = true;
-            break;
-        }
-
-        if (col_const != nullptr)
-        {
-            auto col_const_data = col_const->getDataColumnPtr();
-
-            // It's needless to check if it's a const nullable column when res.has_const_null has been set
-            if (!res.has_const_null_col)
-            {
-                // check const null
-                if (col_const_data->isColumnNullable())
-                {
-                    if (static_cast<const ColumnNullable &>(*col_const_data).isNullAt(0))
-                        res.has_const_null_col = true;
-                }
-            }
-        }
-        else
-        {
-            // It's needless to check if it's a nullable column when res.has_nullable_col has been set
-            if (!res.has_nullable_col)
-            {
-                if ((elem.column)->isColumnNullable())
-                {
-                    res.has_nullable_col = true;
-
-                    // Check if nullable column wrap a DataTypeNothing type
-                    const auto * type_null = typeid_cast<const DataTypeNullable *>(&(*elem.type));
-                    const auto & nested_type = type_null->getNestedType();
-                    if (nested_type->getTypeId() == TypeIndex::Nothing)
-                        res.has_data_type_nothing = true;
-                }
-            }
-        }
-    }
-
-    return res;
-}
-
 /** Replace all matches of regexp 'needle' to string 'replacement'. 'needle' and 'replacement' are constants.
   * 'replacement' could contain substitutions, for example: '\2-\3-\1'
   */

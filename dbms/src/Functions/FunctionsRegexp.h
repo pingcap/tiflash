@@ -107,15 +107,6 @@ inline int getDefaultFlags()
     return flags;
 }
 
-struct NullPresence
-{
-    bool has_nullable_col = false;
-    bool has_const_null_col = false;
-    bool has_data_type_nothing = false;
-};
-
-NullPresence getNullPresense(const Block & block, const ColumnNumbers & args);
-
 // add '()' outside of the pattern to get the matched substr
 inline String addMatchTypeForPattern(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
@@ -455,10 +446,24 @@ public:
         , data(str_ref)
     {}
 
+    // const nullable string param
+    Param(size_t col_size_, const StringRef & str_ref, ConstNullMapPtr null_map_)
+        : col_size(col_size_)
+        , null_map(null_map_)
+        , data(str_ref)
+    {}
+
     // const int param
     Param(size_t col_size_, Int64 val)
         : col_size(col_size_)
         , null_map(nullptr)
+        , data(val)
+    {}
+
+    // const nullable int param
+    Param(size_t col_size_, Int64 val, ConstNullMapPtr null_map_)
+        : col_size(col_size_)
+        , null_map(null_map_)
         , data(val)
     {}
 
@@ -503,8 +508,7 @@ public:
 
     bool isNullAt(size_t idx) const
     {
-        // null_map works only when we are non-const nullable column
-        if constexpr (is_null && !ParamImplType::isConst())
+        if constexpr (is_null)
             return (*null_map)[idx];
         else
             return false;
@@ -584,9 +588,9 @@ private:
             String tmp = field.isNull() ? String("") : field.safeGet<String>();                                                                       \
             if (col_const_data->isColumnNullable())                                                                         \
             {                                                                                                               \
-                /* This is a const column and it can't be const null column as we should have handled it in the previous */ \
-                Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()));                    \
-                next_process;                                                                                               \
+                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
+                Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()), null_map);  \
+                next_process;                                                                                       \
             }                                                                                                               \
             else                                                                                                            \
             {                                                                                                               \
@@ -902,6 +906,12 @@ public:
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && MatchTypeT::isConst())
         {
+            if (col_size == 0 || expr_param.isNullAt(0) || pat_param.isNullAt(0) || match_type_param.isNullAt(0))
+            {
+                res_arg.column = res_arg.type->createColumnConst(col_size, Null());
+                return;
+            }
+
             int flags = getDefaultFlags();
             String expr = expr_param.getString(0);
             String pat = pat_param.getString(0);
@@ -1030,9 +1040,10 @@ public:
         // Do something related with nullable columns
         NullPresence null_presence = getNullPresense(block, arguments);
 
-        if (null_presence.has_const_null_col || null_presence.has_data_type_nothing)
+        const ColumnPtr & EXPR_COL_PTR_VAR_NAME = block.getByPosition(arguments[0]).column;
+
+        if (null_presence.has_null_constant)
         {
-            // There is a const null column in the input
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }

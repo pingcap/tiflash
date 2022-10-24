@@ -23,6 +23,7 @@
 #include <string>
 #include <vector>
 
+#include "Core/ColumnWithTypeAndName.h"
 #include "DataTypes/DataTypesNumber.h"
 #include "common/types.h"
 
@@ -43,6 +44,10 @@ protected:
     static bool isColumnConstNull(const ColumnWithTypeAndName & column_with_type)
     {
         return column_with_type.column->isColumnConst() && column_with_type.column->isNullAt(0);
+    }
+    static bool isColumnConst(const ColumnWithTypeAndName & column_with_type)
+    {
+        return column_with_type.column->isColumnConst();
     }
     static bool isColumnConstNotNull(const ColumnWithTypeAndName & column_with_type)
     {
@@ -1819,8 +1824,8 @@ TEST_F(Regexp, RegexpLike)
 
     size_t row_size = exprs_nulls.size();
 
-    auto const_uint8_null_column = createConstColumn<Nullable<UInt8>>(row_size, {});
-    auto const_string_null_column = createConstColumn<Nullable<String>>(row_size, {});
+    auto const_uint8_null_column = createOnlyNullColumnConst(row_size);
+    auto const_string_null_column = createOnlyNullColumnConst(row_size);
 
     // case 1. regexp_like(const, const [, const])
     {
@@ -2107,26 +2112,49 @@ TEST_F(Regexp, testRegexpCustomerCases)
                      "^756[0-9]{11}$";
     std::vector<String> patterns{pattern, pattern, pattern, pattern, pattern};
     std::vector<String> inputs{"73228012343218", "530101343498", "540101323298", "31111191919191", "78200000000000"};
+    size_t col_size = inputs.size();
     /// columnNothing, columnConstNull, columnConstNotNull, columnVectorNullable, columnVectorNotNull
-    ColumnsWithTypeAndName input_columns{createOnlyNullColumnConst(5), createConstColumn<Nullable<String>>(5, {}), createConstColumn<Nullable<String>>(5, inputs[0]), createConstColumn<String>(5, inputs[0]), createColumn<Nullable<String>>({inputs[0], {}, {}, inputs[3], inputs[4]}), createColumn<String>(inputs)};
-    ColumnsWithTypeAndName pattern_columns{createOnlyNullColumnConst(5), createConstColumn<Nullable<String>>(5, {}), createConstColumn<Nullable<String>>(5, patterns[0]), createConstColumn<String>(5, patterns[0]), createColumn<Nullable<String>>({patterns[0], {}, {}, patterns[3], patterns[4]}), createColumn<String>(patterns)};
+    ColumnsWithTypeAndName input_columns{createOnlyNullColumnConst(col_size), createConstColumn<Nullable<String>>(col_size, {}), createConstColumn<Nullable<String>>(col_size, inputs[0]), createConstColumn<String>(col_size, inputs[0]), createColumn<Nullable<String>>({inputs[0], {}, {}, inputs[3], inputs[4]}), createColumn<String>(inputs)};
+    ColumnsWithTypeAndName pattern_columns{createOnlyNullColumnConst(col_size), createConstColumn<Nullable<String>>(col_size, patterns[0]), createConstColumn<String>(col_size, patterns[0]), createColumn<Nullable<String>>({patterns[0], {}, {}, patterns[3], patterns[4]}), createColumn<String>(patterns)};
+
     for (const auto & input_column : input_columns)
     {
         for (const auto & pattern_column : pattern_columns)
         {
             if (input_column.type->onlyNull() || pattern_column.type->onlyNull())
             {
-                ASSERT_COLUMN_EQ(createOnlyNullColumnConst(5),
+                ASSERT_COLUMN_EQ(createOnlyNullColumnConst(col_size),
                                  executeFunction("regexp", input_column, pattern_column));
+            }
+            else if (isColumnConst(input_column) && isColumnConst(pattern_column)) // All columns are const
+            {
+                if (isColumnConstNull(input_column) && isColumnConstNull(pattern_column))
+                {
+                    ASSERT_COLUMN_EQ(createOnlyNullColumnConst(col_size, {}),
+                                     executeFunction("regexp", input_column, pattern_column));
+                }
+                else if ((isColumnConstNotNull(input_column) && isColumnConstNotNull(pattern_column)))
+                {
+                    ASSERT_COLUMN_EQ(createConstColumn<UInt8>(col_size, 1),
+                                     executeFunction("regexp", input_column, pattern_column));
+                }
+                else if (isColumnConstNull(input_column) || isColumnConstNull(pattern_column))
+                {
+                    DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<UInt8>>());
+                    auto col = data_type->createColumnConst(col_size, Null());
+
+                    ASSERT_COLUMN_EQ(ColumnWithTypeAndName(std::move(col), data_type, ""),
+                                     executeFunction("regexp", input_column, pattern_column));
+                }
             }
             else if (isColumnConstNull(input_column) || isColumnConstNull(pattern_column))
             {
-                ASSERT_COLUMN_EQ(createConstColumn<Nullable<UInt8>>(5, {}),
-                                 executeFunction("regexp", input_column, pattern_column));
-            }
-            else if (isColumnConstNotNull(input_column) && isColumnConstNotNull(pattern_column))
-            {
-                ASSERT_COLUMN_EQ(createConstColumn<UInt8>(5, 1),
+                DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<UInt8>>());
+                auto col = data_type->createColumn();
+                for (size_t i = 0; i < col_size; i++)
+                    col->insert(Null());
+
+                ASSERT_COLUMN_EQ(ColumnWithTypeAndName(std::move(col), data_type, ""),
                                  executeFunction("regexp", input_column, pattern_column));
             }
             else
