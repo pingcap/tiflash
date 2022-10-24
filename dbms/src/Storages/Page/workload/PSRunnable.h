@@ -230,8 +230,6 @@ public:
 
     bool runImpl() override;
 
-    void setPageReadOnce(size_t page_read_once);
-
     void setReadDelay(size_t delay_ms);
 
     void setReadPageRange(size_t max_page_id);
@@ -272,14 +270,11 @@ public:
 
     void setNormalDistributionSigma(size_t sigma);
 
-    void setWriterNums(size_t writer_nums);
-
 protected:
     DB::PageIds genRandomPageIds() override;
 
 protected:
     size_t sigma = 11;
-    size_t writer_nums = 0;
     std::mt19937 gen;
 };
 

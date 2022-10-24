@@ -57,16 +57,15 @@ private:
         {
             stop_watch.start();
             const auto num_writers = options.num_writers;
-            startWriter<PSWindowWriter>(num_writers, [&](std::shared_ptr<PSWindowWriter> writer) -> void {
+            startWriter<PSWindowWriter>(num_writers, [&](std::shared_ptr<PSWindowWriter> writer) {
                 writer->setBatchBufferNums(1);
                 writer->setBatchBufferRange(0, options.avg_page_size * 2);
                 writer->setNormalDistributionSigma(250);
             });
 
-            startReader<PSWindowReader>(options.num_readers, [num_writers](std::shared_ptr<PSWindowReader> reader) -> void {
-                reader->setPageReadOnce(5);
+            startReader<PSWindowReader>(options.num_readers, [](std::shared_ptr<PSWindowReader> reader) {
+                reader->setReadPageNums(5);
                 reader->setReadDelay(0);
-                reader->setWriterNums(num_writers);
                 reader->setNormalDistributionSigma(250);
             });
 

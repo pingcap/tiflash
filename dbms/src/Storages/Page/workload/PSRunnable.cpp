@@ -300,11 +300,6 @@ bool PSReader::runImpl()
     return true;
 }
 
-void PSReader::setPageReadOnce(size_t page_read_once_)
-{
-    num_pages_read = page_read_once_;
-}
-
 void PSReader::setReadDelay(size_t delay_ms)
 {
     heavy_read_delay_ms = delay_ms;
@@ -377,19 +372,14 @@ void PSWindowReader::setNormalDistributionSigma(size_t sigma_)
     sigma = sigma_;
 }
 
-void PSWindowReader::setWriterNums(size_t writer_nums_)
-{
-    writer_nums = writer_nums_;
-}
-
 DB::PageIds PSWindowReader::genRandomPageIds()
 {
     const auto page_id_boundary_copy = global_stat->right_id_boundary.load();
     // Nothing to read
-    if (page_id_boundary_copy < (writer_nums + num_pages_read))
+    if (page_id_boundary_copy < num_pages_read)
         return {};
 
-    const size_t read_right_boundary = page_id_boundary_copy - writer_nums - num_pages_read;
+    const size_t read_right_boundary = page_id_boundary_copy - num_pages_read;
 
     // Generate a random number in the window, normal dist by μ=0 and σ=sigma
     std::normal_distribution<> distribution{0.0, static_cast<double>(sigma)};
