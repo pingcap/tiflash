@@ -993,9 +993,12 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
             return std::make_shared<UniqRawResReformatBlockOutputStream>(in);
         };
 
-    /// finalize
+    
+    // we will not prune column in executor test 
+    // since it doesn't call initOutputInfo in DAGContext
     if (!context.isExecutorTest())
     {
+        /// finalize
         std::unordered_set<String> used_columns;
         for (auto & schema : root_executor->output_schema)
             used_columns.emplace(schema.first);

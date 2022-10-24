@@ -127,7 +127,7 @@ try
         ASSERT_COLUMNS_EQ_UR(
             cols,
             executeRawQuery(
-                "select col_2, col_1, col_2 from default.test2 where col_1 = \'test2\' and col_2 = 777"));
+                "select col_2, col_1, col_2 from default.test2 where col_1 = 'test2' and col_2 = 777"));
     }
 }
 CATCH
@@ -170,11 +170,11 @@ try
     }
 
     {
-        auto cols = {toNullableVec<String>({{}, "test1"}), toNullableVec<Int64>({{}, 666})};
+        auto cols = {toNullableVec<Int64>({777, 666}), toNullableVec<String>({"test2", "test1"}), toNullableVec<Int64>({777, 666})};
         ASSERT_COLUMNS_EQ_UR(
             cols,
             executeRawQuery(
-                "select * from default.test5 order by col_2 limit 2"));
+                "select col_2, col_1, col_2 from default.test5 where col_1 = 'test2' or col_2 = 666 order by col_1 desc limit 2"));
     }
 }
 CATCH
