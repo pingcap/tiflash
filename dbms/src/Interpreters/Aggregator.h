@@ -222,12 +222,15 @@ struct AggregationMethodOneKeyStringNoCache
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
-    FLATTEN_INLINE static inline void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    FLATTEN_INLINE static inline void insertKeyIntoColumns(const StringRef &, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
-        static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
+        // insert empty because such column will be discarded.
+        // make column size same as previous way
+        static_cast<ColumnString *>(key_columns[0])->getOffsets().push_back(0);
     }
 };
 
+/*
 /// Same as above but without cache
 template <typename TData>
 struct AggregationMethodMultiStringNoCache
@@ -256,6 +259,7 @@ struct AggregationMethodMultiStringNoCache
             pos = static_cast<ColumnString *>(key_column)->deserializeAndInsertFromArena(pos, nullptr);
     }
 };
+*/
 
 template <typename Key1Desc, typename Key2Desc, typename TData>
 struct AggregationMethodFastPathTwoKeysNoCache
@@ -281,12 +285,10 @@ struct AggregationMethodFastPathTwoKeysNoCache
     {
         const auto * pos = key.data;
         {
-            auto & key_column = key_columns[0];
-            pos = static_cast<typename Key1Desc::ColumnType *>(key_column)->deserializeAndInsertFromArena(pos, nullptr);
+            pos = Key1Desc::insertAggKeyIntoColumn(pos, key_columns[0]);
         }
         {
-            auto & key_column = key_columns[1];
-            pos = static_cast<typename Key2Desc::ColumnType *>(key_column)->deserializeAndInsertFromArena(pos, nullptr);
+            pos = Key2Desc::insertAggKeyIntoColumn(pos, key_columns[1]);
         }
     }
 };

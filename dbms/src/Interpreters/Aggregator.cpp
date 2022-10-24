@@ -488,7 +488,10 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     if (params.keys_size == 1 && types_not_null[0]->isString())
     {
         if (params.collators.empty() || !params.collators[0])
-            return AggregatedDataVariants::Type::one_key_strbin;
+        {
+            // use original way. `Type::one_key_strbin` will generate empty column.
+            return AggregatedDataVariants::Type::key_string;
+        }
         else
         {
             switch (params.collators[0]->getCollatorType())
