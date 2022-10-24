@@ -993,8 +993,8 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
             return std::make_shared<UniqRawResReformatBlockOutputStream>(in);
         };
 
-    
-    // we will not prune column in executor test 
+
+    // we will not prune column in executor test
     // since it doesn't call initOutputInfo in DAGContext
     if (!context.isExecutorTest())
     {
