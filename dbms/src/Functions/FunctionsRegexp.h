@@ -414,34 +414,34 @@ private:
 #define REGEXP_CLASS_MEM_FUNC_IMPL_NAME process
 
 // Common method to convert nullable string column
-// processed_col is impossible to be const here
-#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, processed_col, next_process)                                                                                               \
+// converted_col is impossible to be const here
+#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                                                               \
     do                                                                                                                                                                       \
     {                                                                                                                                                                        \
-        size_t col_size = (processed_col)->size();                                                                                                                           \
-        if (((processed_col)->isColumnNullable()))                                                                                                                           \
+        size_t col_size = (converted_col)->size();                                                                                                                           \
+        if (((converted_col)->isColumnNullable()))                                                                                                                           \
         {                                                                                                                                                                    \
-            auto nested_ptr = static_cast<const ColumnNullable &>(*(processed_col)).getNestedColumnPtr();                                                                    \
+            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();                                                                    \
             const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));                                                                                              \
-            const auto * null_map = &(static_cast<const ColumnNullable &>(*(processed_col)).getNullMapData());                                                               \
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());                                                               \
             Param<ParamString<false>, true>(param_name)(col_size, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets()))); \
-            next_process;                                                                                                                                                    \
+            next_convertion;                                                                                                                                                    \
         }                                                                                                                                                                    \
         else                                                                                                                                                                 \
         {                                                                                                                                                                    \
             /* This is a pure string vector column */                                                                                                                        \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(processed_col)));                                                                                         \
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(converted_col)));                                                                                         \
             Param<ParamString<false>, false>(param_name)(col_size, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));          \
-            next_process;                                                                                                                                                    \
+            next_convertion;                                                                                                                                                    \
         }                                                                                                                                                                    \
     } while (0);
 
 // Common method to convert const string column
-#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, processed_col, next_process)                                     \
+#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                     \
     do                                                                                                              \
     {                                                                                                               \
-        size_t col_size = (processed_col)->size();                                                                  \
-        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(processed_col)));                             \
+        size_t col_size = (converted_col)->size();                                                                  \
+        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                             \
         if (col_const != nullptr)                                                                                   \
         {                                                                                                           \
             auto col_const_data = col_const->getDataColumnPtr();                                                    \
@@ -452,17 +452,17 @@ private:
             {                                                                                                       \
                 const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
                 Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()), null_map);  \
-                next_process;                                                                                       \
+                next_convertion;                                                                                       \
             }                                                                                                       \
             else                                                                                                    \
             {                                                                                                       \
                 Param<ParamString<true>, false>(param_name)(col_size, col_const->getDataAt(0));                     \
-                next_process;                                                                                       \
+                next_convertion;                                                                                       \
             }                                                                                                       \
         }                                                                                                           \
         else                                                                                                        \
         {                                                                                                           \
-            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (processed_col), next_process)                              \
+            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (converted_col), next_convertion)                              \
         }                                                                                                           \
     } while (0);
 
