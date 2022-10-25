@@ -1,33 +1,12 @@
 // For format details, see https://aka.ms/devcontainer.json.
 {
   "name": "TiFlash",
-  "build": {
-    "dockerfile": "Dockerfile"
-  },
-  "hostRequirements": {
-    "cpus": 2,
-    "memory": "8gb"
-  },
-  "mounts": [
-    // Avoid reinstalling vscode extensions
-    "type=volume,source=tiflash-vscode-extensions,target=/root/.vscode-server/extensions",
-    // Cache Cargo downloaded deps
-    "type=volume,source=tiflash-cargo-registry,target=/root/.cargo/registry",
-    "type=volume,source=tiflash-cargo-git,target=/root/.cargo/git",
-    // Cache Rust toolchain
-    // We have to cache the entire directory due to https://github.com/rust-lang/rustup/issues/1239
-    "type=volume,source=tiflash-rustup,target=/root/.rustup",
-    // Cache ccache results
-    "type=volume,source=tiflash-ccache,target=/root/.cache/ccache",
-    // Persist GitHub CLI Config locally in the repository
-    "type=bind,source=${localWorkspaceFolder}/.devcontainer/.local_persist/gh,target=/root/.config/gh"
+  "dockerComposeFile": [
+    "docker-compose.yml",
+    "docker-compose.vscode.yml"
   ],
-  // For using a ptrace-based debugger like C++, Go, and Rust
-  "runArgs": [
-    "--cap-add=SYS_PTRACE",
-    "--security-opt",
-    "seccomp=unconfined"
-  ],
+  "service": "shell",
+  "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {
       "extensions": [
