@@ -20,7 +20,7 @@ namespace DB::DM::tests
 
 SegmentPtr createSegment(PageId seg_id)
 {
-    return std::make_shared<Segment>("", 0, RowKeyRange{}, seg_id, seg_id + 1, nullptr, nullptr);
+    return std::make_shared<Segment>(Logger::get(), 0, RowKeyRange{}, seg_id, seg_id + 1, nullptr, nullptr);
 }
 
 SegmentReadTaskPtr createSegmentReadTask(PageId seg_id)

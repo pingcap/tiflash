@@ -17,7 +17,7 @@
 #include <fstream>
 namespace DB
 {
-bool process_mem_usage(double & resident_set)
+bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
 {
     resident_set = 0.0;
 
@@ -31,8 +31,7 @@ bool process_mem_usage(double & resident_set)
     std::string pid, comm, state, ppid, pgrp, session, tty_nr;
     std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
     std::string utime, stime, cutime, cstime, priority, nice;
-    std::string proc_num_threads, itrealvalue, starttime;
-    UInt64 vsize;
+    std::string itrealvalue, starttime;
 
     // the field we want
     Int64 rss;
@@ -40,7 +39,7 @@ bool process_mem_usage(double & resident_set)
     stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr
         >> tpgid >> flags >> minflt >> cminflt >> majflt >> cmajflt
         >> utime >> stime >> cutime >> cstime >> priority >> nice
-        >> proc_num_threads >> itrealvalue >> starttime >> vsize >> rss; // don't care about the rest
+        >> cur_proc_num_threads >> itrealvalue >> starttime >> cur_virt_size >> rss; // don't care about the rest
 
     stat_stream.close();
 
@@ -74,12 +73,16 @@ void CollectProcInfoBackgroundTask::begin()
 void CollectProcInfoBackgroundTask::memCheckJob()
 {
     double resident_set;
+    Int64 cur_proc_num_threads = 1;
+    UInt64 cur_virt_size = 0;
     while (!end_syn)
     {
-        process_mem_usage(resident_set);
+        process_mem_usage(resident_set, cur_proc_num_threads, cur_virt_size);
         resident_set *= 1024; // unit: byte
         real_rss = static_cast<Int64>(resident_set);
-
+        proc_num_threads = cur_proc_num_threads;
+        proc_virt_size = cur_virt_size;
+        baseline_of_query_mem_tracker = root_of_query_mem_trackers->get();
         usleep(100000); // sleep 100ms
     }
     end_fin = true;

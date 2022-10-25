@@ -169,7 +169,7 @@ bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Se
 }
 
 StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name)
-    : logger(Logger::get("StoragePool", !name.empty() ? name : DB::toString(ns_id_)))
+    : logger(Logger::get(!name.empty() ? name : DB::toString(ns_id_)))
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , storage_path_pool(storage_path_pool_)

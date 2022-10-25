@@ -164,7 +164,7 @@ public:
     static void writeBlockByRegion(Context & context,
                                    const RegionPtrWithBlock & region,
                                    RegionDataReadInfoList & data_list_to_remove,
-                                   Poco::Logger * log,
+                                   const LoggerPtr & log,
                                    bool lock_region = true);
 
     /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
@@ -177,7 +177,7 @@ public:
                                                                     const std::unordered_set<UInt64> * bypass_lock_ts,
                                                                     RegionVersion region_version,
                                                                     RegionVersion conf_version,
-                                                                    Poco::Logger * log);
+                                                                    const LoggerPtr & log);
 
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
@@ -189,15 +189,16 @@ public:
     static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
     bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
 
+
 private:
     friend class MockTiDB;
     friend class StorageDeltaMerge;
 
     Table & getOrCreateTable(TableID table_id);
     void removeTable(TableID table_id);
-    InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(TableID table_id, RegionID region_id);
 
     RegionDataReadInfoList flushRegion(const RegionPtrWithBlock & region, bool try_persist) const;
@@ -217,7 +218,7 @@ private:
     mutable std::mutex mutex;
     mutable std::shared_mutex rw_lock;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 };
 
 

@@ -1647,7 +1647,7 @@ try
     }
 
     auto getLogFileNum = [&]() {
-        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
         return log_files.size();
     };
 
@@ -1723,7 +1723,7 @@ try
     }
 
     auto getLogFileNum = [&]() {
-        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
         return log_files.size();
     };
 

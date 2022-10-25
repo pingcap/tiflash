@@ -71,7 +71,7 @@ BlobStore::BlobStore(String storage_name, const FileProviderPtr & file_provider_
     : delegator(std::move(delegator_))
     , file_provider(file_provider_)
     , config(config_)
-    , log(Logger::get("BlobStore", std::move(storage_name)))
+    , log(Logger::get(storage_name))
     , blob_stats(log, delegator, config)
     , cached_files(config.cached_fd_size)
 {
@@ -230,7 +230,7 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 
@@ -367,7 +367,7 @@ PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & wr
             edit.putExternal(wb.getFullPageId(write.page_id));
             break;
         case WriteBatchWriteType::UPSERT:
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+            throw Exception(fmt::format("Unknown write type: {}", magic_enum::enum_name(write.type)));
         }
     }
 

@@ -29,7 +29,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
     const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : log(Logger::get(req_id))
     , params(params_)
     , aggregator(params, req_id)
     , file_provider(file_provider_)

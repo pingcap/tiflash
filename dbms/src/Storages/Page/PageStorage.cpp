@@ -597,7 +597,7 @@ void PageWriter::writeIntoMixMode(WriteBatch && write_batch, WriteLimiterPtr wri
         }
         default:
         {
-            throw Exception(fmt::format("Unknown write type: {}", write.type));
+            throw Exception(fmt::format("Unknown write type: {}", static_cast<Int32>(write.type)));
         }
         }
     }
