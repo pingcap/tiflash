@@ -27,6 +27,7 @@
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzerHelper.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsTiDBConversion.h>
@@ -37,7 +38,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/Transaction/TypeMapping.h>
 #include <WindowFunctions/WindowFunctionFactory.h>
-
 
 namespace DB
 {
@@ -923,7 +923,7 @@ void DAGExpressionAnalyzer::appendJoin(
 std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
     const ExpressionActionsPtr & actions,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
+    const JoinKeyTypes & join_key_types,
     bool left,
     bool is_right_out_join)
 {
@@ -939,11 +939,16 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
 
         String key_name = getActions(key, actions);
         DataTypePtr current_type = actions->getSampleBlock().getByName(key_name).type;
-        if (!removeNullable(current_type)->equals(*removeNullable(key_types[i])))
+        const auto & join_key_type = join_key_types[i];
+        if (!removeNullable(current_type)->equals(*removeNullable(join_key_type.key_type)))
         {
             /// need to convert to key type
-            key_name = appendCast(key_types[i], actions, key_name);
+            key_name = appendCast(join_key_type.key_type, actions, key_name);
             has_actions = true;
+            if (join_key_type.is_incompatible_decimal)
+            {
+                key_name = applyFunction("formatDecimalStr", {key_name}, actions, nullptr);
+            }
         }
         if (!has_actions && (!left || is_right_out_join))
         {
@@ -986,7 +991,7 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
 bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsChain & chain,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & keys,
-    const DataTypes & key_types,
+    const JoinKeyTypes & join_key_types,
     Names & key_names,
     bool left,
     bool is_right_out_join,
@@ -997,7 +1002,7 @@ bool DAGExpressionAnalyzer::appendJoinKeyAndJoinFilters(
     ExpressionActionsPtr actions = chain.getLastActions();
 
     bool ret = false;
-    std::tie(ret, key_names) = buildJoinKey(actions, keys, key_types, left, is_right_out_join);
+    std::tie(ret, key_names) = buildJoinKey(actions, keys, join_key_types, left, is_right_out_join);
 
     if (!filters.empty())
     {
