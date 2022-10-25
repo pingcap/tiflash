@@ -15,10 +15,12 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/LockException.h>
 #include <Storages/Transaction/RegionException.h>

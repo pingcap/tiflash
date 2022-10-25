@@ -17,7 +17,7 @@
 #include <Core/Types.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push

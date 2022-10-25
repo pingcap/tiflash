@@ -17,7 +17,9 @@
 #include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Planner/PhysicalPlan.h>
+#include <Flash/Planner/PhysicalPlanVisitor.h>
+#include <Flash/Planner/plans/PhysicalTableScan.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/Context.h>
 #include <Storages/AlterCommands.h>
@@ -85,14 +87,20 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(const String table_info_j
     DAGContext dag_context(dag_request);
     ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
-    DAGQuerySource dag(ctx);
-    auto query_block = *dag.getRootQueryBlock();
+    PhysicalPlan physical_plan{ctx, log->identifier()};
+    physical_plan.build(&dag_request);
+    physical_plan.outputAndOptimize();
+
     std::vector<const tipb::Expr *> conditions;
-    if (query_block.children[0]->selection != nullptr)
-    {
-        for (const auto & condition : query_block.children[0]->selection->selection().conditions())
-            conditions.push_back(&condition);
-    }
+    PhysicalPlanVisitor::visitPostOrder(physical_plan.rootNode(), [&conditions](const PhysicalPlanNodePtr & plan) {
+        assert(plan);
+        if (plan->tp() == PlanType::TableScan)
+        {
+            auto physical_table_scan = std::static_pointer_cast<PhysicalTableScan>(plan);
+            assert(conditions.empty());
+            conditions = physical_table_scan->getPushDownFilter().conditions;
+        }
+    });
 
     std::unique_ptr<DAGQueryInfo> dag_query;
     DM::ColumnDefines columns_to_read;

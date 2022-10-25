@@ -256,4 +256,10 @@ void PhysicalPlan::transform(DAGPipeline & pipeline, Context & context, size_t m
     assert(root_node);
     root_node->transform(pipeline, context, max_streams);
 }
+
+const PhysicalPlanNodePtr & PhysicalPlan::rootNode() const
+{
+    assert(root_node);
+    return root_node;
+}
 } // namespace DB

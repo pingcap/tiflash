@@ -15,8 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Flash/Coprocessor/DAGContext.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
-#include <Flash/Planner/PlanQuerySource.h>
+#include <Flash/Planner/Planner.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
@@ -64,7 +63,7 @@ ProcessList::EntryPtr getProcessListEntry(Context & context, const DAGContext & 
     }
 }
 
-BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
+BlockIO executeImpl(Planner & planner, Context & context, bool internal)
 {
     RUNTIME_ASSERT(context.getDAGContext());
     auto & dag_context = *context.getDAGContext();
@@ -77,12 +76,11 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
     if (likely(!internal))
     {
         process_list_entry = getProcessListEntry(context, dag_context);
-        logQuery(dag.str(context.getSettingsRef().log_queries_cut_to_length), context, logger);
+        logQuery(dag_context.dummy_query_string, context, logger);
     }
 
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_interpreter_failpoint);
-    auto interpreter = dag.interpreter(context, QueryProcessingStage::Complete);
-    BlockIO res = interpreter->execute();
+    BlockIO res = planner.execute();
     if (likely(process_list_entry))
         (*process_list_entry)->setQueryStreams(res);
 
@@ -100,15 +98,7 @@ BlockIO executeDAG(IQuerySource & dag, Context & context, bool internal)
 
 BlockIO executeQuery(Context & context, bool internal)
 {
-    if (context.getSettingsRef().enable_planner)
-    {
-        PlanQuerySource plan(context);
-        return executeDAG(plan, context, internal);
-    }
-    else
-    {
-        DAGQuerySource dag(context);
-        return executeDAG(dag, context, internal);
-    }
+    Planner planner(context);
+    return executeImpl(planner, context, internal);
 }
 } // namespace DB

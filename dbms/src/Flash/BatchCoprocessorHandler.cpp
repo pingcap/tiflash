@@ -14,9 +14,11 @@
 
 #include <Common/TiFlashMetrics.h>
 #include <Flash/BatchCoprocessorHandler.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
-#include <Flash/Coprocessor/InterpreterDAG.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/ServiceUtils.h>
+#include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <TiDB/Schema/SchemaSyncer.h>

@@ -18,7 +18,6 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <common/logger_useful.h>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

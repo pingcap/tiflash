@@ -41,6 +41,8 @@ public:
 
     void transform(DAGPipeline & pipeline, Context & context, size_t max_streams);
 
+    const PhysicalPlanNodePtr & rootNode() const;
+
 private:
     void addRootFinalProjectionIfNeed();
 

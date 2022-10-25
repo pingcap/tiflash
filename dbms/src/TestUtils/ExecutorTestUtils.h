@@ -33,15 +33,6 @@ ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 Block mergeBlocks(Blocks blocks);
 
-
-#define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
-    std::vector<bool> bools{false, true}; \
-    for (auto enable_planner : bools)     \
-    {                                     \
-        enablePlanner(enable_planner);
-
-#define WRAP_FOR_DIS_ENABLE_PLANNER_END }
-
 class ExecutorTest : public ::testing::Test
 {
 protected:
@@ -63,8 +54,6 @@ public:
     void initializeClientInfo();
 
     DAGContext & getDAGContext();
-
-    void enablePlanner(bool is_enable);
 
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 

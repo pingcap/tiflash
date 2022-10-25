@@ -44,6 +44,8 @@ public:
 
     const String & getPushDownFilterId() const;
 
+    const PushDownFilter & getPushDownFilter() const;
+
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 

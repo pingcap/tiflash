@@ -15,7 +15,6 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
-#include <Flash/Coprocessor/DAGQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/executorSerializer.h>
@@ -108,7 +107,6 @@ void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
-    WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN
     std::vector<size_t> concurrencies{1, 2, 10};
     for (auto concurrency : concurrencies)
     {
@@ -125,7 +123,6 @@ void ExecutorTest::executeExecutor(
                     "    line: {}\n"
                     "    test_case_name: {}\n"
                     "    test_func_name: {}\n"
-                    "    enable_planner: {}\n"
                     "    concurrency: {}\n"
                     "    block_size: {}\n"
                     "    dag_request: \n{}",
@@ -133,7 +130,6 @@ void ExecutorTest::executeExecutor(
                     test_info->line(),
                     test_info->test_case_name(),
                     test_info->name(),
-                    enable_planner,
                     concurrency,
                     block_size,
                     ExecutorSerializer().serialize(request.get()));
@@ -141,7 +137,6 @@ void ExecutorTest::executeExecutor(
             ASSERT_TRUE(assert_func(executeStreams(request, concurrency))) << test_info_msg();
         }
     }
-    WRAP_FOR_DIS_ENABLE_PLANNER_END
 }
 
 void ExecutorTest::executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns)
@@ -213,11 +208,6 @@ DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams)
     for (const auto & stream : streams)
         readStream(actual_blocks, stream);
     return mergeBlocks(actual_blocks).getColumnsWithTypeAndName();
-}
-
-void ExecutorTest::enablePlanner(bool is_enable)
-{
-    context.context.setSetting("enable_planner", is_enable ? "true" : "false");
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency)
