@@ -787,45 +787,6 @@ TEST_P(WALStoreTest, GetFileSnapshot)
     }
 }
 
-TEST_P(WALStoreTest, NewFilesInGetFileSnapshot)
-{
-    auto ctx = DB::tests::TiFlashTestEnv::getContext();
-    auto provider = ctx.getFileProvider();
-    auto path = getTemporaryPath();
-
-    WALStorePtr wal;
-    auto ret = WALStore::create(getCurrentTestName(), provider, delegator, config);
-    wal = std::move(ret.first);
-    ASSERT_NE(wal, nullptr);
-
-    // generate log_1_0, log_2_0, log_3_0
-    rollToNewLogWriter(wal);
-    rollToNewLogWriter(wal);
-    rollToNewLogWriter(wal);
-    ASSERT_EQ(getNumLogFiles(), 3);
-
-    auto sp_gc = SyncPointCtl::enableInScope("before_WALStore::tryGetFilesSnapshot_getLastPersistedLogNum");
-    auto th_gc = std::async([&]() {
-        return wal->tryGetFilesSnapshot(2, false);
-    });
-    sp_gc.waitAndPause();
-
-    // generate log_4_0, log_5_0
-    rollToNewLogWriter(wal);
-    rollToNewLogWriter(wal);
-    ASSERT_EQ(getNumLogFiles(), 5);
-
-    sp_gc.next();
-
-    // `files` should include log_4_0 and log_5_0
-    auto files = th_gc.get();
-    ASSERT_TRUE(files.isValid());
-    ASSERT_EQ(files.persisted_log_files.size(), 5);
-    ASSERT_EQ(files.persisted_log_files.begin()->log_num, 1);
-    ASSERT_EQ(files.persisted_log_files.rbegin()->log_num, 5);
-    ASSERT_EQ(getNumLogFiles(), 5);
-}
-
 
 INSTANTIATE_TEST_CASE_P(
     Disks,

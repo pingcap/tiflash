@@ -154,8 +154,9 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
         return WALStore::FilesSnapshot{};
     }
 
-    SYNC_FOR("before_WALStore::tryGetFilesSnapshot_getLastPersistedLogNum");
-
+    // There could be some new-log-files generated before we acquire the lock.
+    // But full GC will not run concurrently when dumping snapshot. So ignoring
+    // the new files is safe.
     Format::LogNumberType current_writing_log_num = 0;
     {
         std::lock_guard lock(log_file_mutex); // block other writes
@@ -172,12 +173,6 @@ WALStore::FilesSnapshot WALStore::tryGetFilesSnapshot(size_t max_persisted_log_f
         log_file.reset();
     }
 
-    // Scan the log file list after we confirm the `last_persisted_log_num`,
-    // cause there could be new log files created between the last `listAllFiles`
-    // and acquiring `log_file_mutex`.
-    // We need to compact all log files before `last_persisted_log_num` so
-    // that it contains all entries changes we need.
-    persisted_log_files = WALStoreReader::listAllFiles(delegator, logger);
     for (auto iter = persisted_log_files.begin(); iter != persisted_log_files.end(); /*empty*/)
     {
         if (iter->log_num >= current_writing_log_num)
