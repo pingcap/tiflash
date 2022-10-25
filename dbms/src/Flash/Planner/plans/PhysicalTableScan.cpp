@@ -15,7 +15,6 @@
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
-#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/MockSourceStream.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -66,12 +65,6 @@ void PhysicalTableScan::transformImpl(DAGPipeline & pipeline, Context & context,
     NamesWithAliases schema_project_cols;
     for (size_t i = 0; i < schema.size(); ++i)
     {
-        RUNTIME_CHECK(
-            schema[i].type->equals(*storage_schema[i].type),
-            schema[i].name,
-            schema[i].type->getName(),
-            storage_schema[i].name,
-            storage_schema[i].type->getName());
         assert(!storage_schema[i].name.empty() && !schema[i].name.empty());
         schema_project_cols.emplace_back(storage_schema[i].name, schema[i].name);
     }

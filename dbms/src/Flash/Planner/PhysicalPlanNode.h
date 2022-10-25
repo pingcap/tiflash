@@ -30,6 +30,7 @@ class DAGContext;
 
 class PhysicalPlanNode;
 using PhysicalPlanNodePtr = std::shared_ptr<PhysicalPlanNode>;
+using PhysicalPlanNodePtrs = std::vector<PhysicalPlanNodePtr>;
 
 class PhysicalPlanNode
 {

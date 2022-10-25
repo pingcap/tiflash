@@ -43,4 +43,8 @@ void visitPostOrder(const PhysicalPlanNodePtr & plan, FF && f)
 }
 
 String visitToString(const PhysicalPlanNodePtr & plan);
+/// visit physical plan node tree to get aggregation nodes.
+PhysicalPlanNodePtrs getAggarationNodes(const PhysicalPlanNodePtr & plan);
+/// visit physical plan node tree to get table scan nodes.
+PhysicalPlanNodePtrs getTableScanNodes(const PhysicalPlanNodePtr & plan);
 } // namespace DB::PhysicalPlanVisitor

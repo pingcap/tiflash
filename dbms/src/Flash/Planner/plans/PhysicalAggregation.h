@@ -55,6 +55,8 @@ public:
 
     const Block & getSampleBlock() const override;
 
+    AggregateDescriptions & getAggregateDescriptions() { return aggregate_descriptions; }
+
 private:
     void transformImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 

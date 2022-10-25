@@ -51,4 +51,30 @@ String visitToString(const PhysicalPlanNodePtr & plan)
     doVisitToString(buffer, plan, 0);
     return buffer.toString();
 }
+
+PhysicalPlanNodePtrs getAggarationNodes(const PhysicalPlanNodePtr & plan) 
+{
+    PhysicalPlanNodePtrs aggr_nodes;
+    visit(plan, [&aggr_nodes](const PhysicalPlanNodePtr & plan) {
+        if (plan->tp() == PlanType::Aggregation)
+        {
+            aggr_nodes.push_back(plan);
+        }
+        return true;
+    });
+    return aggr_nodes;
+}
+
+PhysicalPlanNodePtrs getTableScanNodes(const PhysicalPlanNodePtr & plan)
+{
+    PhysicalPlanNodePtrs table_scan_nodes;
+    visit(plan, [&table_scan_nodes](const PhysicalPlanNodePtr & plan) {
+        if (plan->tp() == PlanType::TableScan)
+        {
+            table_scan_nodes.push_back(plan);
+        }
+        return true;
+    });
+    return table_scan_nodes;
+}
 } // namespace DB::PhysicalPlanVisitor

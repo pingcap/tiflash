@@ -647,6 +647,7 @@ BlockInputStreams StorageDeltaMerge::read(
     auto tracing_logger = log->getChild(query_info.req_id);
 
     LOG_DEBUG(tracing_logger, "Read with tso: {}", mvcc_query_info.read_tso);
+    LOG_DEBUG(tracing_logger, "Required columns: {}", fmt::join(column_names, ", "));
 
     // Check whether tso is smaller than TiDB GcSafePoint
     const auto check_read_tso = [&tmt, &context, this](UInt64 read_tso) {

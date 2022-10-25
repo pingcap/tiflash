@@ -16,6 +16,11 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
+#include <DataTypes/DataTypesNumber.h>
+#include "DataTypes/IDataType.h"
+#include "Dictionaries/ComplexKeyHashedDictionary.h"
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include "Storages/Transaction/TypeMapping.h"
 
 namespace DB
 {
@@ -37,6 +42,18 @@ public:
     void finalize(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
+
+    Block & getSampleBlocks() { return sample_block; }
+
+    void replaceColumnToRead(const String & src_name, const String & dst_name, const DataTypePtr & dst_type) {
+        for (auto & item : schema) {
+            if (item.name == src_name) {
+                item = {dst_name, dst_type};
+                sample_block.erase(src_name);
+                sample_block.insert({dst_type, dst_name});
+            }
+        }
+    }
 
     bool pushDownFilter(const String & filter_executor_id, const tipb::Selection & selection);
 
