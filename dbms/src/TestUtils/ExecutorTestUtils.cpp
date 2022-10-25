@@ -224,6 +224,7 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, s
 {
     DAGProperties properties;
     // disable mpp
+    context.context.setExecutorTest();
     properties.is_mpp_query = false;
     properties.start_ts = 1;
     auto [query_tasks, func_wrap_output_stream] = compileQuery(
