@@ -93,7 +93,7 @@ protected:
             return;
         auto segment_id = getRandomSegmentId();
         auto write_rows = std::uniform_int_distribution<size_t>{20, 100}(random);
-        LOG_FMT_DEBUG(logger, "start random write, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
+        LOG_DEBUG(logger, "start random write, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
         writeSegment(segment_id, write_rows);
     }
 
@@ -103,7 +103,7 @@ protected:
             return;
         auto segment_id = getRandomSegmentId();
         auto write_rows = std::uniform_int_distribution<size_t>{20, 100}(random);
-        LOG_FMT_DEBUG(logger, "start random write delete, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
+        LOG_DEBUG(logger, "start random write delete, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
         writeSegmentWithDeletedPack(segment_id, write_rows);
     }
 
@@ -112,7 +112,7 @@ protected:
         if (segments.empty())
             return;
         auto segment_id = getRandomSegmentId();
-        LOG_FMT_DEBUG(logger, "start random delete range, segment_id={} all_segments={}", segment_id, segments.size());
+        LOG_DEBUG(logger, "start random delete range, segment_id={} all_segments={}", segment_id, segments.size());
         deleteRangeSegment(segment_id);
     }
 
@@ -122,7 +122,7 @@ protected:
             return;
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
-        LOG_FMT_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, magic_enum::enum_name(split_mode), segments.size());
+        LOG_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, magic_enum::enum_name(split_mode), segments.size());
         splitSegment(segment_id, split_mode);
     }
 
@@ -136,7 +136,7 @@ protected:
         if (end - start <= 1)
             return;
         auto split_at = std::uniform_int_distribution<Int64>{start, end - 1}(random);
-        LOG_FMT_DEBUG(logger, "start random split at, segment_id={} split_at={} mode={} all_segments={}", segment_id, split_at, magic_enum::enum_name(split_mode), segments.size());
+        LOG_DEBUG(logger, "start random split at, segment_id={} split_at={} mode={} all_segments={}", segment_id, split_at, magic_enum::enum_name(split_mode), segments.size());
         splitSegmentAt(segment_id, split_at, split_mode);
     }
 
@@ -145,7 +145,7 @@ protected:
         if (segments.size() < 2)
             return;
         auto segments_id = getRandomMergeableSegments();
-        LOG_FMT_DEBUG(logger, "start random merge, segments_id=[{}] all_segments={}", fmt::join(segments_id, ","), segments.size());
+        LOG_DEBUG(logger, "start random merge, segments_id=[{}] all_segments={}", fmt::join(segments_id, ","), segments.size());
         mergeSegment(segments_id);
     }
 
@@ -154,7 +154,7 @@ protected:
         if (segments.empty())
             return;
         PageId random_segment_id = getRandomSegmentId();
-        LOG_FMT_DEBUG(logger, "start random merge delta, segment_id={} all_segments={}", random_segment_id, segments.size());
+        LOG_DEBUG(logger, "start random merge delta, segment_id={} all_segments={}", random_segment_id, segments.size());
         mergeSegmentDelta(random_segment_id);
     }
 
@@ -163,7 +163,7 @@ protected:
         if (segments.empty())
             return;
         PageId random_segment_id = getRandomSegmentId();
-        LOG_FMT_DEBUG(logger, "start random flush cache, segment_id={} all_segments={}", random_segment_id, segments.size());
+        LOG_DEBUG(logger, "start random flush cache, segment_id={} all_segments={}", random_segment_id, segments.size());
         flushSegmentCache(random_segment_id);
     }
 
@@ -219,7 +219,7 @@ protected:
             }
         }
 
-        LOG_FMT_DEBUG(logger, "start random replace segment data, segments_id={} block_rows={} all_segments={}", fmt::join(segments_list, ","), block.rows(), segments.size());
+        LOG_DEBUG(logger, "start random replace segment data, segments_id={} block_rows={} all_segments={}", fmt::join(segments_list, ","), block.rows(), segments.size());
         replaceSegmentData({segments_list}, block);
 
         // Verify rows.

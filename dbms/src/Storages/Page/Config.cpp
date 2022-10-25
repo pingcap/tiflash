@@ -12,18 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "FunctionsConsistentHashing.h"
-
-#include <Functions/FunctionFactory.h>
-
+#include <Storages/Page/Config.h>
+#include <Storages/Page/PageUtil.h>
 
 namespace DB
 {
-void registerFunctionsConsistentHashing(FunctionFactory & factory)
+namespace MVCC
 {
-    factory.registerFunction<FunctionYandexConsistentHash>();
-    factory.registerFunction<FunctionJumpConsistentHash>();
-    factory.registerFunction<FunctionSumburConsistentHash>();
+bool VersionSetConfig::doCleanup() const
+{
+    return PageUtil::randInt(0, 1000) < prob_cleanup_invalid_snapshot;
 }
+} // namespace MVCC
 
 } // namespace DB

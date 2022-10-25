@@ -52,10 +52,10 @@ private:
     void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    explicit MemTableSet(const std::string & log_prefix_, const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
+    explicit MemTableSet(const BlockPtr & last_schema_, const ColumnFiles & in_memory_files = {})
         : last_schema(last_schema_)
         , column_files(in_memory_files)
-        , log(Logger::get("MemTableSet", fmt::format("<{}>", log_prefix_)))
+        , log(Logger::get())
     {
         column_files_count = column_files.size();
         for (const auto & file : column_files)
@@ -64,6 +64,16 @@ public:
             bytes += file->getBytes();
             deletes += file->getDeletes();
         }
+    }
+
+    /**
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
+     */
+    void resetLogger(const LoggerPtr & segment_log)
+    {
+        log = segment_log;
     }
 
     /// Thread safe part start

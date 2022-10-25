@@ -431,7 +431,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         break;
     }
     default:
-        LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+        LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
         exit(-1);
     }
 }
@@ -452,7 +452,7 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
             delete reinterpret_cast<AsyncNotifier *>(ptr);
             break;
         default:
-            LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
             exit(-1);
         }
     }
@@ -565,4 +565,11 @@ void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint
     RegionTable & region_table = server->tmt->getRegionTable();
     region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
 }
+
+
+std::string_view buffToStrView(const BaseBuffView & buf)
+{
+    return std::string_view{buf.data, buf.len};
+}
+
 } // namespace DB

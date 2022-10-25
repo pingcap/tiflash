@@ -55,7 +55,7 @@ SSTFilesToBlockInputStream::SSTFilesToBlockInputStream( //
     , tmt(tmt_)
     , gc_safepoint(gc_safepoint_)
     , expected_size(expected_size_)
-    , log(Logger::get("SSTFilesToBlockInputStream", fmt::format("<{}>", log_prefix_)))
+    , log(Logger::get(log_prefix_))
     , force_decode(force_decode_)
 {
 }
@@ -64,22 +64,42 @@ SSTFilesToBlockInputStream::~SSTFilesToBlockInputStream() = default;
 
 void SSTFilesToBlockInputStream::readPrefix()
 {
+    std::vector<SSTView> ssts_default;
+    std::vector<SSTView> ssts_write;
+    std::vector<SSTView> ssts_lock;
+
+    auto make_inner_func = [&](const TiFlashRaftProxyHelper * proxy_helper, SSTView snap) {
+        return std::make_unique<MonoSSTReader>(proxy_helper, snap);
+    };
     for (UInt64 i = 0; i < snaps.len; ++i)
     {
         const auto & snapshot = snaps.views[i];
         switch (snapshot.type)
         {
         case ColumnFamilyType::Default:
-            default_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+            ssts_default.push_back(snapshot);
             break;
         case ColumnFamilyType::Write:
-            write_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+            ssts_write.push_back(snapshot);
             break;
         case ColumnFamilyType::Lock:
-            lock_cf_reader = std::make_unique<SSTReader>(proxy_helper, snapshot);
+            ssts_lock.push_back(snapshot);
             break;
         }
     }
+    if (!ssts_default.empty())
+    {
+        default_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Default, make_inner_func, ssts_default);
+    }
+    if (!ssts_write.empty())
+    {
+        write_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Write, make_inner_func, ssts_write);
+    }
+    if (!ssts_lock.empty())
+    {
+        lock_cf_reader = std::make_unique<MultiSSTReader<MonoSSTReader, SSTView>>(proxy_helper, ColumnFamilyType::Lock, make_inner_func, ssts_lock);
+    }
+    LOG_INFO(log, "Finish Construct MultiSSTReader, write {} lock {} default {} region {}", ssts_write.size(), ssts_lock.size(), ssts_default.size(), this->region->id());
 
     process_keys.default_cf = 0;
     process_keys.write_cf = 0;
@@ -112,8 +132,8 @@ Block SSTFilesToBlockInputStream::read()
         // the lock column family, we will load all key-values which rowkeys are equal
         // or less that the last rowkey from the write column family.
         {
-            BaseBuffView key = write_cf_reader->key();
-            BaseBuffView value = write_cf_reader->value();
+            BaseBuffView key = write_cf_reader->keyView();
+            BaseBuffView value = write_cf_reader->valueView();
             region->insert(ColumnFamilyType::Write, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
             ++process_keys.write_cf;
             if (process_keys.write_cf % expected_size == 0)
@@ -170,14 +190,14 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
     {
         while (reader && reader->remained())
         {
-            BaseBuffView key = reader->key();
-            BaseBuffView value = reader->value();
+            BaseBuffView key = reader->keyView();
+            BaseBuffView value = reader->valueView();
             // TODO: use doInsert to avoid locking
             region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
             reader->next();
             (*p_process_keys) += 1;
         }
-        LOG_FMT_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
+        LOG_DEBUG(log, "Done loading all kvpairs from [CF={}] [offset={}] [write_cf_offset={}] ", CFToName(cf), (*p_process_keys), process_keys.write_cf);
         return;
     }
 
@@ -188,7 +208,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         // We keep an assumption that rowkeys are memory-comparable and they are asc sorted in the SST file
         if (!last_loaded_rowkey->empty() && *last_loaded_rowkey > *rowkey_to_be_included)
         {
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "Done loading from [CF={}] [offset={}] [write_cf_offset={}] [last_loaded_rowkey={}] [rowkey_to_be_included={}]",
                 CFToName(cf),
@@ -203,8 +223,8 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(ColumnFamilyType cf, const De
         while (reader && reader->remained() && *p_process_keys < process_keys_offset_end)
         {
             {
-                BaseBuffView key = reader->key();
-                BaseBuffView value = reader->value();
+                BaseBuffView key = reader->keyView();
+                BaseBuffView value = reader->valueView();
                 // TODO: use doInsert to avoid locking
                 region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
                 (*p_process_keys) += 1;

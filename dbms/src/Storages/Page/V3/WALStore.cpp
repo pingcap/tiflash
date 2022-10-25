@@ -71,7 +71,7 @@ WALStore::WALStore(
     , provider(provider_)
     , last_log_num(last_log_num_)
     , wal_paths_index(0)
-    , logger(Logger::get("WALStore", storage_name))
+    , logger(Logger::get(storage_name))
     , config(config_)
 {
 }
@@ -128,7 +128,7 @@ std::tuple<std::unique_ptr<LogWriter>, LogFilename> WALStore::createLogWriter(
     auto filename = log_filename.filename(log_filename.stage);
     auto fullname = log_filename.fullname(log_filename.stage);
     // TODO check whether the file already existed
-    LOG_FMT_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
+    LOG_INFO(logger, "Creating log file for writing [fullname={}]", fullname);
     auto log_writer = std::make_unique<LogWriter>(
         fullname,
         provider,
@@ -185,7 +185,7 @@ bool WALStore::saveSnapshot(
     if (files_snap.persisted_log_files.empty())
         return false;
 
-    LOG_FMT_INFO(logger, "Saving directory snapshot");
+    LOG_INFO(logger, "Saving directory snapshot");
 
     // Use {largest_log_num, 1} to save the `edit`
     const auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
@@ -202,7 +202,7 @@ bool WALStore::saveSnapshot(
     const auto temp_fullname = log_filename.fullname(LogFileStage::Temporary);
     const auto normal_fullname = log_filename.fullname(LogFileStage::Normal);
 
-    LOG_FMT_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
+    LOG_INFO(logger, "Renaming log file to be normal [fullname={}]", temp_fullname);
     // Use `renameFile` from FileProvider that take good care of encryption path
     provider->renameFile(
         temp_fullname,
@@ -210,7 +210,7 @@ bool WALStore::saveSnapshot(
         normal_fullname,
         EncryptionPath(normal_fullname, ""),
         true);
-    LOG_FMT_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
+    LOG_INFO(logger, "Rename log file to normal done [fullname={}]", normal_fullname);
 
     // Remove compacted log files.
     for (const auto & filename : files_snap.persisted_log_files)

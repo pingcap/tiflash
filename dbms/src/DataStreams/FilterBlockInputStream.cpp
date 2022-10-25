@@ -35,7 +35,7 @@ FilterBlockInputStream::FilterBlockInputStream(
     const String & filter_column_name,
     const String & req_id)
     : expression(expression_)
-    , log(Logger::get(NAME, req_id))
+    , log(Logger::get(req_id))
 {
     children.push_back(input);
 
