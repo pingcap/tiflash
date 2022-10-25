@@ -70,7 +70,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
     auto get_checked_qualified_array = [log](const std::shared_ptr<cpptoml::table> table, const char * key) -> cpptoml::option<Strings> {
         auto throw_invalid_value = [log, key]() {
             String error_msg = fmt::format("The configuration \"storage.{}\" should be an array of strings. Please check your configuration file.", key);
-            LOG_FMT_ERROR(log, "{}", error_msg);
+            LOG_ERROR(log, "{}", error_msg);
             throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         };
         // not exist key
@@ -103,7 +103,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
     if (main_data_paths.empty())
     {
         String error_msg = "The configuration \"storage.main.dir\" is empty. Please check your configuration file.";
-        LOG_FMT_ERROR(log, "{}", error_msg);
+        LOG_ERROR(log, "{}", error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     if (!main_capacity_quota.empty() && main_capacity_quota.size() != main_data_paths.size())
@@ -114,7 +114,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
             "Please check your configuration file.",
             main_data_paths.size(),
             main_capacity_quota.size());
-        LOG_FMT_ERROR(log, "{}", error_msg);
+        LOG_ERROR(log, "{}", error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < main_data_paths.size(); ++i)
@@ -123,7 +123,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
         main_data_paths[i] = getNormalizedPath(main_data_paths[i]);
         if (main_capacity_quota.size() <= i)
             main_capacity_quota.emplace_back(0);
-        LOG_FMT_INFO(log, "Main data candidate path: {}, capacity_quota: {}", main_data_paths[i], main_capacity_quota[i]);
+        LOG_INFO(log, "Main data candidate path: {}, capacity_quota: {}", main_data_paths[i], main_capacity_quota[i]);
     }
 
     // latest
@@ -137,7 +137,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
     // If it is empty, use the same dir as "main.dir"
     if (latest_data_paths.empty())
     {
-        LOG_FMT_INFO(log, "The configuration \"storage.latest.dir\" is empty, use the same dir and capacity of \"storage.main.dir\"");
+        LOG_INFO(log, "The configuration \"storage.latest.dir\" is empty, use the same dir and capacity of \"storage.main.dir\"");
         latest_data_paths = main_data_paths;
         latest_capacity_quota = main_capacity_quota;
     }
@@ -149,7 +149,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
             "Please check your configuration file.",
             latest_data_paths.size(),
             latest_capacity_quota.size());
-        LOG_FMT_ERROR(log, "{}", error_msg);
+        LOG_ERROR(log, "{}", error_msg);
         throw Exception(error_msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
     }
     for (size_t i = 0; i < latest_data_paths.size(); ++i)
@@ -158,7 +158,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
         latest_data_paths[i] = getNormalizedPath(latest_data_paths[i]);
         if (latest_capacity_quota.size() <= i)
             latest_capacity_quota.emplace_back(0);
-        LOG_FMT_INFO(log, "Latest data candidate path: {}, capacity_quota: {}", latest_data_paths[i], latest_capacity_quota[i]);
+        LOG_INFO(log, "Latest data candidate path: {}, capacity_quota: {}", latest_data_paths[i], latest_capacity_quota[i]);
     }
 
     // Raft
@@ -177,7 +177,7 @@ void TiFlashStorageConfig::parseStoragePath(const String & storage, const Logger
     {
         // normalized
         path = getNormalizedPath(path);
-        LOG_FMT_INFO(log, "Raft data candidate path: {}", path);
+        LOG_INFO(log, "Raft data candidate path: {}", path);
     }
 }
 
@@ -214,7 +214,7 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
 
     lazily_init_store = get_bool_config_or_default("lazily_init_store", lazily_init_store);
 
-    LOG_FMT_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
+    LOG_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const
@@ -294,11 +294,11 @@ bool TiFlashStorageConfig::parseFromDeprecatedConfiguration(Poco::Util::LayeredC
 
     // logging
     for (const auto & s : main_data_paths)
-        LOG_FMT_INFO(log, "Main data candidate path: {}", s);
+        LOG_INFO(log, "Main data candidate path: {}", s);
     for (const auto & s : latest_data_paths)
-        LOG_FMT_INFO(log, "Latest data candidate path: {}", s);
+        LOG_INFO(log, "Latest data candidate path: {}", s);
     for (const auto & s : kvstore_data_path)
-        LOG_FMT_INFO(log, "Raft data candidate path: {}", s);
+        LOG_INFO(log, "Raft data candidate path: {}", s);
     return true;
 }
 
@@ -364,14 +364,14 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(Poc
             }
             if (num_token != 1)
                 LOG_WARNING(log, "Only the first number in configuration \"capacity\" take effect");
-            LOG_FMT_INFO(log, "The capacity limit is: {}", formatReadableSizeWithBinarySuffix(global_capacity_quota));
+            LOG_INFO(log, "The capacity limit is: {}", formatReadableSizeWithBinarySuffix(global_capacity_quota));
         }
 
         if (!storage_config.parseFromDeprecatedConfiguration(config, log))
         {
             // Can not parse from the deprecated configuration "path".
             String msg = "The configuration \"storage.main\" section is not defined. Please check your configuration file.";
-            LOG_FMT_ERROR(log, "{}", msg);
+            LOG_ERROR(log, "{}", msg);
             throw Exception(msg, ErrorCodes::INVALID_CONFIG_PARAMETER);
         }
     }
@@ -408,7 +408,7 @@ void StorageIORateLimitConfig::parse(const String & storage_io_rate_limit, const
 
     use_max_bytes_per_sec = (max_read_bytes_per_sec == 0 && max_write_bytes_per_sec == 0);
 
-    LOG_FMT_DEBUG(log, "storage.io_rate_limit {}", toString());
+    LOG_DEBUG(log, "storage.io_rate_limit {}", toString());
 }
 
 std::string StorageIORateLimitConfig::toString() const

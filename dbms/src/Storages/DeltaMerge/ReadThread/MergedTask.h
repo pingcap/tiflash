@@ -57,6 +57,8 @@ public:
         passive_merged_segments.fetch_sub(units.size() - 1, std::memory_order_relaxed);
         GET_METRIC(tiflash_storage_read_thread_gauge, type_merged_task).Decrement();
         GET_METRIC(tiflash_storage_read_thread_seconds, type_merged_task).Observe(sw.elapsedSeconds());
+        // `setAllStreamFinished` must be called to explicitly releasing all streams for updating memory statistics of `MemoryTracker`.
+        setAllStreamsFinished();
     }
 
     int readBlock();
@@ -116,13 +118,25 @@ private:
     {
         if (!isStreamFinished(i))
         {
-            units[i].pool = nullptr;
-            units[i].task = nullptr;
-            units[i].stream = nullptr;
+            // `MergedUnit.stream` must be released explicitly for updating memory statistics of `MemoryTracker`.
+            auto & [pool, task, stream] = units[i];
+            {
+                MemoryTrackerSetter setter(true, pool->getMemoryTracker().get());
+                task = nullptr;
+                stream = nullptr;
+            }
+            pool = nullptr;
             finished_count++;
         }
     }
 
+    void setAllStreamsFinished()
+    {
+        for (size_t i = 0; i < units.size(); ++i)
+        {
+            setStreamFinished(i);
+        }
+    }
     uint64_t seg_id;
     std::vector<MergedUnit> units;
     bool inited;

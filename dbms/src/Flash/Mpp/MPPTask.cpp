@@ -57,7 +57,7 @@ MPPTask::MPPTask(const mpp::TaskMeta & meta_, const ContextPtr & context_)
     , context(context_)
     , manager(context_->getTMTContext().getMPPTaskManager().get())
     , schedule_entry(manager, id)
-    , log(Logger::get("MPPTask", id.toString()))
+    , log(Logger::get(id.toString()))
     , mpp_task_statistics(id, meta.address())
 {
     current_memory_tracker = nullptr;
@@ -70,7 +70,7 @@ MPPTask::~MPPTask()
     if (process_list_entry != nullptr && current_memory_tracker != process_list_entry->get().getMemoryTrackerPtr().get())
         current_memory_tracker = process_list_entry->get().getMemoryTrackerPtr().get();
     abortTunnels("", true);
-    LOG_FMT_DEBUG(log, "finish MPPTask: {}", id.toString());
+    LOG_DEBUG(log, "finish MPPTask: {}", id.toString());
 }
 
 void MPPTask::abortTunnels(const String & message, bool wait_sender_finish)
@@ -126,7 +126,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         bool is_local = context->getSettingsRef().enable_local_tunnel && meta.address() == task_meta.address();
         bool is_async = !is_local && context->getSettingsRef().enable_async_server;
         MPPTunnelPtr tunnel = std::make_shared<MPPTunnel>(task_meta, task_request.meta(), timeout, context->getSettingsRef().max_threads, is_local, is_async, log->identifier());
-        LOG_FMT_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
+        LOG_DEBUG(log, "begin to register the tunnel {}, is_local: {}, is_async: {}", tunnel->id(), is_local, is_async);
         if (status != INITIALIZING)
             throw Exception(fmt::format("The tunnel {} can not be registered, because the task is not in initializing state", tunnel->id()));
         tunnel_set_local->registerTunnel(MPPTaskId{task_meta.start_ts(), task_meta.task_id()}, tunnel);
@@ -225,7 +225,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     /// MPP task will only use key ranges in mpp::DispatchTaskRequest::regions/mpp::DispatchTaskRequest::table_regions.
     /// The ones defined in tipb::TableScan will never be used and can be removed later.
     TablesRegionsInfo tables_regions_info = TablesRegionsInfo::create(task_request.regions(), task_request.table_regions(), tmt_context);
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "Handling {} regions from {} physical tables in MPP task",
         tables_regions_info.regionCount(),
@@ -291,7 +291,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 
     // register task.
     auto task_manager = tmt_context.getMPPTaskManager();
-    LOG_FMT_DEBUG(log, "begin to register the task {}", id.toString());
+    LOG_DEBUG(log, "begin to register the task {}", id.toString());
 
     if (dag_context->isRootMPPTask())
     {
@@ -349,14 +349,14 @@ void MPPTask::runImpl()
     String err_msg;
     try
     {
-        LOG_FMT_INFO(log, "task starts preprocessing");
+        LOG_INFO(log, "task starts preprocessing");
         preprocess();
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
-        LOG_FMT_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
+        LOG_DEBUG(log, "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}", schedule_entry.getNeededThreads(), dag_context->tunnel_set->getRemoteTunnelCnt(), new_thread_count_of_exchange_receiver);
 
         scheduleOrWait();
 
-        LOG_FMT_INFO(log, "task starts running");
+        LOG_INFO(log, "task starts running");
         if (status.load() != RUNNING)
         {
             /// when task is in running state, canceling the task will call sendCancelToQuery to do the cancellation, however
@@ -380,7 +380,7 @@ void MPPTask::runImpl()
         finishWrite();
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
-        LOG_FMT_DEBUG(
+        LOG_DEBUG(
             log,
             "finish write with {} rows, {} blocks, {} bytes",
             return_statistics.rows,
@@ -413,7 +413,7 @@ void MPPTask::runImpl()
     {
         if (status == RUNNING)
         {
-            LOG_FMT_ERROR(log, "task running meets error: {}", err_msg);
+            LOG_ERROR(log, "task running meets error: {}", err_msg);
             /// trim the stack trace to avoid too many useless information in log
             trimStackTrace(err_msg);
             try
@@ -429,7 +429,7 @@ void MPPTask::runImpl()
     mpp_task_statistics.end(status.load(), err_string);
     mpp_task_statistics.logTracingJson();
 
-    LOG_FMT_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
+    LOG_INFO(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
     unregisterTask();
 }
 

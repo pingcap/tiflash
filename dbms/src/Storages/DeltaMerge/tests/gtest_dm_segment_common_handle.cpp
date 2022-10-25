@@ -59,7 +59,7 @@ protected:
         setColumns(cols);
 
         auto segment_id = storage_pool->newMetaPageId();
-        return Segment::newSegment(/* log_prefix */ "", *dm_context_, table_columns_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
+        return Segment::newSegment(Logger::get(), *dm_context_, table_columns_, RowKeyRange::newAll(is_common_handle, rowkey_column_size), segment_id, 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -129,7 +129,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
 
@@ -140,7 +140,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
     }
@@ -164,7 +164,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
 
@@ -175,7 +175,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
     }
@@ -220,7 +220,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
 
@@ -233,7 +233,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
     }
@@ -259,7 +259,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
 
@@ -271,7 +271,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
     }
@@ -306,7 +306,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -325,7 +325,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         const size_t nrows_after_delete = 2;
         // mock common handle
         auto common_handle_coldata = [this]() {
@@ -367,7 +367,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -394,7 +394,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         const size_t nrows_after_delete = 2;
         // mock common handle
         auto common_handle_coldata = [this]() {
@@ -453,7 +453,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -472,7 +472,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         const size_t nrows_after_delete = 2;
         // mock common handle
         auto common_handle_coldata = [this]() {
@@ -529,7 +529,7 @@ try
     {
         // Read after deletion
         // The deleted range has no overlap with current data, so there should be no change
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         // mock common handle
         auto common_handle_coldata = [this]() {
             auto tmp = createNumbers<Int64>(0, num_rows_write);
@@ -557,7 +557,7 @@ try
     {
         // Read after deletion
         // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         // mock common handle
         auto common_handle_coldata = [this]() {
             std::vector<Int64> int_coldata = createNumbers<Int64>(0, 63);
@@ -584,7 +584,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         // mock common handle
         auto common_handle_coldata = [this]() {
             // the result should be [0, 32,33,34,...62]
@@ -614,7 +614,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         // mock common handle
         auto common_handle_coldata = [this]() {
             std::vector<Int64> int_coldata{0};
@@ -643,7 +643,7 @@ try
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         // mock common handle
         auto common_handle_coldata = [this]() {
             std::vector<Int64> int_coldata = createNumbers<Int64>(32, 63);
@@ -681,7 +681,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -700,8 +700,8 @@ try
     EXPECT_EQ(*s2_range.end.value, *old_range.end.value);
     // TODO check segment epoch is increase
 
-    size_t num_rows_seg1 = getInputStreamNRows(segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)}));
-    size_t num_rows_seg2 = getInputStreamNRows(segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)}));
+    size_t num_rows_seg1 = getInputStreamNRows(segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)}));
+    size_t num_rows_seg2 = getInputStreamNRows(segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)}));
     ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
 
     // merge segments
@@ -714,7 +714,7 @@ try
         // TODO check segment epoch is increase
     }
     {
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 }
@@ -727,8 +727,8 @@ try
     // If they are equal, result will be true, otherwise it will be false.
     auto compare = [&](const SegmentPtr & seg1, const SegmentPtr & seg2, bool & result) {
         result = false;
-        auto in1 = seg1->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
-        auto in2 = seg2->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in1 = seg1->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+        auto in2 = seg2->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
         in1->readPrefix();
         in2->readPrefix();
         for (;;)
@@ -795,7 +795,7 @@ try
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
-    SegmentPtr new_segment = Segment::restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
+    SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
 
     {
         // test compare
@@ -807,7 +807,7 @@ try
     {
         // Do some update and restore again
         segment->write(dmContext(), {DMTestEnv::getRowKeyRangeForClusteredIndex(0, 32, rowkey_column_size)});
-        new_segment = segment->restoreSegment(/* log_prefix */ "", dmContext(), segment->segmentId());
+        new_segment = segment->restoreSegment(Logger::get(), dmContext(), segment->segmentId());
     }
 
     {
@@ -874,7 +874,7 @@ try
 
         {
             // Read after writing
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(is_common_handle, rowkey_column_size)});
             ASSERT_EQ(temp.size(), num_batches_written * (num_rows_per_write - 2));
             // mock common handle
             auto common_handle_coldata = [this, &temp]() {

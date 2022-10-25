@@ -73,9 +73,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
-    M(gc_skip_update_safe_point)                             \
-    M(gc_skip_merge_delta)                                   \
-    M(gc_skip_merge)                                         \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
@@ -242,7 +239,7 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
         RUNTIME_ASSERT((0 <= rate && rate <= 1.0), log, "RandomFailPoint trigger rate should in [0,1], while {}", rate);
         enableRandomFailPoint(pair_tokens[0], rate);
     }
-    LOG_FMT_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+    LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)

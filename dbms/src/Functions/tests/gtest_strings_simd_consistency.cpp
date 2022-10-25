@@ -341,9 +341,7 @@ TEST(StringsLowerUpperAscii, Random)
     std::vector<UInt8> res_new(limit + 1, 0);
     std::vector<UInt8> res_old(limit + 1, 0);
     std::default_random_engine eng(seed);
-    std::uniform_int_distribution<UInt8> dist(
-        'A',
-        'Z');
+    std::uniform_int_distribution<UInt8> dist('A', 'Z');
     for (auto & i : data)
     {
         i = dist(eng);
@@ -378,7 +376,7 @@ TEST(StringsLowerUpperUtf8, Random)
     std::vector<UInt8> res_new(limit + 1, 0);
     std::vector<UInt8> res_old(limit + 1, 0);
     std::default_random_engine eng(seed);
-    std::uniform_int_distribution dist('A', 'z');
+    std::uniform_int_distribution<UInt8> dist('A', 'z');
     size_t size = 0;
     size_t target = data.size() - 1;
     while (size < target)

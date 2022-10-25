@@ -121,7 +121,7 @@ private:
         , file_provider(file_provider_)
         , handle_res(dmfile->getPacks(), RSResult::All)
         , use_packs(dmfile->getPacks())
-        , log(Logger::get("DMFilePackFilter", tracing_id))
+        , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
     {
     }
@@ -206,16 +206,16 @@ private:
             filter_rate = (after_read_packs - after_filter) * 100.0 / after_read_packs;
             GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
         }
-        LOG_FMT_DEBUG(log,
-                      "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
-                      ", read_packs: {}, pack_count: {}",
-                      ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
-                      after_pk,
-                      after_read_packs,
-                      after_filter,
-                      toDebugString(rowkey_ranges),
-                      ((read_packs == nullptr) ? 0 : read_packs->size()),
-                      pack_count);
+        LOG_DEBUG(log,
+                  "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
+                  ", read_packs: {}, pack_count: {}",
+                  ((after_read_packs == 0) ? std::numeric_limits<double>::quiet_NaN() : filter_rate),
+                  after_pk,
+                  after_read_packs,
+                  after_filter,
+                  toDebugString(rowkey_ranges),
+                  ((read_packs == nullptr) ? 0 : read_packs->size()),
+                  pack_count);
     }
 
     static void loadIndex(ColumnIndexes & indexes,

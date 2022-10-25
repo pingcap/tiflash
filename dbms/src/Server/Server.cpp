@@ -130,7 +130,7 @@ void loadMiConfig(Logger * log)
     auto config = getenv("MIMALLOC_CONF");
     if (config)
     {
-        LOG_FMT_INFO(log, "Got environment variable MIMALLOC_CONF: {}", config);
+        LOG_INFO(log, "Got environment variable MIMALLOC_CONF: {}", config);
         Poco::JSON::Parser parser;
         std::ifstream data{config};
         Poco::Dynamic::Var result = parser.parse(data);
@@ -162,13 +162,13 @@ namespace
     auto * config = getenv(name);
     if (config)
     {
-        LOG_FMT_INFO(log, "Got environment variable {} = {}", name, config);
+        LOG_INFO(log, "Got environment variable {} = {}", name, config);
         try
         {
             auto result = std::stoul(config);
             if (result != 0 && result != 1)
             {
-                LOG_FMT_ERROR(log, "Environment variable{} = {} is not valid", name, result);
+                LOG_ERROR(log, "Environment variable{} = {} is not valid", name, result);
                 return;
             }
             target = result;
@@ -348,14 +348,14 @@ void UpdateMallocConfig([[maybe_unused]] const LoggerPtr & log)
 #ifdef RUN_FAIL_RETURN
     static_assert(false);
 #endif
-#define RUN_FAIL_RETURN(f)                                        \
-    do                                                            \
-    {                                                             \
-        if (f)                                                    \
-        {                                                         \
-            LOG_FMT_ERROR(log, "Fail to update jemalloc config"); \
-            return;                                               \
-        }                                                         \
+#define RUN_FAIL_RETURN(f)                                    \
+    do                                                        \
+    {                                                         \
+        if (f)                                                \
+        {                                                     \
+            LOG_ERROR(log, "Fail to update jemalloc config"); \
+            return;                                           \
+        }                                                     \
     } while (0)
 #if USE_JEMALLOC
     const char * version;
@@ -364,40 +364,40 @@ void UpdateMallocConfig([[maybe_unused]] const LoggerPtr & log)
     size_t sz_b = sizeof(bool), sz_st = sizeof(size_t), sz_ver = sizeof(version);
 
     RUN_FAIL_RETURN(je_mallctl("version", &version, &sz_ver, nullptr, 0));
-    LOG_FMT_INFO(log, "Got jemalloc version: {}", version);
+    LOG_INFO(log, "Got jemalloc version: {}", version);
 
     auto * malloc_conf = getenv("MALLOC_CONF");
     if (malloc_conf)
     {
-        LOG_FMT_INFO(log, "Got environment variable MALLOC_CONF: {}", malloc_conf);
+        LOG_INFO(log, "Got environment variable MALLOC_CONF: {}", malloc_conf);
     }
     else
     {
-        LOG_FMT_INFO(log, "Not found environment variable MALLOC_CONF");
+        LOG_INFO(log, "Not found environment variable MALLOC_CONF");
     }
 
     RUN_FAIL_RETURN(je_mallctl("opt.background_thread", (void *)&old_b, &sz_b, nullptr, 0));
     RUN_FAIL_RETURN(je_mallctl("opt.max_background_threads", (void *)&old_max_thd, &sz_st, nullptr, 0));
 
-    LOG_FMT_INFO(log, "Got jemalloc config: opt.background_thread {}, opt.max_background_threads {}", old_b, old_max_thd);
+    LOG_INFO(log, "Got jemalloc config: opt.background_thread {}, opt.max_background_threads {}", old_b, old_max_thd);
 
     if (!malloc_conf && !old_b)
     {
-        LOG_FMT_INFO(log, "Try to use background_thread of jemalloc to handle purging asynchronously");
+        LOG_INFO(log, "Try to use background_thread of jemalloc to handle purging asynchronously");
 
         RUN_FAIL_RETURN(je_mallctl("max_background_threads", nullptr, nullptr, (void *)&new_max_thd, sz_st));
-        LOG_FMT_INFO(log, "Set jemalloc.max_background_threads {}", new_max_thd);
+        LOG_INFO(log, "Set jemalloc.max_background_threads {}", new_max_thd);
 
         RUN_FAIL_RETURN(je_mallctl("background_thread", nullptr, nullptr, (void *)&new_b, sz_b));
-        LOG_FMT_INFO(log, "Set jemalloc.background_thread {}", new_b);
+        LOG_INFO(log, "Set jemalloc.background_thread {}", new_b);
     }
 #endif
 
 #if USE_MIMALLOC
-#define MI_OPTION_SHOW(OPTION) LOG_FMT_INFO(log, "mimalloc." #OPTION ": {}", mi_option_get(OPTION));
+#define MI_OPTION_SHOW(OPTION) LOG_INFO(log, "mimalloc." #OPTION ": {}", mi_option_get(OPTION));
 
     int version = mi_version();
-    LOG_FMT_INFO(log, "Got mimalloc version: {}.{}.{}", (version / 100), ((version % 100) / 10), (version % 10));
+    LOG_INFO(log, "Got mimalloc version: {}.{}.{}", (version / 100), ((version % 100) / 10), (version % 10));
     loadMiConfig(log);
     MI_OPTION_SHOW(mi_option_show_errors);
     MI_OPTION_SHOW(mi_option_show_stats);
@@ -453,7 +453,7 @@ struct RaftStoreProxyRunner : boost::noncopyable
         pthread_attr_t attribute;
         pthread_attr_init(&attribute);
         pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_FMT_INFO(log, "start raft store proxy");
+        LOG_INFO(log, "start raft store proxy");
         pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
         pthread_attr_destroy(&attribute);
     }
@@ -489,7 +489,7 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
             try
             {
                 init_cnt += storage->initStoreIfDataDirExist() ? 1 : 0;
-                LOG_FMT_INFO(log, "Storage inited done [table_id={}]", table_id);
+                LOG_INFO(log, "Storage inited done [table_id={}]", table_id);
             }
             catch (...)
             {
@@ -497,7 +497,7 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
                 tryLogCurrentException(log, fmt::format("Storage inited fail, [table_id={}]", table_id));
             }
         }
-        LOG_FMT_INFO(
+        LOG_INFO(
             log,
             "Storage inited finish. [total_count={}] [init_count={}] [error_count={}]",
             storages.size(),
@@ -506,13 +506,13 @@ void initStores(Context & global_context, const LoggerPtr & log, bool lazily_ini
     };
     if (lazily_init_store)
     {
-        LOG_FMT_INFO(log, "Lazily init store.");
+        LOG_INFO(log, "Lazily init store.");
         // apply the inited in another thread to shorten the start time of TiFlash
         std::thread(do_init_stores).detach();
     }
     else
     {
-        LOG_FMT_INFO(log, "Not lazily init store.");
+        LOG_INFO(log, "Not lazily init store.");
         do_init_stores();
     }
 }
@@ -557,7 +557,7 @@ public:
 #endif
                 )
                 {
-                    LOG_FMT_ERROR(
+                    LOG_ERROR(
                         log,
                         "Cannot resolve listen_host ({}), error {}: {}."
                         "If it is an IPv6 address and your host has disabled IPv6, then consider to "
@@ -604,7 +604,7 @@ public:
 #if Poco_NetSSL_FOUND
                     if (!security_config.has_tls_config)
                     {
-                        LOG_FMT_ERROR(log, "https_port is set but tls config is not set");
+                        LOG_ERROR(log, "https_port is set but tls config is not set");
                     }
                     Poco::Net::Context::Ptr context = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE,
                                                                              security_config.key_path,
@@ -629,7 +629,7 @@ public:
                     servers.emplace_back(
                         new HTTPServer(new HTTPHandlerFactory(server, "HTTPSHandler-factory"), server_pool, socket, http_params));
 
-                    LOG_FMT_INFO(log, "Listening https://{}", address.toString());
+                    LOG_INFO(log, "Listening https://{}", address.toString());
 #else
                     throw Exception{"HTTPS protocol is disabled because Poco library was built without NetSSL support.",
                                     ErrorCodes::SUPPORT_IS_DISABLED};
@@ -649,7 +649,7 @@ public:
                     servers.emplace_back(
                         new HTTPServer(new HTTPHandlerFactory(server, "HTTPHandler-factory"), server_pool, socket, http_params));
 
-                    LOG_FMT_INFO(log, "Listening http://{}", address.toString());
+                    LOG_INFO(log, "Listening http://{}", address.toString());
                 }
 
 
@@ -658,7 +658,7 @@ public:
                 {
                     if (security_config.has_tls_config)
                     {
-                        LOG_FMT_ERROR(log, "tls config is set but tcp_port_secure is not set.");
+                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
                     }
                     std::call_once(ssl_init_once, SSLInit);
                     Poco::Net::ServerSocket socket;
@@ -667,11 +667,11 @@ public:
                     socket.setSendTimeout(settings.send_timeout);
                     servers.emplace_back(new TCPServer(new TCPHandlerFactory(server), server_pool, socket, new Poco::Net::TCPServerParams));
 
-                    LOG_FMT_INFO(log, "Listening tcp: {}", address.toString());
+                    LOG_INFO(log, "Listening tcp: {}", address.toString());
                 }
                 else if (security_config.has_tls_config)
                 {
-                    LOG_FMT_INFO(log, "tcp_port is closed because tls config is set");
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
                 /// TCP with SSL
@@ -691,7 +691,7 @@ public:
                         server_pool,
                         socket,
                         new Poco::Net::TCPServerParams));
-                    LOG_FMT_INFO(log, "Listening tcp_secure: {}", address.toString());
+                    LOG_INFO(log, "Listening tcp_secure: {}", address.toString());
 #else
                     throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
                                     ErrorCodes::SUPPORT_IS_DISABLED};
@@ -699,7 +699,7 @@ public:
                 }
                 else if (security_config.has_tls_config)
                 {
-                    LOG_FMT_INFO(log, "tcp_port is closed because tls config is set");
+                    LOG_INFO(log, "tcp_port is closed because tls config is set");
                 }
 
                 /// At least one of TCP and HTTP servers must be created.
@@ -709,7 +709,7 @@ public:
             catch (const Poco::Net::NetException & e)
             {
                 if (listen_try)
-                    LOG_FMT_ERROR(
+                    LOG_ERROR(
                         log,
                         "Listen [{}]: {}: {}: {}"
                         "  If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
@@ -737,8 +737,8 @@ public:
     {
         auto & config = server.config();
 
-        LOG_FMT_DEBUG(log, "Received termination signal.");
-        LOG_FMT_DEBUG(log, "Waiting for current connections to close.");
+        LOG_DEBUG(log, "Received termination signal.");
+        LOG_DEBUG(log, "Waiting for current connections to close.");
 
         int current_connections = 0;
         for (auto & server : servers)
@@ -749,7 +749,7 @@ public:
         String debug_msg = "Closed all listening sockets.";
 
         if (current_connections)
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "{} Waiting for {} outstanding connections.",
                 debug_msg,
@@ -777,7 +777,7 @@ public:
         debug_msg = "Closed connections.";
 
         if (current_connections)
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "{} But {} remains."
                 " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>",
@@ -803,7 +803,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
 
-    const auto log = std::make_shared<Logger>(&logger(), "");
+    const auto log = Logger::get();
 #ifdef FIU_ENABLE
     fiu_init(0); // init failpoint
     FailPointHelper::initRandomFailPoints(config(), log);
@@ -845,17 +845,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (proxy_conf.is_proxy_runnable)
     {
-        LOG_FMT_INFO(log, "wait for tiflash proxy initializing");
+        LOG_INFO(log, "wait for tiflash proxy initializing");
         while (!tiflash_instance_wrap.proxy_helper)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        LOG_FMT_INFO(log, "tiflash proxy is initialized");
+        LOG_INFO(log, "tiflash proxy is initialized");
         if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled())
         {
             auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
-            LOG_FMT_INFO(log, "encryption is enabled, method is {}", IntoEncryptionMethodName(method));
+            LOG_INFO(log, "encryption is enabled, method is {}", IntoEncryptionMethodName(method));
         }
         else
-            LOG_FMT_INFO(log, "encryption is disabled");
+            LOG_INFO(log, "encryption is disabled");
     }
 
     SCOPE_EXIT({
@@ -864,12 +864,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             proxy_runner.join();
             return;
         }
-        LOG_FMT_INFO(log, "Let tiflash proxy shutdown");
+        LOG_INFO(log, "Let tiflash proxy shutdown");
         tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
         tiflash_instance_wrap.tmt = nullptr;
-        LOG_FMT_INFO(log, "Wait for tiflash proxy thread to join");
+        LOG_INFO(log, "Wait for tiflash proxy thread to join");
         proxy_runner.join();
-        LOG_FMT_INFO(log, "tiflash proxy thread is joined");
+        LOG_INFO(log, "tiflash proxy thread is joined");
     });
 
     /// get CPU/memory/disk info of this server
@@ -882,11 +882,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         auto * helper = tiflash_instance_wrap.proxy_helper;
         helper->fn_server_info(helper->proxy_ptr, strIntoView(&req), &response);
         server_info.parseSysInfo(response);
-        LOG_FMT_INFO(log, "ServerInfo: {}", server_info.debugString());
+        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
     }
     else
     {
-        LOG_FMT_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
+        LOG_INFO(log, "TiFlashRaftProxyHelper is null, failed to get server info");
     }
 
     grpc_log = Logger::get("grpc");
@@ -934,11 +934,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (storage_config.format_version)
     {
         setStorageFormat(storage_config.format_version);
-        LOG_FMT_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit stable storage format detected).", storage_config.format_version);
     }
     else
     {
-        LOG_FMT_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
+        LOG_INFO(log, "Using format_version={} (default settings).", STORAGE_FORMAT_CURRENT.identifier);
     }
 
     global_context->initializePathCapacityMetric( //
@@ -987,7 +987,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
           */
         global_context.reset();
 
-        LOG_FMT_DEBUG(log, "Destroyed global context.");
+        LOG_DEBUG(log, "Destroyed global context.");
     });
 
     /// Try to increase limit on number of open files.
@@ -998,7 +998,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         if (rlim.rlim_cur == rlim.rlim_max)
         {
-            LOG_FMT_DEBUG(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
+            LOG_DEBUG(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
         }
         else
         {
@@ -1013,7 +1013,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     rlim.rlim_cur,
                     strerror(errno));
             else
-                LOG_FMT_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
+                LOG_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
         }
     }
 
@@ -1021,7 +1021,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     Poco::ErrorHandler::set(&error_handler);
 
     /// Initialize DateLUT early, to not interfere with running time of first query.
-    LOG_FMT_DEBUG(log, "Initializing DateLUT.");
+    LOG_DEBUG(log, "Initializing DateLUT.");
     DateLUT::instance();
     LOG_TRACE(log, "Initialized DateLUT with time zone `{}`.", DateLUT::instance().getTimeZone());
 
@@ -1037,7 +1037,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             if (it->isFile() && startsWith(it.name(), "tmp"))
             {
-                LOG_FMT_DEBUG(log, "Removing old temporary file {}", it->path());
+                LOG_DEBUG(log, "Removing old temporary file {}", it->path());
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
             }
         }
@@ -1080,13 +1080,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize the background & blockable background thread pool.
     Settings & settings = global_context->getSettingsRef();
-    LOG_FMT_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
+    LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_FMT_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+    LOG_INFO(log, "Global PageStorage run mode is {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     /// Initialize RateLimiter.
     global_context->initializeRateLimiter(config(), bg_pool, blockable_bg_pool);
@@ -1143,7 +1143,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setFormatSchemaPath(format_schema_path.path() + "/");
     format_schema_path.createDirectories();
 
-    LOG_FMT_INFO(log, "Loading metadata.");
+    LOG_INFO(log, "Loading metadata.");
     loadMetadataSystem(*global_context); // Load "system" database. Its engine keeps as Ordinary.
     /// After attaching system databases we can initialize system log.
     global_context->initializeSystemLogs();
@@ -1158,7 +1158,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     // Initialize the thread pool of storage before the storage engine is initialized.
-    LOG_FMT_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+    LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(server_info);
@@ -1185,7 +1185,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Then, load remaining databases
         loadMetadata(*global_context);
     }
-    LOG_FMT_DEBUG(log, "Load metadata done.");
+    LOG_DEBUG(log, "Load metadata done.");
 
     /// Then, sync schemas with TiDB, and initialize schema sync service.
     for (int i = 0; i < 60; i++) // retry for 3 mins
@@ -1198,7 +1198,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         catch (Poco::Exception & e)
         {
             const int wait_seconds = 3;
-            LOG_FMT_ERROR(
+            LOG_ERROR(
                 log,
                 "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                 " seconds and try again.",
@@ -1207,7 +1207,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             ::sleep(wait_seconds);
         }
     }
-    LOG_FMT_DEBUG(log, "Sync schemas done.");
+    LOG_DEBUG(log, "Sync schemas done.");
 
     initStores(*global_context, log, storage_config.lazily_init_store);
 
@@ -1216,20 +1216,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->initializeSchemaSyncService();
     CPUAffinityManager::initCPUAffinityManager(config());
-    LOG_FMT_INFO(log, "CPUAffinity: {}", CPUAffinityManager::getInstance().toString());
+    LOG_INFO(log, "CPUAffinity: {}", CPUAffinityManager::getInstance().toString());
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,
           *  and also query_log.
           * It is important to do early, not in destructor of Context, because
           *  table engines could use Context on destroy.
           */
-        LOG_FMT_INFO(log, "Shutting down storages.");
+        LOG_INFO(log, "Shutting down storages.");
         // `SegmentReader` threads may hold a segment and its delta-index for read.
         // `Context::shutdown()` will destroy `DeltaIndexManager`.
         // So, stop threads explicitly before `TiFlashTestEnv::shutdown()`.
         DB::DM::SegmentReaderPoolManager::instance().stop();
         global_context->shutdown();
-        LOG_FMT_DEBUG(log, "Shutted down storages.");
+        LOG_DEBUG(log, "Shutted down storages.");
     });
 
     {
@@ -1267,7 +1267,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // on ARM processors it can show only enabled at current moment cores
             CurrentMetrics::set(CurrentMetrics::LogicalCPUCores, server_info.cpu_info.logical_cores);
             CurrentMetrics::set(CurrentMetrics::MemoryCapacity, server_info.memory_info.capacity);
-            LOG_FMT_INFO(
+            LOG_INFO(
                 log,
                 "Available RAM = {}; physical cores = {}; logical cores = {}.",
                 server_info.memory_info.capacity,
@@ -1275,7 +1275,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 server_info.cpu_info.logical_cores);
         }
 
-        LOG_FMT_INFO(log, "Ready for connections.");
+        LOG_INFO(log, "Ready for connections.");
 
         SCOPE_EXIT({
             is_cancelled = true;
@@ -1305,14 +1305,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (proxy_conf.is_proxy_runnable)
         {
             tiflash_instance_wrap.tmt = &tmt_context;
-            LOG_FMT_INFO(log, "Let tiflash proxy start all services");
+            LOG_INFO(log, "Let tiflash proxy start all services");
             tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
             // proxy update store-id before status set `RaftProxyStatus::Running`
             assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
-            LOG_FMT_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
+            LOG_INFO(log, "store {}, tiflash proxy is ready to serve, try to wake up all regions' leader", tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst));
             size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1); // if set 0, DO NOT enable read-index worker
             auto & kvstore_ptr = tmt_context.getKVStore();
             kvstore_ptr->initReadIndexWorkers(
@@ -1327,10 +1327,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SCOPE_EXIT({
             if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
             {
-                LOG_FMT_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
+                LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
                 exit(-1);
             }
-            LOG_FMT_INFO(log, "Set store context status Stopping");
+            LOG_INFO(log, "Set store context status Stopping");
             tmt_context.setStatusStopping();
             {
                 // Wait until there is no read-index task.
@@ -1339,19 +1339,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             tmt_context.setStatusTerminated();
             tmt_context.getKVStore()->stopReadIndexWorkers();
-            LOG_FMT_INFO(log, "Set store context status Terminated");
+            LOG_INFO(log, "Set store context status Terminated");
             {
                 // update status and let proxy stop all services except encryption.
                 tiflash_instance_wrap.status = EngineStoreServerStatus::Stopping;
-                LOG_FMT_INFO(log, "Set engine store server status Stopping");
+                LOG_INFO(log, "Set engine store server status Stopping");
             }
             // wait proxy to stop services
             if (proxy_conf.is_proxy_runnable)
             {
-                LOG_FMT_INFO(log, "Let tiflash proxy to stop all services");
+                LOG_INFO(log, "Let tiflash proxy to stop all services");
                 while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
                     std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                LOG_FMT_INFO(log, "All services in tiflash proxy are stopped");
+                LOG_INFO(log, "All services in tiflash proxy are stopped");
             }
         });
 
@@ -1370,10 +1370,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         catch (...)
         {
-            LOG_FMT_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
+            LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
         }
 
-        LOG_FMT_INFO(log, "Start to wait for terminal signal");
+        LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
         {
