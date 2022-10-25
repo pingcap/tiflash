@@ -316,7 +316,7 @@ private:
 public:
     DeltaSnapshotPtr clone()
     {
-        // for_update snapshots cannot be cloned.
+        // We only allow one for_update snapshots to exist, so it cannot be cloned.
         RUNTIME_CHECK(!is_update);
 
         auto c = std::make_shared<DeltaValueSnapshot>(type);

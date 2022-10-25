@@ -162,10 +162,12 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneNewlyAppended
     head_persisted_files.reserve(snapshot_persisted_files.size() + flushed_mem_files.size());
     head_persisted_files.insert(head_persisted_files.end(), snapshot_persisted_files.begin(), snapshot_persisted_files.end());
     // If there were flush since the snapshot, the flushed files should be behind the files in the snapshot.
+    // So let's place these "flused files" after the persisted files in snapshot.
     head_persisted_files.insert(head_persisted_files.end(), flushed_mem_files.begin(), flushed_mem_files.end());
 
     auto new_persisted_files = persisted_file_set->diffColumnFiles(head_persisted_files);
 
+    // The "newly added column files" + "files in snapshot" should be equal to current files.
     RUNTIME_CHECK(
         mem_table_set->getColumnFileCount() + persisted_file_set->getColumnFileCount() == //
         snapshot_mem_files.size() + snapshot_persisted_files.size() + //
@@ -184,12 +186,16 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneAllColumnFile
     WriteBatches & wbs) const
 {
     auto [new_mem_files, flushed_mem_files] = mem_table_set->diffColumnFiles({});
+    // As we are diffing the current memtable with an empty snapshot,
+    // we expect everything in the current memtable are "newly added" compared to this "empty snapshot",
+    // and none of the files in the "empty snapshot" was flushed.
     RUNTIME_CHECK(flushed_mem_files.empty());
-    auto new_persisted_files = persisted_file_set->diffColumnFiles({});
+    RUNTIME_CHECK(new_mem_files.size() == mem_table_set->getColumnFileCount());
 
-    RUNTIME_CHECK(
-        mem_table_set->getColumnFileCount() + persisted_file_set->getColumnFileCount() == //
-        new_mem_files.size() + new_persisted_files.size());
+    // We are diffing with an empty list, so everything in the current persisted layer
+    // should be considered as "newly added".
+    auto new_persisted_files = persisted_file_set->diffColumnFiles({});
+    RUNTIME_CHECK(new_persisted_files.size() == persisted_file_set->getColumnFileCount());
 
     return {
         CloneColumnFilesHelper<ColumnFilePtr>::clone(context, new_mem_files, target_range, wbs),

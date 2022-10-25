@@ -250,6 +250,7 @@ void MemTableSet::ingestColumnFiles(const RowKeyRange & range, const ColumnFiles
 ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(const StorageSnapshotPtr & storage_snap, bool disable_sharing)
 {
     // Disable append, so that new writes will not touch the content of this snapshot.
+    // This could lead to more fragmented IOs, so we don't do it for all snapshots.
     if (disable_sharing && !column_files.empty() && column_files.back()->isAppendable())
         column_files.back()->disableAppend();
 

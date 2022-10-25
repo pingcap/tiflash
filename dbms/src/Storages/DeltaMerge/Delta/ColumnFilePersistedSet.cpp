@@ -148,6 +148,12 @@ BlockPtr ColumnFilePersistedSet::getLastSchema()
 
 ColumnFilePersisteds ColumnFilePersistedSet::diffColumnFiles(const ColumnFiles & previous_column_files) const
 {
+    // It should not be not possible that files in the snapshots are removed when calling this
+    // function. So we simply expect there are more column files now.
+    // Major compaction and minor compaction are segment updates, which should be blocked by
+    // the for_update snapshot.
+    // TODO: We'd better enforce user to specify a for_update snapshot in the args, to ensure
+    //       that this function is called under a for_update snapshot context.
     RUNTIME_CHECK(previous_column_files.size() <= getColumnFileCount());
 
     // We check in the direction from the last level to the first level.
