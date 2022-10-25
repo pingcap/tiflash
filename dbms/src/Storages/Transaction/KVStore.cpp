@@ -42,7 +42,7 @@ KVStore::KVStore(Context & context, TiDB::SnapshotApplyMethod snapshot_apply_met
     : region_persister(std::make_unique<RegionPersister>(context, region_manager))
     , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , snapshot_apply_method(snapshot_apply_method_)
-    , log(&Poco::Logger::get("KVStore"))
+    , log(Logger::get())
     , region_compact_log_period(120)
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
@@ -129,7 +129,7 @@ void KVStore::traverseRegions(std::function<void(RegionID, const RegionPtr &)> &
         callback(region.first, region.second);
 }
 
-bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log, bool try_until_succeed)
+bool KVStore::tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed)
 {
     auto table_id = region.getMappedTableID();
     auto storage = tmt.getStorages().get(table_id);
@@ -428,6 +428,7 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     {
         // Before CompactLog, we ought to make sure all data of this region are persisted.
         // So proxy will firstly call an FFI `fn_try_flush_data` to trigger a attempt to flush data on TiFlash's side.
+        // An advance of apply index aka `handleWriteRaftCmd` is executed in `fn_try_flush_data`.
         // If the attempt fails, Proxy will filter execution of this CompactLog, which means every CompactLog observed by TiFlash can ALWAYS succeed now.
         // ref. https://github.com/pingcap/tidb-engine-ext/blob/e83a37d2d8d8ae1778fe279c5f06a851f8c9e56a/components/raftstore/src/engine_store_ffi/observer.rs#L175
         return EngineStoreApplyRes::Persist;
@@ -455,6 +456,8 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(raft_cmdpb::AdminRequest && requ
     case raft_cmdpb::AdminCmdType::CompactLog:
     case raft_cmdpb::AdminCmdType::VerifyHash:
     case raft_cmdpb::AdminCmdType::ComputeHash:
+    case raft_cmdpb::AdminCmdType::PrepareFlashback:
+    case raft_cmdpb::AdminCmdType::FinishFlashback:
         return handleUselessAdminRaftCmd(type, curr_region_id, index, term, tmt);
     default:
         break;
@@ -632,7 +635,7 @@ void WaitCheckRegionReady(
     double get_wait_region_ready_timeout_sec)
 {
     constexpr double batch_read_index_time_rate = 0.2; // part of time for waiting shall be assigned to batch-read-index
-    Poco::Logger * log = &Poco::Logger::get(__FUNCTION__);
+    auto log = Logger::get(__FUNCTION__);
 
     LOG_INFO(log,
              "start to check regions ready, min-wait-tick {}s, max-wait-tick {}s, wait-region-ready-timeout {:.3f}s",

@@ -88,6 +88,7 @@ BlockInputStreamPtr dbgFuncMockTiDBQuery(Context & context, const ASTs & args)
     return executeQuery(context, region_id, properties, query_tasks, func_wrap_output_stream);
 }
 
+
 void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInvoker::Printer output)
 {
     if (args.size() != 1)
@@ -107,7 +108,7 @@ void dbgFuncTiDBQueryFromNaturalDag(Context & context, const ASTs & args, DBGInv
         bool unequal_flag = false;
         bool failed_flag = false;
         String unequal_msg;
-        static auto log = Logger::get("MockDAG");
+        static auto log = Logger::get();
         try
         {
             unequal_flag = runAndCompareDagReq(req, res, context, unequal_msg);

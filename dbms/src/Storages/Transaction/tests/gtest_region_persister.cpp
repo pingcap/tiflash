@@ -247,7 +247,7 @@ try
     RegionMap regions;
     const TableID table_id = 100;
 
-    PageStorage::Config config;
+    PageStorageConfig config;
     config.file_roll_size = 128 * MB;
     {
         UInt64 diff = 0;
@@ -321,7 +321,7 @@ try
     RegionMap regions;
     TableID table_id = 100;
 
-    PageStorage::Config config;
+    PageStorageConfig config;
     config.file_roll_size = 16 * 1024;
     RegionManager region_manager;
     DB::Timestamp tso = 0;

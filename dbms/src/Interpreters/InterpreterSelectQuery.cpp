@@ -115,7 +115,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     , subquery_depth(subquery_depth_)
     , only_analyze(only_analyze)
     , input(input)
-    , log(Logger::get("InterpreterSelectQuery"))
+    , log(Logger::get())
 {
     init(required_result_column_names_);
 }
@@ -128,7 +128,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(OnlyAnalyzeTag, const ASTPtr & qu
     , to_stage(QueryProcessingStage::Complete)
     , subquery_depth(0)
     , only_analyze(true)
-    , log(Logger::get("InterpreterSelectQuery"))
+    , log(Logger::get())
 {
     init({});
 }

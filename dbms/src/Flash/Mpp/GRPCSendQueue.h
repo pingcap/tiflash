@@ -21,6 +21,7 @@
 #include <common/logger_useful.h>
 
 #include <functional>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -93,7 +94,7 @@ public:
     // For gtest usage.
     GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
         : send_queue(queue_size)
-        , log(Logger::get("GRPCSendQueue", "test"))
+        , log(Logger::get())
         , kick_func(func)
         , kick_tag([this]() { return kickTagAction(); })
     {}
@@ -102,7 +103,7 @@ public:
     {
         std::unique_lock lock(mu);
 
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", status);
+        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
     }
 
     /// Push the data from queue and kick the grpc completion queue.
@@ -164,12 +165,12 @@ public:
             // Handle this case later.
             break;
         default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", res);
+            RUNTIME_ASSERT(false, log, "Result {} is invalid", static_cast<Int32>(res));
         }
 
         std::unique_lock lock(mu);
 
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", status);
+        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
 
         // Double check if this queue is empty.
         res = send_queue.tryPop(data);
@@ -189,7 +190,7 @@ public:
             return GRPCSendQueueRes::EMPTY;
         }
         default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", res);
+            RUNTIME_ASSERT(false, log, "Result {} is invalid", magic_enum::enum_name(res));
         }
     }
 
@@ -213,7 +214,7 @@ private:
     {
         std::unique_lock lock(mu);
 
-        RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", status);
+        RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", magic_enum::enum_name(status));
         status = Status::NONE;
 
         return std::exchange(tag, nullptr);

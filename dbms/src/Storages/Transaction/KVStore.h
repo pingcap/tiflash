@@ -93,7 +93,7 @@ public:
 
     void tryPersist(RegionID region_id);
 
-    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log, bool try_until_succeed = true);
+    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
@@ -132,6 +132,8 @@ public:
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
+    // Exported only for tests.
+    TiFlashRaftProxyHelper * mutProxyHelperUnsafe() { return const_cast<TiFlashRaftProxyHelper *>(proxy_helper); }
 
     TiDB::SnapshotApplyMethod applyMethod() const { return snapshot_apply_method; }
 
@@ -255,7 +257,7 @@ private:
 
     TiDB::SnapshotApplyMethod snapshot_apply_method;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::atomic<UInt64> region_compact_log_period;
     std::atomic<UInt64> region_compact_log_min_rows;

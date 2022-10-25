@@ -28,7 +28,7 @@ LimitBlockInputStream::LimitBlockInputStream(
     : limit(limit_)
     , offset(offset_)
     , always_read_till_end(always_read_till_end_)
-    , log(Logger::get(NAME, req_id))
+    , log(Logger::get(req_id))
 {
     children.push_back(input);
 }

@@ -35,7 +35,7 @@ public:
     DMDeleteFilterBlockInputStream(const BlockInputStreamPtr & input, const ColumnDefines & columns_to_read_, const String & tracing_id = "")
         : columns_to_read(columns_to_read_)
         , header(toEmptyBlock(columns_to_read))
-        , log(Logger::get("DMDeleteFilterBlockInputStream", tracing_id))
+        , log(Logger::get(tracing_id))
     {
         children.emplace_back(input);
         delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
