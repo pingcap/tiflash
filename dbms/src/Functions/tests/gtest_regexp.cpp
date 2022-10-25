@@ -2185,22 +2185,117 @@ TEST_F(Regexp, testRegexpCustomerCases)
     }
 }
 
+struct RegexpInstrCase
+{
+    RegexpInstrCase(Int64 res, const String & expr, const String & pat, Int64 pos = 1, Int64 occur = 1, Int64 ret_op = 0, const String & mt = "")
+        : result(res)
+        , expression(expr)
+        , pattern(pat)
+        , position(pos)
+        , occurrence(occur)
+        , return_option(ret_op)
+        , match_type(mt)
+        {}
+
+    static std::vector<Int64> getResultVec(const std::vector<RegexpInstrCase> & test_cases)
+    {
+        std::vector<Int64> vecs;
+        vecs.reserve(test_cases.size());
+        for (const auto & elem : test_cases)
+            vecs.push_back(elem.result);
+        
+        return vecs;
+    }
+
+    static std::vector<String> getExprVec(const std::vector<RegexpInstrCase> & test_cases)
+    {
+        std::vector<String> vecs;
+        vecs.reserve(test_cases.size());
+        for (const auto & elem : test_cases)
+            vecs.push_back(elem.expression);
+        
+        return vecs;
+    }
+
+    static std::vector<String> getPatVec(const std::vector<RegexpInstrCase> & test_cases)
+    {
+        std::vector<String> vecs;
+        vecs.reserve(test_cases.size());
+        for (const auto & elem : test_cases)
+            vecs.push_back(elem.pattern);
+        
+        return vecs;
+    }
+
+    static std::vector<Int64> getPosVec(const std::vector<RegexpInstrCase> & test_cases)
+    {
+        std::vector<Int64> vecs;
+        vecs.reserve(test_cases.size());
+        for (const auto & elem : test_cases)
+            vecs.push_back(elem.position);
+        
+        return vecs;
+    }
+
+    static std::vector<Int64> getOccurVec(const std::vector<RegexpInstrCase> & test_cases)
+    {
+        std::vector<Int64> vecs;
+        vecs.reserve(test_cases.size());
+        for (const auto & elem : test_cases)
+            vecs.push_back(elem.occurrence);
+        
+        return vecs;
+    }
+
+    static std::vector<Int64> getRetOpVec(const std::vector<RegexpInstrCase> & test_cases)
+    {
+        std::vector<Int64> vecs;
+        vecs.reserve(test_cases.size());
+        for (const auto & elem : test_cases)
+            vecs.push_back(elem.return_option);
+        
+        return vecs;
+    }
+
+    static std::vector<String> getMatchTypeVec(const std::vector<RegexpInstrCase> & test_cases)
+    {
+        std::vector<String> vecs;
+        vecs.reserve(test_cases.size());
+        for (const auto & elem : test_cases)
+            vecs.push_back(elem.match_type);
+        
+        return vecs;
+    }
+
+    Int64 result;
+    String expression;
+    String pattern;
+    Int64 position;
+    Int64 occurrence;
+    Int64 return_option;
+    String match_type;
+};
+
 TEST_F(Regexp, RegexpInstr)
 {
+    std::cout << "test1\n";
     // Test: All columns are const
     {
         size_t row_size = 2;
+        std::cout << "test1.1\n";
         ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 1),
                             executeFunction(
                                 "regexp_instr",
                                 createConstColumn<String>(row_size, "123"),
                                 createConstColumn<String>(row_size, "12.")));
+        std::cout << "test1.2\n";
         ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 0),
                             executeFunction(
                                 "regexp_instr",
                                 createConstColumn<String>(row_size, "123"),
                                 createConstColumn<String>(row_size, "12."),
                                 createConstColumn<UInt64>(row_size, 2)));
+        std::cout << "test1.3\n";
         ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 4),
                             executeFunction(
                                 "regexp_instr",
@@ -2208,6 +2303,7 @@ TEST_F(Regexp, RegexpInstr)
                                 createConstColumn<String>(row_size, "12"),
                                 createConstColumn<UInt8>(row_size, 2),
                                 createConstColumn<UInt64>(row_size, 2)));
+        std::cout << "test1.4\n";
         ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 6),
                             executeFunction(
                                 "regexp_instr",
@@ -2216,6 +2312,7 @@ TEST_F(Regexp, RegexpInstr)
                                 createConstColumn<UInt64>(row_size, 2),
                                 createConstColumn<Int16>(row_size, 2),
                                 createConstColumn<Int32>(row_size, 1)));
+        std::cout << "test1.5\n";
         ASSERT_COLUMN_EQ(createConstColumn<Int64>(row_size, 6),
                             executeFunction(
                                 "regexp_instr",
@@ -2227,20 +2324,24 @@ TEST_F(Regexp, RegexpInstr)
                                 createConstColumn<String>(row_size, "i")));
     }
 
+    std::cout << "test2\n";
     // Test: null const
     {
         size_t row_size = 2;
+        std::cout << "test2.1\n";    
         ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
                             executeFunction(
                                 "regexp_instr",
                                 createConstColumn<Nullable<String>>(row_size, {}),
                                 createConstColumn<String>(row_size, "123")));
+        std::cout << "test2.2\n";    
         
         ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
                             executeFunction(
                                 "regexp_instr",
                                 createConstColumn<String>(row_size, "123"),
                                 createConstColumn<Nullable<String>>(row_size, {})));
+        std::cout << "test2.3\n";    
 
         ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
                             executeFunction(
@@ -2248,6 +2349,7 @@ TEST_F(Regexp, RegexpInstr)
                                 createConstColumn<String>(row_size, "123"),
                                 createConstColumn<String>(row_size, "12."),
                                 createConstColumn<Nullable<UInt8>>(row_size, {})));
+        std::cout << "test2.4\n";    
 
         ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
                             executeFunction(
@@ -2256,6 +2358,7 @@ TEST_F(Regexp, RegexpInstr)
                                 createConstColumn<String>(row_size, "12."),
                                 createConstColumn<Int8>(row_size, 2),
                                 createConstColumn<Nullable<UInt8>>(row_size, {})));
+        std::cout << "test2.5\n";    
 
         ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
                             executeFunction(
@@ -2265,6 +2368,7 @@ TEST_F(Regexp, RegexpInstr)
                                 createConstColumn<Int8>(row_size, 2),
                                 createConstColumn<Int8>(row_size, 2),
                                 createConstColumn<Nullable<UInt8>>(row_size, {})));
+        std::cout << "test2.6\n";    
 
         ASSERT_COLUMN_EQ(createConstColumn<Nullable<Int64>>(row_size, {}),
                             executeFunction(
@@ -2277,38 +2381,126 @@ TEST_F(Regexp, RegexpInstr)
                                 createConstColumn<Nullable<String>>(row_size, {})));
     }
 
+    std::cout << "test3\n";
     // Test: All columns are pure vector
     {
+        std::vector<RegexpInstrCase> test_cases;
+        std::vector<Int64> results;
         std::vector<String> exprs{"ttttifl", "tidb_tikv", "aaaaaa", "\n", "", "ab\naB", "pp跑ppのaaa"};
         std::vector<String> patterns{"tifl", "ti(db|kv)", "aa", ".", "^$", "^ab$", "(跑|の|P)"};
-        std::vector<Int64> results{4, 1, 1, 0, 1, 0, 3};
+        std::vector<Int64> positions;
+        std::vector<Int64> occurs;
+        std::vector<Int64> return_options;
+        std::vector<String> match_types;
 
         // test regexp_instr(vector, vector)
+        std::cout << "test3.1\n";
+        test_cases = {{4, "ttttifl", "tifl"},
+                      {1, "tidb_tikv", "ti(db|kv)"},
+                      {1, "aaaaaa", "aa"},
+                      {0, "\n", "."},
+                      {1, "", "^$"},
+                      {0, "ab\naB", "^ab$"},
+                      {3, "pp跑ppのaaa", "(跑|の|P)"}};
+        exprs = RegexpInstrCase::getExprVec(test_cases);
+        patterns = RegexpInstrCase::getPatVec(test_cases);
+        results = RegexpInstrCase::getResultVec(test_cases);
+        ASSERT_COLUMN_EQ(createColumn<Int64>(results),
+                        executeFunction(
+                            "regexp_instr",
+                            createColumn<String>(exprs),
+                            createColumn<String>(patterns)));
+
+        // test regexp_instr(vector, vector, vector)
+        std::cout << "test3.2\n";
+        test_cases = {{4, "ttttifl", "tifl", 3},
+                      {6, "tidb_tikv", "ti(db|kv)", 2},
+                      {3, "aaaaaa", "aa", 3},
+                      {0, "\n", ".", 1},
+                      {3, "", "^$", 3},
+                      {0, "ab\naB", "^ab$", 1},
+                      {3, "pp跑ppのaaa", "(跑|の|P)", 2}};
+        exprs = RegexpInstrCase::getExprVec(test_cases);
+        patterns = RegexpInstrCase::getPatVec(test_cases);
+        positions = RegexpInstrCase::getPosVec(test_cases);
+        results = RegexpInstrCase::getResultVec(test_cases);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
                              "regexp_instr",
                              createColumn<String>(exprs),
-                             createColumn<String>(patterns)));
-
-        std::vector<UInt32> positions{};
-        results = {};
-
-        // test regexp_instr(vector, vector, vector)
-
-        std::vector<Int64> occurs{};
-        results = {};
+                             createColumn<String>(patterns),
+                             createColumn<Int32>(positions)));
 
         // test regexp_instr(vector, vector, vector, vector)
-
-        std::vector<UInt8> return_options{};
-        results = {};
+        std::cout << "test3.3\n";
+        test_cases = {{4, "ttttifl", "tifl", 3, 1},
+                      {6, "tidb_tikv", "ti(db|kv)", 2, 1},
+                      {5, "aaaaaa", "aa", 3, 2},
+                      {0, "\n", ".", 1, 1}, {0, "", "^$", 3, 2},
+                      {0, "ab\naB", "^ab$", 1, 1},
+                      {6, "pp跑ppのaaa", "(跑|の|P)", 2, 2}};
+        exprs = RegexpInstrCase::getExprVec(test_cases);
+        patterns = RegexpInstrCase::getPatVec(test_cases);
+        positions = RegexpInstrCase::getPosVec(test_cases);
+        occurs = RegexpInstrCase::getOccurVec(test_cases);
+        results = RegexpInstrCase::getResultVec(test_cases);
+        ASSERT_COLUMN_EQ(createColumn<Int64>(results),
+                         executeFunction(
+                             "regexp_instr",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs)));
 
         // test regexp_instr(vector, vector, vector, vector, vector)
-
-        std::vector<String> match_types{};
-        results = {};
+        std::cout << "test3.4\n";
+        test_cases = {{8, "ttttifl", "tifl", 3, 1, 1},
+                      {10, "tidb_tikv", "ti(db|kv)", 2, 1, 1},
+                      {7, "aaaaaa", "aa", 3, 2, 1},
+                      {0, "\n", ".", 1, 1, 1},
+                      {0, "", "^$", 3, 2, 1},
+                      {0, "ab\naB", "^ab$", 1, 1, 1},
+                      {7, "pp跑ppのaaa", "(跑|の|P)", 2, 2, 1}};
+        exprs = RegexpInstrCase::getExprVec(test_cases);
+        patterns = RegexpInstrCase::getPatVec(test_cases);
+        positions = RegexpInstrCase::getPosVec(test_cases);
+        occurs = RegexpInstrCase::getOccurVec(test_cases);
+        return_options = RegexpInstrCase::getRetOpVec(test_cases);
+        results = RegexpInstrCase::getResultVec(test_cases);
+        ASSERT_COLUMN_EQ(createColumn<Int64>(results),
+                         executeFunction(
+                             "regexp_instr",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs),
+                             createColumn<Int32>(return_options)));
 
         // test regexp_instr(vector, vector, vector, vector, vector, vector)
+        std::cout << "test3.5\n";
+        test_cases = {{8, "ttttifl", "tifl", 3, 1, 1, ""},
+                      {10, "tidb_tikv", "ti(db|kv)", 2, 1, 1, ""},
+                      {7, "aaaaaa", "aa", 3, 2, 1, ""},
+                      {2, "\n", ".", 1, 1, 1, "s"},
+                      {0, "", "^$", 3, 2, 1, ""},
+                      {3, "ab\naB", "^ab$", 1, 1, 1, "mi"},
+                      {4, "pp跑ppのaaa", "(跑|の|P)", 2, 2, 1, "i"}};
+        exprs = RegexpInstrCase::getExprVec(test_cases);
+        patterns = RegexpInstrCase::getPatVec(test_cases);
+        positions = RegexpInstrCase::getPosVec(test_cases);
+        occurs = RegexpInstrCase::getOccurVec(test_cases);
+        return_options = RegexpInstrCase::getRetOpVec(test_cases);
+        match_types = RegexpInstrCase::getMatchTypeVec(test_cases);
+        results = RegexpInstrCase::getResultVec(test_cases);
+        ASSERT_COLUMN_EQ(createColumn<Int64>(results),
+                         executeFunction(
+                             "regexp_instr",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs),
+                             createColumn<Int32>(return_options),
+                             createColumn<String>(match_types)));
 
         // TODO collation
     }

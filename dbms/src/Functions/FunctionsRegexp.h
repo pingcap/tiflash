@@ -259,6 +259,7 @@ public:
         throw Exception("Shouldn't call this constructor");
     }
 
+    static void setIntType(IntType) {}
     static IntType getIntType() { return IntType::Int64; }
 
     template <typename T>
@@ -266,6 +267,7 @@ public:
     static String getString(size_t) { return String(""); }
     void getStringRef(size_t, StringRef &) const {}
     constexpr static bool isConst() { return true; }
+    void setContainer(const void *) {}
     static const void * getContainer() { return nullptr; }
 
 private:
@@ -318,6 +320,7 @@ public:
             throw Exception("const parm should not call this constructor");
     }
 
+    static void setIntType(IntType) { throw Exception("ParamString not supports this function"); }
     static IntType getIntType() { throw Exception("ParamString not supports this function"); }
 
     template <typename T>
@@ -348,6 +351,7 @@ public:
 
     constexpr static bool isConst() { return is_const; }
 
+    void setContainer(const void *) {}
     const void * getContainer() const { return nullptr; }
 
 private:
@@ -366,7 +370,6 @@ class ParamInt
 {
 public:
     DISALLOW_COPY_AND_MOVE(ParamInt);
-
 
     explicit ParamInt(Int64 val)
         : const_int_val(val)
@@ -411,15 +414,17 @@ public:
             return const_int_val;
         else
         {
-            const auto * tmp = reinterpret_cast<const typename ColumnVector<std::enable_if_t<check_int_type<T>, T>>::Container *>(int_container);
+            const auto * tmp = reinterpret_cast<const typename ColumnVector<std::enable_if_t<check_int_type<T>(), T>>::Container *>(int_container);
             return static_cast<Int64>((*tmp)[idx]);
         }
     }
 
+    void setIntType(IntType int_type_) { int_type = int_type_; }
     IntType getIntType() const { return int_type; }
     String getString(size_t) const { throw Exception("ParamInt not supports this function"); }
     void getStringRef(size_t, StringRef &) const { throw Exception("ParamInt not supports this function"); }
     constexpr static bool isConst() { return is_const; }
+    void setContainer(const void * container) { int_container = container; }
     const void * getContainer() const { return int_container; }
 
 private:
@@ -514,10 +519,12 @@ public:
             return false;
     }
 
+    void setIntType(IntType int_type) { data.setIntType(int_type); }
     IntType getIntType() const { return data.getIntType(); }
     size_t getDataNum() const { return col_size; }
     constexpr static bool isNullableCol() { return is_null; }
     constexpr static bool isConst() { return ParamImplType::isConst(); }
+    void setContainer(const void * container) { data.setContainer(container); }
     const void * getContainer() const { return data.getContainer(); }
 
 private:
@@ -552,34 +559,34 @@ private:
 #define REGEXP_CLASS_MEM_FUNC_IMPL_NAME process
 
 // Method to convert nullable string column
-// processed_col is impossible to be const here
-#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, processed_col, next_process)                                                                                               \
+// converted_col is impossible to be const here
+#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                                                               \
     do                                                                                                                                                                       \
     {                                                                                                                                                                        \
-        size_t col_size = (processed_col)->size();                                                                                                                           \
-        if (((processed_col)->isColumnNullable()))                                                                                                                           \
+        size_t col_size = (converted_col)->size();                                                                                                                           \
+        if (((converted_col)->isColumnNullable()))                                                                                                                           \
         {                                                                                                                                                                    \
-            auto nested_ptr = static_cast<const ColumnNullable &>(*(processed_col)).getNestedColumnPtr();                                                                    \
+            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();                                                                    \
             const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));                                                                                              \
-            const auto * null_map = &(static_cast<const ColumnNullable &>(*(processed_col)).getNullMapData());                                                               \
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());                                                               \
             Param<ParamString<false>, true>(param_name)(col_size, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets()))); \
-            next_process;                                                                                                                                                    \
+            next_convertion;                                                                                                                                                    \
         }                                                                                                                                                                    \
         else                                                                                                                                                                 \
         {                                                                                                                                                                    \
             /* This is a pure string vector column */                                                                                                                        \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(processed_col)));                                                                                         \
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(converted_col)));                                                                                         \
             Param<ParamString<false>, false>(param_name)(col_size, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));          \
-            next_process;                                                                                                                                                    \
+            next_convertion;                                                                                                                                                    \
         }                                                                                                                                                                    \
     } while (0);
 
 // Method to convert const string column to param
-#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, processed_col, next_process)                                             \
+#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                             \
     do                                                                                                                      \
     {                                                                                                                       \
-        size_t col_size = (processed_col)->size();                                                                          \
-        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(processed_col)));                                     \
+        size_t col_size = (converted_col)->size();                                                                          \
+        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                     \
         if (col_const != nullptr)                                                                                           \
         {                                                                                                                   \
             auto col_const_data = col_const->getDataColumnPtr();                                                            \
@@ -590,87 +597,144 @@ private:
             {                                                                                                               \
                 const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
                 Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()), null_map);  \
-                next_process;                                                                                       \
+                next_convertion;                                                                                       \
             }                                                                                                               \
             else                                                                                                            \
             {                                                                                                               \
-                /* const col */                                                                                             \
                 Param<ParamString<true>, false>(param_name)(col_size, col_const->getDataAt(0));                             \
-                next_process;                                                                                               \
+                next_convertion;                                                                                               \
             }                                                                                                               \
         }                                                                                                                   \
         else                                                                                                                \
         {                                                                                                                   \
-            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (processed_col), next_process)                                     \
+            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (converted_col), next_convertion)                                     \
         }                                                                                                                   \
     } while (0);
 
 // Method to convert nullable int column to param
-// processed_col is impossible to be const here
-#define CONVERT_NULL_INT_COL_TO_PARAM(param_name, processed_col, next_process)                                 \
+// converted_col is impossible to be const here
+#define CONVERT_NULL_INT_COL_TO_PARAM(param_name, converted_col, next_convertion)                                 \
     do                                                                                                         \
     {                                                                                                          \
-        size_t col_size = (processed_col)->size();                                                             \
-        if ((processed_col)->isColumnNullable())                                                               \
+        size_t col_size = (converted_col)->size();                                                             \
+        if ((converted_col)->isColumnNullable())                                                               \
         {                                                                                                      \
-            auto nested_ptr = static_cast<const ColumnNullable &>(*(processed_col)).getNestedColumnPtr();      \
-            const auto * null_map = &(static_cast<const ColumnNullable &>(*(processed_col)).getNullMapData());              \
+            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();      \
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());              \
+            Param<ParamInt<false>, true> (param_name)(col_size, null_map, nullptr, IntType::Int64); /* The thrid and fourth parameters are useless here */ \
             /* various int types may be input, we need to check them one by one */                             \
             if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(nested_ptr))))                      \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::UInt8);        \
+            { \
+                (param_name).setIntType(IntType::UInt8); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(nested_ptr))))                \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::UInt16);       \
+            { \
+                (param_name).setIntType(IntType::UInt16); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(nested_ptr))))                 \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::UInt32);       \
+            { \
+                (param_name).setIntType(IntType::UInt32); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(nested_ptr))))                 \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::UInt64);       \
+            { \
+                (param_name).setIntType(IntType::UInt64); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnUInt128 *>(&(*(nested_ptr))))                \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::UInt128);      \
+            { \
+                (param_name).setIntType(IntType::UInt128); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(nested_ptr))))                   \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::Int8);         \
+            { \
+                (param_name).setIntType(IntType::Int8); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(nested_ptr))))                  \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::Int16);        \
+            { \
+                (param_name).setIntType(IntType::UInt8); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(nested_ptr))))                  \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::Int32);        \
+            { \
+                (param_name).setIntType(IntType::Int32); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(nested_ptr))))                  \
-                Param<ParamInt<false>, true>(param_name)(col_size, null_map, &(ptr->getData()), IntType::Int64);        \
+            { \
+                (param_name).setIntType(IntType::Int64); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else                                                                                               \
                 throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT); \
+            next_convertion; \
         }                                                                                                      \
         else                                                                                                   \
         {                                                                                                      \
             /* This is a pure vector column */                                                                 \
             /* various int types may be input, we need to check them one by one */                             \
-            if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(processed_col))))                    \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::UInt8);                 \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(processed_col))))              \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::UInt16);                \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(processed_col))))              \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::UInt32);                \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(processed_col))))              \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::UInt64);                \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt128 *>(&(*(processed_col))))             \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::UInt128);               \
-            else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(processed_col))))                \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::Int8);                  \
-            else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(processed_col))))               \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::Int16);                 \
-            else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(processed_col))))               \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::Int32);                 \
-            else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(processed_col))))               \
-                Param<ParamInt<false>, false>(param_name)(col_size, &(ptr->getData()), IntType::Int64);                 \
+            Param<ParamInt<false>, false>(param_name)(col_size, nullptr, IntType::Int64); /* The second and third parameters are useless here */  \
+            if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(converted_col))))                    \
+            { \
+                (param_name).setIntType(IntType::UInt8); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(converted_col))))              \
+            { \
+                (param_name).setIntType(IntType::UInt16); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(converted_col))))              \
+            { \
+                (param_name).setIntType(IntType::UInt32); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(converted_col))))              \
+            { \
+                (param_name).setIntType(IntType::UInt64); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnUInt128 *>(&(*(converted_col))))             \
+            { \
+                (param_name).setIntType(IntType::UInt128); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(converted_col))))                \
+            { \
+                (param_name).setIntType(IntType::Int8); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(converted_col))))               \
+            { \
+                (param_name).setIntType(IntType::Int16); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(converted_col))))               \
+            { \
+                (param_name).setIntType(IntType::Int32); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
+            else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(converted_col))))               \
+            { \
+                (param_name).setIntType(IntType::Int64); \
+                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
+            } \
             else                                                                                               \
                 throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT); \
+            next_convertion; \
         }                                                                                                      \
     } while (0);
 
 // Method to convert const int column
-#define CONVERT_CONST_INT_COL_TO_PARAM(param_name, processed_col, next_process)                                                              \
+#define CONVERT_CONST_INT_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                              \
     do                                                                                                                                       \
     {                                                                                                                                        \
         std::cout << "CONVERT_CONST_INT_COL_TO_PARAM1\n"; \
-        size_t col_size = (processed_col)->size();                                                                                           \
-        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(processed_col)));                                                      \
+        size_t col_size = (converted_col)->size();                                                                                           \
+        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                                      \
         if (col_const != nullptr)                                                                                                            \
         {                                                                                                                                    \
             std::cout << "CONVERT_CONST_INT_COL_TO_PARAM4\n"; \
@@ -680,18 +744,18 @@ private:
             auto col_const_data = col_const->getDataColumnPtr();                                                                             \
             if (col_const_data->isColumnNullable())                                                                                          \
             {                                                                                                                                \
-                /* This is a const nullable column */                                                                                        \
-                Param<ParamInt<true>, true>(param_name)(col_size, data_int64);                                                        \
-                next_process;                                                                                                                \
+                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
+                Param<ParamInt<true>, true>(param_name)(col_size, data_int64, null_map);  \
+                next_convertion;                                                                                                                \
             }                                                                                                                                \
             else                                                                                                                             \
             {                                                                                                                                \
                 Param<ParamInt<true>, false>(param_name)(col_size, data_int64);                                                       \
-                next_process;                                                                                                                \
+                next_convertion;                                                                                                                \
             }                                                                                                                                \
         }                                                                                                                                    \
         else                                                                                                                                 \
-            CONVERT_NULL_INT_COL_TO_PARAM((param_name), (processed_col), next_process)                                                      \
+            CONVERT_NULL_INT_COL_TO_PARAM((param_name), (converted_col), next_convertion)                                                      \
     } while (0);
 
 
@@ -824,7 +888,7 @@ private:
             CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_LIKE()})) \
         else                                                                                                                  \
         {                                                                                                                     \
-            /* match_type is not provided here and set default values */                                                                             \
+            /* match_type is not provided here and set default values */                                                      \
             Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
             EXECUTE_REGEXP_LIKE()                                                                                             \
         }                                                                                                                     \
@@ -1040,8 +1104,6 @@ public:
         // Do something related with nullable columns
         NullPresence null_presence = getNullPresense(block, arguments);
 
-        const ColumnPtr & EXPR_COL_PTR_VAR_NAME = block.getByPosition(arguments[0]).column;
-
         if (null_presence.has_null_constant)
         {
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
@@ -1081,10 +1143,10 @@ private:
 #define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
     do                                                                                                                             \
     { \
-                std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM1\n"; \
+        std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME == REGEXP_INSTR_MAX_PARAM_NUM) \
         { \
-                std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM2\n"; \
+            std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM2\n"; \
             CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_INSTR()})) \
         } \
         else                                                                          \
@@ -1098,11 +1160,11 @@ private:
 #define CONVERT_RET_OP_COL_TO_PARAM() \
     do \
     { \
-            std::cout << "CONVERT_RET_OP_COL_TO_PARAM1\n"; \
+        std::cout << "CONVERT_RET_OP_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 3) \
         { \
-                std::cout << "CONVERT_RET_OP_COL_TO_PARAM2\n"; \
-            Param<ParamDefault, false> RET_OP_PARAM_VAR_NAME(-1, 0); \
+            std::cout << "CONVERT_RET_OP_COL_TO_PARAM2\n"; \
+            Param<ParamDefault, false> RET_OP_PARAM_VAR_NAME(-1, static_cast<Int64>(0)); \
             CONVERT_MATCH_TYPE_COL_TO_PARAM() \
         } \
         else \
@@ -1113,11 +1175,11 @@ private:
 #define CONVERT_OCCUR_COL_TO_PARAM() \
     do \
     { \
-            std::cout << "CONVERT_OCCUR_COL_TO_PARAM1\n"; \
+        std::cout << "CONVERT_OCCUR_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 2) \
         { \
-                std::cout << "CONVERT_OCCUR_COL_TO_PARAM2\n"; \
-            Param<ParamDefault, false> OCCUR_PARAM_VAR_NAME(-1, 1); \
+            std::cout << "CONVERT_OCCUR_COL_TO_PARAM2\n"; \
+            Param<ParamDefault, false> OCCUR_PARAM_VAR_NAME(-1, static_cast<Int64>(1)); \
             CONVERT_RET_OP_COL_TO_PARAM() \
         } \
         else \
@@ -1132,7 +1194,7 @@ private:
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 1) \
         { \
                 std::cout << "CONVERT_POS_COL_TO_PARAM2\n"; \
-            Param<ParamDefault, false> POS_PARAM_VAR_NAME(-1, 1); \
+            Param<ParamDefault, false> POS_PARAM_VAR_NAME(-1, static_cast<Int64>(1)); \
             CONVERT_OCCUR_COL_TO_PARAM() \
         } \
         else \
@@ -1222,27 +1284,18 @@ public:
         const void * occur_container =  occur_param.getContainer();
         const void * ret_op_container =  ret_op_param.getContainer();
 
-        // Const value will not be used when the param is not const
+        // Const value will not be used when param is not const
         Int64 pos_const_val = PosT::isConst() ? pos_param.template getInt<Int64>(0) : -1;
-        Int64 occur_const_val = OccurT::isConst() ? occur_param. template getInt<Int64>(0) : -1;
-        Int64 ret_op_const_val = RetOpT::isConst() ? ret_op_param. template getInt<Int64>(0) : -1;
+        Int64 occur_const_val = OccurT::isConst() ? occur_param.template getInt<Int64>(0) : -1;
+        Int64 ret_op_const_val = RetOpT::isConst() ? ret_op_param.template getInt<Int64>(0) : -1;
 
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && PosT::isConst() && OccurT::isConst() && RetOpT::isConst() && MatchTypeT::isConst())
         {
-            // TODO check
-            if (expar_param.isNullAt(0) || par_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
+            if (col_size == 0 || expar_param.isNullAt(0) || par_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
             {
-                auto col_res = ColumnVector<ResultType>::create();
-                typename ColumnVector<ResultType>::Container & VEC_RES_VAR_NAME = col_res->getData();
-                VEC_RES_VAR_NAME.resize(col_size, 0);
-
-                auto nullmap_col = ColumnUInt8::create();
-                typename ColumnUInt8::Container & null_map = nullmap_col->getData();
-                null_map.resize(col_size, 1);
-
-                res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
-                res_arg.column = res_arg.type->createColumn();
+                res_arg.column = res_arg.type->createColumnConst(col_size, Null());
+                return;
             }
             
             int flags = getDefaultFlags();
@@ -1251,9 +1304,9 @@ public:
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
-            Int64 pos = if PosT::isConst() ? pos_const_val : get_pos_func(pos_container, idx);
-            Int64 occur = if OccurT::isConst() ? occur_const_val : get_occur_func(occur_container, idx);
-            Int64 ret_op = if RetOpT::isConst() ? ret_op_const_val : get_ret_op_func(ret_op_container, idx);
+            Int64 pos = PosT::isConst() ? pos_const_val : get_pos_func(pos_container, 0);
+            Int64 occur = OccurT::isConst() ? occur_const_val : get_occur_func(occur_container, 0);
+            Int64 ret_op = RetOpT::isConst() ? ret_op_const_val : get_ret_op_func(ret_op_container, 0);
             String match_type = match_type_param.getString(0);
 
             Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, COLLATOR_VAR_NAME), flags);
@@ -1310,7 +1363,8 @@ public:
         // Start to execute instr
         if (isMemorized())
         {
-            // Codes in this if-condition execute instr with memorized regexp
+            // Codes in this if branch execute instr with memorized regexp
+
             const auto & regexp = getRegexp();
             if constexpr (has_nullable_col)
             {
@@ -1353,7 +1407,8 @@ public:
         }
         else
         {
-            // Codes in this if-condition execute instr without memorized regexp
+            // Codes in this if branch execute instr without memorized regexp
+
             if constexpr (has_nullable_col)
             {
                 // Process nullable columns without memorized regexp
@@ -1414,9 +1469,8 @@ public:
         // Do something related with nullable columns
         NullPresence null_presence = getNullPresense(block, arguments);
 
-        if (null_presence.has_const_null_col || null_presence.has_data_type_nothing)
+        if (null_presence.has_null_constant)
         {
-            // There is a const null column in the input
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }

@@ -543,6 +543,21 @@ static inline size_t getMatchedIndex(const char * str, const char * sub_str, siz
 
     return start_offset;
 }
+
+// We use this function when expr string is empty
+template <bool thread_safe>
+Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const char * expr, size_t expr_size, size_t pos, Int64 occur)
+{
+    if (occur != 1)
+        return 0;
+
+    StringPieceType expr_sp(expr, expr_size);
+    bool success = RegexType::FindAndConsume(&expr_sp, *re2);
+    if (!success)
+        return 0;
+    return pos;
+}
+
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
@@ -551,18 +566,24 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
     if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
         throw DB::Exception("Index out of bounds in regular expression search.");
 
-    String matched_str; // store the matched substring
+    if (occur <= 0)
+        occur = 1;
 
-    // This is a offset for bytes, not utf8
+    if (unlikely(subject_size == 0))
+    {
+        // Process empty expr in this if branch
+        return processEmptyStringExpr(subject, subject_size, pos, occur);
+    }
+
     size_t byte_pos = utf8Pos2bytePos(subject, pos);
-    size_t byte_offset = byte_pos - 1;
-
-    const char * expr = subject + byte_offset; // expr is the string actually passed into regexp to be matched
+    size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
+    const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
 
     size_t matched_index = 0;
     StringPieceType expr_sp(expr, expr_size);
     size_t matched_str_size = 0;
+    String matched_str; // store the matched substring
 
     while (occur > 0)
     {
