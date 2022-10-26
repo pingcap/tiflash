@@ -497,8 +497,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     UInt64 lowest_seq,
     std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
     PageEntriesV3 * entries_removed,
-    const PageLock & /*page_lock*/,
-    bool keep_last_valid_var_entry)
+    const PageLock & /*page_lock*/)
 {
     if (type == EditRecordType::VAR_EXTERNAL)
     {
@@ -548,11 +547,8 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     // If the first version less than <lowest_seq+1, 0> is entry,
     // then we can remove those entries prev of it.
     // If the first version less than <lowest_seq+1, 0> is delete,
-    // we may keep the first valid entry before the delete entry in the following case:
-    //  1) if `keep_last_valid_var_entry` is true
-    //     (this is only used when dump snapshot because there may be some upsert entry in later wal files,
-    //     so we need keep the last valid entry here to avoid the delete entry being removed)
-    //  2) if `being_ref_count` > 1(this means the entry is ref by other entries)
+    // we may keep the first valid entry before the delete entry
+    // if `being_ref_count` > 1 (this means the entry is ref by other entries)
     bool last_entry_is_delete = !iter->second.isEntry();
     --iter; // keep the first version less than <lowest_seq+1, 0>
     while (true)
@@ -566,7 +562,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
         {
             if (last_entry_is_delete)
             {
-                if (!keep_last_valid_var_entry && iter->second.being_ref_count == 1)
+                if (iter->second.being_ref_count == 1)
                 {
                     if (entries_removed)
                     {
@@ -597,7 +593,7 @@ bool VersionedPageEntries::cleanOutdatedEntries(
     return entries.empty() || (entries.size() == 1 && entries.begin()->second.isDelete());
 }
 
-bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 * entries_removed, bool keep_last_valid_var_entry)
+bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal page_id, const PageVersion & deref_ver, const Int64 deref_count, PageEntriesV3 * entries_removed)
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_EXTERNAL)
@@ -638,7 +634,7 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal pag
 
         // Clean outdated entries after decreased the ref-counter
         // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
-        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock, keep_last_valid_var_entry);
+        return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
     }
 
     throw Exception(fmt::format("calling derefAndClean with invalid state [state={}]", toDebugString()));
@@ -1290,6 +1286,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
 
 bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const WriteLimiterPtr & write_limiter, bool force)
 {
+<<<<<<< HEAD
     bool done_any_io = false;
     // In order not to make read amplification too high, only apply compact logs when ...
     auto files_snap = wal->getFilesSnapshot();
@@ -1315,10 +1312,35 @@ bool PageDirectory::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, const W
         auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
         done_any_io = wal->saveSnapshot(std::move(files_snap), std::move(edit_from_disk), write_limiter);
     }
+=======
+    // Only apply compact logs when files snapshot is valid
+    auto files_snap = wal->tryGetFilesSnapshot(max_persisted_log_files, force);
+    if (!files_snap.isValid())
+        return false;
+
+    // To prevent writes from affecting dumping snapshot (and vice versa), old log files
+    // are read from disk and a temporary PageDirectory is generated for dumping snapshot.
+    // The main reason write affect dumping snapshot is that we can not get a read-only
+    // `being_ref_count` by the function `createSnapshot()`.
+    assert(!files_snap.persisted_log_files.empty()); // should not be empty
+    auto log_num = files_snap.persisted_log_files.rbegin()->log_num;
+    auto identifier = fmt::format("{}.dump_{}", wal->name(), log_num);
+    auto snapshot_reader = wal->createReaderForFiles(identifier, files_snap.persisted_log_files, read_limiter);
+    PageDirectoryFactory factory;
+    // we just use the `collapsed_dir` to dump edit of the snapshot, should never call functions like `apply` that
+    // persist new logs into disk. So we pass `nullptr` as `wal` to the factory.
+    PageDirectoryPtr collapsed_dir = factory.createFromReader(
+        identifier,
+        std::move(snapshot_reader),
+        /* wal */ nullptr);
+    // The records persisted in `files_snap` is older than or equal to all records in `edit`
+    auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
+    bool done_any_io = wal->saveSnapshot(std::move(files_snap), ser::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);
+>>>>>>> 47480fc3a9 (PageStorage: Fix peak memory usage when running GC on PageDirectory (#6168))
     return done_any_io;
 }
 
-PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool keep_last_valid_var_entry)
+PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries)
 {
     UInt64 lowest_seq = sequence.load();
 
@@ -1383,8 +1405,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
             lowest_seq,
             &normal_entries_to_deref,
             return_removed_entries ? &all_del_entries : nullptr,
-            iter->second->acquireLock(),
-            keep_last_valid_var_entry);
+            iter->second->acquireLock());
 
         {
             std::unique_lock write_lock(table_rw_mutex);
@@ -1422,8 +1443,7 @@ PageEntriesV3 PageDirectory::gcInMemEntries(bool return_removed_entries, bool ke
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
-            return_removed_entries ? &all_del_entries : nullptr,
-            keep_last_valid_var_entry);
+            return_removed_entries ? &all_del_entries : nullptr);
 
         if (all_deleted)
         {
