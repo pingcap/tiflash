@@ -2197,6 +2197,17 @@ struct RegexpInstrCase
         , match_type(mt)
         {}
 
+    RegexpInstrCase(Int64 res, const std::vector<UInt8> & null_map_, const String & expr, const String & pat, Int64 pos = 1, Int64 occur = 1, Int64 ret_op = 0, const String & mt = "")
+        : result(res)
+        , null_map(null_map_)
+        , expression(expr)
+        , pattern(pat)
+        , position(pos)
+        , occurrence(occur)
+        , return_option(ret_op)
+        , match_type(mt)
+        {}
+
     static std::vector<Int64> getResultVec(const std::vector<RegexpInstrCase> & test_cases)
     {
         std::vector<Int64> vecs;
@@ -2267,7 +2278,26 @@ struct RegexpInstrCase
         return vecs;
     }
 
+    static void setVecsWithoutNullMap(int param_num, const std::vector<RegexpInstrCase> test_cases, std::vector<Int64> & results, std::vector<String> & exprs, std::vector<String> & pats, std::vector<Int64> & positions, std::vector<Int64> & occurs, std::vector<Int64> & ret_ops, std::vector<String> & match_types)
+    {
+        results = getResultVec(test_cases);
+        switch (param_num) {
+        case 6:
+            match_types = getMatchTypeVec(test_cases);
+        case 5:
+            ret_ops = getRetOpVec(test_cases);
+        case 4:
+            occurs = getOccurVec(test_cases);
+        case 3:
+            positions = getPosVec(test_cases);
+        case 2:
+            pats = getPatVec(test_cases);
+            exprs = getExprVec(test_cases);
+        }
+    }
+
     Int64 result;
+    std::vector<UInt8> null_map;
     String expression;
     String pattern;
     Int64 position;
@@ -2402,9 +2432,7 @@ TEST_F(Regexp, RegexpInstr)
                       {1, "", "^$"},
                       {0, "ab\naB", "^ab$"},
                       {3, "pp跑ppのaaa", "(跑|の|P)"}};
-        exprs = RegexpInstrCase::getExprVec(test_cases);
-        patterns = RegexpInstrCase::getPatVec(test_cases);
-        results = RegexpInstrCase::getResultVec(test_cases);
+        RegexpInstrCase::setVecsWithoutNullMap(2, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                         executeFunction(
                             "regexp_instr",
@@ -2420,10 +2448,7 @@ TEST_F(Regexp, RegexpInstr)
                       {3, "", "^$", 3},
                       {0, "ab\naB", "^ab$", 1},
                       {3, "pp跑ppのaaa", "(跑|の|P)", 2}};
-        exprs = RegexpInstrCase::getExprVec(test_cases);
-        patterns = RegexpInstrCase::getPatVec(test_cases);
-        positions = RegexpInstrCase::getPosVec(test_cases);
-        results = RegexpInstrCase::getResultVec(test_cases);
+        RegexpInstrCase::setVecsWithoutNullMap(3, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
                              "regexp_instr",
@@ -2439,11 +2464,7 @@ TEST_F(Regexp, RegexpInstr)
                       {0, "\n", ".", 1, 1}, {0, "", "^$", 3, 2},
                       {0, "ab\naB", "^ab$", 1, 1},
                       {6, "pp跑ppのaaa", "(跑|の|P)", 2, 2}};
-        exprs = RegexpInstrCase::getExprVec(test_cases);
-        patterns = RegexpInstrCase::getPatVec(test_cases);
-        positions = RegexpInstrCase::getPosVec(test_cases);
-        occurs = RegexpInstrCase::getOccurVec(test_cases);
-        results = RegexpInstrCase::getResultVec(test_cases);
+        RegexpInstrCase::setVecsWithoutNullMap(4, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
                              "regexp_instr",
@@ -2461,12 +2482,7 @@ TEST_F(Regexp, RegexpInstr)
                       {0, "", "^$", 3, 2, 1},
                       {0, "ab\naB", "^ab$", 1, 1, 1},
                       {7, "pp跑ppのaaa", "(跑|の|P)", 2, 2, 1}};
-        exprs = RegexpInstrCase::getExprVec(test_cases);
-        patterns = RegexpInstrCase::getPatVec(test_cases);
-        positions = RegexpInstrCase::getPosVec(test_cases);
-        occurs = RegexpInstrCase::getOccurVec(test_cases);
-        return_options = RegexpInstrCase::getRetOpVec(test_cases);
-        results = RegexpInstrCase::getResultVec(test_cases);
+        RegexpInstrCase::setVecsWithoutNullMap(5, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
                              "regexp_instr",
@@ -2483,14 +2499,9 @@ TEST_F(Regexp, RegexpInstr)
                       {7, "aaaaaa", "aa", 3, 2, 1, ""},
                       {2, "\n", ".", 1, 1, 1, "s"},
                       {0, "", "^$", 3, 2, 1, ""},
-                      {3, "ab\naB", "^ab$", 1, 1, 1, "mi"},
+                      {6, "ab\naB", "^ab$", 3, 1, 1, "mi"},
                       {4, "pp跑ppのaaa", "(跑|の|P)", 2, 2, 1, "i"}};
-        exprs = RegexpInstrCase::getExprVec(test_cases);
-        patterns = RegexpInstrCase::getPatVec(test_cases);
-        positions = RegexpInstrCase::getPosVec(test_cases);
-        occurs = RegexpInstrCase::getOccurVec(test_cases);
-        return_options = RegexpInstrCase::getRetOpVec(test_cases);
-        match_types = RegexpInstrCase::getMatchTypeVec(test_cases);
+        RegexpInstrCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
         results = RegexpInstrCase::getResultVec(test_cases);
         ASSERT_COLUMN_EQ(createColumn<Int64>(results),
                          executeFunction(
@@ -2502,7 +2513,28 @@ TEST_F(Regexp, RegexpInstr)
                              createColumn<Int32>(return_options),
                              createColumn<String>(match_types)));
 
-        // TODO collation
+        // test collation
+        const auto * utf8mb4_general_ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
+        test_cases = {{2, "ttiFl", "tifl", 1, 1, 0, ""},
+                      {0, "ttiFl", "tifl", 1, 1, 0, "c"},
+                      {2, "ttiFl", "tifl", 1, 1, 0, "i"},
+                      {2, "ttiFl", "tifl", 1, 1, 0, "ci"},
+                      {0, "ttiFl", "tifl", 1, 1, 0, "ic"},
+                      {0, "ttiFl", "tifl", 1, 1, 0, "iccc"},
+                      {0, "ttiFl", "tifl", 1, 1, 0, "icic"}};
+        RegexpInstrCase::setVecsWithoutNullMap(6, test_cases, results, exprs, patterns, positions, occurs, return_options, match_types);
+        results = RegexpInstrCase::getResultVec(test_cases);
+        ASSERT_COLUMN_EQ(createColumn<Int64>(results),
+                         executeFunction(
+                             "regexp_instr",
+                             {createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createColumn<Int32>(positions),
+                             createColumn<Int32>(occurs),
+                             createColumn<Int32>(return_options),
+                             createColumn<String>(match_types)},
+                             utf8mb4_general_ci_collator));
+
     }
 
     // Test: Invalid parameter handling
