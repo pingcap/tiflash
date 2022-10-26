@@ -454,6 +454,76 @@ public:
     {
         return (PatT::isConst() && MatchTypeT::isConst());
     }
+
+    static void checkInputArg(const DataTypePtr & arg, bool is_str, bool * has_nullable_col, bool * has_data_type_nothing)
+    {
+        if (is_str)
+        {
+            // Check string type argument
+            if (arg->isNullable())
+            {
+                *has_nullable_col = true;
+                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+                if (null_type == nullptr)
+                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+
+                const auto & nested_type = null_type->getNestedType();
+
+                // It may be DataTypeNothing if it's not string
+                if (!nested_type->isString())
+                {
+                    if (nested_type->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+            else
+            {
+                if (!arg->isString())
+                {
+                    // It may be DataTypeNothing if it's not string
+                    if (arg->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+        }
+        else
+        {
+            // Check int type argument
+            if (arg->isNullable())
+            {
+                *has_nullable_col = true;
+                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+                if (null_type == nullptr)
+                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+                
+                const auto & nested_type = null_type->getNestedType();
+
+                // It may be DataTypeNothing if it's not string
+                if (!nested_type->isInteger())
+                {
+                    if (nested_type->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+            else
+            {
+                if (!arg->isInteger())
+                {
+                    // It may be DataTypeNothing if it's not string
+                    if (arg->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+        }
+    }
 };
 
 // regexp and regexp_like functions are executed in this macro
@@ -536,7 +606,7 @@ public:
         bool has_data_type_nothing = false;
 
         for (const auto & arg : arguments)
-            checkInputArg(arg, &has_nullable_col, &has_data_type_nothing);
+            checkInputArg(arg, true, &has_nullable_col, &has_data_type_nothing);
 
         if (has_data_type_nothing)
             return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>());
@@ -706,36 +776,6 @@ public:
     }
 
 private:
-    void checkInputArg(const DataTypePtr & arg, bool * has_nullable_col, bool * has_data_type_nothing) const
-    {
-        if (arg->isNullable())
-        {
-            *has_nullable_col = true;
-            const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-            if (null_type == nullptr)
-                throw Exception("Get unexpected nullptr in FunctionStringRegexp", ErrorCodes::LOGICAL_ERROR);
-
-            const auto & nested_type = null_type->getNestedType();
-            if (!nested_type->isString())
-            {
-                if (nested_type->getTypeId() != TypeIndex::Nothing)
-                    throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                else
-                    *has_data_type_nothing = true;
-            }
-        }
-        else
-        {
-            if (!arg->isString())
-            {
-                if (arg->getTypeId() != TypeIndex::Nothing)
-                    throw Exception(fmt::format("Illegal type {} of argument of function {}", arg->getName(), getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                else
-                    *has_data_type_nothing = true;
-            }
-        }
-    }
-
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
