@@ -15,7 +15,6 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
