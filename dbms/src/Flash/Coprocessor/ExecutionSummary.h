@@ -14,25 +14,20 @@
 
 #pragma once
 
-#include <Common/config.h>
-#include <Storages/Transaction/Collator.h>
-#include <Storages/Transaction/CollatorUtils.h>
-#include <re2/re2.h>
-
-#include "Common/Exception.h"
-
-
-#if USE_RE2_ST
-#include <re2_st/re2.h>
-#else
-#define re2_st re2
-#endif
+#include <common/types.h>
 
 namespace DB
 {
-namespace re2Util
+/// do not need be thread safe since it is only used in single thread env
+struct ExecutionSummary
 {
-re2_st::RE2::Options getDefaultRe2Options();
-String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator = nullptr);
-} // namespace re2Util
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_rows = 0;
+    UInt64 num_iterations = 0;
+    UInt64 concurrency = 0;
+    ExecutionSummary() = default;
+
+    void merge(const ExecutionSummary & other, bool streaming_call);
+};
+
 } // namespace DB

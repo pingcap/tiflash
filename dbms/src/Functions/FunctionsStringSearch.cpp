@@ -19,6 +19,7 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <Functions/CollationStringSearch.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsStringReplace.h>
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
@@ -767,6 +768,728 @@ struct ExtractImpl
     }
 };
 
+/** Replace one or all occurencies of substring 'needle' to 'replacement'. 'needle' and 'replacement' are constants.
+  */
+template <bool replace_one = false>
+struct ReplaceStringImpl
+{
+    static constexpr bool support_non_const_needle = true;
+    static constexpr bool support_non_const_replacement = true;
+    /// need customized escape char during the string search
+    static const bool need_customized_escape_char = false;
+    /// support match type during the string search, used in regexp
+    static const bool support_match_type = false;
+
+    static void vector(const ColumnString::Chars_t & data,
+                       const ColumnString::Offsets & offsets,
+                       const std::string & needle,
+                       const std::string & replacement,
+                       const Int64 & /* pos */,
+                       const Int64 & /* occ */,
+                       const std::string & /* match_type */,
+                       TiDB::TiDBCollatorPtr /* collator */,
+                       ColumnString::Chars_t & res_data,
+                       ColumnString::Offsets & res_offsets)
+    {
+        const UInt8 * begin = &data[0];
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data.size();
+
+        ColumnString::Offset res_offset = 0;
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            res_data.resize(data.size());
+            memcpy(&res_data[0], begin, data.size());
+            memcpy(&res_offsets[0], &offsets[0], size * sizeof(UInt64));
+            return;
+        }
+
+        /// The current index in the array of strings.
+        size_t i = 0;
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
+
+            /// Copy the data without changing
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+
+            /// Determine which index it belongs to.
+            while (i < offsets.size() && begin + offsets[i] <= match)
+            {
+                res_offsets[i] = res_offset + ((begin + offsets[i]) - pos);
+                ++i;
+            }
+            res_offset += (match - pos);
+
+            /// If you have reached the end, it's time to stop
+            if (i == offsets.size())
+                break;
+
+            /// Is it true that this line no longer needs to perform transformations.
+            bool can_finish_current_string = false;
+
+            /// We check that the entry does not go through the boundaries of strings.
+            if (match + needle.size() < begin + offsets[i])
+            {
+                res_data.resize(res_data.size() + replacement.size());
+                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
+                res_offset += replacement.size();
+                pos = match + needle.size();
+                if (replace_one)
+                    can_finish_current_string = true;
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
+
+            if (can_finish_current_string)
+            {
+                res_data.resize(res_data.size() + (begin + offsets[i] - pos));
+                memcpy(&res_data[res_offset], pos, (begin + offsets[i] - pos));
+                res_offset += (begin + offsets[i] - pos);
+                res_offsets[i] = res_offset;
+                pos = begin + offsets[i];
+                ++i;
+            }
+        }
+    }
+
+    static void vectorNonConstNeedle(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const std::string & replacement,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        res_offsets.resize(offsets.size());
+
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
+
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+
+            const UInt8 * begin = &data[data_offset];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + data_size;
+
+            if (needle_size == 0)
+            {
+                /// Copy the whole data to res without changing
+                res_data.resize(res_data.size() + data_size);
+                memcpy(&res_data[res_offset], begin, data_size);
+                res_offset += data_size;
+                res_offsets[i] = res_offset;
+                continue;
+            }
+
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, data_size);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                /// Copy the data without changing.
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
+
+                if (match == end)
+                {
+                    /// It's time to stop.
+                    break;
+                }
+
+                res_data.resize(res_data.size() + replacement.size());
+                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
+                res_offset += replacement.size();
+                pos = match + needle_size;
+
+                if (replace_one)
+                {
+                    /// Copy the rest of data and stop.
+                    res_data.resize(res_data.size() + (end - pos));
+                    memcpy(&res_data[res_offset], pos, (end - pos));
+                    res_offset += (end - pos);
+                    break;
+                }
+            }
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    static void vectorNonConstReplacement(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const std::string & needle,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        const UInt8 * begin = &data[0];
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data.size();
+
+        ColumnString::Offset res_offset = 0;
+        res_data.reserve(data.size());
+        size_t size = offsets.size();
+        res_offsets.resize(size);
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            res_data.resize(data.size());
+            memcpy(&res_data[0], begin, data.size());
+            memcpy(&res_offsets[0], &offsets[0], size * sizeof(UInt64));
+            return;
+        }
+
+        /// The current index in the array of strings.
+        size_t i = 0;
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
+
+            /// Copy the data without changing
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+
+            /// Determine which index it belongs to.
+            while (i < offsets.size() && begin + offsets[i] <= match)
+            {
+                res_offsets[i] = res_offset + ((begin + offsets[i]) - pos);
+                ++i;
+            }
+            res_offset += (match - pos);
+
+            /// If you have reached the end, it's time to stop
+            if (i == offsets.size())
+                break;
+
+            /// Is it true that this line no longer needs to perform transformations.
+            bool can_finish_current_string = false;
+
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+
+            /// We check that the entry does not go through the boundaries of strings.
+            if (match + needle.size() < begin + offsets[i])
+            {
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+                pos = match + needle.size();
+                if (replace_one)
+                    can_finish_current_string = true;
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
+
+            if (can_finish_current_string)
+            {
+                res_data.resize(res_data.size() + (begin + offsets[i] - pos));
+                memcpy(&res_data[res_offset], pos, (begin + offsets[i] - pos));
+                res_offset += (begin + offsets[i] - pos);
+                res_offsets[i] = res_offset;
+                pos = begin + offsets[i];
+                ++i;
+            }
+        }
+    }
+
+    static void vectorNonConstNeedleReplacement(
+        const ColumnString::Chars_t & data,
+        const ColumnString::Offsets & offsets,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        res_data.reserve(data.size());
+        res_offsets.resize(offsets.size());
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < offsets.size(); ++i)
+        {
+            auto data_offset = StringUtil::offsetAt(offsets, i);
+            auto data_size = StringUtil::sizeAt(offsets, i);
+
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+
+            const UInt8 * begin = &data[data_offset];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + data_size;
+
+            if (needle_size == 0)
+            {
+                res_data.resize(res_data.size() + data_size);
+                memcpy(&res_data[res_offset], begin, data_size);
+                res_offset += data_size;
+                res_offsets[i] = res_offset;
+                continue;
+            }
+
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, data_size);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                /// Copy the data without changing.
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
+
+                if (match == end)
+                {
+                    /// It's time to stop.
+                    break;
+                }
+
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+                pos = match + needle_size;
+
+                if (replace_one)
+                {
+                    /// Copy the rest of data and stop.
+                    res_data.resize(res_data.size() + (end - pos));
+                    memcpy(&res_data[res_offset], pos, (end - pos));
+                    res_offset += (end - pos);
+                    break;
+                }
+            }
+            res_offsets[i] = res_offset;
+        }
+    }
+
+    /// Note: this function converts fixed-length strings to variable-length strings
+    ///       and each variable-length string should ends with zero byte.
+    static void vectorFixed(const ColumnString::Chars_t & data,
+                            size_t n,
+                            const std::string & needle,
+                            const std::string & replacement,
+                            const Int64 & /* pos */,
+                            const Int64 & /* occ */,
+                            const std::string & /* match_type */,
+                            TiDB::TiDBCollatorPtr /* collator */,
+                            ColumnString::Chars_t & res_data,
+                            ColumnString::Offsets & res_offsets)
+    {
+        const UInt8 * begin = &data[0];
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data.size();
+
+        ColumnString::Offset res_offset = 0;
+        size_t count = data.size() / n;
+        res_data.reserve(data.size());
+        res_offsets.resize(count);
+
+        /// The current index in the string array.
+        size_t i = 0;
+
+#define COPY_REST_OF_CURRENT_STRING()                 \
+    do                                                \
+    {                                                 \
+        const size_t len = begin + n * (i + 1) - pos; \
+        res_data.resize(res_data.size() + len + 1);   \
+        memcpy(&res_data[res_offset], pos, len);      \
+        res_offset += len;                            \
+        res_data[res_offset++] = 0;                   \
+        res_offsets[i] = res_offset;                  \
+        pos = begin + n * (i + 1);                    \
+        ++i;                                          \
+    } while (false)
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            while (i < count)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+            return;
+        }
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
+
+            /// Copy skipped strings without any changes but
+            /// add zero byte to the end of each string.
+            while (i < count && begin + n * (i + 1) <= match)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+
+            /// If you have reached the end, it's time to stop
+            if (i == count)
+                break;
+
+            /// Copy unchanged part of current string.
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+            res_offset += (match - pos);
+
+            /// Is it true that this line no longer needs to perform conversions.
+            bool can_finish_current_string = false;
+
+            /// We check that the entry does not pass through the boundaries of strings.
+            if (match + needle.size() <= begin + n * (i + 1))
+            {
+                res_data.resize(res_data.size() + replacement.size());
+                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
+                res_offset += replacement.size();
+                pos = match + needle.size();
+                if (replace_one || pos == begin + n * (i + 1))
+                    can_finish_current_string = true;
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
+
+            if (can_finish_current_string)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+#undef COPY_REST_OF_CURRENT_STRING
+        }
+    }
+
+    static void vectorFixedNonConstNeedle(
+        const ColumnString::Chars_t & data,
+        size_t n,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const std::string & replacement,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t count = data.size() / n;
+        res_data.reserve(data.size());
+        res_offsets.resize(count);
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            const UInt8 * begin = &data[i * n];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + n;
+
+#define COPY_REST_OF_CURRENT_STRING()               \
+    do                                              \
+    {                                               \
+        const size_t len = end - pos;               \
+        res_data.resize(res_data.size() + len + 1); \
+        memcpy(&res_data[res_offset], pos, len);    \
+        res_offset += len;                          \
+        res_data[res_offset++] = 0;                 \
+        res_offsets[i] = res_offset;                \
+        pos = end;                                  \
+    } while (false)
+
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+            if (needle_size == 0)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+                continue;
+            }
+
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, n);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                if (match == end)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+
+                /// Copy the data without changing
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
+
+                res_data.resize(res_data.size() + replacement.size());
+                memcpy(&res_data[res_offset], replacement.data(), replacement.size());
+                res_offset += replacement.size();
+                pos = match + needle_size;
+
+                if (replace_one)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+            }
+#undef COPY_REST_OF_CURRENT_STRING
+        }
+    }
+
+    static void vectorFixedNonConstReplacement(
+        const ColumnString::Chars_t & data,
+        size_t n,
+        const std::string & needle,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        const UInt8 * begin = &data[0];
+        const UInt8 * pos = begin;
+        const UInt8 * end = pos + data.size();
+
+        ColumnString::Offset res_offset = 0;
+        size_t count = data.size() / n;
+        res_data.reserve(data.size());
+        res_offsets.resize(count);
+
+        /// The current index in the string array.
+        size_t i = 0;
+
+#define COPY_REST_OF_CURRENT_STRING()                 \
+    do                                                \
+    {                                                 \
+        const size_t len = begin + n * (i + 1) - pos; \
+        res_data.resize(res_data.size() + len + 1);   \
+        memcpy(&res_data[res_offset], pos, len);      \
+        res_offset += len;                            \
+        res_data[res_offset++] = 0;                   \
+        res_offsets[i] = res_offset;                  \
+        pos = begin + n * (i + 1);                    \
+        ++i;                                          \
+    } while (false)
+
+        if (needle.empty())
+        {
+            /// Copy all the data without changing.
+            while (i < count)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+            return;
+        }
+
+        Volnitsky searcher(needle.data(), needle.size(), end - pos);
+
+        /// We will search for the next occurrence in all rows at once.
+        while (pos < end)
+        {
+            const UInt8 * match = searcher.search(pos, end - pos);
+
+            /// Copy skipped strings without any changes but
+            /// add zero byte to the end of each string.
+            while (i < count && begin + n * (i + 1) <= match)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+
+            /// If you have reached the end, it's time to stop
+            if (i == count)
+                break;
+
+            /// Copy unchanged part of current string.
+            res_data.resize(res_data.size() + (match - pos));
+            memcpy(&res_data[res_offset], pos, match - pos);
+            res_offset += (match - pos);
+
+            /// Is it true that this line no longer needs to perform conversions.
+            bool can_finish_current_string = false;
+
+            /// We check that the entry does not pass through the boundaries of strings.
+            if (match + needle.size() <= begin + n * (i + 1))
+            {
+                auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+                auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+                pos = match + needle.size();
+                if (replace_one || pos == begin + n * (i + 1))
+                    can_finish_current_string = true;
+            }
+            else
+            {
+                pos = match;
+                can_finish_current_string = true;
+            }
+
+            if (can_finish_current_string)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+            }
+#undef COPY_REST_OF_CURRENT_STRING
+        }
+    }
+
+    static void vectorFixedNonConstNeedleReplacement(
+        const ColumnString::Chars_t & data,
+        size_t n,
+        const ColumnString::Chars_t & needle_chars,
+        const ColumnString::Offsets & needle_offsets,
+        const ColumnString::Chars_t & replacement_chars,
+        const ColumnString::Offsets & replacement_offsets,
+        const Int64 & /* pos */,
+        const Int64 & /* occ */,
+        const std::string & /* match_type */,
+        TiDB::TiDBCollatorPtr /* collator */,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        size_t count = data.size() / n;
+        res_data.reserve(data.size());
+        res_offsets.resize(count);
+        ColumnString::Offset res_offset = 0;
+
+        for (size_t i = 0; i < count; ++i)
+        {
+            const UInt8 * begin = &data[i * n];
+            const UInt8 * pos = begin;
+            const UInt8 * end = pos + n;
+
+#define COPY_REST_OF_CURRENT_STRING()               \
+    do                                              \
+    {                                               \
+        const size_t len = end - pos;               \
+        res_data.resize(res_data.size() + len + 1); \
+        memcpy(&res_data[res_offset], pos, len);    \
+        res_offset += len;                          \
+        res_data[res_offset++] = 0;                 \
+        res_offsets[i] = res_offset;                \
+        pos = end;                                  \
+    } while (false)
+
+            auto needle_offset = StringUtil::offsetAt(needle_offsets, i);
+            auto needle_size = StringUtil::sizeAt(needle_offsets, i) - 1; // ignore the trailing zero
+
+            auto replacement_offset = StringUtil::offsetAt(replacement_offsets, i);
+            auto replacement_size = StringUtil::sizeAt(replacement_offsets, i) - 1; // ignore the trailing zero
+
+            if (needle_size == 0)
+            {
+                COPY_REST_OF_CURRENT_STRING();
+                continue;
+            }
+
+            Volnitsky searcher(reinterpret_cast<const char *>(&needle_chars[needle_offset]), needle_size, n);
+            while (pos < end)
+            {
+                const UInt8 * match = searcher.search(pos, end - pos);
+
+                if (match == end)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+
+                /// Copy the data without changing
+                res_data.resize(res_data.size() + (match - pos));
+                memcpy(&res_data[res_offset], pos, match - pos);
+                res_offset += match - pos;
+
+                res_data.resize(res_data.size() + replacement_size);
+                memcpy(&res_data[res_offset], &replacement_chars[replacement_offset], replacement_size);
+                res_offset += replacement_size;
+                pos = match + needle_size;
+
+                if (replace_one)
+                {
+                    COPY_REST_OF_CURRENT_STRING();
+                    break;
+                }
+            }
+#undef COPY_REST_OF_CURRENT_STRING
+        }
+    }
+
+    static void constant(const std::string & data, const std::string & needle, const std::string & replacement, const Int64 & /* pos */, const Int64 & /* occ */, const std::string & /* match_type */, TiDB::TiDBCollatorPtr /* collator */, std::string & res_data)
+    {
+        if (needle.empty())
+        {
+            res_data = data;
+            return;
+        }
+        res_data = "";
+        int replace_cnt = 0;
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            bool match = true;
+            if (i + needle.size() > data.size() || (replace_one && replace_cnt > 0))
+                match = false;
+            for (size_t j = 0; match && j < needle.size(); ++j)
+                if (data[i + j] != needle[j])
+                    match = false;
+            if (match)
+            {
+                ++replace_cnt;
+                res_data += replacement;
+                i = i + needle.size() - 1;
+            }
+            else
+                res_data += data[i];
+        }
+    }
+};
+
 struct NameLike
 {
     static constexpr auto name = "like";
@@ -804,6 +1527,14 @@ struct NameExtract
 {
     static constexpr auto name = "extract";
 };
+struct NameReplaceOne
+{
+    static constexpr auto name = "replaceOne";
+};
+struct NameReplaceAll
+{
+    static constexpr auto name = "replaceAll";
+};
 
 // using FunctionPosition = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveASCII>, NamePosition>;
 using FunctionPositionUTF8 = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveUTF8>, NamePositionUTF8>;
@@ -816,10 +1547,13 @@ using FunctionLike = FunctionsStringSearch<MatchImpl<true>, NameLike>;
 using FunctionLike3Args = FunctionsStringSearch<MatchImpl<true, false, true>, NameLike3Args>;
 using FunctionNotLike = FunctionsStringSearch<MatchImpl<true, true>, NameNotLike>;
 using FunctionExtract = FunctionsStringSearchToString<ExtractImpl, NameExtract>;
-
+using FunctionReplaceOne = FunctionStringReplace<ReplaceStringImpl<true>, NameReplaceOne>;
+using FunctionReplaceAll = FunctionStringReplace<ReplaceStringImpl<false>, NameReplaceAll>;
 
 void registerFunctionsStringSearch(FunctionFactory & factory)
 {
+    factory.registerFunction<FunctionReplaceOne>();
+    factory.registerFunction<FunctionReplaceAll>();
     // factory.registerFunction<FunctionPosition>();
     factory.registerFunction<FunctionPositionUTF8>();
     factory.registerFunction<FunctionPositionCaseInsensitive>();

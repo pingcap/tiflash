@@ -22,6 +22,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsStringReplace.h>
 #include <Functions/IFunction.h>
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
@@ -77,14 +78,6 @@ struct NameRegexpInstr
 {
     static constexpr auto name = "regexp_instr";
 };
-struct NameReplaceOne
-{
-    static constexpr auto name = "replaceOne";
-};
-struct NameReplaceAll
-{
-    static constexpr auto name = "replaceAll";
-};
 struct NameReplaceRegexpOne
 {
     static constexpr auto name = "replaceRegexpOne";
@@ -98,7 +91,7 @@ static constexpr std::string_view regexp_name(NameTiDBRegexp::name);
 static constexpr std::string_view regexp_like_name(NameRegexpLike::name);
 static constexpr std::string_view regexp_instr_name(NameRegexpInstr::name);
 
-String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator = nullptr);
+// String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator = nullptr);
 
 inline int getDefaultFlags()
 {
@@ -110,11 +103,10 @@ inline int getDefaultFlags()
 // add '()' outside of the pattern to get the matched substr
 inline String addMatchTypeForPattern(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
 {
-    String flags = getMatchType(match_type, collator);
-    if (flags.empty())
-        return fmt::format("({})", pattern);
-    
-    return fmt::format("(?{})({})", flags, pattern);
+    String mode = re2Util::getRE2ModeModifiers(match_type, collator);
+    if (mode.empty())
+        return pattern;
+    return fmt::format("{}{}", mode, pattern);
 }
 
 inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
@@ -129,9 +121,6 @@ inline constexpr bool check_int_type()
 {
     return static_cast<bool>(std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, UInt128> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>);
 }
-
-// Field field;
-// field.safeGet<Int64
 
 Int64 getIntFromField(Field & field)
 {
@@ -229,51 +218,6 @@ GetIntFuncPointerType getGetIntFuncPointer(IntType int_type)
         throw Exception("Unexpected int type");
     }
 }
-
-// Use this type when param is not provided
-class ParamDefault
-{
-public:
-    explicit ParamDefault(Int64 val)
-        : default_int(val)
-        , default_string("")
-    {}
-    explicit ParamDefault(const StringRef & str)
-        : default_int(0)
-        , default_string(str)
-    {}
-
-    // For passing compilation
-    explicit ParamDefault(const void *)
-        : default_int(0)
-        , default_string("")
-    {
-        throw Exception("Shouldn't call this constructor");
-    }
-
-    // For passing compilation
-    ParamDefault(const void *, const void *)
-        : default_int(0)
-        , default_string("")
-    {
-        throw Exception("Shouldn't call this constructor");
-    }
-
-    static void setIntType(IntType) {}
-    static IntType getIntType() { return IntType::Int64; }
-
-    template <typename T>
-    Int64 getInt(size_t) const { return default_int; }
-    static String getString(size_t) { return String(""); }
-    void getStringRef(size_t, StringRef &) const {}
-    constexpr static bool isConst() { return true; }
-    void setContainer(const void *) {}
-    static const void * getContainer() { return nullptr; }
-
-private:
-    Int64 default_int;
-    StringRef default_string;
-};
 
 template <bool is_const>
 class ParamString
@@ -542,6 +486,7 @@ private:
 #define MATCH_TYPE_COL_PTR_VAR_NAME col_match_type
 
 #define RES_ARG_VAR_NAME res_arg
+#define COL_SIZE_VAR_NAME col_size
 
 #define EXPR_PARAM_VAR_NAME expr_param
 #define PAT_PARAM_VAR_NAME pat_param
@@ -556,53 +501,51 @@ private:
 #define COLLATOR_VAR_NAME collator
 
 // Unify the name of functions that actually execute regexp
-#define REGEXP_CLASS_MEM_FUNC_IMPL_NAME process
+#define REGEXP_CLASS_MEM_FUNC_IMPL_NAME executeRegexpFunc
 
 // Method to convert nullable string column
 // converted_col is impossible to be const here
-#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                                                               \
-    do                                                                                                                                                                       \
-    {                                                                                                                                                                        \
-        size_t col_size = (converted_col)->size();                                                                                                                           \
-        if (((converted_col)->isColumnNullable()))                                                                                                                           \
-        {                                                                                                                                                                    \
-            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();                                                                    \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));                                                                                              \
-            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());                                                               \
-            Param<ParamString<false>, true>(param_name)(col_size, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets()))); \
-            next_convertion;                                                                                                                                                    \
-        }                                                                                                                                                                    \
-        else                                                                                                                                                                 \
-        {                                                                                                                                                                    \
-            /* This is a pure string vector column */                                                                                                                        \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(converted_col)));                                                                                         \
-            Param<ParamString<false>, false>(param_name)(col_size, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));          \
-            next_convertion;                                                                                                                                                    \
-        }                                                                                                                                                                    \
+#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                                                                     \
+    do                                                                                                                                                                                \
+    {                                                                                                                                                                                 \
+        if (((converted_col)->isColumnNullable()))                                                                                                                                    \
+        {                                                                                                                                                                             \
+            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();                                                                             \
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));                                                                                                       \
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());                                                                        \
+            Param<ParamString<false>, true>(param_name)(COL_SIZE_VAR_NAME, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets()))); \
+            next_convertion;                                                                                                                                                          \
+        }                                                                                                                                                                             \
+        else                                                                                                                                                                          \
+        {                                                                                                                                                                             \
+            /* This is a pure string vector column */                                                                                                                                 \
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(converted_col)));                                                                                                  \
+            Param<ParamString<false>, false>(param_name)(COL_SIZE_VAR_NAME, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));          \
+            next_convertion;                                                                                                                                                          \
+        }                                                                                                                                                                             \
     } while (0);
 
-// Method to convert const string column to param
-#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                             \
+// Method to convert const string column
+#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                          \
     do                                                                                                                      \
     {                                                                                                                       \
-        size_t col_size = (converted_col)->size();                                                                          \
         const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                     \
         if (col_const != nullptr)                                                                                           \
         {                                                                                                                   \
             auto col_const_data = col_const->getDataColumnPtr();                                                            \
-            Field field;                                                                                                \
-            col_const->get(0, field);                                                                                   \
-            String tmp = field.isNull() ? String("") : field.safeGet<String>();                                                                       \
+            Field field;                                                                                                    \
+            col_const->get(0, field);                                                                                       \
+            String tmp = field.isNull() ? String("") : field.safeGet<String>();                                             \
             if (col_const_data->isColumnNullable())                                                                         \
             {                                                                                                               \
-                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
-                Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()), null_map);  \
-                next_convertion;                                                                                       \
+                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData());         \
+                Param<ParamString<true>, true>(param_name)(COL_SIZE_VAR_NAME, StringRef(tmp.data(), tmp.size()), null_map); \
+                next_convertion;                                                                                            \
             }                                                                                                               \
             else                                                                                                            \
             {                                                                                                               \
-                Param<ParamString<true>, false>(param_name)(col_size, col_const->getDataAt(0));                             \
-                next_convertion;                                                                                               \
+                Param<ParamString<true>, false>(param_name)(COL_SIZE_VAR_NAME, col_const->getDataAt(0));                    \
+                next_convertion;                                                                                            \
             }                                                                                                               \
         }                                                                                                                   \
         else                                                                                                                \
@@ -616,12 +559,11 @@ private:
 #define CONVERT_NULL_INT_COL_TO_PARAM(param_name, converted_col, next_convertion)                                 \
     do                                                                                                         \
     {                                                                                                          \
-        size_t col_size = (converted_col)->size();                                                             \
         if ((converted_col)->isColumnNullable())                                                               \
         {                                                                                                      \
             auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();      \
             const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());              \
-            Param<ParamInt<false>, true> (param_name)(col_size, null_map, nullptr, IntType::Int64); /* The thrid and fourth parameters are useless here */ \
+            Param<ParamInt<false>, true> (param_name)(COL_SIZE_VAR_NAME, null_map, nullptr, IntType::Int64); /* The thrid and fourth parameters are useless here */ \
             /* various int types may be input, we need to check them one by one */                             \
             if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(nested_ptr))))                      \
             { \
@@ -676,7 +618,7 @@ private:
         {                                                                                                      \
             /* This is a pure vector column */                                                                 \
             /* various int types may be input, we need to check them one by one */                             \
-            Param<ParamInt<false>, false>(param_name)(col_size, nullptr, IntType::Int64); /* The second and third parameters are useless here */  \
+            Param<ParamInt<false>, false>(param_name)(COL_SIZE_VAR_NAME, nullptr, IntType::Int64); /* The second and third parameters are useless here */  \
             if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(converted_col))))                    \
             { \
                 (param_name).setIntType(IntType::UInt8); \
@@ -733,7 +675,6 @@ private:
     do                                                                                                                                       \
     {                                                                                                                                        \
         std::cout << "CONVERT_CONST_INT_COL_TO_PARAM1\n"; \
-        size_t col_size = (converted_col)->size();                                                                                           \
         const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                                      \
         if (col_const != nullptr)                                                                                                            \
         {                                                                                                                                    \
@@ -745,12 +686,12 @@ private:
             if (col_const_data->isColumnNullable())                                                                                          \
             {                                                                                                                                \
                 const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
-                Param<ParamInt<true>, true>(param_name)(col_size, data_int64, null_map);  \
+                Param<ParamInt<true>, true>(param_name)(COL_SIZE_VAR_NAME, data_int64, null_map);  \
                 next_convertion;                                                                                                                \
             }                                                                                                                                \
             else                                                                                                                             \
             {                                                                                                                                \
-                Param<ParamInt<true>, false>(param_name)(col_size, data_int64);                                                       \
+                Param<ParamInt<true>, false>(param_name)(COL_SIZE_VAR_NAME, data_int64);                                                       \
                 next_convertion;                                                                                                                \
             }                                                                                                                                \
         }                                                                                                                                    \
@@ -771,8 +712,11 @@ public:
     static constexpr size_t REGEXP_REPLACE_MAX_PARAM_NUM = 6;
     static constexpr size_t REGEXP_SUBSTR_MAX_PARAM_NUM = 5;
 
+    // We should pre compile the regular expression when:
+    //  - only pattern column is provided and it's a constant column
+    //  - pattern and match type columns are provided and they are both constant columns
     template <typename ExprT, typename MatchTypeT>
-    void memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
+    std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
     {
         String final_pattern = pat_param.getString(0);
         if (unlikely(final_pattern.empty()))
@@ -782,7 +726,7 @@ public:
         final_pattern = addMatchTypeForPattern(final_pattern, match_type, collator);
 
         int flags = getDefaultFlags();
-        memorized_re = std::make_unique<Regexps::Regexp>(final_pattern, flags);
+        return std::make_unique<Regexps::Regexp>(final_pattern, flags);
     }
 
     // Check if we can memorize the regexp
@@ -791,86 +735,6 @@ public:
     {
         return (PatT::isConst() && MatchTypeT::isConst());
     }
-
-    bool isMemorized() const { return memorized_re != nullptr; }
-
-    const std::unique_ptr<Regexps::Regexp> & getRegexp() const { return memorized_re; }
-
-    static void checkInputArg(const DataTypePtr & arg, bool is_str, bool * has_nullable_col, bool * has_data_type_nothing)
-    {
-        if (is_str)
-        {
-            // Check string type argument
-            if (arg->isNullable())
-            {
-                *has_nullable_col = true;
-                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
-
-                const auto & nested_type = null_type->getNestedType();
-
-                // It may be DataTypeNothing if it's not string
-                if (!nested_type->isString())
-                {
-                    if (nested_type->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-            else
-            {
-                if (!arg->isString())
-                {
-                    // It may be DataTypeNothing if it's not string
-                    if (arg->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-        }
-        else
-        {
-            // Check int type argument
-            if (arg->isNullable())
-            {
-                *has_nullable_col = true;
-                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
-                
-                const auto & nested_type = null_type->getNestedType();
-
-                // It may be DataTypeNothing if it's not string
-                if (!nested_type->isInteger())
-                {
-                    if (nested_type->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-            else
-            {
-                if (!arg->isInteger())
-                {
-                    // It may be DataTypeNothing if it's not string
-                    if (arg->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
-            }
-        }
-    }
-
-private:
-    // We should pre compile the regular expression when:
-    //  - only pattern column is provided and it's a constant column
-    //  - pattern and match type columns are provided and they are both constant columns
-    mutable std::unique_ptr<Regexps::Regexp> memorized_re;
 };
 
 // regexp and regexp_like functions are executed in this macro
@@ -888,8 +752,8 @@ private:
             CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_LIKE()})) \
         else                                                                                                                  \
         {                                                                                                                     \
-            /* match_type is not provided here and set default values */                                                      \
-            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
+            /* match_type is not provided here */                                                                             \
+            Param<ParamString<true>, false> MATCH_TYPE_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, StringRef("", 0));                   \
             EXECUTE_REGEXP_LIKE()                                                                                             \
         }                                                                                                                     \
     } while (0);
@@ -905,10 +769,12 @@ private:
 #define CONVERT_EXPR_COL_TO_PARAM()                                                                                \
     do                                                                                                             \
     {                                                                                                              \
+        /* Getting column size from expr col */                                                                    \
+        size_t COL_SIZE_VAR_NAME = (EXPR_COL_PTR_VAR_NAME)->size();                                                \
         CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
     } while (0);
 
-// The entry to convert columns to params and execute regexp_xxx functions
+// The entry to convert columns to params and execute regexp functions
 #define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
     do                                       \
     {                                        \
@@ -990,10 +856,6 @@ public:
             return;
         }
 
-        // Check memorization
-        if constexpr (canMemorize<PatT, MatchTypeT>())
-            memorize(pat_param, match_type_param, collator);
-
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
@@ -1002,9 +864,9 @@ public:
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || MatchTypeT::isNullableCol();
 
         // Start to match
-        if (isMemorized())
+        if constexpr (canMemorize<PatT, MatchTypeT>())
         {
-            const auto & regexp = getRegexp();
+            const auto & regexp = memorize(pat_param, match_type_param, collator);
             if constexpr (has_nullable_col)
             {
                 // expr column must be a nullable column here, so we need to check null for each elems
@@ -1151,7 +1013,7 @@ private:
         } \
         else                                                                          \
         { \
-            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0)); \
+            Param<ParamString<true>, false> MATCH_TYPE_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, StringRef("", 0));                   \
             EXECUTE_REGEXP_INSTR() \
         } \
     } while (0);
@@ -1164,7 +1026,7 @@ private:
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 3) \
         { \
             std::cout << "CONVERT_RET_OP_COL_TO_PARAM2\n"; \
-            Param<ParamDefault, false> RET_OP_PARAM_VAR_NAME(-1, static_cast<Int64>(0)); \
+            Param<ParamInt<true>, false> RET_OP_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(0)); \
             CONVERT_MATCH_TYPE_COL_TO_PARAM() \
         } \
         else \
@@ -1179,7 +1041,7 @@ private:
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 2) \
         { \
             std::cout << "CONVERT_OCCUR_COL_TO_PARAM2\n"; \
-            Param<ParamDefault, false> OCCUR_PARAM_VAR_NAME(-1, static_cast<Int64>(1)); \
+            Param<ParamInt<true>, false> OCCUR_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(1)); \
             CONVERT_RET_OP_COL_TO_PARAM() \
         } \
         else \
@@ -1194,7 +1056,7 @@ private:
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 1) \
         { \
                 std::cout << "CONVERT_POS_COL_TO_PARAM2\n"; \
-            Param<ParamDefault, false> POS_PARAM_VAR_NAME(-1, static_cast<Int64>(1)); \
+            Param<ParamInt<true>, false> POS_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(1)); \
             CONVERT_OCCUR_COL_TO_PARAM() \
         } \
         else \
@@ -1214,10 +1076,12 @@ private:
     do                                                                                                              \
     {                                                                                                               \
         std::cout << "CONVERT_EXPR_COL_TO_PARAM\n"; \
+        /* Getting column size from expr col */                                                                    \
+        size_t COL_SIZE_VAR_NAME = (EXPR_COL_PTR_VAR_NAME)->size();                                                \
         CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
     } while (0);
 
-// The entry to convert columns to params and execute regexp_xxx functions
+// The entry to convert columns to params and execute regexp functions
 #define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
     do                                       \
     {                                        \
@@ -1315,10 +1179,6 @@ public:
             return;
         }
 
-        // Check memorization
-        if constexpr (canMemorize<PatT, MatchTypeT>())
-            memorize(par_param, match_type_param, COLLATOR_VAR_NAME);
-
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
         typename ColumnVector<ResultType>::Container & VEC_RES_VAR_NAME = col_res->getData();
@@ -1361,11 +1221,11 @@ public:
         String match_type;
 
         // Start to execute instr
-        if (isMemorized())
+        if (canMemorize<PatT, MatchTypeT>())
         {
             // Codes in this if branch execute instr with memorized regexp
 
-            const auto & regexp = getRegexp();
+            const auto & regexp = memorize(par_param, match_type_param, COLLATOR_VAR_NAME);
             if constexpr (has_nullable_col)
             {
                 // Process nullable columns with memorized regexp
@@ -1520,267 +1380,6 @@ private:
 #undef CONVERT_MATCH_TYPE_COL_TO_PARAM
 #undef EXECUTE_REGEXP_INSTR
 
-template <typename Impl, typename Name>
-class FunctionStringReplace : public IFunction
-{
-public:
-    static constexpr auto name = Name::name;
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionStringReplace>();
-    }
-
-    String getName() const override
-    {
-        return name;
-    }
-
-    size_t getNumberOfArguments() const override
-    {
-        return 0;
-    }
-
-    bool isVariadic() const override { return true; }
-    bool useDefaultImplementationForConstants() const override { return true; }
-    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
-    {
-        if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
-        {
-            return {3, 4, 5};
-        }
-        else if constexpr (Impl::support_non_const_needle)
-        {
-            return {2, 3, 4, 5};
-        }
-        else if constexpr (Impl::support_non_const_replacement)
-        {
-            return {1, 3, 4, 5};
-        }
-        else
-        {
-            return {1, 2, 3, 4, 5};
-        }
-    }
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        if (!arguments[0]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[0]->getName() + " of first argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        if (!arguments[1]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[1]->getName() + " of second argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        if (!arguments[2]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of third argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        if (arguments.size() > 3 && !arguments[3]->isInteger())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of forth argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        if (arguments.size() > 4 && !arguments[4]->isInteger())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of fifth argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        if (arguments.size() > 5 && !arguments[5]->isStringOrFixedString())
-            throw Exception("Illegal type " + arguments[2]->getName() + " of sixth argument of function " + getName(),
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return std::make_shared<DataTypeString>();
-    }
-
-    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
-    {
-        const ColumnPtr & column_src = block.getByPosition(arguments[0]).column;
-        const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
-        const ColumnPtr & column_replacement = block.getByPosition(arguments[2]).column;
-        const ColumnPtr column_pos = arguments.size() > 3 ? block.getByPosition(arguments[3]).column : nullptr;
-        const ColumnPtr column_occ = arguments.size() > 4 ? block.getByPosition(arguments[4]).column : nullptr;
-        const ColumnPtr column_match_type = arguments.size() > 5 ? block.getByPosition(arguments[5]).column : nullptr;
-
-        if ((column_pos != nullptr && !column_pos->isColumnConst())
-            || (column_occ != nullptr && !column_occ->isColumnConst())
-            || (column_match_type != nullptr && !column_match_type->isColumnConst()))
-            throw Exception("4th, 5th, 6th arguments of function " + getName() + " must be constants.");
-        Int64 pos = column_pos == nullptr ? 1 : typeid_cast<const ColumnConst *>(column_pos.get())->getInt(0);
-        Int64 occ = column_occ == nullptr ? 0 : typeid_cast<const ColumnConst *>(column_occ.get())->getInt(0);
-        String match_type = column_match_type == nullptr ? "" : typeid_cast<const ColumnConst *>(column_match_type.get())->getValue<String>();
-
-        ColumnWithTypeAndName & column_result = block.getByPosition(result);
-
-        bool needle_const = column_needle->isColumnConst();
-        bool replacement_const = column_replacement->isColumnConst();
-
-        if (needle_const && replacement_const)
-        {
-            executeImpl(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
-        }
-        else if (needle_const)
-        {
-            executeImplNonConstReplacement(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
-        }
-        else if (replacement_const)
-        {
-            executeImplNonConstNeedle(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
-        }
-        else
-        {
-            executeImplNonConstNeedleReplacement(column_src, column_needle, column_replacement, pos, occ, match_type, column_result);
-        }
-    }
-
-private:
-    void executeImpl(
-        const ColumnPtr & column_src,
-        const ColumnPtr & column_needle,
-        const ColumnPtr & column_replacement,
-        Int64 pos,
-        Int64 occ,
-        const String & match_type,
-        ColumnWithTypeAndName & column_result) const
-    {
-        const auto * c1_const = typeid_cast<const ColumnConst *>(column_needle.get());
-        const auto * c2_const = typeid_cast<const ColumnConst *>(column_replacement.get());
-        auto needle = c1_const->getValue<String>();
-        auto replacement = c2_const->getValue<String>();
-
-        if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
-        {
-            auto col_res = ColumnString::create();
-            Impl::vector(col->getChars(), col->getOffsets(), needle, replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-            column_result.column = std::move(col_res);
-        }
-        else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
-        {
-            auto col_res = ColumnString::create();
-            Impl::vectorFixed(col->getChars(), col->getN(), needle, replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-            column_result.column = std::move(col_res);
-        }
-        else
-            throw Exception(
-                "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
-                ErrorCodes::ILLEGAL_COLUMN);
-    }
-
-    void executeImplNonConstNeedle(
-        const ColumnPtr & column_src,
-        const ColumnPtr & column_needle,
-        const ColumnPtr & column_replacement,
-        Int64 pos [[maybe_unused]],
-        Int64 occ [[maybe_unused]],
-        const String & match_type,
-        ColumnWithTypeAndName & column_result) const
-    {
-        if constexpr (Impl::support_non_const_needle)
-        {
-            const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
-            const auto * col_replacement_const = typeid_cast<const ColumnConst *>(column_replacement.get());
-            auto replacement = col_replacement_const->getValue<String>();
-
-            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
-            {
-                auto col_res = ColumnString::create();
-                Impl::vectorNonConstNeedle(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-                column_result.column = std::move(col_res);
-            }
-            else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
-            {
-                auto col_res = ColumnString::create();
-                Impl::vectorFixedNonConstNeedle(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), replacement, pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-                column_result.column = std::move(col_res);
-            }
-            else
-                throw Exception(
-                    "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
-        }
-        else
-        {
-            throw Exception("Argument at index 2 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
-        }
-    }
-
-    void executeImplNonConstReplacement(
-        const ColumnPtr & column_src,
-        const ColumnPtr & column_needle,
-        const ColumnPtr & column_replacement,
-        Int64 pos [[maybe_unused]],
-        Int64 occ [[maybe_unused]],
-        const String & match_type,
-        ColumnWithTypeAndName & column_result) const
-    {
-        if constexpr (Impl::support_non_const_replacement)
-        {
-            const auto * col_needle_const = typeid_cast<const ColumnConst *>(column_needle.get());
-            auto needle = col_needle_const->getValue<String>();
-            const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
-
-            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
-            {
-                auto col_res = ColumnString::create();
-                Impl::vectorNonConstReplacement(col->getChars(), col->getOffsets(), needle, col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-                column_result.column = std::move(col_res);
-            }
-            else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
-            {
-                auto col_res = ColumnString::create();
-                Impl::vectorFixedNonConstReplacement(col->getChars(), col->getN(), needle, col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-                column_result.column = std::move(col_res);
-            }
-            else
-                throw Exception(
-                    "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
-        }
-        else
-        {
-            throw Exception("Argument at index 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
-        }
-    }
-
-    void executeImplNonConstNeedleReplacement(
-        const ColumnPtr & column_src,
-        const ColumnPtr & column_needle,
-        const ColumnPtr & column_replacement,
-        Int64 pos [[maybe_unused]],
-        Int64 occ [[maybe_unused]],
-        const String & match_type,
-        ColumnWithTypeAndName & column_result) const
-    {
-        if constexpr (Impl::support_non_const_needle && Impl::support_non_const_replacement)
-        {
-            const auto * col_needle = typeid_cast<const ColumnString *>(column_needle.get());
-            const auto * col_replacement = typeid_cast<const ColumnString *>(column_replacement.get());
-
-            if (const auto * col = checkAndGetColumn<ColumnString>(column_src.get()))
-            {
-                auto col_res = ColumnString::create();
-                Impl::vectorNonConstNeedleReplacement(col->getChars(), col->getOffsets(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-                column_result.column = std::move(col_res);
-            }
-            else if (const auto * col = checkAndGetColumn<ColumnFixedString>(column_src.get()))
-            {
-                auto col_res = ColumnString::create();
-                Impl::vectorFixedNonConstNeedleReplacement(col->getChars(), col->getN(), col_needle->getChars(), col_needle->getOffsets(), col_replacement->getChars(), col_replacement->getOffsets(), pos, occ, match_type, collator, col_res->getChars(), col_res->getOffsets());
-                column_result.column = std::move(col_res);
-            }
-            else
-                throw Exception(
-                    "Illegal column " + column_src->getName() + " of first argument of function " + getName(),
-                    ErrorCodes::ILLEGAL_COLUMN);
-        }
-        else
-        {
-            throw Exception("Argument at index 2 and 3 for function replace must be constant", ErrorCodes::ILLEGAL_COLUMN);
-        }
-    }
-
-    TiDB::TiDBCollatorPtr collator{};
-};
-
 #undef CONVERT_CONST_STR_COL_TO_PARAM
 #undef CONVERT_NULL_STR_COL_TO_PARAM
 #undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
@@ -1791,6 +1390,7 @@ private:
 #undef MATCH_TYPE_PARAM_VAR_NAME
 #undef PAT_PARAM_VAR_NAME
 #undef EXPR_PARAM_VAR_NAME
+#undef COL_SIZE_VAR_NAME col_size
 #undef RES_ARG_VAR_NAME
 #undef MATCH_TYPE_COL_PTR_VAR_NAME
 #undef PAT_COL_PTR_VAR_NAME
