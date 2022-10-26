@@ -148,13 +148,13 @@ DAGProperties getDAGProperties(const String & prop_string)
         else if (Poco::toLower(tokens[0]) == COLLATOR_NAME)
             ret.collator = std::stoi(tokens[1]);
         else if (Poco::toLower(tokens[0]) == MPP_QUERY)
-            ret.collator = tokens[1] == "true";
+            ret.is_mpp_query = tokens[1] == "true";
         else if (Poco::toLower(tokens[0]) == USE_BROADCAST_JOIN)
-            ret.collator = tokens[1] == "true";
+            ret.use_broadcast_join = tokens[1] == "true";
         else if (Poco::toLower(tokens[0]) == MPP_PARTITION_NUM)
-            ret.collator = std::stoi(tokens[1]);
+            ret.mpp_partition_num = std::stoi(tokens[1]);
         else if (Poco::toLower(tokens[0]) == MPP_TIMEOUT)
-            ret.collator = std::stoi(tokens[1]);
+            ret.mpp_timeout = std::stoi(tokens[1]);
     }
 
     return ret;
