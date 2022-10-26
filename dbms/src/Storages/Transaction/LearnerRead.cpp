@@ -97,6 +97,12 @@ struct UnavailableRegions : public LockWrap
         return ids.count(region_id);
     }
 
+    RegionID one()
+    {
+        auto lock = genLockGuard();
+        return *ids.begin();
+    }
+
 private:
     inline void doAdd(RegionID id) { ids.emplace(id); }
 
@@ -397,12 +403,19 @@ LearnerReadSnapshot doLearnerRead(
         }
         GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
         auto wait_index_elapsed_ms = watch.elapsedMilliseconds();
+
+        FmtBuffer fmt_buf;
+        if (unavailable_regions.size())
+        {
+            fmt_buf.fmtAppend("(including {})", unavailable_regions[0].one());
+        }
         LOG_DEBUG(
             log,
-            "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
+            "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions{}",
             batch_read_index_req.size(),
             wait_index_elapsed_ms,
-            unavailable_regions.size());
+            unavailable_regions.size(),
+            fmt_buf.to_string());
     };
 
     auto start_time = Clock::now();
