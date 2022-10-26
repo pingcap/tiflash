@@ -125,67 +125,40 @@ bool isTunnelNotFound(grpc::Status status)
 
 void EstablishCallData::initRpc()
 {
-    std::exception_ptr eptr = nullptr;
     try
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_tunnel_init_rpc_failure_failpoint);
 
-        auto res = service->establishMPPConnectionAsync(&ctx, &request, this, cq);
+        auto res = service->establishMPPConnectionAsync(&ctx, &request, this);
 
-        bool success = true;
-        bool tunnel_not_found = false;
-        std::visit(variant_op::overloaded{
-                       [&, this](grpc::Status & status) {
-                           if (!status.ok())
-                           {
-                               if (isTunnelNotFound(status))
-                                   tunnel_not_found = true;
-                               else
-                               {
-                                   writeDone("initRpc called with no-ok status", status);
-                                   success = false;
-                               }
-                           }
-                       },
-                       [&, this](std::string & err_msg) {
-                           writeErr(getPacketWithError(err_msg));
-                           success = false;
-                       }},
-                   res);
-        if (tunnel_not_found)
-            // if tunnel is not found, the call data will be put back to cq by alarm, so just return to wait the next call from grpc thread is enough
-            return;
-        if (!success)
-        {
-            // If success is false, return immediately due to calling `write` or `writeErr`.
-            return;
-        }
+        if (!res.ok())
+            writeDone("initRpc called with no-ok status", res);
     }
     catch (...)
     {
-        eptr = std::current_exception();
-    }
-    if (eptr)
-    {
-        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getExceptionMessage(eptr, false));
+        grpc::Status status(static_cast<grpc::StatusCode>(GRPC_STATUS_UNKNOWN), getCurrentExceptionMessage(false));
         writeDone("initRpc called with exception", status);
-        return;
     }
-
-    // Initialization is successful.
-    state = PROCESSING;
-
-    // Try to send one message.
-    // If there is no message, the pointer of this class will be saved in `async_tunnel_sender`.
-    trySendOneMsg();
 }
 
 void EstablishCallData::tryConnectTunnel()
 {
     auto * task_manager = service->getContext()->getTMTContext().getMPPTaskManager().get();
     auto [tunnel, err_msg] = task_manager->findAsyncTunnel(&request, this, cq);
-    if (tunnel != nullptr)
+    if (tunnel == nullptr && err_msg.empty())
     {
+        // call data has been put to cq, just return is ok
+        return;
+    }
+    else if (tunnel == nullptr && !err_msg.empty())
+    {
+        // meet error
+        writeErr(getPacketWithError(err_msg));
+        return;
+    }
+    else if (tunnel != nullptr && err_msg.empty())
+    {
+        // found tunnel
         try
         {
             tunnel->connectAsync(this);
@@ -195,10 +168,14 @@ void EstablishCallData::tryConnectTunnel()
         }
         catch (...)
         {
-            err_msg = getCurrentExceptionMessage(false);
+            writeErr(getPacketWithError(getCurrentExceptionMessage(false)));
         }
     }
-    writeErr(getPacketWithError(err_msg));
+    else if (tunnel != nullptr && !err_msg.empty())
+    {
+        // should not reach here
+        __builtin_unreachable();
+    }
 }
 
 void EstablishCallData::write(const mpp::MPPDataPacket & packet)

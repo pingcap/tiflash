@@ -79,6 +79,8 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
+    void tryConnectTunnel();
+
 private:
     /// WARNING: Since a event from one grpc completion queue may be handled by different
     /// thread, it's EXTREMELY DANGEROUS to read/write any data after calling a grpc function
@@ -87,8 +89,6 @@ private:
     /// Keep it in mind if you want to change any logic here.
 
     void initRpc();
-
-    void tryConnectTunnel();
 
     /// The packet will be written to grpc.
     void write(const mpp::MPPDataPacket & packet);

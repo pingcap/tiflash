@@ -59,12 +59,13 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
 
     std::unique_lock lock(mu);
     auto query_it = mpp_query_map.find(id.start_ts);
-    if (query_it == mpp_query_map.end())
+    if (query_it == mpp_query_map.end() || query_it->second->task_map.find(id) == query_it->second->task_map.end())
     {
+        /// task not found
         if (!call_data->isWaitingTunnelState())
         {
             /// if call_data is in new_request state, then put it to waiting tunnel state
-            auto query_set = addMPPQueryTaskSet(id.start_ts);
+            auto query_set = query_it == mpp_query_map.end() ? addMPPQueryTaskSet(id.start_ts) : query_it->second;
             auto & alarm = query_set->alarms[sender_task_id][receiver_task_id];
             call_data->setToWaitingTunnelState();
             alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data);
@@ -72,33 +73,9 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
         }
         else
         {
-            return {nullptr, fmt::format("Can't find task [{},{}] within 10 s.", id.start_ts, id.task_id)};
-        }
-    }
-    auto query_set = query_it->second;
-
-    if (!query_set->isInNormalState())
-    {
-        /// if the query is aborted, return true to stop waiting timeout.
-        LOG_WARNING(log, fmt::format("Query {} is aborted, all its tasks are invalid.", id.start_ts));
-        /// meet error
-        return {nullptr, query_it->second->error_message};
-    }
-    auto it = query_set->task_map.find(id);
-    if (it == query_set->task_map.end())
-    {
-        if (!call_data->isWaitingTunnelState())
-        {
-            /// task not found, use alarm
-            auto & alarm = query_set->alarms[sender_task_id][receiver_task_id];
-            call_data->setToWaitingTunnelState();
-            alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data);
-            return {nullptr, ""};
-        }
-        else
-        {
-            if (query_it->second->task_map.empty())
+            if (query_it != mpp_query_map.end() && query_it->second->task_map.empty())
             {
+                auto query_set = query_it->second;
                 /// if the query task set has no mpp task, it has to be removed if there is no alarms left,
                 /// otherwise the query task set itself may be left in MPPTaskManager forever
                 auto task_alarm_it = query_set->alarms.find(sender_task_id);
@@ -120,6 +97,16 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
             return {nullptr, fmt::format("Can't find task [{},{}] within 10 s.", id.start_ts, id.task_id)};
         }
     }
+
+    auto query_set = query_it->second;
+    if (!query_set->isInNormalState())
+    {
+        /// if the query is aborted, return true to stop waiting timeout.
+        LOG_WARNING(log, fmt::format("Query {} is aborted, all its tasks are invalid.", id.start_ts));
+        /// meet error
+        return {nullptr, query_it->second->error_message};
+    }
+    auto it = query_set->task_map.find(id);
     return it->second->getTunnel(request);
 }
 

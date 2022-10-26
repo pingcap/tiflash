@@ -238,10 +238,9 @@ grpc::Status FlashService::IsAlive(grpc::ServerContext * grpc_context [[maybe_un
     return grpc::Status::OK;
 }
 
-std::variant<grpc::Status, std::string> AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext * grpc_context,
-                                                                                       const mpp::EstablishMPPConnectionRequest * request,
-                                                                                       EstablishCallData * call_data,
-                                                                                       grpc::CompletionQueue * cq)
+grpc::Status AsyncFlashService::establishMPPConnectionAsync(grpc::ServerContext * grpc_context,
+                                                            const mpp::EstablishMPPConnectionRequest * request,
+                                                            EstablishCallData * call_data)
 {
     CPUAffinityManager::getInstance().bindSelfGrpcThread();
     // Establish a pipe for data transferring. The pipes have registered by the task in advance.
@@ -268,26 +267,7 @@ std::variant<grpc::Status, std::string> AsyncFlashService::establishMPPConnectio
         return status;
     }
 
-    auto & tmt_context = db_context->getTMTContext();
-    auto task_manager = tmt_context.getMPPTaskManager();
-    auto [tunnel, err_msg] = task_manager->findAsyncTunnel(request, call_data, cq);
-    if (tunnel == nullptr)
-    {
-        if (!err_msg.empty())
-        {
-            LOG_ERROR(log, err_msg);
-            return err_msg;
-        }
-        else
-        {
-            /// if err_msg is empty && tunnel is nullptr, then the call_data itself will be put to cq by alarm
-            return grpc::Status(grpc::StatusCode::NOT_FOUND, mpp_tunnel_not_found);
-        }
-    }
-
-    // In async mode, this function won't wait for the request done and the finish event is handled in IAsyncCallData.
-    tunnel->connectAsync(call_data);
-
+    call_data->tryConnectTunnel();
     return grpc::Status::OK;
 }
 
