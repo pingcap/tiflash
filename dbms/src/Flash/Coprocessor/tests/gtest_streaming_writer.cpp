@@ -99,7 +99,6 @@ struct MockStreamWriter
         : checker(checker_)
     {}
 
-    void write(tipb::SelectResponse & response, uint16_t part_id) { checker(response, part_id); }
     void write(tipb::SelectResponse & response) { checker(response, 0); }
 
 private:

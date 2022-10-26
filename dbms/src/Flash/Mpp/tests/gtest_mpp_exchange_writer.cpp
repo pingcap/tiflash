@@ -147,7 +147,7 @@ try
     auto block = prepareUniformBlock(block_rows);
 
     // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, const TrackedMppDataPacketPtr &> write_report;
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed.
@@ -176,6 +176,7 @@ try
     {
         const TrackedMppDataPacketPtr & packet = ele.second;
         ASSERT_TRUE(packet);
+        ASSERT_EQ(fine_grained_shuffle_stream_count, packet->getPacket().stream_ids_size());
         ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
         for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
         {
