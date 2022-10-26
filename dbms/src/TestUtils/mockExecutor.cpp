@@ -333,17 +333,17 @@ DAGRequestBuilder & DAGRequestBuilder::window(MockAstVec window_funcs, MockOrder
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItem order_by, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec({order_by}), is_partial_sort, fine_grained_shuffle_stream_count);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec({order_by}), fine_grained_shuffle_stream_count);
     return *this;
 }
 
-DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
+DAGRequestBuilder & DAGRequestBuilder::sort(MockOrderByItemVec order_by_vec, uint64_t fine_grained_shuffle_stream_count)
 {
     assert(root);
-    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec(order_by_vec), is_partial_sort, fine_grained_shuffle_stream_count);
+    root = compileSort(root, getExecutorIndex(), buildOrderByItemVec(order_by_vec), fine_grained_shuffle_stream_count);
     return *this;
 }
 

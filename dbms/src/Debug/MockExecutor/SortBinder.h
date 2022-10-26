@@ -21,10 +21,9 @@ namespace DB::mock
 class SortBinder : public ExecutorBinder
 {
 public:
-    SortBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && by_exprs_, bool is_partial_sort_, uint64_t fine_grained_shuffle_stream_count_ = 0)
+    SortBinder(size_t & index_, const DAGSchema & output_schema_, ASTs && by_exprs_, uint64_t fine_grained_shuffle_stream_count_ = 0)
         : ExecutorBinder(index_, "sort_" + std::to_string(index_), output_schema_)
         , by_exprs(by_exprs_)
-        , is_partial_sort(is_partial_sort_)
         , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     {}
 
@@ -36,9 +35,8 @@ public:
 
 private:
     std::vector<ASTPtr> by_exprs;
-    bool is_partial_sort;
     uint64_t fine_grained_shuffle_stream_count;
 };
 
-ExecutorBinderPtr compileSort(ExecutorBinderPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count);
+ExecutorBinderPtr compileSort(ExecutorBinderPtr input, size_t & executor_index, ASTPtr order_by_expr_list, uint64_t fine_grained_shuffle_stream_count);
 } // namespace DB::mock

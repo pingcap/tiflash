@@ -24,7 +24,6 @@ bool SortBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
     tipb_executor->set_executor_id(name);
     tipb_executor->set_fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count);
     tipb::Sort * sort = tipb_executor->mutable_sort();
-    sort->set_ispartialsort(is_partial_sort);
 
     for (const auto & child : by_exprs)
     {
@@ -41,7 +40,7 @@ bool SortBinder::toTiPBExecutor(tipb::Executor * tipb_executor, int32_t collator
     return children[0]->toTiPBExecutor(children_executor, collator_id, mpp_info, context);
 }
 
-ExecutorBinderPtr compileSort(ExecutorBinderPtr input, size_t & executor_index, ASTPtr order_by_expr_list, bool is_partial_sort, uint64_t fine_grained_shuffle_stream_count)
+ExecutorBinderPtr compileSort(ExecutorBinderPtr input, size_t & executor_index, ASTPtr order_by_expr_list, uint64_t fine_grained_shuffle_stream_count)
 {
     std::vector<ASTPtr> order_columns;
     if (order_by_expr_list != nullptr)
@@ -55,7 +54,7 @@ ExecutorBinderPtr compileSort(ExecutorBinderPtr input, size_t & executor_index, 
             compileExpr(input->output_schema, elem->children[0]);
         }
     }
-    ExecutorBinderPtr sort = std::make_shared<mock::SortBinder>(executor_index, input->output_schema, std::move(order_columns), is_partial_sort, fine_grained_shuffle_stream_count);
+    ExecutorBinderPtr sort = std::make_shared<mock::SortBinder>(executor_index, input->output_schema, std::move(order_columns), fine_grained_shuffle_stream_count);
     sort->children.push_back(input);
     return sort;
 }

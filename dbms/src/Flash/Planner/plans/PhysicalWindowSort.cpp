@@ -34,8 +34,6 @@ PhysicalPlanNodePtr PhysicalWindowSort::build(
 {
     assert(child);
 
-    RUNTIME_ASSERT(window_sort.ispartialsort(), log, "for window sort, ispartialsort must be true");
-
     DAGExpressionAnalyzer analyzer(child->getSchema(), context);
     const auto & order_columns = analyzer.buildWindowOrderColumns(window_sort);
     const SortDescription & order_descr = getSortDescription(order_columns, window_sort.byitems());

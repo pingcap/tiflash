@@ -39,7 +39,7 @@ bool isSourceNode(const tipb::Executor * root)
         || root->tp() == tipb::ExecType::TypeExchangeReceiver || root->tp() == tipb::ExecType::TypeProjection
         || root->tp() == tipb::ExecType::TypePartitionTableScan
         || root->tp() == tipb::ExecType::TypeWindow
-        || (root->tp() == tipb::ExecType::TypeSort && root->sort().ispartialsort());
+        || root->tp() == tipb::ExecType::TypeSort;
 }
 
 const static String SOURCE_NAME("source");
@@ -160,7 +160,7 @@ DAGQueryBlock::DAGQueryBlock(const tipb::Executor & root_, QueryBlockIDGenerator
         children.push_back(std::make_shared<DAGQueryBlock>(source->window().child(), id_generator));
         GET_METRIC(tiflash_coprocessor_executor_count, type_window).Increment();
     }
-    else if (current->tp() == tipb::ExecType::TypeSort && current->sort().ispartialsort())
+    else if (current->tp() == tipb::ExecType::TypeSort)
     {
         children.push_back(std::make_shared<DAGQueryBlock>(source->sort().child(), id_generator));
         GET_METRIC(tiflash_coprocessor_executor_count, type_window_sort).Increment();

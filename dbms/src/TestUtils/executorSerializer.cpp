@@ -230,7 +230,7 @@ void serializeWindow(const String & executor_id, const tipb::Window & window [[m
 
 void serializeSort(const String & executor_id, const tipb::Sort & sort [[maybe_unused]], FmtBuffer & buf)
 {
-    buf.fmtAppend("{} | isPartialSort: {}, partition_by: {{", executor_id, sort.ispartialsort());
+    buf.fmtAppend("{} | partition_by: {{", executor_id);
     buf.joinStr(
         sort.byitems().begin(),
         sort.byitems().end(),
