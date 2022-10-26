@@ -30,9 +30,13 @@ struct AggregateDescription
     Names argument_names; /// used if no `arguments` are specified.
     String column_name; /// What name to use for a column with aggregate function values
 
-    String toString() const {
+    String toString() const
+    {
         return fmt::format("AggregateDescription{{function={}, arguments={}, argument_names={}, column_name={}}}",
-            function->getName(), fmt::join(arguments, ", "), fmt::join(argument_names, ", "), column_name);
+                           function->getName(),
+                           fmt::join(arguments, ", "),
+                           fmt::join(argument_names, ", "),
+                           column_name);
     }
 };
 

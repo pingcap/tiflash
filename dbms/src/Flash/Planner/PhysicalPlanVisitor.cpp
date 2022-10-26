@@ -52,7 +52,7 @@ String visitToString(const PhysicalPlanNodePtr & plan)
     return buffer.toString();
 }
 
-PhysicalPlanNodePtrs getAggarationNodes(const PhysicalPlanNodePtr & plan) 
+PhysicalPlanNodePtrs getAggarationNodes(const PhysicalPlanNodePtr & plan)
 {
     PhysicalPlanNodePtrs aggr_nodes;
     visit(plan, [&aggr_nodes](const PhysicalPlanNodePtr & plan) {

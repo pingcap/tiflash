@@ -16,11 +16,6 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Planner/plans/PhysicalLeaf.h>
 #include <tipb/executor.pb.h>
-#include <DataTypes/DataTypesNumber.h>
-#include "DataTypes/IDataType.h"
-#include "Dictionaries/ComplexKeyHashedDictionary.h"
-#include <Flash/Coprocessor/GenSchemaAndColumn.h>
-#include "Storages/Transaction/TypeMapping.h"
 
 namespace DB
 {
@@ -45,9 +40,15 @@ public:
 
     Block & getSampleBlocks() { return sample_block; }
 
-    void replaceColumnToRead(const String & src_name, const String & dst_name, const DataTypePtr & dst_type) {
-        for (auto & item : schema) {
-            if (item.name == src_name) {
+    void replaceColumnToRead(const String & src_name, const String & dst_name, const DataTypePtr & dst_type)
+    {
+        // Actually, we should rewirte the `tidb_table_scan`, and then re-generate the schema and block.
+        // But the `columns` in `tidb_table_scan` come from TiDB where may does not aware of the `dst_name`, like `delmark_column`.
+        // so we just replace the name and type in the schema and block.
+        for (auto & item : schema)
+        {
+            if (item.name == src_name)
+            {
                 item = {dst_name, dst_type};
                 sample_block.erase(src_name);
                 sample_block.insert({dst_type, dst_name});

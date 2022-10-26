@@ -1,0 +1,123 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
+mysql> drop table if exists test.t3
+
+
+# is_common_handle == true
+mysql> CREATE TABLE t1 (a VARCHAR(255) NOT NULL PRIMARY KEY CLUSTERED, b INT)
+# is_common_handle == false && pk_is_handle == true
+mysql> CREATE TABLE t2 (a BIGINT NOT NULL PRIMARY KEY, b INT)
+# is_common_handle == false && pk_is_handle == false
+mysql> CREATE TABLE t3 (a INT NOT NULL PRIMARY KEY NONCLUSTERED, b INT)
+
+
+mysql> alter table test.t1 set tiflash replica 1
+mysql> alter table test.t2 set tiflash replica 1
+mysql> alter table test.t3 set tiflash replica 1
+
+
+mysql> insert into test.t1 values('-123', 0)
+mysql> insert into test.t1 values('-124', 1)
+mysql> insert into test.t2 values(123, 0)
+mysql> insert into test.t2 values(124, 1)
+mysql> insert into test.t3 values(123, 0)
+mysql> insert into test.t3 values(124, 1)
+
+
+func> wait_table test t1
+func> wait_table test t2
+func> wait_table test t3
+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(*) from test.t1
++----------+
+| count(*) |
++----------+
+|        2 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(*) from test.t1 where b = 1;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(a) from test.t1
++----------+
+| count(a) |
++----------+
+|        2 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(a) from test.t1 where b = 1;
++----------+
+| count(a) |
++----------+
+|        1 |
++----------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(*) from test.t2
++----------+
+| count(*) |
++----------+
+|        2 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(*) from test.t2 where b = 1;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(a) from test.t2
++----------+
+| count(a) |
++----------+
+|        2 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(a) from test.t2 where b = 1;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(*) from test.t3
++----------+
+| count(*) |
++----------+
+|        2 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(*) from test.t3 where b = 1;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(a) from test.t3
++----------+
+| count(a) |
++----------+
+|        2 |
++----------+
+mysql> set @@tidb_isolation_read_engines='tiflash'; select count(*) from test.t3 where b = 1;
++----------+
+| count(*) |
++----------+
+|        1 |
++----------+
+
+mysql> drop table if exists test.t1
+mysql> drop table if exists test.t2
+mysql> drop table if exists test.t3

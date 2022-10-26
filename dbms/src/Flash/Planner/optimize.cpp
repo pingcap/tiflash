@@ -63,9 +63,9 @@ public:
             if (aggr_descs[0].function->getName() != "count" && aggr_descs[0].argument_names.empty())
                 return plan;
         }
-        // if all the aggregators are `count()`, then the columns to read must be the handle_column
-        // so we do not need to do any check here
-        // just rewrite the table scan to read the delmark_column instead of handle_column
+        // if table scan will read handle_column
+        // rewrite the table scan by replacing handle_column with delmark_column
+        // else do nothing
         auto table_scan_nodes = DB::PhysicalPlanVisitor::getTableScanNodes(plan);
         for (auto & table_scan_node : table_scan_nodes)
         {
