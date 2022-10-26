@@ -19,11 +19,11 @@
 #include <DataTypes/DataTypeFixedString.h>
 #include <Functions/CollationStringSearch.h>
 #include <Functions/FunctionFactory.h>
+#include <Functions/FunctionsStringReplace.h>
 #include <Functions/FunctionsStringSearch.h>
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
 #include <Functions/re2Util.h>
-#include <Functions/FunctionsStringReplace.h>
 #include <IO/WriteHelpers.h>
 #include <Poco/UTF8String.h>
 #include <Storages/Transaction/CollatorUtils.h>

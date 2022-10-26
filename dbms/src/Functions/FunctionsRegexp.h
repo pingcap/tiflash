@@ -22,11 +22,11 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Functions/FunctionsStringReplace.h>
 #include <Functions/IFunction.h>
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
 #include <Functions/re2Util.h>
-#include <Functions/FunctionsStringReplace.h>
 #include <re2/re2.h>
 
 #include <memory>
@@ -114,45 +114,6 @@ inline constexpr bool check_int_type()
 {
     return static_cast<bool>(std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, UInt128> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>);
 }
-
-// Use this type when param is not provided
-class ParamDefault
-{
-public:
-    explicit ParamDefault(Int64 val)
-        : default_int(val)
-        , default_string("")
-    {}
-    explicit ParamDefault(const StringRef & str)
-        : default_int(0)
-        , default_string(str)
-    {}
-
-    // For passing compilation
-    explicit ParamDefault(const void *)
-        : default_int(0)
-        , default_string("")
-    {
-        throw Exception("Shouldn't call this constructor");
-    }
-
-    // For passing compilation
-    ParamDefault(const void *, const void *)
-        : default_int(0)
-        , default_string("")
-    {
-        throw Exception("Shouldn't call this constructor");
-    }
-
-    Int64 getInt(size_t) const { return default_int; }
-    static String getString(size_t) { return String(""); }
-    void getStringRef(size_t, StringRef &) const {}
-    constexpr static bool isConst() { return true; }
-
-private:
-    Int64 default_int;
-    StringRef default_string;
-};
 
 template <bool is_const>
 class ParamString
@@ -395,6 +356,7 @@ private:
 #define MATCH_TYPE_COL_PTR_VAR_NAME col_match_type
 
 #define RES_ARG_VAR_NAME res_arg
+#define COL_SIZE_VAR_NAME col_size
 
 #define EXPR_PARAM_VAR_NAME expr_param
 #define PAT_PARAM_VAR_NAME pat_param
@@ -404,59 +366,57 @@ private:
 #define ARG_NUM_VAR_NAME arg_num
 
 // Unify the name of functions that actually execute regexp
-#define REGEXP_CLASS_MEM_FUNC_IMPL_NAME process
+#define REGEXP_CLASS_MEM_FUNC_IMPL_NAME executeRegexpFunc
 
 // Common method to convert nullable string column
 // converted_col is impossible to be const here
-#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                                                               \
-    do                                                                                                                                                                       \
-    {                                                                                                                                                                        \
-        size_t col_size = (converted_col)->size();                                                                                                                           \
-        if (((converted_col)->isColumnNullable()))                                                                                                                           \
-        {                                                                                                                                                                    \
-            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();                                                                    \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));                                                                                              \
-            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());                                                               \
-            Param<ParamString<false>, true>(param_name)(col_size, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets()))); \
-            next_convertion;                                                                                                                                                    \
-        }                                                                                                                                                                    \
-        else                                                                                                                                                                 \
-        {                                                                                                                                                                    \
-            /* This is a pure string vector column */                                                                                                                        \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(converted_col)));                                                                                         \
-            Param<ParamString<false>, false>(param_name)(col_size, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));          \
-            next_convertion;                                                                                                                                                    \
-        }                                                                                                                                                                    \
+#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                                                                     \
+    do                                                                                                                                                                                \
+    {                                                                                                                                                                                 \
+        if (((converted_col)->isColumnNullable()))                                                                                                                                    \
+        {                                                                                                                                                                             \
+            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();                                                                             \
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));                                                                                                       \
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());                                                                        \
+            Param<ParamString<false>, true>(param_name)(COL_SIZE_VAR_NAME, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets()))); \
+            next_convertion;                                                                                                                                                          \
+        }                                                                                                                                                                             \
+        else                                                                                                                                                                          \
+        {                                                                                                                                                                             \
+            /* This is a pure string vector column */                                                                                                                                 \
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(converted_col)));                                                                                                  \
+            Param<ParamString<false>, false>(param_name)(COL_SIZE_VAR_NAME, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));          \
+            next_convertion;                                                                                                                                                          \
+        }                                                                                                                                                                             \
     } while (0);
 
 // Common method to convert const string column
-#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                     \
-    do                                                                                                              \
-    {                                                                                                               \
-        size_t col_size = (converted_col)->size();                                                                  \
-        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                             \
-        if (col_const != nullptr)                                                                                   \
-        {                                                                                                           \
-            auto col_const_data = col_const->getDataColumnPtr();                                                    \
-            Field field;                                                                                            \
-            col_const->get(0, field);                                                                               \
-            String tmp = field.isNull() ? String("") : field.safeGet<String>();                                     \
-            if (col_const_data->isColumnNullable())                                                                 \
-            {                                                                                                       \
-                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
-                Param<ParamString<true>, true>(param_name)(col_size, StringRef(tmp.data(), tmp.size()), null_map);  \
-                next_convertion;                                                                                       \
-            }                                                                                                       \
-            else                                                                                                    \
-            {                                                                                                       \
-                Param<ParamString<true>, false>(param_name)(col_size, col_const->getDataAt(0));                     \
-                next_convertion;                                                                                       \
-            }                                                                                                       \
-        }                                                                                                           \
-        else                                                                                                        \
-        {                                                                                                           \
-            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (converted_col), next_convertion)                              \
-        }                                                                                                           \
+#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                          \
+    do                                                                                                                      \
+    {                                                                                                                       \
+        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                     \
+        if (col_const != nullptr)                                                                                           \
+        {                                                                                                                   \
+            auto col_const_data = col_const->getDataColumnPtr();                                                            \
+            Field field;                                                                                                    \
+            col_const->get(0, field);                                                                                       \
+            String tmp = field.isNull() ? String("") : field.safeGet<String>();                                             \
+            if (col_const_data->isColumnNullable())                                                                         \
+            {                                                                                                               \
+                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData());         \
+                Param<ParamString<true>, true>(param_name)(COL_SIZE_VAR_NAME, StringRef(tmp.data(), tmp.size()), null_map); \
+                next_convertion;                                                                                            \
+            }                                                                                                               \
+            else                                                                                                            \
+            {                                                                                                               \
+                Param<ParamString<true>, false>(param_name)(COL_SIZE_VAR_NAME, col_const->getDataAt(0));                    \
+                next_convertion;                                                                                            \
+            }                                                                                                               \
+        }                                                                                                                   \
+        else                                                                                                                \
+        {                                                                                                                   \
+            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (converted_col), next_convertion)                                   \
+        }                                                                                                                   \
     } while (0);
 
 class FunctionStringRegexpBase
@@ -471,6 +431,9 @@ public:
     static constexpr size_t REGEXP_REPLACE_MAX_PARAM_NUM = 6;
     static constexpr size_t REGEXP_SUBSTR_MAX_PARAM_NUM = 5;
 
+    // We should pre compile the regular expression when:
+    //  - only pattern column is provided and it's a constant column
+    //  - pattern and match type columns are provided and they are both constant columns
     template <typename ExprT, typename MatchTypeT>
     std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
     {
@@ -491,14 +454,6 @@ public:
     {
         return (PatT::isConst() && MatchTypeT::isConst());
     }
-
-    const std::unique_ptr<Regexps::Regexp> & getRegexp() const { return memorized_re; }
-
-private:
-    // We should pre compile the regular expression when:
-    //  - only pattern column is provided and it's a constant column
-    //  - pattern and match type columns are provided and they are both constant columns
-    mutable std::unique_ptr<Regexps::Regexp> memorized_re;
 };
 
 // regexp and regexp_like functions are executed in this macro
@@ -517,7 +472,7 @@ private:
         else                                                                                                                  \
         {                                                                                                                     \
             /* match_type is not provided here */                                                                             \
-            Param<ParamDefault, false> MATCH_TYPE_PARAM_VAR_NAME(-1, StringRef("", 0));                                       \
+            Param<ParamString<true>, false> MATCH_TYPE_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, StringRef("", 0));                   \
             EXECUTE_REGEXP_LIKE()                                                                                             \
         }                                                                                                                     \
     } while (0);
@@ -533,10 +488,12 @@ private:
 #define CONVERT_EXPR_COL_TO_PARAM()                                                                                \
     do                                                                                                             \
     {                                                                                                              \
+        /* Getting column size from expr col */                                                                    \
+        size_t COL_SIZE_VAR_NAME = (EXPR_COL_PTR_VAR_NAME)->size();                                                \
         CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
     } while (0);
 
-// The entry to convert columns to params and execute regexp_xxx functions
+// The entry to convert columns to params and execute regexp functions
 #define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
     do                                       \
     {                                        \
@@ -796,6 +753,7 @@ private:
 #undef MATCH_TYPE_PARAM_VAR_NAME
 #undef PAT_PARAM_VAR_NAME
 #undef EXPR_PARAM_VAR_NAME
+#undef COL_SIZE_VAR_NAME col_size
 #undef RES_ARG_VAR_NAME
 #undef MATCH_TYPE_COL_PTR_VAR_NAME
 #undef PAT_COL_PTR_VAR_NAME
