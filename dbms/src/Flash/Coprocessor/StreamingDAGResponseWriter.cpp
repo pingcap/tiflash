@@ -29,8 +29,8 @@ extern const int UNSUPPORTED_PARAMETER;
 extern const int LOGICAL_ERROR;
 } // namespace ErrorCodes
 
-template <class StreamWriterPtr, bool is_mpp>
-StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::StreamingDAGResponseWriter(
+template <class StreamWriterPtr>
+StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
@@ -62,8 +62,8 @@ StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::StreamingDAGResponseWriter(
         : (records_per_chunk - 1);
 }
 
-template <class StreamWriterPtr, bool is_mpp>
-void StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::finishWrite()
+template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 {
     if (should_send_exec_summary_at_last)
     {
@@ -75,8 +75,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::finishWrite()
     }
 }
 
-template <class StreamWriterPtr, bool is_mpp>
-void StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::write(const Block & block)
+template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -92,98 +92,75 @@ void StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::write(const Block & bl
         encodeThenWriteBlocks<false>();
 }
 
-template <class StreamWriterPtr, bool is_mpp>
-void StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::encode(std::function<void(String &&)> add_chunk)
-{
-    if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
-    {
-        /// passthrough data to a non-TiFlash node, like sending data to TiSpark
-        while (!blocks.empty())
-        {
-            const auto & block = blocks.back();
-            chunk_codec_stream->encode(block, 0, block.rows());
-            blocks.pop_back();
-            add_chunk(chunk_codec_stream->getString());
-            chunk_codec_stream->clear();
-        }
-    }
-    else /// passthrough data to a TiDB node
-    {
-        Int64 current_records_num = 0;
-        while (!blocks.empty())
-        {
-            const auto & block = blocks.back();
-            size_t rows = block.rows();
-            for (size_t row_index = 0; row_index < rows;)
-            {
-                if (current_records_num >= records_per_chunk)
-                {
-                    add_chunk(chunk_codec_stream->getString());
-                    chunk_codec_stream->clear();
-                    current_records_num = 0;
-                }
-                const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
-                chunk_codec_stream->encode(block, row_index, upper);
-                current_records_num += (upper - row_index);
-                row_index = upper;
-            }
-            blocks.pop_back();
-        }
-
-        if (current_records_num > 0)
-        {
-            add_chunk(chunk_codec_stream->getString());
-            chunk_codec_stream->clear();
-        }
-    }
-    assert(blocks.empty());
-    rows_in_blocks = 0;
-}
-
-template <class StreamWriterPtr, bool is_mpp>
+template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::encodeThenWriteBlocks()
+void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
-    if (!blocks.empty())
+    TrackedSelectResp response;
+    if constexpr (send_exec_summary_at_last)
+        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
+    response.setEncodeType(dag_context.encode_type);
+    if (blocks.empty())
     {
-        if constexpr (is_mpp)
+        if constexpr (send_exec_summary_at_last)
         {
-            // for mpp, we can send `TrackedMppDataPacket` directly without converting the `SelectResp` to `TrackedMppDataPacket` in MPPTunnelSetBase.
-            auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-            encode([&tracked_packet](String && chunk) {
-                tracked_packet->addChunk(std::move(chunk));
-            });
-            writer->write(tracked_packet);
-        }
-        else
-        {
-            TrackedSelectResp response;
-            response.setEncodeType(dag_context.encode_type);
-            encode([&response](String && chunk) {
-                response.addChunk(std::move(chunk));
-            });
             writer->write(response.getResponse());
         }
+        return;
     }
 
-    if constexpr (send_exec_summary_at_last)
+    if (!blocks.empty())
     {
         TrackedSelectResp response;
         response.setEncodeType(dag_context.encode_type);
-        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
-        if constexpr (is_mpp)
+        if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
         {
-            auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-            tracked_packet->serializeByResponse(response.getResponse());
-            writer->write(tracked_packet, 0);
+            /// passthrough data to a non-TiFlash node, like sending data to TiSpark
+            while (!blocks.empty())
+            {
+                const auto & block = blocks.back();
+                chunk_codec_stream->encode(block, 0, block.rows());
+                blocks.pop_back();
+                response.addChunk(chunk_codec_stream->getString());
+                chunk_codec_stream->clear();
+            }
         }
-        else
+        else /// passthrough data to a TiDB node
         {
-            writer->write(response.getResponse());
+            Int64 current_records_num = 0;
+            while (!blocks.empty())
+            {
+                const auto & block = blocks.back();
+                size_t rows = block.rows();
+                for (size_t row_index = 0; row_index < rows;)
+                {
+                    if (current_records_num >= records_per_chunk)
+                    {
+                        response.addChunk(chunk_codec_stream->getString());
+                        chunk_codec_stream->clear();
+                        current_records_num = 0;
+                    }
+                    const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
+                    chunk_codec_stream->encode(block, row_index, upper);
+                    current_records_num += (upper - row_index);
+                    row_index = upper;
+                }
+                blocks.pop_back();
+            }
+
+            if (current_records_num > 0)
+            {
+                response.addChunk(chunk_codec_stream->getString());
+                chunk_codec_stream->clear();
+            }
         }
+
+        assert(blocks.empty());
+        rows_in_blocks = 0;
+        writer->write(response.getResponse());
     }
 }
 
-template class StreamingDAGResponseWriter<StreamWriterPtr, false>;
-template class StreamingDAGResponseWriter<MPPTunnelSetPtr, true>;
+template class StreamingDAGResponseWriter<StreamWriterPtr>;
+template class StreamingDAGResponseWriter<MPPTunnelSetPtr>;
 } // namespace DB

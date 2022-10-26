@@ -45,6 +45,8 @@ public:
     /// so if return execution summary for all the tunnels, the
     /// information in TiDB will be amplified, which may make
     /// user confused.
+    // this is a root mpp writing.
+    void write(tipb::SelectResponse & response);
     // this is a broadcast writing.
     void write(const TrackedMppDataPacketPtr & packet);
     // this is a partition writing.

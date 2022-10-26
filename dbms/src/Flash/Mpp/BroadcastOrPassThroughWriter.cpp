@@ -91,6 +91,7 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
         summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
         auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
         tracked_packet->serializeByResponse(response.getResponse());
+        // only send to one tunnel.
         writer->write(tracked_packet, 0);
     }
 }
