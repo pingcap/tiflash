@@ -105,8 +105,8 @@ inline String addMatchTypeForPattern(const String & pattern, const String & matc
 {
     String mode = re2Util::getRE2ModeModifiers(match_type, collator);
     if (mode.empty())
-        return pattern;
-    return fmt::format("{}{}", mode, pattern);
+        return fmt::format("({})",pattern);
+    return fmt::format("{}({})", mode, pattern);
 }
 
 inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, const String & match_type, TiDB::TiDBCollatorPtr collator)
@@ -734,6 +734,76 @@ public:
     constexpr static bool canMemorize()
     {
         return (PatT::isConst() && MatchTypeT::isConst());
+    }
+
+    static void checkInputArg(const DataTypePtr & arg, bool is_str, bool * has_nullable_col, bool * has_data_type_nothing)
+    {
+        if (is_str)
+        {
+            // Check string type argument
+            if (arg->isNullable())
+            {
+                *has_nullable_col = true;
+                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+                if (null_type == nullptr)
+                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+
+                const auto & nested_type = null_type->getNestedType();
+
+                // It may be DataTypeNothing if it's not string
+                if (!nested_type->isString())
+                {
+                    if (nested_type->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+            else
+            {
+                if (!arg->isString())
+                {
+                    // It may be DataTypeNothing if it's not string
+                    if (arg->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+        }
+        else
+        {
+            // Check int type argument
+            if (arg->isNullable())
+            {
+                *has_nullable_col = true;
+                const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
+                if (null_type == nullptr)
+                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+                
+                const auto & nested_type = null_type->getNestedType();
+
+                // It may be DataTypeNothing if it's not string
+                if (!nested_type->isInteger())
+                {
+                    if (nested_type->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+            else
+            {
+                if (!arg->isInteger())
+                {
+                    // It may be DataTypeNothing if it's not string
+                    if (arg->getTypeId() != TypeIndex::Nothing)
+                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                    else
+                        *has_data_type_nothing = true;
+                }
+            }
+        }
     }
 };
 
@@ -1390,7 +1460,7 @@ private:
 #undef MATCH_TYPE_PARAM_VAR_NAME
 #undef PAT_PARAM_VAR_NAME
 #undef EXPR_PARAM_VAR_NAME
-#undef COL_SIZE_VAR_NAME col_size
+#undef COL_SIZE_VAR_NAME
 #undef RES_ARG_VAR_NAME
 #undef MATCH_TYPE_COL_PTR_VAR_NAME
 #undef PAT_COL_PTR_VAR_NAME
