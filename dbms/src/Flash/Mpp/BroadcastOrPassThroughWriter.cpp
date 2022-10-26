@@ -69,18 +69,18 @@ template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
-    TrackedMppDataPacket tracked_packet(current_memory_tracker);
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
     if constexpr (send_exec_summary_at_last)
     {
         TrackedSelectResp response;
         summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
-        tracked_packet.serializeByResponse(response.getResponse());
+        tracked_packet->serializeByResponse(response.getResponse());
     }
     if (blocks.empty())
     {
         if constexpr (send_exec_summary_at_last)
         {
-            writer->write(tracked_packet.getPacket());
+            writer->write(tracked_packet);
         }
         return;
     }
@@ -89,12 +89,12 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
         const auto & block = blocks.back();
         chunk_codec_stream->encode(block, 0, block.rows());
         blocks.pop_back();
-        tracked_packet.addChunk(chunk_codec_stream->getString());
+        tracked_packet->addChunk(chunk_codec_stream->getString());
         chunk_codec_stream->clear();
     }
     assert(blocks.empty());
     rows_in_blocks = 0;
-    writer->write(tracked_packet.getPacket());
+    writer->write(tracked_packet);
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;

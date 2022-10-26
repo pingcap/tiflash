@@ -99,11 +99,8 @@ struct MockStreamWriter
         : checker(checker_)
     {}
 
-    void write(mpp::MPPDataPacket &) { FAIL() << "cannot reach here."; }
-    void write(mpp::MPPDataPacket &, uint16_t) { FAIL() << "cannot reach here."; }
     void write(tipb::SelectResponse & response, uint16_t part_id) { checker(response, part_id); }
     void write(tipb::SelectResponse & response) { checker(response, 0); }
-    uint16_t getPartitionNum() const { return 1; }
 
 private:
     MockStreamWriterChecker checker;

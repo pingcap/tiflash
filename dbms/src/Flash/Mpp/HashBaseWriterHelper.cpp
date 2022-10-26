@@ -77,4 +77,13 @@ void computeHash(const Block & input_block,
         }
     }
 }
+
+std::vector<TrackedMppDataPacketPtr> createPackets(size_t partition_num)
+{
+    std::vector<TrackedMppDataPacketPtr> tracked_packets;
+    tracked_packets.reserve(partition_num);
+    for (size_t i = 0; i < partition_num; ++i)
+        tracked_packets.emplace_back(std::make_shared<TrackedMppDataPacket>());
+    return tracked_packets;
+}
 } // namespace DB::HashBaseWriterHelper

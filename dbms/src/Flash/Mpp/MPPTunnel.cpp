@@ -132,7 +132,7 @@ void MPPTunnel::close(const String & reason, bool wait_sender_finish)
 }
 
 // TODO: consider to hold a buffer
-void MPPTunnel::write(const mpp::MPPDataPacket & data)
+void MPPTunnel::write(const TrackedMppDataPacketPtr & data)
 {
     LOG_TRACE(log, "ready to write");
     {
@@ -144,7 +144,7 @@ void MPPTunnel::write(const mpp::MPPDataPacket & data)
 
     if (tunnel_sender->push(data))
     {
-        connection_profile_info.bytes += data.ByteSizeLong();
+        connection_profile_info.bytes += data->getPacket().ByteSizeLong();
         connection_profile_info.packets += 1;
         return;
     }

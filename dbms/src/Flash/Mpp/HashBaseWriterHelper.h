@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Storages/Transaction/Collator.h>
 
 namespace DB::HashBaseWriterHelper
@@ -29,4 +30,6 @@ void computeHash(const Block & input_block,
                  std::vector<String> & partition_key_containers,
                  const std::vector<Int64> & partition_col_ids,
                  std::vector<std::vector<MutableColumnPtr>> & result_columns);
+
+std::vector<TrackedMppDataPacketPtr> createPackets(size_t partition_num);
 } // namespace DB::HashBaseWriterHelper

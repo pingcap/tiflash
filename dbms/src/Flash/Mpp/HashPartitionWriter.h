@@ -41,7 +41,7 @@ private:
     void partitionAndEncodeThenWriteBlocks();
 
     template <bool send_exec_summary_at_last>
-    void writePackets(std::vector<TrackedMppDataPacket> & packets);
+    void writePackets(const std::vector<TrackedMppDataPacketPtr> & packets);
 
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;

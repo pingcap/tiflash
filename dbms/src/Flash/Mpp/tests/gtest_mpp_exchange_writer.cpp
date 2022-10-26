@@ -110,7 +110,7 @@ public:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-using MockStreamWriterChecker = std::function<void(mpp::MPPDataPacket &, uint16_t)>;
+using MockStreamWriterChecker = std::function<void(const TrackedMppDataPacketPtr &, uint16_t)>;
 
 struct MockStreamWriter
 {
@@ -120,9 +120,8 @@ struct MockStreamWriter
         , part_num(part_num_)
     {}
 
-    void write(mpp::MPPDataPacket & packet) { checker(packet, 0); }
-    void write(mpp::MPPDataPacket & packet, uint16_t part_id) { checker(packet, part_id); }
-    void write(tipb::SelectResponse &, uint16_t) { FAIL() << "cannot reach here, only consider CH Block format"; }
+    void write(const TrackedMppDataPacketPtr & packet) { checker(packet, 0); }
+    void write(const TrackedMppDataPacketPtr & packet, uint16_t part_id) { checker(packet, part_id); }
     void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     uint16_t getPartitionNum() const { return part_num; }
 
@@ -148,8 +147,8 @@ try
     auto block = prepareUniformBlock(block_rows);
 
     // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    std::unordered_map<uint16_t, const TrackedMppDataPacketPtr &> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed.
         // Because block.rows(1024) < fine_grained_shuffle_batch_size(4096),
@@ -175,11 +174,12 @@ try
     ASSERT_EQ(write_report.size(), part_num);
     for (const auto & ele : write_report)
     {
-        const mpp::MPPDataPacket & packet = ele.second;
-        ASSERT_EQ(packet.chunks_size(), packet.stream_ids_size());
-        for (int i = 0; i < packet.chunks_size(); ++i)
+        const TrackedMppDataPacketPtr & packet = ele.second;
+        ASSERT_TRUE(packet);
+        ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
+        for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
         {
-            decoded_blocks.push_back(CHBlockChunkCodec::decode(packet.chunks(i), block));
+            decoded_blocks.push_back(CHBlockChunkCodec::decode(packet->getPacket().chunks(i), block));
         }
     }
     ASSERT_EQ(decoded_blocks.size(), fine_grained_shuffle_stream_count * part_num);
@@ -211,9 +211,9 @@ try
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, std::vector<mpp::MPPDataPacket>> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
-        write_report[part_id].emplace_back(std::move(packet));
+    std::unordered_map<uint16_t, std::vector<TrackedMppDataPacketPtr>> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(packet);
     };
     auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
 
@@ -239,12 +239,12 @@ try
         size_t part_decoded_block_rows = 0;
         for (const auto & packet : ele.second)
         {
-            ASSERT_EQ(packet.chunks_size(), packet.stream_ids_size());
-            for (int i = 0; i < packet.chunks_size(); ++i)
+            ASSERT_EQ(packet->getPacket().chunks_size(), packet->getPacket().stream_ids_size());
+            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
             {
-                auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+                auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
                 part_decoded_block_rows += decoded_block.rows();
-                rows_of_stream_ids[packet.stream_ids(i)] += decoded_block.rows();
+                rows_of_stream_ids[packet->getPacket().stream_ids(i)] += decoded_block.rows();
             }
         }
         ASSERT_EQ(part_decoded_block_rows, per_part_rows);
@@ -263,8 +263,8 @@ try
     const Int64 fine_grained_shuffle_batch_size = 4096;
     const bool should_send_exec_summary_at_last = true;
 
-    std::unordered_map<uint16_t, mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed. There is at most one packet per partition.
         ASSERT_TRUE(res.second);
@@ -283,7 +283,7 @@ try
 
     // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
     ASSERT_EQ(write_report.size(), 1);
-    ASSERT_EQ(write_report.cbegin()->second.chunks_size(), 0);
+    ASSERT_EQ(write_report.cbegin()->second->getPacket().chunks_size(), 0);
 }
 CATCH
 
@@ -307,9 +307,9 @@ try
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, std::vector<mpp::MPPDataPacket>> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
-        write_report[part_id].emplace_back(std::move(packet));
+    std::unordered_map<uint16_t, std::vector<TrackedMppDataPacketPtr>> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
+        write_report[part_id].emplace_back(packet);
     };
     auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
 
@@ -333,9 +333,9 @@ try
         size_t decoded_block_rows = 0;
         for (const auto & packet : ele.second)
         {
-            for (int i = 0; i < packet.chunks_size(); ++i)
+            for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
             {
-                auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+                auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
                 decoded_block_rows += decoded_block.rows();
             }
         }
@@ -351,8 +351,8 @@ try
     const uint16_t part_num = 4;
     const bool should_send_exec_summary_at_last = true;
 
-    std::unordered_map<uint16_t, mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
         // Should always insert succeed. There is at most one packet per partition.
         ASSERT_TRUE(res.second);
@@ -370,7 +370,7 @@ try
 
     // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
     ASSERT_EQ(write_report.size(), 1);
-    ASSERT_EQ(write_report.cbegin()->second.chunks_size(), 0);
+    ASSERT_EQ(write_report.cbegin()->second->getPacket().chunks_size(), 0);
 }
 CATCH
 
@@ -393,10 +393,10 @@ try
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
-    std::vector<mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    std::vector<TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         ASSERT_EQ(part_id, 0);
-        write_report.emplace_back(std::move(packet));
+        write_report.emplace_back(packet);
     };
     auto mock_writer = std::make_shared<MockStreamWriter>(checker, 1);
 
@@ -415,9 +415,9 @@ try
     size_t decoded_block_rows = 0;
     for (const auto & packet : write_report)
     {
-        for (int i = 0; i < packet.chunks_size(); ++i)
+        for (int i = 0; i < packet->getPacket().chunks_size(); ++i)
         {
-            auto decoded_block = CHBlockChunkCodec::decode(packet.chunks(i), header);
+            auto decoded_block = CHBlockChunkCodec::decode(packet->getPacket().chunks(i), header);
             decoded_block_rows += decoded_block.rows();
         }
     }
@@ -431,10 +431,10 @@ try
     const size_t batch_send_min_limit = 108;
     const bool should_send_exec_summary_at_last = true;
 
-    std::vector<mpp::MPPDataPacket> write_report;
-    auto checker = [&write_report](mpp::MPPDataPacket & packet, uint16_t part_id) {
+    std::vector<TrackedMppDataPacketPtr> write_report;
+    auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         ASSERT_EQ(part_id, 0);
-        write_report.emplace_back(std::move(packet));
+        write_report.emplace_back(packet);
     };
     auto mock_writer = std::make_shared<MockStreamWriter>(checker, 1);
 
@@ -447,7 +447,7 @@ try
 
     // For `should_send_exec_summary_at_last = true`, there is at least one packet used to pass execution summary.
     ASSERT_EQ(write_report.size(), 1);
-    ASSERT_EQ(write_report.back().chunks_size(), 0);
+    ASSERT_EQ(write_report.back()->getPacket().chunks_size(), 0);
 }
 CATCH
 

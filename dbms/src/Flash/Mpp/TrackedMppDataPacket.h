@@ -86,10 +86,13 @@ struct MemTrackerWrapper
 
     void switchMemTracker(MemoryTracker * new_memory_tracker)
     {
-        int bak_size = size;
-        freeAll();
-        memory_tracker = new_memory_tracker;
-        alloc(bak_size);
+        if (new_memory_tracker != memory_tracker)
+        {
+            int bak_size = size;
+            freeAll();
+            memory_tracker = new_memory_tracker;
+            alloc(bak_size);
+        }
     }
     ~MemTrackerWrapper()
     {
@@ -195,6 +198,7 @@ struct TrackedMppDataPacket
     bool need_recompute = false;
     String error_message;
 };
+using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
 
 struct TrackedSelectResp
 {

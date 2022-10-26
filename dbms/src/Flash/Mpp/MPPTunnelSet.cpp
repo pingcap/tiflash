@@ -33,76 +33,27 @@ void checkPacketSize(size_t size)
 } // namespace
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::clearExecutionSummaries(tipb::SelectResponse & response)
-{
-    /// can not use response.clear_execution_summaries() because
-    /// TiDB assume all the executor should return execution summary
-    for (int i = 0; i < response.execution_summaries_size(); i++)
-    {
-        auto * mutable_execution_summary = response.mutable_execution_summaries(i);
-        mutable_execution_summary->set_num_produced_rows(0);
-        mutable_execution_summary->set_num_iterations(0);
-        mutable_execution_summary->set_concurrency(0);
-    }
-}
-
-template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 {
-    TrackedMppDataPacket tracked_packet;
-    tracked_packet.serializeByResponse(response);
-    tunnels[0]->write(tracked_packet.getPacket());
-
-    if (tunnels.size() > 1)
-    {
-        /// only the last response has execution_summaries
-        if (response.execution_summaries_size() > 0)
-        {
-            clearExecutionSummaries(response);
-            tracked_packet = TrackedMppDataPacket();
-            tracked_packet.serializeByResponse(response);
-        }
-        for (size_t i = 1; i < tunnels.size(); ++i)
-            tunnels[i]->write(tracked_packet.getPacket());
-    }
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    tracked_packet->serializeByResponse(response);
+    checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
+    for (auto & tunnel : tunnels)
+        tunnel->write(tracked_packet);
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet)
+void MPPTunnelSetBase<Tunnel>::write(const TrackedMppDataPacketPtr & packet)
 {
-    checkPacketSize(packet.ByteSizeLong());
-    tunnels[0]->write(packet);
-    auto tunnels_size = tunnels.size();
-    if (tunnels_size > 1)
-    {
-        if (!packet.data().empty())
-        {
-            packet.mutable_data()->clear();
-        }
-        for (size_t i = 1; i < tunnels_size; ++i)
-        {
-            tunnels[i]->write(packet);
-        }
-    }
+    checkPacketSize(packet->getPacket().ByteSizeLong());
+    for (auto & tunnel : tunnels)
+        tunnel->write(packet);
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response, int16_t partition_id)
+void MPPTunnelSetBase<Tunnel>::write(const TrackedMppDataPacketPtr & packet, int16_t partition_id)
 {
-    TrackedMppDataPacket tracked_packet;
-    if (partition_id != 0 && response.execution_summaries_size() > 0)
-        clearExecutionSummaries(response);
-    tracked_packet.serializeByResponse(response);
-    tunnels[partition_id]->write(tracked_packet.getPacket());
-}
-
-template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::write(mpp::MPPDataPacket & packet, int16_t partition_id)
-{
-    checkPacketSize(packet.ByteSizeLong());
-    if (partition_id != 0 && !packet.data().empty())
-        packet.mutable_data()->clear();
-
+    checkPacketSize(packet->getPacket().ByteSizeLong());
     tunnels[partition_id]->write(packet);
 }
 

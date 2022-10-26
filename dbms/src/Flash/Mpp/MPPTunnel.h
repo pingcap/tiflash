@@ -58,8 +58,6 @@ enum class TunnelSenderMode
     ASYNC_GRPC // Using async grpc writer
 };
 
-using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
-
 /// TunnelSender is responsible for consuming data from Tunnel's internal send_queue and do the actual sending work
 /// After TunnelSend finished its work, either normally or abnormally, set ConsumerState to inform Tunnel
 class TunnelSender : private boost::noncopyable
@@ -74,9 +72,10 @@ public:
     {
     }
 
-    virtual bool push(const mpp::MPPDataPacket & data)
+    virtual bool push(const TrackedMppDataPacketPtr & data)
     {
-        return send_queue.push(std::make_shared<TrackedMppDataPacket>(data, getMemoryTracker())) == MPMCQueueResult::OK;
+        data->switchMemTracker(getMemoryTracker());
+        return send_queue.push(data) == MPMCQueueResult::OK;
     }
 
     virtual void cancelWith(const String & reason)
@@ -176,9 +175,10 @@ public:
         , queue(queue_size, func)
     {}
 
-    bool push(const mpp::MPPDataPacket & data) override
+    bool push(const TrackedMppDataPacketPtr & data) override
     {
-        return queue.push(std::make_shared<TrackedMppDataPacket>(data, getMemoryTracker()));
+        data->switchMemTracker(getMemoryTracker());
+        return queue.push(data);
     }
 
     bool finish() override
@@ -275,7 +275,7 @@ public:
     const String & id() const { return tunnel_id; }
 
     // write a single packet to the tunnel's send queue, it will block if tunnel is not ready.
-    void write(const mpp::MPPDataPacket & data);
+    void write(const TrackedMppDataPacketPtr & data);
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();

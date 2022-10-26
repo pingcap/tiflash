@@ -15,7 +15,7 @@
 #include <Common/TiFlashException.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Mpp/HashBaseWriterHelper.h>
-#include <Flash/Mpp/HashParitionWriter.h>
+#include <Flash/Mpp/HashPartitionWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
 namespace DB
@@ -76,7 +76,7 @@ template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
 void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
-    std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
+    auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
 
     if (!blocks.empty())
     {
@@ -100,7 +100,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
                 if (dest_block_rows > 0)
                 {
                     chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
-                    tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
+                    tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
                     chunk_codec_stream->clear();
                 }
             }
@@ -114,7 +114,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
 
 template <class StreamWriterPtr>
 template <bool send_exec_summary_at_last>
-void HashPartitionWriter<StreamWriterPtr>::writePackets(std::vector<TrackedMppDataPacket> & packets)
+void HashPartitionWriter<StreamWriterPtr>::writePackets(const std::vector<TrackedMppDataPacketPtr> & packets)
 {
     size_t part_id = 0;
 
@@ -124,15 +124,17 @@ void HashPartitionWriter<StreamWriterPtr>::writePackets(std::vector<TrackedMppDa
         summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
         /// Sending the response to only one node, default the first one.
         assert(!packets.empty());
-        packets[0].serializeByResponse(response);
-        writer->write(packets[0].getPacket(), 0);
+        assert(packets[0]);
+        packets[0]->serializeByResponse(response);
+        writer->write(packets[0], 0);
         part_id = 1;
     }
 
     for (; part_id < packets.size(); ++part_id)
     {
-        auto & packet = packets[part_id].getPacket();
-        if (packet.chunks_size() > 0)
+        const auto & packet = packets[part_id];
+        assert(packet);
+        if (packet->getPacket().chunks_size() > 0)
             writer->write(packet, part_id);
     }
 }
