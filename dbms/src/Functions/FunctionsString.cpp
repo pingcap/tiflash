@@ -345,11 +345,13 @@ struct FormatDecimalStrImpl
         {
             size_t data_size = offsets[i] - prev_offset;
             memcpy(&res_data[prev_res_offset], &data[prev_offset], data_size);
-            if (shouldFmt(prev_offset, offsets[i], data))
+            if (shouldFormat(prev_offset, offsets[i], data))
             {
                 // the last vaild value.
                 size_t last_offset = prev_res_offset + data_size - 2;
-                // remove 0 or .
+                // remove `000...` and `.000...`
+                // `0` == 0x30
+                // `.` == 0x2E
                 while (last_offset > prev_res_offset && res_data[last_offset] == 0x30)
                     --last_offset;
                 assert(last_offset >= prev_res_offset);
@@ -368,11 +370,12 @@ struct FormatDecimalStrImpl
         }
     }
 
-    static bool shouldFmt(ColumnString::Offset prev, ColumnString::Offset cur, const ColumnString::Chars_t & data)
+    // Only `xxx.xxx` needs to be formatted
+    static bool shouldFormat(ColumnString::Offset prev, ColumnString::Offset cur, const ColumnString::Chars_t & data)
     {
         for (auto offset = prev; offset < cur - 1; ++offset)
         {
-            // .
+            // `.` == 0x2E
             if (data[offset] == 0x2E)
                 return true;
         }
