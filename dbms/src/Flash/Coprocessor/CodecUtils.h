@@ -34,6 +34,5 @@ struct DataTypeWithTypeName
 
 void checkColumnSize(size_t expected, size_t actual);
 void checkDataTypeName(size_t column_index, const String & expected, const String & actual);
-
 } // namespace CodecUtils
 } // namespace DB

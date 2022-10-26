@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
+#include <Flash/Coprocessor/IChunkDecodeAndSquash.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
@@ -139,35 +140,50 @@ public:
         return detail;
     }
 
-    // stream_id is only meaningful for ExchagneReceiver.
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/)
+    // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
+    std::vector<CoprocessorReaderResult> nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<IChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
+        std::vector<CoprocessorReaderResult> results;
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
-            return {nullptr, true, result.error.message(), false};
+        {
+            results.push_back({nullptr, true, result.error.message(), false});
+            return results;
+        }
+
         if (!has_next)
-            return {nullptr, false, "", true};
+        {
+            results.push_back({nullptr, false, "", true});
+            return results;
+        }
 
         auto resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(result.data()))
         {
             if (resp->has_error())
             {
-                return {nullptr, true, resp->error().DebugString(), false};
+                results.push_back({nullptr, true, resp->error().DebugString(), false});
+                return results;
             }
             else if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
-                return {
-                    nullptr,
-                    true,
-                    "Encode type of coprocessor response is not CHBlock, "
-                    "maybe the version of some TiFlash node in the cluster is not match with this one",
-                    false};
+            {
+                results.push_back(
+                    {
+                        nullptr,
+                        true,
+                        "Encode type of coprocessor response is not CHBlock, "
+                        "maybe the version of some TiFlash node in the cluster is not match with this one",
+                        false});
+                return results;
+            }
             auto detail = decodeChunks(resp, block_queue, header, schema);
-            return {resp, false, "", false, detail};
+            results.push_back({resp, false, "", false, detail});
+            return results;
         }
         else
         {
-            return {nullptr, true, "Error while decoding coprocessor::Response", false};
+            results.push_back({nullptr, true, "Error while decoding coprocessor::Response", false});
+            return results;
         }
     }
 

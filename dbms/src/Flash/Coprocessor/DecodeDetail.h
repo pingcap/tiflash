@@ -28,5 +28,9 @@ struct DecodeDetail
 
     // Total byte size of the origin packet, even for fine grained shuffle.
     Int64 packet_bytes = 0;
+
+    // For decodeAndSquash usage, several packets might be squashed to produce one block.
+    // This flag is true only when: during the decode process of this packet, new block is produced.
+    bool produce_block_flag = true;
 };
 } // namespace DB

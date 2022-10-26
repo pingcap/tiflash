@@ -98,7 +98,7 @@ void writeData(const IDataType & type, const ColumnPtr & column, WriteBuffer & o
     type.serializeBinaryBulkWithMultipleStreams(*full_column, output_stream_getter, offset, limit, false, {});
 }
 
-void readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
+void CHBlockChunkCodec::readData(const IDataType & type, IColumn & column, ReadBuffer & istr, size_t rows)
 {
     IDataType::InputStreamGetter input_stream_getter = [&](const IDataType::SubstreamPath &) {
         return &istr;
@@ -143,7 +143,7 @@ std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(const std::v
     return std::make_unique<CHBlockChunkCodecStream>(field_types);
 }
 
-Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr)
+Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
 {
     Block res;
     if (istr.eof())
@@ -154,40 +154,18 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr)
     /// Dimensions
     size_t columns = 0;
     size_t rows = 0;
-    readVarUInt(columns, istr);
-    readVarUInt(rows, istr);
-
-    if (header)
-        CodecUtils::checkColumnSize(header.columns(), columns);
-    else if (!output_names.empty())
-        CodecUtils::checkColumnSize(output_names.size(), columns);
+    readBlockMeta(istr, columns, rows);
 
     for (size_t i = 0; i < columns; ++i)
     {
         ColumnWithTypeAndName column;
-        /// Name
-        readBinary(column.name, istr);
-        if (header)
-            column.name = header.getByPosition(i).name;
-        else if (!output_names.empty())
-            column.name = output_names[i];
-
-        /// Type
-        String type_name;
-        readBinary(type_name, istr);
-        const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
-        if (header)
-        {
-            CodecUtils::checkDataTypeName(i, header_datatypes[i].name, type_name);
-            column.type = header_datatypes[i].type;
-        }
-        else
-        {
-            column.type = data_type_factory.get(type_name);
-        }
+        readColumnMeta(i, istr, column);
 
         /// Data
         MutableColumnPtr read_column = column.type->createColumn();
+        if (reserve_size > 0)
+            read_column->reserve(reserve_size);
+
         if (rows) /// If no rows, nothing to read.
             readData(*column.type, *read_column, istr, rows);
 
@@ -195,6 +173,40 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr)
         res.insert(std::move(column));
     }
     return res;
+}
+void CHBlockChunkCodec::readBlockMeta(ReadBuffer & istr, size_t & columns, size_t & rows) const
+{
+    readVarUInt(columns, istr);
+    readVarUInt(rows, istr);
+
+    if (header)
+        CodecUtils::checkColumnSize(header.columns(), columns);
+    else if (!output_names.empty())
+        CodecUtils::checkColumnSize(output_names.size(), columns);
+}
+
+void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTypeAndName & column)
+{
+    /// Name
+    readBinary(column.name, istr);
+    if (header)
+        column.name = header.getByPosition(i).name;
+    else if (!output_names.empty())
+        column.name = output_names[i];
+
+    /// Type
+    String type_name;
+    readBinary(type_name, istr);
+    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+    if (header)
+    {
+        CodecUtils::checkDataTypeName(i, header_datatypes[i].name, type_name);
+        column.type = header_datatypes[i].type;
+    }
+    else
+    {
+        column.type = data_type_factory.get(type_name);
+    }
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)

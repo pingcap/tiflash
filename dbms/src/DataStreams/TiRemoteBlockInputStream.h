@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Coprocessor/IChunkDecodeAndSquash.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
@@ -64,6 +65,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     // CoprocessorBlockInputStream doesn't take care of this.
     size_t stream_id;
 
+    std::unique_ptr<IChunkDecodeAndSquash> decoder_ptr;
+
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
         for (const auto & execution_summary : resp.execution_summaries())
@@ -84,6 +87,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         if (resp.execution_summaries_size() == 0)
             return;
+
         if (!execution_summaries_inited[index].load())
         {
             initRemoteExecutionSummaries(resp, index);
@@ -128,51 +132,54 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         while (true)
         {
-            auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
-            if (result.meet_error)
+            auto results = remote_reader->nextResult(block_queue, sample_block, stream_id, decoder_ptr);
+            for (auto & result : results)
             {
-                LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);
-                throw Exception(result.error_msg);
-            }
-            if (result.eof)
-                return false;
-            if (result.resp != nullptr && result.resp->has_error())
-            {
-                LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
-                throw Exception(result.resp->error().DebugString());
-            }
-            /// only the last response contains execution summaries
-            if (result.resp != nullptr)
-            {
+                if (result.meet_error)
+                {
+                    LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);
+                    throw Exception(result.error_msg);
+                }
+                if (result.eof)
+                    return false;
+                if (result.resp != nullptr && result.resp->has_error())
+                {
+                    LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
+                    throw Exception(result.resp->error().DebugString());
+                }
+                /// only the last response contains execution summaries
+                if (result.resp != nullptr)
+                {
+                    if constexpr (is_streaming_reader)
+                    {
+                        addRemoteExecutionSummaries(*result.resp, result.call_index, true);
+                    }
+                    else
+                    {
+                        addRemoteExecutionSummaries(*result.resp, 0, false);
+                    }
+                }
+
+                const auto & decode_detail = result.decode_detail;
+
+                size_t index = 0;
                 if constexpr (is_streaming_reader)
-                {
-                    addRemoteExecutionSummaries(*result.resp, result.call_index, true);
-                }
-                else
-                {
-                    addRemoteExecutionSummaries(*result.resp, 0, false);
-                }
+                    index = result.call_index;
+
+                ++connection_profile_infos[index].packets;
+                connection_profile_infos[index].bytes += decode_detail.packet_bytes;
+
+                total_rows += decode_detail.rows;
+                LOG_TRACE(
+                    log,
+                    "recv {} rows from remote for {}, total recv row num: {}",
+                    decode_detail.rows,
+                    result.req_info,
+                    total_rows);
+                if (decode_detail.rows > 0)
+                    return true;
+                // else continue
             }
-
-            const auto & decode_detail = result.decode_detail;
-
-            size_t index = 0;
-            if constexpr (is_streaming_reader)
-                index = result.call_index;
-
-            ++connection_profile_infos[index].packets;
-            connection_profile_infos[index].bytes += decode_detail.packet_bytes;
-
-            total_rows += decode_detail.rows;
-            LOG_TRACE(
-                log,
-                "recv {} rows from remote for {}, total recv row num: {}",
-                decode_detail.rows,
-                result.req_info,
-                total_rows);
-            if (decode_detail.rows > 0)
-                return true;
-            // else continue
         }
     }
 
@@ -193,6 +200,8 @@ public:
         execution_summaries.resize(source_num);
         connection_profile_infos.resize(source_num);
         sample_block = Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema())));
+        if constexpr (is_streaming_reader)
+            decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, 8192);
     }
 
     Block getHeader() const override { return sample_block; }
