@@ -109,56 +109,51 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
         return;
     }
 
-    if (!blocks.empty())
+    if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
-        TrackedSelectResp response;
-        response.setEncodeType(dag_context.encode_type);
-        if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
+        /// passthrough data to a non-TiFlash node, like sending data to TiSpark
+        while (!blocks.empty())
         {
-            /// passthrough data to a non-TiFlash node, like sending data to TiSpark
-            while (!blocks.empty())
-            {
-                const auto & block = blocks.back();
-                chunk_codec_stream->encode(block, 0, block.rows());
-                blocks.pop_back();
-                response.addChunk(chunk_codec_stream->getString());
-                chunk_codec_stream->clear();
-            }
+            const auto & block = blocks.back();
+            chunk_codec_stream->encode(block, 0, block.rows());
+            blocks.pop_back();
+            response.addChunk(chunk_codec_stream->getString());
+            chunk_codec_stream->clear();
         }
-        else /// passthrough data to a TiDB node
-        {
-            Int64 current_records_num = 0;
-            while (!blocks.empty())
-            {
-                const auto & block = blocks.back();
-                size_t rows = block.rows();
-                for (size_t row_index = 0; row_index < rows;)
-                {
-                    if (current_records_num >= records_per_chunk)
-                    {
-                        response.addChunk(chunk_codec_stream->getString());
-                        chunk_codec_stream->clear();
-                        current_records_num = 0;
-                    }
-                    const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
-                    chunk_codec_stream->encode(block, row_index, upper);
-                    current_records_num += (upper - row_index);
-                    row_index = upper;
-                }
-                blocks.pop_back();
-            }
-
-            if (current_records_num > 0)
-            {
-                response.addChunk(chunk_codec_stream->getString());
-                chunk_codec_stream->clear();
-            }
-        }
-
-        assert(blocks.empty());
-        rows_in_blocks = 0;
-        writer->write(response.getResponse());
     }
+    else /// passthrough data to a TiDB node
+    {
+        Int64 current_records_num = 0;
+        while (!blocks.empty())
+        {
+            const auto & block = blocks.back();
+            size_t rows = block.rows();
+            for (size_t row_index = 0; row_index < rows;)
+            {
+                if (current_records_num >= records_per_chunk)
+                {
+                    response.addChunk(chunk_codec_stream->getString());
+                    chunk_codec_stream->clear();
+                    current_records_num = 0;
+                }
+                const size_t upper = std::min(row_index + (records_per_chunk - current_records_num), rows);
+                chunk_codec_stream->encode(block, row_index, upper);
+                current_records_num += (upper - row_index);
+                row_index = upper;
+            }
+            blocks.pop_back();
+        }
+
+        if (current_records_num > 0)
+        {
+            response.addChunk(chunk_codec_stream->getString());
+            chunk_codec_stream->clear();
+        }
+    }
+
+    assert(blocks.empty());
+    rows_in_blocks = 0;
+    writer->write(response.getResponse());
 }
 
 template class StreamingDAGResponseWriter<StreamWriterPtr>;
