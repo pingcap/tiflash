@@ -33,6 +33,6 @@ namespace DB
 namespace re2Util
 {
 re2_st::RE2::Options getDefaultRe2Options();
-String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator);
+String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator = nullptr);
 } // namespace re2Util
 } // namespace DB

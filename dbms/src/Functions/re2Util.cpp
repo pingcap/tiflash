@@ -27,6 +27,8 @@ re2_st::RE2::Options getDefaultRe2Options()
     return options;
 }
 
+// If characters specifying contradictory options are specified
+// within match_type, the rightmost one takes precedence.
 String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBCollatorPtr collator)
 {
     /// for regexp only ci/cs is supported
@@ -58,7 +60,7 @@ String getRE2ModeModifiers(const std::string & match_type, const TiDB::TiDBColla
                 options.set_one_line(false);
                 break;
             default:
-                throw Exception("Incorrect arguments to regexp related functions.");
+                throw Exception("Invalid match type in regexp related functions.");
             }
         }
     }
