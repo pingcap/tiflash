@@ -100,7 +100,9 @@ DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing
 
 FileUsageStatistics PageStorageImpl::getFileUsageStatistics() const
 {
-    return blob_store.getFileUsageStatistics();
+    auto u = blob_store.getFileUsageStatistics();
+    u.merge(page_directory->getFileUsageStatistics());
+    return u;
 }
 
 SnapshotsStatistics PageStorageImpl::getSnapshotsStat() const

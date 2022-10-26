@@ -26,6 +26,8 @@
 
 #include <memory>
 
+#include "Storages/Page/FileUsage.h"
+
 namespace DB
 {
 class FileProvider;
@@ -62,6 +64,18 @@ public:
     WALStoreReaderPtr createReaderForFiles(const String & identifier, const LogFilenameSet & log_filenames, const ReadLimiterPtr & read_limiter);
 
     void apply(String && serialized_edit, const WriteLimiterPtr & write_limiter = nullptr);
+
+
+    FileUsageStatistics getFileUsageStatistics() const
+    {
+        FileUsageStatistics usage;
+        {
+            std::lock_guard guard(mtx_disk_usage);
+            usage.total_log_file_num = num_log_files;
+            usage.total_log_disk_size = bytes_on_disk;
+        }
+        return usage;
+    }
 
     struct FilesSnapshot
     {
@@ -104,6 +118,8 @@ private:
 
     Format::LogNumberType rollToNewLogWriter(const std::lock_guard<std::mutex> &);
 
+    void updateDiskUsage(const LogFilenameSet & log_filenames);
+
 private:
     const String storage_name;
     PSDiskDelegatorPtr delegator;
@@ -113,6 +129,11 @@ private:
     // select next path for creating new logfile
     UInt32 wal_paths_index;
     std::unique_ptr<LogWriter> log_file;
+
+    // Cached values when `tryGetFilesSnapshot` is called
+    mutable std::mutex mtx_disk_usage;
+    size_t num_log_files;
+    size_t bytes_on_disk;
 
     LoggerPtr logger;
 
