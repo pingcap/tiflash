@@ -33,16 +33,6 @@ void checkPacketSize(size_t size)
 } // namespace
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
-{
-    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-    tracked_packet->serializeByResponse(response);
-    checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
-    for (auto & tunnel : tunnels)
-        tunnel->write(tracked_packet);
-}
-
-template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(const TrackedMppDataPacketPtr & packet)
 {
     checkPacketSize(packet->getPacket().ByteSizeLong());

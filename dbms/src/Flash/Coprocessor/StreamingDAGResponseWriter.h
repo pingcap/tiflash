@@ -26,7 +26,7 @@
 namespace DB
 {
 /// Serializes the stream of blocks and sends them to TiDB/TiSpark with different serialization paths.
-template <class StreamWriterPtr>
+template <class StreamWriterPtr, bool is_mpp = false>
 class StreamingDAGResponseWriter : public DAGResponseWriter
 {
 public:
@@ -40,9 +40,12 @@ public:
     void finishWrite() override;
 
 private:
+    void encode(std::function<void(String &&)> add_chunk);
+
     template <bool send_exec_summary_at_last>
     void encodeThenWriteBlocks();
 
+private:
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last; /// only one stream needs to sending execution summaries at last.
     StreamWriterPtr writer;

@@ -40,7 +40,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     {
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
         RUNTIME_CHECK(exchange_type == tipb::ExchangeType::PassThrough);
-        return std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr>>(
+        return std::make_unique<StreamingDAGResponseWriter<StreamWriterPtr, true>>(
             writer,
             records_per_chunk,
             batch_send_min_limit,

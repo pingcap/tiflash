@@ -46,9 +46,7 @@ public:
     /// information in TiDB will be amplified, which may make
     /// user confused.
     // this is a broadcast writing.
-    void write(tipb::SelectResponse & response);
     void write(const TrackedMppDataPacketPtr & packet);
-
     // this is a partition writing.
     void write(const TrackedMppDataPacketPtr & packet, int16_t partition_id);
 
