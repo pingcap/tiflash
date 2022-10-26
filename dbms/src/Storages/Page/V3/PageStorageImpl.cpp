@@ -171,15 +171,8 @@ DB::Page PageStorageImpl::readImpl(NamespaceId ns_id, PageId page_id, const Read
         snapshot = this->getSnapshot("");
     }
 
-    Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_page_read_duration_seconds, type_total).Observe(watch.elapsedSeconds());
-    });
     auto page_entry = throw_on_not_exist ? page_directory->getByID(buildV3Id(ns_id, page_id), snapshot) : page_directory->getByIDOrNull(buildV3Id(ns_id, page_id), snapshot);
-    GET_METRIC(tiflash_storage_page_read_duration_seconds, type_directory).Observe(watch.elapsedSecondsFromLastTime());
-    auto page = blob_store.read(page_entry, read_limiter);
-    GET_METRIC(tiflash_storage_page_read_duration_seconds, type_blob).Observe(watch.elapsedSecondsFromLastTime());
-    return page;
+    return blob_store.read(page_entry, read_limiter);
 }
 
 PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
@@ -189,10 +182,6 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
         snapshot = this->getSnapshot("");
     }
 
-    Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_page_read_duration_seconds, type_total).Observe(watch.elapsedSeconds());
-    });
     PageIdV3Internals page_id_v3s;
     for (auto p_id : page_ids)
     {
@@ -202,17 +191,12 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
     if (throw_on_not_exist)
     {
         auto page_entries = page_directory->getByIDs(page_id_v3s, snapshot);
-        GET_METRIC(tiflash_storage_page_read_duration_seconds, type_directory).Observe(watch.elapsedSecondsFromLastTime());
-        auto page_map = blob_store.read(page_entries, read_limiter);
-        GET_METRIC(tiflash_storage_page_read_duration_seconds, type_blob).Observe(watch.elapsedSecondsFromLastTime());
-        return page_map;
+        return blob_store.read(page_entries, read_limiter);
     }
     else
     {
         auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_id_v3s, snapshot);
-        GET_METRIC(tiflash_storage_page_read_duration_seconds, type_directory).Observe(watch.elapsedSecondsFromLastTime());
         PageMap page_map = blob_store.read(page_entries, read_limiter);
-        GET_METRIC(tiflash_storage_page_read_duration_seconds, type_blob).Observe(watch.elapsedSecondsFromLastTime());
         for (const auto & page_id_not_found : page_ids_not_found)
         {
             Page page_not_found;
@@ -255,10 +239,6 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
         snapshot = this->getSnapshot("");
     }
 
-    Stopwatch watch;
-    SCOPE_EXIT({
-        GET_METRIC(tiflash_storage_page_read_duration_seconds, type_total).Observe(watch.elapsedSeconds());
-    });
     // get the entries from directory, keep track
     // for not found page_ids
     PageIds page_ids_not_found;
@@ -277,11 +257,9 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadF
             page_ids_not_found.emplace_back(id);
         }
     }
-    GET_METRIC(tiflash_storage_page_read_duration_seconds, type_directory).Observe(watch.elapsedSecondsFromLastTime());
 
     // read page data from blob_store
     PageMap page_map = blob_store.read(read_infos, read_limiter);
-    GET_METRIC(tiflash_storage_page_read_duration_seconds, type_blob).Observe(watch.elapsedSecondsFromLastTime());
     for (const auto & page_id_not_found : page_ids_not_found)
     {
         Page page_not_found;
