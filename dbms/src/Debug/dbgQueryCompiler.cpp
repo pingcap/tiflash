@@ -254,15 +254,20 @@ std::tuple<QueryTasks, MakeResOutputStream> compileQuery(
             return std::make_shared<UniqRawResReformatBlockOutputStream>(in);
         };
 
-    /// finalize
-    std::unordered_set<String> used_columns;
-    for (auto & schema : root_executor->output_schema)
-        used_columns.emplace(schema.first);
-    root_executor->columnPrune(used_columns);
+    // we will not prune column in executor test
+    // since it doesn't call initOutputInfo in DAGContext
+    if (!context.isExecutorTest())
+    {
+        /// finalize
+        std::unordered_set<String> used_columns;
+        for (auto & schema : root_executor->output_schema)
+            used_columns.emplace(schema.first);
+
+        root_executor->columnPrune(used_columns);
+    }
 
     return std::make_tuple(queryPlanToQueryTasks(properties, root_executor, executor_index, context), func_wrap_output_stream);
 }
-
 
 TableID findTableIdForQueryFragment(ExecutorBinderPtr root_executor, bool must_have_table_id)
 {
@@ -274,8 +279,6 @@ TableID findTableIdForQueryFragment(ExecutorBinderPtr root_executor, bool must_h
         {
             if (dynamic_cast<mock::ExchangeReceiverBinder *>(c.get()))
                 continue;
-            if (non_exchange_child != nullptr)
-                throw Exception("More than one non-exchange child, should not happen");
             non_exchange_child = c;
         }
         if (non_exchange_child == nullptr)
@@ -295,7 +298,6 @@ TableID findTableIdForQueryFragment(ExecutorBinderPtr root_executor, bool must_h
     }
     return ts->getTableId();
 }
-
 QueryFragments mppQueryToQueryFragments(
     ExecutorBinderPtr root_executor,
     size_t & executor_index,
