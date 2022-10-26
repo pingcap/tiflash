@@ -223,18 +223,28 @@ public:
         return res;
     }
 
-    inline const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override
+    inline const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr & collator) override
     {
         const size_t string_size = *reinterpret_cast<const size_t *>(pos);
         pos += sizeof(string_size);
 
-        const size_t old_size = chars.size();
-        const size_t new_size = old_size + string_size;
-        chars.resize(new_size);
-        inline_memcpy(&chars[old_size], pos, string_size);
-
-        offsets.push_back(new_size);
-        return pos + string_size;
+        if (likely(collator))
+        {
+            // https://github.com/pingcap/tiflash/pull/6135
+            // - generate empty string column
+            // - keep size of offsets as previous one for func `ColumnString::size()`
+            offsets.push_back(0);
+            return pos + string_size;
+        }
+        else
+        {
+            const size_t old_size = chars.size();
+            const size_t new_size = old_size + string_size;
+            chars.resize(new_size);
+            inline_memcpy(&chars[old_size], pos, string_size);
+            offsets.push_back(new_size);
+            return pos + string_size;
+        }
     }
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr & collator, String & sort_key_container) const override

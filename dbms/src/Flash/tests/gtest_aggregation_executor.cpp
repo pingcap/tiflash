@@ -130,8 +130,8 @@ public:
                              {
                                  toVec<Int64>("c1_i64", {1, 2, 2}),
                                  toVec<Float64>("c2_f64", {1, 3, 3}),
-                                 toVec<String>("c3_str", {"1", "4", "4"}),
-                                 toVec<String>("c4_str", {"1", "1", "1"}),
+                                 toVec<String>("c3_str", {"1", "4  ", "4 "}),
+                                 toVec<String>("c4_str", {"1", "2  ", "2 "}),
                                  toVec<MyDateTime>("c5_date_time", {2000000, 12000000, 12000000}),
                              });
     }
@@ -402,15 +402,40 @@ try
         }
     }
     {
-        context.setCollation(TiDB::ITiDBCollator::BINARY);
+        context.setCollation(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair("test_db", "test_table_not_null"), {agg_func}, group_by_exprs[i], projections[i]);
             executeAndAssertColumnsEqual(request, expect_cols[i]);
         }
     }
+    for (auto collation_id : {0, static_cast<int>(TiDB::ITiDBCollator::BINARY)})
     {
-        context.setCollation(TiDB::ITiDBCollator::UTF8_UNICODE_CI);
+        // 0: no collation
+        // binnary collation
+        context.setCollation(collation_id);
+
+        std::vector<MockAstVec> group_by_exprs{
+            {group_by_expr_c1_i64, group_by_expr_c3_str},
+            {group_by_expr_c3_str, group_by_expr_c2_f64},
+            {group_by_expr_c3_str, group_by_expr_c4_str},
+            {group_by_expr_c3_str},
+        };
+        std::vector<ColumnsWithTypeAndName> expect_cols{
+            {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 1, 1})},
+            {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 1, 1})},
+            {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 1, 1})},
+            {toVec<UInt64>(agg_func_res_name, ColumnWithUInt64{1, 1, 1})},
+        };
+        std::vector<MockColumnNameVec> projections{
+            {agg_func_res_name},
+            {agg_func_res_name},
+            {agg_func_res_name},
+            {agg_func_res_name},
+        };
+        size_t test_num = expect_cols.size();
+        ASSERT_EQ(test_num, projections.size());
+        ASSERT_EQ(test_num, group_by_exprs.size());
         for (size_t i = 0; i < test_num; ++i)
         {
             request = buildDAGRequest(std::make_pair("test_db", "test_table_not_null"), {agg_func}, group_by_exprs[i], projections[i]);
