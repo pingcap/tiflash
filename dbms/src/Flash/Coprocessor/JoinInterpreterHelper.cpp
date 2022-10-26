@@ -27,7 +27,14 @@
 
 #include <unordered_map>
 
-namespace DB::JoinInterpreterHelper
+namespace DB
+{
+namespace ErrorCodes
+{
+extern const int NO_COMMON_TYPE;
+} // namespace ErrorCodes
+
+namespace JoinInterpreterHelper
 {
 namespace
 {
@@ -106,14 +113,16 @@ JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypeP
     {
         return {getLeastSupertype({left_type, right_type}), false};
     }
-    catch (...)
+    catch (DB::Exception & e)
     {
-        if (removeNullable(left_type)->isDecimal() && removeNullable(right_type)->isDecimal())
+        if (e.code() == ErrorCodes::NO_COMMON_TYPE
+            && removeNullable(left_type)->isDecimal()
+            && removeNullable(right_type)->isDecimal())
         {
             // fix https://github.com/pingcap/tiflash/issues/4519
             // String is the common type for all types, it is always safe to choose String.
-            // But then we need to use `FormatDecimalStrImpl` to remove the 0 and . at the end of the string.
-            // such as 0.1000000000 and 0.10000000000000000000.
+            // But then we need to use `FormatDecimalStrImpl` to remove the `0` and `.` at the end of the string.
+            // such as 0.1000000000 and 0.10000000000000000000
             RUNTIME_ASSERT(!left_type->onlyNull() || !right_type->onlyNull());
             auto fall_back_type = std::make_shared<DataTypeString>();
             bool make_nullable = left_type->isNullable() || right_type->isNullable();
@@ -378,4 +387,5 @@ std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurr
         return (init_value++) % join_build_concurrency;
     };
 }
-} // namespace DB::JoinInterpreterHelper
+} // namespace JoinInterpreterHelper
+} // namespace DB
