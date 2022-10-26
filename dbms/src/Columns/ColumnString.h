@@ -231,8 +231,8 @@ public:
         if (likely(collator))
         {
             // https://github.com/pingcap/tiflash/pull/6135
-            // - generate empty string column
-            // - keep size of offsets as previous one for func `ColumnString::size()`
+            // - Generate empty string column
+            // - Make size of `offsets` as previous way for func `ColumnString::size()`
             offsets.push_back(0);
             return pos + string_size;
         }
