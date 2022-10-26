@@ -456,7 +456,7 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
         GET_METRIC(tiflash_storage_page_gc_count, type_v3_mvcc_dumped).Increment();
     }
     statistics.compact_wal_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_directory_ms / 1000.0);
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_compact_wal).Observe(statistics.compact_wal_ms / 1000.0);
 
     const auto & del_entries = page_directory->gcInMemEntries();
     statistics.compact_directory_ms = gc_watch.elapsedMillisecondsFromLastTime();
@@ -509,7 +509,7 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Then we should notify MVCC apply the change.
     PageEntriesEdit gc_edit = blob_store.gc(blob_gc_info, total_page_size, write_limiter, read_limiter);
     statistics.full_gc_blobstore_copy_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_disk).Observe( //
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_rewrite).Observe( //
         (statistics.full_gc_prepare_ms + statistics.full_gc_get_entries_ms + statistics.full_gc_blobstore_copy_ms) / 1000.0);
     RUNTIME_CHECK_MSG(!gc_edit.empty(), "Something wrong after BlobStore GC");
 
@@ -522,7 +522,7 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
-    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_apply).Observe(statistics.full_gc_apply_ms / 1000.0);
+    GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_fullgc_commit).Observe(statistics.full_gc_apply_ms / 1000.0);
 
     SYNC_FOR("after_PageStorageImpl::doGC_fullGC_commit");
 

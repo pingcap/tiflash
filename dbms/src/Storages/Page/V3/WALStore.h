@@ -16,6 +16,7 @@
 
 #include <Common/Checksum.h>
 #include <Interpreters/SettingsCommon.h>
+#include <Storages/Page/FileUsage.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
 #include <Storages/Page/V3/LogFile/LogWriter.h>

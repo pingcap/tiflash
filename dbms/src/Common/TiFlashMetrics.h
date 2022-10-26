@@ -161,8 +161,8 @@ namespace DB
         F(type_compact_wal, {{"type", "compact_wal"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
         F(type_compact_directory, {{"type", "compact_directory"}}, ExpBuckets{0.0005, 2, 20}),                                            \
         F(type_compact_spacemap, {{"type", "compact_spacemap"}}, ExpBuckets{0.0005, 2, 20}),                                              \
-        F(type_fullgc_disk, {{"type", "fullgc_disk"}}, ExpBuckets{0.0005, 2, 20}),                                                        \
-        F(type_fullgc_apply, {{"type", "fullgc_apply"}}, ExpBuckets{0.0005, 2, 20}),                                                      \
+        F(type_fullgc_rewrite, {{"type", "fullgc_rewrite"}}, ExpBuckets{0.0005, 2, 20}),                                                  \
+        F(type_fullgc_commit, {{"type", "fullgc_commit"}},       ExpBuckets{0.00005, 1.8, 26}),                                           \
         F(type_clean_external, {{"type", "clean_external"}}, ExpBuckets{0.0005, 2, 20}),                                                  \
         F(type_v3, {{"type", "v3"}}, ExpBuckets{0.0005, 2, 20}))                                                                          \
     M(tiflash_storage_page_write_batch_size, "The size of each write batch in bytes", Histogram,                                          \
@@ -170,9 +170,10 @@ namespace DB
     M(tiflash_storage_page_write_duration_seconds, "The duration of each write batch", Histogram,                                         \
         F(type_total, {{"type", "total"}}, ExpBuckets{0.0001, 2, 20}),                                                                    \
         F(type_blob,  {{"type", "blob"}},  ExpBuckets{0.0001, 2, 20}),                                                                    \
-        F(type_wal,   {{"type", "wal"}},   ExpBuckets{0.0001, 2, 20}),                                                                    \
-        /* the bucket range for apply in memory is 50us ~ 216s */                                                                         \
-        F(type_apply, {{"type", "apply"}}, ExpBuckets{0.00005, 1.8, 26}))                                                                 \
+        /* the bucket range for apply in memory is 50us ~ 120s */                                                                         \
+        F(type_latch,  {{"type", "latch"}},   ExpBuckets{0.00005, 1.8, 26}),                                                              \
+        F(type_wal,    {{"type", "wal"}},     ExpBuckets{0.00005, 1.8, 26}),                                                              \
+        F(type_commit, {{"type", "commmit"}}, ExpBuckets{0.00005, 1.8, 26}))                                                              \
     M(tiflash_storage_page_read_duration_seconds, "The duration of each read", Histogram,                                                 \
         /* the bucket range is 50us ~ 216s */                                                                                             \
         F(type_total,     {{"type", "total"}},     ExpBuckets{0.00005, 1.8, 26}),                                                         \
