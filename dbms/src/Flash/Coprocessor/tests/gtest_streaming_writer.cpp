@@ -114,6 +114,7 @@ struct MockMPPStreamWriter
     {}
 
     void write(const TrackedMppDataPacketPtr & packet) { checker(packet); }
+    void write(const TrackedMppDataPacketPtr & packet, size_t) { checker(packet); }
 
 private:
     MockMPPStreamWriterChecker checker;

@@ -144,47 +144,43 @@ template <class StreamWriterPtr, bool is_mpp>
 template <bool send_exec_summary_at_last>
 void StreamingDAGResponseWriter<StreamWriterPtr, is_mpp>::encodeThenWriteBlocks()
 {
-    TrackedSelectResp response;
-    if constexpr (send_exec_summary_at_last)
-        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
-    response.setEncodeType(dag_context.encode_type);
-    if (blocks.empty())
+    if (!blocks.empty())
     {
-        if constexpr (send_exec_summary_at_last)
+        if constexpr (is_mpp)
         {
-            if constexpr (is_mpp)
-            {
-                auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-                tracked_packet->serializeByResponse(response.getResponse());
-                writer->write(tracked_packet);
-            }
-            else
-            {
-                writer->write(response.getResponse());
-            }
+            // for mpp, we can send `TrackedMppDataPacket` directly without converting the `SelectResp` to `TrackedMppDataPacket` in MPPTunnelSetBase.
+            auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+            encode([&tracked_packet](String && chunk) {
+                tracked_packet->addChunk(std::move(chunk));
+            });
+            writer->write(tracked_packet);
         }
-        return;
+        else
+        {
+            TrackedSelectResp response;
+            response.setEncodeType(dag_context.encode_type);
+            encode([&response](String && chunk) {
+                response.addChunk(std::move(chunk));
+            });
+            writer->write(response.getResponse());
+        }
     }
 
-    if constexpr (is_mpp)
+    if constexpr (send_exec_summary_at_last)
     {
-        // for mpp, we can send `TrackedMppDataPacket` directly without converting the `SelectResp` to `TrackedMppDataPacket` in MPPTunnelSetBase.
-        auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-        if constexpr (send_exec_summary_at_last)
+        TrackedSelectResp response;
+        response.setEncodeType(dag_context.encode_type);
+        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
+        if constexpr (is_mpp)
         {
+            auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
             tracked_packet->serializeByResponse(response.getResponse());
+            writer->write(tracked_packet, 0);
         }
-        encode([&tracked_packet](String && chunk) {
-            tracked_packet->addChunk(std::move(chunk));
-        });
-        writer->write(tracked_packet);
-    }
-    else
-    {
-        encode([&response](String && chunk) {
-            response.addChunk(std::move(chunk));
-        });
-        writer->write(response.getResponse());
+        else
+        {
+            writer->write(response.getResponse());
+        }
     }
 }
 
