@@ -354,8 +354,8 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_
         {
             throw Exception("region not found when trying flush", ErrorCodes::LOGICAL_ERROR);
         }
-        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData by force, index {} term {}", curr_region.toString(false), index, term);
         auto & curr_region = *curr_region_ptr;
+        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData by force, index {} term {}", curr_region.toString(false), index, term);
         if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term))
         {
             throw Exception("Force flush region " + std::to_string(region_id) + " failed", ErrorCodes::LOGICAL_ERROR);
@@ -402,7 +402,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     return can_flush;
 }
 
-bool KVStore::forceFlushRegionDataImpl(const Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
+bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
 {
     if (index)
     {
