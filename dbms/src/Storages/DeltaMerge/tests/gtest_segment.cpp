@@ -495,6 +495,7 @@ try
         auto mem_table_set = delta->getMemTableSet();
         WriteBatches wbs(dm_context->storage_pool);
         auto column_files = mem_table_set->cloneColumnFiles(*dm_context, segment->getRowKeyRange(), wbs);
+        ASSERT_FALSE(column_files.empty());
         BlockPtr last_schema;
         for (const auto & column_file : column_files)
         {
