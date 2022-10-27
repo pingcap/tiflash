@@ -411,7 +411,7 @@ LearnerReadSnapshot doLearnerRead(
         FmtBuffer fmt_buf;
         if (unavailable_regions.size())
         {
-            fmt_buf.fmtAppend("(including {})", unavailable_regions[0].one());
+            fmt_buf.fmtAppend("(including {})", unavailable_regions.one());
         }
         LOG_DEBUG(
             log,
