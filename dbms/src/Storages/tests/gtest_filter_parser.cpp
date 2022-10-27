@@ -14,7 +14,8 @@
 
 #include <Common/typeid_cast.h>
 #include <Debug/MockTiDB.h>
-#include <Debug/dbgFuncCoprocessor.h>
+#include <Debug/dbgFuncCoprocessorUtils.h>
+#include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
