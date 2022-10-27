@@ -127,7 +127,5 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     bool left,
     bool is_right_out_join,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & filters);
-
-std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency);
 } // namespace JoinInterpreterHelper
 } // namespace DB
