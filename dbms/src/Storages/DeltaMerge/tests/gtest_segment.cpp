@@ -506,6 +506,8 @@ try
                 last_schema = current_schema;
             }
         }
+        // check last_schema is not nullptr after all
+        ASSERT_NE(last_schema, nullptr);
     }
 }
 CATCH
