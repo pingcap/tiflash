@@ -283,7 +283,6 @@ try
 }
 CATCH
 
-<<<<<<< HEAD
 // run in CI weekly
 TEST_F(SegmentOperationTest, DISABLED_TestSegmentRandomForCI)
 try
@@ -295,7 +294,7 @@ try
     randomSegmentTest(10000);
 }
 CATCH
-=======
+
 TEST_F(SegmentOperationTest, CheckColumnFileSchema)
 try
 {
@@ -350,8 +349,6 @@ try
     }
 }
 CATCH
-
->>>>>>> deb4c9d136 (Fix minor compaction after restart (#6192))
 
 TEST_F(SegmentOperationTest, SegmentLogicalSplit)
 try
