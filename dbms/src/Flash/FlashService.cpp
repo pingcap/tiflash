@@ -41,8 +41,6 @@ namespace ErrorCodes
 extern const int NOT_IMPLEMENTED;
 }
 
-const String mpp_tunnel_not_found = "MPPTunnel not found";
-
 #define CATCH_FLASHSERVICE_EXCEPTION                                                                                                        \
     catch (Exception & e)                                                                                                                   \
     {                                                                                                                                       \

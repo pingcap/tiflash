@@ -39,8 +39,6 @@ class EstablishCallData;
 using MockStorage = tests::MockStorage;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
-extern const String mpp_tunnel_not_found;
-
 namespace Management
 {
 class ManualCompactManager;
@@ -116,7 +114,6 @@ public:
     }
     /// Return grpc::Status::OK when the connection is established.
     /// Return non-OK grpc::Status when the connection can not be established.
-    /// Return std::string when a error happens in application and it should be sent to the client then close the connection with grpc::Status::OK.
     grpc::Status establishMPPConnectionAsync(grpc::ServerContext * context, const mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data);
 };
 } // namespace DB

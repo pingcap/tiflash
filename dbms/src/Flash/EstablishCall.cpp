@@ -118,11 +118,6 @@ EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::
     return new EstablishCallData(service, cq, notify_cq, is_shutdown);
 }
 
-bool isTunnelNotFound(grpc::Status status)
-{
-    return status.error_code() == grpc::StatusCode::NOT_FOUND && status.error_message() == mpp_tunnel_not_found;
-}
-
 void EstablishCallData::initRpc()
 {
     try
@@ -147,22 +142,26 @@ void EstablishCallData::tryConnectTunnel()
     auto [tunnel, err_msg] = task_manager->findAsyncTunnel(&request, this, cq);
     if (tunnel == nullptr && err_msg.empty())
     {
-        // call data has been put to cq, just return is ok
+        /// Call data will be put to cq by alarm, just return is ok
         return;
     }
     else if (tunnel == nullptr && !err_msg.empty())
     {
-        // meet error
+        /// Meet error, write the error message
         writeErr(getPacketWithError(err_msg));
         return;
     }
     else if (tunnel != nullptr && err_msg.empty())
     {
-        // found tunnel
+        /// Found tunnel
         try
         {
+            /// Connect the tunnel
             tunnel->connectAsync(this);
+            /// Initialization is successful.
             state = PROCESSING;
+            /// Try to send one message.
+            /// If there is no message, the pointer of this class will be saved in `async_tunnel_sender`.
             trySendOneMsg();
         }
         catch (...)
@@ -173,7 +172,7 @@ void EstablishCallData::tryConnectTunnel()
     }
     else if (tunnel != nullptr && !err_msg.empty())
     {
-        // should not reach here
+        /// Should not reach here
         __builtin_unreachable();
     }
 }
