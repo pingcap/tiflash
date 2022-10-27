@@ -63,6 +63,14 @@ public:
             rows += file->getRows();
             bytes += file->getBytes();
             deletes += file->getDeletes();
+            if (auto * m_file = file->tryToInMemoryFile(); m_file)
+            {
+                last_schema = m_file->getSchema();
+            }
+            else if (auto * t_file = file->tryToTinyFile(); t_file)
+            {
+                last_schema = t_file->getSchema();
+            }
         }
     }
 
