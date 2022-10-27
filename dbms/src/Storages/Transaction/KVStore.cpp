@@ -411,7 +411,7 @@ bool KVStore::forceFlushRegionDataImpl(Region & curr_region, bool try_until_succ
     }
     if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
     {
-        persistRegion(curr_region, region_task_lock, "canFlushRegionData before compact raft log");
+        persistRegion(curr_region, region_task_lock, "tryFlushRegionData");
         curr_region.markCompactLog();
         curr_region.cleanApproxMemCacheInfo();
         return true;
@@ -457,6 +457,12 @@ EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(
     }
 
     curr_region.handleWriteRaftCmd({}, index, term, tmt);
+    if (cmd_type == raft_cmdpb::AdminCmdType::PrepareFlashback || cmd_type == raft_cmdpb::AdminCmdType::FinishFlashback)
+    {
+        tryFlushRegionCacheInStorage(tmt, curr_region, log);
+        persistRegion(curr_region, region_task_lock, "admin cmd flashback");
+        return EngineStoreApplyRes::Persist;
+    }
     return EngineStoreApplyRes::None;
 }
 
