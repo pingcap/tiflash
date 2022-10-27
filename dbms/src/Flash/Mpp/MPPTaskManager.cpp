@@ -59,12 +59,20 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
 
     std::unique_lock lock(mu);
     auto query_it = mpp_query_map.find(id.start_ts);
+    if (query_it != mpp_query_map.end() && !query_it->second->isInNormalState())
+    {
+        /// if the query is aborted, return the error message
+        LOG_WARNING(log, fmt::format("Query {} is aborted, all its tasks are invalid.", id.start_ts));
+        /// meet error
+        return {nullptr, query_it->second->error_message};
+    }
+
     if (query_it == mpp_query_map.end() || query_it->second->task_map.find(id) == query_it->second->task_map.end())
     {
         /// task not found
         if (!call_data->isWaitingTunnelState())
         {
-            /// if call_data is in new_request state, then put it to waiting tunnel state
+            /// if call_data is in new_request state, put it to waiting tunnel state
             auto query_set = query_it == mpp_query_map.end() ? addMPPQueryTaskSet(id.start_ts) : query_it->second;
             auto & alarm = query_set->alarms[sender_task_id][receiver_task_id];
             call_data->setToWaitingTunnelState();
@@ -73,40 +81,31 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(const ::mpp::Est
         }
         else
         {
-            if (query_it != mpp_query_map.end() && query_it->second->task_map.empty())
+            /// if call_data is already in WaitingTunnelState, then remove the alarm and return tunnel not found error
+            if (query_it != mpp_query_map.end())
             {
                 auto query_set = query_it->second;
-                /// if the query task set has no mpp task, it has to be removed if there is no alarms left,
-                /// otherwise the query task set itself may be left in MPPTaskManager forever
-                auto task_alarm_it = query_set->alarms.find(sender_task_id);
-                if (task_alarm_it != query_set->alarms.end())
+                auto task_alarm_map_it = query_set->alarms.find(sender_task_id);
+                if (task_alarm_map_it != query_set->alarms.end())
                 {
-                    task_alarm_it->second.erase(receiver_task_id);
-                    if (task_alarm_it->second.empty())
-                    {
-                        query_set->alarms.erase(task_alarm_it);
-                        if (query_set->alarms.empty())
-                        {
-                            /// remove the mpp query task set if it is the last alarm
-                            removeMPPQueryTaskSet(id.start_ts, false);
-                            cv.notify_all();
-                        }
-                    }
+                    task_alarm_map_it->second.erase(receiver_task_id);
+                    if (task_alarm_map_it->second.empty())
+                        query_set->alarms.erase(task_alarm_map_it);
+                }
+                if (query_set->alarms.empty() && query_set->task_map.empty())
+                {
+                    /// if the query task set has no mpp task, it has to be removed if there is no alarms left,
+                    /// otherwise the query task set itself may be left in MPPTaskManager forever
+                    removeMPPQueryTaskSet(id.start_ts, false);
+                    cv.notify_all();
                 }
             }
             return {nullptr, fmt::format("Can't find task [{},{}] within 10 s.", id.start_ts, id.task_id)};
         }
     }
+    /// don't need to delete the alarm here because registerMPPTask will delete all the related alarm
 
-    auto query_set = query_it->second;
-    if (!query_set->isInNormalState())
-    {
-        /// if the query is aborted, return true to stop waiting timeout.
-        LOG_WARNING(log, fmt::format("Query {} is aborted, all its tasks are invalid.", id.start_ts));
-        /// meet error
-        return {nullptr, query_it->second->error_message};
-    }
-    auto it = query_set->task_map.find(id);
+    auto it = query_it->second->task_map.find(id);
     return it->second->getTunnel(request);
 }
 
@@ -261,7 +260,7 @@ std::pair<bool, String> MPPTaskManager::unregisterTask(const MPPTaskId & id)
         if (task_it != it->second->task_map.end())
         {
             it->second->task_map.erase(task_it);
-            if (it->second->task_map.empty())
+            if (it->second->task_map.empty() && it->second->alarms.empty())
                 removeMPPQueryTaskSet(id.start_ts, false);
             cv.notify_all();
             return {true, ""};

@@ -164,12 +164,12 @@ void EstablishCallData::tryConnectTunnel()
             tunnel->connectAsync(this);
             state = PROCESSING;
             trySendOneMsg();
-            return;
         }
         catch (...)
         {
             writeErr(getPacketWithError(getCurrentExceptionMessage(false)));
         }
+        return;
     }
     else if (tunnel != nullptr && !err_msg.empty())
     {
