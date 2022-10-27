@@ -111,7 +111,7 @@ public:
     EngineStoreApplyRes handleWriteRaftCmd(const WriteCmdsView & cmds, UInt64 region_id, UInt64 index, UInt64 term, TMTContext & tmt);
 
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
-    bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
+    bool tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
 
     /**
      * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.

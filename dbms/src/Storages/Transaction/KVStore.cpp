@@ -402,7 +402,7 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     return can_flush;
 }
 
-bool KVStore::forceFlushRegionDataImpl(const Region & curr_region, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
+bool KVStore::forceFlushRegionDataImpl(const Region & curr_region, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
 {
     if (index)
     {
