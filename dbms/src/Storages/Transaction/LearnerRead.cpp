@@ -308,7 +308,7 @@ LearnerReadSnapshot doLearnerRead(
             }
             else if (resp.has_locked())
             {
-                LOG_DEBUG(log, "region is locked by read index {}", region_id);
+                LOG_DEBUG(log, "region is locked by read index {} lockinfo[{},{},{},{}]", region->id(), lock->key(), lock->primary_lock(), lock->lock_ttl(), lock->min_commit_ts());
                 unavailable_regions.setRegionLock(region_id, LockInfoPtr(resp.release_locked()));
             }
             else
@@ -385,7 +385,7 @@ LearnerReadSnapshot doLearnerRead(
                 std::visit(
                     variant_op::overloaded{
                         [&](LockInfoPtr & lock) {
-                            LOG_DEBUG(log, "region is locked by resolve {}", region->id());
+                            LOG_DEBUG(log, "region is locked by resolve {} lockinfo[{},{},{},{}]", region->id(), lock->key(), lock->primary_lock(), lock->lock_ttl(), lock->min_commit_ts());
                             unavailable_regions.setRegionLock(region->id(), std::move(lock));
                         },
                         [&](RegionException::RegionReadStatus & status) {
@@ -419,7 +419,7 @@ LearnerReadSnapshot doLearnerRead(
             batch_read_index_req.size(),
             wait_index_elapsed_ms,
             unavailable_regions.size(),
-            fmt_buf.to_string());
+            fmt_buf.toString());
     };
 
     auto start_time = Clock::now();
