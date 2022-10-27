@@ -238,11 +238,7 @@ public:
         }
         else
         {
-            const size_t old_size = chars.size();
-            const size_t new_size = old_size + string_size;
-            chars.resize(new_size);
-            inline_memcpy(&chars[old_size], pos, string_size);
-            offsets.push_back(new_size);
+            insertDataWithTerminatingZero(pos, string_size);
             return pos + string_size;
         }
     }

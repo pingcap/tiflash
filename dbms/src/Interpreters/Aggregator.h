@@ -280,7 +280,7 @@ struct AggregationMethodFastPathTwoKeysNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodFastPathTwoKeys<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
+    using State = ColumnsHashing::HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, typename Data::value_type, Mapped>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 

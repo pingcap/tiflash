@@ -342,7 +342,7 @@ try
 }
 CATCH
 
-TEST_F(ExecutorAggTestRunner, AggregationCounttzg)
+TEST_F(ExecutorAggTestRunner, AggregationCountGroupByFastPathMultiKeys)
 try
 {
     /// Prepare some data

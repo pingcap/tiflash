@@ -338,16 +338,16 @@ struct KeyDescStringBinPadding : KeyDescStringBin
 
 /// For the case when there are 2 keys.
 template <typename Key1Desc, typename Key2Desc, typename Value, typename Mapped>
-struct HashMethodFastPathTwoKeys
-    : public columns_hashing_impl::HashMethodBase<HashMethodFastPathTwoKeys<Key1Desc, Key2Desc, Value, Mapped>, Value, Mapped, false>
+struct HashMethodFastPathTwoKeysSerialized
+    : public columns_hashing_impl::HashMethodBase<HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped>, Value, Mapped, false>
 {
-    using Self = HashMethodFastPathTwoKeys<Key1Desc, Key2Desc, Value, Mapped>;
+    using Self = HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
 
     Key1Desc key_1_desc;
     Key2Desc key_2_desc;
 
-    HashMethodFastPathTwoKeys(const ColumnRawPtrs & key_columns, const Sizes &, const TiDB::TiDBCollators &)
+    HashMethodFastPathTwoKeysSerialized(const ColumnRawPtrs & key_columns, const Sizes &, const TiDB::TiDBCollators &)
         : key_1_desc(key_columns[0])
         , key_2_desc(key_columns[1])
     {
