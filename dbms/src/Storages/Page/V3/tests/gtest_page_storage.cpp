@@ -1637,7 +1637,7 @@ try
         page_storage->write(std::move(batch));
     }
 
-    // create a snapshot to avoid gc
+    // create a snapshot to avoid page0 being GC-ed
     auto snap = page_storage->getSnapshot();
 
     {
@@ -1646,21 +1646,24 @@ try
         page_storage->write(std::move(batch));
     }
 
-    auto getLogFileNum = [&]() {
+    auto get_log_file_num = [&]() {
         auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
         return log_files.size();
     };
 
     // write until there are more than one wal file
-    while (getLogFileNum() <= 1)
+    while (get_log_file_num() <= 1)
     {
         WriteBatch batch;
         PageId page_id1 = 130;
         batch.putPage(page_id1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }
+
+    // read with latest snapshot, we can not get page0
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 
+    // after the page0 get deleted in previouse log file,
     // write an upsert entry into the current writing log file
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
@@ -1673,6 +1676,8 @@ try
         page_storage = reopenWithConfig(config);
     }
 
+    // After restored from disk, we should not see page0 again
+    // or it could be an entry pointing to a non-exist BlobFile
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 }
 CATCH
@@ -1722,13 +1727,13 @@ try
         page_storage->write(std::move(batch));
     }
 
-    auto getLogFileNum = [&]() {
+    auto get_log_file_num = [&]() {
         auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
         return log_files.size();
     };
 
     // write until there are more than one wal file
-    while (getLogFileNum() <= 1)
+    while (get_log_file_num() <= 1)
     {
         WriteBatch batch;
         PageId page_id2 = 130;
@@ -1737,6 +1742,7 @@ try
     }
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 
+    // after the page0 get deleted in previouse log file,
     // write an upsert entry into the current writing log file
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
@@ -1749,6 +1755,8 @@ try
         page_storage = reopenWithConfig(config);
     }
 
+    // After restored from disk, we should not see page0 again
+    // or it could be an entry pointing to a non-exist BlobFile
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 }
 CATCH

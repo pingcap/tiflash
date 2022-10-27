@@ -199,7 +199,6 @@ public:
      *   to be decreased the ref count by `derefAndClean`.
      *   The elem is <page_id, <version, num to decrease ref count>> 
      * `entries_removed`: Return the entries removed from the version list
-     * `keep_last_valid_var_entry`: Keep the last valid entry, useful for dumping snapshot.
      *
      * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
      */
@@ -207,15 +206,13 @@ public:
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 * entries_removed,
-        const PageLock & page_lock,
-        bool keep_last_valid_var_entry = false);
+        const PageLock & page_lock);
     bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
         Int64 deref_count,
-        PageEntriesV3 * entries_removed,
-        bool keep_last_valid_var_entry = false);
+        PageEntriesV3 * entries_removed);
 
     void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
@@ -324,8 +321,7 @@ public:
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
-    // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
-    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
+    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true);
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.

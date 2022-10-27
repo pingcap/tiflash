@@ -35,6 +35,10 @@ class PSDiskDelegator;
 using PSDiskDelegatorPtr = std::shared_ptr<PSDiskDelegator>;
 namespace PS::V3
 {
+namespace tests
+{
+class WALStoreTest;
+}
 
 class WALStore;
 using WALStorePtr = std::unique_ptr<WALStore>;
@@ -60,7 +64,6 @@ public:
 
     struct FilesSnapshot
     {
-        Format::LogNumberType current_writing_log_num;
         // The log files to generate snapshot from. Sorted by <log number, log level>.
         // If the WAL log file is not inited, it is an empty set.
         LogFilenameSet persisted_log_files;
@@ -68,13 +71,13 @@ public:
         // Note that persisted_log_files should not be empty for needSave() == true,
         // cause we get the largest log num from persisted_log_files as the new
         // file name.
-        bool needSave(const size_t max_size) const
+        bool isValid() const
         {
-            return persisted_log_files.size() > max_size;
+            return !persisted_log_files.empty();
         }
     };
 
-    FilesSnapshot getFilesSnapshot() const;
+    FilesSnapshot tryGetFilesSnapshot(size_t max_persisted_log_files, bool force);
 
     bool saveSnapshot(
         FilesSnapshot && files_snap,
@@ -84,18 +87,21 @@ public:
 
     const String & name() { return storage_name; }
 
+    friend class tests::WALStoreTest; // for testing
+
 private:
-    WALStore(
-        String storage_name,
-        const PSDiskDelegatorPtr & delegator_,
-        const FileProviderPtr & provider_,
-        Format::LogNumberType last_log_num_,
-        WALConfig config);
+    WALStore(String storage_name,
+             const PSDiskDelegatorPtr & delegator_,
+             const FileProviderPtr & provider_,
+             Format::LogNumberType last_log_num_,
+             WALConfig config);
 
     std::tuple<std::unique_ptr<LogWriter>, LogFilename>
     createLogWriter(
         const std::pair<Format::LogNumberType, Format::LogNumberType> & new_log_lvl,
         bool manual_flush);
+
+    Format::LogNumberType rollToNewLogWriter(const std::lock_guard<std::mutex> &);
 
 private:
     const String storage_name;

@@ -14,26 +14,20 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
-#include <tipb/select.pb.h>
+#include <common/types.h>
 
 namespace DB
 {
-class DAGResponseWriter
+/// do not need be thread safe since it is only used in single thread env
+struct ExecutionSummary
 {
-public:
-    DAGResponseWriter(
-        Int64 records_per_chunk_,
-        DAGContext & dag_context_);
-    virtual void write(const Block & block) = 0;
-    virtual void finishWrite() = 0;
-    virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
+    UInt64 time_processed_ns = 0;
+    UInt64 num_produced_rows = 0;
+    UInt64 num_iterations = 0;
+    UInt64 concurrency = 0;
+    ExecutionSummary() = default;
 
-protected:
-    Int64 records_per_chunk;
-    ExecutionSummaryCollector summary_collector;
-    DAGContext & dag_context;
+    void merge(const ExecutionSummary & other, bool streaming_call);
 };
 
 } // namespace DB
