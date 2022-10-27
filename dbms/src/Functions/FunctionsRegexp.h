@@ -674,11 +674,9 @@ private:
 #define CONVERT_CONST_INT_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                              \
     do                                                                                                                                       \
     {                                                                                                                                        \
-        std::cout << "CONVERT_CONST_INT_COL_TO_PARAM1\n"; \
         const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                                      \
         if (col_const != nullptr)                                                                                                            \
         {                                                                                                                                    \
-            std::cout << "CONVERT_CONST_INT_COL_TO_PARAM4\n"; \
             Field field;                                                                                                                 \
             col_const->get(0, field);                                                                                                    \
             auto data_int64 = field.isNull() ? -1 : getIntFromField(field);                                                                                             \
@@ -1075,10 +1073,8 @@ private:
 #define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
     do                                                                                                                             \
     { \
-        std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME == REGEXP_INSTR_MAX_PARAM_NUM) \
         { \
-            std::cout << "CONVERT_MATCH_TYPE_COL_TO_PARAM2\n"; \
             CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_INSTR()})) \
         } \
         else                                                                          \
@@ -1092,10 +1088,8 @@ private:
 #define CONVERT_RET_OP_COL_TO_PARAM() \
     do \
     { \
-        std::cout << "CONVERT_RET_OP_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 3) \
         { \
-            std::cout << "CONVERT_RET_OP_COL_TO_PARAM2\n"; \
             Param<ParamInt<true>, false> RET_OP_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(0)); \
             CONVERT_MATCH_TYPE_COL_TO_PARAM() \
         } \
@@ -1107,10 +1101,8 @@ private:
 #define CONVERT_OCCUR_COL_TO_PARAM() \
     do \
     { \
-        std::cout << "CONVERT_OCCUR_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 2) \
         { \
-            std::cout << "CONVERT_OCCUR_COL_TO_PARAM2\n"; \
             Param<ParamInt<true>, false> OCCUR_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(1)); \
             CONVERT_RET_OP_COL_TO_PARAM() \
         } \
@@ -1122,10 +1114,8 @@ private:
 #define CONVERT_POS_COL_TO_PARAM() \
     do \
     { \
-            std::cout << "CONVERT_POS_COL_TO_PARAM1\n"; \
         if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 1) \
         { \
-                std::cout << "CONVERT_POS_COL_TO_PARAM2\n"; \
             Param<ParamInt<true>, false> POS_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(1)); \
             CONVERT_OCCUR_COL_TO_PARAM() \
         } \
@@ -1137,7 +1127,6 @@ private:
 #define CONVERT_PAT_COL_TO_PARAM()                                                                                           \
     do                                                                                                                       \
     {                                                                                                                        \
-        std::cout << "CONVERT_PAT_COL_TO_PARAM\n"; \
         CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_POS_COL_TO_PARAM()})) \
     } while (0);
 
@@ -1145,7 +1134,6 @@ private:
 #define CONVERT_EXPR_COL_TO_PARAM()                                                                                 \
     do                                                                                                              \
     {                                                                                                               \
-        std::cout << "CONVERT_EXPR_COL_TO_PARAM\n"; \
         /* Getting column size from expr col */                                                                    \
         size_t COL_SIZE_VAR_NAME = (EXPR_COL_PTR_VAR_NAME)->size();                                                \
         CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
@@ -1204,9 +1192,9 @@ public:
     }
 
     template <typename ExprT, typename PatT, typename PosT, typename OccurT, typename RetOpT, typename MatchTypeT>
-    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expar_param, const PatT & par_param, const PosT & pos_param, const OccurT & occur_param, const RetOpT & ret_op_param, const MatchTypeT & match_type_param) const
+    void REGEXP_CLASS_MEM_FUNC_IMPL_NAME(ColumnWithTypeAndName & res_arg, const ExprT & expr_param, const PatT & pat_param, const PosT & pos_param, const OccurT & occur_param, const RetOpT & ret_op_param, const MatchTypeT & match_type_param) const
     {
-        size_t col_size = expar_param.getDataNum();
+        size_t col_size = expr_param.getDataNum();
 
         // Get function pointers to process the specific int type
         GetIntFuncPointerType get_pos_func = getGetIntFuncPointer(pos_param.getIntType());
@@ -1226,15 +1214,15 @@ public:
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && PosT::isConst() && OccurT::isConst() && RetOpT::isConst() && MatchTypeT::isConst())
         {
-            if (col_size == 0 || expar_param.isNullAt(0) || par_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
+            if (col_size == 0 || expr_param.isNullAt(0) || pat_param.isNullAt(0) || pos_param.isNullAt(0) || occur_param.isNullAt(0) || ret_op_param.isNullAt(0) || match_type_param.isNullAt(0))
             {
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
                 return;
             }
             
             int flags = getDefaultFlags();
-            String expr = expar_param.getString(0);
-            String pat = par_param.getString(0);
+            String expr = expr_param.getString(0);
+            String pat = pat_param.getString(0);
             if (unlikely(pat.empty()))
                 throw Exception(EMPTY_PAT_ERR_MSG);
 
@@ -1295,7 +1283,7 @@ public:
         {
             // Codes in this if branch execute instr with memorized regexp
 
-            const auto & regexp = memorize(par_param, match_type_param, COLLATOR_VAR_NAME);
+            const auto & regexp = memorize(pat_param, match_type_param, COLLATOR_VAR_NAME);
             if constexpr (has_nullable_col)
             {
                 // Process nullable columns with memorized regexp
@@ -1305,13 +1293,13 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    if (expar_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i))
+                    if (expr_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i))
                     {
                         null_map[i] = 1;
                         continue;
                     }
                     null_map[i] = 0;
-                    expar_param.getStringRef(i, expr_ref);
+                    expr_param.getStringRef(i, expr_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
@@ -1326,7 +1314,7 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    expar_param.getStringRef(i, expr_ref);
+                    expr_param.getStringRef(i, expr_ref);
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
@@ -1348,14 +1336,14 @@ public:
 
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    if (expar_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i))
+                    if (expr_param.isNullAt(i) || pat_param.isNullAt(i) || pos_param.isNullAt(i) || occur_param.isNullAt(i) || ret_op_param.isNullAt(i) || match_type_param.isNullAt(i))
                     {
                         null_map[i] = 1;
                         continue;
                     }
                     null_map[i] = 0;
-                    expar_param.getStringRef(i, expr_ref);
-                    pat = par_param.getString(i);
+                    expr_param.getStringRef(i, expr_ref);
+                    pat = pat_param.getString(i);
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
                     GET_POS_VALUE(i)
@@ -1373,8 +1361,8 @@ public:
                 // Process pure vector columns without memorized regexp
                 for (size_t i = 0; i < col_size; ++i)
                 {
-                    expar_param.getStringRef(i, expr_ref);
-                    pat = par_param.getString(i);
+                    expr_param.getStringRef(i, expr_ref);
+                    pat = pat_param.getString(i);
                     if (unlikely(pat.empty()))
                         throw Exception(EMPTY_PAT_ERR_MSG);
                     GET_POS_VALUE(i)

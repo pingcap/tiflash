@@ -562,7 +562,10 @@ template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
 {
     int64_t utf8_total_len = getStringUtf8Len(subject, subject_size);
-    
+
+    if (unlikely(ret_op != 0 && ret_op != 1))
+        throw DB::Exception("Incorrect arguments to regexp_instr: return_option must be 1 or 0");
+
     if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
         throw DB::Exception("Index out of bounds in regular expression search.");
 
