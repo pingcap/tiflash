@@ -38,6 +38,7 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
     tracked_packet->serializeByResponse(response);
     checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
+    // for root mpp task, only one tunnel will connect to tidb/tispark.
     RUNTIME_CHECK(1 == tunnels.size());
     tunnels.back()->write(tracked_packet);
 }
