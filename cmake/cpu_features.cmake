@@ -14,24 +14,6 @@
 
 # https://software.intel.com/sites/landingpage/IntrinsicsGuide/
 
-if (ARCH_AMD64)
-    option(TIFLASH_ENABLE_AVX_SUPPORT "enable AVX and AVX2 support" ON)
-    option(TIFLASH_ENABLE_AVX512_SUPPORT "enable AVX512 support" ON)
-endif ()
-
-if (ARCH_AARCH64)
-    option(TIFLASH_ENABLE_ASIMD_SUPPORT "enable Advanced SIMD support" ON)
-    option(TIFLASH_ENABLE_SVE_SUPPORT "enable Scalable Vector Extension support" OFF)
-endif ()
-
-if (TIFLASH_ENABLE_ASIMD_SUPPORT)
-    add_definitions(-DTIFLASH_ENABLE_ASIMD_SUPPORT=1)
-endif ()
-
-if (TIFLASH_ENABLE_SVE_SUPPORT)
-    add_definitions(-DTIFLASH_ENABLE_SVE_SUPPORT=1)
-endif ()
-
 include (CheckCXXSourceCompiles)
 include (CMakePushCheckState)
 
@@ -43,7 +25,7 @@ cmake_push_check_state ()
 # All of them are unrelated to the instruction set at the host machine
 # (you can compile for newer instruction set on old machines and vice versa).
 
-option (ARCH_NATIVE "Add -march=native compiler flag. This makes your binaries non-portable but more performant code may be generated. This option overrides ENABLE_* options for specific instruction set. Highly not recommended to use." 0)
+option (ARCH_NATIVE "Add -march=native compiler flag. This makes your binaries non-portable but more performant code may be generated. This option overrides ENABLE_* options for specific instruction set. Highly not recommended to use." OFF)
 
 if (ARCH_AARCH64)
     # ARM publishes almost every year a new revision of it's ISA [1]. Each version comes with new mandatory and optional features from
@@ -52,7 +34,9 @@ if (ARCH_AARCH64)
     # CPUs, (e.g. Graviton).
     #
     # [1] https://en.wikipedia.org/wiki/AArch64
-    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." 0)
+    option (TIFLASH_ENABLE_ASIMD_SUPPORT "Enable Advanced SIMD support." ON)
+    option (TIFLASH_ENABLE_SVE_SUPPORT "Enable Scalable Vector Extension support." OFF)
+    option (NO_ARMV81_OR_HIGHER "Disable ARMv8.1 or higher on Aarch64 for maximum compatibility with older/embedded hardware." OFF)
 
     if (NO_ARMV81_OR_HIGHER)
         # crc32 is optional in v8.0 and mandatory in v8.1. Enable it as __crc32()* is used in lot's of places and even very old ARM CPUs
@@ -86,43 +70,31 @@ if (ARCH_AARCH64)
         # [7] https://gcc.gnu.org/onlinedocs/gcc/ARM-Options.html
         # [8] https://developer.arm.com/documentation/102651/a/What-are-dot-product-intructions-
         # [9] https://developer.arm.com/documentation/dui0801/g/A64-Data-Transfer-Instructions/LDAPR?lang=en
-        set (COMPILER_FLAGS "${COMPILER_FLAGS} -march=armv8.2-a+simd+crypto+dotprod+ssbs -Xclang=-target-feature -Xclang=+ldapr -Wno-unused-command-line-argument")
+        set (TEST_FLAG "-march=armv8.2-a+crypto+ssbs+dotprod")
+        if (TIFLASH_ENABLE_ASIMD_SUPPORT)
+            set (TEST_FLAG "${TEST_FLAG}+simd")
+            add_definitions(-DTIFLASH_ENABLE_ASIMD_SUPPORT=1)
+        endif ()
+        if (TIFLASH_ENABLE_SVE_SUPPORT)
+            set (TEST_FLAG "${TEST_FLAG}+sve")
+            add_definitions(-DTIFLASH_ENABLE_SVE_SUPPORT=1)
+        endif ()
+        set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
     endif ()
 
 elseif (ARCH_AMD64)
-    option (ENABLE_SSSE3 "Use SSSE3 instructions on x86_64" 1)
-    option (ENABLE_SSE41 "Use SSE4.1 instructions on x86_64" 1)
-    option (ENABLE_SSE42 "Use SSE4.2 instructions on x86_64" 1)
-    option (ENABLE_PCLMULQDQ "Use pclmulqdq instructions on x86_64" 1)
-    option (ENABLE_POPCNT "Use popcnt instructions on x86_64" 1)
-    option (ENABLE_AVX "Use AVX instructions on x86_64" 0)
-    option (ENABLE_AVX2 "Use AVX2 instructions on x86_64" 0)
-    option (ENABLE_AVX512 "Use AVX512 instructions on x86_64" 0)
+    # enable sse4.2 or lower default, check avx, avx2, avx512
+    # set the flags for specific files rather than globally
+    # in order to avoid SSE-AVX Transition Penalty
+    # and note that the compile will succeed even if the host machine does not support the instruction set
+    # so we do not set the flags to avoid core dump in old machines
+    option (TIFLASH_ENABLE_AVX_SUPPORT "Use AVX/AVX2 instructions on x86_64" ON)
+    option (TIFLASH_ENABLE_AVX512_SUPPORT "Use AVX512 instructions on x86_64" ON)
 
-    if (TIFLASH_ENABLE_AVX_SUPPORT)
-        set (ENABLE_AVX 1)
-        set (ENABLE_AVX2 1)
-    endif ()
-
-    if (TIFLASH_ENABLE_AVX_SUPPORT)
-        set (ENABLE_AVX512 1)
-    endif ()
-
-    option (NO_SSE3_OR_HIGHER "Disable SSE3 or higher on x86_64 for maximum compatibility with older/embedded hardware." 0)
-    if (NO_SSE3_OR_HIGHER)
-        SET(ENABLE_SSSE3 0)
-        SET(ENABLE_SSE41 0)
-        SET(ENABLE_SSE42 0)
-        SET(ENABLE_PCLMULQDQ 0)
-        SET(ENABLE_POPCNT 0)
-        SET(ENABLE_AVX 0)
-        SET(ENABLE_AVX2 0)
-        SET(ENABLE_AVX512 0)
-        SET(ENABLE_AVX512_VBMI 0)
-        SET(ENABLE_BMI 0)
-        SET(ENABLE_BMI2 0)
-        SET(ENABLE_AVX2_FOR_SPEC_OP 0)
-        SET(ENABLE_AVX512_FOR_SPEC_OP 0)
+    option (NO_SSE42_OR_HIGHER "Disable SSE42 or higher on x86_64 for maximum compatibility with older/embedded hardware." OFF)
+    if (NO_SSE42_OR_HIGHER)
+        SET(TIFLASH_ENABLE_AVX_SUPPORT OFF)
+        SET(TIFLASH_ENABLE_AVX512_SUPPORT OFF)
     endif()
 
     set (TEST_FLAG "-mssse3")
@@ -135,7 +107,7 @@ elseif (ARCH_AMD64)
             return 0;
         }
     " HAVE_SSSE3)
-    if (HAVE_SSSE3 AND ENABLE_SSSE3)
+    if (HAVE_SSSE3)
         set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
     endif ()
 
@@ -149,7 +121,7 @@ elseif (ARCH_AMD64)
             return 0;
         }
     " HAVE_SSE41)
-    if (HAVE_SSE41 AND ENABLE_SSE41)
+    if (HAVE_SSE41)
         set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
     endif ()
 
@@ -163,7 +135,7 @@ elseif (ARCH_AMD64)
             return 0;
         }
     " HAVE_SSE42)
-    if (HAVE_SSE42 AND ENABLE_SSE42)
+    if (HAVE_SSE42)
         set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
     endif ()
 
@@ -177,7 +149,7 @@ elseif (ARCH_AMD64)
             return 0;
         }
     " HAVE_PCLMULQDQ)
-    if (HAVE_PCLMULQDQ AND ENABLE_PCLMULQDQ)
+    if (HAVE_PCLMULQDQ)
         set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
     endif ()
 
@@ -190,39 +162,25 @@ elseif (ARCH_AMD64)
             return 0;
         }
     " HAVE_POPCNT)
-    if (HAVE_POPCNT AND ENABLE_POPCNT)
+    if (HAVE_POPCNT)
         set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
     endif ()
 
-    set (TEST_FLAG "-mavx")
+    set (TEST_FLAG "-mavx -mavx2")
     set (CMAKE_REQUIRED_FLAGS "${TEST_FLAG} -O0")
     check_cxx_source_compiles("
         #include <immintrin.h>
         int main() {
             auto a = _mm256_insert_epi8(__m256i(), 0, 0);
             (void)a;
-            return 0;
-        }
-    " HAVE_AVX)
-    if (HAVE_AVX AND ENABLE_AVX)
-        set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
-    endif ()
-
-    set (TEST_FLAG "-mavx2")
-    set (CMAKE_REQUIRED_FLAGS "${TEST_FLAG} -O0")
-    check_cxx_source_compiles("
-        #include <immintrin.h>
-        int main() {
-            auto a = _mm256_add_epi16(__m256i(), __m256i());
-            (void)a;
+            auto b = _mm256_add_epi16(__m256i(), __m256i());
+            (void)b;
             return 0;
         }
     " HAVE_AVX2)
-    if (HAVE_AVX2 AND ENABLE_AVX2)
-        set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
+    if (HAVE_AVX2 AND TIFLASH_ENABLE_AVX_SUPPORT)
+        # set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
         add_definitions(-DTIFLASH_ENABLE_AVX_SUPPORT=1)
-    else ()
-        add_definitions(-DTIFLASH_ENABLE_AVX_SUPPORT=0)
     endif ()
 
     set (TEST_FLAG "-mavx512f -mavx512bw -mavx512vl")
@@ -239,11 +197,10 @@ elseif (ARCH_AMD64)
             return 0;
         }
     " HAVE_AVX512)
-    if (HAVE_AVX512 AND ENABLE_AVX512)
-        set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
+    message(STATUS "HAVE_AVX512: ${HAVE_AVX512}")
+    if (HAVE_AVX512 AND TIFLASH_ENABLE_AVX512_SUPPORT)
+        # set (COMPILER_FLAGS "${COMPILER_FLAGS} ${TEST_FLAG}")
         add_definitions(-DTIFLASH_ENABLE_AVX512_SUPPORT=1)
-    else ()
-        add_definitions(-DTIFLASH_ENABLE_AVX512_SUPPORT=0)
     endif ()
 
 else ()

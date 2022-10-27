@@ -1,12 +1,29 @@
+# Copyright 2022 PingCAP, Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Compiler
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set (COMPILER_GCC 1)
+    set(MOST_DEBUGGABLE_LEVEL -Og)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
     set (COMPILER_APPLE_CLANG 1)
     set (COMPILER_CLANG 1) # Safe to treat AppleClang as a regular Clang, in general.
+    set(MOST_DEBUGGABLE_LEVEL -O0)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set (COMPILER_CLANG 1)
+    set(MOST_DEBUGGABLE_LEVEL -O0)
 else ()
     message (FATAL_ERROR "Compiler ${CMAKE_CXX_COMPILER_ID} is not supported")
 endif ()
@@ -71,9 +88,11 @@ endif ()
 
 if (LLVM_AR_PATH)
     set (CMAKE_AR "${LLVM_AR_PATH}")
+    message(STATUS "Using archiver: ${CMAKE_AR}")
+else ()
+    message (FATAL_ERROR "Cannot find ar.")
 endif ()
 
-message(STATUS "Using archiver: ${CMAKE_AR}")
 
 # Ranlib
 
@@ -85,23 +104,11 @@ endif ()
 
 if (LLVM_RANLIB_PATH)
     set (CMAKE_RANLIB "${LLVM_RANLIB_PATH}")
-endif ()
-
-message(STATUS "Using ranlib: ${CMAKE_RANLIB}")
-
-# Install Name Tool
-
-if (COMPILER_GCC)
-    find_program (LLVM_INSTALL_NAME_TOOL_PATH NAMES "llvm-install-name-tool" "llvm-install-name-tool-15" "llvm-install-name-tool-14" "llvm-install-name-tool-13" "llvm-install-name-tool-12")
+    message(STATUS "Using ranlib: ${CMAKE_RANLIB}")
 else ()
-    find_program (LLVM_INSTALL_NAME_TOOL_PATH NAMES "llvm-install-name-tool-${COMPILER_VERSION_MAJOR}" "llvm-install-name-tool")
+    message (FATAL_ERROR "Cannot find ranlib.")
 endif ()
 
-if (LLVM_INSTALL_NAME_TOOL_PATH)
-    set (CMAKE_INSTALL_NAME_TOOL "${LLVM_INSTALL_NAME_TOOL_PATH}")
-endif ()
-
-message(STATUS "Using install-name-tool: ${CMAKE_INSTALL_NAME_TOOL}")
 
 # Objcopy
 
@@ -112,21 +119,8 @@ else ()
 endif ()
 
 if (OBJCOPY_PATH)
+    set (CMAKE_OBJCOPY "${OBJCOPY_PATH}")
     message (STATUS "Using objcopy: ${OBJCOPY_PATH}")
 else ()
     message (FATAL_ERROR "Cannot find objcopy.")
-endif ()
-
-# Strip
-
-if (COMPILER_GCC)
-    find_program (STRIP_PATH NAMES "llvm-strip" "llvm-strip-15" "llvm-strip-14" "llvm-strip-13" "llvm-strip-12" "strip")
-else ()
-    find_program (STRIP_PATH NAMES "llvm-strip-${COMPILER_VERSION_MAJOR}" "llvm-strip" "strip")
-endif ()
-
-if (STRIP_PATH)
-    message (STATUS "Using strip: ${STRIP_PATH}")
-else ()
-    message (FATAL_ERROR "Cannot find strip.")
 endif ()

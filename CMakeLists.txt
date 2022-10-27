@@ -35,12 +35,13 @@ include (cmake/target.cmake)
 include (cmake/tools.cmake)
 include (cmake/find_rust.cmake)
 include (cmake/add_warning.cmake)
+
+option(ENABLE_PCH "Enable `Precompiled header`" OFF)
+
 include (cmake/find_ccache.cmake)
 
 # Write compile_commands.json
 set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
-
-option(ENABLE_PCH "Enable `Precompiled header`" OFF)
 
 if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "None")
     set (CMAKE_BUILD_TYPE "RelWithDebInfo")
@@ -171,11 +172,6 @@ endif ()
 
 include (cmake/cpu_features.cmake)
 
-option (ARCHNATIVE "Enable -march=native compiler flag" OFF)
-if (ARCHNATIVE)
-    set (COMPILER_FLAGS                  "${COMPILER_FLAGS} -march=native")
-endif ()
-
 if (CMAKE_VERSION VERSION_LESS "3.8.0")
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++1z")
 else ()
@@ -216,7 +212,7 @@ include (cmake/test_compiler.cmake)
 
 if (ARCH_LINUX AND COMPILER_CLANG)
     set (TIFLASH_LLVM_TOOLCHAIN 1)
-    set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS} ${CXX11_ABI_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS}")
 
     option (USE_LIBCXX "Use libc++ and libc++abi instead of libstdc++ (only make sense on Linux with Clang)" ${HAVE_LIBCXX})
     option (USE_LLVM_LIBUNWIND "Use libunwind from LLVM" OFF)
