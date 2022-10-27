@@ -308,6 +308,7 @@ LearnerReadSnapshot doLearnerRead(
             }
             else if (resp.has_locked())
             {
+                LOG_DEBUG(log, "region is locked by read index {}", region_id);
                 unavailable_regions.setRegionLock(region_id, LockInfoPtr(resp.release_locked()));
             }
             else
@@ -383,7 +384,10 @@ LearnerReadSnapshot doLearnerRead(
 
                 std::visit(
                     variant_op::overloaded{
-                        [&](LockInfoPtr & lock) { unavailable_regions.setRegionLock(region->id(), std::move(lock)); },
+                        [&](LockInfoPtr & lock) {
+                            LOG_DEBUG(log, "region is locked by resolve {}", region->id());
+                            unavailable_regions.setRegionLock(region->id(), std::move(lock));
+                        },
                         [&](RegionException::RegionReadStatus & status) {
                             if (status != RegionException::RegionReadStatus::OK)
                             {
