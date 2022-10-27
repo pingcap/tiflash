@@ -148,7 +148,17 @@ uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t
     try
     {
         auto & kvstore = server->tmt->getKVStore();
-        return kvstore->tryFlushRegionData(region_id, until_succeed, *server->tmt, index, term);
+        if (until_succeed == 2)
+        {
+            force_persist = true;
+            // A force persist requires `until_succeed` to be true.
+            until_succeed = true;
+        }
+        else
+        {
+            force_persist = false;
+        }
+        return kvstore->tryFlushRegionData(region_id, force_persist, until_succeed, *server->tmt, index, term);
     }
     catch (...)
     {

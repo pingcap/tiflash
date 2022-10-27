@@ -335,7 +335,7 @@ bool KVStore::needFlushRegionData(UInt64 region_id, TMTContext & tmt)
     return canFlushRegionDataImpl(curr_region_ptr, false, false, tmt, region_task_lock, 0, 0);
 }
 
-bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
+bool KVStore::tryFlushRegionData(UInt64 region_id, bool force_persist, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term)
 {
     auto region_task_lock = region_manager.genRegionTaskLock(region_id);
     const RegionPtr curr_region_ptr = getRegion(region_id);
@@ -348,7 +348,24 @@ bool KVStore::tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTCo
         LOG_WARNING(log, "region {} [index: {}, term {}], not exist when flushing, maybe have exec `RemoveNode` first", region_id, index, term);
         return true;
     }
-    return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+    if (force_persist)
+    {
+        if (curr_region_ptr == nullptr)
+        {
+            throw Exception("region not found when trying flush", ErrorCodes::LOGICAL_ERROR);
+        }
+        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData by force, index {} term {}", curr_region.toString(false), index, term);
+        auto & curr_region = *curr_region_ptr;
+        if (!forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term))
+        {
+            throw Exception("Force flush region " + std::to_string(region_id) + " failed", ErrorCodes::LOGICAL_ERROR);
+        }
+        return true;
+    }
+    else
+    {
+        return canFlushRegionDataImpl(curr_region_ptr, true, try_until_succeed, tmt, region_task_lock, index, term);
+    }
 }
 
 bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
@@ -379,25 +396,30 @@ bool KVStore::canFlushRegionDataImpl(const RegionPtr & curr_region_ptr, UInt8 fl
     }
     if (can_flush && flush_if_possible)
     {
-        LOG_DEBUG(log, "{} flush region due to canFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
-        if (index)
-        {
-            // We set actual index when handling CompactLog.
-            curr_region.handleWriteRaftCmd({}, index, term, tmt);
-        }
-        if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
-        {
-            persistRegion(curr_region, region_task_lock, "canFlushRegionData before compact raft log");
-            curr_region.markCompactLog();
-            curr_region.cleanApproxMemCacheInfo();
-            return true;
-        }
-        else
-        {
-            return false;
-        }
+        LOG_DEBUG(log, "{} flush region due to tryFlushRegionData, index {} term {}", curr_region.toString(false), index, term);
+        forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
     return can_flush;
+}
+
+bool KVStore::forceFlushRegionDataImpl(const Region & curr_region, UInt8 flush_if_possible, bool try_until_succeed, TMTContext & tmt, const RegionTaskLock & region_task_lock, UInt64 index, UInt64 term)
+{
+    if (index)
+    {
+        // We set actual index when handling CompactLog.
+        curr_region.handleWriteRaftCmd({}, index, term, tmt);
+    }
+    if (tryFlushRegionCacheInStorage(tmt, curr_region, log, try_until_succeed))
+    {
+        persistRegion(curr_region, region_task_lock, "canFlushRegionData before compact raft log");
+        curr_region.markCompactLog();
+        curr_region.cleanApproxMemCacheInfo();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 EngineStoreApplyRes KVStore::handleUselessAdminRaftCmd(

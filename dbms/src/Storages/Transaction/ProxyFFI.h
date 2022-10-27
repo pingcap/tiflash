@@ -126,6 +126,10 @@ EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server,
                                        WriteCmdsView cmds,
                                        RaftCmdHeader header);
 uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id);
+// `until_succeed` values:
+// 0: try, but can fail.
+// 1: try until succeed.
+// 2: disregard all contraits, and persist, until succeed.
 uint8_t TryFlushData(EngineStoreServerWrap * server, uint64_t region_id, uint8_t until_succeed, uint64_t index, uint64_t term);
 void AtomicUpdateProxy(EngineStoreServerWrap * server, RaftStoreProxyFFIHelper * proxy);
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id);
