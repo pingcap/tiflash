@@ -16,6 +16,7 @@
 
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
+#include <Debug/dbgQueryExecutor.h>
 #include <Server/FlashGrpcServerHolder.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <gtest/gtest.h>

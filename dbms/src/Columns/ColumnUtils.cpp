@@ -12,28 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
-#include <tipb/select.pb.h>
+#include <Columns/ColumnUtils.h>
 
 namespace DB
 {
-class DAGResponseWriter
+bool columnEqual(const ColumnPtr & expected, const ColumnPtr & actual, String & unequal_msg)
 {
-public:
-    DAGResponseWriter(
-        Int64 records_per_chunk_,
-        DAGContext & dag_context_);
-    virtual void write(const Block & block) = 0;
-    virtual void finishWrite() = 0;
-    virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
-
-protected:
-    Int64 records_per_chunk;
-    ExecutionSummaryCollector summary_collector;
-    DAGContext & dag_context;
-};
-
+    for (size_t i = 0, size = expected->size(); i < size; ++i)
+    {
+        auto expected_field = (*expected)[i];
+        auto actual_field = (*actual)[i];
+        if (expected_field != actual_field)
+        {
+            unequal_msg = fmt::format("Value {} mismatch {} vs {} ", i, expected_field.toString(), actual_field.toString());
+            return false;
+        }
+    }
+    return true;
+}
 } // namespace DB

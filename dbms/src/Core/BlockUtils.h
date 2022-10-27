@@ -14,26 +14,12 @@
 
 #pragma once
 
-#include <Flash/Coprocessor/ExecutionSummaryCollector.h>
-#include <tipb/select.pb.h>
+#include <Columns/ColumnUtils.h>
+#include <Core/Block.h>
 
 namespace DB
 {
-class DAGResponseWriter
-{
-public:
-    DAGResponseWriter(
-        Int64 records_per_chunk_,
-        DAGContext & dag_context_);
-    virtual void write(const Block & block) = 0;
-    virtual void finishWrite() = 0;
-    virtual ~DAGResponseWriter() = default;
-    const DAGContext & dagContext() const { return dag_context; }
+bool blockEqual(const Block & expected, const Block & actual, String & unequal_msg);
 
-protected:
-    Int64 records_per_chunk;
-    ExecutionSummaryCollector summary_collector;
-    DAGContext & dag_context;
-};
-
+String formatBlockData(const Block & block);
 } // namespace DB
