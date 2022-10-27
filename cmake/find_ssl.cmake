@@ -25,7 +25,7 @@ if(NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/boringssl/README.md")
     set(MISSING_INTERNAL_SSL_LIBRARY 1)
 endif()
 
-if (NOT APPLE)
+if (NOT ARCH_DARWIN)
     option(USE_GM_SSL "Set to FALSE to disable GmSSL" ${USE_INTERNAL_SSL_LIBRARY})
 else()
     # Avoid link to GmSSL when compile on macos because GmSSL only supports dynamic link which complicate the binary package
@@ -35,7 +35,7 @@ endif()
 set (OPENSSL_USE_STATIC_LIBS ${USE_STATIC_LIBRARIES})
 
 if (NOT USE_INTERNAL_SSL_LIBRARY)
-    if (APPLE)
+    if (ARCH_DARWIN)
         set (OPENSSL_ROOT_DIR "/usr/local/opt/openssl@1.1" CACHE INTERNAL "")
         # https://rt.openssl.org/Ticket/Display.html?user=guest&pass=guest&id=2232
         if (USE_STATIC_LIBRARIES)

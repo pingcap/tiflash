@@ -34,7 +34,7 @@ endif ()
 
 set (VERSION_FULL "${PROJECT_NAME} ${VERSION_STRING}")
 
-if (APPLE)
+if (ARCH_DARWIN)
     # dirty hack: ld: malformed 64-bit a.b.c.d.e version number: 1.1.54160
     math (EXPR VERSION_SO1 "${VERSION_REVISION}/255")
     math (EXPR VERSION_SO2 "${VERSION_REVISION}%255")
