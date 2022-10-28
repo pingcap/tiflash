@@ -39,7 +39,7 @@ void scatterColumns(const Block & input_block,
                     std::vector<std::vector<MutableColumnPtr>> & result_columns);
 
 void scatterColumnsInplace(const Block & block,
-                           uint32_t num_bucket,
+                           uint32_t bucket_num,
                            const TiDB::TiDBCollators & collators,
                            std::vector<String> & partition_key_containers,
                            const std::vector<Int64> & partition_col_ids,
