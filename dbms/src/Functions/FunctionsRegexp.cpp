@@ -21,50 +21,6 @@
 
 namespace DB
 {
-
-namespace
-{
-const char flag_i = 'i';
-const char flag_c = 'c';
-const char flag_m = 'm';
-const char flag_s = 's';
-
-std::set<char> valid_flags{flag_i, flag_c, flag_m, flag_s};
-} // namespace
-
-// If characters specifying contradictory options are specified
-// within match_type, the rightmost one takes precedence.
-// String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator)
-// {
-//     std::set<char> applied_flags;
-//     if (collator != nullptr && collator->isCI())
-//         applied_flags.insert(flag_i);
-
-//     for (auto flag : match_type)
-//     {
-//         auto iter = valid_flags.find(flag);
-//         if (iter == valid_flags.end())
-//             throw Exception(fmt::format("Invalid match type '{}' in regexp function", flag));
-
-//         // re2 is case-sensitive by default, so we only need to delete 'i' flag
-//         // to enable the case-sensitive for the regexp
-//         if (flag == flag_c)
-//         {
-//             applied_flags.erase(flag_i);
-//             continue;
-//         }
-
-//         applied_flags.insert(flag);
-//     }
-
-//     // generate match type flag
-//     String flags;
-//     for (auto flag : applied_flags)
-//         flags += flag;
-
-//     return flags;
-// }
-
 /** Replace all matches of regexp 'needle' to string 'replacement'. 'needle' and 'replacement' are constants.
   * 'replacement' could contain substitutions, for example: '\2-\3-\1'
   */
