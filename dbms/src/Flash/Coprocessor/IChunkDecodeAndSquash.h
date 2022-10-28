@@ -26,7 +26,7 @@ public:
     virtual ~IChunkDecodeAndSquash() = default;
     /// The returned optional value can only have block that block.operator bool() is true
     virtual std::optional<Block> decodeAndSquash(const String &) = 0;
-    /// The returned optional value can only have block that block.operator bool() is true
+    /// Return value should be false if 'flush' is invoked consecutively more than once
     virtual std::optional<Block> flush() = 0;
 };
 
@@ -36,7 +36,7 @@ public:
     explicit CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
     virtual ~CHBlockChunkDecodeAndSquash() = default;
     std::optional<Block> decodeAndSquash(const String &);
-    std::optional<Block> flush() { return accumulated_block; }
+    std::optional<Block> flush();
 private:
     CHBlockChunkCodec codec;
     std::optional<Block> accumulated_block;

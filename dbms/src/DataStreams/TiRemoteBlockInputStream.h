@@ -231,6 +231,7 @@ public:
         return execution_summaries_inited[index].load() ? &execution_summaries[index] : nullptr;
     }
 
+    size_t getTotalRows() const { return total_rows; }
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }

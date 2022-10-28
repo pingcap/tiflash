@@ -701,9 +701,11 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         if (!result)
             continue;
         detail.rows += result->rows();
-        detail.produce_block_flag = true;
         if likely(result->rows() > 0)
+        {
+            detail.produce_block_flag = true;
             block_queue.push(std::move(result.value()));
+        }
     }
     return detail;
 }
@@ -739,12 +741,9 @@ std::vector<ExchangeReceiverResult> ExchangeReceiverBase<RPCContext>::nextResult
                 results.push_back(ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg()));
                 return results;
             }
-            const ExchangeReceiverResult & result = toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
-            if (unlikely(result.meet_error) || result.decode_detail.produce_block_flag)
-            {
-                results.push_back(result);
+            results.push_back(toDecodeResult(block_queue, header, recv_msg, decoder_ptr));
+            if (unlikely(results.back().meet_error) || results.back().decode_detail.produce_block_flag)
                 return results;
-            }
         }
     }
 }
@@ -763,8 +762,11 @@ void ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     }
     else
     {
+        /// If there are cached data in squashDecoder, then just push the block and return EOF next iteration
         if (last_block && last_block->rows() > 0)
         {
+            RUNTIME_ASSERT(!results.empty());
+            results.back().decode_detail.rows += last_block->rows();
             block_queue.push(std::move(last_block.value()));
         }
         else

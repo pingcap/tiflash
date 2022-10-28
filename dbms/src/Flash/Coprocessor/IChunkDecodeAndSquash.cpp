@@ -75,4 +75,13 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
     return res;
 }
 
+std::optional<Block> CHBlockChunkDecodeAndSquash::flush()
+{
+    if (!accumulated_block)
+        return accumulated_block;
+    std::optional<Block> res;
+    accumulated_block.swap(res);
+    return res;
+}
+
 } // namespace DB

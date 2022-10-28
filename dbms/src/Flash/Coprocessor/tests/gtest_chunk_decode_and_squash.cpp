@@ -40,6 +40,17 @@ public:
         : context(TiFlashTestEnv::getContext())
     {}
 
+    static Block squashBlocks(std::vector<Block> & blocks)
+    {
+        std::vector<Block> reference_block_vec;
+        SquashingTransform squash_transform(std::numeric_limits<UInt64>::max(), 0, "");
+        for (auto & block : blocks)
+            squash_transform.add(std::move(block));
+        Block empty;
+        auto result = squash_transform.add(std::move(empty));
+        return result.block;
+    }
+
     // Return 10 Int64 column.
     static std::vector<tipb::FieldType> makeFields()
     {
@@ -80,7 +91,7 @@ public:
         return block;
     }
 
-    void doTestWork(bool flush_somthing)
+    void doTestWork(bool flush_something)
     {
         const size_t block_rows = 1024;
         const size_t block_num = 256;
@@ -89,9 +100,9 @@ public:
         std::vector<Block> blocks;
         for (size_t i = 0; i < block_num; ++i)
         {
-            UInt64 rows = flush_somthing ? static_cast<UInt64>(rand_gen()) % (block_rows * 4) : block_rows;
+            UInt64 rows = flush_something ? static_cast<UInt64>(rand_gen()) % (block_rows * 4) : block_rows;
             blocks.emplace_back(prepareBlock(rows));
-            if (flush_somthing)
+            if (flush_something)
                 blocks.emplace_back(prepareBlock(0)); /// Adds this empty block, so even unluckily, total_rows % rows_limit == 0, it would flush an empty block with header
         }
 
@@ -118,28 +129,13 @@ public:
         auto last_block = decoder.flush();
         if (last_block)
             decoded_blocks.push_back(std::move(last_block.value()));
+        /// flush after flush should return empty optional<block>
+        ASSERT_TRUE(!decoder.flush());
 
         // 4. Check correctness
-        std::vector<Block> reference_block_vec;
-        SquashingTransform squash_transform(block_rows * 4, 0, "");
-        for (auto & block : blocks)
-        {
-            auto result = squash_transform.add(std::move(block));
-            if (result.ready)
-                reference_block_vec.push_back(result.block);
-        }
-        Block empty;
-        auto last_result = squash_transform.add(std::move(empty));
-        if (last_result.ready)
-            reference_block_vec.push_back(last_result.block);
-
-        if (flush_somthing)
-            ASSERT_EQ(decoded_blocks.size(), reference_block_vec.size());
-        else
-            ASSERT_EQ(decoded_blocks.size() + 1, reference_block_vec.size()); /// reference_block has an empty block at last
-        for (size_t i = 0; i < decoded_blocks.size(); ++i)
-            for (size_t j = 0; j < header.columns(); ++j)
-                ASSERT_COLUMN_EQ(reference_block_vec[i].getByPosition(j), decoded_blocks[i].getByPosition(j));
+        Block reference_block = squashBlocks(blocks);
+        Block decoded_block = squashBlocks(decoded_blocks);
+        ASSERT_BLOCK_EQ(reference_block, decoded_block);
     }
     Context context;
 };
