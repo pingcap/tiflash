@@ -192,12 +192,14 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
+    // Remove last zero byte.
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, true, false>;
 
     std::optional<Sizes> shuffleKeyColumns(std::vector<IColumn *> &, const Sizes &) { return {}; }
 
     static void insertKeyIntoColumns(const StringRef & key, std::vector<IColumn *> & key_columns, const Sizes &, const TiDB::TiDBCollators &)
     {
+        // Add last zero byte.
         static_cast<ColumnString *>(key_columns[0])->insertData(key.data, key.size);
     }
 };

@@ -49,13 +49,15 @@ String getColumnTypeName(const Column column)
 template <typename Columns>
 void toString(const Columns & columns, FmtBuffer & buf)
 {
-    assert(columns.size() > 0);
-    int bound = columns.size() - 1;
-    for (int i = 0; i < bound; ++i)
+    if (!columns.empty())
     {
-        buf.fmtAppend("<{}, {}>, ", i, getColumnTypeName(columns.at(i)));
+        int bound = columns.size() - 1;
+        for (int i = 0; i < bound; ++i)
+        {
+            buf.fmtAppend("<{}, {}>, ", i, getColumnTypeName(columns.at(i)));
+        }
+        buf.fmtAppend("<{}, {}>", bound, getColumnTypeName(columns.at(bound)));
     }
-    buf.fmtAppend("<{}, {}>", bound, getColumnTypeName(columns.at(bound)));
 }
 
 void serializeTableScan(const String & executor_id, const tipb::TableScan & ts, FmtBuffer & buf)
