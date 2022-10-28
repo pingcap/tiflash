@@ -52,7 +52,7 @@ TEST_F(RegionKVStoreTest, NewProxy)
         ASSERT_EQ(kvs.handleAdminRaftCmd(std::move(request), std::move(response), 1, 5, 1, ctx.getTMTContext()), EngineStoreApplyRes::Persist);
 
         // Filter
-        ASSERT_EQ(kvs.tryFlushRegionData(1, false, ctx.getTMTContext(), 0, 0), false);
+        ASSERT_EQ(kvs.tryFlushRegionData(1, false, false, ctx.getTMTContext(), 0, 0), false);
     }
 }
 
@@ -1151,15 +1151,25 @@ TEST_F(RegionKVStoreTest, KVStore)
         // There shall be data to flush.
         ASSERT_EQ(kvs.needFlushRegionData(19, ctx.getTMTContext()), true);
         // Force flush until succeed only for testing.
-        ASSERT_EQ(kvs.tryFlushRegionData(19, true, ctx.getTMTContext(), 0, 0), true);
+        ASSERT_EQ(kvs.tryFlushRegionData(19, false, true, ctx.getTMTContext(), 0, 0), true);
         // Non existing region.
         // Flush and CompactLog will not panic.
-        ASSERT_EQ(kvs.tryFlushRegionData(1999, true, ctx.getTMTContext(), 0, 0), true);
+        ASSERT_EQ(kvs.tryFlushRegionData(1999, false, true, ctx.getTMTContext(), 0, 0), true);
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+
+        EngineStoreServerWrap store_server_wrap{};
+        store_server_wrap.tmt = &ctx.getTMTContext();
+        ASSERT_EQ(TryFlushData(&store_server_wrap, 19, 2, 0, 0), true);
+
+        kvs.setRegionCompactLogConfig(0, 0, 0);
+        ASSERT_EQ(TryFlushData(&store_server_wrap, 19, 1, 0, 0), true);
+
+        kvs.setRegionCompactLogConfig(0, 0, 0);
+        ASSERT_EQ(NeedFlushData(&store_server_wrap, 19), true);
     }
 }
 
