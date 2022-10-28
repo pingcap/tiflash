@@ -187,6 +187,27 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 2);
         }
     }
+    {
+        KVStore & kvs = getKVS();
+        auto region_id = 1;
+        proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        // There shall be data to flush.
+        ASSERT_EQ(kvs.needFlushRegionData(region_id, ctx.getTMTContext()), true);
+        // If flush fails, and we don't insist a success.
+        FailPointHelper::enableFailPoint(FailPoints::force_fail_in_flush_region_data);
+        ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, false, ctx.getTMTContext(), 0, 0), false);
+        FailPointHelper::disableFailPoint(FailPoints::force_fail_in_flush_region_data);
+        // Force flush until succeed only for testing.
+        ASSERT_EQ(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), 0, 0), true);
+        // Non existing region.
+        // Flush and CompactLog will not panic.
+        ASSERT_EQ(kvs.tryFlushRegionData(1999, false, true, ctx.getTMTContext(), 0, 0), true);
+        raft_cmdpb::AdminRequest request;
+        raft_cmdpb::AdminResponse response;
+        request.mutable_compact_log();
+        request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
+        ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
+    }
 }
 
 TEST_F(RegionKVStoreTest, KVStoreSnapshot)
