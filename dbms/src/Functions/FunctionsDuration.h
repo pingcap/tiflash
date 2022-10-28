@@ -192,7 +192,7 @@ public:
             throw TiFlashException(
                 fmt::format("First argument for function {} must be constant String", getName()),
                 Errors::Coprocessor::BadRequest);
-        
+
         String unit = Poco::toLower(unit_column->getValue<String>());
 
         auto col_from = block.getByPosition(arguments[1]).column;
