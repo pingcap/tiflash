@@ -114,6 +114,7 @@ grpc_call * EstablishCallData::grpcCall()
 
 void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
 {
+    assert(stopwatch != nullptr);
     async_tunnel_sender = async_tunnel_sender_;
     waiting_task_time_ms = stopwatch->elapsedMilliseconds();
 }
@@ -205,7 +206,7 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 
     if (async_tunnel_sender)
     {
-        LOG_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms, waiting task cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds(), waiting_task_time_ms);
+        LOG_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms, including {} ms to waiting task.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds(), waiting_task_time_ms);
 
         RUNTIME_ASSERT(!async_tunnel_sender->isConsumerFinished(), async_tunnel_sender->getLogger(), "tunnel {} consumer finished in advance", async_tunnel_sender->getTunnelId());
 
