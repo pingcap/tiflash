@@ -30,8 +30,6 @@ namespace DM
 {
 namespace tests
 {
-
-
 class DeltaMergeStoreGCTest
     : public SimplePKTestBasic
 {

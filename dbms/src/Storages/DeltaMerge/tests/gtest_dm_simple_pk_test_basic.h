@@ -26,7 +26,6 @@ namespace DM
 {
 namespace tests
 {
-
 /**
  * This is similar to SegmentTestBasic, but is for the DeltaMergeStore.
  * It allows you to write tests easier based on the assumption that the PK is either Int or Int encoded in String.
