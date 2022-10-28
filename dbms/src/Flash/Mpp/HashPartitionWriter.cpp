@@ -121,7 +121,7 @@ void HashPartitionWriter<StreamWriterPtr>::writePackets(std::vector<TrackedMppDa
     if constexpr (send_exec_summary_at_last)
     {
         tipb::SelectResponse response;
-        addExecuteSummaries(response, /*delta_mode=*/false);
+        summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
         /// Sending the response to only one node, default the first one.
         assert(!packets.empty());
         packets[0].serializeByResponse(response);
