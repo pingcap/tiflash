@@ -73,7 +73,7 @@ public:
                 {
                     FieldType(static_cast<Native>(123456), 3), // 123.456
                     FieldType(static_cast<Native>(-123456), 3), // -123.456
-                }))); 
+                })));
 
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"654.321", "-654.321", "600054.321", "-600054.321"}),
@@ -84,8 +84,8 @@ public:
                     FieldType(static_cast<Native>(-123456000), 6), // -123.456000
                     FieldType(static_cast<Native>(123450006), 6), // -123.450006
                     FieldType(static_cast<Native>(-123450006), 6), // -123.450006
-                }))); 
-    
+                })));
+
         ASSERT_COLUMN_EQ(
             createColumn<Nullable<String>>({"60054.321", "-60054.321"}),
             execute_func(createColumn<NullableDecimal>(
