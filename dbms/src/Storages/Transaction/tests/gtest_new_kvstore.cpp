@@ -180,6 +180,7 @@ TEST_F(RegionKVStoreTest, KVStoreAdminCommands)
             kvs.setRegionCompactLogConfig(0, 0, 0);
             auto [index2, term2] = proxy_instance->compactLog(region_id, index);
             // In tryFlushRegionData we will call handleWriteRaftCmd, which will already cause an advance.
+            // Notice kvs is not tmt->getKVStore(), so we can't use the ProxyFFI version.
             ASSERT_TRUE(kvs.tryFlushRegionData(region_id, false, true, ctx.getTMTContext(), index2, term));
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index2);
             ASSERT_EQ(r1->getLatestAppliedIndex(), applied_index + 2);

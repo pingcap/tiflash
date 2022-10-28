@@ -1160,16 +1160,6 @@ TEST_F(RegionKVStoreTest, KVStore)
         request.mutable_compact_log();
         request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
         ASSERT_EQ(kvs.handleAdminRaftCmd(raft_cmdpb::AdminRequest{request}, std::move(response), 1999, 22, 6, ctx.getTMTContext()), EngineStoreApplyRes::NotFound);
-
-        EngineStoreServerWrap store_server_wrap{};
-        store_server_wrap.tmt = &ctx.getTMTContext();
-        ASSERT_EQ(TryFlushData(&store_server_wrap, 19, 2, 0, 0), true);
-
-        kvs.setRegionCompactLogConfig(0, 0, 0);
-        ASSERT_EQ(TryFlushData(&store_server_wrap, 19, 1, 0, 0), true);
-
-        kvs.setRegionCompactLogConfig(0, 0, 0);
-        ASSERT_EQ(NeedFlushData(&store_server_wrap, 19), true);
     }
 }
 
