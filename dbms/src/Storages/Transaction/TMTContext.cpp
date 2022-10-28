@@ -86,8 +86,11 @@ TMTContext::TMTContext(Context & context_, const TiFlashRaftConfig & raft_config
 
 void TMTContext::updateSecurityConfig(const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config)
 {
+    std::lock_guard lock(mutex);
     if (!raft_config.pd_addrs.empty())
+    {
         cluster->update(raft_config.pd_addrs, cluster_config);
+    }
 }
 
 void TMTContext::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy_helper)
