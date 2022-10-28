@@ -384,9 +384,12 @@ public:
     /**
      * Do a fast (but rough) check to see whether there is no data in the snapshot.
      *
+     * "No data" means there is even no delete versions in the snapshot.
+     *
      * As it is a rough check, the result is not certain:
      * - When returning true, the snapshot is definitely empty.
      * - When returning false, the snapshot is very likely to be not empty (but still, may be empty in some rare cases).
+     *   (More specifically, this function does not respect delete ranges.)
      *
      * You must ensure the snapshot is for_write, because when snapshot is not for_write, newly
      * written data will change the content of the snapshot silently at any time.
