@@ -526,7 +526,7 @@ public:
         , server_pool(1, server.config().getUInt("max_connections", 1024))
     {
         auto & config = server.config();
-        auto & security_config = server.security_config;
+        auto & security_config = server.global_context->getSecurityConfig(); // bug...
 
         Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
         Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
@@ -969,8 +969,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// ===== Paths related configuration initialized end ===== ///
 
-    security_config = TiFlashSecurityConfig(config(), log);
-    Redact::setRedactLog(security_config.redact_info_log);
+    global_context->setSecurityConfig(config(), log);
+    Redact::setRedactLog(global_context->getSecurityConfig().redact_info_log);
 
     // Create directories for 'path' and for default database, if not exist.
     for (const String & candidate_path : all_normal_path)
@@ -1152,7 +1152,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     {
         /// create TMTContext
-        auto cluster_config = getClusterConfig(security_config, raft_config);
+        auto cluster_config = global_context->getSecurityConfig().getClusterConfig(raft_config);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
         global_context->getTMTContext().reloadConfig(config());
     }
@@ -1255,7 +1255,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Then, startup grpc server to serve raft and/or flash services.
-    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), this->security_config, raft_config, log);
+    FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), global_context->getSecurityConfig(), raft_config, log); // todo ywq 
 
     {
         TcpHttpServersHolder tcpHttpServersHolder(*this, settings, log);
@@ -1297,7 +1297,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             metrics_transmitters.emplace_back(std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
         }
 
-        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, security_config);
+        auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics, global_context->getSecurityConfig()); // todo maybe bug.
 
         SessionCleaner session_cleaner(*global_context);
 

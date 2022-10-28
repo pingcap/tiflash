@@ -19,7 +19,9 @@
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Util/LayeredConfiguration.h>
+#include <Server/RaftConfigParser.h>
 #include <common/logger_useful.h>
+#include <pingcap/Config.h>
 
 #include <set>
 
@@ -146,8 +148,26 @@ public:
         options.pem_root_certs = readFile(ca_path);
         options.pem_cert_chain = readFile(cert_path);
         options.pem_private_key = readFile(key_path);
+        std::cout << "ywq test pem cert chain: " << options.pem_cert_chain << std::endl;
         inited = true;
         return options;
+    }
+
+    pingcap::ClusterConfig getClusterConfig(const TiFlashRaftConfig & raft_config) const
+    {
+        pingcap::ClusterConfig config;
+        config.tiflash_engine_key = raft_config.engine_key;
+        config.tiflash_engine_value = raft_config.engine_value;
+        config.ca_path = ca_path;
+        config.cert_path = cert_path;
+        config.key_path = key_path;
+        return config;
+    }
+
+    bool shouldUpdate(TiFlashSecurityConfig & other) const
+    {
+        auto other_options = other.readAndCacheSecurityInfo();
+        return other_options.pem_root_certs != options.pem_root_certs || other_options.pem_cert_chain != options.pem_cert_chain || other_options.pem_private_key != options.pem_private_key;
     }
 
 private:

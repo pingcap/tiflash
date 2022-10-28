@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include <Common/TiFlashSecurity.h>
+#include <TestUtils/ConfigTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 #include <ext/singleton.h>
@@ -21,11 +23,20 @@ namespace DB
 {
 namespace tests
 {
-class TestTiFlashSecurity : public ext::Singleton<TestTiFlashSecurity>
+class TiFlashSecurityConfigTest : public ::testing::Test
 {
+public:
+    TiFlashSecurityConfigTest()
+        : log(Logger::get("TiFlashSecurityConfigTest"))
+    {}
+
+    static void SetUpTestCase() {}
+
+protected:
+    LoggerPtr log;
 };
 
-TEST(TestTiFlashSecurity, Config)
+TEST_F(TiFlashSecurityConfigTest, Config)
 {
     TiFlashSecurityConfig config;
     config.parseAllowedCN(String("[abc,efg]"));
@@ -50,5 +61,48 @@ TEST(TestTiFlashSecurity, Config)
     ASSERT_EQ((int)config.allowed_common_names.count("abc"), 1);
     ASSERT_EQ((int)config.allowed_common_names.count("efg"), 1);
 }
+
+TEST_F(TiFlashSecurityConfigTest, ShouldUpdate)
+try
+{
+    Strings tests = {
+        // Deprecated style
+        R"(
+[security]
+ca_path="security/ca.pem"
+cert_path="security/cert.pem"
+key_path="security/key.pem"
+        )",
+    };
+
+    TiFlashSecurityConfig old_security_config;
+    old_security_config.ca_path = "security/ca2.pem";
+    old_security_config.cert_path = "test/security/cert2.pem";
+    old_security_config.key_path = "security/key2.pem";
+    old_security_config.inited = true;
+    old_security_config.options.pem_root_certs = "1.1";
+    old_security_config.options.pem_cert_chain = "1.2";
+    old_security_config.options.pem_private_key = "1.3";
+
+    for (size_t i = 0; i < tests.size(); ++i)
+    {
+        const auto & test_case = tests[i];
+        auto config = loadConfigFromString(test_case);
+
+        LOG_INFO(log, "parsing [index={}] [content={}]", i, test_case);
+
+        TiFlashSecurityConfig security_config = TiFlashSecurityConfig(*config, log);
+        security_config.inited = true;
+        security_config.options.pem_root_certs = "2.1";
+        security_config.options.pem_cert_chain = "2.2";
+        security_config.options.pem_private_key = "2.3";
+        grpc::SslCredentialsOptions options = security_config.readAndCacheSecurityInfo();
+
+        LOG_INFO(log, "read cert option [root_certs={}] [cert_chain={}] [private_key={}]", options.pem_root_certs, options.pem_cert_chain, options.pem_private_key);
+
+        ASSERT_TRUE(old_security_config.shouldUpdate(security_config));
+    }
+}
+CATCH
 } // namespace tests
 } // namespace DB

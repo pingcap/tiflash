@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/Logger.h>
 #include <Core/Types.h>
 #include <Storages/Transaction/StorageEngineType.h>
 

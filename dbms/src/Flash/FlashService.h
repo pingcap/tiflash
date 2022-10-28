@@ -87,6 +87,11 @@ public:
     void setMockStorage(MockStorage & mock_storage_);
     void setMockMPPServerInfo(MockMPPServerInfo & mpp_test_info_);
 
+    void resetSecurityConfig(TiFlashSecurityConfig & security_config_)
+    {
+        security_config = &security_config_;
+    }
+
 protected:
     std::tuple<ContextPtr, grpc::Status> createDBContextForTest() const;
     std::tuple<ContextPtr, grpc::Status> createDBContext(const grpc::ServerContext * grpc_context) const;

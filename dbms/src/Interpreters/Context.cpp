@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Server/RaftConfigParser.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
@@ -158,6 +159,7 @@ struct ContextShared
     PageStorageRunMode storage_run_mode = PageStorageRunMode::ONLY_V3;
     DM::GlobalStoragePoolPtr global_storage_pool;
     /// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
+    TiFlashSecurityConfig security_config;
 
     class SessionKeyHash
     {
@@ -567,6 +569,25 @@ ConfigurationPtr Context::getUsersConfig()
 {
     auto lock = getLock();
     return shared->users_config;
+}
+
+void Context::setSecurityConfig(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log)
+{
+    auto lock = getLock();
+    auto security_config = TiFlashSecurityConfig(config, log);
+    if (shared->security_config.shouldUpdate(security_config))
+    {
+        shared->security_config = security_config;
+        auto raft_config = TiFlashRaftConfig::parseSettings(config, log);
+        auto cluster_config = security_config.getClusterConfig(raft_config);
+        global_context->getTMTContext().updateSecurityConfig(std::move(raft_config), std::move(cluster_config));
+    }
+}
+
+TiFlashSecurityConfig & Context::getSecurityConfig()
+{
+    auto lock = getLock();
+    return shared->security_config;
 }
 
 void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
