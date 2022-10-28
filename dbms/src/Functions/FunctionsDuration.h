@@ -18,7 +18,6 @@
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeMyDuration.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
@@ -172,8 +171,6 @@ public:
         if (!arguments[0]->isString())
             throw TiFlashException(fmt::format("First argument for function {} (unit) must be String", getName()), Errors::Coprocessor::BadRequest);
 
-        // TODO: Support Extract from string, see https://github.com/pingcap/tidb/issues/22700
-        // if (!(arguments[1]->isString() || arguments[1]->isDateOrDateTime()))
         if (!arguments[1]->isMyTime())
             throw TiFlashException(
                 fmt::format("Illegal type {} of second argument of function {}. Must be Duration.", arguments[1]->getName(), getName()),
