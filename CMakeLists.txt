@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-project (TiFlash)
 cmake_minimum_required (VERSION 3.21)
+
+project (TiFlash)
+
+cmake_policy(SET CMP0048 NEW)
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY true)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/")
@@ -37,14 +40,14 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         message (FATAL_ERROR "GCC version must be at least 7! For example, if GCC 7 is available under gcc-7, g++-7 names, do the following: export CC=gcc-7 CXX=g++-7; rm -rf CMakeCache.txt CMakeFiles; and re run cmake or ./release.")
     endif ()
     set(MOST_DEBUGGABLE_LEVEL -Og)
-elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang|Clang")
     # Require at least clang 5
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 5)
         message (FATAL_ERROR "Clang version must be at least 5!")
     endif ()
     set(MOST_DEBUGGABLE_LEVEL -O0)
 else ()
-    message (WARNING "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
+    message (FATAL_ERROR "You are using an unsupported compiler! Compilation has only been tested with Clang 5+ and GCC 7+.")
 endif ()
 
 # Write compile_commands.json
@@ -179,7 +182,7 @@ if (ENABLE_LLVM_PGO)
     endif ()
 endif ()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument")
@@ -245,9 +248,14 @@ endif()
 
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
+if (APPLE)
+    find_program (LD_PATH NAMES "ld")
+endif ()
 
-if (NOT LINKER_NAME AND NOT APPLE)
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
+if (NOT LINKER_NAME)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND LD_PATH)
+        set (LINKER_NAME "ld")
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
         set (LINKER_NAME "lld")
     elseif (GOLD_PATH)
         set (LINKER_NAME "gold")
@@ -255,7 +263,7 @@ if (NOT LINKER_NAME AND NOT APPLE)
 endif ()
 
 if (LINKER_NAME)
-    message(STATUS "Using linker: ${LINKER_NAME} (selected from: LLD_PATH=${LLD_PATH}; GOLD_PATH=${GOLD_PATH}; COMPILER_POSTFIX=${COMPILER_POSTFIX})")
+    message(STATUS "Using linker: ${LINKER_NAME} (selected from: LLD_PATH=${LLD_PATH}; GOLD_PATH=${GOLD_PATH}; LD_PATH=${LD_PATH}; COMPILER_POSTFIX=${COMPILER_POSTFIX})")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=${LINKER_NAME}")
 endif ()
 
@@ -476,14 +484,6 @@ if (JEMALLOC_NARENAS LESS_EQUAL 0)
     message (STATUS "No jemalloc narenas settings")
 else ()
     message (STATUS "Set jemalloc narenas ${JEMALLOC_NARENAS}")
-endif ()
-
-# Flags for test coverage
-option (TEST_COVERAGE "Enables flags for test coverage" OFF)
-option (TEST_COVERAGE_XML "Output XML report for test coverage" OFF)
-if (TEST_COVERAGE AND CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
-    include(CodeCoverage)
-    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fprofile-arcs -ftest-coverage")
 endif ()
 
 option (TEST_LLVM_COVERAGE "Enables flags for test coverage" OFF)

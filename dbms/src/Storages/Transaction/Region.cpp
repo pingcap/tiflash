@@ -96,6 +96,17 @@ UInt64 Region::appliedIndex() const
     return meta.appliedIndex();
 }
 
+UInt64 Region::appliedIndexTerm() const
+{
+    return meta.appliedIndexTerm();
+}
+
+void Region::setApplied(UInt64 index, UInt64 term)
+{
+    std::unique_lock lock(mutex);
+    meta.setApplied(index, term);
+}
+
 RegionPtr Region::splitInto(RegionMeta && meta)
 {
     RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
@@ -112,13 +123,13 @@ void RegionRaftCommandDelegate::execChangePeer(
     const UInt64 index,
     const UInt64 term)
 {
-    LOG_FMT_INFO(log,
-                 "{} execute change peer cmd: {}",
-                 toString(false),
-                 (request.has_change_peer_v2() ? request.change_peer_v2().ShortDebugString()
-                                               : request.change_peer().ShortDebugString()));
+    LOG_INFO(log,
+             "{} execute change peer cmd: {}",
+             toString(false),
+             (request.has_change_peer_v2() ? request.change_peer_v2().ShortDebugString()
+                                           : request.change_peer().ShortDebugString()));
     meta.makeRaftCommandDelegate().execChangePeer(request, response, index, term);
-    LOG_FMT_INFO(log, "After execute change peer cmd, current region info: {}", getDebugString());
+    LOG_INFO(log, "After execute change peer cmd, current region info: {}", getDebugString());
 }
 
 static const metapb::Peer & findPeerByStore(const metapb::Region & region, UInt64 store_id)
@@ -186,7 +197,7 @@ Regions RegionRaftCommandDelegate::execBatchSplit(
             ss << ' ';
         }
         ss << getDebugString();
-        LOG_FMT_INFO(log, "{} split into {}", toString(false), ss.str());
+        LOG_INFO(log, "{} split into {}", toString(false), ss.str());
     }
 
     return split_regions;
@@ -202,11 +213,11 @@ void RegionRaftCommandDelegate::execPrepareMerge(
 
     const auto & target = prepare_merge_request.target();
 
-    LOG_FMT_INFO(log,
-                 "{} execute prepare merge, min_index {}, target [region {}]",
-                 toString(false),
-                 prepare_merge_request.min_index(),
-                 target.id());
+    LOG_INFO(log,
+             "{} execute prepare merge, min_index {}, target [region {}]",
+             toString(false),
+             prepare_merge_request.min_index(),
+             target.id());
 
     meta.makeRaftCommandDelegate().execPrepareMerge(request, response, index, term);
 }
@@ -219,7 +230,7 @@ void RegionRaftCommandDelegate::execRollbackMerge(
 {
     const auto & rollback_request = request.rollback_merge();
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "{} execute rollback merge, commit index {}",
         toString(false),
@@ -238,11 +249,11 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(const raft_cmdpb::AdminReque
     auto & meta_delegate = meta.makeRaftCommandDelegate();
     const auto & source_meta = commit_merge_request.source();
     auto source_region = kvstore.getRegion(source_meta.id());
-    LOG_FMT_INFO(log,
-                 "{} execute commit merge, source [region {}], commit index {}",
-                 toString(false),
-                 source_meta.id(),
-                 commit_merge_request.commit());
+    LOG_INFO(log,
+             "{} execute commit merge, source [region {}], commit index {}",
+             toString(false),
+             source_meta.id(),
+             commit_merge_request.commit());
 
     const auto & source_region_meta_delegate = source_region->meta.makeRaftCommandDelegate();
     const auto res = meta_delegate.checkBeforeCommitMerge(request, source_region_meta_delegate);
@@ -289,12 +300,12 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
 
     auto type = request.cmd_type();
 
-    LOG_FMT_INFO(log,
-                 "{} execute admin command {} at [term: {}, index: {}]",
-                 toString(),
-                 raft_cmdpb::AdminCmdType_Name(type),
-                 term,
-                 index);
+    LOG_INFO(log,
+             "{} execute admin command {} at [term: {}, index: {}]",
+             toString(),
+             raft_cmdpb::AdminCmdType_Name(type),
+             term,
+             index);
 
     switch (type)
     {
@@ -339,7 +350,7 @@ void RegionRaftCommandDelegate::handleAdminRaftCmd(const raft_cmdpb::AdminReques
     case raft_cmdpb::AdminCmdType::CommitMerge:
     case raft_cmdpb::AdminCmdType::RollbackMerge:
     {
-        LOG_FMT_INFO(log, "After execute merge cmd, current region info: {}", getDebugString());
+        LOG_INFO(log, "After execute merge cmd, current region info: {}", getDebugString());
         break;
     }
     default:
@@ -522,20 +533,20 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
         if (!meta.checkIndex(index))
         {
             Stopwatch wait_index_watch;
-            LOG_FMT_DEBUG(log,
-                          "{} need to wait learner index {}",
-                          toString(),
-                          index);
+            LOG_DEBUG(log,
+                      "{} need to wait learner index {}",
+                      toString(),
+                      index);
             auto wait_idx_res = meta.waitIndex(index, timeout_ms, std::move(check_running));
             auto elapsed_secs = wait_index_watch.elapsedSeconds();
             switch (wait_idx_res)
             {
             case WaitIndexResult::Finished:
             {
-                LOG_FMT_DEBUG(log,
-                              "{} wait learner index {} done",
-                              toString(false),
-                              index);
+                LOG_DEBUG(log,
+                          "{} wait learner index {} done",
+                          toString(false),
+                          index);
                 return {wait_idx_res, elapsed_secs};
             }
             case WaitIndexResult::Terminated:
@@ -545,7 +556,7 @@ std::tuple<WaitIndexResult, double> Region::waitIndex(UInt64 index, const UInt64
             case WaitIndexResult::Timeout:
             {
                 ProfileEvents::increment(ProfileEvents::RaftWaitIndexTimeout);
-                LOG_FMT_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
+                LOG_WARNING(log, "{} wait learner index {} timeout", toString(false), index);
                 return {wait_idx_res, elapsed_secs};
             }
             }
@@ -607,10 +618,10 @@ void Region::tryCompactionFilter(const Timestamp safe_point)
     // No need to check default cf. Because tikv will gc default cf before write cf.
     if (del_write)
     {
-        LOG_FMT_INFO(log,
-                     "delete {} records in write cf for region {}",
-                     del_write,
-                     meta.regionId());
+        LOG_INFO(log,
+                 "delete {} records in write cf for region {}",
+                 del_write,
+                 meta.regionId());
     }
 }
 
@@ -640,13 +651,13 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
             }
             catch (Exception & e)
             {
-                LOG_FMT_ERROR(log,
-                              "{} catch exception: {}, while applying `CmdType::Put` on [term {}, index {}], CF {}",
-                              toString(),
-                              e.message(),
-                              term,
-                              index,
-                              CFToName(cf));
+                LOG_ERROR(log,
+                          "{} catch exception: {}, while applying `CmdType::Put` on [term {}, index {}], CF {}",
+                          toString(),
+                          e.message(),
+                          term,
+                          index,
+                          CFToName(cf));
                 e.rethrow();
             }
             break;
@@ -660,14 +671,14 @@ EngineStoreApplyRes Region::handleWriteRaftCmd(const WriteCmdsView & cmds, UInt6
             }
             catch (Exception & e)
             {
-                LOG_FMT_ERROR(log,
-                              "{} catch exception: {}, while applying `CmdType::Delete` on [term {}, index {}], key in hex: {}, CF {}",
-                              toString(),
-                              e.message(),
-                              term,
-                              index,
-                              tikv_key.toDebugString(),
-                              CFToName(cf));
+                LOG_ERROR(log,
+                          "{} catch exception: {}, while applying `CmdType::Delete` on [term {}, index {}], key in hex: {}, CF {}",
+                          toString(),
+                          e.message(),
+                          term,
+                          index,
+                          tikv_key.toDebugString(),
+                          CFToName(cf));
                 e.rethrow();
             }
             break;
@@ -737,12 +748,12 @@ void Region::finishIngestSSTByDTFile(RegionPtr && rhs, UInt64 index, UInt64 term
 
         meta.setApplied(index, term);
     }
-    LOG_FMT_INFO(log,
-                 "{} finish ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
-                 this->toString(false),
-                 data.write_cf.getSize(),
-                 data.default_cf.getSize(),
-                 data.lock_cf.getSize());
+    LOG_INFO(log,
+             "{} finish ingest sst by DTFile [write_cf_keys={}] [default_cf_keys={}] [lock_cf_keys={}]",
+             this->toString(false),
+             data.write_cf.getSize(),
+             data.default_cf.getSize(),
+             data.lock_cf.getSize());
     meta.notifyAll();
 }
 
@@ -765,7 +776,7 @@ Region::Region(RegionMeta && meta_)
 
 Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_helper_)
     : meta(std::move(meta_))
-    , log(&Poco::Logger::get("Region"))
+    , log(Logger::get())
     , mapped_table_id(meta.getRange()->getMappedTableID())
     , proxy_helper(proxy_helper_)
 {}

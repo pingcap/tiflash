@@ -731,5 +731,36 @@ TEST(IOLimitTunerTest, Tune)
     }
 }
 
+TEST(IOLimitTunerTest, Tune2)
+{
+    StorageIORateLimitConfig io_config;
+    io_config.max_bytes_per_sec = 2000;
+    io_config.min_bytes_per_sec = 10;
+
+    auto bg_write_stat = createLimiterStat(0, 1000, 1000, 990);
+    auto fg_write_stat = createLimiterStat(0, 1000, 1000, 990);
+    auto bg_read_stat = createLimiterStat(10, 1000, 1000, 10);
+    auto fg_read_stat = createLimiterStat(0, 1000, 1000, 10);
+
+    ASSERT_EQ(bg_write_stat->pct(), 0);
+    ASSERT_EQ(fg_write_stat->pct(), 0);
+    ASSERT_EQ(bg_read_stat->pct(), 100);
+    ASSERT_EQ(fg_read_stat->pct(), 0);
+    ASSERT_EQ(bg_read_stat->maxBytesPerSec(), 10);
+
+    IOLimitTuner tuner(
+        std::move(bg_write_stat),
+        std::move(fg_write_stat),
+        std::move(bg_read_stat),
+        std::move(fg_read_stat),
+        io_config);
+    ASSERT_EQ(tuner.readWatermark(), Emergency);
+
+    auto res = tuner.tune();
+    ASSERT_TRUE(res.write_tuned);
+    ASSERT_TRUE(res.read_tuned);
+    ASSERT_GT(res.max_bg_read_bytes_per_sec, 10);
+}
+
 } // namespace tests
 } // namespace DB

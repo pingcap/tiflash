@@ -895,7 +895,7 @@ private:
         root = createNode<Leaf>();
         left_leaf = right_leaf = as(Leaf, root);
 
-        LOG_FMT_TRACE(log, "create");
+        LOG_TRACE(log, "create");
     }
 
 public:
@@ -947,7 +947,7 @@ public:
 
         delete allocator;
 
-        LOG_FMT_TRACE(log, "free");
+        LOG_TRACE(log, "free");
     }
 
     void checkAll() const

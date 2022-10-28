@@ -49,7 +49,7 @@ public:
     {
         stop_watch.start();
 
-        DB::PageStorage::Config config;
+        DB::PageStorageConfig config;
         initPageStorage(config, name());
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);

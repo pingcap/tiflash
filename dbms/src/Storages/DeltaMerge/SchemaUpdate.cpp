@@ -247,7 +247,7 @@ void applyAlter(ColumnDefines & table_columns,
         if (unlikely(!exist_column))
         {
             // Fall back to find column by name, this path should only call by tests.
-            LOG_FMT_WARNING(
+            LOG_WARNING(
                 log,
                 "Try to apply alter to column: {}, id: {},"
                 " but not found by id, fall back locating col by name.",
@@ -311,7 +311,7 @@ void applyAlter(ColumnDefines & table_columns,
     }
     else
     {
-        LOG_FMT_WARNING(log, "receive unknown alter command, type: {}", static_cast<Int32>(command.type));
+        LOG_WARNING(log, "receive unknown alter command, type: {}", static_cast<Int32>(command.type));
     }
 }
 

@@ -44,7 +44,7 @@ std::string WorkloadOptions::toString(std::string seperator) const
         fmt::format("read_stream_count {}{}", read_stream_count, seperator) + //
         fmt::format("testing_type {}{}", testing_type, seperator) + //
         fmt::format("log_write_request {}{}", log_write_request, seperator) + //
-        fmt::format("ps_run_mode {}{}", ps_run_mode, seperator) + //
+        fmt::format("ps_run_mode {}{}", magic_enum::enum_name(ps_run_mode), seperator) + //
         fmt::format("bg_thread_count {}{}", bg_thread_count, seperator) + //
         fmt::format("table_id {}{}", table_id, seperator) + //
         fmt::format("table_name {}{}", table_name, seperator) + //

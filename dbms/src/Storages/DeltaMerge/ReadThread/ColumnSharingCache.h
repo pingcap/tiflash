@@ -134,7 +134,7 @@ public:
 
     ~ColumnSharingCacheMap()
     {
-        LOG_FMT_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString());
+        LOG_DEBUG(log, "dmfile {} stat {}", dmfile_name, statString());
     }
 
     // `addStale` just do some statistics.

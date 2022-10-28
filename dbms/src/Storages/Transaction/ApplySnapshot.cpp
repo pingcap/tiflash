@@ -51,7 +51,7 @@ extern const int REGION_DATA_SCHEMA_UPDATED;
 } // namespace ErrorCodes
 
 template <typename RegionPtrWrap>
-void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
+void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
     auto region_id = new_region->id();
     auto old_region = getRegion(region_id);
@@ -73,14 +73,14 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
         }
         else if (old_applied_index == new_index)
         {
-            LOG_FMT_WARNING(log,
-                            "{} already has same applied index, just ignore next process. Please check log whether server crashed after successfully applied snapshot.",
-                            old_region->getDebugString());
+            LOG_WARNING(log,
+                        "{} already has same applied index, just ignore next process. Please check log whether server crashed after successfully applied snapshot.",
+                        old_region->getDebugString());
             return;
         }
 
         {
-            LOG_FMT_INFO(log, "{} set state to `Applying`", old_region->toString());
+            LOG_INFO(log, "{} set state to `Applying`", old_region->toString());
             // Set original region state to `Applying` and any read request toward this region should be rejected because
             // engine may delete data unsafely.
             auto region_lock = region_manager.genRegionTaskLock(old_region->id());
@@ -111,7 +111,7 @@ void KVStore::checkAndApplySnapshot(const RegionPtrWrap & new_region, TMTContext
                 }
                 else
                 {
-                    LOG_FMT_INFO(log, "range of region {} is overlapped with `Tombstone` region {}", region_id, overlapped_region.first);
+                    LOG_INFO(log, "range of region {} is overlapped with `Tombstone` region {}", region_id, overlapped_region.first);
                     handleDestroy(overlapped_region.first, tmt, task_lock);
                 }
             }
@@ -168,8 +168,10 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
                         storage->getRowKeyColumnSize());
                     if (old_key_range != new_key_range)
                     {
-                        LOG_FMT_INFO(log, "clear region {} old range {} before apply snapshot of new range {}", region_id, old_key_range.toDebugString(), new_key_range.toDebugString());
+                        LOG_INFO(log, "clear region {} old range {} before apply snapshot of new range {}", region_id, old_key_range.toDebugString(), new_key_range.toDebugString());
                         dm_storage->deleteRange(old_key_range, context.getSettingsRef());
+                        // We must flush the deletion to the disk here, because we only flush new range when persisting this region later.
+                        dm_storage->flushCache(context, old_key_range, /*try_until_succeed*/ true);
                     }
                 }
                 if constexpr (std::is_same_v<RegionPtrWrap, RegionPtrWithSnapshotFiles>)
@@ -230,7 +232,7 @@ void KVStore::onSnapshot(const RegionPtrWrap & new_region_wrap, RegionPtr old_re
 
         if (old_region != nullptr)
         {
-            LOG_FMT_DEBUG(log, "previous {}, new {}", old_region->getDebugString(), new_region->getDebugString());
+            LOG_DEBUG(log, "previous {}, new {}", old_region->getDebugString(), new_region->getDebugString());
             {
                 // remove index first
                 const auto & range = old_region->makeRaftCommandDelegate(task_lock).getRange().comparableKeys();
@@ -327,11 +329,13 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                                                                        context.getSettingsRef().safe_point_update_interval_seconds);
             }
             physical_table_id = storage->getTableInfo().id;
+            auto log_prefix = fmt::format("table_id={}", physical_table_id);
 
             auto & global_settings = context.getGlobalContext().getSettingsRef();
 
             // Read from SSTs and refine the boundary of blocks output to DTFiles
             auto sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
+                log_prefix,
                 new_region,
                 snaps,
                 proxy_helper,
@@ -342,6 +346,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 expected_block_size);
             auto bounded_stream = std::make_shared<DM::BoundedSSTFilesToBlockInputStream>(sst_stream, ::DB::TiDBPkColumnID, schema_snap);
             stream = std::make_shared<DM::SSTFilesToDTFilesOutputStream<DM::BoundedSSTFilesToBlockInputStreamPtr>>(
+                log_prefix,
                 bounded_stream,
                 storage,
                 schema_snap,
@@ -378,7 +383,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
                 }
 
                 // Update schema and try to decode again
-                LOG_FMT_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
+                LOG_INFO(log, "Decoding Region snapshot data meet error, sync schema and try to decode again {} [error={}]", new_region->toString(true), e.displayText());
                 GET_METRIC(tiflash_schema_trigger_count, type_raft_decode).Increment();
                 tmt.getSchemaSyncer()->syncSchemas(context);
                 // Next time should force_decode
@@ -389,7 +394,7 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
             else if (e.code() == ErrorCodes::TABLE_IS_DROPPED)
             {
                 // We can ignore if storage is dropped.
-                LOG_FMT_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}", new_region->toString(true));
+                LOG_INFO(log, "Pre-handle snapshot to DTFiles is ignored because the table is dropped {}", new_region->toString(true));
                 try_clean_up();
                 break;
             }
@@ -406,24 +411,24 @@ std::vector<DM::ExternalDTFileInfo> KVStore::preHandleSSTsToDTFiles(
 }
 
 template <typename RegionPtrWrap>
-void KVStore::handlePreApplySnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
+void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
 {
-    LOG_FMT_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
+    LOG_INFO(log, "Begin apply snapshot, new_region={}", new_region->toString(true));
 
     Stopwatch watch;
     SCOPE_EXIT({ GET_METRIC(tiflash_raft_command_duration_seconds, type_apply_snapshot_flush).Observe(watch.elapsedSeconds()); });
 
-    checkAndApplySnapshot(new_region, tmt);
+    checkAndApplyPreHandledSnapshot(new_region, tmt);
 
     FAIL_POINT_PAUSE(FailPoints::pause_until_apply_raft_snapshot);
 
-    LOG_FMT_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(false));
+    LOG_INFO(log, "Finish apply snapshot, new_region={}", new_region->toString(false));
 }
 
-template void KVStore::handlePreApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
+template void KVStore::applyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
 
-template void KVStore::checkAndApplySnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
-template void KVStore::checkAndApplySnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
+template void KVStore::checkAndApplyPreHandledSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, TMTContext &);
+template void KVStore::checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, TMTContext &);
 template void KVStore::onSnapshot<RegionPtrWithBlock>(const RegionPtrWithBlock &, RegionPtr, UInt64, TMTContext &);
 template void KVStore::onSnapshot<RegionPtrWithSnapshotFiles>(const RegionPtrWithSnapshotFiles &, RegionPtr, UInt64, TMTContext &);
 
@@ -468,7 +473,8 @@ void KVStore::handleApplySnapshot(
     TMTContext & tmt)
 {
     auto new_region = genRegionPtr(std::move(region), peer_id, index, term);
-    handlePreApplySnapshot(RegionPtrWithSnapshotFiles{new_region, preHandleSnapshotToFiles(new_region, snaps, index, term, tmt)}, tmt);
+    auto external_files = preHandleSnapshotToFiles(new_region, snaps, index, term, tmt);
+    applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{new_region, std::move(external_files)}, tmt);
 }
 
 EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec snaps, UInt64 index, UInt64 term, TMTContext & tmt)
@@ -481,7 +487,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
     const RegionPtr region = getRegion(region_id);
     if (region == nullptr)
     {
-        LOG_FMT_WARNING(log, "[region {}] is not found at [term {}, index {}], might be removed already", region_id, term, index);
+        LOG_WARNING(log, "[region {}] is not found at [term {}, index {}], might be removed already", region_id, term, index);
         return EngineStoreApplyRes::NotFound;
     }
 
@@ -498,7 +504,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         default:
             break;
         }
-        LOG_FMT_INFO(log, "{} ingest sst by method {}", region->toString(true), applyMethodToString(snapshot_apply_method));
+        LOG_INFO(log, "{} ingest sst by method {}", region->toString(true), applyMethodToString(snapshot_apply_method));
     });
 
     const auto func_try_flush = [&]() {
@@ -513,7 +519,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
         {
             // sst of write cf may be ingested first, exception may be raised because there is no matched data in default cf.
             // ignore it.
-            LOG_FMT_DEBUG(log, "catch but ignore exception: {}", e.message());
+            LOG_DEBUG(log, "catch but ignore exception: {}", e.message());
         }
     };
 
@@ -528,7 +534,7 @@ EngineStoreApplyRes KVStore::handleIngestSST(UInt64 region_id, const SSTViewVec 
 
     if (region->dataSize())
     {
-        LOG_FMT_INFO(log, "{} with data {}, skip persist", region->toString(true), region->dataInfo());
+        LOG_INFO(log, "{} with data {}, skip persist", region->toString(true), region->dataInfo());
         return EngineStoreApplyRes::None;
     }
     else

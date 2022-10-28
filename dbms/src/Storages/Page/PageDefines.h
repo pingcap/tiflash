@@ -61,6 +61,12 @@ static constexpr PageId INVALID_PAGE_ID = 0;
 using PageIdV3Internal = UInt128;
 using PageIdV3Internals = std::vector<PageIdV3Internal>;
 
+inline PageIdV3Internal buildV3Id(NamespaceId n_id, PageId p_id)
+{
+    // low bits first
+    return PageIdV3Internal(p_id, n_id);
+}
+
 using PageFieldOffset = UInt64;
 using PageFieldOffsets = std::vector<PageFieldOffset>;
 using PageFieldSizes = std::vector<UInt64>;
@@ -116,12 +122,36 @@ struct fmt::formatter<DB::PageIdV3Internal>
 {
     static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
     {
-        return ctx.begin();
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+        return it;
     }
 
     template <typename FormatContext>
     auto format(const DB::PageIdV3Internal & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
         return format_to(ctx.out(), "{}.{}", value.high, value.low);
+    }
+};
+template <>
+struct fmt::formatter<DB::PageFileIdAndLevel>
+{
+    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    {
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PageFileIdAndLevel & id_lvl, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{}_{}", id_lvl.first, id_lvl.second);
     }
 };

@@ -93,7 +93,7 @@ public:
 
     void tryPersist(RegionID region_id);
 
-    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, Poco::Logger * log, bool try_until_succeed = true);
+    static bool tryFlushRegionCacheInStorage(TMTContext & tmt, const Region & region, const LoggerPtr & log, bool try_until_succeed = true);
 
     size_t regionSize() const;
     EngineStoreApplyRes handleAdminRaftCmd(raft_cmdpb::AdminRequest && request,
@@ -113,6 +113,9 @@ public:
     bool needFlushRegionData(UInt64 region_id, TMTContext & tmt);
     bool tryFlushRegionData(UInt64 region_id, bool try_until_succeed, TMTContext & tmt, UInt64 index, UInt64 term);
 
+    /**
+     * Only used in tests. In production we will call preHandleSnapshotToFiles + applyPreHandledSnapshot.
+     */
     void handleApplySnapshot(metapb::Region && region, uint64_t peer_id, SSTViewVec, uint64_t index, uint64_t term, TMTContext & tmt);
 
     std::vector<DM::ExternalDTFileInfo> preHandleSnapshotToFiles(
@@ -122,13 +125,15 @@ public:
         uint64_t term,
         TMTContext & tmt);
     template <typename RegionPtrWrap>
-    void handlePreApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void applyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
 
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setRegionCompactLogConfig(UInt64, UInt64, UInt64);
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
     const TiFlashRaftProxyHelper * getProxyHelper() const { return proxy_helper; }
+    // Exported only for tests.
+    TiFlashRaftProxyHelper * mutProxyHelperUnsafe() { return const_cast<TiFlashRaftProxyHelper *>(proxy_helper); }
 
     TiDB::SnapshotApplyMethod applyMethod() const { return snapshot_apply_method; }
 
@@ -167,6 +172,7 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    friend struct MockRaftStoreProxy;
     friend class MockTiDB;
     friend struct MockTiDBTable;
     friend struct MockRaftCommand;
@@ -198,7 +204,7 @@ private:
         TMTContext & tmt);
 
     template <typename RegionPtrWrap>
-    void checkAndApplySnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
     template <typename RegionPtrWrap>
     void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
@@ -251,7 +257,7 @@ private:
 
     TiDB::SnapshotApplyMethod snapshot_apply_method;
 
-    Poco::Logger * log;
+    LoggerPtr log;
 
     std::atomic<UInt64> region_compact_log_period;
     std::atomic<UInt64> region_compact_log_min_rows;

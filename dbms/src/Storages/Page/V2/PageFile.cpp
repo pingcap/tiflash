@@ -65,7 +65,7 @@ namespace PageMetaFormat
 using WBSize = UInt32;
 // TODO we should align these alias with type in PageCache
 using PageTag = UInt64;
-using IsPut = std::underlying_type<WriteBatch::WriteType>::type;
+using IsPut = std::underlying_type<WriteBatchWriteType>::type;
 using PageOffset = UInt64;
 using Checksum = UInt64;
 
@@ -98,28 +98,28 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     {
         meta_write_bytes += sizeof(IsPut);
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
-        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
-            write.type = WriteBatch::WriteType::PUT;
+        if (write.type == WriteBatchWriteType::PUT_EXTERNAL)
+            write.type = WriteBatchWriteType::PUT;
 
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
             if (write.read_buffer)
                 data_write_bytes += write.size;
             meta_write_bytes += PAGE_META_SIZE;
             meta_write_bytes += sizeof(UInt64); // size of field_offsets + checksum
             meta_write_bytes += ((sizeof(UInt64) + sizeof(UInt64)) * write.offsets.size());
             break;
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             // For delete page, store page id only. And don't need to write data file.
             meta_write_bytes += sizeof(PageId);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             // For ref page, store RefPageId -> PageId. And don't need to write data file.
             meta_write_bytes += (sizeof(PageId) + sizeof(PageId));
             break;
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
         }
@@ -141,17 +141,17 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
     for (auto & write : wb.getWrites())
     {
         // We don't serialize `PUT_EXTERNAL` for V2, just convert it to `PUT`
-        if (write.type == WriteBatch::WriteType::PUT_EXTERNAL)
-            write.type = WriteBatch::WriteType::PUT;
+        if (write.type == WriteBatchWriteType::PUT_EXTERNAL)
+            write.type = WriteBatchWriteType::PUT;
 
         PageUtil::put(meta_pos, static_cast<IsPut>(write.type));
         switch (write.type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not serialize with `PUT_EXTERNAL`");
             break;
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
         {
             PageFlags flags;
             Checksum page_checksum = 0;
@@ -188,8 +188,8 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
 
             // UPSERT may point to another PageFile
             PageEntry entry;
-            entry.file_id = (write.type == WriteBatch::WriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
-            entry.level = (write.type == WriteBatch::WriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
+            entry.file_id = (write.type == WriteBatchWriteType::PUT ? page_file.getFileId() : write.target_file_id.first);
+            entry.level = (write.type == WriteBatchWriteType::PUT ? page_file.getLevel() : write.target_file_id.second);
             entry.tag = write.tag;
             entry.size = write.size;
             entry.offset = page_offset;
@@ -215,19 +215,19 @@ std::pair<ByteBuffer, ByteBuffer> genWriteData( //
                 PageUtil::put(meta_pos, static_cast<UInt64>(field_offset.second));
             }
 
-            if (write.type == WriteBatch::WriteType::PUT)
+            if (write.type == WriteBatchWriteType::PUT)
                 edit.put(write.page_id, entry);
-            else if (write.type == WriteBatch::WriteType::UPSERT)
+            else if (write.type == WriteBatchWriteType::UPSERT)
                 edit.upsertPage(write.page_id, entry);
 
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
             PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
 
             edit.del(write.page_id);
             break;
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
             PageUtil::put(meta_pos, static_cast<PageId>(write.page_id));
             PageUtil::put(meta_pos, static_cast<PageId>(write.ori_page_id));
 
@@ -308,11 +308,11 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
     char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "[batch_start_pos={}] [meta_size={}] [file={}] ignored.",
-                        meta_file_offset,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "[batch_start_pos={}] [meta_size={}] [file={}] ignored.",
+                    meta_file_offset,
+                    meta_size,
+                    page_file.metaPath());
         return false;
     }
 
@@ -320,11 +320,11 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
     const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "[expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
-                        wb_bytes,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "[expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
+                    wb_bytes,
+                    meta_size,
+                    page_file.metaPath());
         return false;
     }
 
@@ -369,14 +369,14 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
     // recover WriteBatch
     while (pos < wb_start_pos + wb_bytes_without_checksum)
     {
-        const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
+        const auto write_type = static_cast<WriteBatchWriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not deserialize with PUT_EXTERNAL");
             break;
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
         {
             PageMetaFormat::PageFlags flags;
             auto page_id = PageUtil::get<PageId>(pos);
@@ -425,12 +425,12 @@ bool PageFile::LinkingMetaAdapter::linkToNewSequenceNext(WriteBatch::SequenceID 
             edit.upsertPage(page_id, entry);
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
             pos += sizeof(PageId);
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
             // ref_id
             pos += sizeof(PageId);
@@ -548,12 +548,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     char * pos = meta_buffer + meta_file_offset;
     if (pos + sizeof(PageMetaFormat::WBSize) > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "Incomplete write batch {{{}}} [batch_start_pos={}] [meta_size={}] [file={}] ignored.",
-                        toString(),
-                        meta_file_offset,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "Incomplete write batch {{{}}} [batch_start_pos={}] [meta_size={}] [file={}] ignored.",
+                    toString(),
+                    meta_file_offset,
+                    meta_size,
+                    page_file.metaPath());
         status = Status::Finished;
         return;
     }
@@ -561,12 +561,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     const auto wb_bytes = PageUtil::get<PageMetaFormat::WBSize>(pos);
     if (wb_start_pos + wb_bytes > meta_data_end)
     {
-        LOG_FMT_WARNING(page_file.log,
-                        "Incomplete write batch {{{}}} [expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
-                        toString(),
-                        wb_bytes,
-                        meta_size,
-                        page_file.metaPath());
+        LOG_WARNING(page_file.log,
+                    "Incomplete write batch {{{}}} [expect_batch_bytes={}] [meta_size={}] [file={}] ignored.",
+                    toString(),
+                    wb_bytes,
+                    meta_size,
+                    page_file.metaPath());
         status = Status::Finished;
         return;
     }
@@ -608,14 +608,14 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
     size_t curr_wb_data_offset = 0;
     while (pos < wb_start_pos + wb_bytes_without_checksum)
     {
-        const auto write_type = static_cast<WriteBatch::WriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
+        const auto write_type = static_cast<WriteBatchWriteType>(PageUtil::get<PageMetaFormat::IsPut>(pos));
         switch (write_type)
         {
-        case WriteBatch::WriteType::PUT_EXTERNAL:
+        case WriteBatchWriteType::PUT_EXTERNAL:
             throw Exception("Should not deserialize with PUT_EXTERNAL");
             break;
-        case WriteBatch::WriteType::PUT:
-        case WriteBatch::WriteType::UPSERT:
+        case WriteBatchWriteType::PUT:
+        case WriteBatchWriteType::UPSERT:
         {
             PageMetaFormat::PageFlags flags;
 
@@ -659,12 +659,12 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
                 }
             }
 
-            if (write_type == WriteBatch::WriteType::PUT)
+            if (write_type == WriteBatchWriteType::PUT)
             {
                 curr_edit.put(page_id, entry);
                 curr_wb_data_offset += entry.size;
             }
-            else if (write_type == WriteBatch::WriteType::UPSERT)
+            else if (write_type == WriteBatchWriteType::UPSERT)
             {
                 curr_edit.upsertPage(page_id, entry);
                 // If it is a deatch page, don't move data offset.
@@ -672,13 +672,13 @@ void PageFile::MetaMergingReader::moveNext(PageFormat::Version * v)
             }
             break;
         }
-        case WriteBatch::WriteType::DEL:
+        case WriteBatchWriteType::DEL:
         {
             auto page_id = PageUtil::get<PageId>(pos);
             curr_edit.del(page_id);
             break;
         }
-        case WriteBatch::WriteType::REF:
+        case WriteBatchWriteType::REF:
         {
             const auto ref_id = PageUtil::get<PageId>(pos);
             const auto page_id = PageUtil::get<PageId>(pos);
@@ -813,11 +813,11 @@ size_t PageFile::Writer::write(DB::WriteBatch & wb, PageEntriesEdit & edit, cons
                   auto size = f.getSize();
                   f.setSize(size - 2);
                   auto size_after = f.getSize();
-                  LOG_FMT_WARNING(page_file.log,
-                                  "Failpoint truncate [file={}] [origin_size={}] [truncated_size={}]",
-                                  meta_file->getFileName(),
-                                  size,
-                                  size_after);
+                  LOG_WARNING(page_file.log,
+                              "Failpoint truncate [file={}] [origin_size={}] [truncated_size={}]",
+                              meta_file->getFileName(),
+                              size,
+                              size_after);
                   throw Exception(String("Fail point ") + FailPoints::exception_before_page_file_write_sync + " is triggered.",
                                   ErrorCodes::FAIL_POINT_ERROR);
               });
@@ -1022,7 +1022,7 @@ PageMap PageFile::Reader::read(PageFile::Reader::FieldReadInfos & to_read, const
     char * data_buf = static_cast<char *>(alloc(buf_size));
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     char * pos = data_buf;
     PageMap page_map;
@@ -1093,7 +1093,7 @@ Page PageFile::Reader::read(FieldReadInfo & to_read, const ReadLimiterPtr & read
     MemHolder mem_holder = createMemHolder(data_buf, [&, buf_size](char * p) { free(p, buf_size); });
 
     Page page_rc;
-    std::set<Page::FieldOffset> fields_offset_in_page;
+    std::set<FieldOffsetInsidePage> fields_offset_in_page;
 
     size_t read_size_this_entry = 0;
     char * write_offset = data_buf;
@@ -1191,14 +1191,14 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     if (!startsWith(page_file_name, folder_prefix_formal) && !startsWith(page_file_name, folder_prefix_temp)
         && !startsWith(page_file_name, folder_prefix_legacy) && !startsWith(page_file_name, folder_prefix_checkpoint))
     {
-        LOG_FMT_INFO(log, "Not page file, ignored {}", page_file_name);
+        LOG_INFO(log, "Not page file, ignored {}", page_file_name);
         return {{}, Type::Invalid};
     }
     std::vector<std::string> ss;
     boost::split(ss, page_file_name, boost::is_any_of("_"));
     if (ss.size() != 3)
     {
-        LOG_FMT_INFO(log, "Unrecognized file, ignored: {}", page_file_name);
+        LOG_INFO(log, "Unrecognized file, ignored: {}", page_file_name);
         return {{}, Type::Invalid};
     }
 
@@ -1207,7 +1207,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
     PageFile pf(file_id, level, parent_path, file_provider_, Type::Formal, /* is_create */ false, log);
     if (ss[0] == folder_prefix_temp)
     {
-        LOG_FMT_INFO(log, "Temporary page file, ignored: {}", page_file_name);
+        LOG_INFO(log, "Temporary page file, ignored: {}", page_file_name);
         pf.type = Type::Temp;
         return {pf, Type::Temp};
     }
@@ -1217,7 +1217,7 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         // ensure meta exist
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
+            LOG_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
@@ -1228,13 +1228,13 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         // ensure both meta && data exist
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
+            LOG_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
         if (!Poco::File(pf.dataPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without data file, ignored: {}", pf.dataPath());
+            LOG_INFO(log, "Broken page without data file, ignored: {}", pf.dataPath());
             return {{}, Type::Invalid};
         }
 
@@ -1245,14 +1245,14 @@ PageFile::recover(const String & parent_path, const FileProviderPtr & file_provi
         pf.type = Type::Checkpoint;
         if (!Poco::File(pf.metaPath()).exists())
         {
-            LOG_FMT_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
+            LOG_INFO(log, "Broken page without meta file, ignored: {}", pf.metaPath());
             return {{}, Type::Invalid};
         }
 
         return {pf, Type::Checkpoint};
     }
 
-    LOG_FMT_INFO(log, "Unrecognized file prefix, ignored: {}", page_file_name);
+    LOG_INFO(log, "Unrecognized file prefix, ignored: {}", page_file_name);
     return {{}, Type::Invalid};
 }
 
@@ -1305,11 +1305,11 @@ void PageFile::setFileAppendPos(size_t meta_pos, size_t data_pos)
     const auto meta_size_on_disk = meta_on_disk.getSize();
     if (unlikely(meta_size_on_disk != meta_pos))
     {
-        LOG_FMT_WARNING(log,
-                        "Truncate incomplete write batches [orig_size={}] [set_size={}] [file={}]",
-                        meta_size_on_disk,
-                        meta_file_pos,
-                        metaPath());
+        LOG_WARNING(log,
+                    "Truncate incomplete write batches [orig_size={}] [set_size={}] [file={}]",
+                    meta_size_on_disk,
+                    meta_file_pos,
+                    metaPath());
         meta_on_disk.setSize(meta_file_pos);
     }
 }
@@ -1408,7 +1408,7 @@ bool PageFile::linkFrom(PageFile & page_file, WriteBatch::SequenceID sid, PageEn
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_WARNING(page_file.log, "failed to link page file. error message : {}", e.message());
+        LOG_WARNING(page_file.log, "failed to link page file. error message : {}", e.message());
     }
     return false;
 }

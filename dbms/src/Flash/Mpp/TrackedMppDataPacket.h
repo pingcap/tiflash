@@ -46,22 +46,17 @@ inline size_t estimateAllocatedSize(const mpp::MPPDataPacket & data)
     return ret;
 }
 
-inline std::shared_ptr<MemoryTracker> getSharedPtrOfMemTracker(MemoryTracker * memory_tracker)
-{
-    return memory_tracker ? memory_tracker->shared_from_this() : nullptr;
-}
-
 struct MemTrackerWrapper
 {
-    MemTrackerWrapper(size_t _size, MemoryTracker * memory_tracker)
-        : memory_tracker(getSharedPtrOfMemTracker(memory_tracker))
+    MemTrackerWrapper(size_t _size, MemoryTracker * memory_tracker_)
+        : memory_tracker(memory_tracker_)
         , size(0)
     {
         alloc(_size);
     }
 
-    explicit MemTrackerWrapper(MemoryTracker * memory_tracker)
-        : memory_tracker(getSharedPtrOfMemTracker(memory_tracker))
+    explicit MemTrackerWrapper(MemoryTracker * memory_tracker_)
+        : memory_tracker(memory_tracker_)
         , size(0)
     {}
 
@@ -69,7 +64,7 @@ struct MemTrackerWrapper
     {
         if (delta)
         {
-            if (memory_tracker)
+            if likely (memory_tracker)
             {
                 memory_tracker->alloc(delta);
                 size += delta;
@@ -81,7 +76,7 @@ struct MemTrackerWrapper
     {
         if (delta)
         {
-            if (memory_tracker)
+            if likely (memory_tracker)
             {
                 memory_tracker->free(delta);
                 size -= delta;
@@ -93,7 +88,7 @@ struct MemTrackerWrapper
     {
         int bak_size = size;
         freeAll();
-        memory_tracker = getSharedPtrOfMemTracker(new_memory_tracker);
+        memory_tracker = new_memory_tracker;
         alloc(bak_size);
     }
     ~MemTrackerWrapper()
@@ -106,7 +101,7 @@ struct MemTrackerWrapper
         free(size);
     }
 
-    std::shared_ptr<MemoryTracker> memory_tracker;
+    MemoryTracker * memory_tracker;
     size_t size = 0;
 };
 
@@ -154,9 +149,16 @@ struct TrackedMppDataPacket
     {
         if (need_recompute)
         {
-            mem_tracker_wrapper.freeAll();
-            mem_tracker_wrapper.alloc(estimateAllocatedSize(packet));
-            need_recompute = false;
+            try
+            {
+                mem_tracker_wrapper.freeAll();
+                mem_tracker_wrapper.alloc(estimateAllocatedSize(packet));
+                need_recompute = false;
+            }
+            catch (...)
+            {
+                error_message = getCurrentExceptionMessage(false);
+            }
         }
     }
 
@@ -175,12 +177,12 @@ struct TrackedMppDataPacket
 
     bool hasError() const
     {
-        return packet.has_error();
+        return !error_message.empty() || packet.has_error();
     }
 
-    const ::mpp::Error & error() const
+    const String & error() const
     {
-        return packet.error();
+        return error_message.empty() ? packet.error().msg() : error_message;
     }
 
     mpp::MPPDataPacket & getPacket()
@@ -191,6 +193,7 @@ struct TrackedMppDataPacket
     MemTrackerWrapper mem_tracker_wrapper;
     mpp::MPPDataPacket packet;
     bool need_recompute = false;
+    String error_message;
 };
 
 struct TrackedSelectResp

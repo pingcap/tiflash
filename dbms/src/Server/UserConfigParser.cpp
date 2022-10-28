@@ -67,7 +67,7 @@ ConfigReloaderPtr parseSettings(
     if (load_from_main_config_path)
         users_config_path = config_path;
 
-    LOG_FMT_INFO(log, "Set users config file to: {}", users_config_path);
+    LOG_INFO(log, "Set users config file to: {}", users_config_path);
 
     return std::make_unique<ConfigReloader>(
         users_config_path, //

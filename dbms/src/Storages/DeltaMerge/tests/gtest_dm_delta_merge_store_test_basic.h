@@ -33,8 +33,6 @@ namespace DB
 {
 namespace DM
 {
-
-
 extern DMFilePtr writeIntoNewDMFile(DMContext & dm_context,
                                     const ColumnDefinesPtr & schema_snap,
                                     const BlockInputStreamPtr & input_stream,
@@ -70,6 +68,7 @@ public:
                                                                  "test",
                                                                  "t_100",
                                                                  100,
+                                                                 true,
                                                                  *cols,
                                                                  handle_column_define,
                                                                  is_common_handle,
@@ -138,6 +137,7 @@ public:
                                                                  "test",
                                                                  "t_101",
                                                                  101,
+                                                                 true,
                                                                  *cols,
                                                                  handle_column_define,
                                                                  is_common_handle,

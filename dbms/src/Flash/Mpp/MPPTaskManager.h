@@ -14,9 +14,11 @@
 
 #pragma once
 
+#include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
 #include <common/logger_useful.h>
+#include <grpcpp/alarm.h>
 #include <kvproto/mpp.pb.h>
 
 #include <chrono>
@@ -37,6 +39,7 @@ struct MPPQueryTaskSet
     State state = Normal;
     String error_message;
     MPPTaskMap task_map;
+    std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
     bool isInNormalState() const
@@ -82,15 +85,21 @@ public:
 
     std::pair<bool, String> unregisterTask(const MPPTaskId & id);
 
-    bool tryToScheduleTask(const MPPTaskPtr & task);
+    bool tryToScheduleTask(MPPTaskScheduleEntry & schedule_entry);
 
     void releaseThreadsFromScheduler(int needed_threads);
 
     std::pair<MPPTunnelPtr, String> findTunnelWithTimeout(const ::mpp::EstablishMPPConnectionRequest * request, std::chrono::seconds timeout);
 
+    std::pair<MPPTunnelPtr, String> findAsyncTunnel(const ::mpp::EstablishMPPConnectionRequest * request, EstablishCallData * call_data, grpc::CompletionQueue * cq);
+
     void abortMPPQuery(UInt64 query_id, const String & reason, AbortType abort_type);
 
     String toString();
+
+private:
+    MPPQueryTaskSetPtr addMPPQueryTaskSet(UInt64 query_id);
+    void removeMPPQueryTaskSet(UInt64 query_id, bool on_abort);
 };
 
 } // namespace DB

@@ -97,7 +97,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 const auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
-                    LOG_FMT_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
+                    LOG_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
                     continue;
                 }
                 auto & current_execution_summary = execution_summaries_map[executor_id];
@@ -131,14 +131,14 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
             if (result.meet_error)
             {
-                LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
+                LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);
                 throw Exception(result.error_msg);
             }
             if (result.eof)
                 return false;
             if (result.resp != nullptr && result.resp->has_error())
             {
-                LOG_FMT_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
+                LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
                 throw Exception(result.resp->error().DebugString());
             }
             /// only the last response contains execution summaries
@@ -164,7 +164,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             connection_profile_infos[index].bytes += decode_detail.packet_bytes;
 
             total_rows += decode_detail.rows;
-            LOG_FMT_TRACE(
+            LOG_TRACE(
                 log,
                 "recv {} rows from remote for {}, total recv row num: {}",
                 decode_detail.rows,
@@ -243,7 +243,7 @@ public:
 protected:
     void readSuffixImpl() override
     {
-        LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
+        LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
     }
 
     void appendInfo(FmtBuffer & buffer) const override

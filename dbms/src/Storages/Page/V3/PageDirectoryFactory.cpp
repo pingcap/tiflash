@@ -16,6 +16,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
+#include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 
 #include <memory>
@@ -34,7 +35,7 @@ PageDirectoryPtr PageDirectoryFactory::create(String storage_name, FileProviderP
     return createFromReader(storage_name, reader, std::move(wal));
 }
 
-PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal, bool for_dump_snapshot)
+PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WALStoreReaderPtr reader, WALStorePtr wal)
 {
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(storage_name, std::move(wal));
     loadFromDisk(dir, std::move(reader));
@@ -45,10 +46,10 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
     // It's no need to remove the expired entries in BlobStore, so skip filling removed_entries to improve performance.
-    dir->gcInMemEntries(/*return_removed_entries=*/false, /* keep_last_delete_entry */ for_dump_snapshot);
-    LOG_FMT_INFO(DB::Logger::get("PageDirectoryFactory", storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
+    dir->gcInMemEntries(/*return_removed_entries=*/false);
+    LOG_INFO(DB::Logger::get(storage_name), "PageDirectory restored [max_page_id={}] [max_applied_ver={}]", dir->getMaxId(), dir->sequence);
 
-    if (!for_dump_snapshot && blob_stats)
+    if (blob_stats)
     {
         // After all entries restored to `mvcc_table_directory`, only apply
         // the latest entry to `blob_stats`, or we may meet error since
@@ -187,7 +188,7 @@ void PageDirectoryFactory::applyRecord(
     }
     catch (DB::Exception & e)
     {
-        e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}]", r.type, r.page_id, restored_version));
+        e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}]", magic_enum::enum_name(r.type), r.page_id, restored_version));
         throw e;
     }
 }
@@ -196,8 +197,8 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
 {
     while (reader->remained())
     {
-        auto [ok, edit] = reader->next();
-        if (!ok)
+        auto record = reader->next();
+        if (!record)
         {
             // TODO: Handle error, some error could be ignored.
             // If the file happened to some error,
@@ -208,6 +209,7 @@ void PageDirectoryFactory::loadFromDisk(const PageDirectoryPtr & dir, WALStoreRe
         }
 
         // apply the edit read
+        auto edit = ser::deserializeFrom(record.value());
         loadEdit(dir, edit);
     }
 }

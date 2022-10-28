@@ -70,6 +70,7 @@ public:
     UInt64 storeId() const;
 
     UInt64 appliedIndex() const;
+    UInt64 appliedIndexTerm() const;
 
     ImutRegionRangePtr getRange() const;
 

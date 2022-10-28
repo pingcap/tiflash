@@ -29,7 +29,7 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
     size_t max_threads_,
     size_t temporary_data_merge_threads_,
     const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : log(Logger::get(req_id))
     , params(params_)
     , aggregator(params, req_id)
     , file_provider(file_provider_)
@@ -99,7 +99,7 @@ Block ParallelAggregatingBlockInputStream::readImpl()
                 input_streams.emplace_back(temporary_inputs.back()->block_in);
             }
 
-            LOG_FMT_TRACE(
+            LOG_TRACE(
                 log,
                 "Will merge {} temporary files of size {:.2f} MiB compressed, {:.2f} MiB uncompressed.",
                 files.files.size(),
@@ -192,7 +192,7 @@ void ParallelAggregatingBlockInputStream::execute()
     for (size_t i = 0; i < max_threads; ++i)
         threads_data.emplace_back(keys_size, aggregates_size);
 
-    LOG_FMT_TRACE(log, "Aggregating");
+    LOG_TRACE(log, "Aggregating");
 
     Stopwatch watch;
 
@@ -215,7 +215,7 @@ void ParallelAggregatingBlockInputStream::execute()
     for (size_t i = 0; i < max_threads; ++i)
     {
         size_t rows = many_data[i]->size();
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "Aggregated. {} to {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
             threads_data[i].src_rows,
@@ -228,7 +228,7 @@ void ParallelAggregatingBlockInputStream::execute()
         total_src_rows += threads_data[i].src_rows;
         total_src_bytes += threads_data[i].src_bytes;
     }
-    LOG_FMT_TRACE(
+    LOG_TRACE(
         log,
         "Total aggregated. {} rows (from {:.3f} MiB) in {:.3f} sec. ({:.3f} rows/sec., {:.3f} MiB/sec.)",
         total_src_rows,

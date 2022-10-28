@@ -50,7 +50,7 @@ static std::mutex global_logger_mutex;
         }                                                                       \
     } while (false)
 
-//#define TEST_LOG_FMT(...) LOG_FMT_ERROR(global_logger_for_test, __VA_ARGS__)
+//#define TEST_LOG_FMT(...) LOG_ERROR(global_logger_for_test, __VA_ARGS__)
 
 #define TEST_LOG_FMT(...) STDOUT_TEST_LOG_FMT(__VA_ARGS__)
 
@@ -936,11 +936,11 @@ void KVStore::initReadIndexWorkers(ReadIndexWorkerManager::FnGetTickTime && fn_m
 {
     if (!runner_cnt)
     {
-        LOG_FMT_WARNING(log, "Run without read-index workers");
+        LOG_WARNING(log, "Run without read-index workers");
         return;
     }
     auto worker_cnt = worker_coefficient * runner_cnt;
-    LOG_FMT_INFO(log, "Start to initialize read-index workers: worker count {}, runner count {}", worker_cnt, runner_cnt);
+    LOG_INFO(log, "Start to initialize read-index workers: worker count {}, runner count {}", worker_cnt, runner_cnt);
     auto * ptr = ReadIndexWorkerManager::newReadIndexWorkerManager(
                      *proxy_helper,
                      worker_cnt,
@@ -993,7 +993,7 @@ void ReadIndexWorkerManager::ReadIndexRunner::stop()
     {
         work_thread->join();
         work_thread.reset();
-        LOG_FMT_INFO(logger, "Thread of read-index runner {} has joined", id);
+        LOG_INFO(logger, "Thread of read-index runner {} has joined", id);
     }
     state.store(State::Terminated);
 }
@@ -1015,7 +1015,7 @@ void ReadIndexWorkerManager::ReadIndexRunner::asyncRun()
     work_thread = std::make_unique<std::thread>([this]() {
         std::string name = fmt::format("ReadIndexWkr-{}", id);
         setThreadName(name.data());
-        LOG_FMT_INFO(logger, "Start read-index runner {}", id);
+        LOG_INFO(logger, "Start read-index runner {}", id);
         while (true)
         {
             auto base_tick_timeout = fn_min_dur_handle_region();
@@ -1024,7 +1024,7 @@ void ReadIndexWorkerManager::ReadIndexRunner::asyncRun()
             if (state.load(std::memory_order_acquire) != State::Running)
                 break;
         }
-        LOG_FMT_INFO(logger, "Start to stop read-index runner {}", id);
+        LOG_INFO(logger, "Start to stop read-index runner {}", id);
     });
 }
 
