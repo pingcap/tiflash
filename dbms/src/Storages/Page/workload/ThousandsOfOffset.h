@@ -88,7 +88,7 @@ private:
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferSize(buffer_size);
+                writer->setBufferSizeRange(buffer_size, buffer_size);
                 writer->setNormalDistributionSigma(13);
             });
 
@@ -109,7 +109,7 @@ private:
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(20);
-                writer->setBatchBufferSize(buffer_size);
+                writer->setBufferSizeRange(buffer_size, buffer_size);
                 writer->setNormalDistributionSigma(13);
             });
 
@@ -130,7 +130,7 @@ private:
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferSize(buffer_size);
+                writer->setBufferSizeRange(buffer_size, buffer_size);
                 writer->setNormalDistributionSigma(13);
             });
 
@@ -151,7 +151,7 @@ private:
             startWriter<PSWindowWriter>(options.num_writers, [field_size, buffer_size](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setFieldSize(field_size);
                 writer->setBatchBufferNums(20);
-                writer->setBatchBufferSize(buffer_size);
+                writer->setBufferSizeRange(buffer_size, buffer_size);
                 writer->setNormalDistributionSigma(13);
             });
 

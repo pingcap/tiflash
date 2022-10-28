@@ -65,7 +65,7 @@ public:
 
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferSize(100ULL * DB::MB);
+                writer->setBufferSizeRange(100ULL * DB::MB, 100ULL * DB::MB);
                 writer->setBatchBufferLimit(8ULL * DB::GB);
                 writer->setBatchBufferPageRange(1000000);
             });
@@ -86,7 +86,7 @@ public:
             stop_watch.start();
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(4);
-                writer->setBatchBufferSize(2ULL * DB::MB);
+                writer->setBufferSizeRange(2ULL * DB::MB, 2ULL * DB::MB);
                 writer->setBatchBufferLimit(1ULL * DB::GB);
                 writer->setBatchBufferPageRange(1000000);
             });
@@ -103,7 +103,7 @@ public:
             stop_watch.start();
             startWriter<PSCommonWriter>(1, [](std::shared_ptr<PSCommonWriter> writer) -> void {
                 writer->setBatchBufferNums(4);
-                writer->setBatchBufferSize(2ULL * DB::MB);
+                writer->setBufferSizeRange(2ULL * DB::MB, 2ULL * DB::MB);
                 writer->setBatchBufferLimit(1ULL * DB::GB);
                 writer->setBatchBufferPageRange(1000000);
             });

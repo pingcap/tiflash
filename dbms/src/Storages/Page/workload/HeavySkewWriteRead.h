@@ -59,7 +59,7 @@ private:
             const auto num_writers = options.num_writers;
             startWriter<PSWindowWriter>(num_writers, [&](std::shared_ptr<PSWindowWriter> writer) {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferRange(0, options.avg_page_size * 2);
+                writer->setBufferSizeRange(0, options.avg_page_size * 2);
                 writer->setNormalDistributionSigma(250);
             });
 

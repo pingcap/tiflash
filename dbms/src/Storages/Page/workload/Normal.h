@@ -14,6 +14,8 @@
 
 #include <Storages/Page/workload/PSWorkload.h>
 
+#include "Storages/Page/workload/PSRunnable.h"
+
 namespace DB::PS::tests
 {
 class NormalWorkload
@@ -48,16 +50,11 @@ public:
         config.num_write_slots = options.num_writer_slots;
         initPageStorage(config);
 
-        if (options.avg_page_size != 0)
-        {
-            PSWriter::setApproxPageSize(options.avg_page_size);
-        }
-
         // init all pages in PageStorage
         if (options.init_pages || options.just_init_pages)
         {
             static constexpr PageId MAX_PAGE_ID_DEFAULT = 1000;
-            PSWriter::fillAllPages(ps, MAX_PAGE_ID_DEFAULT);
+            initPages(MAX_PAGE_ID_DEFAULT);
             LOG_INFO(StressEnv::logger, "All pages have been init.");
             if (options.just_init_pages)
             {
@@ -67,7 +64,9 @@ public:
 
         stop_watch.start();
 
-        startWriter<PSWriter>(options.num_writers);
+        startWriter<PSWriter>(options.num_writers, [this](std::shared_ptr<PSWriter> w) {
+            w->setBufferSizeRange(options.avg_page_size, options.avg_page_size);
+        });
         const size_t read_delay_ms = options.read_delay_ms;
         startReader<PSReader>(options.num_readers, [read_delay_ms](std::shared_ptr<PSReader> reader) -> void {
             reader->setReadDelay(read_delay_ms);

@@ -59,7 +59,7 @@ private:
             stop_watch.start();
             startWriter<PSWindowWriter>(options.num_writers, [](std::shared_ptr<PSWindowWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferRange(10 * 1024, 1 * DB::MB);
+                writer->setBufferSizeRange(10 * 1024, 1 * DB::MB);
                 writer->setNormalDistributionSigma(13);
             });
 

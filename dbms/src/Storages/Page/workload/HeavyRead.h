@@ -14,6 +14,8 @@
 
 #include <Storages/Page/workload/PSWorkload.h>
 
+#include "Storages/Page/workload/PSRunnable.h"
+
 namespace DB::PS::tests
 {
 class HeavyRead : public StressWorkload
@@ -50,7 +52,7 @@ private:
     {
         DB::PageStorageConfig config;
         initPageStorage(config, name());
-        PSWriter::fillAllPages(ps, MAX_PAGE_ID_DEFAULT);
+        initPages(MAX_PAGE_ID_DEFAULT);
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);
         metrics_dumper->start();

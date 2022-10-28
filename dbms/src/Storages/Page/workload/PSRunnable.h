@@ -68,8 +68,6 @@ struct GlobalStat
 
 class PSWriter : public PSRunnable
 {
-    static size_t approx_page_bytes;
-
 public:
     PSWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
         : ps(ps_)
@@ -89,15 +87,13 @@ public:
         return fmt::format("(Stress Test Writer {})", index);
     }
 
-    static void setApproxPageSize(size_t bytes);
+    void setBufferSizeRange(size_t min, size_t max);
 
-    static DB::ReadBufferPtr genRandomData(DB::PageId page_id, std::unique_ptr<char[]> & p);
-
-    virtual void updatedRandomData();
-
-    static void fillAllPages(const PSPtr & ps, size_t max_page_id);
+    virtual DB::ReadBufferPtr updatedRandomData();
 
     bool runImpl() override;
+
+    void write(const RandomPageId & r);
 
 protected:
     virtual RandomPageId genRandomPageId();
@@ -108,7 +104,10 @@ protected:
     std::mt19937 gen;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
     std::unique_ptr<char[]> memory;
-    DB::ReadBufferPtr buff_ptr;
+
+    size_t buffer_size_min = 1 * 1024 * 1024;
+    size_t buffer_size_max = 1 * 1024 * 1024;
+
     const std::unique_ptr<GlobalStat> & global_stat;
 };
 
@@ -122,7 +121,7 @@ public:
         : PSWriter(ps_, index_, global_stat_)
     {}
 
-    void updatedRandomData() override;
+    DB::ReadBufferPtr updatedRandomData() override;
 
     String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 
@@ -130,29 +129,17 @@ public:
 
     void setBatchBufferNums(size_t numbers);
 
-    void setBatchBufferSize(size_t size);
-
     void setBatchBufferLimit(size_t size_limit);
 
     void setBatchBufferPageRange(size_t max_page_id_);
 
-    void setBatchBufferRange(size_t min, size_t max);
-
     void setFieldSize(const DB::PageFieldSizes & data_sizes);
 
 protected:
-    std::vector<DB::ReadBufferPtr> buff_ptrs;
     size_t batch_buffer_nums = 100;
-    size_t batch_buffer_size = 1 * DB::MB;
     size_t batch_buffer_limit = 0;
 
-    size_t buffer_size_min = 0;
-    size_t buffer_size_max = 0;
-
     DB::PageFieldSizes data_sizes = {};
-
-    RandomPageId genRandomPageId() override;
-    virtual size_t genBufferSize();
 };
 
 // PSWindowsWriter can better simulate the user's workload in cooperation with PSWindowsReader

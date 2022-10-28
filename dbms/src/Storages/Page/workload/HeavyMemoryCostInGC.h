@@ -60,7 +60,7 @@ public:
 
         startWriter<PSCommonWriter>(options.num_writers, [](std::shared_ptr<PSCommonWriter> writer) -> void {
             writer->setBatchBufferNums(100);
-            writer->setBatchBufferSize(1);
+            writer->setBufferSizeRange(1, 1);
         });
 
         pool.joinAll();

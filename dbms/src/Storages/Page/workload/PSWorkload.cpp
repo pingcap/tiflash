@@ -22,6 +22,14 @@
 
 #include <ext/scope_guard.h>
 
+#include "Storages/Page/workload/PSRunnable.h"
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Array.h>
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 namespace DB::PS::tests
 {
 void StressWorkload::onDumpResult()
@@ -30,23 +38,45 @@ void StressWorkload::onDumpResult()
     LOG_INFO(options.logger, "result in {}ms", time_interval);
     double seconds_run = 1.0 * time_interval / 1000;
 
+    Poco::JSON::Object::Ptr details = new Poco::JSON::Object();
+
     size_t total_pages_written = 0;
     size_t total_bytes_written = 0;
 
+    Poco::JSON::Array::Ptr json_writers(new Poco::JSON::Array());
     for (auto & writer : writers)
     {
         total_pages_written += writer->pages_used;
         total_bytes_written += writer->bytes_used;
+
+        Poco::JSON::Object::Ptr json_writer = new Poco::JSON::Object();
+        json_writer->set("pages", writer->pages_used);
+        json_writer->set("bytes", writer->bytes_used);
+        json_writers->add(json_writer);
     }
+    details->set("writers", json_writers);
 
     size_t total_pages_read = 0;
     size_t total_bytes_read = 0;
 
+    Poco::JSON::Array::Ptr json_readers(new Poco::JSON::Array());
     for (auto & reader : readers)
     {
         total_pages_read += reader->pages_used;
         total_bytes_read += reader->bytes_used;
+
+        Poco::JSON::Object::Ptr json_reader = new Poco::JSON::Object();
+        json_reader->set("pages", reader->pages_used);
+        json_reader->set("bytes", reader->bytes_used);
+        json_readers->add(json_reader);
     }
+    details->set("readers", json_readers);
+
+    LOG_INFO(options.logger, "{}", [&]() {
+        std::stringstream ss;
+        details->stringify(ss);
+        return ss.str();
+    }());
 
     LOG_INFO(options.logger,
              "W: {} pages, {:.4f} GB, {:.4f} GB/s",
@@ -111,6 +141,18 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
     }
 
     runtime_stat = std::make_unique<GlobalStat>();
+}
+
+void StressWorkload::initPages(const DB::PageId & max_page_id)
+{
+    auto writer = std::make_shared<PSWriter>(ps, 0, runtime_stat);
+    for (DB::PageId page_id = 0; page_id <= max_page_id; ++page_id)
+    {
+        RandomPageId r(page_id);
+        writer->write(r);
+        if (page_id % 100 == 0)
+            LOG_INFO(StressEnv::logger, "writer wrote page {}", page_id);
+    }
 }
 
 void StressWorkload::startBackgroundTimer()

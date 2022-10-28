@@ -83,6 +83,8 @@ protected:
 
     void startBackgroundTimer();
 
+    void initPages(const DB::PageId & max_page_id);
+
     template <typename T>
     void startWriter(size_t nums_writers, std::function<void(std::shared_ptr<T>)> writer_configure = nullptr)
     {

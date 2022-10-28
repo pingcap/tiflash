@@ -146,7 +146,7 @@ private:
             stop_watch.start();
             startWriter<PSIncreaseWriter>(options.num_writers, [](std::shared_ptr<PSIncreaseWriter> writer) -> void {
                 writer->setBatchBufferNums(1);
-                writer->setBatchBufferSize(10 * 1024);
+                writer->setBufferSizeRange(10ULL * DB::MB, 10ULL * DB::MB);
                 writer->setPageRange(single_writer_page_nums);
             });
 
