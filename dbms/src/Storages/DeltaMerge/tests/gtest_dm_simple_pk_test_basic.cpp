@@ -290,7 +290,7 @@ void SimplePKTestBasic::deleteRange(Int64 start_key, Int64 end_key)
     store->deleteRange(*db_context, db_context->getSettingsRef(), range);
 }
 
-size_t SimplePKTestBasic::getRowsN()
+size_t SimplePKTestBasic::getRowsN() const
 {
     const auto & columns = store->getTableColumns();
     auto in = store->read(
@@ -308,7 +308,7 @@ size_t SimplePKTestBasic::getRowsN()
     return getInputStreamNRows(in);
 }
 
-size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key)
+size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key) const
 {
     const auto & columns = store->getTableColumns();
     auto in = store->read(

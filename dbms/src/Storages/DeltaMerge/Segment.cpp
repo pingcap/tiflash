@@ -71,6 +71,8 @@ extern const Event DMSegmentMerge;
 extern const Event DMSegmentMergeNS;
 extern const Event DMDeltaMerge;
 extern const Event DMDeltaMergeNS;
+extern const Event DMSegmentIsEmptyFastPath;
+extern const Event DMSegmentIsEmptySlowPath;
 
 } // namespace ProfileEvents
 
@@ -379,7 +381,12 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
 
     // Fast path: all packs has been filtered away
     if (segment_snap->getRows() == 0)
+    {
+        ProfileEvents::increment(ProfileEvents::DMSegmentIsEmptyFastPath);
         return true;
+    }
+
+    ProfileEvents::increment(ProfileEvents::DMSegmentIsEmptySlowPath);
 
     // Build read stream
     auto columns_to_read = std::make_shared<ColumnDefines>();
