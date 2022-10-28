@@ -176,50 +176,32 @@ public:
                     FieldType(static_cast<Native>(0), 2), // 0.00
                 })));
 
-        if constexpr (std::is_same_v<Decimal, Decimal32>)
-        {
+        auto test_for_min_max = [&](const ColumnWithTypeAndName & expected) {
             ASSERT_COLUMN_EQ(
-                createColumn<Nullable<String>>({"74.63847412", "-84.63847412"}),
+                expected,
                 execute_func(createColumn<NullableDecimal>(
                     std::make_tuple(precision, 2),
                     {
                         FieldType(static_cast<Native>(std::numeric_limits<Native>::max()), 2),
                         FieldType(static_cast<Native>(std::numeric_limits<Native>::min()), 2),
                     })));
+        };
+        if constexpr (std::is_same_v<Decimal, Decimal32>)
+        {
+            test_for_min_max(createColumn<Nullable<String>>({"74.63847412", "-84.63847412"}));
         }
         else if constexpr (std::is_same_v<Decimal, Decimal64>)
         {
-            ASSERT_COLUMN_EQ(
-                createColumn<Nullable<String>>({"70.85774586302733229", "-80.85774586302733229"}),
-                execute_func(createColumn<NullableDecimal>(
-                    std::make_tuple(precision, 2),
-                    {
-                        FieldType(static_cast<Native>(std::numeric_limits<Native>::max()), 2),
-                        FieldType(static_cast<Native>(std::numeric_limits<Native>::min()), 2),
-                    })));
+            test_for_min_max(createColumn<Nullable<String>>({"70.85774586302733229", "-80.85774586302733229"}));
         }
         else if constexpr (std::is_same_v<Decimal, Decimal128>)
         {
-            ASSERT_COLUMN_EQ(
-                createColumn<Nullable<String>>({"72.7501488517303786137132964064381141071", "-82.7501488517303786137132964064381141071"}),
-                execute_func(createColumn<NullableDecimal>(
-                    std::make_tuple(precision, 2),
-                    {
-                        FieldType(static_cast<Native>(std::numeric_limits<Native>::max()), 2),
-                        FieldType(static_cast<Native>(std::numeric_limits<Native>::min()), 2),
-                    })));
+            test_for_min_max(createColumn<Nullable<String>>({"72.7501488517303786137132964064381141071", "-82.7501488517303786137132964064381141071"}));
         }
         else
         {
             static_assert(std::is_same_v<Decimal, Decimal256>);
-            ASSERT_COLUMN_EQ(
-                createColumn<Nullable<String>>({"53.9936921319700485754930465046566489962358709786800589075324591613732980297511", "-53.9936921319700485754930465046566489962358709786800589075324591613732980297511"}),
-                execute_func(createColumn<NullableDecimal>(
-                    std::make_tuple(precision, 2),
-                    {
-                        FieldType(static_cast<Native>(std::numeric_limits<Native>::max()), 2),
-                        FieldType(static_cast<Native>(std::numeric_limits<Native>::min()), 2),
-                    })));
+            test_for_min_max(createColumn<Nullable<String>>({"53.9936921319700485754930465046566489962358709786800589075324591613732980297511", "-53.9936921319700485754930465046566489962358709786800589075324591613732980297511"}));
         }
     }
 };
