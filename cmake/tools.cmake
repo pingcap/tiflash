@@ -37,6 +37,7 @@ set (CLANG_MINIMUM_VERSION 5)
 set (GCC_MINIMUM_VERSION 7)
 
 if (COMPILER_GCC)
+    message (WARNING "GCC is not officially supported, and may not work.")
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${GCC_MINIMUM_VERSION})
         message (FATAL_ERROR "Compilation with GCC version ${CMAKE_CXX_COMPILER_VERSION} is not supported, minimum required version is ${GCC_MINIMUM_VERSION}")
     endif ()
