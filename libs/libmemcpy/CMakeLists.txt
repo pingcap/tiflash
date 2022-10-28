@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-option(TIFLASH_FOLLY_MEMCPY_IS_MEMCPY "use folly memcpy as default `memcpy` and `memmove`" ON)
+# TODO: optimize for small size memory
+option(USE_FOLLY_MEMCPY_AS_MEMCPY "use folly memcpy as default `memcpy` and `memmove`" OFF)
 
 set (memcpy_sources)
 
@@ -24,11 +25,11 @@ if (ARCH_LINUX AND TIFLASH_ENABLE_AVX_SUPPORT)
     list (APPEND memcpy_sources folly/memcpy.S)
     message (STATUS "`libmemcpy` support Folly memcpy")
 else ()
-    set (TIFLASH_FOLLY_MEMCPY_IS_MEMCPY OFF)
+    set (USE_FOLLY_MEMCPY_AS_MEMCPY OFF)
 endif ()
 
 if (USE_INTERNAL_MEMCPY)
-    if (TIFLASH_FOLLY_MEMCPY_IS_MEMCPY)
+    if (USE_FOLLY_MEMCPY_AS_MEMCPY)
         message (STATUS "Using Folly memcpy as default `memcpy` and `memmove`")
         add_definitions(-DFOLLY_MEMCPY_IS_MEMCPY=1)
     else ()

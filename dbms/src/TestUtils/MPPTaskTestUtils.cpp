@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Server/MockComputeClient.h>
 #include <TestUtils/MPPTaskTestUtils.h>
 
 namespace DB::tests
@@ -28,7 +29,7 @@ DAGProperties getDAGPropertiesForTest(int server_num)
 void MPPTaskTestUtils::SetUpTestCase()
 {
     ExecutorTest::SetUpTestCase();
-    log_ptr = Logger::get("compute_test");
+    log_ptr = Logger::get();
     server_num = 1;
 }
 
@@ -82,6 +83,46 @@ ColumnsWithTypeAndName MPPTaskTestUtils::exeucteMPPTasks(QueryTasks & tasks, con
 {
     auto res = executeMPPQueryWithMultipleContext(properties, tasks, server_config_map);
     return readBlocks(res);
+}
+
+ColumnsWithTypeAndName extractColumns(Context & context, const std::shared_ptr<tipb::SelectResponse> & dag_response)
+{
+    auto codec = getCodec(dag_response->encode_type());
+    Blocks blocks;
+    auto schema = getSelectSchema(context);
+    for (const auto & chunk : dag_response->chunks())
+        blocks.emplace_back(codec->decode(chunk.rows_data(), schema));
+    return mergeBlocks(blocks).getColumnsWithTypeAndName();
+}
+
+ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<tipb::DAGRequest> & dag_request)
+{
+    assert(server_num == 1);
+    auto req = std::make_shared<coprocessor::Request>();
+    req->set_tp(103); // 103 is COP_REQ_TYPE_DAG
+    auto * data = req->mutable_data();
+    dag_request->AppendToString(data);
+
+    DAGContext dag_context(*dag_request);
+
+    TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setDAGContext(&dag_context);
+    TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setCopTest();
+
+    MockComputeServerManager::instance().setMockStorage(context.mockStorage());
+
+    auto addr = MockComputeServerManager::instance().getServerConfigMap()[0].addr; // Since we only have started 1 server currently.
+    MockComputeClient client(
+        grpc::CreateChannel(addr, grpc::InsecureChannelCredentials()));
+    auto resp = client.runCoprocessor(req);
+    auto resp_ptr = std::make_shared<tipb::SelectResponse>();
+    if (unlikely(!resp_ptr->ParseFromString(resp.data())))
+    {
+        throw Exception("Incorrect json response data from Coprocessor.", ErrorCodes::BAD_ARGUMENTS);
+    }
+    else
+    {
+        return extractColumns(TiFlashTestEnv::getGlobalContext(test_meta.context_idx), resp_ptr);
+    }
 }
 
 String MPPTaskTestUtils::queryInfo(size_t server_id)

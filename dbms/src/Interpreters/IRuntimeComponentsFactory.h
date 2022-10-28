@@ -33,8 +33,6 @@ public:
     // Repositories with configurations of user-defined objects (dictionaries, models)
     virtual std::unique_ptr<IExternalLoaderConfigRepository> createExternalDictionariesConfigRepository() = 0;
 
-    virtual std::unique_ptr<IExternalLoaderConfigRepository> createExternalModelsConfigRepository() = 0;
-
     virtual ~IRuntimeComponentsFactory() {}
 };
 

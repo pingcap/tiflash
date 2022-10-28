@@ -15,7 +15,6 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -29,8 +28,10 @@ namespace DB::tests
 {
 TiDB::TP dataTypeToTP(const DataTypePtr & type);
 
-DB::ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
-DB::ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
+ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
+ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
+Block mergeBlocks(Blocks blocks);
+
 
 #define WRAP_FOR_DIS_ENABLE_PLANNER_BEGIN \
     std::vector<bool> bools{false, true}; \
@@ -67,7 +68,7 @@ public:
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
-
+    ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
 

@@ -186,7 +186,7 @@ void AtomicUpdateProxy(DB::EngineStoreServerWrap * server, RaftStoreProxyFFIHelp
         RustGcHelper::instance().setRustPtrGcFn(proxy->fn_gc_rust_ptr);
     }
     server->proxy_helper = static_cast<TiFlashRaftProxyHelper *>(proxy);
-    std::atomic_thread_fence(std::memory_order::memory_order_seq_cst);
+    std::atomic_thread_fence(std::memory_order_seq_cst);
 }
 
 void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
@@ -410,7 +410,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, PreHandledSnapshot 
         auto & kvstore = server->tmt->getKVStore();
         if constexpr (std::is_same_v<PreHandledSnapshot, PreHandledSnapshotWithFiles>)
         {
-            kvstore->handlePreApplySnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)}, *server->tmt);
+            kvstore->applyPreHandledSnapshot(RegionPtrWithSnapshotFiles{snap->region, std::move(snap->external_files)}, *server->tmt);
         }
     }
     catch (...)
@@ -431,7 +431,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         break;
     }
     default:
-        LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+        LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
         exit(-1);
     }
 }
@@ -452,7 +452,7 @@ void GcRawCppPtr(RawVoidPtr ptr, RawCppPtrType type)
             delete reinterpret_cast<AsyncNotifier *>(ptr);
             break;
         default:
-            LOG_FMT_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
+            LOG_ERROR(&Poco::Logger::get(__FUNCTION__), "unknown type {}", type);
             exit(-1);
         }
     }
@@ -514,7 +514,7 @@ void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
 
 void MockSetFFI::MockSetRustGcHelper(void (*fn_gc_rust_ptr)(RawVoidPtr, RawRustPtrType))
 {
-    LOG_FMT_WARNING(&Poco::Logger::get(__FUNCTION__), "Set mock rust ptr gc function");
+    LOG_WARNING(&Poco::Logger::get(__FUNCTION__), "Set mock rust ptr gc function");
     RustGcHelper::instance().setRustPtrGcFn(fn_gc_rust_ptr);
 }
 
@@ -560,8 +560,16 @@ raft_serverpb::RegionLocalState TiFlashRaftProxyHelper::getRegionLocalState(uint
     return state;
 }
 
-// just a dummy function to avoid proxy fn_handle_safe_ts_update.is_some() panic.
-void HandleSafeTSUpdate(EngineStoreServerWrap *, uint64_t, uint64_t, uint64_t)
+void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts)
 {
+    RegionTable & region_table = server->tmt->getRegionTable();
+    region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
 }
+
+
+std::string_view buffToStrView(const BaseBuffView & buf)
+{
+    return std::string_view{buf.data, buf.len};
+}
+
 } // namespace DB

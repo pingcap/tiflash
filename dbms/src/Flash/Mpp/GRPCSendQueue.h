@@ -21,10 +21,10 @@
 #include <common/logger_useful.h>
 
 #include <functional>
+#include <magic_enum.hpp>
 
 namespace DB
 {
-
 namespace tests
 {
 class TestGRPCSendQueue;
@@ -58,6 +58,7 @@ enum class GRPCSendQueueRes
     OK,
     FINISHED,
     EMPTY,
+    CANCELLED,
 };
 
 /// A multi-producer-single-consumer queue dedicated to async grpc streaming send work.
@@ -93,7 +94,7 @@ public:
     // For gtest usage.
     GRPCSendQueue(size_t queue_size, GRPCKickFunc func)
         : send_queue(queue_size)
-        , log(Logger::get("GRPCSendQueue", "test"))
+        , log(Logger::get())
         , kick_func(func)
         , kick_tag([this]() { return kickTagAction(); })
     {}
@@ -102,7 +103,7 @@ public:
     {
         std::unique_lock lock(mu);
 
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", status);
+        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
     }
 
     /// Push the data from queue and kick the grpc completion queue.
@@ -118,6 +119,22 @@ public:
             kickCompletionQueue();
         }
         return ret;
+    }
+
+    /// Cancel the send queue, and set the cancel reason
+    bool cancelWith(const String & reason)
+    {
+        auto ret = send_queue.cancelWith(reason);
+        if (ret)
+        {
+            kickCompletionQueue();
+        }
+        return ret;
+    }
+
+    const String & getCancelReason() const
+    {
+        return send_queue.getCancelReason();
     }
 
     /// Pop the data from queue.
@@ -142,16 +159,18 @@ public:
             return GRPCSendQueueRes::OK;
         case MPMCQueueResult::FINISHED:
             return GRPCSendQueueRes::FINISHED;
+        case MPMCQueueResult::CANCELLED:
+            return GRPCSendQueueRes::CANCELLED;
         case MPMCQueueResult::EMPTY:
             // Handle this case later.
             break;
         default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", res);
+            RUNTIME_ASSERT(false, log, "Result {} is invalid", static_cast<Int32>(res));
         }
 
         std::unique_lock lock(mu);
 
-        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", status);
+        RUNTIME_ASSERT(status == Status::NONE, log, "status {} is not none", magic_enum::enum_name(status));
 
         // Double check if this queue is empty.
         res = send_queue.tryPop(data);
@@ -161,6 +180,8 @@ public:
             return GRPCSendQueueRes::OK;
         case MPMCQueueResult::FINISHED:
             return GRPCSendQueueRes::FINISHED;
+        case MPMCQueueResult::CANCELLED:
+            return GRPCSendQueueRes::CANCELLED;
         case MPMCQueueResult::EMPTY:
         {
             // If empty, change status to WAITING.
@@ -169,7 +190,7 @@ public:
             return GRPCSendQueueRes::EMPTY;
         }
         default:
-            RUNTIME_ASSERT(false, log, "Result {} is invalid", res);
+            RUNTIME_ASSERT(false, log, "Result {} is invalid", magic_enum::enum_name(res));
         }
     }
 
@@ -186,13 +207,6 @@ public:
         return ret;
     }
 
-    /// Finish and drain the queue.
-    void finishAndDrain()
-    {
-        send_queue.finishAndDrain();
-        kickCompletionQueue();
-    }
-
 private:
     friend class tests::TestGRPCSendQueue;
 
@@ -200,7 +214,7 @@ private:
     {
         std::unique_lock lock(mu);
 
-        RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", status);
+        RUNTIME_ASSERT(status == Status::QUEUING, log, "status {} is not queuing", magic_enum::enum_name(status));
         status = Status::NONE;
 
         return std::exchange(tag, nullptr);

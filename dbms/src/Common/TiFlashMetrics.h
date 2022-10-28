@@ -231,7 +231,9 @@ namespace DB
     M(tiflash_storage_read_thread_gauge, "The gauge of storage read thread", Gauge,                                                       \
         F(type_merged_task, {"type", "merged_task"}))                                                                                     \
     M(tiflash_storage_read_thread_seconds, "Bucketed histogram of read thread", Histogram,                                                \
-        F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))
+        F(type_merged_task, {{"type", "merged_task"}}, ExpBuckets{0.001, 2, 20}))                                                         \
+    M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
+        F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
 // clang-format on
 
 struct ExpBuckets

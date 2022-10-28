@@ -149,5 +149,39 @@ try
 }
 CATCH
 
+TEST_F(TestGRPCSendQueue, SequentialPopAfterCancel)
+try
+{
+    int p1;
+    int data;
+
+    GTEST_ASSERT_EQ(queue.push(1), true);
+    checkTagInQueue(nullptr);
+    checkTag(nullptr);
+
+    GTEST_ASSERT_EQ(queue.push(2), true);
+    checkTagInQueue(nullptr);
+    checkTag(nullptr);
+
+    GTEST_ASSERT_EQ(queue.push(3), true);
+    checkTagInQueue(nullptr);
+    checkTag(nullptr);
+
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::OK);
+    GTEST_ASSERT_EQ(data, 1);
+    checkTagInQueue(nullptr);
+    checkTag(nullptr);
+
+    // Cancel the queue
+    GTEST_ASSERT_EQ(queue.cancelWith("cancel test"), true);
+
+    GTEST_ASSERT_EQ(queue.pop(data, &p1), GRPCSendQueueRes::CANCELLED);
+    checkTagInQueue(nullptr);
+    checkTag(nullptr);
+
+    GTEST_ASSERT_EQ(queue.getCancelReason(), "cancel test");
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

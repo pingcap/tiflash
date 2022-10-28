@@ -148,7 +148,6 @@ public:
             }
             else
             {
-                PageDirectory::MVCCMapType type;
                 CLIService service(getPageStorageV3Info, options, options.config_file_path, run_raftstore_proxy_ffi);
                 service.run({""});
             }
@@ -185,7 +184,7 @@ private:
         }
         BlobConfig blob_config;
 
-        PageStorage::Config config;
+        PageStorageConfig config;
         PageStorageImpl ps_v3("PageStorageControlV3", delegator, config, file_provider_ptr);
         ps_v3.restore();
         PageDirectory::MVCCMapType & mvcc_table_directory = ps_v3.page_directory->mvcc_table_directory;

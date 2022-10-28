@@ -32,5 +32,11 @@ target_compile_definitions (boost_internal PUBLIC BOOST_SYSTEM_NO_DEPRECATED)
 
 target_compile_definitions (boost_internal PUBLIC BOOST_NO_CXX98_FUNCTION_BASE)
 
+target_compile_definitions (boost_internal PUBLIC BOOST_BIND_GLOBAL_PLACEHOLDERS)
+
+target_no_warning(boost_internal unused-but-set-variable)
+target_no_warning(boost_internal deprecated-builtins)
+target_no_warning(boost_internal non-virtual-dtor)
+
 target_link_libraries (boost_internal boost_fiber boost_context)
 

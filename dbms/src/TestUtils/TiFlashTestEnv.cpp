@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/UnifiedLogPatternFormatter.h>
+#include <Common/UnifiedLogFormatter.h>
 #include <Encryption/MockKeyManager.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Poco/ConsoleChannel.h>
@@ -32,7 +32,11 @@ std::vector<std::shared_ptr<Context>> TiFlashTestEnv::global_contexts = {};
 
 String TiFlashTestEnv::getTemporaryPath(const std::string_view test_case, bool get_abs)
 {
-    String path = "./tmp/";
+    String path = ".";
+    const char * temp_prefix = getenv("TIFLASH_TEMP_DIR");
+    if (temp_prefix != nullptr)
+        path = DB::String(temp_prefix);
+    path += "/tmp/";
     if (!test_case.empty())
         path += std::string(test_case);
 
@@ -77,7 +81,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     auto global_context = std::make_shared<DB::Context>(DB::Context::createGlobal());
     global_contexts.push_back(global_context);
     global_context->setGlobalContext(*global_context);
-    global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
+    global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
 
     global_context->initializeTiFlashMetrics();
     KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(false);
@@ -119,7 +123,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
 
     global_context->setPageStorageRunMode(ps_run_mode);
     global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
-    LOG_FMT_INFO(Logger::get("TiFlashTestEnv"), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
+    LOG_INFO(Logger::get(), "Storage mode : {}", static_cast<UInt8>(global_context->getPageStorageRunMode()));
 
     TiFlashRaftConfig raft_config;
 
@@ -141,7 +145,7 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     // Load `testdata_path` as path if it is set.
     const String root_path = [&]() {
         const auto root_path = testdata_path.empty()
-            ? (DB::toString(getpid()) + "/" + getTemporaryPath("", /*get_abs*/ false))
+            ? getTemporaryPath(fmt::format("{}/", getpid()), /*get_abs*/ false)
             : testdata_path[0];
         return Poco::Path(root_path).absolute().toString();
     }();
@@ -168,8 +172,7 @@ void TiFlashTestEnv::shutdown()
 void TiFlashTestEnv::setupLogger(const String & level, std::ostream & os)
 {
     Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(os);
-    Poco::AutoPtr<UnifiedLogPatternFormatter> formatter(new UnifiedLogPatternFormatter());
-    formatter->setProperty("pattern", "%L%Y-%m-%d %H:%M:%S.%i [%I] <%p> %s: %t");
+    Poco::AutoPtr<UnifiedLogFormatter> formatter(new UnifiedLogFormatter());
     Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
     Poco::Logger::root().setChannel(formatting_channel);
     Poco::Logger::root().setLevel(level);

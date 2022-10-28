@@ -191,9 +191,9 @@ TEST(ReadLimiterTest, GetIOStatPeroid200ms)
     using TimePointMS = std::chrono::time_point<std::chrono::system_clock, std::chrono::milliseconds>;
     Int64 bytes_per_sec = 1000;
     UInt64 refill_period_ms = 20;
+    TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     ReadLimiter limiter(get_stat, bytes_per_sec, LimiterType::UNKNOW, refill_period_ms);
 
-    TimePointMS t0 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
     // Refill 20 every 20ms.
     ASSERT_EQ(limiter.getAvailableBalance(), 20);
     request(limiter, 1);
@@ -729,6 +729,37 @@ TEST(IOLimitTunerTest, Tune)
         test4(t);
         test5(t);
     }
+}
+
+TEST(IOLimitTunerTest, Tune2)
+{
+    StorageIORateLimitConfig io_config;
+    io_config.max_bytes_per_sec = 2000;
+    io_config.min_bytes_per_sec = 10;
+
+    auto bg_write_stat = createLimiterStat(0, 1000, 1000, 990);
+    auto fg_write_stat = createLimiterStat(0, 1000, 1000, 990);
+    auto bg_read_stat = createLimiterStat(10, 1000, 1000, 10);
+    auto fg_read_stat = createLimiterStat(0, 1000, 1000, 10);
+
+    ASSERT_EQ(bg_write_stat->pct(), 0);
+    ASSERT_EQ(fg_write_stat->pct(), 0);
+    ASSERT_EQ(bg_read_stat->pct(), 100);
+    ASSERT_EQ(fg_read_stat->pct(), 0);
+    ASSERT_EQ(bg_read_stat->maxBytesPerSec(), 10);
+
+    IOLimitTuner tuner(
+        std::move(bg_write_stat),
+        std::move(fg_write_stat),
+        std::move(bg_read_stat),
+        std::move(fg_read_stat),
+        io_config);
+    ASSERT_EQ(tuner.readWatermark(), Emergency);
+
+    auto res = tuner.tune();
+    ASSERT_TRUE(res.write_tuned);
+    ASSERT_TRUE(res.read_tuned);
+    ASSERT_GT(res.max_bg_read_bytes_per_sec, 10);
 }
 
 } // namespace tests

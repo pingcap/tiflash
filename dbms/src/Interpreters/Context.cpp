@@ -21,6 +21,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
+#include <Common/randomSeed.h>
 #include <Common/setThreadName.h>
 #include <DataStreams/FormatFactory.h>
 #include <Databases/IDatabase.h>
@@ -32,7 +33,6 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/ExternalModels.h>
 #include <Interpreters/ISecurityManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
@@ -122,7 +122,6 @@ struct ContextShared
     /// Separate mutex for access of dictionaries. Separate mutex to avoid locks when server doing request to itself.
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
-    mutable std::mutex external_models_mutex;
 
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
@@ -134,7 +133,6 @@ struct ContextShared
 
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
-    mutable std::shared_ptr<ExternalModels> external_models;
     String default_profile_name; /// Default profile name used for default values.
     String system_profile_name; /// Profile used by system processes
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
@@ -527,7 +525,7 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setPathPool( //
+void Context::setPathPool(
     const Strings & main_data_paths,
     const Strings & latest_data_paths,
     const Strings & kvstore_paths,
@@ -1027,8 +1025,17 @@ ASTPtr Context::getCreateDatabaseQuery(const String & database_name) const
     return shared->databases[db]->getCreateDatabaseQuery(*this);
 }
 
+void Context::checkIsConfigLoaded() const
+{
+    if (shared->application_type == ApplicationType::SERVER && !is_config_loaded)
+    {
+        throw Exception("Configuration are used before load from configure file tiflash.toml, so the user config may not take effect.", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 Settings Context::getSettings() const
 {
+    checkIsConfigLoaded();
     return settings;
 }
 
@@ -1192,41 +1199,17 @@ Context & Context::getGlobalContext()
     return *global_context;
 }
 
-const ExternalModels & Context::getExternalModels() const
+const Settings & Context::getSettingsRef() const
 {
-    return getExternalModelsImpl(false);
+    checkIsConfigLoaded();
+    return settings;
 }
 
-ExternalModels & Context::getExternalModels()
+Settings & Context::getSettingsRef()
 {
-    return getExternalModelsImpl(false);
+    checkIsConfigLoaded();
+    return settings;
 }
-
-ExternalModels & Context::getExternalModelsImpl(bool throw_on_error) const
-{
-    std::lock_guard lock(shared->external_models_mutex);
-
-    if (!shared->external_models)
-    {
-        if (!this->global_context)
-            throw Exception("Logical error: there is no global context", ErrorCodes::LOGICAL_ERROR);
-
-        auto config_repository = runtime_components_factory->createExternalModelsConfigRepository();
-
-        shared->external_models = std::make_shared<ExternalModels>(
-            std::move(config_repository),
-            *this->global_context,
-            throw_on_error);
-    }
-
-    return *shared->external_models;
-}
-
-void Context::tryCreateExternalModels() const
-{
-    static_cast<void>(getExternalModelsImpl(true));
-}
-
 
 void Context::setProgressCallback(ProgressCallback callback)
 {
@@ -1792,6 +1775,7 @@ void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & confi
     shared->default_profile_name = config.getString("default_profile", "default");
     shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
     setSetting("profile", shared->system_profile_name);
+    is_config_loaded = true;
 }
 
 String Context::getDefaultProfileName() const
@@ -1885,6 +1869,16 @@ bool Context::isExecutorTest() const
 void Context::setExecutorTest()
 {
     test_mode = executor_test;
+}
+
+bool Context::isCopTest() const
+{
+    return test_mode == cop_test;
+}
+
+void Context::setCopTest()
+{
+    test_mode = cop_test;
 }
 
 bool Context::isTest() const

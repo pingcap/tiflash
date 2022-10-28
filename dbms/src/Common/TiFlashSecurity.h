@@ -82,7 +82,7 @@ public:
             else
             {
                 has_tls_config = true;
-                LOG_FMT_INFO(
+                LOG_INFO(
                     log,
                     "security config is set: ca path is {} cert path is {} key path is {}",
                     ca_path,

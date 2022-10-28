@@ -90,7 +90,10 @@ ColumnDefinesPtr createColumnDefines(size_t column_number)
 
 String createRandomString(std::size_t limit, std::mt19937_64 & eng, size_t & acc)
 {
-    std::uniform_int_distribution<char> dist('a', 'z');
+    // libc++-15 forbids instantiate `std::uniform_int_distribution<char>`.
+    // see https://github.com/llvm/llvm-project/blob/bfcd536a8ef6b1d6e9dd211925be3b078d06fe77/libcxx/include/__random/is_valid.h#L28
+    // and https://github.com/llvm/llvm-project/blob/bfcd536a8ef6b1d6e9dd211925be3b078d06fe77/libcxx/include/__random/uniform_int_distribution.h#L162
+    std::uniform_int_distribution<uint8_t> dist('a', 'z');
     std::string buffer((eng() % limit) + 1, 0);
     for (auto & i : buffer)
     {
@@ -303,12 +306,12 @@ int benchEntry(const std::vector<std::string> & opts)
         auto * logger = &Poco::Logger::get("DTTool::Bench");
         if (version == 1)
         {
-            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V1, version, column, size, field, random, encryption, workdir);
+            LOG_INFO(logger, SUMMARY_TEMPLATE_V1, version, column, size, field, random, encryption, workdir);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V2;
         }
         else
         {
-            LOG_FMT_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_config);
+            LOG_INFO(logger, SUMMARY_TEMPLATE_V2, version, column, size, field, random, workdir, frame, encryption, algorithm_config);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
         }
@@ -322,7 +325,7 @@ int benchEntry(const std::vector<std::string> & opts)
         for (size_t i = 0, count = 1; i < size; count++)
         {
             auto block_size = engine() % (size - i) + 1;
-            LOG_FMT_INFO(logger, "generating block with size: {}", block_size);
+            LOG_INFO(logger, "generating block with size: {}", block_size);
             blocks.push_back(DTTool::Bench::createBlock(column, i, block_size, field, engine, effective_size));
             i += block_size;
             DB::DM::DMFileBlockOutputStream::BlockProperty property{};
@@ -330,8 +333,8 @@ int benchEntry(const std::vector<std::string> & opts)
             property.effective_num_rows = block_size;
             properties.push_back(property);
         }
-        LOG_FMT_INFO(logger, "effective_size: {}", effective_size);
-        LOG_FMT_INFO(logger, "start writing");
+        LOG_INFO(logger, "effective_size: {}", effective_size);
+        LOG_INFO(logger, "start writing");
         size_t write_records = 0;
         auto settings = DB::Settings();
         auto db_context = env.getContext();
@@ -367,17 +370,17 @@ int benchEntry(const std::vector<std::string> & opts)
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<nanoseconds>(end - start).count();
             write_records += duration;
-            LOG_FMT_INFO(logger, "attemp {} finished in {} ns", i, duration);
+            LOG_INFO(logger, "attemp {} finished in {} ns", i, duration);
         }
 
-        LOG_FMT_INFO(logger, "average write time: {} ns", (static_cast<double>(write_records) / static_cast<double>(repeat)));
-        LOG_FMT_INFO(
+        LOG_INFO(logger, "average write time: {} ns", (static_cast<double>(write_records) / static_cast<double>(repeat)));
+        LOG_INFO(
             logger,
             "throughput (MB/s): {}",
             (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(write_records) / 1024 / 1024));
 
         // Read
-        LOG_FMT_INFO(logger, "start reading");
+        LOG_INFO(logger, "start reading");
         size_t read_records = 0;
         for (size_t i = 0; i < repeat; ++i)
         {
@@ -396,11 +399,11 @@ int benchEntry(const std::vector<std::string> & opts)
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<nanoseconds>(end - start).count();
             read_records += duration;
-            LOG_FMT_INFO(logger, "attemp {} finished in {} ns", i, duration);
+            LOG_INFO(logger, "attemp {} finished in {} ns", i, duration);
         }
 
-        LOG_FMT_INFO(logger, "average read time: {} ns", (static_cast<double>(read_records) / static_cast<double>(repeat)));
-        LOG_FMT_INFO(
+        LOG_INFO(logger, "average read time: {} ns", (static_cast<double>(read_records) / static_cast<double>(repeat)));
+        LOG_INFO(
             logger,
             "throughput (MB/s): {}",
             (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat) / static_cast<double>(read_records) / 1024 / 1024));

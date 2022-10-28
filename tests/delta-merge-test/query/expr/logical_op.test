@@ -12,27 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
->> DBGInvoke __enable_schema_sync_service('false')
-
->> drop table if exists logical_op_test
-
->> create table logical_op_test (id Int64, c1 Nullable(Int64), c2 Nullable(Int64), c3 Int64, c4 Int64) engine = Log
-
->> insert into logical_op_test(id,c1,c2,c3,c4) values(0,1,1,1,1),(1,1,0,1,0),(2,1,null,1,0),(3,0,1,0,1),(4,0,0,0,0),(5,0,null,0,0),(6,null,1,0,1),(7,null,0,0,0),(8,null,null,0,0)
-
->> select and(c1,c2), and(c3,c4), and(c1,c3), or(c1,c2), or(c3,c4), or(c1,c3), xor(c1,c2), xor(c3,c4), xor(c1,c3), not(c1), not(c3) from logical_op_test order by id
-┌─and(c1, c2)─┬─and(c3, c4)─┬─and(c1, c3)─┬─or(c1, c2)─┬─or(c3, c4)─┬─or(c1, c3)─┬─xor(c1, c2)─┬─xor(c3, c4)─┬─xor(c1, c3)─┬─not(c1)─┬─not(c3)─┐
-│           1 │           1 │           1 │          1 │          1 │          1 │           0 │           0 │           0 │       0 │       0 │
-│           0 │           0 │           1 │          1 │          1 │          1 │           1 │           1 │           0 │       0 │       0 │
-│          \N │           0 │           1 │          1 │          1 │          1 │          \N │           1 │           0 │       0 │       0 │
-│           0 │           0 │           0 │          1 │          1 │          0 │           1 │           1 │           0 │       1 │       1 │
-│           0 │           0 │           0 │          0 │          0 │          0 │           0 │           0 │           0 │       1 │       1 │
-│           0 │           0 │           0 │         \N │          0 │          0 │          \N │           0 │           0 │       1 │       1 │
-│          \N │           0 │           0 │          1 │          1 │         \N │          \N │           1 │          \N │      \N │       1 │
-│           0 │           0 │           0 │         \N │          0 │         \N │          \N │           0 │          \N │      \N │       1 │
-│          \N │           0 │           0 │         \N │          0 │         \N │          \N │           0 │          \N │      \N │       1 │
-└─────────────┴─────────────┴─────────────┴────────────┴────────────┴────────────┴─────────────┴─────────────┴─────────────┴─────────┴─────────┘
-
 => DBGInvoke __enable_schema_sync_service('true')
 
 => DBGInvoke __drop_tidb_table(default, test)

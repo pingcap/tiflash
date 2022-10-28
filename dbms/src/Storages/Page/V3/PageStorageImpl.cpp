@@ -23,6 +23,7 @@
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/WAL/WALConfig.h>
 #include <Storages/PathPool.h>
 #include <common/logger_useful.h>
 
@@ -39,20 +40,20 @@ namespace PS::V3
 PageStorageImpl::PageStorageImpl(
     String name,
     PSDiskDelegatorPtr delegator_,
-    const Config & config_,
+    const PageStorageConfig & config_,
     const FileProviderPtr & file_provider_)
     : DB::PageStorage(name, delegator_, config_, file_provider_)
-    , log(Logger::get("PageStorage", name))
-    , blob_store(name, file_provider_, delegator, parseBlobConfig(config_))
+    , log(Logger::get(name))
+    , blob_store(name, file_provider_, delegator, BlobConfig::from(config_))
 {
-    LOG_FMT_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
+    LOG_INFO(log, "PageStorageImpl start. Config{{ {} }}", config.toDebugStringV3());
 }
 
 PageStorageImpl::~PageStorageImpl() = default;
 
 void PageStorageImpl::reloadConfig()
 {
-    blob_store.reloadConfig(parseBlobConfig(config));
+    blob_store.reloadConfig(BlobConfig::from(config));
 }
 
 void PageStorageImpl::restore()
@@ -64,7 +65,7 @@ void PageStorageImpl::restore()
     PageDirectoryFactory factory;
     page_directory = factory
                          .setBlobStore(blob_store)
-                         .create(storage_name, file_provider, delegator, parseWALConfig(config));
+                         .create(storage_name, file_provider, delegator, WALConfig::from(config));
 }
 
 PageId PageStorageImpl::getMaxId()
@@ -147,7 +148,7 @@ DB::PageEntry PageStorageImpl::getEntryImpl(NamespaceId ns_id, PageId page_id, S
     }
     catch (DB::Exception & e)
     {
-        LOG_FMT_WARNING(log, "{}", e.message());
+        LOG_WARNING(log, "{}", e.message());
         return {.file_id = INVALID_BLOBFILE_ID}; // return invalid PageEntry
     }
 }

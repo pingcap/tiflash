@@ -16,10 +16,10 @@
 #include <Common/StringUtils/StringUtils.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
 #include <Storages/Page/V3/LogFile/LogFormat.h>
+#include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
 #include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
 #include <stdexcept>
 
 namespace DB::PS::V3
@@ -28,14 +28,14 @@ LogFilename LogFilename::parseFrom(const String & parent_path, const String & fi
 {
     if (!startsWith(filename, LOG_FILE_PREFIX_TEMP) && !startsWith(filename, LOG_FILE_PREFIX_NORMAL))
     {
-        LOG_FMT_INFO(log, "Ignore not log file [dir={}] [file={}]", parent_path, filename);
+        LOG_INFO(log, "Ignore not log file [dir={}] [file={}]", parent_path, filename);
         return {LogFileStage::Invalid, 0, 0, ""};
     }
     Strings ss;
     boost::split(ss, filename, boost::is_any_of("_"));
     if (ss.size() != 3)
     {
-        LOG_FMT_INFO(log, "Ignore unrecognized log file [dir={}] [file={}]", parent_path, filename);
+        LOG_INFO(log, "Ignore unrecognized log file [dir={}] [file={}]", parent_path, filename);
         return {LogFileStage::Invalid, 0, 0, ""};
     }
 
@@ -61,7 +61,7 @@ LogFilename LogFilename::parseFrom(const String & parent_path, const String & fi
     {
         err_msg = e.what();
     }
-    LOG_FMT_INFO(log, "Ignore unrecognized log file [dir={}] [file={}] [err={}]", parent_path, filename, err_msg);
+    LOG_INFO(log, "Ignore unrecognized log file [dir={}] [file={}] [err={}]", parent_path, filename, err_msg);
     return {LogFileStage::Invalid, 0, 0, ""};
 }
 

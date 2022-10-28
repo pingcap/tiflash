@@ -35,11 +35,6 @@ public:
     {
         return std::make_unique<ExternalLoaderConfigRepository>();
     }
-
-    std::unique_ptr<IExternalLoaderConfigRepository> createExternalModelsConfigRepository() override
-    {
-        return std::make_unique<ExternalLoaderConfigRepository>();
-    }
 };
 
 } // namespace DB

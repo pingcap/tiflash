@@ -241,7 +241,7 @@ public:
 
     virtual int compareAt(size_t, size_t, const IColumn &, int, const ICollator &) const
     {
-        throw Exception(fmt::format("Method compareAt with collation is not supported for {}" + getName()), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(fmt::format("Method compareAt with collation is not supported for {}", getName()), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** Returns a permutation that sorts elements of this column,

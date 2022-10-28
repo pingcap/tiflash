@@ -81,7 +81,7 @@ PathCapacityMetrics::PathCapacityMetrics(
 
     for (auto && [path, quota] : all_paths)
     {
-        LOG_FMT_INFO(log, "Init capacity [path={}] [capacity={}]", path, formatReadableSizeWithBinarySuffix(quota));
+        LOG_INFO(log, "Init capacity [path={}] [capacity={}]", path, formatReadableSizeWithBinarySuffix(quota));
         path_infos.emplace_back(CapacityInfo{path, quota});
     }
 }
@@ -91,7 +91,7 @@ void PathCapacityMetrics::addUsedSize(std::string_view file_path, size_t used_by
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_FMT_ERROR(log, "Can not locate path in addUsedSize. File: {}", file_path);
+        LOG_ERROR(log, "Can not locate path in addUsedSize. File: {}", file_path);
         return;
     }
 
@@ -104,7 +104,7 @@ void PathCapacityMetrics::freeUsedSize(std::string_view file_path, size_t used_b
     ssize_t path_idx = locatePath(file_path);
     if (path_idx == INVALID_INDEX)
     {
-        LOG_FMT_ERROR(log, "Can not locate path in removeUsedSize. File: {}", file_path);
+        LOG_ERROR(log, "Can not locate path in removeUsedSize. File: {}", file_path);
         return;
     }
 
@@ -187,7 +187,7 @@ FsStats PathCapacityMetrics::getFsStats()
     const double avail_rate = 1.0 * total_stat.avail_size / total_stat.capacity_size;
     // Default threshold "schedule.low-space-ratio" in PD is 0.8, log warning message if avail ratio is low.
     if (avail_rate <= 0.2)
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "Available space is only {:.2f}% of capacity size. Avail size: {}, used size: {}, capacity size: {}",
             avail_rate * 100.0,
@@ -208,7 +208,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::getFsStatsOfPath(std::s
     ssize_t path_idx = locatePath(file_path);
     if (unlikely(path_idx == INVALID_INDEX))
     {
-        LOG_FMT_ERROR(log, "Can not locate path in getFsStatsOfPath. File: {}", file_path);
+        LOG_ERROR(log, "Can not locate path in getFsStatsOfPath. File: {}", file_path);
         return {FsStats{}, {}};
     }
 
@@ -254,12 +254,14 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     /// Get capacity, used, available size for one path.
     /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
     /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
-    struct statvfs vfs;
+    struct statvfs vfs
+    {
+    };
     if (int code = statvfs(path.data(), &vfs); code != 0)
     {
         if (log)
         {
-            LOG_FMT_ERROR(log, "Could not calculate available disk space (statvfs) of path: {}, errno: {}", path, errno);
+            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: {}, errno: {}", path, errno);
         }
         return {};
     }
@@ -281,7 +283,7 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
     if (capacity > res.used_size)
         avail = capacity - res.used_size;
     else if (log)
-        LOG_FMT_WARNING(
+        LOG_WARNING(
             log,
             "No available space for path: {}, capacity: {}, used: {}",
             path,

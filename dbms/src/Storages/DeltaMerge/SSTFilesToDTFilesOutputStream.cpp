@@ -35,6 +35,7 @@ namespace DM
 
 template <typename ChildStream>
 SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
+    const std::string & log_prefix_,
     ChildStream child_,
     StorageDeltaMergePtr storage_,
     DecodingStorageSchemaSnapshotConstPtr schema_snap_,
@@ -51,7 +52,7 @@ SSTFilesToDTFilesOutputStream<ChildStream>::SSTFilesToDTFilesOutputStream( //
     , split_after_rows(split_after_rows_)
     , split_after_size(split_after_size_)
     , context(context_)
-    , log(Logger::get("SSTFilesToDTFilesOutputStream"))
+    , log(Logger::get(log_prefix_))
 {
 }
 
@@ -87,7 +88,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::writeSuffix()
         GET_METRIC(tiflash_raft_process_keys, type_ingest_sst).Increment(process_keys.total());
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "Transformed snapshot in SSTFile to DTFiles, region={} job_type={} cost_ms={} rows={} bytes={} write_cf_keys={} default_cf_keys={} lock_cf_keys={} dt_files=[{}]",
         child->getRegion()->toString(true),
@@ -144,7 +145,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::newDTFileStream()
     committed_rows_this_dt_file = 0;
     committed_bytes_this_dt_file = 0;
 
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "Create new DTFile for snapshot data, region={} file_idx={} file={}",
         child->getRegion()->toString(true),
@@ -171,7 +172,7 @@ bool SSTFilesToDTFilesOutputStream<ChildStream>::finalizeDTFileStream()
     storage->getStore()->preIngestFile(dt_file->parentPath(), dt_file->fileId(), bytes_written);
     dt_stream.reset();
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "Finished writing DTFile from snapshot data, region={} file_idx={} file_rows={} file_bytes={} data_range={} file_bytes_on_disk={} file={}",
         child->getRegion()->toString(true),
@@ -227,7 +228,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
                 {
                     const auto & pk_col = block.getByName(MutableSupport::tidb_pk_column_name);
                     const auto & ver_col = block.getByName(MutableSupport::version_column_name);
-                    LOG_FMT_ERROR(
+                    LOG_ERROR(
                         log,
                         "[Row={}/{}] [pk={}] [ver={}]",
                         i,

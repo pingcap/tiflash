@@ -342,23 +342,48 @@ CATCH
 TEST_F(ExecutorAggTestRunner, RepeatedAggregateFunction)
 try
 {
-    /// select max(s1), max(s1) from test_db.test_table;
-    auto request = context
-                       .scan("test_db", "test_table")
-                       .aggregation({Max(col("s1")), Max(col("s1"))}, {})
-                       .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}});
+    std::vector<ASTPtr> functions = {Max(col("s1")), Min(col("s1")), Sum(col("s2"))};
+    ColumnsWithTypeAndName functions_result = {toNullableVec<Int64>({3}), toNullableVec<Int64>({1}), toVec<UInt64>({6})};
+    auto test_single_function = [&](size_t index) {
+        auto request = context
+                           .scan("test_db", "test_table")
+                           .aggregation({functions[index]}, {})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {functions_result[index]});
+    };
+    for (size_t i = 0; i < functions.size(); ++i)
+        test_single_function(i);
 
-    /// select max(s1), max(s1), sum(s2) from test_db.test_table;
-    request = context
-                  .scan("test_db", "test_table")
-                  .aggregation({Max(col("s1")), Max(col("s1")), Sum(col("s2"))}, {})
-                  .build(context);
-    executeAndAssertColumnsEqual(
-        request,
-        {{toNullableVec<Int64>({3})}, {toNullableVec<Int64>({3})}, {toVec<UInt64>({6})}});
+    std::vector<ASTPtr> funcs;
+    ColumnsWithTypeAndName results;
+    for (size_t i = 0; i < functions.size(); ++i)
+    {
+        funcs.push_back(functions[i]);
+        results.push_back(functions_result[i]);
+        for (size_t j = 0; j < functions.size(); ++j)
+        {
+            funcs.push_back(functions[j]);
+            results.push_back(functions_result[j]);
+            for (size_t k = 0; k < functions.size(); ++k)
+            {
+                funcs.push_back(functions[k]);
+                results.push_back(functions_result[k]);
+
+                auto request = context
+                                   .scan("test_db", "test_table")
+                                   .aggregation(funcs, {})
+                                   .build(context);
+                executeAndAssertColumnsEqual(request, results);
+
+                funcs.pop_back();
+                results.pop_back();
+            }
+            funcs.pop_back();
+            results.pop_back();
+        }
+        funcs.pop_back();
+        results.pop_back();
+    }
 }
 CATCH
 

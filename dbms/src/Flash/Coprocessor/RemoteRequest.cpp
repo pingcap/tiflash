@@ -39,7 +39,7 @@ RemoteRequest RemoteRequest::build(
         buffer.fmtAppend(") for table {}", table_info.id);
         return buffer.toString();
     };
-    LOG_FMT_INFO(log, "{}", print_retry_regions());
+    LOG_INFO(log, "{}", print_retry_regions());
 
     DAGSchema schema;
     tipb::DAGRequest dag_req;

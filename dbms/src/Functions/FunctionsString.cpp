@@ -22,7 +22,6 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Functions/CharUtil.h>
 #include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsArray.h>
 #include <Functions/FunctionsRound.h>
 #include <Functions/FunctionsString.h>
 #include <Functions/GatherUtils/Algorithms.h>
@@ -34,6 +33,7 @@
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <ext/range.h>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -1090,10 +1090,6 @@ public:
             ReverseImpl::vectorFixed(col->getChars(), col->getN(), col_res->getChars());
             block.getByPosition(result).column = std::move(col_res);
         }
-        else if (checkColumn<ColumnArray>(column.get()))
-        {
-            DefaultExecutable(std::make_shared<FunctionArrayReverse>()).execute(block, arguments, result);
-        }
         else
             throw Exception(
                 fmt::format("Illegal column {} of argument of function {}", block.getByPosition(arguments[0]).column->getName(), getName()),
@@ -1190,9 +1186,6 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        if (!is_injective && !arguments.empty() && checkDataType<DataTypeArray>(arguments[0].get()))
-            return FunctionArrayConcat(context).getReturnTypeImpl(arguments);
-
         if (arguments.size() < 2)
             throw Exception(
                 fmt::format("Number of arguments for function {} doesn't match: passed {}, should be at least 2.", getName(), arguments.size()),
@@ -1212,9 +1205,6 @@ public:
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, const size_t result) const override
     {
-        if (!is_injective && !arguments.empty() && checkDataType<DataTypeArray>(block.getByPosition(arguments[0]).type.get()))
-            return FunctionArrayConcat(context).executeImpl(block, arguments, result);
-
         if (arguments.size() == 2)
             executeBinary(block, arguments, result);
         else
@@ -3484,7 +3474,7 @@ private:
             TidbPadImpl::tidbExecutePadImpl<Int64, false, is_left>(block, arguments, result, getName());
             break;
         default:
-            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         };
     }
 };
@@ -4079,7 +4069,7 @@ private:
             TidbPadImpl::tidbExecutePadImpl<Int64, true, is_left>(block, arguments, result, getName());
             break;
         default:
-            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), type_index), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(fmt::format("the second argument type of {} is invalid, expect integer, got {}", getName(), magic_enum::enum_name(type_index)), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
     }
 };

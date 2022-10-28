@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -20,6 +21,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -28,6 +30,7 @@
 #include <common/logger_useful.h>
 
 #include <ctime>
+#include <future>
 #include <memory>
 
 namespace CurrentMetrics
@@ -79,7 +82,7 @@ protected:
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
-        return Segment::newSegment(*dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
+        return Segment::newSegment(Logger::get(), *dm_context, table_columns, RowKeyRange::newAll(false, 1), storage_pool->newMetaPageId(), 0);
     }
 
     // setColumns should update dm_context at the same time
@@ -138,7 +141,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
 
@@ -149,7 +152,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
         }
     }
@@ -165,7 +168,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
 
@@ -176,7 +179,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_write + num_rows_write_2);
         }
     }
@@ -197,7 +200,7 @@ try
 
         // flush segment and make sure there is two packs in stable
         segment = segment->mergeDelta(dmContext(), tableColumns());
-        ASSERT_EQ(segment->getStable()->getPacks(), 2);
+        ASSERT_EQ(segment->getStable()->getDMFilesPacks(), 2);
     }
 
     {
@@ -206,7 +209,7 @@ try
     }
 
     {
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         // only write two visible pks
         ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
@@ -242,7 +245,7 @@ try
     { // Round 1
         {
             // read written data (only in delta)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
 
@@ -255,7 +258,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows);
         }
     }
@@ -273,7 +276,7 @@ try
     { // Round 2
         {
             // read written data (both in delta and stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
 
@@ -285,7 +288,7 @@ try
 
         {
             // read written data (only in stable)
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), read_ranges);
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), read_ranges);
             ASSERT_INPUTSTREAM_NROWS(in, expect_read_rows_2);
         }
     }
@@ -317,19 +320,19 @@ try
     // Thread A
     write_rows(100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         100);
     auto snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
 
     // Thread B
     write_rows(100);
     ASSERT_INPUTSTREAM_NROWS(
-        segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
+        segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)}),
         200);
 
     // Thread A
     {
-        auto in = segment->getInputStream(
+        auto in = segment->getInputStreamModeNormal(
             dmContext(),
             *tableColumns(),
             snap,
@@ -365,7 +368,7 @@ try
     }
 
     auto get_rows = [&](const RowKeyRange & range) {
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {range});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {range});
         return getInputStreamNRows(in);
     };
 
@@ -435,7 +438,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -456,7 +459,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -467,7 +470,7 @@ try
     if (merge_delta_after_delete)
     {
         // read raw after delete range
-        auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
+        auto in = segment->getInputStreamModeRaw(dmContext(), *tableColumns());
         // Only 2 rows are left on disk, others are compacted.
         ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
@@ -488,7 +491,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -517,7 +520,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -528,7 +531,7 @@ try
     if (merge_delta_after_delete)
     {
         // read raw after delete range
-        auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
+        auto in = segment->getInputStreamModeRaw(dmContext(), *tableColumns());
         // Only 2 rows are left on disk, others are compacted.
         ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
@@ -558,7 +561,7 @@ try
     if (read_before_delete)
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -579,7 +582,7 @@ try
 
     {
         // read after delete range
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -590,7 +593,7 @@ try
     if (merge_delta_after_delete)
     {
         // read raw after delete range
-        auto in = segment->getInputStreamRaw(dmContext(), *tableColumns());
+        auto in = segment->getInputStreamModeRaw(dmContext(), *tableColumns());
         // Only 2 rows are left on disk, others are compacted.
         ASSERT_INPUTSTREAM_NROWS(in, 2);
     }
@@ -626,14 +629,12 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString()); // Add trace msg when ASSERT failed
         check_segment_squash_delete_range(segment, HandleRange{70, 100});
-
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
         // Read after deletion
         // The deleted range has no overlap with current data, so there should be no change
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -645,15 +646,14 @@ try
         HandleRange del{63, 70};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
-        check_segment_squash_delete_range(segment, HandleRange{63, 100});
 
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        check_segment_squash_delete_range(segment, HandleRange{63, 100});
     }
 
     {
         // Read after deletion
         // The deleted range has overlap range [63, 64) with current data, so the record with Handle 63 should be deleted
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({DMTestEnv::pk_name}),
@@ -666,12 +666,11 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
 
         std::vector<Int64> pk_coldata{0};
         auto tmp = createNumbers<Int64>(32, 63);
@@ -689,12 +688,11 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         std::vector<Int64> pk_coldata{0};
         auto tmp = createNumbers<Int64>(32, 63);
         pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
@@ -711,12 +709,11 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{0, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
         // Read after deletion
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         std::vector<Int64> pk_coldata = createNumbers<Int64>(32, 63);
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -734,7 +731,7 @@ try
 
     {
         // Read after new write
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         std::vector<Int64> pk_coldata = createNumbers<Int64>(9, 16);
         auto tmp = createNumbers<Int64>(32, 63);
         pk_coldata.insert(pk_coldata.end(), tmp.begin(), tmp.end());
@@ -765,7 +762,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_write);
     }
 
@@ -784,8 +781,8 @@ try
     EXPECT_EQ(*s2_range.end.value, *old_range.end.value);
     // TODO check segment epoch is increase
 
-    size_t num_rows_seg1 = getInputStreamNRows(segment->getInputStream(dmContext(), *tableColumns(), {segment->getRowKeyRange()}));
-    size_t num_rows_seg2 = getInputStreamNRows(new_segment->getInputStream(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()}));
+    size_t num_rows_seg1 = getInputStreamNRows(segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {segment->getRowKeyRange()}));
+    size_t num_rows_seg2 = getInputStreamNRows(new_segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {new_segment->getRowKeyRange()}));
     ASSERT_EQ(num_rows_seg1 + num_rows_seg2, num_rows_write);
 
     // delete rows in the right segment
@@ -805,7 +802,7 @@ try
             // TODO check segment epoch is increase
         }
         {
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_NROWS(in, num_rows_seg1);
         }
     }
@@ -839,8 +836,8 @@ try
     // If they are equal, result will be true, otherwise it will be false.
     auto compare = [&](const SegmentPtr & seg1, const SegmentPtr & seg2, bool & result) {
         result = false;
-        auto in1 = seg1->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
-        auto in2 = seg2->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in1 = seg1->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in2 = seg2->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         in1->readPrefix();
         in2->readPrefix();
         for (;;)
@@ -899,7 +896,7 @@ try
         segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
-    SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
+    SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
 
     {
         // test compare
@@ -912,7 +909,7 @@ try
         // Do some update and restore again
         HandleRange del(0, 32);
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
-        new_segment = segment->restoreSegment(dmContext(), segment->segmentId());
+        new_segment = segment->restoreSegment(Logger::get(), dmContext(), segment->segmentId());
     }
 
     {
@@ -972,7 +969,7 @@ try
 
         {
             // Read after writing
-            auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+            auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
             ASSERT_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
@@ -1106,7 +1103,7 @@ try
     };
 
     auto read_rows = [&](const SegmentPtr & segment) {
-        auto in = segment->getInputStream(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *tableColumns(), {RowKeyRange::newAll(false, 1)});
         return getInputStreamNRows(in);
     };
 
@@ -1134,8 +1131,8 @@ try
     }
 
     {
-        SegmentPtr new_segment_1 = Segment::restoreSegment(dmContext(), segment->segmentId());
-        SegmentPtr new_segment_2 = Segment::restoreSegment(dmContext(), other_segment->segmentId());
+        SegmentPtr new_segment_1 = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
+        SegmentPtr new_segment_2 = Segment::restoreSegment(Logger::get(), dmContext(), other_segment->segmentId());
         auto rows1 = read_rows(new_segment_1);
         auto rows2 = read_rows(new_segment_2);
         ASSERT_EQ(rows1 + rows2, (size_t)200);
@@ -1166,7 +1163,7 @@ try
     }
 
     {
-        SegmentPtr new_segment = Segment::restoreSegment(dmContext(), segment->segmentId());
+        SegmentPtr new_segment = Segment::restoreSegment(Logger::get(), dmContext(), segment->segmentId());
         auto rows = read_rows(new_segment);
         ASSERT_EQ(rows, (size_t)300);
     }
@@ -1249,7 +1246,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
         // check that we can read correct values
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
@@ -1281,7 +1278,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         // [0, 50) is the old signed values, [50, 100) is replaced by newer written values
@@ -1307,7 +1304,7 @@ try
 
     {
         // check the stable data with new schema
-        auto in = segment->getInputStream(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_to_read, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         std::vector<Int64> i32_columndata = createSignedNumbers(0, num_rows_write / 2);
@@ -1372,7 +1369,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1407,7 +1404,7 @@ try
 
     {
         // read written data
-        auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         // First 50 values are default value
@@ -1434,7 +1431,7 @@ try
 
     {
         // read written data after delta-merge
-        auto in = segment->getInputStream(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
+        auto in = segment->getInputStreamModeNormal(dmContext(), *columns_after_ddl, {RowKeyRange::newAll(false, 1)});
 
         // check that we can read correct values
         // First 50 values are default value
@@ -1551,6 +1548,100 @@ INSTANTIATE_TEST_CASE_P(SegmentWriteType,
                             ::testing::Values(SegmentWriteType::ToDisk, SegmentWriteType::ToCache),
                             ::testing::Bool()),
                         paramToString);
+
+
+TEST_F(SimplePKTestBasic, FlushWhileMerging)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    // Everything in memtable
+    fill(-1000, 1000);
+    ASSERT_EQ(1000, getSegmentAt(-10)->getDelta()->getMemTableSet()->getRows());
+
+    auto sp_merge_prepared = SyncPointCtl::enableInScope("after_DeltaMergeStore::segmentMerge|prepare_merge");
+
+    auto th_merge = std::async([&]() {
+        ASSERT_TRUE(merge(-10, 20));
+    });
+
+    sp_merge_prepared.waitAndPause();
+    flush(-10, -9); // Flush the first segment
+    sp_merge_prepared.next();
+    th_merge.get();
+
+    ASSERT_EQ(2000, getRowsN());
+    ASSERT_EQ(2000, getRowsN(-1000, 1000));
+}
+CATCH
+
+TEST_F(SimplePKTestBasic, MultipleFlushAndWriteWhileMerging)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    fill(-1000, 1000);
+
+    auto sp_merge_prepared = SyncPointCtl::enableInScope("after_DeltaMergeStore::segmentMerge|prepare_merge");
+
+    auto th_merge = std::async([&]() {
+        ASSERT_TRUE(merge(-10, 110));
+    });
+
+    sp_merge_prepared.waitAndPause();
+
+    ASSERT_EQ(2000, getRowsN());
+
+    flush(-10, -9);
+    ASSERT_EQ(2000, getRowsN());
+
+    fill(0, 100);
+    ASSERT_EQ(2000, getRowsN());
+
+    flush(50, 51);
+    ASSERT_EQ(2000, getRowsN());
+
+    deleteRange(30, 70);
+    ASSERT_EQ(1960, getRowsN());
+
+    sp_merge_prepared.next();
+    th_merge.get();
+
+    ASSERT_EQ(1960, getRowsN());
+    ASSERT_EQ(1960, getRowsN(-1000, 1000));
+}
+CATCH
+
+TEST_F(SimplePKTestBasic, MergeWhileFlushing)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    fill(-1000, 1000);
+    ASSERT_EQ(2000, getRowsN());
+
+    auto sp_flush_prepared = SyncPointCtl::enableInScope("after_DeltaValueSpace::flush|prepare_flush");
+
+    auto th_flush = std::async([&]() {
+        flush(10, 11);
+    });
+
+    sp_flush_prepared.waitAndPause();
+
+    ASSERT_TRUE(merge(-10, 110));
+    ASSERT_EQ(std::vector<Int64>({}), getSegmentBreakpoints());
+    ASSERT_EQ(2000, getRowsN());
+
+    deleteRange(30, 70);
+    ASSERT_EQ(1960, getRowsN());
+
+    sp_flush_prepared.next();
+    sp_flush_prepared.waitAndNext(); // We expect one flush retry
+    th_flush.get();
+
+    ASSERT_EQ(1960, getRowsN());
+}
+CATCH
 
 } // namespace tests
 } // namespace DM

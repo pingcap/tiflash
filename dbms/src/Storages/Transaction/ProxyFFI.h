@@ -147,8 +147,8 @@ BaseBuffView strIntoView(const std::string * str_ptr);
 CppStrWithView GetConfig(EngineStoreServerWrap *, uint8_t full);
 void SetStore(EngineStoreServerWrap *, BaseBuffView);
 void SetPBMsByBytes(MsgPBType type, RawVoidPtr ptr, BaseBuffView view);
-}
 void HandleSafeTSUpdate(EngineStoreServerWrap * server, uint64_t region_id, uint64_t self_safe_ts, uint64_t leader_safe_ts);
+}
 
 inline EngineStoreServerHelper GetEngineStoreServerHelper(
     EngineStoreServerWrap * tiflash_instance_wrap)
@@ -179,4 +179,7 @@ inline EngineStoreServerHelper GetEngineStoreServerHelper(
         .fn_handle_safe_ts_update = HandleSafeTSUpdate,
     };
 }
+
+std::string_view buffToStrView(const BaseBuffView & buf);
+
 } // namespace DB

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/SimpleIntrusiveNode.h>
 #include <Common/nocopyable.h>
 #include <common/defines.h>
@@ -81,12 +82,6 @@ public:
 
     ~MPMCQueue()
     {
-        drain();
-    }
-
-    void finishAndDrain()
-    {
-        finish();
         drain();
     }
 
@@ -219,7 +214,7 @@ public:
         return static_cast<size_t>(write_pos - read_pos);
     }
 
-    std::string_view getCancelReason() const
+    const String & getCancelReason() const
     {
         std::unique_lock lock(mu);
         RUNTIME_ASSERT(isCancelled());

@@ -316,7 +316,6 @@ private:
         Arena temporary_keys_pool;
         PODArray<StringRef> keys_array(rows_num);
 
-        size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
         {
             const auto now = std::chrono::system_clock::now();
             /// fetch up-to-date values, decide which ones require update
@@ -334,14 +333,9 @@ private:
                 if (!find_result.valid)
                 {
                     outdated_keys[key].push_back(row);
-                    if (find_result.outdated)
-                        ++cache_expired;
-                    else
-                        ++cache_not_found;
                 }
                 else
                 {
-                    ++cache_hit;
                     const auto & cell_idx = find_result.cell_idx;
                     const auto & cell = cells[cell_idx];
                     out[row] = cell.isDefault() ? get_default(row) : static_cast<OutputType>(attribute_array[cell_idx]);
@@ -435,7 +429,6 @@ private:
         PODArray<StringRef> keys_array(rows_num);
 
         size_t total_length = 0;
-        size_t cache_expired = 0, cache_not_found = 0, cache_hit = 0;
         {
             const auto now = std::chrono::system_clock::now();
             for (const auto row : ext::range(0, rows_num))
@@ -447,14 +440,9 @@ private:
                 if (!find_result.valid)
                 {
                     outdated_keys[key].push_back(row);
-                    if (find_result.outdated)
-                        ++cache_expired;
-                    else
-                        ++cache_not_found;
                 }
                 else
                 {
-                    ++cache_hit;
                     const auto & cell_idx = find_result.cell_idx;
                     const auto & cell = cells[cell_idx];
                     const auto string_ref = cell.isDefault() ? get_default(row) : attribute_array[cell_idx];
@@ -504,7 +492,7 @@ private:
         for (const auto row : ext::range(0, ext::size(keys_array)))
         {
             const StringRef key = keys_array[row];
-            const auto it = map.find(key);
+            auto * const it = map.find(key);
             const auto string_ref = it != std::end(map) ? it->getMapped() : get_default(row);
             out->insertData(string_ref.data, string_ref.size);
         }
@@ -598,9 +586,6 @@ private:
             stream->readSuffix();
         }
 
-        size_t found_num = 0;
-        size_t not_found_num = 0;
-
         const auto now = std::chrono::system_clock::now();
 
         /// Check which ids have not been found and require setting null_value
@@ -608,11 +593,8 @@ private:
         {
             if (key_found_pair.getMapped())
             {
-                ++found_num;
                 continue;
             }
-
-            ++not_found_num;
 
             auto key = key_found_pair.getKey();
             const auto hash = StringRefHash{}(key);

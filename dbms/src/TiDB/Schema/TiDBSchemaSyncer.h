@@ -110,7 +110,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         Stopwatch watch;
         SCOPE_EXIT({ GET_METRIC(tiflash_schema_apply_duration_seconds).Observe(watch.elapsedSeconds()); });
 
-        LOG_FMT_INFO(log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
+        LOG_INFO(log, "Start to sync schemas. current version is: {} and try to sync schema version to: {}", cur_version, version);
 
         // Show whether the schema mutex is held for a long time or not.
         GET_METRIC(tiflash_schema_applying).Set(1.0);
@@ -132,7 +132,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
         }
         cur_version = version_after_load_diff;
         GET_METRIC(tiflash_schema_version).Set(cur_version);
-        LOG_FMT_INFO(log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
+        LOG_INFO(log, "End sync schema, version has been updated to {}{}", cur_version, cur_version == version ? "" : "(latest diff is empty)");
         return true;
     }
 
@@ -167,7 +167,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             return -1;
         }
 
-        LOG_FMT_DEBUG(log, "Try load schema diffs.");
+        LOG_DEBUG(log, "Try load schema diffs.");
 
         Int64 used_version = cur_version;
         // First get all schema diff from `cur_version` to `latest_version`. Only apply the schema diff(s) if we fetch all
@@ -178,12 +178,12 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             used_version++;
             diffs.push_back(getter.getSchemaDiff(used_version));
         }
-        LOG_FMT_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
+        LOG_DEBUG(log, "End load schema diffs with total {} entries.", diffs.size());
 
 
         if (diffs.empty())
         {
-            LOG_FMT_WARNING(log, "Schema Diff is empty.");
+            LOG_WARNING(log, "Schema Diff is empty.");
             return -1;
         }
         // Since the latest schema diff may be empty, and schemaBuilder may need to update the latest version for storageDeltaMerge,
@@ -210,7 +210,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                     //  - `cur_version` is 1, `latest_version` is 10
                     //  - The schema diff of schema version [2,4,6] is empty, Then we just skip it.
                     //  - The schema diff of schema version 10 is empty, Then we should just apply version into 9(which we check it before)
-                    LOG_FMT_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
+                    LOG_WARNING(log, "Skip the schema diff from version {}. ", cur_version + diff_index + 1);
                     continue;
                 }
                 builder.applyDiff(*schema_diff);
@@ -222,7 +222,7 @@ struct TiDBSchemaSyncer : public SchemaSyncer
             {
                 GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
             }
-            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return -1;
         }
         catch (Exception & e)
@@ -232,19 +232,19 @@ struct TiDBSchemaSyncer : public SchemaSyncer
                 throw;
             }
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
+            LOG_WARNING(log, "apply diff meets exception : {} \n stack is {}", e.displayText(), e.getStackTrace().toString());
             return -1;
         }
         catch (Poco::Exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.displayText());
+            LOG_WARNING(log, "apply diff meets exception : {}", e.displayText());
             return -1;
         }
         catch (std::exception & e)
         {
             GET_METRIC(tiflash_schema_apply_count, type_failed).Increment();
-            LOG_FMT_WARNING(log, "apply diff meets exception : {}", e.what());
+            LOG_WARNING(log, "apply diff meets exception : {}", e.what());
             return -1;
         }
 

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <boost/endian/conversion.hpp>
+#include <boost_wrapper/endian_conversion.h>
 
 namespace DB
 {

@@ -25,7 +25,7 @@ extern const int IP_ADDRESS_NOT_ALLOWED;
 } // namespace ErrorCodes
 namespace tests
 {
-void MockComputeServerManager::addServer(String addr)
+void MockComputeServerManager::addServer(const String & addr)
 {
     MockServerConfig config;
     for (const auto & server : server_config_map)

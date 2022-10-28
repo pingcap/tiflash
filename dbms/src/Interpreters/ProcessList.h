@@ -120,7 +120,6 @@ public:
     {
         memory_tracker->setDescription("(for query)");
         current_memory_tracker = memory_tracker.get();
-
         if (memory_tracker_fault_probability)
             memory_tracker->setFaultProbability(memory_tracker_fault_probability);
     }
@@ -146,6 +145,10 @@ public:
     }
 
     ThrottlerPtr getUserNetworkThrottler();
+    MemoryTrackerPtr getMemoryTrackerPtr()
+    {
+        return memory_tracker;
+    }
 
     bool updateProgressIn(const Progress & value)
     {
@@ -296,7 +299,7 @@ public:
     ProcessList(size_t max_size_ = 0)
         : cur_size(0)
         , max_size(max_size_)
-        , total_memory_tracker(MemoryTracker::create())
+        , total_memory_tracker(root_of_query_mem_trackers)
     {}
 
     using EntryPtr = std::shared_ptr<ProcessListEntry>;

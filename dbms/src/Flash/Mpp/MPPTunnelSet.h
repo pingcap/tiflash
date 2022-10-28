@@ -34,7 +34,7 @@ class MPPTunnelSetBase : private boost::noncopyable
 public:
     using TunnelPtr = std::shared_ptr<Tunnel>;
     explicit MPPTunnelSetBase(const String & req_id)
-        : log(Logger::get("MPPTunnelSet", req_id))
+        : log(Logger::get(req_id))
     {}
 
     void clearExecutionSummaries(tipb::SelectResponse & response);
@@ -54,11 +54,9 @@ public:
     // this is a partition writing.
     void write(tipb::SelectResponse & response, int16_t partition_id);
     void write(mpp::MPPDataPacket & packet, int16_t partition_id);
-    void writeError(const String & msg);
-    void close(const String & reason);
+    void close(const String & reason, bool wait_sender_finish);
     void finishWrite();
     void registerTunnel(const MPPTaskId & id, const TunnelPtr & tunnel);
-    void updateMemTracker();
 
     TunnelPtr getTunnelByReceiverTaskId(const MPPTaskId & id);
 
