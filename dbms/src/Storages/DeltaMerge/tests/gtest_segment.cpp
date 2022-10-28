@@ -172,15 +172,16 @@ TEST_F(SegmentOperationTest, Issue4956)
 try
 {
     // flush data, make the segment can be split.
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     // write data to cache, reproduce the https://github.com/pingcap/tiflash/issues/4956
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
-    auto segment_id = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto segment_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 500, Segment::SplitMode::Physical);
     ASSERT_TRUE(segment_id.has_value());
 
     mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id});
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
 }
 CATCH
 
@@ -453,6 +454,63 @@ try
         storage_pool->data_storage_v2->gc(/* not_skip */ true);
         ASSERT_EQ(storage_pool->log_storage_v2->getNumberOfPages(), 0);
         ASSERT_EQ(storage_pool->data_storage_v2->getNumberOfPages(), 1);
+    }
+}
+CATCH
+
+TEST_F(SegmentOperationTest, CheckColumnFileSchema)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    {
+        LOG_DEBUG(log, "beginSegmentMergeDelta");
+
+        // Start a segment merge and suspend it before applyMerge
+        auto sp_seg_merge_delta_apply = SyncPointCtl::enableInScope("before_Segment::applyMergeDelta");
+        auto th_seg_merge_delta = std::async([&]() {
+            mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID, /* check_rows */ false);
+        });
+        sp_seg_merge_delta_apply.waitAndPause();
+
+        LOG_DEBUG(log, "pausedBeforeApplyMergeDelta");
+
+        // non-flushed column files
+        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        sp_seg_merge_delta_apply.next();
+        th_seg_merge_delta.get();
+
+        LOG_DEBUG(log, "finishApplyMergeDelta");
+    }
+
+    {
+        ingestDTFileIntoSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+        writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100);
+    }
+    ASSERT_EQ(segments.size(), 1);
+    {
+        auto segment = segments[DELTA_MERGE_FIRST_SEGMENT_ID];
+        auto delta = segment->getDelta();
+        auto mem_table_set = delta->getMemTableSet();
+        WriteBatches wbs(dm_context->storage_pool);
+        auto lock = segment->mustGetUpdateLock();
+        auto [memory_cf, persisted_cf] = delta->cloneAllColumnFiles(lock, *dm_context, segment->getRowKeyRange(), wbs);
+        ASSERT_FALSE(memory_cf.empty());
+        ASSERT_TRUE(persisted_cf.empty());
+        BlockPtr last_schema;
+        for (const auto & column_file : memory_cf)
+        {
+            if (auto * t_file = column_file->tryToTinyFile(); t_file)
+            {
+                auto current_schema = t_file->getSchema();
+                ASSERT_TRUE(!last_schema || (last_schema == current_schema));
+                last_schema = current_schema;
+            }
+        }
+        // check last_schema is not nullptr after all
+        ASSERT_NE(last_schema, nullptr);
     }
 }
 CATCH
@@ -798,8 +856,8 @@ try
     ASSERT_TRUE(new_seg_id_opt.has_value());
     ASSERT_EQ(segments.size(), 2);
     ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
-    ASSERT_EQ(50, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(50 + 70, getSegmentRowNum(*new_seg_id_opt));
+    ASSERT_EQ(85, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(85, getSegmentRowNum(*new_seg_id_opt));
 }
 CATCH
 
