@@ -112,7 +112,7 @@ void executeExpression(
 void orderStreams(
     DAGPipeline & pipeline,
     size_t max_streams,
-    SortDescription order_descr,
+    const SortDescription & order_descr,
     Int64 limit,
     bool enable_fine_grained_shuffle,
     const Context & context,
