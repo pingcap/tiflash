@@ -47,7 +47,6 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 }
 namespace tests
 {
-
 class SegmentFrameworkTest : public SegmentTestBasic
 {
 };

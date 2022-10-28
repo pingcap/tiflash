@@ -50,7 +50,7 @@ namespace FailPoints
 {
 extern const char skip_check_segment_update[];
 extern const char force_fail_in_flush_region_data[];
-}
+} // namespace FailPoints
 
 namespace RegionBench
 {
