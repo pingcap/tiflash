@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/SyncPoint/SyncPoint.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -65,15 +66,141 @@ void DeltaValueSpace::saveMeta(WriteBatches & wbs) const
     persisted_file_set->saveMeta(wbs);
 }
 
-std::pair<ColumnFilePersisteds, ColumnFiles>
-DeltaValueSpace::checkHeadAndCloneTail(DMContext & context,
-                                       const RowKeyRange & target_range,
-                                       const ColumnFiles & head_column_files,
-                                       WriteBatches & wbs) const
+template <class ColumnFileT>
+struct CloneColumnFilesHelper
 {
-    auto tail_persisted_files = persisted_file_set->checkHeadAndCloneTail(context, target_range, head_column_files, wbs);
-    auto memory_files = mem_table_set->cloneColumnFiles(context, target_range, wbs);
-    return std::make_pair(std::move(tail_persisted_files), std::move(memory_files));
+    static std::vector<ColumnFileT> clone(
+        DMContext & context,
+        const std::vector<ColumnFileT> & src,
+        const RowKeyRange & target_range,
+        WriteBatches & wbs);
+};
+
+template <class ColumnFilePtrT>
+std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
+    DMContext & context,
+    const std::vector<ColumnFilePtrT> & src,
+    const RowKeyRange & target_range,
+    WriteBatches & wbs)
+{
+    std::vector<ColumnFilePtrT> cloned;
+    cloned.reserve(src.size());
+
+    for (auto & column_file : src)
+    {
+        if constexpr (std::is_same_v<ColumnFilePtrT, ColumnFilePtr>)
+        {
+            if (auto * b = column_file->tryToInMemoryFile(); b)
+            {
+                auto new_column_file = b->clone();
+
+                // No matter or what, don't append to column files which cloned from old column file again.
+                // Because they could shared the same cache. And the cache can NOT be inserted from different column files in different delta.
+                new_column_file->disableAppend();
+                cloned.push_back(new_column_file);
+                continue;
+            }
+        }
+
+        if (auto * dr = column_file->tryToDeleteRange(); dr)
+        {
+            auto new_dr = dr->getDeleteRange().shrink(target_range);
+            if (!new_dr.none())
+            {
+                // Only use the available delete_range column file.
+                cloned.push_back(dr->cloneWith(new_dr));
+            }
+        }
+        else if (auto * t = column_file->tryToTinyFile(); t)
+        {
+            // Use a newly created page_id to reference the data page_id of current column file.
+            PageId new_data_page_id = context.storage_pool.newLogPageId();
+            wbs.log.putRefPage(new_data_page_id, t->getDataPageId());
+            auto new_column_file = t->cloneWith(new_data_page_id);
+            cloned.push_back(new_column_file);
+        }
+        else if (auto * f = column_file->tryToBigFile(); f)
+        {
+            auto delegator = context.path_pool.getStableDiskDelegator();
+            auto new_page_id = context.storage_pool.newDataPageIdForDTFile(delegator, __PRETTY_FUNCTION__);
+            // Note that the file id may has already been mark as deleted. We must
+            // create a reference to the page id itself instead of create a reference
+            // to the file id.
+            wbs.data.putRefPage(new_page_id, f->getDataPageId());
+            auto file_id = f->getFile()->fileId();
+            auto file_parent_path = delegator.getDTFilePath(file_id);
+            auto new_file = DMFile::restore(context.db_context.getFileProvider(), file_id, /* page_id= */ new_page_id, file_parent_path, DMFile::ReadMetaMode::all());
+
+            auto new_column_file = f->cloneWith(context, new_file, target_range);
+            cloned.push_back(new_column_file);
+        }
+        else
+        {
+            throw Exception("Meet unknown type of column file", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+    return cloned;
+}
+
+template struct CloneColumnFilesHelper<ColumnFilePtr>;
+template struct CloneColumnFilesHelper<ColumnFilePersistedPtr>;
+
+std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneNewlyAppendedColumnFiles(
+    const DeltaValueSpace::Lock &,
+    DMContext & context,
+    const RowKeyRange & target_range,
+    const DeltaValueSnapshot & update_snapshot,
+    WriteBatches & wbs) const
+{
+    RUNTIME_CHECK(update_snapshot.is_update);
+
+    const auto & snapshot_mem_files = update_snapshot.getMemTableSetSnapshot()->getColumnFiles();
+    const auto & snapshot_persisted_files = update_snapshot.getPersistedFileSetSnapshot()->getColumnFiles();
+
+    auto [new_mem_files, flushed_mem_files] = mem_table_set->diffColumnFiles(snapshot_mem_files);
+    ColumnFiles head_persisted_files;
+    head_persisted_files.reserve(snapshot_persisted_files.size() + flushed_mem_files.size());
+    head_persisted_files.insert(head_persisted_files.end(), snapshot_persisted_files.begin(), snapshot_persisted_files.end());
+    // If there were flush since the snapshot, the flushed files should be behind the files in the snapshot.
+    // So let's place these "flused files" after the persisted files in snapshot.
+    head_persisted_files.insert(head_persisted_files.end(), flushed_mem_files.begin(), flushed_mem_files.end());
+
+    auto new_persisted_files = persisted_file_set->diffColumnFiles(head_persisted_files);
+
+    // The "newly added column files" + "files in snapshot" should be equal to current files.
+    RUNTIME_CHECK(
+        mem_table_set->getColumnFileCount() + persisted_file_set->getColumnFileCount() == //
+        snapshot_mem_files.size() + snapshot_persisted_files.size() + //
+            new_mem_files.size() + new_persisted_files.size());
+
+    return {
+        CloneColumnFilesHelper<ColumnFilePtr>::clone(context, new_mem_files, target_range, wbs),
+        CloneColumnFilesHelper<ColumnFilePersistedPtr>::clone(context, new_persisted_files, target_range, wbs),
+    };
+}
+
+std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneAllColumnFiles(
+    const DeltaValueSpace::Lock &,
+    DMContext & context,
+    const RowKeyRange & target_range,
+    WriteBatches & wbs) const
+{
+    auto [new_mem_files, flushed_mem_files] = mem_table_set->diffColumnFiles({});
+    // As we are diffing the current memtable with an empty snapshot,
+    // we expect everything in the current memtable are "newly added" compared to this "empty snapshot",
+    // and none of the files in the "empty snapshot" was flushed.
+    RUNTIME_CHECK(flushed_mem_files.empty());
+    RUNTIME_CHECK(new_mem_files.size() == mem_table_set->getColumnFileCount());
+
+    // We are diffing with an empty list, so everything in the current persisted layer
+    // should be considered as "newly added".
+    auto new_persisted_files = persisted_file_set->diffColumnFiles({});
+    RUNTIME_CHECK(new_persisted_files.size() == persisted_file_set->getColumnFileCount());
+
+    return {
+        CloneColumnFilesHelper<ColumnFilePtr>::clone(context, new_mem_files, target_range, wbs),
+        CloneColumnFilesHelper<ColumnFilePersistedPtr>::clone(context, new_persisted_files, target_range, wbs),
+    };
 }
 
 size_t DeltaValueSpace::getTotalCacheRows() const
@@ -194,6 +321,8 @@ bool DeltaValueSpace::flush(DMContext & context)
         LOG_DEBUG(log, "Update index done, delta={}", simpleInfo());
     }
 
+    SYNC_FOR("after_DeltaValueSpace::flush|prepare_flush");
+
     {
         /// If this instance is still valid, then commit.
         std::scoped_lock lock(mutex);
@@ -223,17 +352,11 @@ bool DeltaValueSpace::flush(DMContext & context)
 
 bool DeltaValueSpace::compact(DMContext & context)
 {
-    bool v = false;
-    // Other thread is doing structure update, just return.
-    if (!is_updating.compare_exchange_strong(v, true))
-    {
-        LOG_DEBUG(log, "Compact stop because updating, delta={}", simpleInfo());
+    if (!tryLockUpdating())
         return true;
-    }
     SCOPE_EXIT({
-        bool v = true;
-        if (!is_updating.compare_exchange_strong(v, false))
-            throw Exception(fmt::format("Delta is expected to be flushing, delta={}", simpleInfo()), ErrorCodes::LOGICAL_ERROR);
+        auto released = releaseUpdating();
+        RUNTIME_CHECK(released, simpleInfo());
     });
 
     LOG_DEBUG(log, "Compact start, delta={}", info());

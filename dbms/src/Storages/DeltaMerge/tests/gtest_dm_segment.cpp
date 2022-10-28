@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -20,6 +21,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
+#include <Storages/DeltaMerge/tests/gtest_dm_simple_pk_test_basic.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -28,6 +30,7 @@
 #include <common/logger_useful.h>
 
 #include <ctime>
+#include <future>
 #include <memory>
 
 namespace CurrentMetrics
@@ -626,8 +629,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString()); // Add trace msg when ASSERT failed
         check_segment_squash_delete_range(segment, HandleRange{70, 100});
-
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -645,9 +646,8 @@ try
         HandleRange del{63, 70};
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
-        check_segment_squash_delete_range(segment, HandleRange{63, 100});
 
-        segment = segment->mergeDelta(dmContext(), tableColumns());
+        check_segment_squash_delete_range(segment, HandleRange{63, 100});
     }
 
     {
@@ -666,7 +666,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -689,7 +688,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{1, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -711,7 +709,6 @@ try
         segment->write(dmContext(), {RowKeyRange::fromHandleRange(del)});
         SCOPED_TRACE("check after range: " + del.toDebugString());
         check_segment_squash_delete_range(segment, HandleRange{0, 100});
-        segment = segment->mergeDelta(dmContext(), tableColumns());
     }
 
     {
@@ -1551,6 +1548,100 @@ INSTANTIATE_TEST_CASE_P(SegmentWriteType,
                             ::testing::Values(SegmentWriteType::ToDisk, SegmentWriteType::ToCache),
                             ::testing::Bool()),
                         paramToString);
+
+
+TEST_F(SimplePKTestBasic, FlushWhileMerging)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    // Everything in memtable
+    fill(-1000, 1000);
+    ASSERT_EQ(1000, getSegmentAt(-10)->getDelta()->getMemTableSet()->getRows());
+
+    auto sp_merge_prepared = SyncPointCtl::enableInScope("after_DeltaMergeStore::segmentMerge|prepare_merge");
+
+    auto th_merge = std::async([&]() {
+        ASSERT_TRUE(merge(-10, 20));
+    });
+
+    sp_merge_prepared.waitAndPause();
+    flush(-10, -9); // Flush the first segment
+    sp_merge_prepared.next();
+    th_merge.get();
+
+    ASSERT_EQ(2000, getRowsN());
+    ASSERT_EQ(2000, getRowsN(-1000, 1000));
+}
+CATCH
+
+TEST_F(SimplePKTestBasic, MultipleFlushAndWriteWhileMerging)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    fill(-1000, 1000);
+
+    auto sp_merge_prepared = SyncPointCtl::enableInScope("after_DeltaMergeStore::segmentMerge|prepare_merge");
+
+    auto th_merge = std::async([&]() {
+        ASSERT_TRUE(merge(-10, 110));
+    });
+
+    sp_merge_prepared.waitAndPause();
+
+    ASSERT_EQ(2000, getRowsN());
+
+    flush(-10, -9);
+    ASSERT_EQ(2000, getRowsN());
+
+    fill(0, 100);
+    ASSERT_EQ(2000, getRowsN());
+
+    flush(50, 51);
+    ASSERT_EQ(2000, getRowsN());
+
+    deleteRange(30, 70);
+    ASSERT_EQ(1960, getRowsN());
+
+    sp_merge_prepared.next();
+    th_merge.get();
+
+    ASSERT_EQ(1960, getRowsN());
+    ASSERT_EQ(1960, getRowsN(-1000, 1000));
+}
+CATCH
+
+TEST_F(SimplePKTestBasic, MergeWhileFlushing)
+try
+{
+    ensureSegmentBreakpoints({0, 50, 100});
+
+    fill(-1000, 1000);
+    ASSERT_EQ(2000, getRowsN());
+
+    auto sp_flush_prepared = SyncPointCtl::enableInScope("after_DeltaValueSpace::flush|prepare_flush");
+
+    auto th_flush = std::async([&]() {
+        flush(10, 11);
+    });
+
+    sp_flush_prepared.waitAndPause();
+
+    ASSERT_TRUE(merge(-10, 110));
+    ASSERT_EQ(std::vector<Int64>({}), getSegmentBreakpoints());
+    ASSERT_EQ(2000, getRowsN());
+
+    deleteRange(30, 70);
+    ASSERT_EQ(1960, getRowsN());
+
+    sp_flush_prepared.next();
+    sp_flush_prepared.waitAndNext(); // We expect one flush retry
+    th_flush.get();
+
+    ASSERT_EQ(1960, getRowsN());
+}
+CATCH
 
 } // namespace tests
 } // namespace DM
