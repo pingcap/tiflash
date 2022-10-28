@@ -21,8 +21,6 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Mpp/MPPTunnelSet.h>
 
-#include <iostream>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -107,7 +105,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
     TrackedSelectResp response;
     if constexpr (send_exec_summary_at_last)
-        addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
+        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
     response.setEncodeType(dag_context.encode_type);
     if (blocks.empty())
     {

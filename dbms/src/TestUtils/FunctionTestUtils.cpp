@@ -461,6 +461,8 @@ String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size
         return "";
 
     const size_t col_size = cols[0].column->size();
+    if (col_size <= 0)
+        return "";
     assert(begin <= end);
     assert(col_size >= end);
     assert(col_size > begin);

@@ -122,12 +122,36 @@ struct fmt::formatter<DB::PageIdV3Internal>
 {
     static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
     {
-        return ctx.begin();
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+        return it;
     }
 
     template <typename FormatContext>
     auto format(const DB::PageIdV3Internal & value, FormatContext & ctx) const -> decltype(ctx.out())
     {
         return format_to(ctx.out(), "{}.{}", value.high, value.low);
+    }
+};
+template <>
+struct fmt::formatter<DB::PageFileIdAndLevel>
+{
+    static constexpr auto parse(format_parse_context & ctx) -> decltype(ctx.begin())
+    {
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("invalid format");
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::PageFileIdAndLevel & id_lvl, FormatContext & ctx) const -> decltype(ctx.out())
+    {
+        return format_to(ctx.out(), "{}_{}", id_lvl.first, id_lvl.second);
     }
 };

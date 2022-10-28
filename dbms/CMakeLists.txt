@@ -215,6 +215,12 @@ target_link_libraries (dbms
     absl::synchronization
 )
 
+# always add GmSSL include dir to the include path for static analysis
+target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+if (USE_GM_SSL)
+    target_link_libraries(dbms gmssl)
+endif ()
+
 if (NOT USE_INTERNAL_RE2_LIBRARY)
     target_include_directories (dbms BEFORE PRIVATE ${RE2_INCLUDE_DIR})
 endif ()
@@ -309,6 +315,33 @@ if (ENABLE_TESTS)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
     target_link_libraries(gtests_dbms test_util_gtest_main clickhouse_functions tiflash-dttool-lib)
+
+    install (TARGETS gtests_dbms
+            COMPONENT tiflash-gtest
+            DESTINATION "."
+            RUNTIME_DEPENDENCY_SET tiflash-gtest-dependency)
+    install (RUNTIME_DEPENDENCY_SET tiflash-gtest-dependency
+            COMPONENT tiflash-gtest
+            DESTINATION "."
+            PRE_EXCLUDE_REGEXES
+                "libdl.*"
+                "libc-.*"
+                "libc\\..*"
+                "libgcc_s.*"
+                "librt.*"
+                "libm.*"
+                "ld-linux-x86-64.*"
+                "ld-linux-aarch64.*"
+                "libpthread.*"# exclude libc dependencies
+            DIRECTORIES ${TIFLASH_GTEST_DEPENDENCY_DIRECTORIES})
+
+    if (USE_GM_SSL)
+        target_link_libraries(gtests_dbms gmssl)
+        target_include_directories(gtests_dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+        install (TARGETS gmssl
+                COMPONENT tiflash-gtest
+                DESTINATION ".")
+    endif ()
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)

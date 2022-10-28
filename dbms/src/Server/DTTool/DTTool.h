@@ -88,11 +88,15 @@ class ImitativeEnv
         // set itself as global context
         global_context = std::make_unique<DB::Context>(DB::Context::createGlobal());
         global_context->setGlobalContext(*global_context);
-        global_context->setApplicationType(DB::Context::ApplicationType::SERVER);
+        global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
 
         global_context->initializeTiFlashMetrics();
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(encryption);
         global_context->initializeFileProvider(key_manager, encryption);
+
+        auto & settings = global_context->getSettingsRef();
+        global_context->initializeBackgroundPool(settings.background_pool_size.get());
+        global_context->initializeBlockableBackgroundPool(settings.background_pool_size.get());
 
         // Theses global variables should be initialized by the following order
         // 1. capacity
@@ -108,7 +112,7 @@ class ImitativeEnv
             global_context->getPathCapacity(),
             global_context->getFileProvider());
         TiFlashRaftConfig raft_config;
-
+        global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
         raft_config.ignore_databases = {"default", "system"};
         raft_config.engine = TiDB::StorageEngine::DT;
         global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
