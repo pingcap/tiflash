@@ -49,6 +49,8 @@ public:
         const String & executor_id,
         bool delta_mode);
     void addExecuteSummaries(tipb::SelectResponse & response, bool delta_mode);
+    /// prepared with sample block
+    virtual void prepare(const Block &) {};
     virtual void write(const Block & block) = 0;
     /// flush cached blocks for batch writer
     virtual void flush() = 0;

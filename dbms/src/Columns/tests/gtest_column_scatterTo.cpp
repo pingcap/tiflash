@@ -12,13 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
+#include <Columns/ColumnArray.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnNothing.h>
 #include <Columns/ColumnSet.h>
 #include <Columns/ColumnTuple.h>
-#include <Columns/ColumnArray.h>
+#include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
+
 #include "Common/COWPtr.h"
 
 namespace DB
@@ -29,7 +30,7 @@ class TestColumnScatterTo : public ::testing::Test
 {
 public:
     void compareColumn(const ColumnWithTypeAndName & expected_col_with_type_name,
-                          const ColumnWithTypeAndName & actual_col_with_type_name)
+                       const ColumnWithTypeAndName & actual_col_with_type_name)
     {
         const ColumnPtr expected = expected_col_with_type_name.column;
         const ColumnPtr actual = actual_col_with_type_name.column;
@@ -50,7 +51,8 @@ public:
         auto column_ptr = col_with_type_and_name.column;
         ASSERT_TRUE(rows == column_ptr->size());
         MutableColumns scatterTo_res(scattered_num_column);
-        for (size_t i = 0; i < scattered_num_column; i++) {
+        for (size_t i = 0; i < scattered_num_column; i++)
+        {
             scatterTo_res[i] = column_ptr->cloneEmpty();
         }
         IColumn::Selector selector;
@@ -69,7 +71,8 @@ public:
 
         /// Apply scatterTo twice sequentially
         scatterTo_res.clear();
-        for (size_t i = 0; i < scattered_num_column; i++) {
+        for (size_t i = 0; i < scattered_num_column; i++)
+        {
             scatterTo_res.push_back(column_ptr->cloneEmpty());
         }
         column_ptr->scatterTo(scatterTo_res, selector);
@@ -94,14 +97,13 @@ try
     using FieldType = DecimalField<Decimal32>;
 
     auto col_with_type_and_name = createColumn<Decimal32>(
-                          std::make_tuple(9, 4),
-                          {
-                              FieldType(static_cast<Native>(1), 4),
-                              FieldType(static_cast<Native>(2), 4),
-                              FieldType(static_cast<Native>(3), 4),
-                              FieldType(static_cast<Native>(4), 4),
-                              FieldType(static_cast<Native>(5), 4),
-                              FieldType(static_cast<Native>(6), 4)});
+        std::make_tuple(9, 4),
+        {FieldType(static_cast<Native>(1), 4),
+         FieldType(static_cast<Native>(2), 4),
+         FieldType(static_cast<Native>(3), 4),
+         FieldType(static_cast<Native>(4), 4),
+         FieldType(static_cast<Native>(5), 4),
+         FieldType(static_cast<Native>(6), 4)});
     doTestWork(col_with_type_and_name);
 }
 CATCH
@@ -133,9 +135,9 @@ try
     col->insertData("e", 1);
     col->insertData("f", 1);
     auto col_with_type_and_name = ColumnWithTypeAndName{
-            std::move(col),
-            std::make_shared<DataTypeString>(),
-            String("col")};
+        std::move(col),
+        std::make_shared<DataTypeString>(),
+        String("col")};
     doTestWork(col_with_type_and_name);
 }
 CATCH
@@ -144,14 +146,12 @@ TEST_F(TestColumnScatterTo, TestColumnNullableAndVector)
 try
 {
     auto col_with_type_and_name = createColumn<Nullable<DataTypeMyDateTime::FieldType>>(
-                                                        {
-                                                            MyDateTime(2020, 1, 10, 0, 0, 0, 0).toPackedUInt(),
-                                                            MyDateTime(2020, 2, 10, 0, 0, 0, 0).toPackedUInt(),
-                                                            MyDateTime(2020, 3, 10, 0, 0, 0, 0).toPackedUInt(),
-                                                            {}, // Null
-                                                            MyDateTime(2020, 4, 10, 0, 0, 0, 0).toPackedUInt(),
-                                                            MyDateTime(2020, 5, 10, 0, 0, 0, 0).toPackedUInt()
-                                                        });
+        {MyDateTime(2020, 1, 10, 0, 0, 0, 0).toPackedUInt(),
+         MyDateTime(2020, 2, 10, 0, 0, 0, 0).toPackedUInt(),
+         MyDateTime(2020, 3, 10, 0, 0, 0, 0).toPackedUInt(),
+         {}, // Null
+         MyDateTime(2020, 4, 10, 0, 0, 0, 0).toPackedUInt(),
+         MyDateTime(2020, 5, 10, 0, 0, 0, 0).toPackedUInt()});
     doTestWork(col_with_type_and_name);
 }
 CATCH

@@ -107,7 +107,7 @@ public:
     {
         scatterToImpl<ColumnNullable>(columns, selector);
     }
-    
+
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     void forEachSubcolumn(ColumnCallback callback) override

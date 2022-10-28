@@ -145,7 +145,7 @@ public:
     {
         scatterToImpl<ColumnFixedString>(columns, selector);
     }
-    
+
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     void reserve(size_t size) override

@@ -288,7 +288,7 @@ public:
     }
 
     /// Different from scatter, scatterTo appends the scattered data to 'columns' instead of creating ScatterColumns
-    virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;    
+    virtual void scatterTo(ScatterColumns & columns, const Selector & selector) const = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).
     /// For now it is a helper to de-virtualize calls to insert*() functions inside gather loop

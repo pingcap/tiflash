@@ -34,6 +34,7 @@ public:
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
         UInt64 fine_grained_shuffle_batch_size);
+    void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
     void flush() override;
     void finishWrite() override;
@@ -53,20 +54,17 @@ private:
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks = 0;
-    size_t cached_block_count = 0;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
 
-    bool inited = false;
     Block header;
     size_t num_columns, num_bucket;
     std::vector<String> partition_key_containers_for_reuse;
     WeakHash32 hash;
     IColumn::Selector selector;
     std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
-
 };
 
 } // namespace DB

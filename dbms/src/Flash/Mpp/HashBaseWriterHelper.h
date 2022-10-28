@@ -24,27 +24,27 @@ void materializeBlocks(std::vector<Block> & input_blocks);
 std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t num);
 
 void computeHash(const Block & block,
-                uint32_t num_bucket,
-                const TiDB::TiDBCollators & collators,
-                std::vector<String> & partition_key_containers,
-                const std::vector<Int64> & partition_col_ids,
-                WeakHash32 & hash,
-                IColumn::Selector & selector);
-
-void scatterColumns(const Block & input_block,
-                 uint32_t bucket_num,
+                 uint32_t num_bucket,
                  const TiDB::TiDBCollators & collators,
                  std::vector<String> & partition_key_containers,
                  const std::vector<Int64> & partition_col_ids,
-                 std::vector<std::vector<MutableColumnPtr>> & result_columns);
+                 WeakHash32 & hash,
+                 IColumn::Selector & selector);
+
+void scatterColumns(const Block & input_block,
+                    uint32_t bucket_num,
+                    const TiDB::TiDBCollators & collators,
+                    std::vector<String> & partition_key_containers,
+                    const std::vector<Int64> & partition_col_ids,
+                    std::vector<std::vector<MutableColumnPtr>> & result_columns);
 
 void scatterColumnsInplace(const Block & block,
-                        uint32_t num_bucket,
-                        const TiDB::TiDBCollators & collators,
-                        std::vector<String> & partition_key_containers,
-                        const std::vector<Int64> & partition_col_ids,
-                        WeakHash32 & hash,
-                        IColumn::Selector & selector,
-                        std::vector<IColumn::ScatterColumns> & scattered);
+                           uint32_t num_bucket,
+                           const TiDB::TiDBCollators & collators,
+                           std::vector<String> & partition_key_containers,
+                           const std::vector<Int64> & partition_col_ids,
+                           WeakHash32 & hash,
+                           IColumn::Selector & selector,
+                           std::vector<IColumn::ScatterColumns> & scattered);
 
 } // namespace DB::HashBaseWriterHelper

@@ -49,7 +49,7 @@ public:
     ScatterColumns scatter(
         IColumn::ColumnIndex num_columns,
         const IColumn::Selector & selector) const override;
-    void scatterTo(ScatterColumns & columns, const Selector & selector) const override;    
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
 
     void getExtremes(Field &, Field &) const override {}
 

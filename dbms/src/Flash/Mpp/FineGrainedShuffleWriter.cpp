@@ -59,9 +59,21 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
+void FineGrainedShuffleWriter<StreamWriterPtr>::prepare(const Block & sample_block)
+{
+    header = sample_block.cloneEmpty();
+    num_columns = header.columns();
+    // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
+    num_bucket = partition_num * fine_grained_shuffle_stream_count;
+    ;
+    partition_key_containers_for_reuse.resize(collators.size());
+    resetScatterColumns();
+}
+
+template <class StreamWriterPtr>
 void FineGrainedShuffleWriter<StreamWriterPtr>::flush()
 {
-    if (cached_block_count > 0)
+    if (rows_in_blocks > 0)
         batchWriteFineGrainedShuffle<false>();
 }
 
@@ -77,10 +89,9 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
     if (rows > 0)
     {
         blocks.push_back(block);
-        cached_block_count++;
     }
 
-    if (cached_block_count == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
+    if (blocks.size() == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
         batchWriteFineGrainedShuffle<false>();
 }
 
@@ -112,19 +123,12 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
         assert(fine_grained_shuffle_stream_count <= 1024);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
-        if (!inited)
+        while (!blocks.empty())
         {
-            header = blocks[0].cloneEmpty();
-            num_columns = header.columns();
-            // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
-            num_bucket = partition_num * fine_grained_shuffle_stream_count;;
-            partition_key_containers_for_reuse.resize(collators.size());
-            resetScatterColumns();
-            inited = true;
-        }
-
-        for (const auto & block : blocks)
+            const auto & block = blocks.back();
             HashBaseWriterHelper::scatterColumnsInplace(block, num_bucket, collators, partition_key_containers_for_reuse, partition_col_ids, hash, selector, scattered);
+            blocks.pop_back();
+        }
 
         // serialize each partitioned block and write it to its destination
         size_t part_id = 0;
@@ -154,9 +158,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
                 }
             }
         }
-        blocks.clear();
         rows_in_blocks = 0;
-        cached_block_count = 0;
     }
 
     writePackets<send_exec_summary_at_last>(tracked_packets);

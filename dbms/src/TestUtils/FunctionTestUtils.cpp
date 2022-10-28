@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnNothing.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnSet.h>
 #include <Common/FmtUtils.h>
 #include <Core/ColumnNumbers.h>
@@ -104,7 +104,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
     ASSERT_EQUAL(expected->getName(), actual->getName(), "Column name mismatch");
     ASSERT_EQUAL(expected->size(), actual->size(), "Column size mismatch");
 
-    if unlikely(typeid_cast<const ColumnNothing *>(expected.get()) || typeid_cast<const ColumnNothing *>(actual.get()))
+    if unlikely (typeid_cast<const ColumnNothing *>(expected.get()) || typeid_cast<const ColumnNothing *>(actual.get()))
     {
         /// ColumnNothing compares size only
         const ColumnNothing * expected_nothing = typeid_cast<const ColumnNothing *>(expected.get());
