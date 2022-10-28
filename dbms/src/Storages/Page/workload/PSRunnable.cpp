@@ -75,61 +75,53 @@ size_t PSRunnable::getPagesUsed() const
     return pages_used;
 }
 
-size_t PSWriter::approx_page_mb = 2;
-void PSWriter::setApproxPageSize(size_t size)
+///
+/// Writer
+///
+
+size_t PSWriter::approx_page_bytes = 2;
+void PSWriter::setApproxPageSize(size_t bytes)
 {
-    LOG_INFO(StressEnv::logger, "Page approx size is set to {} MB", formatReadableSizeWithBinarySuffix(size));
-    approx_page_mb = size * 1024 * 1024;
+    LOG_INFO(StressEnv::logger, "Page approx size is set to {}", formatReadableSizeWithBinarySuffix(bytes));
+    approx_page_bytes = bytes;
 }
 
-DB::ReadBufferPtr PSWriter::genRandomData(const DB::PageId pageId, DB::MemHolder & holder)
+DB::ReadBufferPtr PSWriter::genRandomData(DB::PageId page_id, std::unique_ptr<char[]> & p)
 {
     // fill page with random bytes
     std::mt19937 size_gen;
     size_gen.seed(time(nullptr));
     std::uniform_int_distribution<> dist(0, 3000);
 
-    const size_t buff_sz = approx_page_mb * DB::MB + dist(size_gen);
-    char * buff = static_cast<char *>(malloc(buff_sz)); // NOLINT
-    if (buff == nullptr)
-    {
-        throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
-    }
+    const size_t buff_sz = approx_page_bytes + dist(size_gen);
+    p.reset(new char[buff_sz]);
 
-    const char buff_ch = pageId % 0xFF;
-    memset(buff, buff_ch, buff_sz);
+    const char buff_ch = page_id % 0xFF;
+    memset(p.get(), buff_ch, buff_sz);
 
-    holder = DB::createMemHolder(buff, [&](char * p) { free(p); }); // NOLINT
-
-    return std::make_shared<DB::ReadBufferFromMemory>(const_cast<char *>(buff), buff_sz);
+    return std::make_shared<DB::ReadBufferFromMemory>(p.get(), buff_sz);
 }
 
 void PSWriter::updatedRandomData()
 {
-    size_t memory_size = approx_page_mb * DB::MB * 2;
+    size_t memory_size = approx_page_bytes * 2;
     if (memory == nullptr)
     {
-        memory = static_cast<char *>(malloc(memory_size)); // NOLINT
-        if (memory == nullptr)
-        {
-            throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
-        }
+        memory = std::unique_ptr<char[]>(new char[memory_size]);
         for (size_t i = 0; i < memory_size; i++)
-        {
-            memset(memory + i, i % 0xFF, sizeof(char));
-        }
+            memory[i] = i % 0xFF;
     }
 
-    std::uniform_int_distribution<> dist(0, memory_size / 2 - 1);
-    size_t gen_size = dist(gen);
-    buff_ptr = std::make_shared<DB::ReadBufferFromMemory>(memory + gen_size, memory_size - gen_size);
+    // std::uniform_int_distribution<> dist(0, memory_size / 2 - 1);
+    // size_t gen_size = dist(gen);
+    buff_ptr = std::make_shared<DB::ReadBufferFromMemory>(memory.get(), approx_page_bytes);
 }
 
-void PSWriter::fillAllPages(const PSPtr & ps)
+void PSWriter::fillAllPages(const PSPtr & ps, size_t max_page_id)
 {
-    for (DB::PageId page_id = 0; page_id <= MAX_PAGE_ID_DEFAULT; ++page_id)
+    for (DB::PageId page_id = 0; page_id <= max_page_id; ++page_id)
     {
-        DB::MemHolder holder;
+        std::unique_ptr<char[]> holder;
         DB::ReadBufferPtr buff = genRandomData(page_id, holder);
 
         DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
@@ -143,14 +135,15 @@ void PSWriter::fillAllPages(const PSPtr & ps)
 bool PSWriter::runImpl()
 {
     const auto r = genRandomPageId();
-    updatedRandomData();
+    updatedRandomData(); // update buff_ptr
 
     DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
     wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());
     for (const auto id : r.page_id_to_remove)
         wb.delPage(id);
     ps->write(std::move(wb));
-    ++pages_used;
+
+    pages_used += 1;
     bytes_used += buff_ptr->buffer().size();
 
     // verbose logging for debug
@@ -162,8 +155,9 @@ bool PSWriter::runImpl()
 
 RandomPageId PSWriter::genRandomPageId()
 {
-    std::normal_distribution<> distribution{static_cast<double>(max_page_id) / 2, 150};
-    return RandomPageId(static_cast<DB::PageId>(std::round(distribution(gen))) % max_page_id);
+    // std::normal_distribution<> distribution{static_cast<double>(max_page_id) / 2, 150};
+    std::uniform_int_distribution dist(0UL, max_page_id - 1);
+    return RandomPageId(static_cast<DB::PageId>(std::round(dist(gen))));
 }
 
 void PSCommonWriter::updatedRandomData()
@@ -175,16 +169,9 @@ void PSCommonWriter::updatedRandomData()
 
     if (memory == nullptr)
     {
-        memory = static_cast<char *>(malloc(memory_size)); // NOLINT
-        if (memory == nullptr)
-        {
-            throw DB::Exception("Alloc fix memory failed.", DB::ErrorCodes::LOGICAL_ERROR);
-        }
-
+        memory = std::unique_ptr<char[]>(new char[memory_size]);
         for (size_t i = 0; i < memory_size; i++)
-        {
-            memset(memory + i, i % 0xFF, sizeof(char));
-        }
+            memory[i] = i % 0xFF;
     }
 
     buff_ptrs.clear();
@@ -192,7 +179,7 @@ void PSCommonWriter::updatedRandomData()
     size_t gen_size = genBufferSize();
     for (size_t i = 0; i < batch_buffer_nums; ++i)
     {
-        buff_ptrs.emplace_back(std::make_shared<DB::ReadBufferFromMemory>(memory + i * single_buff_size, gen_size));
+        buff_ptrs.emplace_back(std::make_shared<DB::ReadBufferFromMemory>(memory.get() + i * single_buff_size, gen_size));
     }
 }
 
@@ -269,6 +256,9 @@ size_t PSCommonWriter::genBufferSize()
     return batch_buffer_size;
 }
 
+///
+/// Reader
+///
 
 DB::PageIds PSReader::genRandomPageIds()
 {

@@ -17,10 +17,9 @@
 #include <Storages/Page/PageDefines.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 
-const DB::PageId MAX_PAGE_ID_DEFAULT = 1000;
-
 namespace DB::PS::tests
 {
+static constexpr PageId MAX_PAGE_ID_DEFAULT = 1000;
 class PSRunnable : public Poco::Runnable
 {
 public:
@@ -69,7 +68,7 @@ struct GlobalStat
 
 class PSWriter : public PSRunnable
 {
-    static size_t approx_page_mb;
+    static size_t approx_page_bytes;
 
 public:
     PSWriter(const PSPtr & ps_, DB::UInt32 index_, const std::unique_ptr<GlobalStat> & global_stat_)
@@ -82,10 +81,7 @@ public:
 
     ~PSWriter() override
     {
-        if (memory != nullptr)
-        {
-            free(memory);
-        }
+        memory.reset();
     }
 
     String description() override
@@ -93,13 +89,13 @@ public:
         return fmt::format("(Stress Test Writer {})", index);
     }
 
-    static void setApproxPageSize(size_t size_mb);
+    static void setApproxPageSize(size_t bytes);
 
-    static DB::ReadBufferPtr genRandomData(DB::PageId pageId, DB::MemHolder & holder);
+    static DB::ReadBufferPtr genRandomData(DB::PageId page_id, std::unique_ptr<char[]> & p);
 
     virtual void updatedRandomData();
 
-    static void fillAllPages(const PSPtr & ps);
+    static void fillAllPages(const PSPtr & ps, size_t max_page_id);
 
     bool runImpl() override;
 
@@ -111,7 +107,7 @@ protected:
     DB::UInt32 index = 0;
     std::mt19937 gen;
     DB::PageId max_page_id = MAX_PAGE_ID_DEFAULT;
-    char * memory = nullptr;
+    std::unique_ptr<char[]> memory;
     DB::ReadBufferPtr buff_ptr;
     const std::unique_ptr<GlobalStat> & global_stat;
 };

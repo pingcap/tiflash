@@ -50,7 +50,7 @@ private:
     {
         DB::PageStorageConfig config;
         initPageStorage(config, name());
-        PSWriter::fillAllPages(ps);
+        PSWriter::fillAllPages(ps, MAX_PAGE_ID_DEFAULT);
 
         metrics_dumper = std::make_shared<PSMetricsDumper>(1);
         metrics_dumper->start();
