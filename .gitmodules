@@ -89,3 +89,6 @@
 [submodule "contrib/magic_enum"]
 	path = contrib/magic_enum
 	url = https://github.com/Neargye/magic_enum.git
+[submodule "contrib/GmSSL"]
+	path = contrib/GmSSL
+	url = https://github.com/guanzhi/GmSSL.git

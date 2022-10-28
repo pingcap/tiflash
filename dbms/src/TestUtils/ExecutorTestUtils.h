@@ -15,7 +15,6 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Debug/dbgFuncCoprocessor.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -69,7 +68,7 @@ public:
     static void dagRequestEqual(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & actual);
 
     void executeInterpreter(const String & expected_string, const std::shared_ptr<tipb::DAGRequest> & request, size_t concurrency);
-    ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency);
+    ColumnsWithTypeAndName executeRawQuery(const String & query, size_t concurrency = 1);
     void executeAndAssertColumnsEqual(const std::shared_ptr<tipb::DAGRequest> & request, const ColumnsWithTypeAndName & expect_columns);
     void executeAndAssertRowsEqual(const std::shared_ptr<tipb::DAGRequest> & request, size_t expect_rows);
 

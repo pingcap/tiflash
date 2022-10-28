@@ -182,7 +182,7 @@ if (ENABLE_LLVM_PGO)
     endif ()
 endif ()
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     # clang: warning: argument unused during compilation: '-stdlib=libc++'
     # clang: warning: argument unused during compilation: '-specs=/usr/share/dpkg/no-pie-compile.specs' [-Wunused-command-line-argument]
     set (COMMON_WARNING_FLAGS "${COMMON_WARNING_FLAGS} -Wno-unused-command-line-argument")
@@ -248,9 +248,14 @@ endif()
 
 find_program (LLD_PATH NAMES "lld${COMPILER_POSTFIX}" "lld")
 find_program (GOLD_PATH NAMES "gold")
+if (APPLE)
+    find_program (LD_PATH NAMES "ld")
+endif ()
 
-if (NOT LINKER_NAME AND NOT APPLE)
-    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
+if (NOT LINKER_NAME)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND LD_PATH)
+        set (LINKER_NAME "ld")
+    elseif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND LLD_PATH)
         set (LINKER_NAME "lld")
     elseif (GOLD_PATH)
         set (LINKER_NAME "gold")
@@ -258,7 +263,7 @@ if (NOT LINKER_NAME AND NOT APPLE)
 endif ()
 
 if (LINKER_NAME)
-    message(STATUS "Using linker: ${LINKER_NAME} (selected from: LLD_PATH=${LLD_PATH}; GOLD_PATH=${GOLD_PATH}; COMPILER_POSTFIX=${COMPILER_POSTFIX})")
+    message(STATUS "Using linker: ${LINKER_NAME} (selected from: LLD_PATH=${LLD_PATH}; GOLD_PATH=${GOLD_PATH}; LD_PATH=${LD_PATH}; COMPILER_POSTFIX=${COMPILER_POSTFIX})")
     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=${LINKER_NAME}")
 endif ()
 
