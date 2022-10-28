@@ -54,8 +54,8 @@ public:
     void mergeDelta();
     bool merge(Int64 start_key, Int64 end_key);
     void deleteRange(Int64 start_key, Int64 end_key);
-    size_t getRowsN();
-    size_t getRowsN(Int64 start_key, Int64 end_key);
+    size_t getRowsN() const;
+    size_t getRowsN(Int64 start_key, Int64 end_key) const;
 
 public:
     SegmentPtr getSegmentAt(Int64 key) const;
