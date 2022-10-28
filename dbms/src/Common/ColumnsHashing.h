@@ -113,6 +113,7 @@ struct HashMethodString
     ALWAYS_INLINE inline auto getKeyHolder(ssize_t row, [[maybe_unused]] Arena * pool, std::vector<String> & sort_key_containers) const
     {
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
+        // Remove last zero byte.
         StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
 
         if constexpr (place_string_to_arena)
