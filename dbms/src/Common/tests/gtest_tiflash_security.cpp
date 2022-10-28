@@ -77,7 +77,7 @@ key_path="security/key.pem"
 
     TiFlashSecurityConfig old_security_config;
     old_security_config.ca_path = "security/ca2.pem";
-    old_security_config.cert_path = "test/security/cert2.pem";
+    old_security_config.cert_path = "security/cert2.pem";
     old_security_config.key_path = "security/key2.pem";
     old_security_config.inited = true;
     old_security_config.options.pem_root_certs = "1.1";

@@ -75,3 +75,16 @@ docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml exec -T 
 
 docker-compose -f cluster_disable_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log
+
+# run enable_tls tests
+docker-compose -f cluster_enable_tls.yaml -f tiflash-dt-enable-tls.yaml down
+clean_data_log
+
+docker-compose -f cluster_enable_tls.yaml -f tiflash-dt-enable-tls.yaml up -d
+wait_env
+docker-compose -f cluster_enable_tls.yaml -f tiflash-dt-enable-tls.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fullstack-test'
+update_tls
+docker-compose -f cluster_enable_tls.yaml -f tiflash-dt-enable-tls.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fullstack-test'
+
+docker-compose -f cluster_enable_tls.yaml -f tiflash-dt-enable-tls.yaml down
+clean_data_log

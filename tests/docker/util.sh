@@ -88,6 +88,20 @@ function wait_tiflash_env() {
   fi
 }
 
+function update_tls_file() {
+  file=$1
+  exec "cp $file.pem $file.pem.old && cp $file.pem.new $file.pem \
+    cp $file-key.pem $file-key.pem.old && cp $file-key.pem.new $file-key.pem"
+}
+
+function update_tls() {
+  update_tls_file "ca"
+  update_tls_file "tidb-server"
+  update_tls_file "tikv-server"
+  update_tls_file "pd-server"
+  update_tls_file "tiflash-server"
+}
+
 function set_branch() {
   # XYZ_BRANCH: pd/tikv/tidb hash, default to `master`
   # BRANCH:     hash short cut, default to `master`
@@ -114,6 +128,7 @@ function check_env() {
 export -f show_env
 export -f wait_env
 export -f wait_tiflash_env
+export -f update_tls
 export -f set_branch
 export -f clean_data_log
 export -f check_env
