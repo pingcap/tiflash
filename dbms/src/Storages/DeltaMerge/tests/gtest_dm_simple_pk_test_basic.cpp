@@ -249,6 +249,35 @@ void SimplePKTestBasic::mergeDelta()
     store->mergeDeltaAll(*db_context);
 }
 
+bool SimplePKTestBasic::merge(Int64 start_key, Int64 end_key)
+{
+    LOG_INFO(
+        logger_op,
+        "merge [{}, {})",
+        start_key,
+        end_key);
+
+    std::vector<SegmentPtr> to_merge;
+    auto range = buildRowRange(start_key, end_key);
+    {
+        std::shared_lock lock(store->read_write_mutex);
+        while (!range.none())
+        {
+            auto segment_it = store->segments.upper_bound(range.getStart());
+            RUNTIME_CHECK(segment_it != store->segments.end());
+            const auto & segment = segment_it->second;
+            to_merge.emplace_back(segment);
+            range.setStart(segment->getRowKeyRange().end);
+        }
+    }
+
+    if (to_merge.size() < 2)
+        return false;
+
+    auto merged = store->segmentMerge(*dm_context, to_merge, DeltaMergeStore::SegmentMergeReason::BackgroundGCThread);
+    return merged != nullptr;
+}
+
 void SimplePKTestBasic::deleteRange(Int64 start_key, Int64 end_key)
 {
     LOG_INFO(
@@ -324,11 +353,6 @@ CATCH
 TEST_F(SimplePKTestBasic, SegmentBreakpoints)
 try
 {
-    FailPointHelper::enableFailPoint(FailPoints::skip_check_segment_update);
-    SCOPE_EXIT({
-        FailPointHelper::disableFailPoint(FailPoints::skip_check_segment_update);
-    });
-
     for (auto ch : {true, false})
     {
         is_common_handle = ch;
@@ -369,6 +393,23 @@ try
 }
 CATCH
 
+TEST_F(SimplePKTestBasic, Merge)
+try
+{
+    ensureSegmentBreakpoints({100, 10, -40, 500});
+    ASSERT_EQ(std::vector<Int64>({-40, 10, 100, 500}), getSegmentBreakpoints());
+
+    ASSERT_FALSE(merge(100, -100));
+    ASSERT_FALSE(merge(100, 101));
+    ASSERT_EQ(std::vector<Int64>({-40, 10, 100, 500}), getSegmentBreakpoints());
+
+    ASSERT_TRUE(merge(90, 110));
+    ASSERT_EQ(std::vector<Int64>({-40, 10, 500}), getSegmentBreakpoints());
+
+    ASSERT_TRUE(merge(-100, 100));
+    ASSERT_EQ(std::vector<Int64>({500}), getSegmentBreakpoints());
+}
+CATCH
 
 } // namespace tests
 } // namespace DM
