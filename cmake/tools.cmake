@@ -16,14 +16,14 @@
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set (COMPILER_GCC 1)
-    set(MOST_DEBUGGABLE_LEVEL -Og)
+    set (MOST_DEBUGGABLE_LEVEL -Og)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
     set (COMPILER_APPLE_CLANG 1)
     set (COMPILER_CLANG 1) # Safe to treat AppleClang as a regular Clang, in general.
-    set(MOST_DEBUGGABLE_LEVEL -O0)
+    set (MOST_DEBUGGABLE_LEVEL -O0)
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     set (COMPILER_CLANG 1)
-    set(MOST_DEBUGGABLE_LEVEL -O0)
+    set (MOST_DEBUGGABLE_LEVEL -O0)
 else ()
     message (FATAL_ERROR "Compiler ${CMAKE_CXX_COMPILER_ID} is not supported")
 endif ()
