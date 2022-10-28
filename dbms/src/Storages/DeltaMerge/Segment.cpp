@@ -443,7 +443,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
 
     // We cannot read out anything from the delta stream and the stable stream,
     // so we know that the snapshot is definitely empty.
-    
+
     return true;
 }
 
