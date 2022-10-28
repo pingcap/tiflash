@@ -943,12 +943,10 @@ std::pair<bool, Names> DAGExpressionAnalyzer::buildJoinKey(
         if (!removeNullable(current_type)->equals(*removeNullable(join_key_type.key_type)))
         {
             /// need to convert to key type
-            key_name = appendCast(join_key_type.key_type, actions, key_name);
+            key_name = join_key_type.is_incompatible_decimal
+                ? applyFunction("formatDecimal", {key_name}, actions, nullptr)
+                : appendCast(join_key_type.key_type, actions, key_name);
             has_actions = true;
-            if (join_key_type.is_incompatible_decimal)
-            {
-                key_name = applyFunction("formatDecimalStr", {key_name}, actions, nullptr);
-            }
         }
         if (!has_actions && (!left || is_right_out_join))
         {

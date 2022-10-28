@@ -325,69 +325,6 @@ struct ReverseUTF8Impl
     }
 };
 
-// xxx.xxx0000 ==> xxx.xxx
-// xxx.000 ==> xxx
-// xxx000 ==> xxx000
-struct FormatDecimalStrImpl
-{
-    static void vector(const ColumnString::Chars_t & data,
-                       const ColumnString::Offsets & offsets,
-                       ColumnString::Chars_t & res_data,
-                       ColumnString::Offsets & res_offsets)
-    {
-        res_data.resize(data.size());
-        size_t size = offsets.size();
-        res_offsets.resize(size);
-
-        ColumnString::Offset prev_offset = 0;
-        ColumnString::Offset prev_res_offset = 0;
-        for (size_t i = 0; i < size; ++i)
-        {
-            size_t data_size = offsets[i] - prev_offset;
-            memcpy(&res_data[prev_res_offset], &data[prev_offset], data_size);
-            if (shouldFormat(prev_offset, offsets[i], data))
-            {
-                // the last vaild value.
-                size_t last_offset = prev_res_offset + data_size - 2;
-                // remove `000...` and `.000...`
-                // `0` == 0x30
-                // `.` == 0x2E
-                while (last_offset > prev_res_offset && res_data[last_offset] == 0x30)
-                    --last_offset;
-                assert(last_offset >= prev_res_offset);
-                if (res_data[last_offset] != 0x30 && res_data[last_offset] != 0x2E)
-                    ++last_offset;
-                res_data[last_offset] = 0;
-                res_offsets[i] = last_offset + 1;
-            }
-            else
-            {
-                res_offsets[i] = prev_res_offset + data_size;
-            }
-
-            prev_res_offset = res_offsets[i];
-            prev_offset = offsets[i];
-        }
-    }
-
-    // Only `xxx.xxx` needs to be formatted
-    static bool shouldFormat(ColumnString::Offset prev, ColumnString::Offset cur, const ColumnString::Chars_t & data)
-    {
-        for (auto offset = prev; offset < cur - 1; ++offset)
-        {
-            // `.` == 0x2E
-            if (data[offset] == 0x2E)
-                return true;
-        }
-        return false;
-    }
-
-    static void vectorFixed(const ColumnString::Chars_t &, size_t, ColumnString::Chars_t &)
-    {
-        throw Exception("Cannot apply function FormatDecimalStr to fixed string.", ErrorCodes::ILLEGAL_COLUMN);
-    }
-};
-
 template <char not_case_lower_bound,
           char not_case_upper_bound,
           int to_case(int),
@@ -5854,6 +5791,161 @@ private:
     }
 };
 
+// internal function.
+// `abc.def` ==> 'fed.cba'
+// `-abc.def` ==> '-fed.cba'
+// `abc.def0000` ==> 'fed.cba'
+// `-abc.def0000` ==> '-fed.cba'
+// `abc.de0000f` ==> 'f0000ed.cba'
+// `-abc.de0000f` ==> '-f0000ed.cba'
+// `abc.de0000f0000` ==> 'f0000ed.cba'
+// `-abc.de0000f0000` ==> '-f0000ed.cba'
+// `0.def` ==> 'fed.'
+// `-0.def` ==> '-fed.'
+// `0.def0000` ==> 'fed.'
+// `-0.def0000` ==> '-fed.'
+// `0.de0000f` ==> 'f0000ed.'
+// `-0.de0000f` ==> '-f0000ed.'
+// `0.de0000f0000` ==> 'f0000ed.'
+// `-0.de0000f0000` ==> '-f0000ed.'
+// `abc` ==> 'cba'
+// `-abc` ==> '-cba'
+// `abc.00` ==> 'cba'
+// `-abc.00` ==> '-cba'
+// `abc0000` ==> '0000cba'
+// `-abc0000` ==> '-0000cba'
+// `abc0000.00` ==> '0000cba'
+// `-abc0000.00` ==> '-0000cba'
+// `0` ==> ''
+// `0.00` ==> ''
+class FunctionFormatDecimal : public IFunction
+{
+public:
+    static constexpr auto name = "formatDecimal";
+
+    static FunctionPtr create(const Context & /*context*/)
+    {
+        return std::make_shared<FunctionFormatDecimal>();
+    }
+
+    String getName() const override { return name; }
+    size_t getNumberOfArguments() const override { return 1; }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    {
+        if (!arguments[0]->isDecimal())
+            throw Exception(
+                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return std::make_shared<DataTypeString>();
+    }
+
+    void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
+    {
+        const auto & base_type = block.getByPosition(arguments[0]).type;
+        bool is_types_valid = getDecimalType(base_type, [&](const auto & decimal_type, bool) {
+            using DecimalType = std::decay_t<decltype(decimal_type)>;
+            using DecimalFieldType = typename DecimalType::FieldType;
+            static_assert(IsDecimal<DecimalFieldType>);
+            using DecimalColVec = ColumnDecimal<DecimalFieldType>;
+
+            const auto & col_arg = block.getByPosition(arguments[0]);
+            if (const auto * col = checkAndGetColumn<DecimalColVec>(col_arg.column.get()))
+            {
+                auto precision = maxDecimalPrecision<DecimalFieldType>();
+                auto scale = decimal_type.getScale();
+                auto col_res = ColumnString::create();
+                format(col, precision, scale, col_res->getChars(), col_res->getOffsets());
+                block.getByPosition(result).column = std::move(col_res);
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        });
+
+        if (!is_types_valid)
+            throw Exception(
+                fmt::format("Illegal types {} arguments of function {}", base_type->getName(), getName()),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    }
+
+private:
+    template <typename F>
+    static bool getDecimalType(DataTypePtr type, F && f)
+    {
+        return castTypeToEither<
+            DataTypeDecimal32,
+            DataTypeDecimal64,
+            DataTypeDecimal128,
+            DataTypeDecimal256>(type.get(), std::forward<F>(f));
+    }
+
+    template <typename DecimalColVec>
+    static void format(
+        DecimalColVec * col,
+        PrecType precision,
+        ScaleType scale,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offsets & res_offsets)
+    {
+        auto & data = col->getData();
+        size_t size = data.size();
+        res_data.resize(size * (precision + 3));
+        res_offsets.resize(size);
+
+        ColumnString::Offset cur_offset = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto & decimal = data[i];
+            Int256 value = decimal.value;
+            if (value < 0)
+            {
+                res_data[cur_offset++] = '-';
+                value = -value;
+            }
+            if (scale > 0 && value > 0)
+            {
+                bool add_dot = false;
+                size_t scale_i = 0;
+                // Ignore trailing zero.
+                while (value > 0 && scale_i < scale)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    ++scale_i;
+                    if (d != 0)
+                    {
+                        res_data[cur_offset++] = d + '0';
+                        add_dot = true;
+                        break;
+                    }
+                }
+                for (; value > 0 && scale_i < scale; ++scale_i)
+                {
+                    int d = static_cast<int>(value % 10);
+                    value /= 10;
+                    res_data[cur_offset++] = d + '0';
+                    add_dot = true;
+                }
+                if (add_dot)
+                    res_data[cur_offset++] = '.';
+            }
+            while (value > 0)
+            {
+                int d = static_cast<int>(value % 10);
+                value = value / 10;
+                res_data[cur_offset++] = d + '0';
+            }
+            res_data[cur_offset++] = 0;
+            res_offsets[i] = cur_offset;
+        }
+    }
+};
+
 // clang-format off
 struct NameEmpty                 { static constexpr auto name = "empty"; };
 struct NameNotEmpty              { static constexpr auto name = "notEmpty"; };
@@ -5877,7 +5969,6 @@ struct NameRPadUTF8              { static constexpr auto name = "rpadUTF8"; };
 struct NameConcat                { static constexpr auto name = "concat"; };
 struct NameConcatAssumeInjective { static constexpr auto name = "concatAssumeInjective"; };
 struct NameFormat                { static constexpr auto name = "format"; };
-struct NameFormatDecimalStr      { static constexpr auto name = "formatDecimalStr"; };
 // clang-format on
 
 using FunctionEmpty = FunctionStringOrArrayToT<EmptyImpl<false>, NameEmpty, UInt8>;
@@ -5899,7 +5990,6 @@ using FunctionRPadUTF8 = PadUTF8Impl<NameRPadUTF8, false>;
 using FunctionConcat = ConcatImpl<NameConcat, false>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
 using FunctionFormat = FormatImpl<NameFormat, FormatWithEnUS>;
-using FunctionFormatDecimalStr = FunctionStringToString<FormatDecimalStrImpl, NameFormatDecimalStr>;
 
 // export for tests
 template struct LowerUpperUTF8Impl<'A', 'Z', Poco::Unicode::toLower, UTF8CyrillicToCase<true>>;
@@ -5946,6 +6036,6 @@ void registerFunctionsString(FunctionFactory & factory)
     factory.registerFunction<FunctionSpace>();
     factory.registerFunction<FunctionBin>();
     factory.registerFunction<FunctionElt>();
-    factory.registerFunction<FunctionFormatDecimalStr>();
+    factory.registerFunction<FunctionFormatDecimal>();
 }
 } // namespace DB
