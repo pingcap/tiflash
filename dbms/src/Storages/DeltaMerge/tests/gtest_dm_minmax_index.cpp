@@ -29,7 +29,6 @@
 #include <ctime>
 #include <ext/scope_guard.h>
 #include <memory>
-
 namespace DB
 {
 namespace DM
@@ -115,6 +114,7 @@ bool checkMatch(
         "test_database",
         name,
         /*table_id*/ 100,
+        true,
         table_columns,
         getExtraHandleColumnDefine(is_common_handle),
         is_common_handle,
@@ -195,6 +195,7 @@ enum MinMaxTestOperator
     Test_Less,
     Test_LessEqual,
     Test_MaxOperator,
+    Test_IsNull,
 };
 
 Decimal64 getDecimal64(String s)
@@ -323,44 +324,44 @@ RSOperatorPtr generateEqualOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createEqual(attr("Date"), Field(String(Date_Match_DATA)));
+            return createEqual(attr("Date"), Field(static_cast<String> Date_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Date"), Field(String(Date_Smaller_DATA)));
+            return createEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA));
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(Date)"), Field(String(Date_Match_DATA)));
+            return createEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(Date)"), Field(String(Date_Smaller_DATA)));
+            return createEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA));
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createEqual(attr("DateTime"), Field(String(DateTime_Match_DATA)));
+            return createEqual(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA));
         }
         else
         {
-            return createEqual(attr("DateTime"), Field(String(DateTime_Smaller_DATA)));
+            return createEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA));
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createEqual(attr("Nullable(DateTime)"), Field(String(DateTime_Match_DATA)));
+            return createEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA));
         }
         else
         {
-            return createEqual(attr("Nullable(DateTime)"), Field(String(DateTime_Smaller_DATA)));
+            return createEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA));
         }
     }
     case Test_MyDateTime:
@@ -442,44 +443,44 @@ RSOperatorPtr generateInOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createIn(attr("Date"), {Field(String(Date_Match_DATA))});
+            return createIn(attr("Date"), {Field(static_cast<String> Date_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Date"), {Field(String(Date_Smaller_DATA))});
+            return createIn(attr("Date"), {Field(static_cast<String> Date_Smaller_DATA)});
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(Date)"), {Field(String(Date_Match_DATA))});
+            return createIn(attr("Nullable(Date)"), {Field(static_cast<String> Date_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(Date)"), {Field(String(Date_Smaller_DATA))});
+            return createIn(attr("Nullable(Date)"), {Field(static_cast<String> Date_Smaller_DATA)});
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createIn(attr("DateTime"), {Field(String(DateTime_Match_DATA))});
+            return createIn(attr("DateTime"), {Field(static_cast<String> DateTime_Match_DATA)});
         }
         else
         {
-            return createIn(attr("DateTime"), {Field(String(DateTime_Smaller_DATA))});
+            return createIn(attr("DateTime"), {Field(static_cast<String> DateTime_Smaller_DATA)});
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createIn(attr("Nullable(DateTime)"), {Field(String(DateTime_Match_DATA))});
+            return createIn(attr("Nullable(DateTime)"), {Field(static_cast<String> DateTime_Match_DATA)});
         }
         else
         {
-            return createIn(attr("Nullable(DateTime)"), {Field(String(DateTime_Smaller_DATA))});
+            return createIn(attr("Nullable(DateTime)"), {Field(static_cast<String> DateTime_Smaller_DATA)});
         }
     }
     case Test_MyDateTime:
@@ -561,44 +562,44 @@ RSOperatorPtr generateGreaterOperator(MinMaxTestDatatype data_type, bool is_matc
     {
         if (is_match)
         {
-            return createGreater(attr("Date"), Field(String(Date_Smaller_DATA)), 0);
+            return createGreater(attr("Date"), Field(static_cast<String> Date_Smaller_DATA), 0);
         }
         else
         {
-            return createGreater(attr("Date"), Field(String(Date_Match_DATA)), 0);
+            return createGreater(attr("Date"), Field(static_cast<String> Date_Match_DATA), 0);
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(Date)"), Field(String(Date_Smaller_DATA)), 0);
+            return createGreater(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA), 0);
         }
         else
         {
-            return createGreater(attr("Nullable(Date)"), Field(String(Date_Match_DATA)), 0);
+            return createGreater(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA), 0);
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createGreater(attr("DateTime"), Field(String(DateTime_Smaller_DATA)), 0);
+            return createGreater(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA), 0);
         }
         else
         {
-            return createGreater(attr("DateTime"), Field(String(DateTime_Match_DATA)), 0);
+            return createGreater(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA), 0);
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createGreater(attr("Nullable(DateTime)"), Field(String(DateTime_Smaller_DATA)), 0);
+            return createGreater(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA), 0);
         }
         else
         {
-            return createGreater(attr("Nullable(DateTime)"), Field(String(DateTime_Match_DATA)), 0);
+            return createGreater(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA), 0);
         }
     }
     case Test_MyDateTime:
@@ -680,44 +681,44 @@ RSOperatorPtr generateGreaterEqualOperator(MinMaxTestDatatype data_type, bool is
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Date"), Field(String(Date_Smaller_DATA)), 0);
+            return createGreaterEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA), 0);
         }
         else
         {
-            return createGreaterEqual(attr("Date"), Field(String(Date_Greater_DATA)), 0);
+            return createGreaterEqual(attr("Date"), Field(static_cast<String> Date_Greater_DATA), 0);
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(Date)"), Field(String(Date_Smaller_DATA)), 0);
+            return createGreaterEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA), 0);
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(Date)"), Field(String(Date_Greater_DATA)), 0);
+            return createGreaterEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA), 0);
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("DateTime"), Field(String(DateTime_Smaller_DATA)), 0);
+            return createGreaterEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA), 0);
         }
         else
         {
-            return createGreaterEqual(attr("DateTime"), Field(String(DateTime_Greater_DATA)), 0);
+            return createGreaterEqual(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA), 0);
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createGreaterEqual(attr("Nullable(DateTime)"), Field(String(DateTime_Smaller_DATA)), 0);
+            return createGreaterEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA), 0);
         }
         else
         {
-            return createGreaterEqual(attr("Nullable(DateTime)"), Field(String(DateTime_Greater_DATA)), 0);
+            return createGreaterEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA), 0);
         }
     }
     case Test_MyDateTime:
@@ -799,44 +800,44 @@ RSOperatorPtr generateLessOperator(MinMaxTestDatatype data_type, bool is_match)
     {
         if (is_match)
         {
-            return createLess(attr("Date"), Field(String(Date_Greater_DATA)), 0);
+            return createLess(attr("Date"), Field(static_cast<String> Date_Greater_DATA), 0);
         }
         else
         {
-            return createLess(attr("Date"), Field(String(Date_Match_DATA)), 0);
+            return createLess(attr("Date"), Field(static_cast<String> Date_Match_DATA), 0);
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(Date)"), Field(String(Date_Greater_DATA)), 0);
+            return createLess(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA), 0);
         }
         else
         {
-            return createLess(attr("Nullable(Date)"), Field(String(Date_Match_DATA)), 0);
+            return createLess(attr("Nullable(Date)"), Field(static_cast<String> Date_Match_DATA), 0);
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createLess(attr("DateTime"), Field(String(DateTime_Greater_DATA)), 0);
+            return createLess(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA), 0);
         }
         else
         {
-            return createLess(attr("DateTime"), Field(String(DateTime_Match_DATA)), 0);
+            return createLess(attr("DateTime"), Field(static_cast<String> DateTime_Match_DATA), 0);
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createLess(attr("Nullable(DateTime)"), Field(String(DateTime_Greater_DATA)), 0);
+            return createLess(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA), 0);
         }
         else
         {
-            return createLess(attr("Nullable(DateTime)"), Field(String(DateTime_Match_DATA)), 0);
+            return createLess(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Match_DATA), 0);
         }
     }
     case Test_MyDateTime:
@@ -918,44 +919,44 @@ RSOperatorPtr generateLessEqualOperator(MinMaxTestDatatype data_type, bool is_ma
     {
         if (is_match)
         {
-            return createLessEqual(attr("Date"), Field(String(Date_Greater_DATA)), 0);
+            return createLessEqual(attr("Date"), Field(static_cast<String> Date_Greater_DATA), 0);
         }
         else
         {
-            return createLessEqual(attr("Date"), Field(String(Date_Smaller_DATA)), 0);
+            return createLessEqual(attr("Date"), Field(static_cast<String> Date_Smaller_DATA), 0);
         }
     }
     case Test_Nullable_Date:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(Date)"), Field(String(Date_Greater_DATA)), 0);
+            return createLessEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Greater_DATA), 0);
         }
         else
         {
-            return createLessEqual(attr("Nullable(Date)"), Field(String(Date_Smaller_DATA)), 0);
+            return createLessEqual(attr("Nullable(Date)"), Field(static_cast<String> Date_Smaller_DATA), 0);
         }
     }
     case Test_DateTime:
     {
         if (is_match)
         {
-            return createLessEqual(attr("DateTime"), Field(String(DateTime_Greater_DATA)), 0);
+            return createLessEqual(attr("DateTime"), Field(static_cast<String> DateTime_Greater_DATA), 0);
         }
         else
         {
-            return createLessEqual(attr("DateTime"), Field(String(DateTime_Smaller_DATA)), 0);
+            return createLessEqual(attr("DateTime"), Field(static_cast<String> DateTime_Smaller_DATA), 0);
         }
     }
     case Test_Nullable_DateTime:
     {
         if (is_match)
         {
-            return createLessEqual(attr("Nullable(DateTime)"), Field(String(DateTime_Greater_DATA)), 0);
+            return createLessEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Greater_DATA), 0);
         }
         else
         {
-            return createLessEqual(attr("Nullable(DateTime)"), Field(String(DateTime_Smaller_DATA)), 0);
+            return createLessEqual(attr("Nullable(DateTime)"), Field(static_cast<String> DateTime_Smaller_DATA), 0);
         }
     }
     case Test_MyDateTime:
@@ -1007,6 +1008,55 @@ RSOperatorPtr generateLessEqualOperator(MinMaxTestDatatype data_type, bool is_ma
     }
 }
 
+RSOperatorPtr generateIsNullOperator(MinMaxTestDatatype data_type)
+{
+    switch (data_type)
+    {
+    case Test_Int64:
+    {
+        return createIsNull(attr("Int64"));
+    }
+    case Test_Nullable_Int64:
+    {
+        return createIsNull(attr("Nullable(Int64)"));
+    }
+    case Test_Date:
+    {
+        return createIsNull(attr("Date"));
+    }
+    case Test_Nullable_Date:
+    {
+        return createIsNull(attr("Nullable(Date)"));
+    }
+    case Test_DateTime:
+    {
+        return createIsNull(attr("DateTime"));
+    }
+    case Test_Nullable_DateTime:
+    {
+        return createIsNull(attr("Nullable(DateTime)"));
+    }
+    case Test_MyDateTime:
+    {
+        return createIsNull(attr("MyDateTime"));
+    }
+    case Test_Nullable_MyDateTime:
+    {
+        return createIsNull(attr("Nullable(MyDateTime)"));
+    }
+    case Test_Decimal64:
+    {
+        return createIsNull(attr("Decimal(20,5)"));
+    }
+    case Test_Nullable_Decimal64:
+    {
+        return createIsNull(attr("Nullable(Decimal(20,5))"));
+    }
+    default:
+        throw Exception("Unknown data type");
+    }
+}
+
 RSOperatorPtr generateRSOperator(MinMaxTestDatatype data_type, MinMaxTestOperator rs_operator, bool is_match)
 {
     switch (rs_operator)
@@ -1034,6 +1084,10 @@ RSOperatorPtr generateRSOperator(MinMaxTestDatatype data_type, MinMaxTestOperato
     case Test_LessEqual:
     {
         return generateLessEqualOperator(data_type, is_match);
+    }
+    case Test_IsNull:
+    {
+        return generateIsNullOperator(data_type);
     }
     default:
         throw Exception("Unknown filter operator type");
@@ -1063,7 +1117,7 @@ try
                 }
                 auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
-                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
+                ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
             }
         }
         // datatypes which not support minmax index
@@ -1112,6 +1166,27 @@ try
                     continue;
                 }
                 auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+                ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true))));
+                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false))));
+            }
+        }
+
+        // datatypes which not support minmax index
+        for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
+        {
+            {
+                // not null
+                auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true))));
+                ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false))));
+            }
+            {
+                // has null
+                if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
+                {
+                    continue;
+                }
+                auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true))));
                 ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createNot(generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false))));
             }
@@ -1149,9 +1224,11 @@ try
                     }
                     auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
-                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), true);
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
+
+                    auto right_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator_not_match})));
                 }
             }
             // datatypes which not support minmax index
@@ -1161,9 +1238,11 @@ try
                     // not null
                     auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
-                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), true);
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
+
+                    auto right_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator_not_match})));
                 }
                 {
                     // has null
@@ -1173,10 +1252,12 @@ try
                     }
                     auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
-                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), true);
 
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator})));
+
+                    auto right_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
+                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createAnd({left_rs_operator, right_rs_operator_not_match})));
                 }
             }
         }
@@ -1202,8 +1283,8 @@ try
                     auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
 
-                    auto right_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator_not_match})));
+                    auto left_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), false);
+                    ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator_not_match, right_rs_operator})));
                 }
                 {
                     // has null
@@ -1215,7 +1296,9 @@ try
                     auto left_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), true);
                     auto right_rs_operator = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_right_type), false);
                     ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
-                    ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator, right_rs_operator})));
+
+                    auto left_rs_operator_not_match = generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_left_type), false);
+                    ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, createOr({left_rs_operator_not_match, right_rs_operator})));
                 }
             }
             // datatypes which not support minmax index
@@ -1245,6 +1328,57 @@ try
     }
 }
 CATCH
+
+TEST_F(DMMinMaxIndexTest, IsNull)
+try
+{
+    const auto * case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+
+    auto operater_type = Test_IsNull;
+
+    for (size_t datatype = Test_Int64; datatype < Test_Decimal64; datatype++)
+    {
+        {
+            // not null
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
+            ASSERT_EQ(false, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
+        }
+        {
+            // has null
+            if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
+            {
+                continue;
+            }
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
+            ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
+        }
+    }
+
+    // datatypes which not support minmax index
+    for (size_t datatype = Test_Decimal64; datatype < Test_Max; datatype++)
+    {
+        {
+            // not null
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), false);
+            ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
+            ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
+        }
+        {
+            // has null
+            if (!isNullableDateType(static_cast<MinMaxTestDatatype>(datatype)))
+            {
+                continue;
+            }
+            auto type_value_pair = generateTypeValue(static_cast<MinMaxTestDatatype>(datatype), true);
+            ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), true)));
+            ASSERT_EQ(true, checkMatch(case_name, *context, type_value_pair.first, type_value_pair.second, generateRSOperator(static_cast<MinMaxTestDatatype>(datatype), static_cast<MinMaxTestOperator>(operater_type), false)));
+        }
+    }
+}
+CATCH
+
 
 TEST_F(DMMinMaxIndexTest, checkPKMatch)
 try
@@ -1275,6 +1409,9 @@ try
                          {{"0", "0", "1", "88"}, {"1", "1", "0", "100"}},
                          createLess(attr("Int64"), Field((Int64)100), 0)));
     ASSERT_EQ(false, checkDelMatch(case_name, *context, "Int64", "100", createEqual(attr("Int64"), Field((Int64)100))));
+
+    ASSERT_EQ(true, checkMatch(case_name, *context, "Nullable(Int64)", {{"0", "0", "0", "\\N"}}, createIsNull(attr("Int64"))));
+    ASSERT_EQ(false, checkDelMatch(case_name, *context, "Nullable(Int64)", "\\N", createIsNull(attr("Int64"))));
 }
 CATCH
 
@@ -1323,6 +1460,43 @@ try
     ASSERT_EQ(RoughCheck::Cmp<LessOrEqualsOp>::compare(Field((String) "test_2"), enum16_type, (Int16)101), ValueCompareResult::True);
 }
 CATCH
+
+// Check it compatible with the minmax index generated by the version before v6.4
+TEST_F(DMMinMaxIndexTest, CompatibleOldMinmaxIndex)
+try
+{
+    RSCheckParam param;
+
+    auto type = std::make_shared<DataTypeInt64>();
+    auto data_type = makeNullable(type);
+
+    // Generate a minmax index with the min value is null as a old version(before v6.4) minmax index.
+    auto has_null_marks = std::make_shared<PaddedPODArray<UInt8>>(1);
+    auto has_value_marks = std::make_shared<PaddedPODArray<UInt8>>(1);
+    MutableColumnPtr minmaxes = data_type->createColumn();
+
+    auto column = data_type->createColumn();
+
+    column->insert(Field(static_cast<Int64>(1))); // insert value 1
+    column->insertDefault(); // insert null value
+
+    auto * col = column.get();
+    minmaxes->insertFrom(*col, 1); // insert min index
+    minmaxes->insertFrom(*col, 0); // insert max index
+
+    auto minmax = std::make_shared<MinMaxIndex>(has_null_marks, has_value_marks, std::move(minmaxes));
+
+    auto index = RSIndex(type, minmax);
+    auto col_id = 1;
+    param.indexes.emplace(col_id, index);
+
+    // make a euqal filter, check equal with 1
+    auto filter = createEqual(attr("Nullable(Int64)"), Field(static_cast<Int64>(1)));
+
+    ASSERT_EQ(filter->roughCheck(0, param), RSResult::Some);
+}
+CATCH
+
 } // namespace tests
 } // namespace DM
 } // namespace DB

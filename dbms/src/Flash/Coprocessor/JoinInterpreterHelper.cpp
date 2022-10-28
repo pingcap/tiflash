@@ -345,12 +345,4 @@ std::tuple<ExpressionActionsPtr, Names, String> prepareJoin(
     dag_analyzer.appendJoinKeyAndJoinFilters(chain, keys, key_types, key_names, left, is_right_out_join, filters, filter_column_name);
     return {chain.getLastActions(), std::move(key_names), std::move(filter_column_name)};
 }
-
-std::function<size_t()> concurrencyBuildIndexGenerator(size_t join_build_concurrency)
-{
-    size_t init_value = 0;
-    return [init_value, join_build_concurrency]() mutable {
-        return (init_value++) % join_build_concurrency;
-    };
-}
 } // namespace DB::JoinInterpreterHelper

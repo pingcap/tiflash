@@ -65,7 +65,7 @@ cd "${build_dir}"
 
 # Set env variable to run test cases with test data
 export ALSO_RUN_WITH_TEST_DATA=1
-
+export LD_LIBRARY_PATH=.
 if [[ ${RUN_TESTS_PARALLEL} != "true" ]]; then
 	tests=(
 		"gtests_dbms"

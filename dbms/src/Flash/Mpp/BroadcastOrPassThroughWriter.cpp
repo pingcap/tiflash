@@ -80,7 +80,7 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
     if constexpr (send_exec_summary_at_last)
     {
         TrackedSelectResp response;
-        addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
+        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
         tracked_packet.serializeByResponse(response.getResponse());
     }
     if (blocks.empty())

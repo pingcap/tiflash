@@ -13,13 +13,20 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
+#include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Debug/MockRaftStoreProxy.h>
+#include <Debug/MockSSTReader.h>
+#include <Debug/MockTiDB.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/KVStore.h>
 #include <Storages/Transaction/ProxyFFICommon.h>
 #include <Storages/Transaction/RegionMeta.h>
+#include <Storages/Transaction/RegionTable.h>
 #include <Storages/Transaction/TMTContext.h>
 #include <Storages/Transaction/tests/region_helper.h>
+#include <TestUtils/TiFlashTestEnv.h>
 
 namespace DB
 {
@@ -338,7 +345,7 @@ void MockRaftStoreProxy::bootstrap(
     auto task_lock = kvs.genTaskLock();
     auto lock = kvs.genRegionWriteLock(task_lock);
     {
-        auto region = tests::makeRegion(region_id, RecordKVFormat::genKey(region_id, 0), RecordKVFormat::genKey(region_id, 10));
+        auto region = tests::makeRegion(region_id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10));
         lock.regions.emplace(region_id, region);
         lock.index.add(region);
     }
@@ -437,14 +444,14 @@ void MockRaftStoreProxy::doApply(
             if (cmd_types[i] == WriteCmdType::Put)
             {
                 auto cf_name = CFToName(cmd_cf[i]);
-                auto key = RecordKVFormat::genKey(1, keys[i], 1);
+                auto key = RecordKVFormat::genKey(table_id, keys[i], 1);
                 TiKVValue value = std::move(vals[i]);
                 RegionBench::setupPutRequest(request.add_requests(), cf_name, key, value);
             }
             else
             {
                 auto cf_name = CFToName(cmd_cf[i]);
-                auto key = RecordKVFormat::genKey(1, keys[i], 1);
+                auto key = RecordKVFormat::genKey(table_id, keys[i], 1);
                 RegionBench::setupDelRequest(request.add_requests(), cf_name, key);
             }
         }
@@ -503,6 +510,133 @@ void MockRaftStoreProxy::replay(
     {
         doApply(kvs, tmt, cond, region_id, i);
     }
+}
+
+void MockRaftStoreProxy::Cf::finish_file()
+{
+    if (freezed)
+        return;
+    auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
+    c++;
+    sst_files.push_back(region_id_str);
+    MockSSTReader::Data kv_list;
+    for (auto & kv : kvs)
+    {
+        kv_list.emplace_back(kv.first, kv.second);
+    }
+    auto & mmp = MockSSTReader::getMockSSTData();
+    mmp[MockSSTReader::Key{region_id_str, type}] = std::move(kv_list);
+    kvs.clear();
+}
+
+std::vector<SSTView> MockRaftStoreProxy::Cf::ssts() const
+{
+    assert(freezed);
+    std::vector<SSTView> sst_views;
+    for (const auto & sst_file : sst_files)
+    {
+        sst_views.push_back(SSTView{
+            type,
+            BaseBuffView{sst_file.c_str(), sst_file.size()},
+        });
+    }
+    return sst_views;
+}
+
+MockRaftStoreProxy::Cf::Cf(UInt64 region_id_, TableID table_id_, ColumnFamilyType type_)
+    : region_id(region_id_)
+    , table_id(table_id_)
+    , type(type_)
+    , c(0)
+    , freezed(false)
+{
+    auto & mmp = MockSSTReader::getMockSSTData();
+    auto region_id_str = std::to_string(region_id) + "_multi_" + std::to_string(c);
+    mmp[MockSSTReader::Key{region_id_str, type}].clear();
+}
+
+void MockRaftStoreProxy::Cf::insert(HandleID key, std::string val)
+{
+    auto k = RecordKVFormat::genKey(table_id, key, 1);
+    TiKVValue v = std::move(val);
+    kvs.emplace_back(k, v);
+}
+
+void MockRaftStoreProxy::snapshot(
+    KVStore & kvs,
+    TMTContext & tmt,
+    UInt64 region_id,
+    std::vector<Cf> && cfs,
+    uint64_t index,
+    uint64_t term)
+{
+    auto region = getRegion(region_id);
+    auto kv_region = kvs.getRegion(region_id);
+    // We have catch up to index by snapshot.
+    index = region->getLatestCommitIndex() + 1;
+    term = region->getLatestCommitTerm();
+    // The new entry is committed on Proxy's side.
+    region->updateCommitIndex(index);
+
+    auto ori_snapshot_apply_method = kvs.snapshot_apply_method;
+    kvs.snapshot_apply_method = TiDB::SnapshotApplyMethod::DTFile_Single;
+    SCOPE_EXIT({
+        kvs.snapshot_apply_method = ori_snapshot_apply_method;
+    });
+    std::vector<SSTView> ssts;
+    for (auto & cf : cfs)
+    {
+        auto sst = cf.ssts();
+        for (auto & it : sst)
+        {
+            ssts.push_back(it);
+        }
+    }
+    SSTViewVec snaps{ssts.data(), ssts.size()};
+    auto ingest_ids = kvs.preHandleSnapshotToFiles(
+        kv_region,
+        snaps,
+        index,
+        term,
+        tmt);
+
+    kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{kv_region, std::move(ingest_ids)}, tmt);
+    region->updateAppliedIndex(index);
+    // PreHandledSnapshotWithFiles will do that, however preHandleSnapshotToFiles will not.
+    kv_region->setApplied(index, term);
+}
+
+TableID MockRaftStoreProxy::bootstrap_table(
+    Context & ctx,
+    KVStore & kvs,
+    TMTContext & tmt)
+{
+    UNUSED(kvs);
+    ColumnsDescription columns;
+    auto & data_type_factory = DataTypeFactory::instance();
+    columns.ordinary = NamesAndTypesList({NameAndTypePair{"a", data_type_factory.get("Int64")}});
+    auto tso = tmt.getPDClient()->getTS();
+    MockTiDB::instance().newDataBase("d");
+    UInt64 table_id = MockTiDB::instance().newTable("d", "t", columns, tso, "", "dt");
+
+    auto schema_syncer = tmt.getSchemaSyncer();
+    schema_syncer->syncSchemas(ctx);
+    this->table_id = table_id;
+    return table_id;
+}
+
+void MockRaftStoreProxy::clear_tables(
+    Context & ctx,
+    KVStore & kvs,
+    TMTContext & tmt)
+{
+    UNUSED(kvs);
+    UNUSED(tmt);
+    if (this->table_id != 1)
+    {
+        MockTiDB::instance().dropTable(ctx, "d", "t", false);
+    }
+    this->table_id = 1;
 }
 
 void GCMonitor::add(RawObjType type, int64_t diff)
