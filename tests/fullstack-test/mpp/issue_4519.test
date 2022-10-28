@@ -16,8 +16,8 @@
 => DBGInvoke __init_fail_point()
 
 mysql> drop table if exists test.test
-mysql> create table test.test (col1 decimal(65, 10) not null, col2 decimal(20, 20), col3 decimal(65, 0) NOT NULL)
-mysql> insert into test.test values(0.1,0.1,1),(1.0,0.1,1),(0,0,0)
+mysql> create table test.test (col1 decimal(65, 10), col2 decimal(20, 20), col3 decimal(65, 0))
+mysql> insert into test.test values(0.1,0.1,1),(1.0,0.1,1),(0,0,0),(null,null,null),(99.9,0.99,99)
 
 mysql> alter table test.test set tiflash replica 1
 
