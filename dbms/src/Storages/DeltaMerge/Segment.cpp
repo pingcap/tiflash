@@ -373,6 +373,72 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
+bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
+{
+    RUNTIME_CHECK(segment_snap->isForUpdate());
+
+    // Fast path: all packs has been filtered away
+    if (segment_snap->getRows() == 0)
+        return true;
+
+    // Build read stream
+    auto columns_to_read = std::make_shared<ColumnDefines>();
+    columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    auto read_ranges = RowKeyRanges{rowkey_range};
+
+    SkippableBlockInputStreams streams;
+    for (const auto & file : segment_snap->stable->getDMFiles())
+    {
+        DMFileBlockInputStreamBuilder builder(dm_context.db_context);
+        auto stream = builder
+                          .setRowsThreshold(std::numeric_limits<UInt64>::max()) // TODO: May be we could have some better settings
+                          .onlyReadOnePackEveryTime()
+                          .build(file, *columns_to_read, read_ranges);
+        streams.push_back(stream);
+    }
+
+    BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream>(streams);
+    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read, rowkey_range);
+
+    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, read_ranges, 0);
+    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
+
+    // Try to read one row from the two stream to determine whether the snapshot is empty.
+    // If we cannot read out anything, we know that the snapshot is definitely empty.
+    {
+        delta_stream->readPrefix();
+        while (true)
+        {
+            Block block = delta_stream->read();
+            if (!block)
+                break;
+            if (block.rows() > 0)
+                // Note: Returning false here does not mean that there must be data in the snapshot,
+                // because we are not considering the delete range.
+                return false; // TODO: We did not call readSuffix here. Is it fine?
+        }
+        delta_stream->readSuffix();
+    }
+    {
+        stable_stream->readPrefix();
+        while (true)
+        {
+            Block block = stable_stream->read();
+            if (!block)
+                break;
+            if (block.rows() > 0)
+                // Note: Returning false here does not mean that there must be data in the snapshot,
+                // because we are not considering the delete range.
+                return false;
+        }
+        stable_stream->readSuffix();
+    }
+
+    // We cannot read out anything from the delta stream and the stable stream,
+    // so we know that the snapshot is definitely empty.
+    return true;
+}
+
 bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);

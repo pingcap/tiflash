@@ -56,10 +56,12 @@ struct SegmentSnapshot : private boost::noncopyable
         , stable(std::move(stable_))
     {}
 
-    SegmentSnapshotPtr clone() { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
+    SegmentSnapshotPtr clone() const { return std::make_shared<SegmentSnapshot>(delta->clone(), stable->clone()); }
 
-    UInt64 getBytes() { return delta->getBytes() + stable->getBytes(); }
-    UInt64 getRows() { return delta->getRows() + stable->getRows(); }
+    UInt64 getBytes() const { return delta->getBytes() + stable->getBytes(); }
+    UInt64 getRows() const { return delta->getRows() + stable->getRows(); }
+
+    bool isForUpdate() const { return delta->isForUpdate(); }
 };
 
 /// A segment contains many rows of a table. A table is split into segments by consecutive ranges.
@@ -378,6 +380,20 @@ public:
     [[nodiscard]] SegmentPtr dangerouslyReplaceData(const Lock &, DMContext & dm_context, const DMFilePtr & data_file, WriteBatches & wbs) const;
 
     [[nodiscard]] SegmentPtr dropNextSegment(WriteBatches & wbs, const RowKeyRange & next_segment_range);
+
+    /**
+     * Do a fast (but rough) check to see whether there is no data in the snapshot.
+     *
+     * As it is a rough check, the result is not certain:
+     * - When returning true, the snapshot is definitely empty.
+     * - When returning false, the snapshot is very likely to be not empty (but still, may be empty in some rare cases).
+     *
+     * You must ensure the snapshot is for_write, because when snapshot is not for_write, newly
+     * written data will change the content of the snapshot silently at any time.
+     *
+     * To prevent you from making mistakes, exceptions will be thrown when snapshot is not for_write.
+     */
+    bool isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);

@@ -339,6 +339,8 @@ public:
     RowKeyRange getSquashDeleteRange() const;
 
     const auto & getSharedDeltaIndex() { return shared_delta_index; }
+
+    bool isForUpdate() const { return is_update; }
 };
 
 class DeltaValueReader
