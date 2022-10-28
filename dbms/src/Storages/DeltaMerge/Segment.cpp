@@ -388,31 +388,16 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
 
     ProfileEvents::increment(ProfileEvents::DMSegmentIsEmptySlowPath);
 
-    // Build read stream
+    // Build a delta stream first, and try to read some data from it.
+    // As long as we read out anything, we will stop.
+
     auto columns_to_read = std::make_shared<ColumnDefines>();
     columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
     auto read_ranges = RowKeyRanges{rowkey_range};
 
-    SkippableBlockInputStreams streams;
-    for (const auto & file : segment_snap->stable->getDMFiles())
     {
-        DMFileBlockInputStreamBuilder builder(dm_context.db_context);
-        auto stream = builder
-                          .setRowsThreshold(std::numeric_limits<UInt64>::max()) // TODO: May be we could have some better settings
-                          .onlyReadOnePackEveryTime()
-                          .build(file, *columns_to_read, read_ranges);
-        streams.push_back(stream);
-    }
-
-    BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream>(streams);
-    BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read, rowkey_range);
-
-    delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, read_ranges, 0);
-    stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
-
-    // Try to read one row from the two stream to determine whether the snapshot is empty.
-    // If we cannot read out anything, we know that the snapshot is definitely empty.
-    {
+        BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read, rowkey_range);
+        delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, read_ranges, 0);
         delta_stream->readPrefix();
         while (true)
         {
@@ -422,11 +407,26 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
             if (block.rows() > 0)
                 // Note: Returning false here does not mean that there must be data in the snapshot,
                 // because we are not considering the delete range.
-                return false; // TODO: We did not call readSuffix here. Is it fine?
+                return false;
         }
         delta_stream->readSuffix();
     }
+
+    // The delta stream is empty. Let's then try to read from stable.
     {
+        SkippableBlockInputStreams streams;
+        for (const auto & file : segment_snap->stable->getDMFiles())
+        {
+            DMFileBlockInputStreamBuilder builder(dm_context.db_context);
+            auto stream = builder
+                              .setRowsThreshold(std::numeric_limits<UInt64>::max()) // TODO: May be we could have some better settings
+                              .onlyReadOnePackEveryTime()
+                              .build(file, *columns_to_read, read_ranges);
+            streams.push_back(stream);
+        }
+
+        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream>(streams);
+        stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
         stable_stream->readPrefix();
         while (true)
         {
@@ -443,6 +443,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
 
     // We cannot read out anything from the delta stream and the stable stream,
     // so we know that the snapshot is definitely empty.
+    
     return true;
 }
 
