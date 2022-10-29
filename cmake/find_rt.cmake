@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if (ARCH_DARWIN)
+if (OS_DARWIN)
     # lib from libs/libcommon
     set (RT_LIBRARY "apple_rt")
 else ()
@@ -22,7 +22,7 @@ endif ()
 message(STATUS "Using rt: ${RT_LIBRARY}")
 
 function (target_link_rt_by_force TARGET)
-    if (NOT ARCH_DARWIN)
+    if (NOT OS_DARWIN)
         set (FLAGS "-Wl,-no-as-needed -lrt -Wl,-as-needed")
         set_property (TARGET ${TARGET} APPEND PROPERTY LINK_FLAGS "${FLAGS}")
     endif ()

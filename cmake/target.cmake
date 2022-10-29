@@ -13,9 +13,9 @@
 # limitations under the License.
 
 if (CMAKE_SYSTEM MATCHES "Linux")
-    set (ARCH_LINUX 1)
+    set (OS_LINUX 1)
 elseif (CMAKE_SYSTEM MATCHES "FreeBSD")
-    set (ARCH_FREEBSD 1)
+    set (OS_FREEBSD 1)
 elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    set (ARCH_DARWIN 1)
+    set (OS_DARWIN 1)
 endif ()

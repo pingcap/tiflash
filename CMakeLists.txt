@@ -156,7 +156,7 @@ endif ()
 if (CMAKE_LIBRARY_ARCHITECTURE MATCHES "amd64.*|x86_64.*|AMD64.*")
     option (USE_INTERNAL_MEMCPY "Use internal implementation of 'memcpy' function instead of provided by libc. Only for x86_64." ON)
 
-    if (ARCH_LINUX)
+    if (OS_LINUX)
         option (GLIBC_COMPATIBILITY "Set to TRUE to enable compatibility with older glibc libraries. Only for x86_64, Linux. Implies USE_INTERNAL_MEMCPY." ON)
     endif()
 endif ()
@@ -202,7 +202,7 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} ${COMPILER_FLAGS} -fn
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} ${MOST_DEBUGGABLE_LEVEL} -fverbose-asm -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
-if (MAKE_STATIC_LIBRARIES AND NOT ARCH_DARWIN AND NOT COMPILER_CLANG)
+if (MAKE_STATIC_LIBRARIES AND NOT OS_DARWIN AND NOT COMPILER_CLANG)
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
 endif ()
 
@@ -210,7 +210,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 include (cmake/test_compiler.cmake)
 
-if (ARCH_LINUX AND COMPILER_CLANG)
+if (OS_LINUX AND COMPILER_CLANG)
     set (TIFLASH_LLVM_TOOLCHAIN 1)
     set (CMAKE_EXE_LINKER_FLAGS          "${CMAKE_EXE_LINKER_FLAGS} ${GLIBC_COMPATIBILITY_LINK_FLAGS}")
 
@@ -274,7 +274,7 @@ else ()
     set(NOT_UNBUNDLED 1)
 endif ()
 # Using system libs can cause lot of warnings in includes.
-if (UNBUNDLED OR NOT (ARCH_LINUX OR ARCH_DARWIN) OR ARCH_32)
+if (UNBUNDLED OR NOT (OS_LINUX OR OS_DARWIN) OR ARCH_32)
     option (NO_WERROR "Disable -Werror compiler option" ON)
 endif ()
 
