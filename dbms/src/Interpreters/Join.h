@@ -228,6 +228,8 @@ public:
     M(key32)                       \
     M(key64)                       \
     M(key_string)                  \
+    M(key_strbinpadding)           \
+    M(key_strbin)                  \
     M(key_fixed_string)            \
     M(keys128)                     \
     M(keys256)                     \
@@ -253,10 +255,13 @@ public:
         std::unique_ptr<ConcurrentHashMap<UInt32, Mapped, HashCRC32<UInt32>>> key32;
         std::unique_ptr<ConcurrentHashMap<UInt64, Mapped, HashCRC32<UInt64>>> key64;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_string;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbinpadding;
+        std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_strbin;
         std::unique_ptr<ConcurrentHashMapWithSavedHash<StringRef, Mapped>> key_fixed_string;
         std::unique_ptr<ConcurrentHashMap<UInt128, Mapped, HashCRC32<UInt128>>> keys128;
         std::unique_ptr<ConcurrentHashMap<UInt256, Mapped, HashCRC32<UInt256>>> keys256;
         std::unique_ptr<ConcurrentHashMap<StringRef, Mapped>> serialized;
+        // TODO: add more cases like Aggregator
     };
 
     using MapsAny = MapsTemplate<WithUsedFlag<false, RowRef>>;
@@ -320,7 +325,7 @@ private:
 private:
     Type type = Type::EMPTY;
 
-    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
+    Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const;
 
     Sizes key_sizes;
 
