@@ -4384,6 +4384,7 @@ class FunctionInstrUTF8 : public IFunction
 {
 public:
     static constexpr auto name = "instrUTF8";
+    static constexpr auto diff = 'Z' - 'z';
 
     FunctionInstrUTF8() = default;
 
@@ -4407,7 +4408,7 @@ public:
         auto second_argument = removeNullable(arguments[1]);
         if (!second_argument->isString())
             throw Exception(
-                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                fmt::format("Illegal type {} of first argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         auto return_type = std::make_shared<DataTypeInt64>();
@@ -4480,7 +4481,7 @@ private:
         unsigned int find_in_size = 0;
         Int64 res = 0;
         ColumnString::Offset substr_size = substr_end_offset - substr_start_offset - 1;
-        if (substr_size == 0)
+        if (unlikely(substr_size == 0))
         {
             return 1;
         }
@@ -4491,11 +4492,11 @@ private:
             auto char_substr = col_vector_substr_value[substr_start_offset + sub_search_index];
             if (char_str <= 'Z' && char_str >= 'A')
             {
-                char_str = char_str - ('Z' - 'z');
+                char_str = char_str - diff;
             }
             if (char_substr <= 'Z' && char_substr >= 'A')
             {
-                char_substr = char_substr - ('Z' - 'z');
+                char_substr = char_substr - diff;
             }
             if (char_str == char_substr)
             {
@@ -4619,7 +4620,7 @@ public:
         auto second_argument = removeNullable(arguments[1]);
         if (!second_argument->isString())
             throw Exception(
-                fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
+                fmt::format("Illegal type {} of first argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         auto return_type = std::make_shared<DataTypeInt64>();
