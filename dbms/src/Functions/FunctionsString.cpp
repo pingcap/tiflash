@@ -4693,7 +4693,7 @@ private:
         unsigned int find_in_size = 0;
         Int64 res = 0;
         ColumnString::Offset substr_size = substr_end_offset - substr_start_offset - 1;
-        if (substr_size == 0)
+        if (unlikely(substr_size == 0))
         {
             return 1;
         }
