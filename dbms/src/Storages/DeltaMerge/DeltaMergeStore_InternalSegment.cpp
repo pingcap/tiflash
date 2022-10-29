@@ -33,10 +33,8 @@ extern const Metric DT_SnapshotOfDeltaMerge;
 
 namespace DB
 {
-
 namespace DM
 {
-
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at, SegmentSplitMode opt_split_mode)
 {
     LOG_INFO(
