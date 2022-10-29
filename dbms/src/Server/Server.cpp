@@ -111,6 +111,7 @@
 #include <fiu.h>
 #endif
 
+#include <Functions/MathVectorization/Switch.h>
 
 #if USE_MIMALLOC
 #define TRY_LOAD_CONF(NAME)                          \
@@ -592,6 +593,18 @@ public:
 
             return address;
         };
+
+        /// Check math vectorization
+#ifdef TIFLASH_HAS_MATH_VECTORIZATION_SUPPORT
+        if (config.getBool("math_vectorization", false))
+        {
+            DB::MathVectorization::enableVectorization();
+        }
+        else
+        {
+            DB::MathVectorization::disableVectorization();
+        }
+#endif
 
         for (const auto & listen_host : listen_hosts)
         {
