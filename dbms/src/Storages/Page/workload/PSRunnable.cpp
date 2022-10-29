@@ -79,17 +79,16 @@ size_t PSRunnable::getPagesUsed() const
 /// Writer
 ///
 
-DB::ReadBufferPtr PSWriter::updatedRandomData()
+DB::ReadBufferPtr PSWriter::getRandomData()
 {
-    size_t memory_size = buffer_size_max;
     if (memory == nullptr)
     {
-        memory = std::unique_ptr<char[]>(new char[memory_size]);
-        for (size_t i = 0; i < memory_size; i++)
+        memory = std::unique_ptr<char[]>(new char[buffer_size_max + 1]);
+        for (size_t i = 0; i < buffer_size_max + 1; i++)
             memory[i] = i % 0xFF;
     }
 
-    std::uniform_int_distribution<> dist(buffer_size_min, buffer_size_max - 1);
+    std::uniform_int_distribution<> dist(buffer_size_min, buffer_size_max);
     size_t gen_size = dist(gen);
     return std::make_shared<DB::ReadBufferFromMemory>(memory.get(), gen_size);
 }
@@ -107,7 +106,7 @@ void PSWriter::setBufferSizeRange(size_t min, size_t max)
 
 void PSWriter::write(const RandomPageId & r)
 {
-    auto buff_ptr = updatedRandomData(); // update buff_ptr
+    auto buff_ptr = getRandomData();
 
     DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
     wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());
@@ -137,7 +136,7 @@ RandomPageId PSWriter::genRandomPageId()
     return RandomPageId(static_cast<DB::PageId>(std::round(dist(gen))));
 }
 
-DB::ReadBufferPtr PSCommonWriter::updatedRandomData()
+DB::ReadBufferPtr PSCommonWriter::getRandomData()
 {
     // Calculate the fixed memory size
     size_t single_buff_size = buffer_size_max;
@@ -165,7 +164,7 @@ bool PSCommonWriter::runImpl()
     DB::WriteBatch wb{DB::TEST_NAMESPACE_ID};
     for (size_t i = 0; i < batch_buffer_nums; ++i)
     {
-        auto buff_ptr = updatedRandomData();
+        auto buff_ptr = getRandomData();
         if (data_sizes.empty())
         {
             wb.putPage(r.page_id, 0, buff_ptr, buff_ptr->buffer().size());

@@ -89,7 +89,7 @@ public:
 
     void setBufferSizeRange(size_t min, size_t max);
 
-    virtual DB::ReadBufferPtr updatedRandomData();
+    virtual DB::ReadBufferPtr getRandomData();
 
     bool runImpl() override;
 
@@ -121,7 +121,7 @@ public:
         : PSWriter(ps_, index_, global_stat_)
     {}
 
-    DB::ReadBufferPtr updatedRandomData() override;
+    DB::ReadBufferPtr getRandomData() override;
 
     String description() override { return fmt::format("(Stress Test Common Writer {})", index); }
 
