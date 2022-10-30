@@ -78,10 +78,10 @@ add_executable (io_operators operators.cpp ${SRCS})
 target_link_libraries (io_operators clickhouse_common_io)
 
 if (NOT APPLE AND NOT ARCH_FREEBSD)
-    add_executable(write_buffer_aio write_buffer_aio.cpp)
+    add_executable(write_buffer_aio EXCLUDE_FROM_ALL write_buffer_aio.cpp)
     target_link_libraries (write_buffer_aio clickhouse_common_io ${Boost_FILESYSTEM_LIBRARY})
 
-    add_executable(read_buffer_aio read_buffer_aio.cpp)
+    add_executable(read_buffer_aio EXCLUDE_FROM_ALL read_buffer_aio.cpp)
     target_link_libraries (read_buffer_aio clickhouse_common_io ${Boost_FILESYSTEM_LIBRARY})
 endif ()
 

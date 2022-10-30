@@ -19,6 +19,6 @@ target_include_directories(page-ctl-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdae
 target_link_libraries(page-ctl-lib dbms daemon tiflash-dttool-entry-object clickhouse-server-lib)
 target_compile_options(page-ctl-lib  PRIVATE -Wno-format)
 
-add_executable(page-ctl Main.cpp)
+add_executable(page-ctl EXCLUDE_FROM_ALL Main.cpp)
 target_link_libraries(page-ctl page-ctl-lib dbms clickhouse_functions clickhouse-server-lib)
 target_compile_options(page-ctl  PRIVATE -Wno-format)
