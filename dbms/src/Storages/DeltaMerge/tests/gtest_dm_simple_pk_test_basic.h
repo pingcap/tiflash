@@ -26,7 +26,6 @@ namespace DM
 {
 namespace tests
 {
-
 /**
  * This is similar to SegmentTestBasic, but is for the DeltaMergeStore.
  * It allows you to write tests easier based on the assumption that the PK is either Int or Int encoded in String.
@@ -55,8 +54,8 @@ public:
     void mergeDelta();
     bool merge(Int64 start_key, Int64 end_key);
     void deleteRange(Int64 start_key, Int64 end_key);
-    size_t getRowsN();
-    size_t getRowsN(Int64 start_key, Int64 end_key);
+    size_t getRowsN() const;
+    size_t getRowsN(Int64 start_key, Int64 end_key) const;
 
 public:
     SegmentPtr getSegmentAt(Int64 key) const;
