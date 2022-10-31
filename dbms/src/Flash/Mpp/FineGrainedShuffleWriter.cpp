@@ -62,7 +62,12 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::finishWrite()
 template <class StreamWriterPtr>
 void FineGrainedShuffleWriter<StreamWriterPtr>::prepare(const Block & sample_block)
 {
-    header = sample_block.cloneEmpty();
+    /// Materialize sample_block so that header and reserved scatterColumns are full columns
+    /// Because ser/der don't support constant columns now
+    std::vector<Block> sample_blocks;
+    sample_blocks.push_back(sample_block);
+    HashBaseWriterHelper::materializeBlocks(sample_blocks);
+    header = sample_blocks.back().cloneEmpty();
     num_columns = header.columns();
     // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
