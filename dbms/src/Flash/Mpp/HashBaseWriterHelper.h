@@ -19,6 +19,7 @@
 
 namespace DB::HashBaseWriterHelper
 {
+void materializeBlock(Block & input_block);
 void materializeBlocks(std::vector<Block> & input_blocks);
 
 std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t num);

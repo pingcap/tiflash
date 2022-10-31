@@ -64,7 +64,8 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::prepare(const Block & sample_blo
 {
     /// Materialize sample_block so that header and reserved scatterColumns are full columns
     /// Because ser/der don't support constant columns now
-    header = materializeBlock(sample_block);
+    header = sample_block.cloneEmpty();
+    materializeBlock(header);
     num_columns = header.columns();
     // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
     num_bucket = partition_num * fine_grained_shuffle_stream_count;

@@ -16,6 +16,17 @@
 
 namespace DB::HashBaseWriterHelper
 {
+void materializeBlock(Block & input_block)
+{
+    for (size_t i = 0; i < input_block.columns(); ++i)
+    {
+        auto & element = input_block.getByPosition(i);
+        auto & src = element.column;
+        if (ColumnPtr converted = src->convertToFullColumnIfConst())
+            src = converted;
+    }
+}
+
 void materializeBlocks(std::vector<Block> & blocks)
 {
     for (auto & block : blocks)
