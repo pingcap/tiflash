@@ -54,7 +54,7 @@ enum class StorageType
     Meta = 3,
 };
 
-PageStorage::Config extractConfig(const Settings & settings, StorageType subtype)
+PageStorageConfig extractConfig(const Settings & settings, StorageType subtype)
 {
 #define SET_CONFIG(NAME)                                                            \
     config.num_write_slots = settings.dt_storage_pool_##NAME##_write_slots;         \
@@ -64,7 +64,7 @@ PageStorage::Config extractConfig(const Settings & settings, StorageType subtype
     config.gc_max_valid_rate = settings.dt_storage_pool_##NAME##_gc_max_valid_rate; \
     config.blob_heavy_gc_valid_rate = settings.dt_page_gc_threshold;
 
-    PageStorage::Config config = getConfigFromSettings(settings);
+    PageStorageConfig config = getConfigFromSettings(settings);
 
     switch (subtype)
     {
@@ -169,7 +169,7 @@ bool GlobalStoragePool::gc(const Settings & settings, bool immediately, const Se
 }
 
 StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPool & storage_path_pool_, const String & name)
-    : logger(Logger::get("StoragePool", !name.empty() ? name : DB::toString(ns_id_)))
+    : logger(Logger::get(!name.empty() ? name : DB::toString(ns_id_)))
     , run_mode(global_ctx.getPageStorageRunMode())
     , ns_id(ns_id_)
     , storage_path_pool(storage_path_pool_)
@@ -227,10 +227,10 @@ StoragePool::StoragePool(Context & global_ctx, NamespaceId ns_id_, StoragePathPo
 
         if (storage_path_pool.isPSV2Deleted())
         {
-            LOG_FMT_INFO(logger, "PageStorage V2 is already mark deleted. Current pagestorage change from {} to {} [ns_id={}]", //
-                         static_cast<UInt8>(PageStorageRunMode::MIX_MODE), //
-                         static_cast<UInt8>(PageStorageRunMode::ONLY_V3), //
-                         ns_id);
+            LOG_INFO(logger, "PageStorage V2 is already mark deleted. Current pagestorage change from {} to {} [ns_id={}]", //
+                     static_cast<UInt8>(PageStorageRunMode::MIX_MODE), //
+                     static_cast<UInt8>(PageStorageRunMode::ONLY_V3), //
+                     ns_id);
             log_storage_v2 = nullptr;
             data_storage_v2 = nullptr;
             meta_storage_v2 = nullptr;
@@ -434,44 +434,44 @@ PageStorageRunMode StoragePool::restore()
         // However, the pages on meta V2 can not be deleted. As the pages in meta are small, we perform a forceTransformMetaV2toV3 to convert pages before all.
         if (const auto & meta_remain_pages = meta_storage_v2->getNumberOfPages(); meta_remain_pages != 0)
         {
-            LOG_FMT_INFO(logger, "Current pool.meta transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
+            LOG_INFO(logger, "Current pool.meta transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, meta_remain_pages);
             forceTransformMetaV2toV3();
             const auto & meta_remain_pages_after_transform = meta_storage_v2->getNumberOfPages();
-            LOG_FMT_INFO(logger, "Current pool.meta transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
-                         ns_id,
-                         meta_remain_pages_after_transform == 0,
-                         meta_remain_pages,
-                         meta_remain_pages_after_transform);
+            LOG_INFO(logger, "Current pool.meta transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+                     ns_id,
+                     meta_remain_pages_after_transform == 0,
+                     meta_remain_pages,
+                     meta_remain_pages_after_transform);
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current pool.meta transform already done before restored [ns_id={}] ", ns_id);
+            LOG_INFO(logger, "Current pool.meta transform already done before restored [ns_id={}] ", ns_id);
         }
 
         if (const auto & data_remain_pages = data_storage_v2->getNumberOfPages(); data_remain_pages != 0)
         {
-            LOG_FMT_INFO(logger, "Current pool.data transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, data_remain_pages);
+            LOG_INFO(logger, "Current pool.data transform to V3 begin [ns_id={}] [pages_before_transform={}]", ns_id, data_remain_pages);
             forceTransformDataV2toV3();
             const auto & data_remain_pages_after_transform = data_storage_v2->getNumberOfPages();
-            LOG_FMT_INFO(logger, "Current pool.data transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
-                         ns_id,
-                         data_remain_pages_after_transform == 0,
-                         data_remain_pages,
-                         data_remain_pages_after_transform);
+            LOG_INFO(logger, "Current pool.data transform to V3 finished [ns_id={}] [done={}] [pages_before_transform={}], [pages_after_transform={}]", //
+                     ns_id,
+                     data_remain_pages_after_transform == 0,
+                     data_remain_pages,
+                     data_remain_pages_after_transform);
         }
         else
         {
-            LOG_FMT_INFO(logger, "Current pool.data transform already done before restored [ns_id={}]", ns_id);
+            LOG_INFO(logger, "Current pool.data transform already done before restored [ns_id={}]", ns_id);
         }
 
         // Check number of valid pages in v2
         // If V2 already have no any data in disk, Then change run_mode to ONLY_V3
         if (log_storage_v2->getNumberOfPages() == 0 && data_storage_v2->getNumberOfPages() == 0 && meta_storage_v2->getNumberOfPages() == 0)
         {
-            LOG_FMT_INFO(logger, "Current pagestorage change from {} to {} [ns_id={}]", //
-                         static_cast<UInt8>(PageStorageRunMode::MIX_MODE),
-                         static_cast<UInt8>(PageStorageRunMode::ONLY_V3),
-                         ns_id);
+            LOG_INFO(logger, "Current pagestorage change from {} to {} [ns_id={}]", //
+                     static_cast<UInt8>(PageStorageRunMode::MIX_MODE),
+                     static_cast<UInt8>(PageStorageRunMode::ONLY_V3),
+                     ns_id);
             if (storage_path_pool.createPSV2DeleteMarkFile())
             {
                 log_storage_v2->drop();

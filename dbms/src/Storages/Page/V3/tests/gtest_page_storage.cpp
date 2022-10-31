@@ -63,7 +63,7 @@ public:
         page_storage->restore();
     }
 
-    std::shared_ptr<PageStorageImpl> reopenWithConfig(const PageStorage::Config & config_)
+    std::shared_ptr<PageStorageImpl> reopenWithConfig(const PageStorageConfig & config_)
     {
         auto path = getTemporaryPath();
         delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
@@ -77,7 +77,7 @@ protected:
     FileProviderPtr file_provider;
     std::unique_ptr<StoragePathPool> path_pool;
     PSDiskDelegatorPtr delegator;
-    PageStorage::Config config;
+    PageStorageConfig config;
     std::shared_ptr<PageStorageImpl> page_storage;
 
     std::list<PageDirectorySnapshotPtr> snapshots_holder;
@@ -788,7 +788,7 @@ try
     }
 
     // Restore, the broken meta should be ignored
-    page_storage = reopenWithConfig(PageStorage::Config{});
+    page_storage = reopenWithConfig(PageStorageConfig{});
 
     {
         size_t num_pages = 0;
@@ -817,7 +817,7 @@ try
     }
 
     // Restore again, we should be able to read page 1
-    page_storage = reopenWithConfig(PageStorage::Config{});
+    page_storage = reopenWithConfig(PageStorageConfig{});
 
     {
         size_t num_pages = 0;
@@ -892,7 +892,7 @@ try
     }
 
     // Restore again, we should be able to read page 1
-    page_storage = reopenWithConfig(PageStorage::Config{});
+    page_storage = reopenWithConfig(PageStorageConfig{});
 
     {
         size_t num_pages = 0;
@@ -1295,7 +1295,7 @@ try
     }
 
     sp_gc.next(); // continue the gc
-    th_gc.wait();
+    th_gc.get();
 
     ASSERT_EQ(*ptr, 100 + 4);
 }
@@ -1336,7 +1336,7 @@ try
     ptr = nullptr;
 
     sp_gc.next(); // continue the gc
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 
@@ -1565,7 +1565,7 @@ TEST_F(PageStorageTest, EntryTagAfterFullGC)
 try
 {
     {
-        PageStorage::Config config;
+        PageStorageConfig config;
         config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
         page_storage = reopenWithConfig(config);
     }
@@ -1615,7 +1615,7 @@ TEST_F(PageStorageTest, DumpPageStorageSnapshot)
 try
 {
     {
-        PageStorage::Config config;
+        PageStorageConfig config;
         config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
         config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
         config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
@@ -1637,7 +1637,7 @@ try
         page_storage->write(std::move(batch));
     }
 
-    // create a snapshot to avoid gc
+    // create a snapshot to avoid page0 being GC-ed
     auto snap = page_storage->getSnapshot();
 
     {
@@ -1646,21 +1646,24 @@ try
         page_storage->write(std::move(batch));
     }
 
-    auto getLogFileNum = [&]() {
-        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+    auto get_log_file_num = [&]() {
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
         return log_files.size();
     };
 
     // write until there are more than one wal file
-    while (getLogFileNum() <= 1)
+    while (get_log_file_num() <= 1)
     {
         WriteBatch batch;
         PageId page_id1 = 130;
         batch.putPage(page_id1, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
         page_storage->write(std::move(batch));
     }
+
+    // read with latest snapshot, we can not get page0
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 
+    // after the page0 get deleted in previouse log file,
     // write an upsert entry into the current writing log file
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
@@ -1669,10 +1672,12 @@ try
     ASSERT_TRUE(done_snapshot);
 
     {
-        PageStorage::Config config;
+        PageStorageConfig config;
         page_storage = reopenWithConfig(config);
     }
 
+    // After restored from disk, we should not see page0 again
+    // or it could be an entry pointing to a non-exist BlobFile
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 }
 CATCH
@@ -1681,7 +1686,7 @@ TEST_F(PageStorageTest, DumpPageStorageSnapshotWithRefPage)
 try
 {
     {
-        PageStorage::Config config;
+        PageStorageConfig config;
         config.blob_heavy_gc_valid_rate = 1.0; /// always run full gc
         config.wal_roll_size = 1 * 1024 * 1024; /// make the wal file more easy to roll
         config.wal_max_persisted_log_files = 10; /// avoid checkpoint when gc
@@ -1722,13 +1727,13 @@ try
         page_storage->write(std::move(batch));
     }
 
-    auto getLogFileNum = [&]() {
-        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get("PageStorageTest", ""));
+    auto get_log_file_num = [&]() {
+        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
         return log_files.size();
     };
 
     // write until there are more than one wal file
-    while (getLogFileNum() <= 1)
+    while (get_log_file_num() <= 1)
     {
         WriteBatch batch;
         PageId page_id2 = 130;
@@ -1737,6 +1742,7 @@ try
     }
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 
+    // after the page0 get deleted in previouse log file,
     // write an upsert entry into the current writing log file
     auto done_full_gc = page_storage->gc();
     EXPECT_TRUE(done_full_gc);
@@ -1745,10 +1751,12 @@ try
     ASSERT_TRUE(done_snapshot);
 
     {
-        PageStorage::Config config;
+        PageStorageConfig config;
         page_storage = reopenWithConfig(config);
     }
 
+    // After restored from disk, we should not see page0 again
+    // or it could be an entry pointing to a non-exist BlobFile
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 }
 CATCH

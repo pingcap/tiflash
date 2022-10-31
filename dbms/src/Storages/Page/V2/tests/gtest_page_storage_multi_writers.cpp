@@ -63,7 +63,7 @@ protected:
         storage = reopenWithConfig(config);
     }
 
-    std::shared_ptr<PageStorage> reopenWithConfig(const PageStorage::Config & config_)
+    std::shared_ptr<PageStorage> reopenWithConfig(const PageStorageConfig & config_)
     {
         auto spool = db_context->getPathPool().withTable("test", "t", false);
         auto delegator = spool.getPSDiskDelegatorSingle("log");
@@ -73,7 +73,7 @@ protected:
     }
 
 protected:
-    PageStorage::Config config;
+    PageStorageConfig config;
     std::shared_ptr<PageStorage> storage;
     const FileProviderPtr file_provider;
 };
@@ -371,7 +371,7 @@ try
     size_t timeout_s = 5 * 60;
 
     srand(0x123987);
-    PageStorage::Config curr_config = config;
+    PageStorageConfig curr_config = config;
     curr_config.num_write_slots = num_write_slots;
 
     storage = reopenWithConfig(curr_config);

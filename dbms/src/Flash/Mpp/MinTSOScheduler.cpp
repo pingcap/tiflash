@@ -33,7 +33,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     , thread_hard_limit(hard_limit)
     , estimated_thread_usage(0)
     , active_set_soft_limit(active_set_soft_limit_)
-    , log(Logger::get("MinTSOScheduler"))
+    , log(Logger::get())
 {
     auto cores = getNumberOfPhysicalCPUCores();
     if (active_set_soft_limit == 0 || active_set_soft_limit > 10 * cores)
@@ -43,7 +43,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     }
     if (isDisabled())
     {
-        LOG_FMT_INFO(log, "MinTSOScheduler is disabled!");
+        LOG_INFO(log, "MinTSOScheduler is disabled!");
     }
     else
     {
@@ -51,11 +51,11 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
         {
             thread_hard_limit = 10000;
             thread_soft_limit = 5000;
-            LOG_FMT_INFO(log, "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", hard_limit, soft_limit, OS_THREAD_SOFT_LIMIT, thread_hard_limit, thread_soft_limit, active_set_soft_limit);
+            LOG_INFO(log, "hard limit {} should > soft limit {} and under maximum {}, so MinTSOScheduler set them as {}, {} by default, and active_set_soft_limit is {}.", hard_limit, soft_limit, OS_THREAD_SOFT_LIMIT, thread_hard_limit, thread_soft_limit, active_set_soft_limit);
         }
         else
         {
-            LOG_FMT_INFO(log, "thread_hard_limit is {}, thread_soft_limit is {}, and active_set_soft_limit is {} in MinTSOScheduler.", thread_hard_limit, thread_soft_limit, active_set_soft_limit);
+            LOG_INFO(log, "thread_hard_limit is {}, thread_soft_limit is {}, and active_set_soft_limit is {} in MinTSOScheduler.", thread_hard_limit, thread_soft_limit, active_set_soft_limit);
         }
         GET_METRIC(tiflash_task_scheduler, type_min_tso).Set(min_tso);
         GET_METRIC(tiflash_task_scheduler, type_thread_soft_limit).Set(thread_soft_limit);
@@ -96,7 +96,7 @@ void MinTSOScheduler::deleteQuery(const UInt64 tso, MPPTaskManager & task_manage
         return;
     }
 
-    LOG_FMT_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
+    LOG_DEBUG(log, "{} query {} (is min = {}) is deleted from active set {} left {} or waiting set {} left {}.", is_cancelled ? "Cancelled" : "Finished", tso, tso == min_tso, active_set.find(tso) != active_set.end(), active_set.size(), waiting_set.find(tso) != waiting_set.end(), waiting_set.size());
     active_set.erase(tso);
     waiting_set.erase(tso);
     GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
@@ -152,7 +152,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
         auto query_task_set = task_manager.getQueryTaskSetWithoutLock(current_query_id);
         if (nullptr == query_task_set) /// silently solve this rare case
         {
-            LOG_FMT_ERROR(log, "the waiting query {} is not in the task manager.", current_query_id);
+            LOG_ERROR(log, "the waiting query {} is not in the task manager.", current_query_id);
             updateMinTSO(current_query_id, true, "as it is not in the task manager.");
             active_set.erase(current_query_id);
             waiting_set.erase(current_query_id);
@@ -161,7 +161,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
             continue;
         }
 
-        LOG_FMT_DEBUG(log, "query {} (is min = {}) with {} tasks is to be scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, query_task_set->waiting_tasks.size(), waiting_set.size());
+        LOG_DEBUG(log, "query {} (is min = {}) with {} tasks is to be scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, query_task_set->waiting_tasks.size(), waiting_set.size());
         /// schedule tasks one by one
         while (!query_task_set->waiting_tasks.empty())
         {
@@ -179,7 +179,7 @@ void MinTSOScheduler::scheduleWaitingQueries(MPPTaskManager & task_manager)
             query_task_set->waiting_tasks.pop();
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Decrement();
         }
-        LOG_FMT_DEBUG(log, "query {} (is min = {}) is scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, waiting_set.size());
+        LOG_DEBUG(log, "query {} (is min = {}) is scheduled from waiting set (size = {}).", current_query_id, current_query_id == min_tso, waiting_set.size());
         waiting_set.erase(current_query_id); /// all waiting tasks of this query are fully active
         GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
     }
@@ -202,7 +202,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
         }
         GET_METRIC(tiflash_task_scheduler, type_active_queries_count).Set(active_set.size());
         GET_METRIC(tiflash_task_scheduler, type_estimated_thread_usage).Set(estimated_thread_usage);
-        LOG_FMT_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", schedule_entry.getMPPTaskId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
+        LOG_INFO(log, "{} is scheduled (active set size = {}) due to available threads {}, after applied for {} threads, used {} of the thread {} limit {}.", schedule_entry.getMPPTaskId().toString(), active_set.size(), isWaiting ? "from the waiting set" : "directly", needed_threads, estimated_thread_usage, min_tso == tso ? "hard" : "soft", min_tso == tso ? thread_hard_limit : thread_soft_limit);
         return true;
     }
     else
@@ -213,7 +213,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
         {
             has_error = true;
             auto msg = fmt::format("threads are unavailable for the query {} ({} min_tso {}) {}, need {}, but used {} of the thread hard limit {}, {} active and {} waiting queries.", tso, tso == min_tso ? "is" : "is newer than", min_tso, isWaiting ? "from the waiting set" : "when directly schedule it", needed_threads, estimated_thread_usage, thread_hard_limit, active_set.size(), waiting_set.size());
-            LOG_FMT_ERROR(log, "{}", msg);
+            LOG_ERROR(log, "{}", msg);
             GET_METRIC(tiflash_task_scheduler, type_hard_limit_exceeded_count).Increment();
             if (isWaiting)
             {
@@ -234,7 +234,7 @@ bool MinTSOScheduler::scheduleImp(const UInt64 tso, const MPPQueryTaskSetPtr & q
             GET_METRIC(tiflash_task_scheduler, type_waiting_queries_count).Set(waiting_set.size());
             GET_METRIC(tiflash_task_scheduler, type_waiting_tasks_count).Increment();
         }
-        LOG_FMT_INFO(log, "threads are unavailable for the query {} or active set is full (size =  {}), need {}, but used {} of the thread soft limit {},{} waiting set size = {}", tso, active_set.size(), needed_threads, estimated_thread_usage, thread_soft_limit, isWaiting ? "" : " put into", waiting_set.size());
+        LOG_INFO(log, "threads are unavailable for the query {} or active set is full (size =  {}), need {}, but used {} of the thread soft limit {},{} waiting set size = {}", tso, active_set.size(), needed_threads, estimated_thread_usage, thread_soft_limit, isWaiting ? "" : " put into", waiting_set.size());
         return false;
     }
 }
@@ -260,7 +260,7 @@ bool MinTSOScheduler::updateMinTSO(const UInt64 tso, const bool retired, const S
     if (min_tso != old_min_tso) /// if min_tso == MAX_UINT64 and the query tso is not to be cancelled, the used_threads, active_set.size() and waiting_set.size() must be 0.
     {
         GET_METRIC(tiflash_task_scheduler, type_min_tso).Set(min_tso);
-        LOG_FMT_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.", old_min_tso, min_tso, msg, estimated_thread_usage, active_set.size(), waiting_set.size());
+        LOG_INFO(log, "min_tso query is updated from {} to {} {}, used threads = {}, {} active and {} waiting queries.", old_min_tso, min_tso, msg, estimated_thread_usage, active_set.size(), waiting_set.size());
     }
     return force_scheduling;
 }

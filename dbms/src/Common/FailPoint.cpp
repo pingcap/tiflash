@@ -73,9 +73,6 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \
-    M(gc_skip_update_safe_point)                             \
-    M(gc_skip_merge_delta)                                   \
-    M(gc_skip_merge)                                         \
     M(force_set_page_file_write_errno)                       \
     M(force_split_io_size_4k)                                \
     M(minimum_block_size_for_cross_join)                     \
@@ -93,7 +90,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_slow_page_storage_snapshot_release)              \
     M(force_change_all_blobs_to_read_only)                   \
     M(unblock_query_init_after_write)                        \
-    M(exception_in_merged_task_init)
+    M(exception_in_merged_task_init)                         \
+    M(force_fail_in_flush_region_data)
 
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
@@ -104,7 +102,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(pause_before_apply_raft_cmd)             \
     M(pause_before_apply_raft_snapshot)        \
     M(pause_until_apply_raft_snapshot)         \
-    M(pause_after_copr_streams_acquired_once)
+    M(pause_after_copr_streams_acquired_once)  \
+    M(pause_before_register_non_root_mpp_task)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS(M) \
     M(pause_when_reading_from_dt_stream)  \
@@ -148,10 +147,20 @@ public:
     // wake up all waiting threads when destroy
     ~FailPointChannel() { notifyAll(); }
 
+    explicit FailPointChannel(UInt64 timeout_)
+        : timeout(timeout_)
+    {}
+    FailPointChannel()
+        : timeout(0)
+    {}
+
     void wait()
     {
         std::unique_lock lock(m);
-        cv.wait(lock);
+        if (timeout == 0)
+            cv.wait(lock);
+        else
+            cv.wait_for(lock, std::chrono::seconds(timeout));
     }
 
     void notifyAll()
@@ -161,9 +170,33 @@ public:
     }
 
 private:
+    UInt64 timeout;
     std::mutex m;
     std::condition_variable cv;
 };
+
+void FailPointHelper::enablePauseFailPoint(const String & fail_point_name, UInt64 time)
+{
+#define SUB_M(NAME, flags)                                                                                  \
+    if (fail_point_name == FailPoints::NAME)                                                                \
+    {                                                                                                       \
+        /* FIU_ONETIME -- Only fail once; the point of failure will be automatically disabled afterwards.*/ \
+        fiu_enable(FailPoints::NAME, 1, nullptr, flags);                                                    \
+        fail_point_wait_channels.try_emplace(FailPoints::NAME, std::make_shared<FailPointChannel>(time));   \
+        return;                                                                                             \
+    }
+
+#define M(NAME) SUB_M(NAME, FIU_ONETIME)
+    APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)
+#undef M
+
+#define M(NAME) SUB_M(NAME, 0)
+    APPLY_FOR_PAUSEABLE_FAILPOINTS(M)
+#undef M
+#undef SUB_M
+
+    throw Exception(fmt::format("Cannot find fail point {}", fail_point_name), ErrorCodes::FAIL_POINT_ERROR);
+}
 
 void FailPointHelper::enableFailPoint(const String & fail_point_name)
 {
@@ -242,7 +275,7 @@ void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration & co
         RUNTIME_ASSERT((0 <= rate && rate <= 1.0), log, "RandomFailPoint trigger rate should in [0,1], while {}", rate);
         enableRandomFailPoint(pair_tokens[0], rate);
     }
-    LOG_FMT_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
+    LOG_INFO(log, "Enable RandomFailPoints: {}", random_fail_point_cfg);
 }
 
 void FailPointHelper::enableRandomFailPoint(const String & fail_point_name, double rate)
@@ -267,6 +300,8 @@ class FailPointChannel
 };
 
 void FailPointHelper::enableFailPoint(const String &) {}
+
+void FailPointHelper::enablePauseFailPoint(const String &, UInt64) {}
 
 void FailPointHelper::disableFailPoint(const String &) {}
 

@@ -124,7 +124,7 @@ target_include_directories (common PUBLIC ${COMMON_INCLUDE_DIR})
 
 target_include_directories (common BEFORE PUBLIC ${Boost_INCLUDE_DIRS})
 
-if(APPLE AND ARCH_AARCH64)
+if(OS_DARWIN AND ARCH_AARCH64)
     set(CPU_FEATURES_LIBRARY)
 else()
     set(CPU_FEATURES_LIBRARY cpu_features)
@@ -194,6 +194,6 @@ if (ARCH_AMD64)
             APPEND COMPILE_FLAGS "-mpclmul")
 endif()
 
-if (ARCH_AARCH64 AND ARCH_LINUX)
+if (ARCH_AARCH64 AND OS_LINUX)
     target_link_libraries (common PUBLIC tiflash-aarch64-string tiflash-aarch64-math)
 endif()

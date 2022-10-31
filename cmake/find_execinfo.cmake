@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if (ARCH_FREEBSD)
+if (OS_FREEBSD)
     find_library (EXECINFO_LIBRARY execinfo)
     message (STATUS "Using execinfo: ${EXECINFO_LIBRARY}")
 else ()

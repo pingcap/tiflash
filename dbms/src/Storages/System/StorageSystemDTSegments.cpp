@@ -42,22 +42,32 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
 
         {"segment_id", std::make_shared<DataTypeUInt64>()},
         {"range", std::make_shared<DataTypeString>()},
-
+        {"epoch", std::make_shared<DataTypeUInt64>()},
         {"rows", std::make_shared<DataTypeUInt64>()},
         {"size", std::make_shared<DataTypeUInt64>()},
-        {"delete_ranges", std::make_shared<DataTypeUInt64>()},
-
-        {"stable_size_on_disk", std::make_shared<DataTypeUInt64>()},
-
-        {"delta_pack_count", std::make_shared<DataTypeUInt64>()},
-        {"stable_pack_count", std::make_shared<DataTypeUInt64>()},
-
-        {"avg_delta_pack_rows", std::make_shared<DataTypeFloat64>()},
-        {"avg_stable_pack_rows", std::make_shared<DataTypeFloat64>()},
 
         {"delta_rate", std::make_shared<DataTypeFloat64>()},
+        {"delta_memtable_rows", std::make_shared<DataTypeUInt64>()},
+        {"delta_memtable_size", std::make_shared<DataTypeUInt64>()},
+        {"delta_memtable_column_files", std::make_shared<DataTypeUInt64>()},
+        {"delta_memtable_delete_ranges", std::make_shared<DataTypeUInt64>()},
+        {"delta_persisted_page_id", std::make_shared<DataTypeUInt64>()},
+        {"delta_persisted_rows", std::make_shared<DataTypeUInt64>()},
+        {"delta_persisted_size", std::make_shared<DataTypeUInt64>()},
+        {"delta_persisted_column_files", std::make_shared<DataTypeUInt64>()},
+        {"delta_persisted_delete_ranges", std::make_shared<DataTypeUInt64>()},
         {"delta_cache_size", std::make_shared<DataTypeUInt64>()},
         {"delta_index_size", std::make_shared<DataTypeUInt64>()},
+
+        {"stable_page_id", std::make_shared<DataTypeUInt64>()},
+        {"stable_rows", std::make_shared<DataTypeUInt64>()},
+        {"stable_size", std::make_shared<DataTypeUInt64>()},
+        {"stable_dmfiles", std::make_shared<DataTypeUInt64>()},
+        {"stable_dmfiles_id_0", std::make_shared<DataTypeUInt64>()},
+        {"stable_dmfiles_rows", std::make_shared<DataTypeUInt64>()},
+        {"stable_dmfiles_size", std::make_shared<DataTypeUInt64>()},
+        {"stable_dmfiles_size_on_disk", std::make_shared<DataTypeUInt64>()},
+        {"stable_dmfiles_packs", std::make_shared<DataTypeUInt64>()},
     }));
 }
 
@@ -93,7 +103,10 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
             const auto & table_info = dm_storage->getTableInfo();
             auto table_id = table_info.id;
-            auto segment_stats = dm_storage->getStore()->getSegmentStats();
+            auto store = dm_storage->getStoreIfInited();
+            if (!store)
+                continue;
+            auto segment_stats = store->getSegmentsStats();
             for (auto & stat : segment_stats)
             {
                 size_t j = 0;
@@ -111,22 +124,32 @@ BlockInputStreams StorageSystemDTSegments::read(const Names & column_names,
 
                 res_columns[j++]->insert(stat.segment_id);
                 res_columns[j++]->insert(stat.range.toString());
+                res_columns[j++]->insert(stat.epoch);
                 res_columns[j++]->insert(stat.rows);
                 res_columns[j++]->insert(stat.size);
-                res_columns[j++]->insert(stat.delete_ranges);
-
-                res_columns[j++]->insert(stat.stable_size_on_disk);
-
-                res_columns[j++]->insert(stat.delta_pack_count);
-                res_columns[j++]->insert(stat.stable_pack_count);
-
-                res_columns[j++]->insert(stat.avg_delta_pack_rows);
-                res_columns[j++]->insert(stat.avg_stable_pack_rows);
 
                 res_columns[j++]->insert(stat.delta_rate);
+                res_columns[j++]->insert(stat.delta_memtable_rows);
+                res_columns[j++]->insert(stat.delta_memtable_size);
+                res_columns[j++]->insert(stat.delta_memtable_column_files);
+                res_columns[j++]->insert(stat.delta_memtable_delete_ranges);
+                res_columns[j++]->insert(stat.delta_persisted_page_id);
+                res_columns[j++]->insert(stat.delta_persisted_rows);
+                res_columns[j++]->insert(stat.delta_persisted_size);
+                res_columns[j++]->insert(stat.delta_persisted_column_files);
+                res_columns[j++]->insert(stat.delta_persisted_delete_ranges);
                 res_columns[j++]->insert(stat.delta_cache_size);
-
                 res_columns[j++]->insert(stat.delta_index_size);
+
+                res_columns[j++]->insert(stat.stable_page_id);
+                res_columns[j++]->insert(stat.stable_rows);
+                res_columns[j++]->insert(stat.stable_size);
+                res_columns[j++]->insert(stat.stable_dmfiles);
+                res_columns[j++]->insert(stat.stable_dmfiles_id_0);
+                res_columns[j++]->insert(stat.stable_dmfiles_rows);
+                res_columns[j++]->insert(stat.stable_dmfiles_size);
+                res_columns[j++]->insert(stat.stable_dmfiles_size_on_disk);
+                res_columns[j++]->insert(stat.stable_dmfiles_packs);
             }
         }
     }

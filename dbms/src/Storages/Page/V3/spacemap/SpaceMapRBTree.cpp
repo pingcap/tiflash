@@ -434,7 +434,7 @@ std::shared_ptr<RBTreeSpaceMap> RBTreeSpaceMap::create(UInt64 start, UInt64 end)
 
     if (!rb_insert_entry(start, end, ptr->rb_tree, ptr->log))
     {
-        LOG_FMT_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start={}] , [end={}]", start, end);
+        LOG_ERROR(ptr->log, "Erorr happend, when mark all space free.  [start={}] , [end={}]", start, end);
         free(ptr->rb_tree); // NOLINT
         return nullptr;
     }
@@ -592,7 +592,7 @@ std::tuple<UInt64, UInt64, bool> RBTreeSpaceMap::searchInsertOffset(size_t size)
     // No enough space for insert
     if (!node)
     {
-        LOG_FMT_ERROR(
+        LOG_ERROR(
             log,
             "Not sure why can't found any place to insert.[size={}] [old biggest_range={}] [old biggest_cap={}] [new biggest_range={}] [new biggest_cap={}]",
             size,
