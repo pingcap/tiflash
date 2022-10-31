@@ -50,7 +50,7 @@ public:
         auto column_ptr = col_with_type_and_name.column;
         ASSERT_TRUE(rows == column_ptr->size());
         MutableColumns scatterTo_res(scattered_num_column);
-        for (size_t i = 0; i < scattered_num_column; i++)
+        for (size_t i = 0; i < scattered_num_column; ++i)
         {
             scatterTo_res[i] = column_ptr->cloneEmpty();
         }
