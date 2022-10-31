@@ -71,6 +71,8 @@ extern const Event DMSegmentMerge;
 extern const Event DMSegmentMergeNS;
 extern const Event DMDeltaMerge;
 extern const Event DMDeltaMergeNS;
+extern const Event DMSegmentIsEmptyFastPath;
+extern const Event DMSegmentIsEmptySlowPath;
 
 } // namespace ProfileEvents
 
@@ -373,6 +375,78 @@ bool Segment::write(DMContext & dm_context, const RowKeyRange & delete_range)
     return delta->appendDeleteRange(dm_context, delete_range);
 }
 
+bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
+{
+    RUNTIME_CHECK(segment_snap->isForUpdate());
+
+    // Fast path: all packs has been filtered away
+    if (segment_snap->getRows() == 0)
+    {
+        ProfileEvents::increment(ProfileEvents::DMSegmentIsEmptyFastPath);
+        return true;
+    }
+
+    ProfileEvents::increment(ProfileEvents::DMSegmentIsEmptySlowPath);
+
+    // Build a delta stream first, and try to read some data from it.
+    // As long as we read out anything, we will stop.
+
+    auto columns_to_read = std::make_shared<ColumnDefines>();
+    columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
+    auto read_ranges = RowKeyRanges{rowkey_range};
+
+    {
+        BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStream>(dm_context, segment_snap->delta, columns_to_read, rowkey_range);
+        delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, read_ranges, 0);
+        delta_stream->readPrefix();
+        while (true)
+        {
+            Block block = delta_stream->read();
+            if (!block)
+                break;
+            if (block.rows() > 0)
+                // Note: Returning false here does not mean that there must be data in the snapshot,
+                // because we are not considering the delete range.
+                return false;
+        }
+        delta_stream->readSuffix();
+    }
+
+    // The delta stream is empty. Let's then try to read from stable.
+    {
+        SkippableBlockInputStreams streams;
+        for (const auto & file : segment_snap->stable->getDMFiles())
+        {
+            DMFileBlockInputStreamBuilder builder(dm_context.db_context);
+            auto stream = builder
+                              .setRowsThreshold(std::numeric_limits<UInt64>::max()) // TODO: May be we could have some better settings
+                              .onlyReadOnePackEveryTime()
+                              .build(file, *columns_to_read, read_ranges);
+            streams.push_back(stream);
+        }
+
+        BlockInputStreamPtr stable_stream = std::make_shared<ConcatSkippableBlockInputStream>(streams);
+        stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
+        stable_stream->readPrefix();
+        while (true)
+        {
+            Block block = stable_stream->read();
+            if (!block)
+                break;
+            if (block.rows() > 0)
+                // Note: Returning false here does not mean that there must be data in the snapshot,
+                // because we are not considering the delete range.
+                return false;
+        }
+        stable_stream->readSuffix();
+    }
+
+    // We cannot read out anything from the delta stream and the stable stream,
+    // so we know that the snapshot is definitely empty.
+
+    return true;
+}
+
 bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & range, const ColumnFiles & column_files, bool clear_data_in_range)
 {
     auto new_range = range.shrink(rowkey_range);
@@ -383,15 +457,12 @@ bool Segment::ingestColumnFiles(DMContext & dm_context, const RowKeyRange & rang
 
 SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool for_update, CurrentMetrics::Metric metric) const
 {
-    // If the snapshot is created for read, then the snapshot will contain all packs (cached and persisted) for read.
-    // If the snapshot is created for update, then the snapshot will only contain the persisted packs.
     auto delta_snap = delta->createSnapshot(dm_context, for_update, metric);
     auto stable_snap = stable->createSnapshot();
     if (!delta_snap || !stable_snap)
         return {};
     return std::make_shared<SegmentSnapshot>(std::move(delta_snap), std::move(stable_snap));
 }
-
 
 BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
                                             const DMContext & dm_context,
@@ -751,7 +822,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(DMContext & dm_context,
     return new_stable;
 }
 
-SegmentPtr Segment::applyMergeDelta(const Segment::Lock &, //
+SegmentPtr Segment::applyMergeDelta(const Segment::Lock & lock, //
                                     DMContext & context,
                                     const SegmentSnapshotPtr & segment_snap,
                                     WriteBatches & wbs,
@@ -759,7 +830,12 @@ SegmentPtr Segment::applyMergeDelta(const Segment::Lock &, //
 {
     LOG_DEBUG(log, "MergeDelta - Begin apply");
 
-    auto [persisted_column_files, in_memory_files] = delta->checkHeadAndCloneTail(context, rowkey_range, segment_snap->delta->getColumnFilesInSnapshot(), wbs);
+    auto [in_memory_files, persisted_column_files] = delta->cloneNewlyAppendedColumnFiles(
+        lock,
+        context,
+        rowkey_range,
+        *segment_snap->delta,
+        wbs);
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
 
@@ -1343,7 +1419,7 @@ std::optional<Segment::SplitInfo> Segment::prepareSplitPhysical( //
 }
 
 SegmentPair Segment::applySplit( //
-    const Segment::Lock &,
+    const Segment::Lock & lock,
     DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
     WriteBatches & wbs,
@@ -1353,11 +1429,15 @@ SegmentPair Segment::applySplit( //
 
     RowKeyRange my_range(rowkey_range.start, split_info.split_point, is_common_handle, rowkey_column_size);
     RowKeyRange other_range(split_info.split_point, rowkey_range.end, is_common_handle, rowkey_column_size);
-    ColumnFiles empty_files;
-    ColumnFiles * head_files = split_info.is_logical ? &empty_files : &segment_snap->delta->getColumnFilesInSnapshot();
 
-    auto [my_persisted_files, my_in_memory_files] = delta->checkHeadAndCloneTail(dm_context, my_range, *head_files, wbs);
-    auto [other_persisted_files, other_in_memory_files] = delta->checkHeadAndCloneTail(dm_context, other_range, *head_files, wbs);
+    // In logical split, the newly created two segment shares the same delta column files,
+    // because stable content is unmodified.
+    auto [my_in_memory_files, my_persisted_files] = split_info.is_logical
+        ? delta->cloneAllColumnFiles(lock, dm_context, my_range, wbs)
+        : delta->cloneNewlyAppendedColumnFiles(lock, dm_context, my_range, *segment_snap->delta, wbs);
+    auto [other_in_memory_files, other_persisted_files] = split_info.is_logical
+        ? delta->cloneAllColumnFiles(lock, dm_context, other_range, wbs)
+        : delta->cloneNewlyAppendedColumnFiles(lock, dm_context, other_range, *segment_snap->delta, wbs);
 
     // Created references to tail pages' pages in "log" storage, we need to write them down.
     wbs.writeLogAndData();
@@ -1412,22 +1492,6 @@ SegmentPair Segment::applySplit( //
 SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schema_snap, const std::vector<SegmentPtr> & ordered_segments)
 {
     WriteBatches wbs(dm_context.storage_pool, dm_context.getWriteLimiter());
-    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
-    /// And only saved data in this segment will be filtered by the segment range in the merge process,
-    /// unsaved data will be directly copied to the new segment.
-    /// So we flush here to make sure that all potential data left by previous split operation is saved.
-    for (const auto & seg : ordered_segments)
-    {
-        while (!seg->flushCache(dm_context))
-        {
-            // keep flush until success if not abandoned
-            if (seg->hasAbandoned())
-            {
-                LOG_DEBUG(seg->log, "Merge - Give up segmentMerge because abandoned, seg={}", seg->simpleInfo());
-                return {};
-            }
-        }
-    }
 
     std::vector<SegmentSnapshotPtr> ordered_snapshots;
     for (const auto & seg : ordered_segments)
@@ -1459,10 +1523,6 @@ SegmentPtr Segment::merge(DMContext & dm_context, const ColumnDefinesPtr & schem
     return merged;
 }
 
-/// Segments may contain some rows that not belong to its range which is left by previous split operation.
-/// And only saved data in the segment will be filtered by the segment range in the merge process,
-/// unsaved data will be directly copied to the new segment.
-/// So remember to do a flush for the segments before merge.
 StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
                                           const ColumnDefinesPtr & schema_snap,
                                           const std::vector<SegmentPtr> & ordered_segments,
@@ -1538,7 +1598,7 @@ StableValueSpacePtr Segment::prepareMerge(DMContext & dm_context, //
     return merged_stable;
 }
 
-SegmentPtr Segment::applyMerge(const std::vector<Segment::Lock> &, //
+SegmentPtr Segment::applyMerge(const std::vector<Segment::Lock> & locks, //
                                DMContext & dm_context,
                                const std::vector<SegmentPtr> & ordered_segments,
                                const std::vector<SegmentSnapshotPtr> & ordered_snapshots,
@@ -1559,7 +1619,12 @@ SegmentPtr Segment::applyMerge(const std::vector<Segment::Lock> &, //
     ColumnFiles merged_in_memory_files;
     for (size_t i = 0; i < ordered_segments.size(); i++)
     {
-        const auto [persisted_files, in_memory_files] = ordered_segments[i]->delta->checkHeadAndCloneTail(dm_context, merged_range, ordered_snapshots[i]->delta->getColumnFilesInSnapshot(), wbs);
+        const auto [in_memory_files, persisted_files] = ordered_segments[i]->delta->cloneNewlyAppendedColumnFiles(
+            locks[i],
+            dm_context,
+            merged_range,
+            *ordered_snapshots[i]->delta,
+            wbs);
         merged_persisted_column_files.insert(merged_persisted_column_files.end(), persisted_files.begin(), persisted_files.end());
         merged_in_memory_files.insert(merged_in_memory_files.end(), in_memory_files.begin(), in_memory_files.end());
     }

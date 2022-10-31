@@ -120,8 +120,20 @@ public:
 
     BlockPtr getLastSchema();
 
-    ColumnFilePersisteds
-    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
+    /**
+     * Return newly appended column files compared to `previous_column_files`.
+     * If `previous_column_files` is not the prefix of the current column files, exceptions will be thrown.
+     *
+     * Example:
+     *  A, B, C, D          Current Column File
+     *  A, B                Previous Column File
+     *        C, D          Return Value
+     *
+     * Example of throws exception:
+     *  A, B, C, D          Current Column File
+     *     B                Previous Column File
+     */
+    ColumnFilePersisteds diffColumnFiles(const ColumnFiles & previous_column_files) const;
 
     /// Thread safe part start
     PageId getId() const { return metadata_id; }
