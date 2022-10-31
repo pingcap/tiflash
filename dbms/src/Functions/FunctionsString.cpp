@@ -4428,13 +4428,8 @@ public:
 
         if (const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get()))
         {
-            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
-            {
-                auto str = str_const_string->getValue<String>();
-                auto substr = substr_const_string->getValue<String>();
-                constConst(str, substr, val_num, res_vec);
-            }
-            else
+            const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get());
+            if (!substr_const_string)
             {
                 const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
                 const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
@@ -4519,21 +4514,6 @@ private:
             }
         }
         return res;
-    }
-
-    static void constConst(
-        String str,
-        String substr,
-        size_t val_num,
-        ColumnInt64::Container & res_vec)
-    {
-        Int64 idx = str.find(substr);
-        idx = getPositionUTF8(str, idx);
-
-        for (size_t row = 0; row < val_num; ++row)
-        {
-            res_vec[row] = idx;
-        }
     }
 
     static void constVector(
@@ -4640,13 +4620,8 @@ public:
 
         if (const auto * str_const_string = checkAndGetColumnConst<ColumnString>(c0_col_column.get()))
         {
-            if (const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get()))
-            {
-                auto str = str_const_string->getValue<String>();
-                auto substr = substr_const_string->getValue<String>();
-                constConst(str, substr, val_num, res_vec);
-            }
-            else
+            const auto * substr_const_string = checkAndGetColumnConst<ColumnString>(c1_col_column.get());
+            if (!substr_const_string)
             {
                 const auto * substr_vector_string = checkAndGetColumn<ColumnString>(c1_col_column.get());
                 const auto * str_const_string_value = checkAndGetColumn<ColumnString>(str_const_string->getDataColumnPtr().get());
@@ -4721,21 +4696,6 @@ private:
             }
         }
         return res;
-    }
-
-    static void constConst(
-        String str,
-        String substr,
-        size_t val_num,
-        ColumnInt64::Container & res_vec)
-    {
-        Int64 idx = str.find(substr);
-        idx = getPositionUTF8(str, idx);
-
-        for (size_t row = 0; row < val_num; ++row)
-        {
-            res_vec[row] = idx;
-        }
     }
 
     static void constVector(
