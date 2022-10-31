@@ -68,6 +68,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::prepare(const Block & sample_blo
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
     partition_key_containers_for_reuse.resize(collators.size());
     resetScatterColumns();
+    prepared = true;
 }
 
 template <class StreamWriterPtr>
@@ -80,6 +81,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::flush()
 template <class StreamWriterPtr>
 void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
 {
+    RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
