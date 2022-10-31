@@ -647,14 +647,18 @@ public:
         // Start to match
         if constexpr (canMemorize<PatT, MatchTypeT>())
         {
-            const auto & regexp = memorize(pat_param, match_type_param, collator);
-            if (regexp == nullptr)
+            std::unique_ptr<Regexps::Regexp> regexp;
+            if (col_size > 0)
             {
-                auto nullmap_col = ColumnUInt8::create();
-                typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
-                nullmap.resize(col_size, 1);
-                res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
-                return;
+                regexp = memorize(pat_param, match_type_param, collator);
+                if (regexp == nullptr)
+                {
+                    auto nullmap_col = ColumnUInt8::create();
+                    typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
+                    nullmap.resize(col_size, 1);
+                    res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+                    return;
+                }
             }
 
             if constexpr (has_nullable_col)
