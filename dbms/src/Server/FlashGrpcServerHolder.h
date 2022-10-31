@@ -30,7 +30,6 @@ namespace DB
 using MockStorage = tests::MockStorage;
 using MockMPPServerInfo = tests::MockMPPServerInfo;
 
-
 struct SecureData
 {
     bool server_credential_reloaded = false;

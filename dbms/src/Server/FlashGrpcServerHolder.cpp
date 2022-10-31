@@ -15,6 +15,7 @@
 #include <Server/FlashGrpcServerHolder.h>
 
 #include "Core/Types.h"
+#include "grpc/grpc.h"
 #include "grpc/grpc_security.h"
 #include "grpcpp/security/credentials.h"
 #include "grpcpp/security/server_credentials.h"
@@ -88,7 +89,6 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
     background_task.begin();
-
     initSecurityConfig(security_config, raft_config.flash_server_addr);
 
     /// Init and register flash service.
@@ -126,7 +126,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(Context & context, Poco::Util::Laye
             notify_cqs.emplace_back(builder.AddCompletionQueue());
         }
     }
-    flash_grpc_server = builder.BuildAndStart();
+    // flash_grpc_server = builder.BuildAndStart();
     if (!flash_grpc_server)
     {
         throw Exception("Exception happens when start grpc server, the flash.service_addr may be invalid, flash.service_addr is " + raft_config.flash_server_addr, ErrorCodes::IP_ADDRESS_NOT_ALLOWED);
