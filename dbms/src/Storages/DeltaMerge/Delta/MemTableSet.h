@@ -100,7 +100,21 @@ public:
     size_t getDeletes() const { return deletes.load(); }
     /// Thread safe part end
 
-    ColumnFiles cloneColumnFiles(DMContext & context, const RowKeyRange & target_range, WriteBatches & wbs);
+    /**
+     * For memtable, there are two cases after the snapshot is created:
+     * 1. CFs in memtable may be flushed into persist, causing CFs in snapshot no longer exist in memtable.
+     * 2. There are new writes, producing new CFs in memtable.
+     *
+     * This function will compare the CFs in memtable with the CFs in memtable-snapshot.
+     *
+     * @returns two pairs: < NewColumnFiles, RemovedColumnFiles >
+     *   NewColumnFiles     -- These CFs in memtable are newly appended compared to the snapshot.
+     *   FlushedColumnFiles -- These CFs in snapshot were flushed, no longer exist in memtable.
+     *
+     * Note: there may be CFs newly appended and then removed (e.g. write + flush). These CFs will
+     * not be included in the result.
+     */
+    std::pair<ColumnFiles, ColumnFiles> diffColumnFiles(const ColumnFiles & column_files_in_snapshot) const;
 
     void recordRemoveColumnFilesPages(WriteBatches & wbs) const;
 
@@ -121,8 +135,20 @@ public:
 
     void ingestColumnFiles(const RowKeyRange & range, const ColumnFiles & new_column_files, bool clear_data_in_range);
 
-    /// Create a constant snapshot for read.
-    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap);
+    /**
+     * Create a snapshot for reading data from it.
+     *
+     * **WARNING**:
+     *
+     * When you specify `disable_sharing == false` (which is the default value), the content of this snapshot may be
+     * still mutable. For example, there may be concurrent writes when you hold this snapshot, causing the
+     * snapshot to be changed. However it is guaranteed that only new data will be appended. No data will be lost when you
+     * are holding this snapshot.
+     *
+     * `disable_sharing == true` seems nice, but it may cause flush to be less efficient when used frequently.
+     * Only specify it when really needed.
+     */
+    ColumnFileSetSnapshotPtr createSnapshot(const StorageSnapshotPtr & storage_snap, bool disable_sharing = false);
 
     /// Build a flush task which will try to flush all column files in this MemTableSet at this moment.
     ColumnFileFlushTaskPtr buildFlushTask(DMContext & context, size_t rows_offset, size_t deletes_offset, size_t flush_version);

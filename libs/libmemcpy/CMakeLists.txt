@@ -18,7 +18,7 @@ option(USE_FOLLY_MEMCPY_AS_MEMCPY "use folly memcpy as default `memcpy` and `mem
 set (memcpy_sources)
 
 # only enbale folly memcpy under linux x86_64 with avx2 supported
-if (ARCH_LINUX AND TIFLASH_ENABLE_AVX_SUPPORT)
+if (OS_LINUX AND TIFLASH_ENABLE_AVX_SUPPORT)
     set_property(SOURCE folly/memcpy.S PROPERTY LANGUAGE CXX)
     set_property(SOURCE folly/memcpy.S APPEND PROPERTY COMPILE_OPTIONS "-x" "assembler-with-cpp")
     set_property(SOURCE folly/memcpy.S APPEND PROPERTY COMPILE_FLAGS "-mavx -mavx2")
