@@ -144,6 +144,20 @@ public:
         return res;
     }
 
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override
+    {
+        if (s != selector.size())
+            throw Exception("Size of selector doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+        IColumn::ColumnIndex num_columns = columns.size();
+        std::vector<size_t> counts(num_columns);
+        for (auto idx : selector)
+            ++counts[idx];
+
+        for (size_t i = 0; i < num_columns; ++i)
+            columns[i]->insertRangeFrom(*this, 0, counts[i]);
+    }
+
     void gather(ColumnGathererStream &) override
     {
         throw Exception("Method gather is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);

@@ -76,6 +76,13 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
+void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
+{
+    if (rows_in_blocks > 0)
+        encodeThenWriteBlocks<false>();
+}
+
+template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
