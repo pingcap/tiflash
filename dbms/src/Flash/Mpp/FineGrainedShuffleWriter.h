@@ -60,7 +60,7 @@ private:
     UInt64 fine_grained_shuffle_batch_size;
 
     Block header;
-    size_t num_columns = 0, num_bucket = 0; // Assign they initial values to pass clang-tidy check, they will be initialized in prepare method
+    size_t num_columns = 0, num_bucket = 0, batch_send_row_limit = 0; // Assign they initial values to pass clang-tidy check, they will be initialized in prepare method
     std::vector<String> partition_key_containers_for_reuse;
     WeakHash32 hash;
     IColumn::Selector selector;

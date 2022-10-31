@@ -36,6 +36,7 @@ FineGrainedShuffleWriter<StreamWriterPtr>::FineGrainedShuffleWriter(
     , collators(std::move(collators_))
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
+    , batch_send_row_limit(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
     , hash(0)
 {
     rows_in_blocks = 0;
@@ -65,7 +66,6 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::prepare(const Block & sample_blo
     num_columns = header.columns();
     // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
-    ;
     partition_key_containers_for_reuse.resize(collators.size());
     resetScatterColumns();
 }
@@ -91,7 +91,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (blocks.size() == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
+    if (blocks.size() == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
         batchWriteFineGrainedShuffle<false>();
 }
 

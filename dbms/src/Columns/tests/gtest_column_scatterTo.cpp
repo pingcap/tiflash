@@ -20,7 +20,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-#include "Common/COWPtr.h"
+#include <Common/COWPtr.h>
 
 namespace DB
 {
