@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if (OS_FREEBSD)
-    find_library (EXECINFO_LIBRARY execinfo)
-    message (STATUS "Using execinfo: ${EXECINFO_LIBRARY}")
-else ()
-    set (EXECINFO_LIBRARY "")
+if (CMAKE_SYSTEM MATCHES "Linux")
+    set (OS_LINUX 1)
+elseif (CMAKE_SYSTEM MATCHES "FreeBSD")
+    set (OS_FREEBSD 1)
+elseif (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    set (OS_DARWIN 1)
 endif ()

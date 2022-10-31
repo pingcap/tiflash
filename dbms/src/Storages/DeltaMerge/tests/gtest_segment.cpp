@@ -26,6 +26,12 @@
 
 #include <future>
 
+namespace ProfileEvents
+{
+extern const Event DMSegmentIsEmptyFastPath;
+extern const Event DMSegmentIsEmptySlowPath;
+} // namespace ProfileEvents
+
 namespace CurrentMetrics
 {
 extern const Metric DT_SnapshotOfDeltaMerge;
@@ -47,7 +53,6 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 }
 namespace tests
 {
-
 class SegmentFrameworkTest : public SegmentTestBasic
 {
 };
@@ -172,15 +177,16 @@ TEST_F(SegmentOperationTest, Issue4956)
 try
 {
     // flush data, make the segment can be split.
-    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 1000, /* at */ 0);
     flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
     // write data to cache, reproduce the https://github.com/pingcap/tiflash/issues/4956
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
     deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
-    auto segment_id = splitSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto segment_id = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 500, Segment::SplitMode::Physical);
     ASSERT_TRUE(segment_id.has_value());
 
     mergeSegment({DELTA_MERGE_FIRST_SEGMENT_ID, *segment_id});
+    ASSERT_EQ(0, getSegmentRowNumWithoutMVCC(DELTA_MERGE_FIRST_SEGMENT_ID));
 }
 CATCH
 
@@ -494,10 +500,12 @@ try
         auto delta = segment->getDelta();
         auto mem_table_set = delta->getMemTableSet();
         WriteBatches wbs(dm_context->storage_pool);
-        auto column_files = mem_table_set->cloneColumnFiles(*dm_context, segment->getRowKeyRange(), wbs);
-        ASSERT_FALSE(column_files.empty());
+        auto lock = segment->mustGetUpdateLock();
+        auto [memory_cf, persisted_cf] = delta->cloneAllColumnFiles(lock, *dm_context, segment->getRowKeyRange(), wbs);
+        ASSERT_FALSE(memory_cf.empty());
+        ASSERT_TRUE(persisted_cf.empty());
         BlockPtr last_schema;
-        for (const auto & column_file : column_files)
+        for (const auto & column_file : memory_cf)
         {
             if (auto * t_file = column_file->tryToTinyFile(); t_file)
             {
@@ -853,8 +861,8 @@ try
     ASSERT_TRUE(new_seg_id_opt.has_value());
     ASSERT_EQ(segments.size(), 2);
     ASSERT_FALSE(areSegmentsSharingStable({DELTA_MERGE_FIRST_SEGMENT_ID, *new_seg_id_opt}));
-    ASSERT_EQ(50, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
-    ASSERT_EQ(50 + 70, getSegmentRowNum(*new_seg_id_opt));
+    ASSERT_EQ(85, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(85, getSegmentRowNum(*new_seg_id_opt));
 }
 CATCH
 
@@ -1265,6 +1273,179 @@ try
         ASSERT_EQ(1, getSegmentRowNumWithoutMVCC(*right_id));
         ASSERT_EQ(1, getSegmentRowNum(*right_id));
     }
+}
+CATCH
+
+
+class IsEmptyTest : public SegmentTestBasic
+{
+};
+
+TEST_F(IsEmptyTest, Basic)
+try
+{
+    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // As long as there is a valid version, we consider the segment to be not empty.
+    writeSegmentWithDeletedPack(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+}
+CATCH
+
+TEST_F(IsEmptyTest, DeletedVersion)
+try
+{
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // Even deleted version are considered to be not empty.
+    writeSegmentWithDeletedPack(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+}
+CATCH
+
+TEST_F(IsEmptyTest, DeleteRange)
+try
+{
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // We do not consider delete ranges currently.
+    deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // We will consider it to be empty after compaction.
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
+
+    // For empty segment, delete range will not cause it to be "not empty".
+    deleteRangeSegment(DELTA_MERGE_FIRST_SEGMENT_ID);
+    fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(0, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
+}
+CATCH
+
+TEST_F(IsEmptyTest, LogicalSplitMemTableDelta)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+
+    auto right_seg = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 200, Segment::SplitMode::Logical);
+    ASSERT_TRUE(right_seg.has_value());
+
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // This is the slow path, because ColumnFileInMemory exists for both left and right segments after logical split.
+    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_EQ(0, getSegmentRowNum(*right_seg));
+    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
+}
+CATCH
+
+TEST_F(IsEmptyTest, LogicalSplitPersistedDelta)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto right_seg = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 200, Segment::SplitMode::Logical);
+    ASSERT_TRUE(right_seg.has_value());
+
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // This is the slow path, because ColumnFileTiny exists for both left and right segments after logical split.
+    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_EQ(0, getSegmentRowNum(*right_seg));
+    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
+}
+CATCH
+
+TEST_F(IsEmptyTest, LogicalSplitStable)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto right_seg = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 200, Segment::SplitMode::Logical);
+    ASSERT_TRUE(right_seg.has_value());
+
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // This goes into the fast path thanks to pack filter.
+    auto fast_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath);
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(*right_seg));
+    ASSERT_EQ(0, getSegmentRowNum(*right_seg));
+    ASSERT_EQ(fast_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptyFastPath));
+}
+CATCH
+
+TEST_F(IsEmptyTest, LogicalSplitStableHollow)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 100, /* at */ 0);
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 42, /* at */ 1000);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    mergeSegmentDelta(DELTA_MERGE_FIRST_SEGMENT_ID);
+
+    auto seg_2 = splitSegmentAt(DELTA_MERGE_FIRST_SEGMENT_ID, 200, Segment::SplitMode::Logical);
+    ASSERT_TRUE(seg_2.has_value());
+
+    auto seg_3 = splitSegmentAt(*seg_2, 800, Segment::SplitMode::Logical);
+    ASSERT_TRUE(seg_3.has_value());
+
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(DELTA_MERGE_FIRST_SEGMENT_ID));
+    ASSERT_EQ(100, getSegmentRowNum(DELTA_MERGE_FIRST_SEGMENT_ID));
+
+    // This is the slow path, because pack filter will not work.
+    auto slow_count = ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath);
+    ASSERT_TRUE(isSegmentDefinitelyEmpty(*seg_2));
+    ASSERT_EQ(0, getSegmentRowNum(*seg_2));
+    ASSERT_EQ(slow_count + 1, ProfileEvents::get(ProfileEvents::DMSegmentIsEmptySlowPath));
+
+    ASSERT_FALSE(isSegmentDefinitelyEmpty(*seg_3));
+    ASSERT_EQ(42, getSegmentRowNum(*seg_3));
 }
 CATCH
 
