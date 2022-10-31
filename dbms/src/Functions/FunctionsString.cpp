@@ -4401,19 +4401,17 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        auto first_argument = removeNullable(arguments[0]);
+        auto first_argument = arguments[0];
         if (!first_argument->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        auto second_argument = removeNullable(arguments[1]);
+        auto second_argument = arguments[1];
         if (!second_argument->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        auto return_type = std::make_shared<DataTypeInt64>();
-        return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
+        return std::make_shared<DataTypeInt64>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -4456,15 +4454,6 @@ public:
     }
 
 private:
-    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
-    {
-        if (idx == -1)
-            return 0;
-
-        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
-        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
-    }
-
     static Int64 find(
         const ColumnString::Chars_t & col_vector_str_value,
         const ColumnString::Offset & str_start_offset,
@@ -4593,19 +4582,17 @@ public:
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        auto first_argument = removeNullable(arguments[0]);
+        auto first_argument = arguments[0];
         if (!first_argument->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[0]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        auto second_argument = removeNullable(arguments[1]);
+        auto second_argument = arguments[1];
         if (!second_argument->isString())
             throw Exception(
                 fmt::format("Illegal type {} of first argument of function {}", arguments[1]->getName(), getName()),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        auto return_type = std::make_shared<DataTypeInt64>();
-        return (arguments[0]->isNullable() || arguments[1]->isNullable()) ? makeNullable(return_type) : return_type;
+        return std::make_shared<DataTypeInt64>();
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
@@ -4648,15 +4635,6 @@ public:
     }
 
 private:
-    static Int64 getPositionUTF8(const String & c1_str, Int64 idx)
-    {
-        if (idx == -1)
-            return 0;
-
-        const auto * data = reinterpret_cast<const UInt8 *>(c1_str.data());
-        return static_cast<size_t>(UTF8::countCodePoints(data, idx) + 1);
-    }
-
     static Int64 find(
         const ColumnString::Chars_t & col_vector_str_value,
         const ColumnString::Offset & str_start_offset,
