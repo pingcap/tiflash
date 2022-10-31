@@ -83,8 +83,6 @@ struct NameReplaceRegexpAll
 static constexpr std::string_view regexp_name(NameTiDBRegexp::name);
 static constexpr std::string_view regexp_like_name(NameRegexpLike::name);
 
-// String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator = nullptr);
-
 inline int getDefaultFlags()
 {
     int flags = 0;
@@ -594,7 +592,7 @@ public:
         if (arg_num < REGEXP_MIN_PARAM_NUM)
             throw Exception("Too few arguments", ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION);
         else if (arg_num > args_max_num)
-            throw Exception("Too mant arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
+            throw Exception("Too many arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
         bool has_nullable_col = false;
         bool has_data_type_nothing = false;
