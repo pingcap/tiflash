@@ -75,9 +75,6 @@ extern const int FUNCTION_THROW_IF_VALUE_IS_NON_ZERO;
   * in(x, set) - function for evaluating the IN
   * notIn(x, set) - and NOT IN.
   *
-  * arrayJoin(arr) - a special function - it can not be executed directly;
-  *                     is used only to get the result type of the corresponding expression.
-  *
   * replicate(x, arr) - creates an array of the same size as arr, all elements of which are equal to x;
   *                  for example: replicate(1, ['a', 'b', 'c']) = [1, 1, 1].
   *
@@ -1005,57 +1002,6 @@ public:
 };
 
 
-class FunctionArrayJoin : public IFunction
-{
-public:
-    static constexpr auto name = "arrayJoin";
-    static FunctionPtr create(const Context &)
-    {
-        return std::make_shared<FunctionArrayJoin>();
-    }
-
-
-    /// Get the function name.
-    String getName() const override
-    {
-        return name;
-    }
-
-    size_t getNumberOfArguments() const override
-    {
-        return 1;
-    }
-
-    /** It could return many different values for single argument. */
-    bool isDeterministic() const override { return false; }
-
-    bool isDeterministicInScopeOfQuery() const override
-    {
-        return false;
-    }
-
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
-    {
-        const DataTypeArray * arr = checkAndGetDataType<DataTypeArray>(&*arguments[0]);
-        if (!arr)
-            throw Exception("Argument for function " + getName() + " must be Array.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-        return arr->getNestedType();
-    }
-
-    void executeImpl(Block & /*block*/, const ColumnNumbers & /*arguments*/, size_t /*result*/) const override
-    {
-        throw Exception("Function " + getName() + " must not be executed directly.", ErrorCodes::FUNCTION_IS_SPECIAL);
-    }
-
-    /// Because of function cannot be executed directly.
-    bool isSuitableForConstantFolding() const override
-    {
-        return false;
-    }
-};
-
-
 FunctionPtr FunctionReplicate::create(const Context &)
 {
     return std::make_shared<FunctionReplicate>();
@@ -1967,7 +1913,6 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     factory.registerFunction<FunctionIgnore>();
     factory.registerFunction<FunctionIndexHint>();
     factory.registerFunction<FunctionIdentity>();
-    factory.registerFunction<FunctionArrayJoin>();
     factory.registerFunction<FunctionReplicate>();
     factory.registerFunction<FunctionBar>();
     factory.registerFunction<FunctionHasColumnInTable>();

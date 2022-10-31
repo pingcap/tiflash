@@ -25,7 +25,7 @@ do \
 { \
     if (member) \
     { \
-        res->member = member->clone(); \
+        res->member = (member)->clone(); \
         res->children.push_back(res->member); \
     } \
 } \
@@ -57,16 +57,6 @@ ASTPtr ASTTableJoin::clone() const
     return res;
 }
 
-ASTPtr ASTArrayJoin::clone() const
-{
-    auto res = std::make_shared<ASTArrayJoin>(*this);
-    res->children.clear();
-
-    CLONE(expression_list);
-
-    return res;
-}
-
 ASTPtr ASTTablesInSelectQueryElement::clone() const
 {
     auto res = std::make_shared<ASTTablesInSelectQueryElement>(*this);
@@ -74,7 +64,6 @@ ASTPtr ASTTablesInSelectQueryElement::clone() const
 
     CLONE(table_join);
     CLONE(table_expression);
-    CLONE(array_join);
 
     return res;
 }
@@ -220,17 +209,6 @@ void ASTTableJoin::formatImpl(const FormatSettings & settings, FormatState & sta
 }
 
 
-void ASTArrayJoin::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
-{
-    settings.ostr << (settings.hilite ? hilite_keyword : "")
-        << (kind == Kind::Left ? "LEFT " : "") << "ARRAY JOIN " << (settings.hilite ? hilite_none : "");
-
-    settings.one_line
-        ? expression_list->formatImpl(settings, state, frame)
-        : typeid_cast<const ASTExpressionList &>(*expression_list).formatImplMultiline(settings, state, frame);
-}
-
-
 void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     if (table_expression)
@@ -246,10 +224,6 @@ void ASTTablesInSelectQueryElement::formatImpl(const FormatSettings & settings, 
 
         if (table_join)
             static_cast<const ASTTableJoin &>(*table_join).formatImplAfterTable(settings, state, frame);
-    }
-    else if (array_join)
-    {
-        array_join->formatImpl(settings, state, frame);
     }
 }
 

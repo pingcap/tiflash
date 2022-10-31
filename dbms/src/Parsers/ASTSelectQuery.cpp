@@ -218,31 +218,6 @@ static ASTTableExpression * getFirstTableExpression(ASTSelectQuery & select)
     return static_cast<ASTTableExpression *>(tables_element.table_expression.get());
 }
 
-static const ASTArrayJoin * getFirstArrayJoin(const ASTSelectQuery & select)
-{
-    if (!select.tables)
-        return {};
-
-    const ASTTablesInSelectQuery & tables_in_select_query = static_cast<const ASTTablesInSelectQuery &>(*select.tables);
-    if (tables_in_select_query.children.empty())
-        return {};
-
-    const ASTArrayJoin * array_join = nullptr;
-    for (const auto & child : tables_in_select_query.children)
-    {
-        const ASTTablesInSelectQueryElement & tables_element = static_cast<const ASTTablesInSelectQueryElement &>(*child);
-        if (tables_element.array_join)
-        {
-            if (!array_join)
-                array_join = static_cast<const ASTArrayJoin *>(tables_element.array_join.get());
-            else
-                throw Exception("Support for more than one ARRAY JOIN in query is not implemented", ErrorCodes::NOT_IMPLEMENTED);
-        }
-    }
-
-    return array_join;
-}
-
 static const ASTTablesInSelectQueryElement * getFirstTableJoin(const ASTSelectQuery & select)
 {
     if (!select.tables)
@@ -336,26 +311,6 @@ bool ASTSelectQuery::final() const
         return {};
 
     return table_expression->final;
-}
-
-
-ASTPtr ASTSelectQuery::array_join_expression_list() const
-{
-    const ASTArrayJoin * array_join = getFirstArrayJoin(*this);
-    if (!array_join)
-        return {};
-
-    return array_join->expression_list;
-}
-
-
-bool ASTSelectQuery::array_join_is_left() const
-{
-    const ASTArrayJoin * array_join = getFirstArrayJoin(*this);
-    if (!array_join)
-        return {};
-
-    return array_join->kind == ASTArrayJoin::Kind::Left;
 }
 
 

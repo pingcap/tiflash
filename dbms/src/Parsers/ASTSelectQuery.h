@@ -59,9 +59,7 @@ public:
     ASTPtr table() const;
     ASTPtr sample_size() const;
     ASTPtr sample_offset() const;
-    ASTPtr array_join_expression_list() const;
     const ASTTablesInSelectQueryElement * join() const;
-    bool array_join_is_left() const;
     bool final() const;
     void setDatabaseIfNeeded(const String & database_name);
     void replaceDatabaseAndTable(const String & database_name, const String & table_name);

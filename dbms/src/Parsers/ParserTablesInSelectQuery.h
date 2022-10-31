@@ -20,7 +20,7 @@
 namespace DB
 {
 
-/** List of single or multiple JOIN-ed tables or subqueries in SELECT query, with ARRAY JOINs and SAMPLE, FINAL modifiers.
+/** List of single or multiple JOIN-ed tables or subqueries in SELECT query, with SAMPLE and FINAL modifiers.
   */
 class ParserTablesInSelectQuery : public IParserBase
 {
@@ -50,14 +50,5 @@ protected:
     const char * getName() const { return "table or subquery or table function"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
 };
-
-
-class ParserArrayJoin : public IParserBase
-{
-protected:
-    const char * getName() const { return "array join"; }
-    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
-};
-
 
 }
