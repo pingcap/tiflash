@@ -122,7 +122,7 @@ public:
     }
 
 
-    bool checkGrpcContext(grpc::ServerContext * grpc_context) const
+    bool checkGrpcContext(const grpc::ServerContext * grpc_context) const
     {
         if (allowed_common_names.empty() || grpc_context == nullptr)
         {

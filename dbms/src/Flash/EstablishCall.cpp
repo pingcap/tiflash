@@ -46,6 +46,11 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
 EstablishCallData::~EstablishCallData()
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
+    if (stopwatch)
+    {
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(stopwatch->elapsedSeconds());
+    }
 }
 
 void EstablishCallData::proceed(bool ok)
@@ -98,9 +103,16 @@ grpc_call * EstablishCallData::grpcCall()
 
 void EstablishCallData::attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> & async_tunnel_sender_)
 {
-    stopwatch = std::make_unique<Stopwatch>();
+    assert(stopwatch != nullptr);
     async_tunnel_sender = async_tunnel_sender_;
+    waiting_task_time_ms = stopwatch->elapsedMilliseconds();
 }
+
+void EstablishCallData::startEstablishConnection()
+{
+    stopwatch = std::make_unique<Stopwatch>();
+}
+
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
 {
@@ -172,10 +184,14 @@ void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 
     if (async_tunnel_sender)
     {
+<<<<<<< HEAD
         if (stopwatch)
         {
             LOG_FMT_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds());
         }
+=======
+        LOG_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms, including {} ms to waiting task.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds(), waiting_task_time_ms);
+>>>>>>> e57a6063da (fix metrics for establish connection (#6203))
 
         RUNTIME_ASSERT(!async_tunnel_sender->isConsumerFinished(), async_tunnel_sender->getLogger(), "tunnel {} consumer finished in advance", async_tunnel_sender->getTunnelId());
 

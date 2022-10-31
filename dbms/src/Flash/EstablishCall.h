@@ -61,6 +61,18 @@ public:
     grpc_call * grpcCall() override;
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
+<<<<<<< HEAD
+=======
+    void startEstablishConnection();
+    void setToWaitingTunnelState()
+    {
+        state = WAITING_TUNNEL;
+    }
+    bool isWaitingTunnelState()
+    {
+        return state == WAITING_TUNNEL;
+    }
+>>>>>>> e57a6063da (fix metrics for establish connection (#6203))
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -120,5 +132,6 @@ private:
 
     std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
     std::unique_ptr<Stopwatch> stopwatch;
+    double waiting_task_time_ms = 0;
 };
 } // namespace DB
