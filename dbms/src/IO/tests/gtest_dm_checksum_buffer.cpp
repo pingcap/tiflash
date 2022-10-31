@@ -47,7 +47,7 @@ std::mt19937_64 eng(seed); // NOLINT(cert-err58-cpp)
 std::pair<std::vector<char>, uint64_t> randomData(size_t size)
 {
     std::vector<char> data(size);
-    std::uniform_int_distribution<char> dist{};
+    std::uniform_int_distribution<UInt8> dist{};
     for (auto & i : data)
     {
         i = dist(eng);

@@ -278,7 +278,7 @@ LearnerReadSnapshot doLearnerRead(
             GET_METRIC(tiflash_raft_read_index_duration_seconds).Observe(read_index_elapsed_ms / 1000.0);
             const size_t cached_size = ori_batch_region_size - batch_read_index_req.size();
 
-            LOG_FMT_DEBUG(
+            LOG_DEBUG(
                 log,
                 "Batch read index, original size {}, send & get {} message, cost {}ms{}",
                 ori_batch_region_size,
@@ -373,7 +373,7 @@ LearnerReadSnapshot doLearnerRead(
                     region_to_query.bypass_lock_ts,
                     region_to_query.version,
                     region_to_query.conf_version,
-                    log->getLog());
+                    log);
 
                 std::visit(
                     variant_op::overloaded{
@@ -397,7 +397,7 @@ LearnerReadSnapshot doLearnerRead(
         }
         GET_METRIC(tiflash_syncing_data_freshness).Observe(batch_wait_data_watch.elapsedSeconds()); // For DBaaS SLI
         auto wait_index_elapsed_ms = watch.elapsedMilliseconds();
-        LOG_FMT_DEBUG(
+        LOG_DEBUG(
             log,
             "Finish wait index | resolve locks | check memory cache for {} regions, cost {}ms, {} unavailable regions",
             batch_read_index_req.size(),
@@ -425,7 +425,7 @@ LearnerReadSnapshot doLearnerRead(
     unavailable_regions.tryThrowRegionException(for_batch_cop);
 
     auto end_time = Clock::now();
-    LOG_FMT_DEBUG(
+    LOG_DEBUG(
         log,
         "[Learner Read] batch read index | wait index cost {} ms totally, regions_num={}, concurrency={}",
         std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count(),

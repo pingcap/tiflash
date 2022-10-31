@@ -14,7 +14,7 @@
 
 #pragma once
 #include <Common/TiFlashBuildInfo.h>
-#include <Common/UnifiedLogPatternFormatter.h>
+#include <Common/UnifiedLogFormatter.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/MockKeyManager.h>
 #include <Poco/ConsoleChannel.h>

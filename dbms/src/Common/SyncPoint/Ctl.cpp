@@ -34,7 +34,7 @@ void SyncPointCtl::enable(const char * name)
                                  std::make_shared<SyncChannel>()));
     }
     fiu_enable(name, 1, nullptr, 0);
-    LOG_FMT_DEBUG(getLogger(), "Enabled: {}", name);
+    LOG_DEBUG(getLogger(), "Enabled: {}", name);
 }
 
 void SyncPointCtl::disable(const char * name)
@@ -50,7 +50,7 @@ void SyncPointCtl::disable(const char * name)
             channels.erase(iter);
         }
     }
-    LOG_FMT_DEBUG(getLogger(), "Disabled: {}", name);
+    LOG_DEBUG(getLogger(), "Disabled: {}", name);
 }
 
 std::pair<SyncPointCtl::SyncChannelPtr, SyncPointCtl::SyncChannelPtr> SyncPointCtl::mustGetChannel(const char * name)
@@ -69,31 +69,31 @@ std::pair<SyncPointCtl::SyncChannelPtr, SyncPointCtl::SyncChannelPtr> SyncPointC
 void SyncPointCtl::waitAndPause(const char * name)
 {
     auto ch = mustGetChannel(name).first;
-    LOG_FMT_DEBUG(getLogger(), "waitAndPause({}) waiting...", name);
+    LOG_DEBUG(getLogger(), "waitAndPause({}) waiting...", name);
     auto result = ch->recv();
-    LOG_FMT_DEBUG(getLogger(), "waitAndPause({}) {}", name, result ? "finished" : "cancelled");
+    LOG_DEBUG(getLogger(), "waitAndPause({}) {}", name, result ? "finished" : "cancelled");
 }
 
 void SyncPointCtl::next(const char * name)
 {
     auto ch = mustGetChannel(name).second;
-    LOG_FMT_DEBUG(getLogger(), "next({}) trying...", name);
+    LOG_DEBUG(getLogger(), "next({}) trying...", name);
     auto result = ch->send();
-    LOG_FMT_DEBUG(getLogger(), "next({}) {}", name, result ? "done" : "cancelled");
+    LOG_DEBUG(getLogger(), "next({}) {}", name, result ? "done" : "cancelled");
 }
 
 void SyncPointCtl::sync(const char * name)
 {
     auto [ch_1, ch_2] = mustGetChannel(name);
     // Print a stack, which is helpful to know where undesired SYNC_FOR comes from.
-    LOG_FMT_DEBUG(getLogger(), "SYNC_FOR({}) trying... \n\n# Current Stack: {}", name, StackTrace().toString());
+    LOG_DEBUG(getLogger(), "SYNC_FOR({}) trying... \n\n# Current Stack: {}", name, StackTrace().toString());
     auto result = ch_1->send();
-    LOG_FMT_DEBUG(getLogger(), "SYNC_FOR({}) {}", name, //
-                  result ? "matched waitAndPause(), paused until calling next()..." : "cancelled");
+    LOG_DEBUG(getLogger(), "SYNC_FOR({}) {}", name, //
+              result ? "matched waitAndPause(), paused until calling next()..." : "cancelled");
     if (!result)
         return;
     result = ch_2->recv();
-    LOG_FMT_DEBUG(getLogger(), "SYNC_FOR({}) {}", name, result ? "done" : "cancelled");
+    LOG_DEBUG(getLogger(), "SYNC_FOR({}) {}", name, result ? "done" : "cancelled");
 }
 
 #else

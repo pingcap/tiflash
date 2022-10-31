@@ -70,11 +70,11 @@ enum DebugMode
 };
 
 void dump_all_entries(PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
-void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config);
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const DB::PageStorageConfig & config);
 
-PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
+DB::PageStorageConfig parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
 {
-    PageStorage::Config config;
+    DB::PageStorageConfig config;
     if (argc > 4)
     {
         size_t num = strtoull(argv[4], nullptr, 10);
@@ -95,7 +95,7 @@ PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * 
         config.gc_max_valid_rate = n;
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         logger,
         "[gc_min_files={}] [gc_min_bytes={}] [gc_max_valid_rate={:.3f}]",
         config.gc_min_files,
@@ -137,7 +137,7 @@ try
     case LIST_ALL_CAPACITY:
     case LIST_ALL_PAGE_FILE:
     case RUN_GC:
-        LOG_FMT_INFO(logger, "Running with [mode={}]", mode);
+        LOG_INFO(logger, "Running with [mode={}]", mode);
         break;
     default:
         Usage();
@@ -173,7 +173,7 @@ try
         return 0;
     }
 
-    PageStorage::Config config = parse_storage_config(argc, argv, logger);
+    DB::PageStorageConfig config = parse_storage_config(argc, argv, logger);
     PageStorage storage("PageCtl", delegator, config, file_provider);
     storage.restore();
     switch (mode)
@@ -203,9 +203,9 @@ try
         }
         for (Int64 idx = 0; num_gc == -1 || idx < num_gc; ++idx)
         {
-            LOG_FMT_INFO(logger, "Running GC, [round={}] [num_gc={}]", (idx + 1), num_gc);
+            LOG_INFO(logger, "Running GC, [round={}] [num_gc={}]", (idx + 1), num_gc);
             storage.gcImpl(/*not_skip=*/true, nullptr, nullptr);
-            LOG_FMT_INFO(logger, "Run GC done, [round={}] [num_gc={}]", (idx + 1), num_gc);
+            LOG_INFO(logger, "Run GC done, [round={}] [num_gc={}]", (idx + 1), num_gc);
         }
         break;
     }
@@ -246,24 +246,24 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                 printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
-                case DB::WriteBatch::WriteType::PUT_EXTERNAL:
-                case DB::WriteBatch::WriteType::PUT:
+                case DB::WriteBatchWriteType::PUT_EXTERNAL:
+                case DB::WriteBatchWriteType::PUT:
                     printf("PUT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case DB::WriteBatch::WriteType::UPSERT:
+                case DB::WriteBatchWriteType::UPSERT:
                     printf("UPSERT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case DB::WriteBatch::WriteType::DEL:
+                case DB::WriteBatchWriteType::DEL:
                     printf("DEL\t%lld\t%llu\t%u\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
-                case DB::WriteBatch::WriteType::REF:
+                case DB::WriteBatchWriteType::REF:
                     printf("REF\t%lld\t%lld\t\t%llu\t%u\n", //
                            record.page_id,
                            record.ori_page_id,
@@ -292,7 +292,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
     }
 }
 
-void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config)
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const DB::PageStorageConfig & config)
 {
     static constexpr double MB = 1.0 * 1024 * 1024;
 

@@ -30,6 +30,7 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -134,6 +135,14 @@ struct EntryOrDelete
 class VersionedPageEntries;
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 using PageLock = std::lock_guard<std::mutex>;
+
+enum class ResolveResult
+{
+    FAIL,
+    TO_REF,
+    TO_NORMAL,
+};
+
 class VersionedPageEntries
 {
 public:
@@ -161,12 +170,6 @@ public:
 
     std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
-    enum ResolveResult
-    {
-        RESOLVE_FAIL,
-        RESOLVE_TO_REF,
-        RESOLVE_TO_NORMAL,
-    };
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
     resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
@@ -196,7 +199,6 @@ public:
      *   to be decreased the ref count by `derefAndClean`.
      *   The elem is <page_id, <version, num to decrease ref count>> 
      * `entries_removed`: Return the entries removed from the version list
-     * `keep_last_valid_var_entry`: Keep the last valid entry, useful for dumping snapshot.
      *
      * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
      */
@@ -204,15 +206,13 @@ public:
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 * entries_removed,
-        const PageLock & page_lock,
-        bool keep_last_valid_var_entry = false);
+        const PageLock & page_lock);
     bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
         Int64 deref_count,
-        PageEntriesV3 * entries_removed,
-        bool keep_last_valid_var_entry = false);
+        PageEntriesV3 * entries_removed);
 
     void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
@@ -229,7 +229,7 @@ public:
             "type:{}, create_ver: {}, is_deleted: {}, delete_ver: {}, "
             "ori_page_id: {}, being_ref_count: {}, num_entries: {}"
             "}}",
-            type,
+            magic_enum::enum_name(type),
             create_ver,
             is_deleted,
             delete_ver,
@@ -321,8 +321,7 @@ public:
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
-    // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
-    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
+    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true);
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.

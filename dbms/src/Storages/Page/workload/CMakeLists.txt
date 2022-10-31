@@ -18,4 +18,4 @@ set (page-workload-src MainEntry.cpp PSBackground.cpp PSRunnable.cpp PSStressEnv
 
 add_library (page-workload-lib ${page-workload-src})
 target_link_libraries (page-workload-lib dbms clickhouse_functions clickhouse-server-lib)
-target_compile_options (page-workload-lib PRIVATE -Wno-format -lc++)
+target_compile_options (page-workload-lib PRIVATE -Wno-format)

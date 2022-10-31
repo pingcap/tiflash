@@ -50,6 +50,8 @@ class FailPointHelper
 public:
     static void enableFailPoint(const String & fail_point_name);
 
+    static void enablePauseFailPoint(const String & fail_point_name, UInt64 time);
+
     static void disableFailPoint(const String & fail_point_name);
 
     static void wait(const String & fail_point_name);

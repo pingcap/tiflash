@@ -31,7 +31,7 @@ using RegionPtr = std::shared_ptr<Region>;
 
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
-struct SSTReader;
+class SSTReader;
 class StorageDeltaMerge;
 using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
 struct DecodingStorageSchemaSnapshot;
@@ -69,14 +69,16 @@ public:
      * @param split_after_rows_ Split for a new DTFile when reaching specified rows.
      * @param split_after_size_ Split for a new DTFile when reaching specified bytes.
      */
-    SSTFilesToDTFilesOutputStream(ChildStream child_,
-                                  StorageDeltaMergePtr storage_,
-                                  DecodingStorageSchemaSnapshotConstPtr schema_snap_,
-                                  TiDB::SnapshotApplyMethod method_,
-                                  FileConvertJobType job_type_,
-                                  UInt64 split_after_rows_,
-                                  UInt64 split_after_size_,
-                                  Context & context);
+    SSTFilesToDTFilesOutputStream(
+        const std::string & log_prefix_,
+        ChildStream child_,
+        StorageDeltaMergePtr storage_,
+        DecodingStorageSchemaSnapshotConstPtr schema_snap_,
+        TiDB::SnapshotApplyMethod method_,
+        FileConvertJobType job_type_,
+        UInt64 split_after_rows_,
+        UInt64 split_after_size_,
+        Context & context);
     ~SSTFilesToDTFilesOutputStream();
 
     void writePrefix();
