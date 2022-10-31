@@ -61,10 +61,12 @@ struct DecodingStorageSchemaSnapshot
         , schema_version{table_info_.schema_version}
     {
         std::unordered_map<ColumnID, size_t> column_lut;
+        std::unordered_map<String, ColumnID> column_name_id_map;
         for (size_t i = 0; i < table_info_.columns.size(); i++)
         {
             const auto & ci = table_info_.columns[i];
             column_lut.emplace(ci.id, i);
+            column_name_id_map.emplace(ci.name, ci.id);
         }
         for (size_t i = 0; i < column_defines->size(); i++)
         {
@@ -72,7 +74,7 @@ struct DecodingStorageSchemaSnapshot
             sorted_column_id_with_pos.insert({cd.id, i});
             if (cd.id != TiDBPkColumnID && cd.id != VersionColumnID && cd.id != DelMarkColumnID)
             {
-                auto & columns = table_info_.columns;
+                const auto & columns = table_info_.columns;
                 column_infos.push_back(columns[column_lut.at(cd.id)]);
             }
             else
@@ -84,10 +86,14 @@ struct DecodingStorageSchemaSnapshot
         // create pk related metadata if needed
         if (is_common_handle)
         {
-            const auto & primary_index_info = table_info_.getPrimaryIndexInfo();
-            for (size_t i = 0; i < primary_index_info.idx_cols.size(); i++)
+            /// we will not update the IndexInfo except Rename DDL.
+            /// When the add column / drop column action happenes, the offset of each column may change
+            /// Thus, we should not use offset to get the column we want,
+            /// but use to compare the column name to get the column id.
+            const auto & primary_index_cols = table_info_.getPrimaryIndexInfo().idx_cols;
+            for (const auto & col : primary_index_cols)
             {
-                auto pk_column_id = table_info_.columns[primary_index_info.idx_cols[i].offset].id;
+                auto pk_column_id = column_name_id_map[col.name];
                 pk_column_ids.emplace_back(pk_column_id);
                 pk_pos_map.emplace(pk_column_id, reinterpret_cast<size_t>(std::numeric_limits<size_t>::max()));
             }

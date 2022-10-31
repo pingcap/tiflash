@@ -26,7 +26,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
 
-    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
     const String & database_name = typeid_cast<const ASTIdentifier &>(*args[1]).name;
     const String & table_name = typeid_cast<const ASTIdentifier &>(*args[2]).name;
     auto table = MockTiDB::instance().getTableByName(database_name, table_name);
@@ -35,7 +35,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
     if (4 + handle_column_size * 4 != args.size())
         throw Exception("Args not matched, should be: region-id1, database-name, table-name, start1, end1, start2, end2, region-id2",
                         ErrorCodes::BAD_ARGUMENTS);
-    RegionID region_id2 = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args.size() - 1]).value);
+    auto region_id2 = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[args.size() - 1]).value));
 
     auto table_id = table->id();
     TiKVKey start_key1, start_key2, end_key1, end_key2;
@@ -45,9 +45,17 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         std::vector<Field> start_keys2;
         std::vector<Field> end_keys1;
         std::vector<Field> end_keys2;
+
+        std::unordered_map<String, size_t> column_name_columns_index_map;
+        for (size_t i = 0; i < table_info.columns.size(); i++)
+        {
+            column_name_columns_index_map.emplace(table_info.columns[i].name, i);
+        }
+
         for (size_t i = 0; i < handle_column_size; i++)
         {
-            auto & column_info = table_info.columns[table_info.getPrimaryIndexInfo().idx_cols[i].offset];
+            auto idx = column_name_columns_index_map[table_info.getPrimaryIndexInfo().idx_cols[i].name];
+            auto & column_info = table_info.columns[idx];
 
             auto start_field1 = RegionBench::convertField(column_info, typeid_cast<const ASTLiteral &>(*args[3 + i]).value);
             TiDB::DatumBumpy start_datum1 = TiDB::DatumBumpy(start_field1, column_info.tp);
@@ -74,10 +82,10 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
     }
     else
     {
-        HandleID start1 = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value);
-        HandleID end1 = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value);
-        HandleID start2 = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value);
-        HandleID end2 = (HandleID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[6]).value);
+        auto start1 = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value));
+        auto end1 = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value));
+        auto start2 = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[5]).value));
+        auto end2 = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[6]).value));
         start_key1 = RecordKVFormat::genKey(table_id, start1);
         start_key2 = RecordKVFormat::genKey(table_id, start2);
         end_key1 = RecordKVFormat::genKey(table_id, end1);
@@ -96,7 +104,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         request.set_cmd_type(raft_cmdpb::AdminCmdType::BatchSplit);
         raft_cmdpb::BatchSplitResponse * splits = response.mutable_splits();
         {
-            auto region = splits->add_regions();
+            auto * region = splits->add_regions();
             region->set_id(region_id);
             region->set_start_key(start_key1);
             region->set_end_key(end_key1);
@@ -104,7 +112,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
             *region->mutable_region_epoch() = new_epoch;
         }
         {
-            auto region = splits->add_regions();
+            auto * region = splits->add_regions();
             region->set_id(region_id2);
             region->set_start_key(start_key2);
             region->set_end_key(end_key2);
@@ -130,8 +138,8 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
         throw Exception("Args not matched, should be: source-id1, target-id2", ErrorCodes::BAD_ARGUMENTS);
     }
 
-    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RegionID target_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
+    auto target_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value));
 
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
@@ -143,7 +151,7 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
     {
         request.set_cmd_type(raft_cmdpb::AdminCmdType::PrepareMerge);
 
-        auto prepare_merge = request.mutable_prepare_merge();
+        auto * prepare_merge = request.mutable_prepare_merge();
         {
             auto min_index = region->appliedIndex();
             prepare_merge->set_min_index(min_index);
@@ -170,8 +178,8 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
         throw Exception("Args not matched, should be: source-id1, current-id2", ErrorCodes::BAD_ARGUMENTS);
     }
 
-    RegionID source_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-    RegionID current_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value);
+    auto source_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
+    auto current_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[1]).value));
 
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
@@ -182,7 +190,7 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
 
     {
         request.set_cmd_type(raft_cmdpb::AdminCmdType::CommitMerge);
-        auto commit_merge = request.mutable_commit_merge();
+        auto * commit_merge = request.mutable_commit_merge();
         {
             commit_merge->set_commit(source_region->appliedIndex());
             *commit_merge->mutable_source() = source_region->getMetaRegion();
@@ -206,7 +214,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
         throw Exception("Args not matched, should be: region-id", ErrorCodes::BAD_ARGUMENTS);
     }
 
-    RegionID region_id = (RegionID)safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value);
+    auto region_id = static_cast<RegionID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[0]).value));
 
     auto & tmt = context.getTMTContext();
     auto & kvstore = tmt.getKVStore();
@@ -217,7 +225,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
     {
         request.set_cmd_type(raft_cmdpb::AdminCmdType::RollbackMerge);
 
-        auto rollback_merge = request.mutable_rollback_merge();
+        auto * rollback_merge = request.mutable_rollback_merge();
         {
             auto merge_state = region->getMergeState();
             rollback_merge->set_commit(merge_state.commit());

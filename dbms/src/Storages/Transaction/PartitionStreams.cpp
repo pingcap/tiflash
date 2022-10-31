@@ -241,31 +241,26 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
     return data_list_read;
 }
 
-std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region = true)
+std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
 {
     auto scanner = region->createCommittedScanner(lock_region);
 
     /// Some sanity checks for region meta.
-    {
-        if (region->isPendingRemove())
-            return std::nullopt;
-    }
+    if (region->isPendingRemove())
+        return std::nullopt;
 
     /// Read raw KVs from region cache.
+    // Shortcut for empty region.
+    if (!scanner.hasNext())
+        return std::nullopt;
+
+    RegionDataReadInfoList data_list_read;
+    data_list_read.reserve(scanner.writeMapSize());
+    do
     {
-        // Shortcut for empty region.
-        if (!scanner.hasNext())
-            return std::nullopt;
-
-        RegionDataReadInfoList data_list_read;
-        data_list_read.reserve(scanner.writeMapSize());
-
-        do
-        {
-            data_list_read.emplace_back(scanner.next());
-        } while (scanner.hasNext());
-        return data_list_read;
-    }
+        data_list_read.emplace_back(scanner.next());
+    } while (scanner.hasNext());
+    return data_list_read;
 }
 
 void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region = true)
@@ -447,7 +442,7 @@ RegionPtrWithBlock::CachePtr GenRegionPreDecodeBlockData(const RegionPtr & regio
     std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
     try
     {
-        data_list_read = ReadRegionCommitCache(region);
+        data_list_read = ReadRegionCommitCache(region, true);
         if (!data_list_read)
             return nullptr;
     }
@@ -603,7 +598,7 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
                                    const DecodingStorageSchemaSnapshotConstPtr & schema_snap,
                                    Timestamp gc_safepoint,
                                    bool force_decode,
-                                   TMTContext & tmt)
+                                   TMTContext & /* */)
 {
     // In 5.0.1, feature `compaction filter` is enabled by default. Under such feature tikv will do gc in write & default cf individually.
     // If some rows were updated and add tiflash replica, tiflash store may receive region snapshot with unmatched data in write & default cf sst files.
@@ -611,15 +606,12 @@ Block GenRegionBlockDataWithSchema(const RegionPtr & region, //
               { gc_safepoint = 10000000; }); // Mock a GC safepoint for testing compaction filter
     region->tryCompactionFilter(gc_safepoint);
 
-    std::optional<RegionDataReadInfoList> data_list_read = std::nullopt;
-    data_list_read = ReadRegionCommitCache(region);
+    std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
 
     Block res_block;
     // No committed data, just return
     if (!data_list_read)
         return res_block;
-
-    auto context = tmt.getContext();
 
     {
         Stopwatch watch;

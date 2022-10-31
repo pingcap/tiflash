@@ -47,7 +47,7 @@ public:
                                bool force_decode_,
                                TMTContext & tmt_,
                                size_t expected_size_ = DEFAULT_MERGE_BLOCK_SIZE);
-    ~SSTFilesToBlockInputStream();
+    ~SSTFilesToBlockInputStream() override;
 
     String getName() const override { return "SSTFilesToBlockInputStream"; }
 

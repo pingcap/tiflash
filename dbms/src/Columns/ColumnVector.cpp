@@ -184,7 +184,7 @@ void ColumnVector<T>::insertRangeFrom(const IColumn & src, size_t start, size_t 
     if (start + length > src_vec.data.size())
         throw Exception(
             fmt::format(
-                "Parameters start = {}, length = {} are out of bound in ColumnVector<T>::insertRangeFrom method (data.size() = {}).",
+                "Parameters are out of bound in ColumnVector<T>::insertRangeFrom method, start={}, length={}, src.size()={}",
                 start,
                 length,
                 src_vec.data.size()),

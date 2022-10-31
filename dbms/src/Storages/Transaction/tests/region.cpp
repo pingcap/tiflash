@@ -8,7 +8,7 @@ using namespace DB;
 RegionPtr makeRegion(UInt64 id, const std::string start_key, const std::string end_key)
 {
     return std::make_shared<Region>(
-        RegionMeta(createPeer(666, true), createRegionInfo(id, std::move(start_key), std::move(end_key)), initialApplyState()));
+        RegionMeta(tests::createPeer(666, true), tests::createRegionInfo(id, std::move(start_key), std::move(end_key)), initialApplyState()));
 }
 
 int main(int, char **)

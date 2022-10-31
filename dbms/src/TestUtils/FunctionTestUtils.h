@@ -370,6 +370,11 @@ ColumnWithTypeAndName createConstColumn(
     return createConstColumn<T>(data_type_args, size, InferredFieldType<T>(std::nullopt), name);
 }
 
+String getColumnsContent(const ColumnsWithTypeAndName & cols);
+
+/// We can designate the range of columns printed with begin and end. range: [begin, end)
+String getColumnsContent(const ColumnsWithTypeAndName & cols, size_t begin, size_t end);
+
 ::testing::AssertionResult dataTypeEqual(
     const DataTypePtr & expected,
     const DataTypePtr & actual);
