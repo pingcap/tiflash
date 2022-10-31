@@ -119,6 +119,11 @@ if (ARCH_LINUX)
                 "ld-linux-aarch64.*"
                 "libpthread.*"# exclude libc dependencies
             DIRECTORIES ${TIFLASH_DEPENDENCY_DIRECTORIES})
+    if (USE_GM_SSL)
+        install (TARGETS gmssl
+                COMPONENT tiflash-release
+                DESTINATION ".")
+    endif()
 
     install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
 elseif(APPLE)
