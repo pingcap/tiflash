@@ -62,15 +62,19 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::finishWrite()
 template <class StreamWriterPtr>
 void FineGrainedShuffleWriter<StreamWriterPtr>::prepare(const Block & sample_block)
 {
-    /// Materialize sample_block so that header and reserved scatterColumns are full columns
-    /// Because ser/der don't support constant columns now
-    header = sample_block.cloneEmpty();
-    HashBaseWriterHelper::materializeBlock(header);
+    /// Initialize header block, use column type to create new empty column to handle potential null column cases
+    const auto & column_with_type_and_names = sample_block.getColumnsWithTypeAndName();
+    for (const auto & column : column_with_type_and_names)
+    {
+        MutableColumnPtr empty_column = column.type->createColumn();
+        ColumnWithTypeAndName new_column(std::move(empty_column), column.type, column.name);
+        header.insert(new_column);
+    }
     num_columns = header.columns();
     // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
     num_bucket = partition_num * fine_grained_shuffle_stream_count;
     partition_key_containers_for_reuse.resize(collators.size());
-    resetScatterColumns();
+    initScatterColumns();
     prepared = true;
 }
 
@@ -101,7 +105,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
 }
 
 template <class StreamWriterPtr>
-void FineGrainedShuffleWriter<StreamWriterPtr>::resetScatterColumns()
+void FineGrainedShuffleWriter<StreamWriterPtr>::initScatterColumns()
 {
     scattered.resize(num_columns);
     for (size_t col_id = 0; col_id < num_columns; ++col_id)

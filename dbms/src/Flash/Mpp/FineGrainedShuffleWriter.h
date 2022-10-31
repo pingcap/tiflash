@@ -46,7 +46,7 @@ private:
     template <bool send_exec_summary_at_last>
     void writePackets(std::vector<TrackedMppDataPacket> & packets);
 
-    void resetScatterColumns();
+    void initScatterColumns();
 
     bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;
