@@ -162,15 +162,8 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
                 columns = block.mutateColumns();
                 for (size_t col_id = 0; col_id < num_columns; ++col_id)
                 {
-<<<<<<< HEAD
-                    chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
-                    tracked_packets[part_id]->addChunk(chunk_codec_stream->getString());
-                    chunk_codec_stream->clear();
-                    tracked_packets[part_id]->getPacket().add_stream_ids(stream_idx);
-=======
                     columns[col_id]->popBack(columns[col_id]->size()); // clear column
                     scattered[col_id][bucket_idx + stream_idx] = std::move(columns[col_id]);
->>>>>>> master
                 }
             }
         }
