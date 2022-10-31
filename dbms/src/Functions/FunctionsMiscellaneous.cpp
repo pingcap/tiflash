@@ -1481,9 +1481,9 @@ public:
 
         auto deleter = [&agg_func](char * ptr) {
             agg_func.destroy(ptr);
-            free(ptr);
+            free(ptr); // NOLINT(cppcoreguidelines-no-malloc)
         };
-        std::unique_ptr<char, decltype(deleter)> place{reinterpret_cast<char *>(malloc(agg_func.sizeOfData())), deleter};
+        std::unique_ptr<char, decltype(deleter)> place{reinterpret_cast<char *>(malloc(agg_func.sizeOfData())), deleter}; // NOLINT(cppcoreguidelines-no-malloc)
 
         agg_func.create(place.get()); /// Not much exception-safe. If an exception is thrown out, destroy will be called in vain.
 
