@@ -372,7 +372,7 @@ private:
 
 // Common method to convert nullable string column
 // converted column referred by converted_col_name is impossible to be const here
-#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col_name, next_convertion)                                                                                                \
+#define CONVERT_STR_VEC_TO_PARAM(param_name, converted_col_name, next_convertion)                                                                                                     \
     do                                                                                                                                                                                \
     {                                                                                                                                                                                 \
         if (((converted_col_name)->isColumnNullable()))                                                                                                                               \
@@ -393,7 +393,7 @@ private:
     } while (0);
 
 // Common method to convert const string column
-#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col_name, next_convertion)                                 \
+#define CONVERT_STR_CONST_TO_PARAM(param_name, converted_col_name, next_convertion)                                     \
     do                                                                                                                  \
     {                                                                                                                   \
         auto col_const_data = COL_CONST_VAR_NAME->getDataColumnPtr();                                                   \
@@ -419,9 +419,9 @@ private:
     {                                                                                                 \
         const auto * COL_CONST_VAR_NAME = typeid_cast<const ColumnConst *>(&(*(converted_col_name))); \
         if (COL_CONST_VAR_NAME != nullptr)                                                            \
-            CONVERT_CONST_STR_COL_TO_PARAM((param_name), (converted_col_name), next_convertion)       \
+            CONVERT_STR_CONST_TO_PARAM((param_name), (converted_col_name), next_convertion)           \
         else                                                                                          \
-            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (converted_col_name), next_convertion)        \
+            CONVERT_STR_VEC_TO_PARAM((param_name), (converted_col_name), next_convertion)             \
     } while (0);
 
 class FunctionStringRegexpBase
@@ -442,6 +442,9 @@ public:
     template <typename ExprT, typename MatchTypeT>
     std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
     {
+        if (pat_param.isNullAt(0) || match_type_param.isNullAt(0))
+            return nullptr;
+
         String final_pattern = pat_param.getString(0);
         if (unlikely(final_pattern.empty()))
             throw Exception(EMPTY_PAT_ERR_MSG);
@@ -469,8 +472,7 @@ public:
             {
                 *has_nullable_col = true;
                 const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+                assert(null_type != null_type);
 
                 const auto & nested_type = null_type->getNestedType();
 
@@ -496,8 +498,7 @@ public:
             {
                 *has_nullable_col = true;
                 const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+                assert(null_type != nullptr);
 
                 const auto & nested_type = null_type->getNestedType();
 
@@ -527,7 +528,7 @@ public:
     } while (0);
 
 // Method to convert match type column
-#define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                               \
+#define CONVERT_MATCH_TYPE_COL_TO_PARAM_AND_EXECUTE()                                                                   \
     do                                                                                                                  \
     {                                                                                                                   \
         if ((ARG_NUM_VAR_NAME) == 3)                                                                                    \
@@ -541,10 +542,10 @@ public:
     } while (0);
 
 // Method to convert pattern column
-#define CONVERT_PAT_COL_TO_PARAM()                                                                                \
-    do                                                                                                            \
-    {                                                                                                             \
-        CONVERT_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
+#define CONVERT_PAT_COL_TO_PARAM()                                                                                            \
+    do                                                                                                                        \
+    {                                                                                                                         \
+        CONVERT_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM_AND_EXECUTE()})) \
     } while (0);
 
 // Method to convert expression column
@@ -618,7 +619,7 @@ public:
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && MatchTypeT::isConst())
         {
-            if (col_size == 0 || expr_param.isNullAt(0) || pat_param.isNullAt(0) || match_type_param.isNullAt(0))
+            if (expr_param.isNullAt(0) || pat_param.isNullAt(0) || match_type_param.isNullAt(0))
             {
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
                 return;
@@ -649,6 +650,15 @@ public:
         if constexpr (canMemorize<PatT, MatchTypeT>())
         {
             const auto & regexp = memorize(pat_param, match_type_param, collator);
+            if (regexp == nullptr)
+            {
+                auto nullmap_col = ColumnUInt8::create();
+                typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
+                nullmap.resize(col_size, 1);
+                res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+                return;
+            }
+
             if constexpr (has_nullable_col)
             {
                 // expr column must be a nullable column here, so we need to check null for each elems
