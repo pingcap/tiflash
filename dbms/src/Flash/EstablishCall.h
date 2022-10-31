@@ -57,6 +57,7 @@ public:
 
     void tryFlushOne() override;
 
+<<<<<<< HEAD
     void writeDone(const ::grpc::Status & status) override;
 
     void writeErr(const mpp::MPPDataPacket & packet);
@@ -66,6 +67,18 @@ public:
     void cancel();
 
     void attachTunnel(const std::shared_ptr<DB::MPPTunnel> & mpp_tunnel_);
+=======
+    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
+    void startEstablishConnection();
+    void setToWaitingTunnelState()
+    {
+        state = WAITING_TUNNEL;
+    }
+    bool isWaitingTunnelState()
+    {
+        return state == WAITING_TUNNEL;
+    }
+>>>>>>> e57a6063da (fix metrics for establish connection (#6203))
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
@@ -114,8 +127,17 @@ private:
         ERR_HANDLE,
         FINISH
     };
+<<<<<<< HEAD
     CallStatus state; // The current serving state.
     std::shared_ptr<DB::MPPTunnel> mpp_tunnel = nullptr;
     std::shared_ptr<Stopwatch> stopwatch;
+=======
+    // The current serving state.
+    CallStatus state;
+
+    std::shared_ptr<DB::AsyncTunnelSender> async_tunnel_sender;
+    std::unique_ptr<Stopwatch> stopwatch;
+    double waiting_task_time_ms = 0;
+>>>>>>> e57a6063da (fix metrics for establish connection (#6203))
 };
 } // namespace DB

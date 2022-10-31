@@ -37,6 +37,11 @@ EstablishCallData::EstablishCallData(AsyncFlashService * service, grpc::ServerCo
 EstablishCallData::~EstablishCallData()
 {
     GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
+    if (stopwatch)
+    {
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_mpp_establish_conn).Observe(stopwatch->elapsedSeconds());
+    }
 }
 
 EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
@@ -60,10 +65,27 @@ void EstablishCallData::tryFlushOne()
 
 void EstablishCallData::responderFinish(const grpc::Status & status)
 {
+<<<<<<< HEAD
     if (*is_shutdown)
         finishTunnelAndResponder();
     else
         responder.Finish(status, this);
+=======
+    assert(stopwatch != nullptr);
+    async_tunnel_sender = async_tunnel_sender_;
+    waiting_task_time_ms = stopwatch->elapsedMilliseconds();
+}
+
+void EstablishCallData::startEstablishConnection()
+{
+    stopwatch = std::make_unique<Stopwatch>();
+}
+
+
+EstablishCallData * EstablishCallData::spawn(AsyncFlashService * service, grpc::ServerCompletionQueue * cq, grpc::ServerCompletionQueue * notify_cq, const std::shared_ptr<std::atomic<bool>> & is_shutdown)
+{
+    return new EstablishCallData(service, cq, notify_cq, is_shutdown);
+>>>>>>> e57a6063da (fix metrics for establish connection (#6203))
 }
 
 void EstablishCallData::initRpc()
@@ -110,10 +132,14 @@ void EstablishCallData::writeDone(const ::grpc::Status & status)
     state = FINISH;
     if (stopwatch)
     {
+<<<<<<< HEAD
         LOG_FMT_INFO(mpp_tunnel->getLogger(), "connection for {} cost {} ms.", mpp_tunnel->id(), stopwatch->elapsedMilliseconds());
     }
     responderFinish(status);
 }
+=======
+        LOG_INFO(async_tunnel_sender->getLogger(), "connection for {} cost {} ms, including {} ms to waiting task.", async_tunnel_sender->getTunnelId(), stopwatch->elapsedMilliseconds(), waiting_task_time_ms);
+>>>>>>> e57a6063da (fix metrics for establish connection (#6203))
 
 void EstablishCallData::notifyReady()
 {
