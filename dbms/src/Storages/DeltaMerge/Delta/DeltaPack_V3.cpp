@@ -42,6 +42,7 @@ void serializeSavedPacks_V3(WriteBuffer & buf, const DeltaPacks & packs)
                 throw Exception("A data pack without schema: " + pack->toString(), ErrorCodes::LOGICAL_ERROR);
 
             bool save_schema = cur_schema != last_schema;
+            last_schema = cur_schema;
             pack->serializeMetadata(buf, save_schema);
             break;
         }
