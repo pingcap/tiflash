@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Parsers/IAST.h>
 #include <Core/Names.h>
+#include <Parsers/IAST.h>
 
 
 namespace DB
@@ -68,4 +68,4 @@ protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
 
-}
+} // namespace DB

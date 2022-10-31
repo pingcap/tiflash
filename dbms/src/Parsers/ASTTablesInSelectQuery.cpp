@@ -20,16 +20,15 @@
 namespace DB
 {
 
-#define CLONE(member) \
-do \
-{ \
-    if (member) \
-    { \
-        res->member = (member)->clone(); \
-        res->children.push_back(res->member); \
-    } \
-} \
-while (0)
+#define CLONE(member)                             \
+    do                                            \
+    {                                             \
+        if (member)                               \
+        {                                         \
+            res->member = (member)->clone();      \
+            res->children.push_back(res->member); \
+        }                                         \
+    } while (0)
 
 
 ASTPtr ASTTableExpression::clone() const
@@ -102,19 +101,19 @@ void ASTTableExpression::formatImpl(const FormatSettings & settings, FormatState
     if (final)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str
-            << "FINAL" << (settings.hilite ? hilite_none : "");
+                      << "FINAL" << (settings.hilite ? hilite_none : "");
     }
 
     if (sample_size)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << settings.nl_or_ws << indent_str
-            << "SAMPLE " << (settings.hilite ? hilite_none : "");
+                      << "SAMPLE " << (settings.hilite ? hilite_none : "");
         sample_size->formatImpl(settings, state, frame);
 
         if (sample_offset)
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << ' '
-                << "OFFSET " << (settings.hilite ? hilite_none : "");
+                          << "OFFSET " << (settings.hilite ? hilite_none : "");
             sample_offset->formatImpl(settings, state, frame);
         }
     }
@@ -127,55 +126,55 @@ void ASTTableJoin::formatImplBeforeTable(const FormatSettings & settings, Format
 
     switch (locality)
     {
-        case Locality::Unspecified:
-            break;
-        case Locality::Local:
-            break;
-        case Locality::Global:
-            settings.ostr << "GLOBAL ";
-            break;
+    case Locality::Unspecified:
+        break;
+    case Locality::Local:
+        break;
+    case Locality::Global:
+        settings.ostr << "GLOBAL ";
+        break;
     }
 
     if (kind != Kind::Cross && kind != Kind::Comma)
     {
         switch (strictness)
         {
-            case Strictness::Unspecified:
-                break;
-            case Strictness::Any:
-                settings.ostr << "ANY ";
-                break;
-            case Strictness::All:
-                settings.ostr << "ALL ";
-                break;
+        case Strictness::Unspecified:
+            break;
+        case Strictness::Any:
+            settings.ostr << "ANY ";
+            break;
+        case Strictness::All:
+            settings.ostr << "ALL ";
+            break;
         }
     }
 
     switch (kind)
     {
-        case Kind::Inner:
-            settings.ostr << "INNER JOIN";
-            break;
-        case Kind::Left:
-            settings.ostr << "LEFT JOIN";
-            break;
-        case Kind::Right:
-            settings.ostr << "RIGHT JOIN";
-            break;
-        case Kind::Full:
-            settings.ostr << "FULL OUTER JOIN";
-            break;
-        case Kind::Cross:
-            settings.ostr << "CROSS JOIN";
-            break;
-        case Kind::Comma:
-            settings.ostr << ",";
-            break;
-        case Kind::Anti:
-            settings.ostr << "ANTI JOIN";
-            break;
-        default:
-            throw Exception("Join kind not supported");
+    case Kind::Inner:
+        settings.ostr << "INNER JOIN";
+        break;
+    case Kind::Left:
+        settings.ostr << "LEFT JOIN";
+        break;
+    case Kind::Right:
+        settings.ostr << "RIGHT JOIN";
+        break;
+    case Kind::Full:
+        settings.ostr << "FULL OUTER JOIN";
+        break;
+    case Kind::Cross:
+        settings.ostr << "CROSS JOIN";
+        break;
+    case Kind::Comma:
+        settings.ostr << ",";
+        break;
+    case Kind::Anti:
+        settings.ostr << "ANTI JOIN";
+        break;
+    default:
+        throw Exception("Join kind not supported");
     }
 
     settings.ostr << (settings.hilite ? hilite_none : "");
@@ -232,7 +231,7 @@ void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatS
 {
     std::string indent_str = settings.one_line ? "" : std::string(4 * frame.indent, ' ');
 
-    for (ASTs::const_iterator it = children.begin(); it != children.end(); ++it)
+    for (auto it = children.begin(); it != children.end(); ++it)
     {
         if (it != children.begin())
             settings.ostr << settings.nl_or_ws << indent_str;
@@ -241,4 +240,4 @@ void ASTTablesInSelectQuery::formatImpl(const FormatSettings & settings, FormatS
     }
 }
 
-}
+} // namespace DB

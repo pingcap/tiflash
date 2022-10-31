@@ -33,7 +33,9 @@ protected:
 class ParserTablesInSelectQueryElement : public IParserBase
 {
 public:
-    ParserTablesInSelectQueryElement(bool is_first) : is_first(is_first) {}
+    ParserTablesInSelectQueryElement(bool is_first)
+        : is_first(is_first)
+    {}
 
 protected:
     const char * getName() const { return "table, table function, subquery or list of joined tables"; }
@@ -51,4 +53,4 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected);
 };
 
-}
+} // namespace DB
