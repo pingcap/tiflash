@@ -68,7 +68,7 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    /// Result only contains rows info in decode_detail, 'rowsInfoOnly' is true only when flushing data previous to eod
+    /// Result only contains rows info in decode_detail, 'rowsInfoOnly' is true only when flushing data previous to eof
     bool rowsInfoOnly;
     DecodeDetail decode_detail;
 
