@@ -55,6 +55,7 @@ public:
     void SetUp() override
     {
         TiFlashStorageTestBasic::SetUp();
+        log = Logger::get();
         auto path = getTemporaryPath();
         createIfNotExist(path);
         file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
@@ -72,6 +73,11 @@ public:
         return storage;
     }
 
+    size_t getLogFileNum()
+    {
+        auto log_files = WALStoreReader::listAllFiles(delegator, log);
+        return log_files.size();
+    }
 
 protected:
     FileProviderPtr file_provider;
@@ -80,10 +86,7 @@ protected:
     PageStorageConfig config;
     std::shared_ptr<PageStorageImpl> page_storage;
 
-    std::list<PageDirectorySnapshotPtr> snapshots_holder;
-    size_t fixed_test_buff_size = 1024;
-
-    size_t epoch_offset = 0;
+    LoggerPtr log;
 };
 
 TEST_F(PageStorageTest, WriteRead)
@@ -1646,13 +1649,8 @@ try
         page_storage->write(std::move(batch));
     }
 
-    auto get_log_file_num = [&]() {
-        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
-        return log_files.size();
-    };
-
     // write until there are more than one wal file
-    while (get_log_file_num() <= 1)
+    while (getLogFileNum() <= 1)
     {
         WriteBatch batch;
         PageId page_id1 = 130;
@@ -1727,13 +1725,8 @@ try
         page_storage->write(std::move(batch));
     }
 
-    auto get_log_file_num = [&]() {
-        auto log_files = WALStoreReader::listAllFiles(delegator, Logger::get());
-        return log_files.size();
-    };
-
     // write until there are more than one wal file
-    while (get_log_file_num() <= 1)
+    while (getLogFileNum() <= 1)
     {
         WriteBatch batch;
         PageId page_id2 = 130;
@@ -1760,7 +1753,6 @@ try
     ASSERT_ANY_THROW(page_storage->read(page_id0));
 }
 CATCH
-
 
 TEST_F(PageStorageTest, ReloadConfig)
 try
