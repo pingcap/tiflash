@@ -120,7 +120,7 @@ ColumnFilePersisteds deserializeSavedColumnFiles(DMContext & context, const RowK
         column_files = deserializeSavedColumnFilesInV2Format(buf, version);
         break;
     case DeltaFormat::V3:
-        column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf, version);
+        column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
         break;
     default:
         throw Exception("Unexpected delta value version: " + DB::toString(version) + ", latest version: " + DB::toString(DeltaFormat::V3),
