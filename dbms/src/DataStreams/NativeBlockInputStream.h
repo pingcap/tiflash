@@ -17,8 +17,8 @@
 #include <Common/PODArray.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
-#include <IO/CompressedReadBufferFromFile.h>
 #include <Flash/Coprocessor/CodecUtils.h>
+#include <IO/CompressedReadBufferFromFile.h>
 
 namespace DB
 {

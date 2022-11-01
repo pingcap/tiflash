@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/CodecUtils.h>
-#include <Flash/Coprocessor/CHBlockChunkCodec.h>
 
 namespace DB
 {
@@ -37,6 +37,7 @@ public:
     virtual ~CHBlockChunkDecodeAndSquash() = default;
     std::optional<Block> decodeAndSquash(const String &);
     std::optional<Block> flush();
+
 private:
     CHBlockChunkCodec codec;
     std::optional<Block> accumulated_block;

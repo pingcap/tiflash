@@ -15,10 +15,10 @@
 #include <Common/TiFlashException.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <IO/ReadBufferFromString.h>
-#include <DataTypes/DataTypeFactory.h>
 
 namespace DB
 {

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 #include <Common/TiFlashException.h>
-#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/CodecUtils.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 
 namespace DB
 {

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/SquashingTransform.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
-#include <DataStreams/SquashingTransform.h>
 #include <TestUtils/ColumnGenerator.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 

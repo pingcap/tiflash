@@ -39,10 +39,7 @@ using PacketQueuePtr = std::shared_ptr<PacketQueue>;
 
 bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & right)
 {
-    return (left.concurrency == right.concurrency) &&
-        (left.num_iterations == right.num_iterations) &&
-        (left.num_produced_rows == right.num_produced_rows) &&
-        (left.time_processed_ns == right.time_processed_ns);
+    return (left.concurrency == right.concurrency) && (left.num_iterations == right.num_iterations) && (left.num_produced_rows == right.num_produced_rows) && (left.time_processed_ns == right.time_processed_ns);
 }
 
 struct MockWriter

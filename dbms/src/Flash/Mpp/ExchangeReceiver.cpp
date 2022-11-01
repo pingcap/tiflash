@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ExchangeReceiver.h"
-
 #include <Common/CPUAffinityManager.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
@@ -694,16 +692,14 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
-    detail.produce_block_flag = false;
     for (const String * chunk : recv_msg->chunks)
     {
         auto result = decoder_ptr->decodeAndSquash(*chunk);
         if (!result)
             continue;
         detail.rows += result->rows();
-        if likely(result->rows() > 0)
+        if likely (result->rows() > 0)
         {
-            detail.produce_block_flag = true;
             block_queue.push(std::move(result.value()));
         }
     }
@@ -711,47 +707,35 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 }
 
 template <typename RPCContext>
-std::vector<ExchangeReceiverResult> ExchangeReceiverBase<RPCContext>::nextResult(
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     std::queue<Block> & block_queue,
     const Block & header,
     size_t stream_id,
     std::unique_ptr<IChunkDecodeAndSquash> & decoder_ptr)
 {
-    std::vector<ExchangeReceiverResult> results;
     if (unlikely(stream_id >= msg_channels.size()))
     {
         LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
-        results.push_back(ExchangeReceiverResult::newError(0, "", "stream_id out of range"));
-        return results;
+        return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
     }
 
-    while (true)
+    std::shared_ptr<ReceivedMessage> recv_msg;
+    if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
     {
-        std::shared_ptr<ReceivedMessage> recv_msg;
-        if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
-        {
-            handleUnnormalChannel(block_queue, results, decoder_ptr);
-            return results;
-        }
-        else
-        {
-            assert(recv_msg != nullptr);
-            if (unlikely(recv_msg->error_ptr != nullptr))
-            {
-                results.push_back(ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg()));
-                return results;
-            }
-            results.push_back(toDecodeResult(block_queue, header, recv_msg, decoder_ptr));
-            if (unlikely(results.back().meet_error) || results.back().decode_detail.produce_block_flag)
-                return results;
-        }
+        return handleUnnormalChannel(block_queue, decoder_ptr);
+    }
+    else
+    {
+        assert(recv_msg != nullptr);
+        if (unlikely(recv_msg->error_ptr != nullptr))
+            return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
+        return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
     }
 }
 
 template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::queue<Block> & block_queue,
-    std::vector<ExchangeReceiverResult> & results,
     std::unique_ptr<IChunkDecodeAndSquash> & decoder_ptr)
 {
     std::optional<Block> last_block;
@@ -761,20 +745,20 @@ void ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::unique_lock lock(mu);
     if (this->state != DB::ExchangeReceiverState::NORMAL)
     {
-        results.push_back(DB::ExchangeReceiverResult::newError(0, DB::ExchangeReceiverBase<RPCContext>::name, DB::constructStatusString(this->state, this->err_msg)));
+        return DB::ExchangeReceiverResult::newError(0, DB::ExchangeReceiverBase<RPCContext>::name, DB::constructStatusString(this->state, this->err_msg));
     }
     else
     {
         /// If there are cached data in squashDecoder, then just push the block and return EOF next iteration
         if (last_block && last_block->rows() > 0)
         {
-            RUNTIME_ASSERT(!results.empty());
-            results.back().decode_detail.rows += last_block->rows();
+            const auto & result = DB::ExchangeReceiverResult::newRowsInfoOnly(last_block->rows());
             block_queue.push(std::move(last_block.value()));
+            return result;
         }
         else
         {
-            results.push_back(DB::ExchangeReceiverResult::newEOF(DB::ExchangeReceiverBase<RPCContext>::name)); /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
+            return DB::ExchangeReceiverResult::newEOF(DB::ExchangeReceiverBase<RPCContext>::name); /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
         }
     }
 }

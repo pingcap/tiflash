@@ -17,7 +17,6 @@
 
 namespace DB
 {
-
 CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(
     const Block & header,
     size_t rows_limit_)
@@ -37,7 +36,8 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
         return res;
     }
 
-    if (!accumulated_block) {
+    if (!accumulated_block)
+    {
         /// hard-code 1.5 here, since final column size will be more than rows_limit in most situations,
         /// so it should be larger than 1.0, just use 1.5 here, no special meaning
         Block block = codec.decodeImpl(istr, static_cast<size_t>(rows_limit * 1.5));
@@ -57,16 +57,13 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
             ColumnWithTypeAndName column;
             codec.readColumnMeta(i, istr, column);
 
-            /// Data
-            MutableColumnPtr read_column = column.type->createColumn();
             if (rows) /// If no rows, nothing to read.
                 CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows);
         }
         accumulated_block->setColumns(std::move(mutable_columns));
     }
 
-    RUNTIME_ASSERT(accumulated_block);
-    if (accumulated_block->rows() >= rows_limit)
+    if (accumulated_block && accumulated_block->rows() >= rows_limit)
     {
         /// Return accumulated data and reset accumulated_block
         res.swap(accumulated_block);

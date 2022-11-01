@@ -47,6 +47,8 @@ struct CoprocessorReaderResult
     bool meet_error;
     String error_msg;
     bool eof;
+    /// Always false, aligned with ExchangeReceiverResult struct
+    bool rowsInfoOnly = false;
     String req_info = "cop request";
     DecodeDetail decode_detail;
 
@@ -141,49 +143,36 @@ public:
     }
 
     // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
-    std::vector<CoprocessorReaderResult> nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<IChunkDecodeAndSquash> & /*decoder_ptr*/)
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<IChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
-        std::vector<CoprocessorReaderResult> results;
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
-        {
-            results.push_back({nullptr, true, result.error.message(), false});
-            return results;
-        }
+            return {nullptr, true, result.error.message(), false};
 
         if (!has_next)
-        {
-            results.push_back({nullptr, false, "", true});
-            return results;
-        }
+            return {nullptr, false, "", true};
 
         auto resp = std::make_shared<tipb::SelectResponse>();
         if (resp->ParseFromString(result.data()))
         {
             if (resp->has_error())
             {
-                results.push_back({nullptr, true, resp->error().DebugString(), false});
-                return results;
+                return {nullptr, true, resp->error().DebugString(), false};
             }
             else if (has_enforce_encode_type && resp->encode_type() != tipb::EncodeType::TypeCHBlock && resp->chunks_size() > 0)
             {
-                results.push_back(
-                    {
-                        nullptr,
+                return {nullptr,
                         true,
                         "Encode type of coprocessor response is not CHBlock, "
                         "maybe the version of some TiFlash node in the cluster is not match with this one",
-                        false});
-                return results;
+                        false};
             }
             auto detail = decodeChunks(resp, block_queue, header, schema);
-            results.push_back({resp, false, "", false, detail});
-            return results;
+            return {resp, false, "", false, detail};
         }
         else
         {
-            results.push_back({nullptr, true, "Error while decoding coprocessor::Response", false});
-            return results;
+            return {nullptr, true, "Error while decoding coprocessor::Response", false};
         }
     }
 
