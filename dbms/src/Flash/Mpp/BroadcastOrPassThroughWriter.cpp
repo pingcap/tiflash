@@ -78,21 +78,21 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
 template <class StreamWriterPtr>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
-    if (likely(!blocks.empty()))
+    if (unlikely(blocks.empty()))
+        return;
+
+    auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
+    while (!blocks.empty())
     {
-        auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-        while (!blocks.empty())
-        {
-            const auto & block = blocks.back();
-            chunk_codec_stream->encode(block, 0, block.rows());
-            blocks.pop_back();
-            tracked_packet->addChunk(chunk_codec_stream->getString());
-            chunk_codec_stream->clear();
-        }
-        assert(blocks.empty());
-        rows_in_blocks = 0;
-        writer->broadcastWrite(tracked_packet);
+        const auto & block = blocks.back();
+        chunk_codec_stream->encode(block, 0, block.rows());
+        blocks.pop_back();
+        tracked_packet->addChunk(chunk_codec_stream->getString());
+        chunk_codec_stream->clear();
     }
+    assert(blocks.empty());
+    rows_in_blocks = 0;
+    writer->broadcastWrite(tracked_packet);
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;
