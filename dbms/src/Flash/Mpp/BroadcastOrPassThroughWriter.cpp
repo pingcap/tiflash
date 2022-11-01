@@ -38,21 +38,24 @@ BroadcastOrPassThroughWriter<StreamWriterPtr>::BroadcastOrPassThroughWriter(
 template <class StreamWriterPtr>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
 {
+    assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
-    {
-        encodeThenWriteBlocks<true>();
-    }
-    else
-    {
-        encodeThenWriteBlocks<false>();
-    }
+        sendExecutionSummary();
+}
+
+template <class StreamWriterPtr>
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::sendExecutionSummary()
+{
+    tipb::SelectResponse response;
+    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    writer->sendExecutionSummary(response);
 }
 
 template <class StreamWriterPtr>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        encodeThenWriteBlocks<false>();
+        encodeThenWriteBlocks();
 }
 
 template <class StreamWriterPtr>
@@ -69,14 +72,13 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        encodeThenWriteBlocks<false>();
+        encodeThenWriteBlocks();
 }
 
 template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
-    if (!blocks.empty())
+    if (likely(!blocks.empty()))
     {
         auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
         while (!blocks.empty())
@@ -89,17 +91,7 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
         }
         assert(blocks.empty());
         rows_in_blocks = 0;
-        writer->write(tracked_packet);
-    }
-
-    if constexpr (send_exec_summary_at_last)
-    {
-        TrackedSelectResp response;
-        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
-        auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
-        tracked_packet->serializeByResponse(response.getResponse());
-        // only send to one tunnel.
-        writer->write(tracked_packet, 0);
+        writer->broadcastWrite(tracked_packet);
     }
 }
 

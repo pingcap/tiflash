@@ -45,21 +45,24 @@ HashPartitionWriter<StreamWriterPtr>::HashPartitionWriter(
 template <class StreamWriterPtr>
 void HashPartitionWriter<StreamWriterPtr>::finishWrite()
 {
+    assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
-    {
-        partitionAndEncodeThenWriteBlocks<true>();
-    }
-    else
-    {
-        partitionAndEncodeThenWriteBlocks<false>();
-    }
+        sendExecutionSummary();
+}
+
+template <class StreamWriterPtr>
+void HashPartitionWriter<StreamWriterPtr>::sendExecutionSummary()
+{
+    tipb::SelectResponse response;
+    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    writer->sendExecutionSummary(response);
 }
 
 template <class StreamWriterPtr>
 void HashPartitionWriter<StreamWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        partitionAndEncodeThenWriteBlocks<false>();
+        partitionAndEncodeThenWriteBlocks();
 }
 
 template <class StreamWriterPtr>
@@ -76,11 +79,10 @@ void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
-        partitionAndEncodeThenWriteBlocks<false>();
+        partitionAndEncodeThenWriteBlocks();
 }
 
 template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
 void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
 {
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
@@ -116,33 +118,18 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
         rows_in_blocks = 0;
     }
 
-    writePackets<send_exec_summary_at_last>(tracked_packets);
+    writePackets(tracked_packets);
 }
 
 template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
 void HashPartitionWriter<StreamWriterPtr>::writePackets(const std::vector<TrackedMppDataPacketPtr> & packets)
 {
-    size_t part_id = 0;
-
-    if constexpr (send_exec_summary_at_last)
-    {
-        tipb::SelectResponse response;
-        summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
-        /// Sending the response to only one node, default the first one.
-        assert(!packets.empty());
-        assert(packets[0]);
-        packets[0]->serializeByResponse(response);
-        writer->write(packets[0], 0);
-        part_id = 1;
-    }
-
-    for (; part_id < packets.size(); ++part_id)
+    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
         const auto & packet = packets[part_id];
         assert(packet);
         if (packet->getPacket().chunks_size() > 0)
-            writer->write(packet, part_id);
+            writer->partitionWrite(packet, part_id);
     }
 }
 

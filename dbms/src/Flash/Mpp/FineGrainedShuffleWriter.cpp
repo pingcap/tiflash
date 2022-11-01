@@ -49,14 +49,17 @@ FineGrainedShuffleWriter<StreamWriterPtr>::FineGrainedShuffleWriter(
 template <class StreamWriterPtr>
 void FineGrainedShuffleWriter<StreamWriterPtr>::finishWrite()
 {
+    assert(0 == rows_in_blocks);
     if (should_send_exec_summary_at_last)
-    {
-        batchWriteFineGrainedShuffle<true>();
-    }
-    else
-    {
-        batchWriteFineGrainedShuffle<false>();
-    }
+        sendExecutionSummary();
+}
+
+template <class StreamWriterPtr>
+void FineGrainedShuffleWriter<StreamWriterPtr>::sendExecutionSummary()
+{
+    tipb::SelectResponse response;
+    summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
+    writer->sendExecutionSummary(response);
 }
 
 template <class StreamWriterPtr>
@@ -82,7 +85,7 @@ template <class StreamWriterPtr>
 void FineGrainedShuffleWriter<StreamWriterPtr>::flush()
 {
     if (rows_in_blocks > 0)
-        batchWriteFineGrainedShuffle<false>();
+        batchWriteFineGrainedShuffle();
 }
 
 template <class StreamWriterPtr>
@@ -101,7 +104,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (blocks.size() == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
-        batchWriteFineGrainedShuffle<false>();
+        batchWriteFineGrainedShuffle();
 }
 
 template <class StreamWriterPtr>
@@ -122,11 +125,10 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::initScatterColumns()
 }
 
 template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
 void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
 {
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
-    if (!blocks.empty())
+    if (likely(!blocks.empty()))
     {
         assert(rows_in_blocks > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
@@ -170,33 +172,18 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
         rows_in_blocks = 0;
     }
 
-    writePackets<send_exec_summary_at_last>(tracked_packets);
+    writePackets(tracked_packets);
 }
 
 template <class StreamWriterPtr>
-template <bool send_exec_summary_at_last>
 void FineGrainedShuffleWriter<StreamWriterPtr>::writePackets(const std::vector<TrackedMppDataPacketPtr> & packets)
 {
-    size_t part_id = 0;
-
-    if constexpr (send_exec_summary_at_last)
-    {
-        tipb::SelectResponse response;
-        summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
-        /// Sending the response to only one node, default the first one.
-        assert(!packets.empty());
-        assert(packets[0]);
-        packets[0]->serializeByResponse(response);
-        writer->write(packets[0], 0);
-        part_id = 1;
-    }
-
-    for (; part_id < packets.size(); ++part_id)
+    for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {
         const auto & packet = packets[part_id];
         assert(packet);
         if (packet->getPacket().chunks_size() > 0)
-            writer->write(packet, part_id);
+            writer->partitionWrite(packet, part_id);
     }
 }
 

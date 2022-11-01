@@ -38,12 +38,13 @@ public:
     void finishWrite() override;
 
 private:
-    template <bool send_exec_summary_at_last>
     void partitionAndEncodeThenWriteBlocks();
 
-    template <bool send_exec_summary_at_last>
     void writePackets(const std::vector<TrackedMppDataPacketPtr> & packets);
 
+    void sendExecutionSummary();
+
+private:
     Int64 batch_send_min_limit;
     bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;

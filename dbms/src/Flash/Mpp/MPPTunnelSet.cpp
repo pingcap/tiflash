@@ -30,21 +30,33 @@ void checkPacketSize(size_t size)
         throw Exception(fmt::format("Packet is too large to send, size : {}", size));
 }
 
-} // namespace
-
-template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
+TrackedMppDataPacketPtr serializePacket(tipb::SelectResponse & response)
 {
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>();
     tracked_packet->serializeByResponse(response);
     checkPacketSize(tracked_packet->getPacket().ByteSizeLong());
-    // for root mpp task, only one tunnel will connect to tidb/tispark.
-    RUNTIME_CHECK(1 == tunnels.size());
-    tunnels.back()->write(tracked_packet);
+    return tracked_packet;
+}
+} // namespace
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::sendExecutionSummary(tipb::SelectResponse & response)
+{
+    RUNTIME_CHECK(!tunnels.empty());
+    // for execution summary, only need to send to one tunnel.
+    tunnels.back()->write(serializePacket(response));
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::write(const TrackedMppDataPacketPtr & packet)
+void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
+{
+    // for root mpp task, only one tunnel will connect to tidb/tispark.
+    RUNTIME_CHECK(1 == tunnels.size());
+    tunnels.back()->write(serializePacket(response));
+}
+
+template <typename Tunnel>
+void MPPTunnelSetBase<Tunnel>::broadcastWrite(const TrackedMppDataPacketPtr & packet)
 {
     checkPacketSize(packet->getPacket().ByteSizeLong());
     RUNTIME_ASSERT(!tunnels.empty());
@@ -57,7 +69,7 @@ void MPPTunnelSetBase<Tunnel>::write(const TrackedMppDataPacketPtr & packet)
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::write(const TrackedMppDataPacketPtr & packet, int16_t partition_id)
+void MPPTunnelSetBase<Tunnel>::partitionWrite(const TrackedMppDataPacketPtr & packet, int16_t partition_id)
 {
     checkPacketSize(packet->getPacket().ByteSizeLong());
     tunnels[partition_id]->write(packet);

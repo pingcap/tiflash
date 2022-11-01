@@ -40,14 +40,15 @@ public:
     void finishWrite() override;
 
 private:
-    template <bool send_exec_summary_at_last>
     void batchWriteFineGrainedShuffle();
 
-    template <bool send_exec_summary_at_last>
     void writePackets(const std::vector<TrackedMppDataPacketPtr> & packets);
 
     void initScatterColumns();
 
+    void sendExecutionSummary();
+
+private:
     bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
