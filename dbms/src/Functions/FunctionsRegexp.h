@@ -493,7 +493,7 @@ public:
             {
                 *has_nullable_col = true;
                 const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                assert(null_type != null_type);
+                assert(null_type != nullptr);
 
                 const auto & nested_type = null_type->getNestedType();
 
