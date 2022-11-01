@@ -5839,6 +5839,7 @@ public:
             using DecimalType = std::decay_t<decltype(decimal_type)>;
             using DecimalFieldType = typename DecimalType::FieldType;
             static_assert(IsDecimal<DecimalFieldType>);
+            using IntType = typename DecimalFieldType::NativeType;
             using DecimalColVec = ColumnDecimal<DecimalFieldType>;
 
             const auto & col_arg = block.getByPosition(arguments[0]);
@@ -5847,7 +5848,7 @@ public:
                 auto precision = maxDecimalPrecision<DecimalFieldType>();
                 auto scale = decimal_type.getScale();
                 auto col_res = ColumnString::create();
-                format(col, precision, scale, col_res->getChars(), col_res->getOffsets());
+                format<DecimalColVec, IntType>(col, precision, scale, col_res->getChars(), col_res->getOffsets());
                 block.getByPosition(result).column = std::move(col_res);
                 return true;
             }
@@ -5874,9 +5875,9 @@ private:
             DataTypeDecimal256>(type.get(), std::forward<F>(f));
     }
 
-    template <typename DecimalColVec>
+    template <typename DecimalColVec, typename IntType>
     static void format(
-        DecimalColVec * col,
+        const DecimalColVec * col,
         PrecType precision,
         ScaleType scale,
         ColumnString::Chars_t & res_data,
@@ -5891,48 +5892,62 @@ private:
         for (size_t i = 0; i < size; ++i)
         {
             const auto & decimal = data[i];
-            Int256 value = decimal.value;
-            if (value < 0)
-            {
-                res_data[cur_offset++] = '-';
-                value = -value;
-            }
-            if (scale > 0 && value > 0)
-            {
-                bool add_dot = false;
-                size_t scale_i = 0;
-                // Ignore trailing zero.
-                while (value > 0 && scale_i < scale)
-                {
-                    int d = static_cast<int>(value % 10);
-                    value /= 10;
-                    ++scale_i;
-                    if (d != 0)
-                    {
-                        res_data[cur_offset++] = d + '0';
-                        add_dot = true;
-                        break;
-                    }
-                }
-                for (; value > 0 && scale_i < scale; ++scale_i)
-                {
-                    int d = static_cast<int>(value % 10);
-                    value /= 10;
-                    res_data[cur_offset++] = d + '0';
-                    add_dot = true;
-                }
-                if (add_dot)
-                    res_data[cur_offset++] = '.';
-            }
-            while (value > 0)
+            if (decimal.value == std::numeric_limits<IntType>::min())
+                // for IntType::min, `value = -value` may cause overflow, so use Int256 here.
+                doFormat<Int256>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+            else
+                doFormat<IntType>(decimal.value, scale, cur_offset, res_data, res_offsets[i]);
+        }
+    }
+
+    template <typename IntType>
+    static void doFormat(
+        IntType value,
+        ScaleType scale,
+        ColumnString::Offset & cur_offset,
+        ColumnString::Chars_t & res_data,
+        ColumnString::Offset & res_offset)
+    {
+        if (value < 0)
+        {
+            res_data[cur_offset++] = '-';
+            value = -value;
+        }
+        if (scale > 0 && value > 0)
+        {
+            bool add_dot = false;
+            size_t scale_i = 0;
+            // Ignore trailing zero.
+            while (value > 0 && scale_i < scale)
             {
                 int d = static_cast<int>(value % 10);
-                value = value / 10;
-                res_data[cur_offset++] = d + '0';
+                value /= 10;
+                ++scale_i;
+                if (d != 0)
+                {
+                    res_data[cur_offset++] = d + '0';
+                    add_dot = true;
+                    break;
+                }
             }
-            res_data[cur_offset++] = 0;
-            res_offsets[i] = cur_offset;
+            for (; value > 0 && scale_i < scale; ++scale_i)
+            {
+                int d = static_cast<int>(value % 10);
+                value /= 10;
+                res_data[cur_offset++] = d + '0';
+                add_dot = true;
+            }
+            if (add_dot)
+                res_data[cur_offset++] = '.';
         }
+        while (value > 0)
+        {
+            int d = static_cast<int>(value % 10);
+            value = value / 10;
+            res_data[cur_offset++] = d + '0';
+        }
+        res_data[cur_offset++] = 0;
+        res_offset = cur_offset;
     }
 };
 

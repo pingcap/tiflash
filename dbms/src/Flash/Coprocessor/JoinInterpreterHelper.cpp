@@ -121,8 +121,8 @@ JoinKeyType geCommonTypeForJoinOn(const DataTypePtr & left_type, const DataTypeP
         {
             // fix https://github.com/pingcap/tiflash/issues/4519
             // String is the common type for all types, it is always safe to choose String.
-            // But then we need to use `FormatDecimalStrImpl` to remove the `0` and `.` at the end of the string.
-            // such as 0.1000000000 and 0.10000000000000000000
+            // But then we need to use `FunctionFormatDecimal` to format decimal.
+            // Such as 0.1000000000 and 0.10000000000000000000.
             RUNTIME_ASSERT(!left_type->onlyNull() || !right_type->onlyNull());
             auto fall_back_type = std::make_shared<DataTypeString>();
             bool make_nullable = left_type->isNullable() || right_type->isNullable();
