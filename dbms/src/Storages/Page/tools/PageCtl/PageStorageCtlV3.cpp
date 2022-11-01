@@ -21,6 +21,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/V3/WAL/WALConfig.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -46,6 +47,7 @@ struct ControlOptions
     };
 
     std::vector<std::string> paths;
+    bool is_universal_ps = false;
     DisplayType mode = DisplayType::DISPLAY_SUMMARY_INFO;
     UInt64 page_id = UINT64_MAX;
     UInt32 blob_id = UINT32_MAX;
@@ -66,6 +68,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     po::options_description desc("Allowed options");
     desc.add_options()("help,h", "produce help message") //
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
+        ("universal", value<bool>()->default_value(false), "Dumping universal ps instance or not") //
         ("mode", value<int>()->default_value(1), R"(Display Mode:
  1 is summary information
  2 is display all of stored page and version chain(will be very long)
@@ -103,6 +106,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         exit(0);
     }
     opt.paths = options["paths"].as<std::vector<std::string>>();
+    opt.is_universal_ps = options["universal"].as<bool>();
     auto mode_int = options["mode"].as<int>();
     opt.page_id = options["page_id"].as<UInt64>();
     opt.blob_id = options["blob_id"].as<UInt32>();
@@ -197,13 +201,26 @@ private:
         if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
             // Only restore the PageDirectory
-            u128::PageDirectoryFactory factory;
-            factory.dump_entries = true;
-            factory.create(String(NAME), provider, delegator, WALConfig::from(config));
+            if (options.is_universal_ps)
+            {
+                universal::PageDirectoryFactory factory;
+                factory.dump_entries = true;
+                factory.create(String(NAME), provider, delegator, WALConfig::from(config));
+            }
+            else
+            {
+                u128::PageDirectoryFactory factory;
+                factory.dump_entries = true;
+                factory.create(String(NAME), provider, delegator, WALConfig::from(config));
+            }
             return 0;
         }
 
         // Other display mode need to restore ps instance
+        if (options.is_universal_ps)
+        {
+            throw Exception("Not yet support");
+        }
         PageStorageImpl ps(String(NAME), delegator, config, provider);
         ps.restore();
         auto & mvcc_table_directory = ps.page_directory->mvcc_table_directory;

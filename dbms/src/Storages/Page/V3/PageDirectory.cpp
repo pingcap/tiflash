@@ -1516,7 +1516,7 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
 
     LOG_INFO(log, "Get entries by blob ids done [rewrite_ref_page_num={}] [total_page_size={}] [total_page_nums={}]", //
              num_ref_id_rewrite,
-             total_page_size, //
+             total_page_size,
              total_page_nums);
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);
 }
