@@ -145,7 +145,7 @@ struct PageStorageConfig
             "PageStorageConfig V3 {{"
             "blob_file_limit_size: {}, blob_spacemap_type: {}, "
             "blob_cached_fd_size: {}, blob_heavy_gc_valid_rate: {:.3f}, blob_block_alignment_bytes: {}, "
-            "wal_roll_size: {},  wal_max_persisted_log_files: {}}}",
+            "wal_roll_size: {}, wal_max_persisted_log_files: {}}}",
             blob_file_limit_size.get(),
             blob_spacemap_type.get(),
             blob_cached_fd_size.get(),

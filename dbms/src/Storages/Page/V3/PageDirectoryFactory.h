@@ -69,6 +69,10 @@ private:
         const PageEntriesEdit::EditRecord & r);
 
     BlobStats * blob_stats = nullptr;
+
+    // For debug tool
+    friend class PageStorageControlV3;
+    bool dump_entries = false;
 };
 
 } // namespace PS::V3
