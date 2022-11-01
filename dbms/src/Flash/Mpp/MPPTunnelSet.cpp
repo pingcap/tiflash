@@ -47,8 +47,13 @@ template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::write(const TrackedMppDataPacketPtr & packet)
 {
     checkPacketSize(packet->getPacket().ByteSizeLong());
-    for (auto & tunnel : tunnels)
-        tunnel->write(packet);
+    RUNTIME_ASSERT(!tunnels.empty());
+    tunnels[0]->write(packet);
+    //  TODO avoid copy packet for broadcast.
+    for (size_t i = 1; i < tunnels.size(); ++i)
+        tunnels[i]->write(std::make_shared<TrackedMppDataPacket>(
+            packet->getPacket(),
+            tunnels[i]->getMemTracker()));
 }
 
 template <typename Tunnel>

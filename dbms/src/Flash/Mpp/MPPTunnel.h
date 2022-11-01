@@ -307,6 +307,11 @@ public:
     AsyncTunnelSenderPtr getAsyncTunnelSender() { return async_tunnel_sender; }
     LocalTunnelSenderPtr getLocalTunnelSender() { return local_tunnel_sender; }
 
+    MemoryTracker * getMemTracker()
+    {
+        return mem_tracker ? mem_tracker.get() : nullptr;
+    }
+
 private:
     friend class tests::TestMPPTunnel;
     // TODO(hyb): Extract Cancelled status from Finished to distinguish Completed and Cancelled situation
@@ -323,11 +328,6 @@ private:
     void waitUntilConnectedOrFinished(std::unique_lock<std::mutex> & lk);
 
     void waitForSenderFinish(bool allow_throw);
-
-    MemoryTracker * getMemTracker()
-    {
-        return mem_tracker ? mem_tracker.get() : nullptr;
-    }
 
     std::mutex mu;
     std::condition_variable cv_for_status_changed;
