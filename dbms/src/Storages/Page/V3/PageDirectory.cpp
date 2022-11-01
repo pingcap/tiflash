@@ -468,32 +468,55 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     PageIdV3Internal page_id,
     std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries)
 {
+    // `blob_versioned_entries`:
     // blob_file_0, [<page_id_0, ver0, entry0>,
-    //               <page_id_0, ver1, entry1>,
     //               <page_id_1, ver1, entry1> ]
     // blob_file_1, [...]
     // ...
-    // the total entries size taken out
-    PageSize total_entries_size = 0;
-    auto page_lock = acquireLock();
-    if (type == EditRecordType::VAR_ENTRY)
-    {
-        for (const auto & [ver, entry_or_del] : entries)
-        {
-            if (!entry_or_del.isEntry())
-            {
-                continue;
-            }
 
-            const auto & entry = entry_or_del.entry;
-            if (blob_ids.count(entry.file_id) > 0)
-            {
-                blob_versioned_entries[entry.file_id].emplace_back(page_id, ver, entry);
-                total_entries_size += entry.size;
-            }
-        }
+    auto page_lock = acquireLock();
+    if (type != EditRecordType::VAR_ENTRY)
+        return 0;
+
+    assert(type == EditRecordType::VAR_ENTRY);
+    // ignore the last delete
+    bool exist_delete = false;
+    auto iter = entries.rbegin();
+    while (iter != entries.rend())
+    {
+        if (iter->second.isEntry())
+            break;
+        assert(iter->second.isDelete());
+        exist_delete = true;
+        ++iter;
     }
-    return total_entries_size;
+    if (iter == entries.rend())
+        return 0;
+
+    assert(iter->second.isEntry());
+    const auto & last_entry = iter->second;
+    bool need_full_gc = false;
+    if (last_entry.being_ref_count == 1)
+    {
+        // This PageEntry is not shared by any other page_id,
+        need_full_gc = !exist_delete;
+    }
+    else
+    {
+        // This PageEntry is shared by another page_id, we
+        // need to move the latest entry to another BlobFile
+        // in order to reduce space amplification.
+        need_full_gc = true;
+    }
+
+    // The total entries size that will be moved
+    PageSize entry_size_full_gc = 0;
+    if (need_full_gc && blob_ids.count(last_entry.entry.file_id) > 0)
+    {
+        blob_versioned_entries[last_entry.entry.file_id].emplace_back(page_id, /* ver */ iter->first, last_entry.entry);
+        entry_size_full_gc += last_entry.entry.size;
+    }
+    return entry_size_full_gc;
 }
 
 bool VersionedPageEntries::cleanOutdatedEntries(
