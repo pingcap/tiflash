@@ -122,14 +122,16 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         opt.config_file_path = options["config_file_path"].as<std::string>();
     }
 
-    auto mode = magic_enum::enum_cast<DisplayType>(mode_int);
-    if (!mode)
+    if (auto mode = magic_enum::enum_cast<DisplayType>(mode_int); !mode)
     {
-        std::cerr << "Invalid display mode: " << magic_enum::enum_name(opt.mode) << std::endl;
+        std::cerr << "Invalid display mode: " << mode_int << std::endl;
         std::cerr << desc << std::endl;
         exit(0);
     }
-    opt.mode = mode.value();
+    else
+    {
+        opt.mode = mode.value();
+    }
 
     return opt;
 }
