@@ -194,7 +194,7 @@ private:
         PageStorageConfig config;
         if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
-            // Only restreo the PageDirectory
+            // Only restore the PageDirectory
             PageDirectoryFactory factory;
             factory.dump_entries = true;
             factory.create(String(NAME), provider, delegator, WALConfig::from(config));
