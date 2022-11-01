@@ -44,11 +44,10 @@ struct ControlOptions
     };
 
     std::vector<std::string> paths;
-    DisplayType display_mode = DisplayType::DISPLAY_SUMMARY_INFO;
-    UInt64 query_page_id = UINT64_MAX;
-    UInt32 query_blob_id = UINT32_MAX;
-    UInt64 query_ns_id = DB::TEST_NAMESPACE_ID;
-    UInt64 check_page_id = UINT64_MAX;
+    DisplayType mode = DisplayType::DISPLAY_SUMMARY_INFO;
+    UInt64 page_id = UINT64_MAX;
+    UInt32 blob_id = UINT32_MAX;
+    UInt64 namespace_id = DB::TEST_NAMESPACE_ID;
     bool enable_fo_check = true;
     bool is_imitative = true;
     String config_file_path;
@@ -65,7 +64,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     po::options_description desc("Allowed options");
     desc.add_options()("help,h", "produce help message") //
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
-        ("display_mode,D", value<int>()->default_value(1), R"(Display Mode:
+        ("mode", value<int>()->default_value(1), R"(Display Mode:
  1 is summary information
  2 is display all of stored page and version chain(will be very long)
  3 is display all blobs(in disk) data distribution
@@ -73,10 +72,9 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  5 is dump entries in WAL log files
 )") //
         ("enable_fo_check,E", value<bool>()->default_value(true), "Also check the evert field offsets. This options only works when `display_mode` is 4.") //
-        ("query_ns_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `check_page_id`/`query_page_id`/`query_blob_id` to query results. You can specify a namespace id.") //
-        ("check_page_id,C", value<UInt64>()->default_value(UINT64_MAX), "Check a single Page id, display the exception if meet. And also will check the field offsets.") //
-        ("query_page_id,W", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
-        ("query_blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
+        ("namespace_id,N", value<UInt64>()->default_value(DB::TEST_NAMESPACE_ID), "When used `page_id`/`blob_id` to query results. You can specify a namespace id.") //
+        ("page_id", value<UInt64>()->default_value(UINT64_MAX), "Query a single Page id, and print its version chain.") //
+        ("blob_id,B", value<UInt32>()->default_value(UINT32_MAX), "Query a single Blob id, and print its data distribution.") //
         ("imitative,I", value<bool>()->default_value(true), "Use imitative context instead. (encryption is not supported in this mode so that no need to set config_file_path)") //
         ("config_file_path", value<std::string>(), "Path to TiFlash config (tiflash.toml).");
 
@@ -103,12 +101,11 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         exit(0);
     }
     opt.paths = options["paths"].as<std::vector<std::string>>();
-    auto display_mode_int = options["display_mode"].as<int>();
-    opt.query_page_id = options["query_page_id"].as<UInt64>();
-    opt.query_blob_id = options["query_blob_id"].as<UInt32>();
+    auto mode_int = options["mode"].as<int>();
+    opt.page_id = options["page_id"].as<UInt64>();
+    opt.blob_id = options["blob_id"].as<UInt32>();
     opt.enable_fo_check = options["enable_fo_check"].as<bool>();
-    opt.check_page_id = options["check_page_id"].as<UInt64>();
-    opt.query_ns_id = options["query_ns_id"].as<UInt64>();
+    opt.namespace_id = options["namespace_id"].as<UInt64>();
     opt.is_imitative = options["imitative"].as<bool>();
     if (opt.is_imitative && options.count("config_file_path") != 0)
     {
@@ -125,14 +122,14 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
         opt.config_file_path = options["config_file_path"].as<std::string>();
     }
 
-    auto display_mode = magic_enum::enum_cast<DisplayType>(display_mode_int);
-    if (!display_mode)
+    auto mode = magic_enum::enum_cast<DisplayType>(mode_int);
+    if (!mode)
     {
-        std::cerr << "Invalid display mode: " << magic_enum::enum_name(opt.display_mode) << std::endl;
+        std::cerr << "Invalid display mode: " << magic_enum::enum_name(opt.mode) << std::endl;
         std::cerr << desc << std::endl;
         exit(0);
     }
-    opt.display_mode = display_mode.value();
+    opt.mode = mode.value();
 
     return opt;
 }
@@ -193,8 +190,9 @@ private:
 
         constexpr static std::string_view NAME = "PageStorageControlV3";
         PageStorageConfig config;
-        if (options.display_mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
+        if (options.mode == ControlOptions::DisplayType::DISPLAY_WAL_ENTRIES)
         {
+            // Only restreo the PageDirectory
             PageDirectoryFactory factory;
             factory.dump_entries = true;
             factory.create(String(NAME), provider, delegator, WALConfig::from(config));
@@ -206,7 +204,7 @@ private:
         ps.restore();
         PageDirectory::MVCCMapType & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
 
-        switch (options.display_mode)
+        switch (options.mode)
         {
         case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
         {
@@ -215,19 +213,19 @@ private:
         }
         case ControlOptions::DisplayType::DISPLAY_DIRECTORY_INFO:
         {
-            std::cout << getDirectoryInfo(mvcc_table_directory, options.query_ns_id, options.query_page_id) << std::endl;
+            std::cout << getDirectoryInfo(mvcc_table_directory, options.namespace_id, options.page_id) << std::endl;
             break;
         }
         case ControlOptions::DisplayType::DISPLAY_BLOBS_INFO:
         {
-            std::cout << getBlobsInfo(ps.blob_store, options.query_blob_id) << std::endl;
+            std::cout << getBlobsInfo(ps.blob_store, options.blob_id) << std::endl;
             break;
         }
         case ControlOptions::DisplayType::CHECK_ALL_DATA_CRC:
         {
-            if (options.check_page_id != UINT64_MAX)
+            if (options.page_id != UINT64_MAX)
             {
-                std::cout << checkSinglePage(mvcc_table_directory, ps.blob_store, options.query_ns_id, options.check_page_id) << std::endl;
+                std::cout << checkSinglePage(mvcc_table_directory, ps.blob_store, options.namespace_id, options.page_id) << std::endl;
             }
             else
             {
@@ -524,7 +522,7 @@ private:
         {
             error_msg.fmtAppend("id: {}, sequence: {}, epoch: {} \n", internal_id, versioned.sequence, versioned.epoch);
         }
-        error_msg.append("Please use `--query_table_id` + `--check_page_id` to get the more error info.");
+        error_msg.append("Please use `--query_table_id` + `--page_id` to get the more error info.");
 
         return error_msg.toString();
     }
