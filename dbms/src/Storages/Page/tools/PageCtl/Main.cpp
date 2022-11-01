@@ -14,6 +14,7 @@
 
 #include <Storages/Page/tools/PageCtl/PageStorageCtl.h>
 
+// main func for standalone binary
 int main(int argc, char ** argv)
 {
     return DB::PageStorageCtl::mainEntry(argc, argv);

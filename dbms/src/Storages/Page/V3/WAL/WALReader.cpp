@@ -203,7 +203,6 @@ bool WALStoreReader::openNextFile()
         const auto filename = next_file.filename(next_file.stage);
         const auto fullname = next_file.fullname(next_file.stage);
         LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
-        std::cout << fmt::format("Open log file for reading [file={}]\n", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,
