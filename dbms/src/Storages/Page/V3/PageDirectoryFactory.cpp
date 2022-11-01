@@ -121,6 +121,7 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
 
+        std::cout << fmt::format("{}\n", PageEntriesEdit::toDebugString(r));
         applyRecord(dir, r);
     }
 }

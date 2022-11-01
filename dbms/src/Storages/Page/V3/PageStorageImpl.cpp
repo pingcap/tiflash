@@ -64,7 +64,7 @@ void PageStorageImpl::restore()
 
     PageDirectoryFactory factory;
     page_directory = factory
-                         .setBlobStore(blob_store)
+                        //  .setBlobStore(blob_store)
                          .create(storage_name, file_provider, delegator, WALConfig::from(config));
 }
 

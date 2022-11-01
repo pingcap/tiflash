@@ -22,6 +22,7 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
+#include <TestUtils/TiFlashTestEnv.h>
 
 #include <boost/program_options.hpp>
 
@@ -523,6 +524,7 @@ using namespace DB::PS::V3;
 
 void pageStorageV3CtlEntry(int argc, char ** argv)
 {
+    DB::tests::TiFlashTestEnv::setupLogger();
     const auto & options = ControlOptions::parse(argc, argv);
     PageStorageControlV3(options).run();
 }
