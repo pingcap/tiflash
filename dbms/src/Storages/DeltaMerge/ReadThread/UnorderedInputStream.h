@@ -18,6 +18,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/PerfContextImpl.h>
 
 namespace DB::FailPoints
 {
@@ -116,6 +117,7 @@ protected:
 
     void readSuffixImpl() override
     {
+        //std::cout << " UnorderedInputStream readSuffixImpl" << get_perf_context()->toDebugString() << std::endl;
         LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, total_rows);
     }
 

@@ -54,7 +54,9 @@ public:
 
     bool getSkippedRows(size_t & skip_rows) override { return reader.getSkippedRows(skip_rows); }
 
-    Block read() override { return reader.read(); }
+    Block read() override { 
+        return reader.read(); 
+    }
 
 private:
     DMFileReader reader;

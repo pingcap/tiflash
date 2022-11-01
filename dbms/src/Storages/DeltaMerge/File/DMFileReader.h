@@ -24,6 +24,7 @@
 #include <Storages/DeltaMerge/ReadThread/ColumnSharingCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/MarkCache.h>
+#include <Storages/DeltaMerge/PerfContextImpl.h>
 
 namespace DB
 {

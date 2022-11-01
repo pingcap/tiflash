@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/PerfContextImpl.h>
 
 namespace ProfileEvents
 {
@@ -206,6 +207,12 @@ private:
             filter_rate = (after_read_packs - after_filter) * 100.0 / after_read_packs;
             GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
         }
+
+        // perf_context.skip_packs_count = after_read_packs - after_filter;
+        // perf_context.scan_packs_count = after_filter;
+        // PERF_ADD(scan_packs_count, after_filter);
+        // PERF_ADD(skip_packs_count, after_read_packs - after_filter); // skip 里要不要算上 因为 range 范围不在内而过滤的量 -- 我觉得是不用的
+
         LOG_DEBUG(log,
                   "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"
                   ", read_packs: {}, pack_count: {}",

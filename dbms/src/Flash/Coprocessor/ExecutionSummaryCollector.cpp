@@ -40,6 +40,8 @@ void ExecutionSummaryCollector::fillTiExecutionSummary(
     prev_stats = current;
     if (dag_context.return_executor_id)
         execution_summary->set_executor_id(executor_id);
+    
+    std::cout << " execution_summary is " << execution_summary->DebugString() << " executor_id is " << executor_id << " delta_mode is " << delta_mode << std::endl;
 }
 
 template <typename RemoteBlockInputStream>
@@ -97,7 +99,7 @@ void ExecutionSummaryCollector::addExecuteSummaries(tipb::SelectResponse & respo
         {
             if (auto * p_stream = dynamic_cast<IProfilingBlockInputStream *>(stream_ptr.get()))
             {
-                current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time);
+                current.time_processed_ns = std::max(current.time_processed_ns, p_stream->getProfileInfo().execution_time); // 为什么这是 max 啊，这不是多个 stream 么？
                 current.num_produced_rows += p_stream->getProfileInfo().rows;
                 current.num_iterations += p_stream->getProfileInfo().blocks;
             }
