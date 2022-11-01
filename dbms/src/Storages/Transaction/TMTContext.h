@@ -117,6 +117,8 @@ public:
     Int64 waitRegionReadyTimeout() const;
     uint64_t readIndexWorkerTick() const;
 
+    // gjt todo:
+    bool isDisaggregatedComputeNode() const { return false; }
 private:
     Context & context;
     KVStorePtr kvstore;
