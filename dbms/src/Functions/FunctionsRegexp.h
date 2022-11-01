@@ -108,7 +108,7 @@ inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, 
 template <typename T>
 inline constexpr bool check_int_type()
 {
-    return static_cast<bool>(std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>);
+    return std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>;
 }
 
 template <bool is_const>
@@ -267,28 +267,36 @@ public:
         : col_size(col_size_)
         , null_map(nullptr)
         , data(str_ref)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // const nullable string param
     Param(size_t col_size_, const StringRef & str_ref, ConstNullMapPtr null_map_)
         : col_size(col_size_)
         , null_map(null_map_)
         , data(str_ref)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // const int param
     Param(size_t col_size_, Int64 val)
         : col_size(col_size_)
         , null_map(nullptr)
         , data(val)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // const nullable int param
     Param(size_t col_size_, Int64 val, ConstNullMapPtr null_map_)
         : col_size(col_size_)
         , null_map(null_map_)
         , data(val)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // pure vector string param
     // chars_ type: ParamImplType::Chars_t
@@ -297,7 +305,9 @@ public:
         : col_size(col_size_)
         , null_map(nullptr)
         , data(chars_, offsets_)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // pure vector int param
     // int_container_ type: ParamImplType::Container
@@ -305,7 +315,9 @@ public:
         : col_size(col_size_)
         , null_map(nullptr)
         , data(int_container_)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // nullable vector string param
     // chars_ type: ParamImplType::Chars_t
@@ -314,7 +326,9 @@ public:
         : col_size(col_size_)
         , null_map(null_map_)
         , data(chars_, offsets_)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // nullable vector int param
     // int_container_ type: ParamImplType::Container
@@ -322,7 +336,9 @@ public:
         : col_size(col_size_)
         , null_map(null_map_)
         , data(int_container_)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     Int64 getInt(size_t idx) const { return data.getInt(idx); }
     void getStringRef(size_t idx, StringRef & dst) const { return data.getStringRef(idx, dst); }
@@ -343,6 +359,13 @@ public:
     constexpr static bool isConst() { return ParamImplType::isConst(); }
 
 private:
+    // When this is a nullable param, we should ensure the null_map is not nullptr
+    inline void checkNullableLogic()
+    {
+        if (is_nullable && (null_map == nullptr))
+            throw Exception("Nullable Param with nullptr null_map");
+    }
+
     const size_t col_size;
     ConstNullMapPtr null_map;
     ParamImplType data;
