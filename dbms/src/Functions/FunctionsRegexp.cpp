@@ -36,7 +36,7 @@ struct ReplaceRegexpImpl
     /// Sequence of instructions, describing how to get resulting string.
     /// Each element is either:
     /// - substitution (in that case first element of pair is their number and second element is empty)
-    /// - string that need to be inserted (in that case, first element of pair is that string and second element is -1)
+    /// - string that need to be inserted (in that case, first element of pair is -1 and second element is that string)
     using Instructions = std::vector<std::pair<int, std::string>>;
 
     static const size_t max_captures = 10;
