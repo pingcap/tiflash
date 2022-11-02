@@ -30,6 +30,7 @@
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
+#include <Storages/Page/WriteBatch.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -437,40 +438,42 @@ try
 }
 CATCH
 
+TEST_F(PageStorageTest, UnsupportWriteBatch)
+{
+    // This will make put && delete share the same
+    // version. If full gc happen, then the upsert
+    // entry can not be insert between put && delete.
+    WriteBatch wb;
+    wb.putPage(1, default_tag, getDefaultBuffer(), buf_sz);
+    wb.putRefPage(2, 1);
+    wb.delPage(1);
+    ASSERT_THROW(page_storage->write(std::move(wb)), DB::Exception);
+}
+
 TEST_F(PageStorageTest, WriteMultipleBatchRead1)
 try
 {
-    const UInt64 tag = 0;
-    const size_t buf_sz = 1024;
-    char c_buff[buf_sz];
-    for (size_t i = 0; i < buf_sz; ++i)
-    {
-        c_buff[i] = i % 0xff;
-    }
-
     {
         WriteBatch batch;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(0, tag, buff, buf_sz);
+        batch.putPage(0, default_tag, getDefaultBuffer(), buf_sz);
         page_storage->write(std::move(batch));
     }
     {
         WriteBatch batch;
-        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, sizeof(c_buff));
-        batch.putPage(1, tag, buff, buf_sz);
+        batch.putPage(1, default_tag, getDefaultBuffer(), buf_sz);
         page_storage->write(std::move(batch));
     }
 
     DB::Page page0 = page_storage->read(0);
     ASSERT_EQ(page0.data.size(), buf_sz);
-    ASSERT_EQ(page0.page_id, 0UL);
+    ASSERT_EQ(page0.page_id, 0);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page0.data.begin() + i), static_cast<char>(i % 0xff));
     }
     DB::Page page1 = page_storage->read(1);
     ASSERT_EQ(page1.data.size(), buf_sz);
-    ASSERT_EQ(page1.page_id, 1UL);
+    ASSERT_EQ(page1.page_id, 1);
     for (size_t i = 0; i < buf_sz; ++i)
     {
         EXPECT_EQ(*(page1.data.begin() + i), static_cast<char>(i % 0xff));

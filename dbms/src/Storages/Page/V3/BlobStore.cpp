@@ -28,6 +28,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/WriteBatch.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
@@ -35,6 +36,7 @@
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>
+#include <unordered_map>
 
 namespace ProfileEvents
 {
@@ -238,11 +240,61 @@ PageEntriesEdit BlobStore::handleLargeWrite(DB::WriteBatch & wb, const WriteLimi
     return edit;
 }
 
+void checkWriteBatch(const DB::WriteBatch & wb)
+{
+    enum class IdState
+    {
+        PUT = 1,
+        PUT_REF = 2,
+        PUT_REF_DEL = 3,
+    };
+    std::unordered_map<PageId, IdState> states;
+    for (const auto & w : wb.getWrites())
+    {
+        switch (w.type)
+        {
+        case DB::WriteBatchWriteType::PUT:
+        case DB::WriteBatchWriteType::PUT_EXTERNAL:
+        {
+            if (states.find(w.page_id) == states.end())
+                states[w.page_id] = IdState::PUT;
+            break;
+        }
+        case DB::WriteBatchWriteType::REF:
+        {
+            if (auto iter = states.find(w.ori_page_id);
+                iter != states.end() && iter->second == IdState::PUT)
+            {
+                iter->second = IdState::PUT_REF;
+            }
+            break;
+        }
+        case DB::WriteBatchWriteType::DEL:
+        {
+            if (auto iter = states.find(w.page_id); iter != states.end() && iter->second == IdState::PUT_REF)
+            {
+                throw Exception(fmt::format(
+                                    "Invalid write batch, put-ref-del inside one write batch! page_id={}.{}",
+                                    wb.getNamespaceId(),
+                                    iter->first),
+                                ErrorCodes::LOGICAL_ERROR);
+            }
+            break;
+        }
+
+        case DB::WriteBatchWriteType::UPSERT:
+            throw Exception("only check foreground writes");
+        }
+    }
+}
+
 PageEntriesEdit BlobStore::write(DB::WriteBatch & wb, const WriteLimiterPtr & write_limiter)
 {
     ProfileEvents::increment(ProfileEvents::PSMWritePages, wb.putWriteCount());
 
     const size_t all_page_data_size = wb.getTotalDataSize();
+
+    checkWriteBatch(wb);
 
     PageEntriesEdit edit;
 
