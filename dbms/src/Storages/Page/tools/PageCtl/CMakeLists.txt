@@ -18,7 +18,3 @@ add_library(page-ctl-lib MainEntry.cpp PageStorageCtlV3.cpp PageStorageCtlV2.cpp
 target_include_directories(page-ctl-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 target_link_libraries(page-ctl-lib dbms daemon tiflash-dttool-entry-object clickhouse-server-lib)
 target_compile_options(page-ctl-lib  PRIVATE -Wno-format)
-
-add_executable(page-ctl Main.cpp)
-target_link_libraries(page-ctl page-ctl-lib dbms clickhouse_functions clickhouse-server-lib)
-target_compile_options(page-ctl  PRIVATE -Wno-format)

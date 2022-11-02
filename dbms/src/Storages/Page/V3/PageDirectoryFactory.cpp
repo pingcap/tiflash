@@ -121,6 +121,8 @@ void PageDirectoryFactory::loadEdit(const PageDirectoryPtr & dir, const PageEntr
         if (max_applied_ver < r.version)
             max_applied_ver = r.version;
 
+        if (dump_entries)
+            LOG_INFO(Logger::get(), PageEntriesEdit::toDebugString(r));
         applyRecord(dir, r);
     }
 }
