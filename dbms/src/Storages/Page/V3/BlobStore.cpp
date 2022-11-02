@@ -253,8 +253,9 @@ void checkWriteBatch(const DB::WriteBatch & wb)
     {
         switch (w.type)
         {
-        case DB::WriteBatchWriteType::PUT:
         case DB::WriteBatchWriteType::PUT_EXTERNAL:
+            break;
+        case DB::WriteBatchWriteType::PUT:
         {
             if (states.find(w.page_id) == states.end())
                 states[w.page_id] = IdState::PUT;
