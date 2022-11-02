@@ -27,7 +27,7 @@ namespace CodecUtils
 {
 void checkColumnSize(size_t expected, size_t actual)
 {
-    if (expected != actual)
+    if unlikely (expected != actual)
         throw Exception(
             fmt::format("NativeBlockInputStream schema mismatch, expected {}, actual {}.", expected, actual),
             ErrorCodes::LOGICAL_ERROR);
@@ -35,7 +35,7 @@ void checkColumnSize(size_t expected, size_t actual)
 
 void checkDataTypeName(size_t column_index, const String & expected, const String & actual)
 {
-    if (expected != actual)
+    if unlikely (expected != actual)
         throw Exception(
             fmt::format(
                 "NativeBlockInputStream schema mismatch at column {}, expected {}, actual {}",
