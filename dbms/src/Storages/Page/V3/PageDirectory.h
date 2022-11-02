@@ -57,7 +57,7 @@ public:
         CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
-    ~PageDirectorySnapshot()
+    ~PageDirectorySnapshot() override
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
     }

@@ -108,6 +108,29 @@ void VersionedPageEntries::createNewEntry(const PageVersion & ver, const PageEnt
         return;
     }
 
+    if (type == EditRecordType::VAR_REF)
+    {
+        // an ref-page is rewritten into a normal page
+        if (!is_deleted)
+        {
+            // Full gc commit, we need to rewrite this page to
+            // be normal page with upsert-entry.
+            // TODO: Also we need to decrease the ref-count of ori_page_id.
+            entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+        }
+        else
+        {
+            // The ref-id is deleted before full gc commit,
+            // we need to rewrite this page to be normal page
+            // with upsert-entry and a delete.
+            entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+            entries.emplace(delete_ver, EntryOrDelete::newDelete());
+        }
+        is_deleted = false;
+        type = EditRecordType::VAR_ENTRY;
+        return;
+    }
+
     throw Exception(
         fmt::format("try to create entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
