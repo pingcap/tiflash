@@ -176,7 +176,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
 }
 
 template <class StreamWriterPtr>
-void FineGrainedShuffleWriter<StreamWriterPtr>::writePackets(const std::vector<TrackedMppDataPacketPtr> & packets)
+void FineGrainedShuffleWriter<StreamWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {

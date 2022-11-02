@@ -216,7 +216,7 @@ try
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, std::vector<TrackedMppDataPacketPtr>> write_report;
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
@@ -312,7 +312,7 @@ try
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
-    std::unordered_map<uint16_t, std::vector<TrackedMppDataPacketPtr>> write_report;
+    std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
@@ -397,7 +397,7 @@ try
     Block header = blocks.back();
 
     // 2. Build MockStreamWriter.
-    std::vector<TrackedMppDataPacketPtr> write_report;
+    TrackedMppDataPacketPtrs write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         ASSERT_EQ(part_id, 0);
         write_report.emplace_back(packet);
@@ -435,7 +435,7 @@ try
 {
     const size_t batch_send_min_limit = 108;
 
-    std::vector<TrackedMppDataPacketPtr> write_report;
+    TrackedMppDataPacketPtrs write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         ASSERT_EQ(part_id, 0);
         write_report.emplace_back(packet);

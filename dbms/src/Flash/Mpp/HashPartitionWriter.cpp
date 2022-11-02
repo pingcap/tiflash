@@ -122,7 +122,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
 }
 
 template <class StreamWriterPtr>
-void HashPartitionWriter<StreamWriterPtr>::writePackets(const std::vector<TrackedMppDataPacketPtr> & packets)
+void HashPartitionWriter<StreamWriterPtr>::writePackets(const TrackedMppDataPacketPtrs & packets)
 {
     for (size_t part_id = 0; part_id < packets.size(); ++part_id)
     {

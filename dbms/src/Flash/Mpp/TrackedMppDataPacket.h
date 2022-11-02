@@ -199,6 +199,7 @@ struct TrackedMppDataPacket
     String error_message;
 };
 using TrackedMppDataPacketPtr = std::shared_ptr<DB::TrackedMppDataPacket>;
+using TrackedMppDataPacketPtrs = std::vector<TrackedMppDataPacketPtr>;
 
 struct TrackedSelectResp
 {

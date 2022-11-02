@@ -33,7 +33,7 @@ void computeHash(const Block & block,
                  WeakHash32 & hash,
                  IColumn::Selector & selector);
 
-std::vector<TrackedMppDataPacketPtr> createPackets(size_t partition_num);
+DB::TrackedMppDataPacketPtrs createPackets(size_t partition_num);
 
 void scatterColumns(const Block & input_block,
                     uint32_t bucket_num,
