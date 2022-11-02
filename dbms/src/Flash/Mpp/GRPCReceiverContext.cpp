@@ -215,6 +215,27 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     return req;
 }
 
+void GRPCReceiverContext::cancelMPPTaskOnTiFlashStorageNode()
+{
+    auto sender_task_size = exchange_receiver_meta.encoded_task_meta_size();
+    auto thread_manager = newThreadManager();
+    for (auto i = 0; i < sender_task_size; ++i)
+    {
+        auto sender_task = std::make_unique<mpp::TaskMeta>();
+        if (!sender_task->ParseFromString(exchange_receiver_meta.encoded_task_meta(i)))
+            throw Exception("parse task meta error!");
+        auto cancel_req = std::make_shared<mpp::CancelTaskRequest>();
+        cancel_req->set_allocated_meta(sender_task.release());
+        auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::CancelTaskRequest>>(cancel_req);
+        thread_manager->schedule(/*mem_tracker=*/true, "", [cancel_req, this] {
+                auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::DispatchTaskRequest>>(cancel_req);
+                // No need to retry.
+                this->cluster->rpc_client->sendRequest(cancel_req->meta().address(), rpc_call, /*timeout=*/30);
+        });
+    }
+    thread_manager->wait();
+}
+
 bool GRPCReceiverContext::supportAsync(const ExchangeRecvRequest & request) const
 {
     return enable_async_grpc && !request.is_local;

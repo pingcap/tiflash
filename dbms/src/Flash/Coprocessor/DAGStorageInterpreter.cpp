@@ -588,6 +588,7 @@ void DAGStorageInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocess
 
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
+    // gjt todo: also check exec summaries.
     executor->set_executor_id("disaggregated_storage_exchange_sender");
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
@@ -615,7 +616,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> DAGStorageInterpreter::buildBatc
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
     pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
     auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-    // gjt todo: log task info.
+    LOG_DEBUG(log, "batch cop tasks({}) build finish for tiflash_storage node", batch_cop_tasks.size());
     return batch_cop_tasks;
 }
 
@@ -630,6 +631,7 @@ void DAGStorageInterpreter::dispatchMPPTasks()
         thread_manager->schedule(/*mem_tracker=*/true, "", [&] {
                 auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::DispatchTaskRequest>>(dispatch_reqs[i]);
                 // gjt todo: retry dispatch
+                // gjt todo: make timeout const
                 context.getTMTContext().getKVCluster()->rpc_client->sendRequest(batch_cop_tasks[i].store_addr, rpc_call, /*timeout=*/60);
         });
     }
@@ -637,13 +639,16 @@ void DAGStorageInterpreter::dispatchMPPTasks()
     thread_manager->wait();
 }
 
-void DAGStorageInterpreter::buildExchangeReceiver(const ::mpp::DispatchTaskRequest & dispatch_req, DAGPipeline & pipeline)
+void DAGStorageInterpreter::buildExchangeReceiver(const std::vector<::mpp::DispatchTaskRequest> & dispatch_reqs, DAGPipeline & pipeline)
 {
     tipb::ExchangeReceiver receiver;
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    const ::mpp::TaskMeta & sender_task_meta = dispatch_req.meta();
-    receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
-    // gjt todo: field types
+    // gjt todo: field types is used to construct schema of ExchangeReceiver, which is only meaningful for cop.
+    for (const auto & req : dispatch_reqs)
+    {
+        const ::mpp::TaskMeta & sender_task_meta = req.meta();
+        receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
+    }
 
     static const String executor_id = "disaggregated_compute_exchange_receiver";
     auto exchange_receiver = std::make_shared<ExchangeReceiver>(
@@ -659,11 +664,12 @@ void DAGStorageInterpreter::buildExchangeReceiver(const ::mpp::DispatchTaskReque
             log->identifier(),
             executor_id,
             /*fine_grained_shuffle_stream_count=*/0);
-    // gjt todo: check MPPTask::initExchangeReceivers()
-    // receiver_set_local->addExchangeReceiver(executor_id, exchange_receiver);
-    // new_thread_count_of_exchange_receiver += exchange_receiver->computeNewThreadCount();
+    // No need to put this ExchangeReciever to DAGContext::receiver_set,
+    // because ExchangeReceiverInputStream is generated immediately.
+    // Planner no need to touch this ExchangeReciever.
+    // gjt todo: put receiver_set!!
 
-    // gjt todo: use PhysicalExchange::transform() if DAGQueryBlockInterpreter is deprecated.
+    // We can use PhysicalExchange::transform() to build InputStream after DAGQueryBlockInterpreter is deprecated.
     size_t max_streams = context.getMaxStreams();
     for (size_t i = 0; i < max_streams; ++i)
     {
@@ -1239,14 +1245,15 @@ std::vector<RemoteRequest> DAGStorageInterpreter::buildRemoteRequests()
         for (const auto & r : retry_regions)
             context.getDAGContext()->retry_regions.push_back(r.get());
 
-        // gjt todo: handle parittion table
         remote_requests.push_back(RemoteRequest::build(
             retry_regions,
             *context.getDAGContext(),
             table_scan,
             storages_with_structure_lock[physical_table_id].storage->getTableInfo(),
             push_down_filter,
-            log));
+            log,
+            physical_table_id,
+            context.getTMTContext().isDisaggregatedComputeNode()));
     }
     return remote_requests;
 }

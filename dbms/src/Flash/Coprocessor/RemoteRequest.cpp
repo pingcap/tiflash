@@ -26,7 +26,9 @@ RemoteRequest RemoteRequest::build(
     const TiDBTableScan & table_scan,
     const TiDB::TableInfo & table_info,
     const PushDownFilter & push_down_filter,
-    const LoggerPtr & log)
+    const LoggerPtr & log,
+    Int64 physical_table_id,
+    bool is_disaggregated_compute_node)
 {
     auto print_retry_regions = [&retry_regions, &table_info] {
         FmtBuffer buffer;
@@ -47,10 +49,20 @@ RemoteRequest RemoteRequest::build(
 
     {
         tipb::Executor * ts_exec = executor;
-        ts_exec->set_tp(tipb::ExecType::TypeTableScan);
         ts_exec->set_executor_id(table_scan.getTableScanExecutorID());
-        auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
-        table_scan.constructTableScanForRemoteRead(mutable_table_scan, table_info.id);
+        if (is_disaggregated_compute_node && table_scan.isPartitionTableScan())
+        {
+            // In disaggregated mode, partition table scan will be handled in tiflash_storage node.
+            ts_exec->set_tp(tipb::ExecType::TypePartitionTableScan);
+            auto * mutable_partition_table_scan = ts_exec->mutable_partition_table_scan();
+            table_scan.constructPartitionTableScanForRemoteRead(mutable_partition_table_scan);
+        }
+        else
+        {
+            ts_exec->set_tp(tipb::ExecType::TypeTableScan);
+            auto * mutable_table_scan = ts_exec->mutable_tbl_scan();
+            table_scan.constructTableScanForRemoteRead(mutable_table_scan, table_info.id);
+        }
 
         String handle_column_name = MutableSupport::tidb_pk_column_name;
         if (auto pk_handle_col = table_info.getPKHandleColumn())
@@ -100,6 +112,6 @@ RemoteRequest RemoteRequest::build(
             key_ranges.emplace_back(*range.first, *range.second);
     }
     sort(key_ranges.begin(), key_ranges.end());
-    return {std::move(dag_req), std::move(schema), std::move(key_ranges)};
+    return {std::move(dag_req), std::move(schema), std::move(key_ranges), physical_table_id};
 }
 } // namespace DB

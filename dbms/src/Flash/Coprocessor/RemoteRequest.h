@@ -39,21 +39,26 @@ struct RemoteRequest
     RemoteRequest(
         tipb::DAGRequest && dag_request_,
         DAGSchema && schema_,
-        std::vector<pingcap::coprocessor::KeyRange> && key_ranges_)
+        std::vector<pingcap::coprocessor::KeyRange> && key_ranges_,
+        Int64 physical_table_id_)
         : dag_request(std::move(dag_request_))
         , schema(std::move(schema_))
         , key_ranges(std::move(key_ranges_))
+        , physical_table_id(physical_table_id_)
     {}
     tipb::DAGRequest dag_request;
     DAGSchema schema;
     /// the sorted key ranges
     std::vector<pingcap::coprocessor::KeyRange> key_ranges;
+    Int64 physical_table_id;
     static RemoteRequest build(
         const RegionRetryList & retry_regions,
         DAGContext & dag_context,
         const TiDBTableScan & table_scan,
         const TiDB::TableInfo & table_info,
         const PushDownFilter & push_down_filter,
-        const LoggerPtr & log);
+        const LoggerPtr & log,
+        Int64 physical_table_id,
+        bool is_disaggregated_compute_node);
 };
 } // namespace DB

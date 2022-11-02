@@ -96,6 +96,11 @@ public:
 
     void fillSchema(DAGSchema & schema) const;
 
+    // Normally cancel will be sent by TiDB to all MPPTasks, so ExchangeReceiver no need to cancel.
+    // But in disaggregated mode, TableScan in tiflash_compute node will be transferred to ExchangeReceiver(executed in tiflash_compute node),
+    // and ExchangeSender+TableScan(executed in tiflash_storage node).
+    // So when we cancel the former MPPTask, the latter MPPTask needs to be handled by the tiflash_compute node itself.
+    void cancelMPPTaskOnTiFlashStorageNode();
 private:
     tipb::ExchangeReceiver exchange_receiver_meta;
     mpp::TaskMeta task_meta;

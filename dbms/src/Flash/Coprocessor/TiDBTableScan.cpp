@@ -82,4 +82,9 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
         tipb_table_scan->set_table_id(table_id);
     }
 }
+
+void TiDBTableScan::constructPartitionTableScanForRemoteRead(tipb::PartitionTableScan * tipb_partition_table_scan) const
+{
+    *tipb_partition_table_scan = table_scan->partition_table_scan();
+}
 } // namespace DB
