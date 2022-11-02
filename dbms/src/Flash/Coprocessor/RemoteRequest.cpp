@@ -84,6 +84,7 @@ RemoteRequest RemoteRequest::build(
         }
         dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
         dag_req.set_force_encode_type(true);
+        dag_req.set_is_remote_read(true);
     }
     /// do not collect execution summaries because in this case because the execution summaries
     /// will be collected by CoprocessorBlockInputStream
