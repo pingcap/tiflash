@@ -164,7 +164,9 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
         /// Data
         MutableColumnPtr read_column = column.type->createColumn();
         if (reserve_size > 0)
-            read_column->reserve(reserve_size);
+            read_column->reserve(std::max(rows, reserve_size));
+        else if (rows)
+            read_column->reserve(rows);
 
         if (rows) /// If no rows, nothing to read.
             readData(*column.type, *read_column, istr, rows);
