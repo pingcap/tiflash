@@ -411,7 +411,7 @@ else()
     add_definitions(-DTIFLASH_COMPILER_VPCLMULQDQ_SUPPORT=0)
 endif()
 
-add_subdirectory (libs)
+add_subdirectory (libs EXCLUDE_FROM_ALL)
 add_subdirectory (dbms)
 
 include (cmake/print_include_directories.cmake)
