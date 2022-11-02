@@ -116,7 +116,6 @@ Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
     bool use_nulls_,
-    const SizeLimits & limits,
     ASTTableJoin::Kind kind_,
     ASTTableJoin::Strictness strictness_,
     const String & req_id,
@@ -135,7 +134,6 @@ Join::Join(
     , key_names_right(key_names_right_)
     , use_nulls(use_nulls_)
     , build_concurrency(0)
-    , build_set_exceeded(false)
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -146,7 +144,6 @@ Join::Join(
     , max_block_size_for_cross_join(max_block_size_)
     , build_table_state(BuildTableState::SUCCEED)
     , log(Logger::get(req_id))
-    , limits(limits)
 {
     if (other_condition_ptr != nullptr)
     {
@@ -821,7 +818,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
 }
 
-bool Join::insertFromBlock(const Block & block)
+void Join::insertFromBlock(const Block & block)
 {
     std::unique_lock lock(rwlock);
     if (unlikely(!initialized))
@@ -829,7 +826,7 @@ bool Join::insertFromBlock(const Block & block)
     total_input_build_rows += block.rows();
     blocks.push_back(block);
     Block * stored_block = &blocks.back();
-    return insertFromBlockInternal(stored_block, 0);
+    insertFromBlockInternal(stored_block, 0);
 }
 
 /// the block should be valid.
@@ -849,15 +846,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         stored_block = &blocks.back();
         original_blocks.push_back(block);
     }
-    if (build_set_exceeded.load())
-        return;
-    if (!insertFromBlockInternal(stored_block, stream_index))
-    {
-        build_set_exceeded.store(true);
-    }
+    insertFromBlockInternal(stored_block, stream_index);
 }
 
-bool Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
+void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 {
     size_t keys_size = key_names_right.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -949,8 +941,6 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
                 insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *pools[stream_index]);
         }
     }
-
-    return limits.check(getTotalRowCount(), getTotalByteCount(), "JOIN", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED);
 }
 
 
