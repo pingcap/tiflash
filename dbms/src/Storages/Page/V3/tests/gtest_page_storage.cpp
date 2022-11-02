@@ -29,6 +29,7 @@
 #include <Storages/Page/V3/PageStorageImpl.h>
 #include <Storages/Page/V3/WAL/WALReader.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
+#include <Storages/Page/V3/tests/gtest_page_storage.h>
 #include <Storages/PathPool.h>
 #include <Storages/tests/TiFlashStorageTestBasic.h>
 #include <TestUtils/MockDiskDelegator.h>
@@ -49,45 +50,6 @@ extern const char force_set_page_file_write_errno[];
 
 namespace PS::V3::tests
 {
-class PageStorageTest : public DB::base::TiFlashStorageTestBasic
-{
-public:
-    void SetUp() override
-    {
-        TiFlashStorageTestBasic::SetUp();
-        log = Logger::get();
-        auto path = getTemporaryPath();
-        createIfNotExist(path);
-        file_provider = DB::tests::TiFlashTestEnv::getContext().getFileProvider();
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        page_storage = std::make_shared<PageStorageImpl>("test.t", delegator, config, file_provider);
-        page_storage->restore();
-    }
-
-    std::shared_ptr<PageStorageImpl> reopenWithConfig(const PageStorageConfig & config_)
-    {
-        auto path = getTemporaryPath();
-        delegator = std::make_shared<DB::tests::MockDiskDelegatorSingle>(path);
-        auto storage = std::make_shared<PageStorageImpl>("test.t", delegator, config_, file_provider);
-        storage->restore();
-        return storage;
-    }
-
-    size_t getLogFileNum()
-    {
-        auto log_files = WALStoreReader::listAllFiles(delegator, log);
-        return log_files.size();
-    }
-
-protected:
-    FileProviderPtr file_provider;
-    std::unique_ptr<StoragePathPool> path_pool;
-    PSDiskDelegatorPtr delegator;
-    PageStorageConfig config;
-    std::shared_ptr<PageStorageImpl> page_storage;
-
-    LoggerPtr log;
-};
 
 TEST_F(PageStorageTest, WriteRead)
 try
@@ -1751,67 +1713,6 @@ try
     // After restored from disk, we should not see page0 again
     // or it could be an entry pointing to a non-exist BlobFile
     ASSERT_ANY_THROW(page_storage->read(page_id0));
-}
-CATCH
-
-TEST_F(PageStorageTest, FullGCAfterWALCompact)
-try
-{
-    DB::UInt64 tag = 0;
-    const size_t buf_sz = 1024;
-    char c_buff[buf_sz];
-    for (size_t i = 0; i < buf_sz; ++i)
-    {
-        c_buff[i] = i % 0xff;
-    }
-
-    PageId page_id1 = 101;
-    {
-        WriteBatch batch;
-        batch.putPage(page_id1, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        batch.putPage(page_id1, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        batch.putPage(page_id1, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        batch.putPage(page_id1, tag, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz);
-        page_storage->write(std::move(batch));
-    }
-    // write until there are more than one wal file
-    PageId page_id2 = 102;
-    while (getLogFileNum() <= 1)
-    {
-        WriteBatch batch;
-        batch.putPage(page_id2, 0, std::make_shared<ReadBufferFromMemory>(c_buff, buf_sz), buf_sz, {});
-        page_storage->write(std::move(batch));
-    }
-
-    {
-        // acquire a snapshot to prevent page 1 from being removed
-        auto snap = page_storage->getSnapshot("t0");
-        {
-            WriteBatch batch;
-            batch.delPage(page_id1);
-            batch.delPage(page_id2);
-            page_storage->write(std::move(batch));
-        }
-
-        // let's compact the WAL logs
-        auto done_snapshot = page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, /* force */ true);
-        ASSERT_TRUE(done_snapshot);
-
-        // let's full gc, this will move page 1 and 2 to a new BlobFile
-        auto done_full_gc = page_storage->gcImpl(true, nullptr, nullptr);
-        ASSERT_TRUE(done_full_gc);
-
-        snap.reset();
-    }
-
-    LOG_INFO(log, "gc after snapshot released");
-    // free snap then page 1 and 2 are removed from disk
-    page_storage->gcImpl(true, nullptr, nullptr);
-
-    LOG_INFO(log, "restore from disk");
-    page_storage.reset();
-    page_storage = reopenWithConfig(config);
-    page_storage->read(page_id1);
 }
 CATCH
 

@@ -69,7 +69,8 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(exception_mpp_hash_build)                                   \
     M(exception_before_drop_segment)                              \
     M(exception_after_drop_segment)                               \
-    M(exception_between_schema_change_in_the_same_diff)
+    M(exception_between_schema_change_in_the_same_diff)           \
+    M(force_ps_wal_compact)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \

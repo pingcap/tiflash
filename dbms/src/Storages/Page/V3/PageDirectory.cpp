@@ -1301,13 +1301,6 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
                 break;
         }
     }
-    for (const auto blob_id : blob_ids)
-    {
-        if (blob_versioned_entries.find(blob_id) == blob_versioned_entries.end())
-        {
-            throw Exception(fmt::format("Can't get any entries from [blob_id={}]", blob_id));
-        }
-    }
 
     LOG_INFO(log, "Get entries by blob ids done. [total_page_size={}] [total_page_nums={}]", //
              total_page_size, //
