@@ -372,6 +372,7 @@ TEST_P(SpaceMapTest, TestSearchIsExpansion)
     ASSERT_EQ(expansion, true);
 
     ASSERT_TRUE(smap->markUsed(90, 10));
+    smap->updateAccurateMaxCapacity();
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
     ASSERT_EQ(expansion, false);
     std::tie(offset, max_cap, expansion) = smap->searchInsertOffset(20);
