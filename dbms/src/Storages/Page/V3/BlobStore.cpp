@@ -20,6 +20,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/formatReadable.h>
 #include <Poco/File.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
@@ -34,7 +35,6 @@
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>
-#include "Common/formatReadable.h"
 
 namespace ProfileEvents
 {

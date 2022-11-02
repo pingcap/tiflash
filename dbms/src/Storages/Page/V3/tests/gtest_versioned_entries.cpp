@@ -45,7 +45,7 @@ namespace PS::V3::tests
 #define INSERT_ENTRY(VERSION) INSERT_BLOBID_ENTRY(1, VERSION)
 #define INSERT_GC_ENTRY(VERSION, EPOCH)                                                                                                                          \
     PageEntryV3 entry_gc_v##VERSION##_##EPOCH{.file_id = 2, .size = 100 * (VERSION) + (EPOCH), .padded_size = 0, .tag = 0, .offset = 0x234, .checksum = 0x5678}; \
-    entries.createNewEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
+    entries.createUpsertEntry(PageVersion((VERSION), (EPOCH)), entry_gc_v##VERSION##_##EPOCH);
 
 class VersionedEntriesTest : public ::testing::Test
 {

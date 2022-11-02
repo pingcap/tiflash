@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/Page/PageDefines.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
@@ -185,8 +186,16 @@ void PageDirectoryFactory::applyRecord(
                 restored_version);
             break;
         case EditRecordType::UPSERT:
-            version_list->createNewEntry(restored_version, r.entry);
+        {
+            auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry);
+            if (id_to_deref.low != INVALID_PAGE_ID)
+            {
+                auto deref_iter = dir->mvcc_table_directory.find(id_to_deref);
+                auto deref_res = deref_iter->second->derefAndClean(/*lowest_seq*/ 0, id_to_deref, restored_version, 1, nullptr);
+                RUNTIME_ASSERT(!deref_res);
+            }
             break;
+        }
         }
     }
     catch (DB::Exception & e)

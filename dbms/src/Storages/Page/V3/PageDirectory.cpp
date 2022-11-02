@@ -31,6 +31,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <type_traits>
 #include <utility>
 
@@ -73,6 +74,7 @@ void VersionedPageEntries::createNewEntry(const PageVersion & ver, const PageEnt
     if (type == EditRecordType::VAR_DELETE)
     {
         type = EditRecordType::VAR_ENTRY;
+        assert(entries.empty());
         entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
         return;
     }
@@ -108,6 +110,59 @@ void VersionedPageEntries::createNewEntry(const PageVersion & ver, const PageEnt
         return;
     }
 
+    throw Exception(
+        fmt::format("try to create entry version with invalid state "
+                    "[ver={}] [entry={}] [state={}]",
+                    ver,
+                    ::DB::PS::V3::toDebugString(entry),
+                    toDebugString()),
+        ErrorCodes::PS_DIR_APPLY_INVALID_STATUS);
+}
+
+PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry)
+{
+    auto page_lock = acquireLock();
+
+    if (type == EditRecordType::VAR_DELETE)
+    {
+        type = EditRecordType::VAR_ENTRY;
+        assert(entries.empty());
+        entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+        return buildV3Id(TEST_NAMESPACE_ID, INVALID_PAGE_ID);
+    }
+
+    if (type == EditRecordType::VAR_ENTRY)
+    {
+        auto last_iter = MapUtils::findLess(entries, PageVersion(ver.sequence + 1, 0));
+        if (last_iter == entries.end())
+        {
+            entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+        }
+        else if (last_iter->second.isDelete())
+        {
+            // append after delete
+            entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+        }
+        else
+        {
+            assert(last_iter->second.isEntry());
+            // It is ok to replace the entry with same sequence and newer epoch, but not valid
+            // to replace the entry with newer sequence.
+            if (unlikely(last_iter->second.being_ref_count != 1 && last_iter->first.sequence < ver.sequence))
+            {
+                throw Exception(
+                    fmt::format("Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                                ver,
+                                last_iter->first,
+                                last_iter->second.toDebugString()),
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+            // create a new version that inherit the `being_ref_count` of the last entry
+            entries.emplace(ver, EntryOrDelete::newReplacingEntry(last_iter->second, entry));
+        }
+        return buildV3Id(TEST_NAMESPACE_ID, INVALID_PAGE_ID);
+    }
+
     if (type == EditRecordType::VAR_REF)
     {
         // an ref-page is rewritten into a normal page
@@ -117,6 +172,9 @@ void VersionedPageEntries::createNewEntry(const PageVersion & ver, const PageEnt
             // be normal page with upsert-entry.
             // TODO: Also we need to decrease the ref-count of ori_page_id.
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
+            is_deleted = false;
+            type = EditRecordType::VAR_ENTRY;
+            return ori_page_id;
         }
         else
         {
@@ -125,14 +183,14 @@ void VersionedPageEntries::createNewEntry(const PageVersion & ver, const PageEnt
             // with upsert-entry and a delete.
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
             entries.emplace(delete_ver, EntryOrDelete::newDelete());
+            is_deleted = false;
+            type = EditRecordType::VAR_ENTRY;
+            return ori_page_id;
         }
-        is_deleted = false;
-        type = EditRecordType::VAR_ENTRY;
-        return;
     }
 
     throw Exception(
-        fmt::format("try to create entry version with invalid state "
+        fmt::format("try to create upsert entry version with invalid state "
                     "[ver={}] [entry={}] [state={}]",
                     ver,
                     ::DB::PS::V3::toDebugString(entry),
@@ -672,6 +730,8 @@ bool VersionedPageEntries::derefAndClean(UInt64 lowest_seq, PageIdV3Internal pag
         }
         iter->second.being_ref_count -= deref_count;
 
+        if (lowest_seq == 0)
+            return false;
         // Clean outdated entries after decreased the ref-counter
         // set `normal_entries_to_deref` to be nullptr to ignore cleaning ref-var-entries
         return cleanOutdatedEntries(lowest_seq, /*normal_entries_to_deref*/ nullptr, entries_removed, page_lock);
@@ -1261,15 +1321,23 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
         {
             std::shared_lock read_lock(table_rw_mutex);
             iter = mvcc_table_directory.find(record.page_id);
-            if (unlikely(iter == mvcc_table_directory.end()))
-            {
-                throw Exception(fmt::format("Can't find [page_id={}] while doing gcApply", record.page_id), ErrorCodes::LOGICAL_ERROR);
-            }
+            RUNTIME_CHECK_MSG(iter != mvcc_table_directory.end(), "Can't find [page_id={}] while doing gcApply", record.page_id);
         } // release the read lock on `table_rw_mutex`
 
         // Append the gc version to version list
         const auto & versioned_entries = iter->second;
-        versioned_entries->createNewEntry(record.version, record.entry);
+        auto id_to_deref = versioned_entries->createUpsertEntry(record.version, record.entry);
+        if (id_to_deref.low != INVALID_PAGE_ID)
+        {
+            MVCCMapType::const_iterator deref_iter;
+            {
+                std::shared_lock read_lock(table_rw_mutex);
+                deref_iter = mvcc_table_directory.find(id_to_deref);
+                RUNTIME_CHECK_MSG(deref_iter != mvcc_table_directory.end(), "Can't find [page_id={}] to deref after gcApply", id_to_deref);
+            }
+            auto deref_res = deref_iter->second->derefAndClean(/*lowest_seq*/ 0, id_to_deref, record.version, 1, nullptr);
+            RUNTIME_ASSERT(!deref_res);
+        }
     }
 
     LOG_INFO(log, "GC apply done. [edit size={}]", migrated_edit.size());

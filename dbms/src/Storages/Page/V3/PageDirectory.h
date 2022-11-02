@@ -81,7 +81,7 @@ using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
 struct EntryOrDelete
 {
-    bool is_delete;
+    bool is_delete = true;
     Int64 being_ref_count = 1;
     PageEntryV3 entry;
 
@@ -162,6 +162,8 @@ public:
 
     void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
+    PageIdV3Internal createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
+
     bool createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id);
 
     std::shared_ptr<PageIdV3Internal> createNewExternal(const PageVersion & ver);
@@ -203,12 +205,19 @@ public:
      *
      * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
      */
-    bool cleanOutdatedEntries(
+    [[nodiscard]] bool cleanOutdatedEntries(
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 * entries_removed,
         const PageLock & page_lock);
-    bool derefAndClean(
+    /**
+     * Decrease the ref-count of entry with given `deref_ver`.
+     * If `lowest_seq` != 0, then it will run `cleanOutdatedEntries` after decreasing
+     * the ref-count.
+     *
+     * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
+     */
+    [[nodiscard]] bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
