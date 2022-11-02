@@ -59,10 +59,9 @@ struct MockWriter
         return summary;
     }
 
-    void write(mpp::MPPDataPacket &, uint16_t) { FAIL() << "cannot reach here."; }
-    void write(mpp::MPPDataPacket & packet)
+    void partitionWrite(const TrackedMppDataPacketPtr &, uint16_t) { FAIL() << "cannot reach here."; }
+    void broadcastWrite(const TrackedMppDataPacketPtr & packet)
     {
-        auto tracked_packet = std::make_shared<TrackedMppDataPacket>(packet, nullptr);
         if (add_summary)
         {
             tipb::SelectResponse response;
@@ -73,14 +72,13 @@ struct MockWriter
             summary_ptr->set_num_iterations(summary.num_iterations);
             summary_ptr->set_concurrency(summary.concurrency);
             summary_ptr->set_executor_id("Executor_0");
-            tracked_packet->serializeByResponse(response);
+            packet->serializeByResponse(response);
         }
         ++total_packets;
-        if (!tracked_packet->packet.chunks().empty())
-            total_bytes += tracked_packet->packet.ByteSizeLong();
-        queue->push(tracked_packet);
+        if (!packet->packet.chunks().empty())
+            total_bytes += packet->packet.ByteSizeLong();
+        queue->push(packet);
     }
-    void write(tipb::SelectResponse &, uint16_t) { FAIL() << "cannot reach here."; }
     void write(tipb::SelectResponse & response)
     {
         ++total_packets;
@@ -91,6 +89,7 @@ struct MockWriter
         tracked_packet->serializeByResponse(response);
         queue->push(tracked_packet);
     }
+    void sendExecutionSummary(tipb::SelectResponse & response) { write(response); }
     uint16_t getPartitionNum() const { return 1; }
 
     PacketQueuePtr queue;
@@ -303,6 +302,7 @@ public:
         // 2. encode all blocks
         for (const auto & block : source_blocks)
             dag_writer->write(block);
+        dag_writer->flush();
         writer->add_summary = true;
         dag_writer->finishWrite();
     }
