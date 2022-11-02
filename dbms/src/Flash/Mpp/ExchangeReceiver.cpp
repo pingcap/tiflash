@@ -738,10 +738,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::queue<Block> & block_queue,
     std::unique_ptr<IChunkDecodeAndSquash> & decoder_ptr)
 {
-    std::optional<Block> last_block;
-    if (decoder_ptr)
-        last_block = decoder_ptr->flush();
-
+    std::optional<Block> last_block = decoder_ptr->flush();
     std::unique_lock lock(mu);
     if (this->state != DB::ExchangeReceiverState::NORMAL)
     {

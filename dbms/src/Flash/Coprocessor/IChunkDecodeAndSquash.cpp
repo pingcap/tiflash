@@ -51,16 +51,17 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String &
         size_t rows = 0;
         codec.readBlockMeta(istr, columns, rows);
 
-        auto mutable_columns = accumulated_block->mutateColumns();
-        for (size_t i = 0; i < columns; ++i)
+        if (rows)
         {
-            ColumnWithTypeAndName column;
-            codec.readColumnMeta(i, istr, column);
-
-            if (rows) /// If no rows, nothing to read.
+            auto mutable_columns = accumulated_block->mutateColumns();
+            for (size_t i = 0; i < columns; ++i)
+            {
+                ColumnWithTypeAndName column;
+                codec.readColumnMeta(i, istr, column);
                 CHBlockChunkCodec::readData(*column.type, *(mutable_columns[i]), istr, rows);
+            }
+            accumulated_block->setColumns(std::move(mutable_columns));
         }
-        accumulated_block->setColumns(std::move(mutable_columns));
     }
 
     if (accumulated_block && accumulated_block->rows() >= rows_limit)

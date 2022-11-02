@@ -219,7 +219,6 @@ public:
             if (!fetchRemoteResult())
                 return {};
         }
-        // todo should merge some blocks to make sure the output block is big enough
         Block block = block_queue.front();
         block_queue.pop();
         return block;
