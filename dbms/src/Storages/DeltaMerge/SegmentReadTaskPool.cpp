@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/PerfContextImpl.h>
 
 namespace CurrentMetrics
 {
@@ -239,6 +240,7 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
     auto block = stream->read();
+    std::cout << " SegmentReadTaskPool::readOneBlock " << get_perf_context()->toDebugString() << std::endl;
     if (block)
     {
         pushBlock(std::move(block));

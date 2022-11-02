@@ -99,16 +99,19 @@ protected:
                 }
                 if (!res.rows())
                 {
+                    std::cout << " UnorderedInputStream readImpl" << get_perf_context()->toDebugString() << std::endl;
                     continue;
                 }
                 else
                 {
                     total_rows += res.rows();
+                    std::cout << " UnorderedInputStream readImpl" << get_perf_context()->toDebugString() << std::endl;
                     return res;
                 }
             }
             else
             {
+                std::cout << " UnorderedInputStream readImpl" << get_perf_context()->toDebugString() << std::endl;
                 done = true;
                 return {};
             }
@@ -117,7 +120,7 @@ protected:
 
     void readSuffixImpl() override
     {
-        //std::cout << " UnorderedInputStream readSuffixImpl" << get_perf_context()->toDebugString() << std::endl;
+        
         LOG_DEBUG(log, "Finish read from storage, pool_id={} ref_no={} rows={}", task_pool->poolId(), ref_no, total_rows);
     }
 

@@ -25,7 +25,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 #include "Poco/Thread_STD.h"
-#include "Storages/DeltaMerge/PerfContext.h"
+
 namespace CurrentMetrics
 {
 extern const Metric OpenFileForRead;
@@ -379,8 +379,6 @@ Block DMFileReader::read()
             max_version = std::max(pack_filter.getMaxVersion(pack_id), max_version);
         do_clean_read_on_normal_mode = max_version <= max_read_version;
     }
-
-    perf_context.scan_packs_count += read_packs;
 
     for (size_t i = 0; i < read_columns.size(); ++i)
     {

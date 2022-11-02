@@ -40,6 +40,7 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 #include <fmt/core.h>
+#include <Storages/DeltaMerge/PerfContextImpl.h>
 
 #include <ext/scope_guard.h>
 #include <memory>
@@ -477,6 +478,7 @@ BlockInputStreamPtr Segment::getInputStream(const ReadMode & read_mode,
     {
     case ReadMode::Normal:
         return getInputStreamModeNormal(dm_context, columns_to_read, segment_snap, read_ranges, filter, max_version, expected_block_size);
+        std::cout << " Segment::getInputStream" << get_perf_context()->toDebugString() << std::endl;
         break;
     case ReadMode::Fast:
         return getInputStreamModeFast(dm_context, columns_to_read, segment_snap, read_ranges, filter, expected_block_size);

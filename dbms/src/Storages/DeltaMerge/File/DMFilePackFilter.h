@@ -208,10 +208,9 @@ private:
             GET_METRIC(tiflash_storage_rough_set_filter_rate, type_dtfile_pack).Observe(filter_rate);
         }
 
-        // perf_context.skip_packs_count = after_read_packs - after_filter;
-        // perf_context.scan_packs_count = after_filter;
-        // PERF_ADD(scan_packs_count, after_filter);
-        // PERF_ADD(skip_packs_count, after_read_packs - after_filter); // skip 里要不要算上 因为 range 范围不在内而过滤的量 -- 我觉得是不用的
+        PERF_ADD(scan_packs_count, after_filter);
+        PERF_ADD(skip_packs_count, after_read_packs - after_filter); // skip 里要不要算上 因为 range 范围不在内而过滤的量 -- 我觉得是不用的
+        std::cout << "perf_context.scan_packs_count " << perf_context.scan_packs_count << " perf_context.skip_packs_count " <<  perf_context.skip_packs_count << std::endl;
 
         LOG_DEBUG(log,
                   "RSFilter exclude rate: {:.2f}, after_pk: {}, after_read_packs: {}, after_filter: {}, handle_ranges: {}"

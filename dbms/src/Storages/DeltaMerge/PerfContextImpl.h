@@ -23,7 +23,7 @@ namespace DB
 
 namespace DM
 {
-extern PerfContext perf_context;
+extern thread_local PerfContext perf_context;
 
 #define PERF_ADD(metric, value)        \
     perf_context.metric += (value);

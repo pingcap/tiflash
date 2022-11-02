@@ -20,8 +20,8 @@ namespace DB
 namespace DM 
 {
 
-// thread_local PerfContext perf_context;
-PerfContext perf_context;
+thread_local PerfContext perf_context;
+//PerfContext perf_context;
 
 PerfContext* get_perf_context() { return &perf_context; }
 
