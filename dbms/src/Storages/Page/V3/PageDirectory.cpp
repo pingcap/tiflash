@@ -1387,6 +1387,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
         }
     }
 
+    size_t num_ref_id_rewrite = 0;
     for (const auto & [ref_id, ori_id_ver] : ref_ids_maybe_rewrite)
     {
         const auto ori_id = std::get<0>(ori_id_ver);
@@ -1408,10 +1409,12 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
             blob_versioned_entries[entry->file_id].emplace_back(ref_id, ver, *entry);
             total_page_size += entry->size;
             total_page_nums += 1;
+            num_ref_id_rewrite += 1;
         }
     }
 
-    LOG_INFO(log, "Get entries by blob ids done. [total_page_size={}] [total_page_nums={}]", //
+    LOG_INFO(log, "Get entries by blob ids done [rewrite_ref_pages={}] [total_page_size={}] [total_page_nums={}]", //
+             num_ref_id_rewrite,
              total_page_size, //
              total_page_nums);
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);

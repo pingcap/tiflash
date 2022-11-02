@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/Ctl.h>
+#include <Common/SyncPoint/ScopeGuard.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/Snapshot.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
@@ -24,6 +25,7 @@
 #include <gtest/gtest.h>
 
 #include <future>
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -34,24 +36,24 @@ extern const char force_ps_wal_compact[];
 namespace PS::V3::tests
 {
 
-struct TestParam
+struct FullGCParam
 {
     bool keep_snap;
     bool has_ref;
 
-    explicit TestParam(const std::tuple<bool, bool> & t)
+    explicit FullGCParam(const std::tuple<bool, bool> & t)
         : keep_snap(std::get<0>(t))
         , has_ref(std::get<1>(t))
     {
     }
 };
 
-class PageStorageFullGCTestWithParam
+class PageStorageFullGCTest
     : public PageStorageTest
     , public testing::WithParamInterface<std::tuple<bool, bool>>
 {
 public:
-    PageStorageFullGCTestWithParam()
+    PageStorageFullGCTest()
         : test_param(GetParam())
     {
     }
@@ -62,10 +64,10 @@ public:
     }
 
 protected:
-    TestParam test_param;
+    FullGCParam test_param;
 };
 
-TEST_P(PageStorageFullGCTestWithParam, DontMoveDeletedPageId)
+TEST_P(PageStorageFullGCTest, DontMoveDeletedPageId)
 try
 {
     // always pick all blob file for full gc
@@ -111,13 +113,70 @@ CATCH
 
 INSTANTIATE_TEST_CASE_P(
     Group,
-    PageStorageFullGCTestWithParam,
+    PageStorageFullGCTest,
     ::testing::Combine(
         ::testing::Bool(),
         ::testing::Bool()));
 
+///////
+/// PageStorageFullGCConcurrentTest
+///////
 
-TEST_F(PageStorageTest, DeletePageIdAfterWALCompact)
+enum class DeleteTiming
+{
+    BeforeFullGCPrepare = 1,
+    BeforeFullGCCommit,
+    AfterFullGCCommit,
+};
+class PageStorageFullGCConcurrentTest
+    : public PageStorageTest
+    , public testing::WithParamInterface<DeleteTiming>
+{
+public:
+    PageStorageFullGCConcurrentTest()
+        : timing(GetParam())
+    {
+    }
+
+    void SetUp() override
+    {
+        PageStorageTest::SetUp();
+    }
+
+    SyncPointScopeGuard getSyncPoint() const
+    {
+        switch (timing)
+        {
+        case DeleteTiming::BeforeFullGCPrepare:
+            return SyncPointCtl::enableInScope("before_PageStorageImpl::doGC_fullGC_prepare");
+        case DeleteTiming::BeforeFullGCCommit:
+            return SyncPointCtl::enableInScope("before_PageStorageImpl::doGC_fullGC_commit");
+        case DeleteTiming::AfterFullGCCommit:
+            return SyncPointCtl::enableInScope("after_PageStorageImpl::doGC_fullGC_commit");
+        }
+    }
+
+    bool expectFullGCExecute() const
+    {
+        // - If delete happen before prepare, then nothing need to be rewrite.
+        // - If delete happen before commit, the page is logically delete.
+        //   We should able to handle the "upsert after delete" on disk.
+        switch (timing)
+        {
+        case DeleteTiming::BeforeFullGCPrepare:
+            return false;
+        case DeleteTiming::BeforeFullGCCommit:
+            return true;
+        case DeleteTiming::AfterFullGCCommit:
+            return true;
+        }
+    }
+
+protected:
+    DeleteTiming timing;
+};
+
+TEST_P(PageStorageFullGCConcurrentTest, DeletePage)
 try
 {
     // always pick all blob file for full gc
@@ -133,23 +192,22 @@ try
     }
 
     FailPointHelper::enableFailPoint(FailPoints::force_ps_wal_compact);
-    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::doGC_fullGC");
+    auto sp_gc = getSyncPoint();
     auto th_gc = std::async([&]() {
         auto done_full_gc = page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
-        ASSERT_FALSE(done_full_gc);
+        ASSERT_EQ(expectFullGCExecute(), done_full_gc);
     });
     // let's compact the WAL logs
     sp_gc.waitAndPause();
 
-    // If page is logically delete between `tryDumpSnapshot` and `fullGC`, then
-    // we should able to handle the "upsert after delete" on disk
     {
+        // the delete timing is decide by `sp_gc`
         WriteBatch batch;
         batch.delPage(page_id1);
         page_storage->write(std::move(batch));
     }
 
-    // let's try full gc, this will not trigger full gc
+    // let's try full gc
     sp_gc.next();
     th_gc.get();
 
@@ -177,7 +235,7 @@ try
 }
 CATCH
 
-TEST_F(PageStorageTest, DeleteRefPageIdAfterWALCompact)
+TEST_P(PageStorageFullGCConcurrentTest, DeleteRefPage)
 try
 {
     // always pick all blob file for full gc
@@ -186,7 +244,9 @@ try
     page_storage->reloadSettings(new_config);
 
     PageId page_id1 = 101;
-    PageId ref_page_id = 102;
+    PageId ref_page_id2 = 102;
+    PageId ref_page_id3 = 103;
+    PageId ref_page_id4 = 104;
     {
         WriteBatch batch;
         batch.putPage(page_id1, default_tag, getDefaultBuffer(), buf_sz);
@@ -194,34 +254,44 @@ try
     }
     {
         WriteBatch batch;
-        batch.putRefPage(ref_page_id, page_id1);
+        batch.putRefPage(ref_page_id2, page_id1);
         batch.delPage(page_id1);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.putRefPage(ref_page_id3, ref_page_id2);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.putRefPage(ref_page_id4, ref_page_id3);
         page_storage->write(std::move(batch));
     }
 
     FailPointHelper::enableFailPoint(FailPoints::force_ps_wal_compact);
-    auto sp_gc = SyncPointCtl::enableInScope("before_PageStorageImpl::doGC_fullGC");
+    auto sp_gc = getSyncPoint();
     auto th_gc = std::async([&]() {
         auto done_full_gc = page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
-        ASSERT_TRUE(done_full_gc); // note that full gc is executed
+        ASSERT_EQ(expectFullGCExecute(), done_full_gc);
     });
     // let's compact the WAL logs
     sp_gc.waitAndPause();
 
-    // If page is logically delete between `tryDumpSnapshot` and `fullGC`, then
-    // we should able to handle the "upsert after delete" on disk
     {
+        // the delete timing is decide by `sp_gc`
         WriteBatch batch;
-        batch.delPage(ref_page_id);
+        batch.delPage(ref_page_id2);
+        batch.delPage(ref_page_id3);
+        batch.delPage(ref_page_id4);
         page_storage->write(std::move(batch));
     }
 
-    // let's try full gc, unlike `DeletePageIdAfterWALCompact`,
-    // this ** will ** trigger full gc
+    // let's try full gc
     sp_gc.next();
     th_gc.get();
 
-    // wal compact again !!!! FIXME: this will throw exception
+    // wal compact again
     page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
 
     LOG_INFO(log, "close and restore WAL from disk");
@@ -244,6 +314,18 @@ try
     ASSERT_EQ(num_entries_on_wal, 0);
 }
 CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    DeleteTiming,
+    PageStorageFullGCConcurrentTest,
+    ::testing::Values(
+        DeleteTiming::BeforeFullGCPrepare,
+        DeleteTiming::BeforeFullGCCommit,
+        DeleteTiming::AfterFullGCCommit //
+        ),
+    [](const ::testing::TestParamInfo<PageStorageFullGCConcurrentTest::ParamType> & param) {
+        return String(magic_enum::enum_name(param.param));
+    });
 
 } // namespace PS::V3::tests
 } // namespace DB

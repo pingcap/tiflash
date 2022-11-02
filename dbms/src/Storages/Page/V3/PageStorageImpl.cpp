@@ -427,7 +427,7 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     const auto & del_entries = page_directory->gcInMemEntries();
     statistics.gc_in_mem_entries_ms = gc_watch.elapsedMillisecondsFromLastTime();
 
-    SYNC_FOR("before_PageStorageImpl::doGC_fullGC");
+    SYNC_FOR("before_PageStorageImpl::doGC_fullGC_prepare");
 
     // 2. Remove the expired entries in BlobStore.
     // It won't delete the data on the disk.
@@ -462,6 +462,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
         return statistics;
     }
 
+    SYNC_FOR("before_PageStorageImpl::doGC_fullGC_commit");
+
     // 5. Do the BlobStore GC
     // After BlobStore GC, these entries will be migrated to a new blob.
     // Then we should notify MVCC apply the change.
@@ -478,6 +480,8 @@ PageStorageImpl::GCTimeStatistics PageStorageImpl::doGC(const WriteLimiterPtr & 
     // Those BlobFiles should be cleaned during next restore.
     page_directory->gcApply(std::move(gc_edit), write_limiter);
     statistics.full_gc_apply_ms = gc_watch.elapsedMillisecondsFromLastTime();
+
+    SYNC_FOR("after_PageStorageImpl::doGC_fullGC_commit");
 
     cleanExternalPage(gc_watch, statistics);
     statistics.stage = GCStageType::FullGC;
