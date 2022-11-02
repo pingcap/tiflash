@@ -177,7 +177,7 @@ public:
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
-    std::optional<PageEntryV3> getLastEntry() const;
+    std::optional<PageEntryV3> getLastEntry(std::optional<UInt64> seq) const;
 
     bool isVisible(UInt64 seq) const;
 
@@ -189,7 +189,8 @@ public:
     PageSize getEntriesByBlobIds(
         const std::unordered_set<BlobFileId> & blob_ids,
         PageIdV3Internal page_id,
-        std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries);
+        std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries,
+        std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> & ref_ids_maybe_rewrite);
 
     /**
      * Given a `lowest_seq`, this will clean all outdated entries before `lowest_seq`.

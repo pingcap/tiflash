@@ -374,13 +374,15 @@ std::optional<PageEntryV3> VersionedPageEntries::getEntry(UInt64 seq) const
     return std::nullopt;
 }
 
-std::optional<PageEntryV3> VersionedPageEntries::getLastEntry() const
+std::optional<PageEntryV3> VersionedPageEntries::getLastEntry(std::optional<UInt64> seq) const
 {
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
         for (auto it_r = entries.rbegin(); it_r != entries.rend(); it_r++)
         {
+            if (seq.has_value() && it_r->first.sequence > seq.value())
+                continue;
             if (it_r->second.isEntry())
             {
                 return it_r->second.entry;
@@ -466,7 +468,8 @@ Int64 VersionedPageEntries::incrRefCount(const PageVersion & ver)
 PageSize VersionedPageEntries::getEntriesByBlobIds(
     const std::unordered_set<BlobFileId> & blob_ids,
     PageIdV3Internal page_id,
-    std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries)
+    std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries,
+    std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> & ref_ids_maybe_rewrite)
 {
     // `blob_versioned_entries`:
     // blob_file_0, [<page_id_0, ver0, entry0>,
@@ -475,43 +478,31 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     // ...
 
     auto page_lock = acquireLock();
+    if (type == EditRecordType::VAR_REF)
+    {
+        if (is_deleted)
+        {
+            ref_ids_maybe_rewrite[page_id] = {ori_page_id, create_ver};
+        }
+        return 0;
+    }
+
     if (type != EditRecordType::VAR_ENTRY)
         return 0;
 
     assert(type == EditRecordType::VAR_ENTRY);
-    // ignore the last delete
-    bool exist_delete = false;
+    // Empty or already deleted
+    if (entries.empty())
+        return 0;
     auto iter = entries.rbegin();
-    while (iter != entries.rend())
-    {
-        if (iter->second.isEntry())
-            break;
-        assert(iter->second.isDelete());
-        exist_delete = true;
-        ++iter;
-    }
-    if (iter == entries.rend())
+    if (iter->second.isDelete())
         return 0;
 
     assert(iter->second.isEntry());
-    const auto & last_entry = iter->second;
-    bool need_full_gc = false;
-    if (last_entry.being_ref_count == 1)
-    {
-        // This PageEntry is not shared by any other page_id,
-        need_full_gc = !exist_delete;
-    }
-    else
-    {
-        // This PageEntry is shared by another page_id, we
-        // need to move the latest entry to another BlobFile
-        // in order to reduce space amplification.
-        need_full_gc = true;
-    }
-
     // The total entries size that will be moved
     PageSize entry_size_full_gc = 0;
-    if (need_full_gc && blob_ids.count(last_entry.entry.file_id) > 0)
+    const auto & last_entry = iter->second;
+    if (blob_ids.count(last_entry.entry.file_id) > 0)
     {
         blob_versioned_entries[last_entry.entry.file_id].emplace_back(page_id, /* ver */ iter->first, last_entry.entry);
         entry_size_full_gc += last_entry.entry.size;
@@ -1271,34 +1262,61 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
 
     std::map<BlobFileId, PageIdAndVersionedEntries> blob_versioned_entries;
     PageSize total_page_size = 0;
-
-    MVCCMapType::const_iterator iter;
-    {
-        std::shared_lock read_lock(table_rw_mutex);
-        iter = mvcc_table_directory.cbegin();
-        if (iter == mvcc_table_directory.end())
-            return {blob_versioned_entries, total_page_size};
-    }
-
     UInt64 total_page_nums = 0;
-    while (true)
-    {
-        // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
-        // do scan on the version list without lock on `mvcc_table_directory`.
-        auto page_id = iter->first;
-        const auto & version_entries = iter->second;
-        auto single_page_size = version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries);
-        total_page_size += single_page_size;
-        if (single_page_size != 0)
-        {
-            total_page_nums++;
-        }
+    std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> ref_ids_maybe_rewrite;
 
+    {
+        MVCCMapType::const_iterator iter;
         {
             std::shared_lock read_lock(table_rw_mutex);
-            iter++;
+            iter = mvcc_table_directory.cbegin();
             if (iter == mvcc_table_directory.end())
-                break;
+                return {blob_versioned_entries, total_page_size};
+        }
+
+        while (true)
+        {
+            // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
+            // do scan on the version list without lock on `mvcc_table_directory`.
+            auto page_id = iter->first;
+            const auto & version_entries = iter->second;
+            auto single_page_size = version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries, ref_ids_maybe_rewrite);
+            total_page_size += single_page_size;
+            if (single_page_size != 0)
+            {
+                total_page_nums++;
+            }
+
+            {
+                std::shared_lock read_lock(table_rw_mutex);
+                iter++;
+                if (iter == mvcc_table_directory.end())
+                    break;
+            }
+        }
+    }
+
+    for (const auto & [ref_id, ori_id_ver] : ref_ids_maybe_rewrite)
+    {
+        const auto ori_id = std::get<0>(ori_id_ver);
+        const auto ver = std::get<1>(ori_id_ver);
+        MVCCMapType::const_iterator page_iter;
+        {
+            std::shared_lock read_lock(table_rw_mutex);
+            page_iter = mvcc_table_directory.find(ori_id);
+            RUNTIME_CHECK(page_iter != mvcc_table_directory.end(), ref_id, ori_id, ver);
+        }
+        const auto & version_entries = page_iter->second;
+        // the latest entry with version.seq <= ref_id.create_ver.seq
+        auto entry = version_entries->getLastEntry(ver.sequence);
+        RUNTIME_CHECK(entry.has_value(), ref_id, ori_id, ver);
+        // If the being-ref entry lays on the full gc candidate blobfiles, then we
+        // need to rewrite the ref-id to a normal page.
+        if (blob_id_set.count(entry->file_id) > 0)
+        {
+            blob_versioned_entries[entry->file_id].emplace_back(ref_id, ver, *entry);
+            total_page_size += entry->size;
+            total_page_nums += 1;
         }
     }
 

@@ -20,6 +20,7 @@
 #include <Storages/Page/V3/WALStore.h>
 
 #include <memory>
+#include <optional>
 
 namespace DB
 {
@@ -62,7 +63,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
             // We should restore the entry to `blob_stats` even if it is marked as "deleted",
             // or we will mistakenly reuse the space to write other blobs down into that space.
             // So we need to use `getLastEntry` instead of `getEntry(version)` here.
-            if (auto entry = entries->getLastEntry(); entry)
+            if (auto entry = entries->getLastEntry(std::nullopt); entry)
             {
                 blob_stats->restoreByEntry(*entry);
             }
@@ -102,7 +103,7 @@ PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileP
             // We should restore the entry to `blob_stats` even if it is marked as "deleted",
             // or we will mistakenly reuse the space to write other blobs down into that space.
             // So we need to use `getLastEntry` instead of `getEntry(version)` here.
-            if (auto entry = entries->getLastEntry(); entry)
+            if (auto entry = entries->getLastEntry(std::nullopt); entry)
             {
                 blob_stats->restoreByEntry(*entry);
             }
