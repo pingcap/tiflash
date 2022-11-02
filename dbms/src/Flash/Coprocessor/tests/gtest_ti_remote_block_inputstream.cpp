@@ -16,9 +16,6 @@
 #include <DataStreams/TiRemoteBlockInputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
-#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
-#include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
-#include <Flash/Mpp/ExchangeReceiver.cpp>
 #include <Interpreters/Context.h>
 #include <Storages/Transaction/TiDB.h>
 #include <TestUtils/ColumnGenerator.h>
@@ -26,6 +23,10 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
+
+#include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
+#include <Flash/Mpp/BroadcastOrPassThroughWriter.cpp>
+#include <Flash/Mpp/ExchangeReceiver.cpp>
 
 
 namespace DB
