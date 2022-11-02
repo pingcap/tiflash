@@ -44,10 +44,10 @@ public:
     void execute(DAGPipeline & pipeline);
 private:
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks();
-    mpp::DispatchTaskRequest buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-    std::vector<::mpp::DispatchTaskRequest> buildAndDispatchMPPTaskRequests();
+    std::shared_ptr<mpp::DispatchTaskRequest> buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task);
+    std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> buildAndDispatchMPPTaskRequests();
 
-    void buildReceiverStreams(const std::vector<::mpp::DispatchTaskRequest> & dispatch_reqs, DAGPipeline & pipeline);
+    void buildReceiverStreams(const std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> & dispatch_reqs, DAGPipeline & pipeline);
 
     Context & context;
     const TiDBTableScan & table_scan;

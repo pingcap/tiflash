@@ -26,8 +26,7 @@ void DisaggregatedTiFlashTableScanInterpreter::execute(DAGPipeline & pipeline)
     buildReceiverStreams(dispatch_reqs, pipeline);
 }
 
-std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInterpreter::buildBatchCopTasks(
-        const std::vector<RemoteRequest> & remote_requests)
+std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInterpreter::buildBatchCopTasks()
 {
     std::vector<Int64> physical_table_ids;
     physical_table_ids.reserve(remote_requests.size());
@@ -47,19 +46,19 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
     return batch_cop_tasks;
 }
 
-::mpp::DispatchTaskRequest DisaggregatedTiFlashTableScanInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
+std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const auto * dag_req = context.getDAGContext()->dag_request;
 
-    ::mpp::DispatchTaskRequest dispatch_req;
-    ::mpp::TaskMeta * dispatch_req_meta = dispatch_req.mutable_meta();
+    std::shared_ptr<::mpp::DispatchTaskRequest> dispatch_req;
+    ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
     dispatch_req_meta->set_task_id(sender_target_task_meta.task_id());
     dispatch_req_meta->set_start_ts(sender_target_task_meta.start_ts());
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
     const auto & settings = context.getSettings();
-    dispatch_req.set_timeout(settings.mpp_task_timeout);
-    dispatch_req.set_schema_ver(settings.read_tso);
+    dispatch_req->set_timeout(settings.mpp_task_timeout);
+    dispatch_req->set_schema_ver(settings.read_tso);
     RUNTIME_CHECK_MSG(batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
             "batch cop task invalid, single table region info: {}, partition table region info: {}",
             batch_cop_task.region_infos.size(), batch_cop_task.table_regions.size());
@@ -68,7 +67,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
         // For non-partition table.
         for (const auto & region_info : batch_cop_task.region_infos)
         {
-            auto * region = dispatch_req.add_regions();
+            auto * region = dispatch_req->add_regions();
             region->set_region_id(region_info.region_id.id);
             region->mutable_region_epoch()->set_version(region_info.region_id.ver);
             region->mutable_region_epoch()->set_conf_ver(region_info.region_id.conf_ver);
@@ -79,7 +78,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
         // For partition table.
         for (const auto & table_region : batch_cop_task.table_regions)
         {
-            auto * req_table_region = dispatch_req.add_table_regions();
+            auto * req_table_region = dispatch_req->add_table_regions();
             req_table_region->set_physical_table_id(table_region.physical_table_id);
             auto * region = req_table_region->add_regions();
             for (const auto & region_info : table_region.region_infos)
@@ -116,13 +115,14 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
     // gjt todo: ignore sender.all_filed_types
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
-    dispatch_req.set_encoded_plan(sender_dag_req.SerializeAsString());
+    dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
+    return dispatch_req;
 }
 
-std::vector<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpreter::buildAndDispatchMPPTaskRequests()
+std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> DisaggregatedTiFlashTableScanInterpreter::buildAndDispatchMPPTaskRequests()
 {
-    auto batch_cop_tasks = buildBatchCopTasks(remote_requests);
-    std::vector<::mpp::DispatchTaskRequest> dispatch_reqs;
+    auto batch_cop_tasks = buildBatchCopTasks();
+    std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> dispatch_reqs;
     dispatch_reqs.reserve(batch_cop_tasks.size());
     for (const auto & batch_cop_task : batch_cop_tasks)
         dispatch_reqs.emplace_back(buildDispatchMPPTaskRequest(batch_cop_task));
@@ -130,11 +130,11 @@ std::vector<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpreter
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
     for (const auto & dispatch_req : dispatch_reqs)
     {
-        thread_manager->schedule(/*mem_tracker=*/true, "", [&] {
-                auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::DispatchTaskRequest>>(dispatch_reqs[i]);
+        thread_manager->schedule(/*mem_tracker=*/true, "", [dispatch_req, this] {
+                pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(dispatch_req);
                 // gjt todo: retry dispatch
                 // gjt todo: make timeout const
-                context.getTMTContext().getKVCluster()->rpc_client->sendRequest(batch_cop_tasks[i].store_addr, rpc_call, /*timeout=*/60);
+                this->context.getTMTContext().getKVCluster()->rpc_client->sendRequest(dispatch_req->meta().address(), rpc_call, /*timeout=*/60);
         });
     }
 
@@ -143,14 +143,14 @@ std::vector<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpreter
 }
 
 void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
-        const std::vector<::mpp::DispatchTaskRequest> & dispatch_reqs, DAGPipeline & pipeline)
+        const std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> & dispatch_reqs, DAGPipeline & pipeline)
 {
     tipb::ExchangeReceiver receiver;
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     // gjt todo: field types is used to construct schema of ExchangeReceiver, which is only meaningful for cop.
     for (const auto & dispatch_req : dispatch_reqs)
     {
-        const ::mpp::TaskMeta & sender_task_meta = dispatch_req.meta();
+        const ::mpp::TaskMeta & sender_task_meta = dispatch_req->meta();
         receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
     }
 
@@ -167,7 +167,8 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
             context.getMaxStreams(),
             log->identifier(),
             executor_id,
-            /*fine_grained_shuffle_stream_count=*/0);
+            /*fine_grained_shuffle_stream_count=*/0,
+            /*is_tiflash_storage_receiver=*/true);
     // No need to put this ExchangeReciever to DAGContext::receiver_set,
     // because ExchangeReceiverInputStream is generated immediately.
     // Planner no need to touch this ExchangeReciever.
@@ -177,7 +178,7 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
     size_t max_streams = context.getMaxStreams();
     for (size_t i = 0; i < max_streams; ++i)
     {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(receiver,
+        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
                                                                                    log->identifier(),
                                                                                    executor_id,
                                                                                    /*stream_id=*/0);

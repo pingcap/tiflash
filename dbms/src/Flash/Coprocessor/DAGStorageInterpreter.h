@@ -91,7 +91,7 @@ private:
 
     void recordProfileStreams(DAGPipeline & pipeline, const String & key);
 
-    std::vector<pingcap::coprocessor::copTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
+    std::vector<pingcap::coprocessor::CopTask> buildCopTasks(const std::vector<RemoteRequest> & remote_requests);
     void buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline);
 
     void executeCastAfterTableScan(

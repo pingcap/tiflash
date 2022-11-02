@@ -492,7 +492,7 @@ void DAGStorageInterpreter::executeCastAfterTableScan(
     }
 }
 
-std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(const std::vector<RemoteRequest> & remote_requests)
+std::vector<pingcap::coprocessor::CopTask> DAGStorageInterpreter::buildCopTasks(const std::vector<RemoteRequest> & remote_requests)
 {
     assert(!remote_requests.empty());
 #ifndef NDEBUG
@@ -514,7 +514,7 @@ std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(
     }
 #endif
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    std::vector<pingcap::coprocessor::copTask> all_tasks;
+    std::vector<pingcap::coprocessor::CopTask> all_tasks;
     for (const auto & remote_request : remote_requests)
     {
         pingcap::coprocessor::RequestPtr req = std::make_shared<pingcap::coprocessor::Request>();
@@ -541,7 +541,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
     }
     else
     {
-        std::vector<pingcap::coprocessor::copTask> all_tasks = buildCopTasks(remote_requests);
+        std::vector<pingcap::coprocessor::CopTask> all_tasks = buildCopTasks(remote_requests);
 
         const DAGSchema & schema = remote_requests[0].schema;
         pingcap::kv::Cluster * cluster = tmt.getKVCluster();
@@ -556,7 +556,7 @@ void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> 
                 task_end++;
             if (task_end == task_start)
                 continue;
-            std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+            std::vector<pingcap::coprocessor::CopTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
 
             auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
             context.getDAGContext()->addCoprocessorReader(coprocessor_reader);

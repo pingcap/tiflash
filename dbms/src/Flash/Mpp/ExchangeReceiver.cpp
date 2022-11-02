@@ -413,7 +413,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     size_t max_streams_,
     const String & req_id,
     const String & executor_id,
-    uint64_t fine_grained_shuffle_stream_count_
+    uint64_t fine_grained_shuffle_stream_count_,
     bool is_tiflash_storage_receiver_)
     : rpc_context(std::move(rpc_context_))
     , source_num(source_num_)
@@ -485,15 +485,10 @@ void ExchangeReceiverBase<RPCContext>::cancel()
         }
         catch (...)
         {
-            auto cancel_err_msg = getCurrentExceptionMessage(/*with_stracktrace=*/false, /*check_embedded_stacktrace=*/false);
-            LOG_INFO(log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
+            String cancel_err_msg = getCurrentExceptionMessage(false, false);
+            LOG_INFO(exc_log, "cancel MPPTasks on tiflash_storage nodes failed: {}. will ignore this error", cancel_err_msg);
         }
     }
-}
-
-template <typename RPCContext>
-void ExchangeReceiverBase<RPCContext>::cancelMPPTaskOnTiFlashStorageNode()
-{
 }
 
 template <typename RPCContext>

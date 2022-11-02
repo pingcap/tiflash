@@ -79,7 +79,7 @@ public:
     CoprocessorReader(
         const DAGSchema & schema_,
         pingcap::kv::Cluster * cluster,
-        std::vector<pingcap::coprocessor::copTask> tasks,
+        std::vector<pingcap::coprocessor::CopTask> tasks,
         bool has_enforce_encode_type_,
         int concurrency)
         : schema(schema_)

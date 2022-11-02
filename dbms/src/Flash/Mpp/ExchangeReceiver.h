@@ -129,7 +129,7 @@ public:
         size_t max_streams_,
         const String & req_id,
         const String & executor_id,
-        uint64_t fine_grained_shuffle_stream_count
+        uint64_t fine_grained_shuffle_stream_count,
         bool is_tiflash_storage_receiver);
 
     ~ExchangeReceiverBase();
@@ -221,8 +221,11 @@ private:
     bool collected = false;
     int thread_count = 0;
     uint64_t fine_grained_shuffle_stream_count;
-    /// True when we are in disaggregated tiflash mode, and this receiver is receiving data from tiflash_storage node.
-    /// If it's true, when this ExchangeReciever is canceled, need to cancel MPPTask in tiflash_storage node
+
+    /// True when:
+    ///   1. we are in disaggregated tiflash mode
+    ///   2. and this receiver is receiving data from tiflash_storage node.
+    /// If it's true, when this ExchangeReciever is canceled, need to cancel MPPTasks in tiflash_storage node.
     bool is_tiflash_storage_receiver;
 };
 
