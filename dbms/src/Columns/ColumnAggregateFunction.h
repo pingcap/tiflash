@@ -177,6 +177,8 @@ public:
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector & selector) const override;
 
+    void scatterTo(ScatterColumns & columns, const Selector & selector) const override;
+
     void gather(ColumnGathererStream & gatherer_stream) override;
 
     int compareAt(size_t, size_t, const IColumn &, int) const override

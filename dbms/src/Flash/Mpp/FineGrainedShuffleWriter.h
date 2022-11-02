@@ -34,7 +34,9 @@ public:
         DAGContext & dag_context_,
         UInt64 fine_grained_shuffle_stream_count_,
         UInt64 fine_grained_shuffle_batch_size);
+    void prepare(const Block & sample_block) override;
     void write(const Block & block) override;
+    void flush() override;
     void finishWrite() override;
 
 private:
@@ -44,16 +46,26 @@ private:
     template <bool send_exec_summary_at_last>
     void writePackets(std::vector<TrackedMppDataPacket> & packets);
 
+    void initScatterColumns();
+
     bool should_send_exec_summary_at_last;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
-    size_t rows_in_blocks;
+    size_t rows_in_blocks = 0;
     uint16_t partition_num;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
+
+    Block header;
+    bool prepared = false;
+    size_t num_columns = 0, num_bucket = 0, batch_send_row_limit = 0; // Assign they initial values to pass clang-tidy check, they will be initialized in prepare method
+    std::vector<String> partition_key_containers_for_reuse;
+    WeakHash32 hash;
+    IColumn::Selector selector;
+    std::vector<IColumn::ScatterColumns> scattered; // size = num_columns
 };
 
 } // namespace DB

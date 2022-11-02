@@ -45,11 +45,6 @@ struct SetMethodOneNumber
                                                       use_cache>;
 };
 
-namespace GeneralCI
-{
-using WeightType = uint16_t;
-} // namespace GeneralCI
-
 /// For the case where there is one string key.
 template <typename TData>
 struct SetMethodString
@@ -60,6 +55,17 @@ struct SetMethodString
     Data data;
 
     using State = ColumnsHashing::HashMethodString<typename Data::value_type, void, true, false>;
+};
+
+template <typename TData, bool padding>
+struct SetMethodStringBinNoCache
+{
+    using Data = TData;
+    using Key = typename Data::key_type;
+
+    Data data;
+
+    using State = ColumnsHashing::HashMethodStringBin<typename Data::value_type, void, padding>;
 };
 
 /// For the case when there is one fixed-length string key.
@@ -214,6 +220,8 @@ struct NonClearableSet
     std::unique_ptr<SetMethodOneNumber<UInt32, HashSet<UInt32, HashCRC32<UInt32>>>> key32;
     std::unique_ptr<SetMethodOneNumber<UInt64, HashSet<UInt64, HashCRC32<UInt64>>>> key64;
     std::unique_ptr<SetMethodString<HashSetWithSavedHash<StringRef>>> key_string;
+    std::unique_ptr<SetMethodStringBinNoCache<HashSetWithSavedHash<StringRef>, true>> key_strbinpadding;
+    std::unique_ptr<SetMethodStringBinNoCache<HashSetWithSavedHash<StringRef>, false>> key_strbin;
     std::unique_ptr<SetMethodFixedString<HashSetWithSavedHash<StringRef>>> key_fixed_string;
     std::unique_ptr<SetMethodKeysFixed<HashSet<UInt128, HashCRC32<UInt128>>>> keys128;
     std::unique_ptr<SetMethodKeysFixed<HashSet<UInt256, HashCRC32<UInt256>>>> keys256;
@@ -237,6 +245,8 @@ struct ClearableSet
     std::unique_ptr<SetMethodOneNumber<UInt32, ClearableHashSet<UInt32, HashCRC32<UInt32>>>> key32;
     std::unique_ptr<SetMethodOneNumber<UInt64, ClearableHashSet<UInt64, HashCRC32<UInt64>>>> key64;
     std::unique_ptr<SetMethodString<ClearableHashSetWithSavedHash<StringRef>>> key_string;
+    std::unique_ptr<SetMethodStringBinNoCache<ClearableHashSetWithSavedHash<StringRef>, true>> key_strbinpadding;
+    std::unique_ptr<SetMethodStringBinNoCache<ClearableHashSetWithSavedHash<StringRef>, false>> key_strbin;
     std::unique_ptr<SetMethodFixedString<ClearableHashSetWithSavedHash<StringRef>>> key_fixed_string;
     std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt128, HashCRC32<UInt128>>>> keys128;
     std::unique_ptr<SetMethodKeysFixed<ClearableHashSet<UInt256, HashCRC32<UInt256>>>> keys256;
@@ -262,6 +272,8 @@ struct SetVariantsTemplate : public Variant
     M(key32)                      \
     M(key64)                      \
     M(key_string)                 \
+    M(key_strbinpadding)          \
+    M(key_strbin)                 \
     M(key_fixed_string)           \
     M(keys128)                    \
     M(keys256)                    \
@@ -286,7 +298,7 @@ struct SetVariantsTemplate : public Variant
 
     bool empty() const { return type == Type::EMPTY; }
 
-    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes);
+    static Type chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes, const TiDB::TiDBCollators & collators = {});
 
     void init(Type type_);
 

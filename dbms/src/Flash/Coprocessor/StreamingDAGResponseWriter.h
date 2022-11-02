@@ -37,6 +37,7 @@ public:
         bool should_send_exec_summary_at_last,
         DAGContext & dag_context_);
     void write(const Block & block) override;
+    void flush() override;
     void finishWrite() override;
 
 private:

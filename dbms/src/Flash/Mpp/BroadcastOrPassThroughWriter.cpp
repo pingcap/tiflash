@@ -49,6 +49,13 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::flush()
+{
+    if (rows_in_blocks > 0)
+        encodeThenWriteBlocks<false>();
+}
+
+template <class StreamWriterPtr>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
@@ -73,7 +80,7 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::encodeThenWriteBlocks()
     if constexpr (send_exec_summary_at_last)
     {
         TrackedSelectResp response;
-        addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
+        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/false);
         tracked_packet.serializeByResponse(response.getResponse());
     }
     if (blocks.empty())
