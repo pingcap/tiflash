@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Encryption/RateLimiter.h>
+#include <TestUtils/TiFlashTestEnv.h>
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -385,9 +386,11 @@ TEST(IORateLimiterTest, IOStat)
     ASSERT_EQ(io_rate_limiter.bg_read_limiter, nullptr);
     ASSERT_EQ(io_rate_limiter.fg_read_limiter, nullptr);
 
-    std::string fname = "/tmp/rate_limit_io_stat_test";
+    String dir = TiFlashTestEnv::getTemporaryPath();
+    TiFlashTestEnv::tryRemovePath(dir, /*recreate*/ true);
+    String fname = dir + "/rate_limit_io_stat_test";
     int fd = ::open(fname.c_str(), O_CREAT | O_RDWR | O_DIRECT, 0666);
-    ASSERT_GT(fd, 0) << strerror(errno);
+    ASSERT_GT(fd, 0) << fmt::format("path:{}, err: {}", fname, strerror(errno));
     std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](const int * fd) { ::close(*fd); });
 
     void * buf = nullptr;
@@ -410,6 +413,9 @@ TEST(IORateLimiterTest, IOStat)
 
 TEST(IORateLimiterTest, IOStatMultiThread)
 {
+    String dir = TiFlashTestEnv::getTemporaryPath();
+    TiFlashTestEnv::tryRemovePath(dir, /*recreate*/ true);
+
     std::mutex bg_pids_mtx;
     std::vector<pid_t> bg_pids;
     auto add_bg_pid = [&](pid_t tid) {
@@ -427,9 +433,9 @@ TEST(IORateLimiterTest, IOStatMultiThread)
         {
             add_bg_pid(syscall(SYS_gettid));
         }
-        std::string fname = "/tmp/rate_limit_io_stat_test_" + std::to_string(id) + (is_bg ? "_bg" : "_fg");
+        String fname = fmt::format("{}/rate_limit_io_stat_test_{}_{}", dir, id, (is_bg ? "bg" : "fg"));
         int fd = ::open(fname.c_str(), O_CREAT | O_RDWR | O_DIRECT, 0666);
-        ASSERT_GT(fd, 0) << strerror(errno);
+        ASSERT_GT(fd, 0) << fmt::format("path:{}, err: {}", fname, strerror(errno));
         std::unique_ptr<int, std::function<void(int * fd)>> defer_close(&fd, [](const int * fd) { ::close(*fd); });
 
         void * buf = nullptr;
