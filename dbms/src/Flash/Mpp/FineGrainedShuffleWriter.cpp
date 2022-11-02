@@ -36,6 +36,8 @@ FineGrainedShuffleWriter<StreamWriterPtr>::FineGrainedShuffleWriter(
     , collators(std::move(collators_))
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
+    , batch_send_row_limit(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
+    , hash(0)
 {
     rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
@@ -58,11 +60,39 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
+void FineGrainedShuffleWriter<StreamWriterPtr>::prepare(const Block & sample_block)
+{
+    /// Initialize header block, use column type to create new empty column to handle potential null column cases
+    const auto & column_with_type_and_names = sample_block.getColumnsWithTypeAndName();
+    for (const auto & column : column_with_type_and_names)
+    {
+        MutableColumnPtr empty_column = column.type->createColumn();
+        ColumnWithTypeAndName new_column(std::move(empty_column), column.type, column.name);
+        header.insert(new_column);
+    }
+    num_columns = header.columns();
+    // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
+    num_bucket = partition_num * fine_grained_shuffle_stream_count;
+    partition_key_containers_for_reuse.resize(collators.size());
+    initScatterColumns();
+    prepared = true;
+}
+
+template <class StreamWriterPtr>
+void FineGrainedShuffleWriter<StreamWriterPtr>::flush()
+{
+    if (rows_in_blocks > 0)
+        batchWriteFineGrainedShuffle<false>();
+}
+
+template <class StreamWriterPtr>
 void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
 {
+    RUNTIME_CHECK_MSG(prepared, "FineGrainedShuffleWriter should be prepared before writing.");
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
         "Output column size mismatch with field type size");
+
     size_t rows = block.rows();
     rows_in_blocks += rows;
     if (rows > 0)
@@ -70,8 +100,25 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (static_cast<UInt64>(rows_in_blocks) >= fine_grained_shuffle_batch_size)
+    if (blocks.size() == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
         batchWriteFineGrainedShuffle<false>();
+}
+
+template <class StreamWriterPtr>
+void FineGrainedShuffleWriter<StreamWriterPtr>::initScatterColumns()
+{
+    scattered.resize(num_columns);
+    for (size_t col_id = 0; col_id < num_columns; ++col_id)
+    {
+        auto & column = header.getByPosition(col_id).column;
+
+        scattered[col_id].reserve(num_bucket);
+        for (size_t chunk_id = 0; chunk_id < num_bucket; ++chunk_id)
+        {
+            scattered[col_id].emplace_back(column->cloneEmpty());
+            scattered[col_id][chunk_id]->reserve(1024);
+        }
+    }
 }
 
 template <class StreamWriterPtr>
@@ -79,59 +126,48 @@ template <bool send_exec_summary_at_last>
 void FineGrainedShuffleWriter<StreamWriterPtr>::batchWriteFineGrainedShuffle()
 {
     std::vector<TrackedMppDataPacket> tracked_packets(partition_num);
-
     if (!blocks.empty())
     {
         assert(rows_in_blocks > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
 
-        // fine_grained_shuffle_stream_count is in (0, 1024], and partition_num is uint16_t, so will not overflow.
-        uint32_t bucket_num = partition_num * fine_grained_shuffle_stream_count;
-
         HashBaseWriterHelper::materializeBlocks(blocks);
-        auto final_dest_tbl_columns = HashBaseWriterHelper::createDestColumns(blocks[0], bucket_num);
-        Block dest_block = blocks[0].cloneEmpty();
-
-        // Hash partition input_blocks into bucket_num.
         while (!blocks.empty())
         {
             const auto & block = blocks.back();
-            size_t columns = block.columns();
-            std::vector<String> partition_key_containers(collators.size());
-            auto dest_tbl_columns = HashBaseWriterHelper::createDestColumns(block, bucket_num);
-            HashBaseWriterHelper::computeHash(block, bucket_num, collators, partition_key_containers, partition_col_ids, dest_tbl_columns);
+            HashBaseWriterHelper::scatterColumnsInplace(block, num_bucket, collators, partition_key_containers_for_reuse, partition_col_ids, hash, selector, scattered);
             blocks.pop_back();
-
-            for (size_t bucket_idx = 0; bucket_idx < bucket_num; ++bucket_idx)
-            {
-                for (size_t col_id = 0; col_id < columns; ++col_id)
-                {
-                    const MutableColumnPtr & src_col = dest_tbl_columns[bucket_idx][col_id];
-                    final_dest_tbl_columns[bucket_idx][col_id]->insertRangeFrom(*src_col, 0, src_col->size());
-                }
-            }
         }
-        assert(blocks.empty());
-        rows_in_blocks = 0;
 
-        // For i-th stream_count buckets, send to i-th tiflash node.
-        for (size_t bucket_idx = 0; bucket_idx < bucket_num; bucket_idx += fine_grained_shuffle_stream_count)
+        // serialize each partitioned block and write it to its destination
+        size_t part_id = 0;
+        for (size_t bucket_idx = 0; bucket_idx < num_bucket; bucket_idx += fine_grained_shuffle_stream_count, ++part_id)
         {
-            size_t part_id = bucket_idx / fine_grained_shuffle_stream_count; // NOLINT(clang-analyzer-core.DivideZero)
             for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
             {
-                // For now we put all rows into one Block, may cause this Block too large.
-                dest_block.setColumns(std::move(final_dest_tbl_columns[bucket_idx + stream_idx]));
-                size_t dest_block_rows = dest_block.rows();
-                if (dest_block_rows > 0)
+                // assemble scatter columns into a block
+                MutableColumns columns;
+                columns.reserve(num_columns);
+                for (size_t col_id = 0; col_id < num_columns; ++col_id)
+                    columns.emplace_back(std::move(scattered[col_id][bucket_idx + stream_idx]));
+                auto block = header.cloneWithColumns(std::move(columns));
+
+                // encode into packet
+                chunk_codec_stream->encode(block, 0, block.rows());
+                tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
+                tracked_packets[part_id].packet.add_stream_ids(stream_idx);
+                chunk_codec_stream->clear();
+
+                // disassemble the block back to scatter columns
+                columns = block.mutateColumns();
+                for (size_t col_id = 0; col_id < num_columns; ++col_id)
                 {
-                    chunk_codec_stream->encode(dest_block, 0, dest_block_rows);
-                    tracked_packets[part_id].addChunk(chunk_codec_stream->getString());
-                    chunk_codec_stream->clear();
-                    tracked_packets[part_id].packet.add_stream_ids(stream_idx);
+                    columns[col_id]->popBack(columns[col_id]->size()); // clear column
+                    scattered[col_id][bucket_idx + stream_idx] = std::move(columns[col_id]);
                 }
             }
         }
+        rows_in_blocks = 0;
     }
 
     writePackets<send_exec_summary_at_last>(tracked_packets);

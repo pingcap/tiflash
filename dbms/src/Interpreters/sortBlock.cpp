@@ -70,8 +70,8 @@ ALWAYS_INLINE static inline bool NeedCollation(const IColumn * column, const Sor
 #define APPLY_FOR_TYPE(M) \
     M(UInt64)             \
     M(Int64)              \
+    M(StringBin)          \
     M(StringBinPadding)   \
-    M(StringBinNoPadding) \
     M(StringWithCollatorGeneric)
 
 #define CONCAT(x, y) x##y
@@ -124,7 +124,7 @@ struct ColumnStringCompare
             {
                 ret = BinCollatorCompare<true>(str_a.data, str_a.size, str_b.data, str_b.size);
             }
-            else if constexpr (type == FastPathType::StringBinNoPadding)
+            else if constexpr (type == FastPathType::StringBin)
             {
                 ret = BinCollatorCompare<false>(str_a.data, str_a.size, str_b.data, str_b.size);
             }
@@ -140,7 +140,7 @@ struct ColumnStringCompare
 using ColumnCompareUInt64 = ColumnVecCompare<UInt64>;
 using ColumnCompareInt64 = ColumnVecCompare<Int64>;
 using ColumnCompareStringBinPadding = ColumnStringCompare<FastPathType::StringBinPadding>;
-using ColumnCompareStringBinNoPadding = ColumnStringCompare<FastPathType::StringBinNoPadding>;
+using ColumnCompareStringBin = ColumnStringCompare<FastPathType::StringBin>;
 using ColumnCompareStringWithCollatorGeneric = ColumnStringCompare<FastPathType::StringWithCollatorGeneric>;
 
 // only for uint64, int64, string
@@ -235,7 +235,7 @@ struct FastSortDesc : boost::noncopyable
                         }
                         case TiDB::ITiDBCollator::CollatorType::BINARY:
                         {
-                            addFastPathType(FastPathType::StringBinNoPadding);
+                            addFastPathType(FastPathType::StringBin);
                             break;
                         }
                         default:
