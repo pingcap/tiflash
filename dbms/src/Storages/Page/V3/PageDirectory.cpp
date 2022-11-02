@@ -561,7 +561,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_REF)
     {
-        if (is_deleted)
+        if (!is_deleted)
         {
             ref_ids_maybe_rewrite[page_id] = {ori_page_id, create_ver};
         }

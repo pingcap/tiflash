@@ -162,7 +162,7 @@ public:
 
     void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
-    PageIdV3Internal createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
+    [[nodiscard]] PageIdV3Internal createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
     bool createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id);
 

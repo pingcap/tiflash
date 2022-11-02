@@ -77,14 +77,24 @@ PageDirectoryPtr PageDirectoryFactory::createFromReader(String storage_name, WAL
     return dir;
 }
 
-PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, const PageEntriesEdit & edit)
+// just for test
+PageDirectoryPtr PageDirectoryFactory::createFromEdit(String storage_name, FileProviderPtr & file_provider, PSDiskDelegatorPtr & delegator, PageEntriesEdit & edit)
 {
     auto [wal, reader] = WALStore::create(storage_name, file_provider, delegator, WALConfig());
     (void)reader;
     PageDirectoryPtr dir = std::make_unique<PageDirectory>(std::move(storage_name), std::move(wal));
+
+    // Allocate mock sequence to run gc
+    UInt64 mock_sequence = 0;
+    for (auto & r : edit.getMutRecords())
+    {
+        r.version.sequence = ++mock_sequence;
+    }
+
     loadEdit(dir, edit);
     // Reset the `sequence` to the maximum of persisted.
     dir->sequence = max_applied_ver.sequence;
+    RUNTIME_CHECK(dir->sequence, mock_sequence);
 
     // After restoring from the disk, we need cleanup all invalid entries in memory, or it will
     // try to run GC again on some entries that are already marked as invalid in BlobStore.
