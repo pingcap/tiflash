@@ -68,8 +68,6 @@ struct ExchangeReceiverResult
     bool meet_error;
     String error_msg;
     bool eof;
-    /// Result only contains rows info in decode_detail, 'rowsInfoOnly' is true only when flushing data previous to eof
-    bool rowsInfoOnly;
     DecodeDetail decode_detail;
 
     ExchangeReceiverResult()
@@ -79,13 +77,6 @@ struct ExchangeReceiverResult
     static ExchangeReceiverResult newOk(std::shared_ptr<tipb::SelectResponse> resp_, size_t call_index_, const String & req_info_)
     {
         return {resp_, call_index_, req_info_, /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false};
-    }
-
-    static ExchangeReceiverResult newRowsInfoOnly(size_t rows)
-    {
-        ExchangeReceiverResult result(/*resp*/ nullptr, 0, "", /*meet_error*/ false, /*error_msg*/ "", /*eof*/ false, /*rowsInfoOnly*/ true);
-        result.decode_detail.rows = rows;
-        return result;
     }
 
     static ExchangeReceiverResult newEOF(const String & req_info_)
@@ -105,15 +96,13 @@ private:
         const String & req_info_ = "",
         bool meet_error_ = false,
         const String & error_msg_ = "",
-        bool eof_ = false,
-        bool rowsInfoOnly_ = false)
+        bool eof_ = false)
         : resp(resp_)
         , call_index(call_index_)
         , req_info(req_info_)
         , meet_error(meet_error_)
         , error_msg(error_msg_)
         , eof(eof_)
-        , rowsInfoOnly(rowsInfoOnly_)
     {}
 };
 

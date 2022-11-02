@@ -161,22 +161,19 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             const auto & decode_detail = result.decode_detail;
             total_rows += decode_detail.rows;
 
-            if (!result.rowsInfoOnly)
-            {
-                size_t index = 0;
-                if constexpr (is_streaming_reader)
-                    index = result.call_index;
+            size_t index = 0;
+            if constexpr (is_streaming_reader)
+                index = result.call_index;
 
-                ++connection_profile_infos[index].packets;
-                connection_profile_infos[index].bytes += decode_detail.packet_bytes;
+            connection_profile_infos[index].packets += decode_detail.packets;
+            connection_profile_infos[index].bytes += decode_detail.packet_bytes;
 
-                LOG_TRACE(
-                    log,
-                    "recv {} rows from remote for {}, total recv row num: {}",
-                    decode_detail.rows,
-                    result.req_info,
-                    total_rows);
-            }
+            LOG_TRACE(
+                log,
+                "recv {} rows from remote for {}, total recv row num: {}",
+                decode_detail.rows,
+                result.req_info,
+                total_rows);
 
             if (decode_detail.rows > 0)
                 return true;
@@ -201,8 +198,9 @@ public:
         execution_summaries.resize(source_num);
         connection_profile_infos.resize(source_num);
         sample_block = Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema())));
+        constexpr size_t squash_rows_limit = 8192;
         if constexpr (is_streaming_reader)
-            decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, 8192);
+            decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, squash_rows_limit);
     }
 
     Block getHeader() const override { return sample_block; }

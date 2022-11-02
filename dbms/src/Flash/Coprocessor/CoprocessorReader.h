@@ -47,8 +47,6 @@ struct CoprocessorReaderResult
     bool meet_error;
     String error_msg;
     bool eof;
-    /// Always false, aligned with ExchangeReceiverResult struct
-    bool rowsInfoOnly = false;
     String req_info = "cop request";
     DecodeDetail decode_detail;
 

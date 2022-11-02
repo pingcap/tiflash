@@ -752,7 +752,10 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
         /// If there are cached data in squashDecoder, then just push the block and return EOF next iteration
         if (last_block && last_block->rows() > 0)
         {
-            const auto & result = DB::ExchangeReceiverResult::newRowsInfoOnly(last_block->rows());
+            /// Can't get correct caller_index here, use 0 instead
+            auto result = ExchangeReceiverResult::newOk(nullptr, 0, "");
+            result.decode_detail.packets = 0;
+            result.decode_detail.rows = last_block->rows();
             block_queue.push(std::move(last_block.value()));
             return result;
         }
