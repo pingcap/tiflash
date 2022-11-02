@@ -531,49 +531,9 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
     PageId page_id = 100;
     auto check_for_blob_id_1 = [&](const PageIdAndVersionedEntries & entries) {
         auto it = entries.begin();
-
-        ASSERT_EQ(std::get<0>(*it).low, page_id);
-        ASSERT_EQ(std::get<1>(*it).sequence, 1);
-        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v1);
-
-        it++;
-        ASSERT_EQ(std::get<0>(*it).low, page_id);
-        ASSERT_EQ(std::get<1>(*it).sequence, 2);
-        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v2);
-
-        it++;
-        ASSERT_EQ(std::get<0>(*it).low, page_id);
-        ASSERT_EQ(std::get<1>(*it).sequence, 5);
-        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v5);
-
-        it++;
         ASSERT_EQ(std::get<0>(*it).low, page_id);
         ASSERT_EQ(std::get<1>(*it).sequence, 11);
         ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v11);
-    };
-    auto check_for_blob_id_2 = [&](const PageIdAndVersionedEntries & entries) {
-        auto it = entries.begin();
-
-        ASSERT_EQ(std::get<0>(*it).low, page_id);
-        ASSERT_EQ(std::get<1>(*it).sequence, 3);
-        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v3);
-
-        it++;
-        ASSERT_EQ(std::get<0>(*it).low, page_id);
-        ASSERT_EQ(std::get<1>(*it).sequence, 4);
-        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v4);
-    };
-    auto check_for_blob_id_3 = [&](const PageIdAndVersionedEntries & entries) {
-        auto it = entries.begin();
-
-        ASSERT_EQ(std::get<0>(*it).low, page_id);
-        ASSERT_EQ(std::get<1>(*it).sequence, 6);
-        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v6);
-
-        it++;
-        ASSERT_EQ(std::get<0>(*it).low, page_id);
-        ASSERT_EQ(std::get<1>(*it).sequence, 8);
-        ASSERT_SAME_ENTRY(std::get<2>(*it), entry_v8);
     };
 
     {
@@ -592,8 +552,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
         ASSERT_EQ(blob_entries.size(), 1);
-        ASSERT_EQ(blob_entries[blob_id].size(), 4);
-        ASSERT_EQ(total_size, 1 + 2 + 5 + 11);
+        ASSERT_EQ(blob_entries[blob_id].size(), 1);
+        ASSERT_EQ(total_size, 11);
         check_for_blob_id_1(blob_entries[blob_id]);
     }
 
@@ -603,10 +563,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         const BlobFileId blob_id = 2;
         PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
-        ASSERT_EQ(blob_entries.size(), 1);
-        ASSERT_EQ(blob_entries[blob_id].size(), 2);
-        ASSERT_EQ(total_size, 3 + 4);
-        check_for_blob_id_2(blob_entries[blob_id]);
+        ASSERT_EQ(blob_entries.empty(), true);
+        ASSERT_EQ(total_size, 0);
     }
 
     {
@@ -615,10 +573,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         const BlobFileId blob_id = 3;
         PageSize total_size = entries.getEntriesByBlobIds({blob_id}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
-        ASSERT_EQ(blob_entries.size(), 1);
-        ASSERT_EQ(blob_entries[blob_id].size(), 2);
-        ASSERT_EQ(total_size, 6 + 8);
-        check_for_blob_id_3(blob_entries[blob_id]);
+        ASSERT_EQ(blob_entries.empty(), true);
+        ASSERT_EQ(total_size, 0);
     }
 
     // {1, 2}
@@ -627,12 +583,10 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({1, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
-        ASSERT_EQ(blob_entries.size(), 2);
-        ASSERT_EQ(blob_entries[1].size(), 4);
-        ASSERT_EQ(blob_entries[2].size(), 2);
-        ASSERT_EQ(total_size, (1 + 2 + 5 + 11) + (3 + 4));
+        ASSERT_EQ(blob_entries.size(), 1);
+        ASSERT_EQ(blob_entries[1].size(), 1);
+        ASSERT_EQ(total_size, 11);
         check_for_blob_id_1(blob_entries[1]);
-        check_for_blob_id_2(blob_entries[2]);
     }
 
     // {2, 3}
@@ -641,12 +595,8 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
-        ASSERT_EQ(blob_entries.size(), 2);
-        ASSERT_EQ(blob_entries[2].size(), 2);
-        ASSERT_EQ(blob_entries[3].size(), 2);
-        ASSERT_EQ(total_size, (6 + 8) + (3 + 4));
-        check_for_blob_id_2(blob_entries[2]);
-        check_for_blob_id_3(blob_entries[3]);
+        ASSERT_EQ(blob_entries.empty(), true);
+        ASSERT_EQ(total_size, 0);
     }
 
     // {1, 2, 3}
@@ -655,14 +605,10 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
-        ASSERT_EQ(blob_entries.size(), 3);
-        ASSERT_EQ(blob_entries[1].size(), 4);
-        ASSERT_EQ(blob_entries[2].size(), 2);
-        ASSERT_EQ(blob_entries[3].size(), 2);
-        ASSERT_EQ(total_size, (1 + 2 + 5 + 11) + (6 + 8) + (3 + 4));
+        ASSERT_EQ(blob_entries.size(), 1);
+        ASSERT_EQ(blob_entries[1].size(), 1);
+        ASSERT_EQ(total_size, 11);
         check_for_blob_id_1(blob_entries[1]);
-        check_for_blob_id_2(blob_entries[2]);
-        check_for_blob_id_3(blob_entries[3]);
     }
 
     // {1, 2, 3, 100}; blob_id 100 is not exist in actual
@@ -671,15 +617,10 @@ TEST_F(VersionedEntriesTest, getEntriesByBlobId)
         std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> rewrite;
         PageSize total_size = entries.getEntriesByBlobIds({1, 3, 2, 4}, buildV3Id(TEST_NAMESPACE_ID, page_id), blob_entries, rewrite);
 
-        ASSERT_EQ(blob_entries.size(), 3); // 100 not exist
-        ASSERT_EQ(blob_entries.find(100), blob_entries.end());
-        ASSERT_EQ(blob_entries[1].size(), 4);
-        ASSERT_EQ(blob_entries[2].size(), 2);
-        ASSERT_EQ(blob_entries[3].size(), 2);
-        ASSERT_EQ(total_size, (1 + 2 + 5 + 11) + (6 + 8) + (3 + 4));
+        ASSERT_EQ(blob_entries.size(), 1);
+        ASSERT_EQ(blob_entries[1].size(), 1);
+        ASSERT_EQ(total_size, 11);
         check_for_blob_id_1(blob_entries[1]);
-        check_for_blob_id_2(blob_entries[2]);
-        check_for_blob_id_3(blob_entries[3]);
     }
 }
 
