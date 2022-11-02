@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/ThreadManager.h>
-#include <common/logger_useful.h>
 #include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <Storages/Transaction/TMTContext.h>
@@ -48,7 +47,7 @@ std::vector<pingcap::coprocessor::BatchCopTask> DisaggregatedTiFlashTableScanInt
     return batch_cop_tasks;
 }
 
-::mpp::DispatchTaskRequest buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
+::mpp::DispatchTaskRequest DisaggregatedTiFlashTableScanInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
 {
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
     const auto * dag_req = context.getDAGContext()->dag_request;

@@ -28,6 +28,7 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/DisaggregatedTiFlashTableScanInterpreter.h>
 #include <Interpreters/Context.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/IManageableStorage.h>
@@ -530,185 +531,39 @@ std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(
     return all_tasks;
 }
 
-void DAGStorageInterpreter::buildDispatchMPPTaskRequest(const pingcap::coprocessor::BatchCopTask & batch_cop_task)
+void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline)
 {
-    const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    const auto * dag_req = context.getDAGContext()->dag_request;
-
-    ::mpp::DispatchTaskRequest dispatch_req;
-    ::mpp::TaskMeta * dispatch_req_meta = dispatch_req.mutable_meta();
-    dispatch_req_meta->set_task_id(sender_target_task_meta.task_id());
-    dispatch_req_meta->set_start_ts(sender_target_task_meta.start_ts());
-    dispatch_req_meta->set_address(batch_cop_task.store_addr);
-    const auto & settings = context.getSettings();
-    dispatch_req.set_timeout(settings.mpp_task_timeout);
-    dispatch_req.set_schema_ver(settings.read_tso);
-    RUNTIME_CHECK_MSG(batch_cop_task.region_infos.empty() != batch_cop_task.table_regions.empty(),
-            "batch cop task invalid, single table region info: {}, partition table region info: {}",
-            batch_cop_task.region_infos.size(), batch_cop_task.table_regions.size());
-    if (!batch_cop_task.region_infos.empty())
+    if (tmt.isDisaggregatedComputeNode())
     {
-        // For non-partition table.
-        for (const auto & region_info : batch_cop_task.region_infos)
-        {
-            auto * region = dispatch_req.add_regions();
-            region->set_region_id(region_info.region_id.id);
-            region->mutable_region_epoch()->set_version(region_info.region_id.ver);
-            region->mutable_region_epoch()->set_conf_ver(region_info.region_id.conf_ver);
-        }
+        DisaggregatedTiFlashTableScanInterpreter tsc_interpreter(context, table_scan, remote_requests, log);
+        tsc_interpreter.execute(pipeline);
+        return;
     }
     else
     {
-        // For partition table.
-        for (const auto & table_region : batch_cop_task.table_regions)
+        std::vector<pingcap::coprocessor::copTask> all_tasks = buildCopTasks(remote_requests);
+
+        const DAGSchema & schema = remote_requests[0].schema;
+        pingcap::kv::Cluster * cluster = tmt.getKVCluster();
+        bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+        size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
+        size_t task_per_thread = all_tasks.size() / concurrent_num;
+        size_t rest_task = all_tasks.size() % concurrent_num;
+        for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
         {
-            auto * req_table_region = dispatch_req.add_table_regions();
-            req_table_region->set_physical_table_id(table_region.physical_table_id);
-            auto * region = req_table_region->add_regions();
-            for (const auto & region_info : table_region.region_infos)
-            {
-                region->set_region_id(region_info.region_id.id);
-                region->mutable_region_epoch()->set_version(region_info.region_id.ver);
-                region->mutable_region_epoch()->set_conf_ver(region_info.region_id.conf_ver);
-                for (const auto & key_range : region_info.ranges)
-                {
-                    key_range.setKeyRange(region->add_ranges());
-                }
-            }
+            size_t task_end = task_start + task_per_thread;
+            if (i < rest_task)
+                task_end++;
+            if (task_end == task_start)
+                continue;
+            std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
+
+            auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
+            context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
+            BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
+            pipeline.streams.push_back(input);
+            task_start = task_end;
         }
-    }
-
-    tipb::DAGRequest sender_dag_req;
-    sender_dag_req.set_time_zone_name(dag_req->time_zone_name());
-    sender_dag_req.set_time_zone_offset(dag_req->time_zone_offset());
-    sender_dag_req.set_collect_execution_summaries(true);
-    sender_dag_req.set_flags(dag_req->flags());
-    sender_dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
-    // Ignore sender_dag_req.output_offsets because tiflash_storage sender MPPTask is not root.
-
-    tipb::Executor * executor = sender_dag_req.mutable_root_executor();
-    executor->set_tp(tipb::ExecType::TypeExchangeSender);
-    // gjt todo: also check exec summaries.
-    executor->set_executor_id("disaggregated_storage_exchange_sender");
-
-    tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
-    sender->set_tp(tipb::ExchangeType::PassThrough);
-    sender->add_encoded_task_meta(sender_target_task_meta.SerializeAsString());
-    auto * child = sender->mutable_child();
-    child->CopyFrom(*(table_scan.getTableScanPB()));
-    // gjt todo: ignore sender.all_filed_types
-    // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
-}
-
-std::vector<pingcap::coprocessor::BatchCopTask> DAGStorageInterpreter::buildBatchCopTasks(const std::vector<RemoteRequest> & remote_requests)
-{
-    std::vector<Int64> physical_table_ids;
-    physical_table_ids.reserve(remote_requests.size());
-    std::vector<pingcap::coprocessor::KeyRanges> ranges_for_each_physical_table;
-    ranges_for_each_physical_table.reserve(remote_requests.size());
-    for (const auto & remote_request : remote_requests)
-    {
-        physical_table_ids.emplace_back(remote_request.physical_table_id);
-        ranges_for_each_physical_table.emplace_back(remote_request.key_ranges);
-    }
-
-    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-    pingcap::kv::StoreType store_type = pingcap::kv::StoreType::TiFlash;
-    auto batch_cop_tasks = pingcap::coprocessor::buildBatchCopTasks(bo, cluster, table_scan.isPartitionTableScan(), physical_table_ids, ranges_for_each_physical_table, store_type, &Poco::Logger::get("pingcap/coprocessor"));
-    LOG_DEBUG(log, "batch cop tasks({}) build finish for tiflash_storage node", batch_cop_tasks.size());
-    return batch_cop_tasks;
-}
-
-void DAGStorageInterpreter::dispatchMPPTasks()
-{
-    auto batch_cop_tasks = buildBatchCopTasks(remote_request);
-    auto dispatch_reqs = buildDispatchMPPTaskRequests(batch_cop_tasks);
-    std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
-
-    for (size_t i = 0; i < dispatch_reqs.size(); ++i)
-    {
-        thread_manager->schedule(/*mem_tracker=*/true, "", [&] {
-                auto rpc_call = std::make_shared<pingcap::kv::RpcCall<mpp::DispatchTaskRequest>>(dispatch_reqs[i]);
-                // gjt todo: retry dispatch
-                // gjt todo: make timeout const
-                context.getTMTContext().getKVCluster()->rpc_client->sendRequest(batch_cop_tasks[i].store_addr, rpc_call, /*timeout=*/60);
-        });
-    }
-
-    thread_manager->wait();
-}
-
-void DAGStorageInterpreter::buildExchangeReceiver(const std::vector<::mpp::DispatchTaskRequest> & dispatch_reqs, DAGPipeline & pipeline)
-{
-    tipb::ExchangeReceiver receiver;
-    const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    // gjt todo: field types is used to construct schema of ExchangeReceiver, which is only meaningful for cop.
-    for (const auto & req : dispatch_reqs)
-    {
-        const ::mpp::TaskMeta & sender_task_meta = req.meta();
-        receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
-    }
-
-    static const String executor_id = "disaggregated_compute_exchange_receiver";
-    auto exchange_receiver = std::make_shared<ExchangeReceiver>(
-            std::make_shared<GRPCReceiverContext>(
-                receiver,
-                sender_target_task_meta,
-                context.getTMTContext().getKVCluster(),
-                context.getTMTContext().getMPPTaskManager(),
-                context.getSettingsRef().enable_local_tunnel,
-                context.getSettingsRef().enable_async_grpc_client),
-            receiver.encoded_task_meta_size(),
-            context.getMaxStreams(),
-            log->identifier(),
-            executor_id,
-            /*fine_grained_shuffle_stream_count=*/0);
-    // No need to put this ExchangeReciever to DAGContext::receiver_set,
-    // because ExchangeReceiverInputStream is generated immediately.
-    // Planner no need to touch this ExchangeReciever.
-    // gjt todo: put receiver_set!!
-
-    // We can use PhysicalExchange::transform() to build InputStream after DAGQueryBlockInterpreter is deprecated.
-    size_t max_streams = context.getMaxStreams();
-    for (size_t i = 0; i < max_streams; ++i)
-    {
-        BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(receiver,
-                                                                                   log->identifier(),
-                                                                                   executor_id,
-                                                                                   /*stream_id=*/0);
-        // gjt todo:
-        // exchange_receiver_io_input_streams.push_back(stream);
-        stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
-        // stream->setExtraInfo(extra_info);
-        pipeline.streams.push_back(stream);
-    }
-}
-
-void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline)
-{
-    std::vector<pingcap::coprocessor::copTask> all_tasks = buildCopTasks(remote_requests);
-
-    const DAGSchema & schema = remote_requests[0].schema;
-    pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    bool has_enforce_encode_type = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
-    size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
-    size_t task_per_thread = all_tasks.size() / concurrent_num;
-    size_t rest_task = all_tasks.size() % concurrent_num;
-    for (size_t i = 0, task_start = 0; i < concurrent_num; ++i)
-    {
-        size_t task_end = task_start + task_per_thread;
-        if (i < rest_task)
-            task_end++;
-        if (task_end == task_start)
-            continue;
-        std::vector<pingcap::coprocessor::copTask> tasks(all_tasks.begin() + task_start, all_tasks.begin() + task_end);
-
-        auto coprocessor_reader = std::make_shared<CoprocessorReader>(schema, cluster, tasks, has_enforce_encode_type, 1);
-        context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
-        BlockInputStreamPtr input = std::make_shared<CoprocessorBlockInputStream>(coprocessor_reader, log->identifier(), table_scan.getTableScanExecutorID(), /*stream_id=*/0);
-        pipeline.streams.push_back(input);
-        task_start = task_end;
     }
 }
 
