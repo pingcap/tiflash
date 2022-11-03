@@ -98,6 +98,14 @@ grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()
     return future.get();
 }
 
+String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
+{
+    if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
+        return String(it->second.data(), it->second.size());
+
+    return default_val;
+}
+
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context,
     const coprocessor::Request * request,
@@ -118,6 +126,12 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
     });
+    if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+        GET_METRIC(tiflash_remote_read_count, type_received).Increment();
+    SCOPE_EXIT({
+        if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+            GET_METRIC(tiflash_remote_read_count, type_ended).Increment();
+    });
 
     context->setMockStorage(mock_storage);
 
@@ -127,6 +141,8 @@ grpc::Status FlashService::Coprocessor(
         {
             return status;
         }
+        if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+            GET_METRIC(tiflash_remote_read_count, type_started).Increment();
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
         CoprocessorHandler cop_handler(cop_context, request, response);
         return cop_handler.execute();
@@ -363,14 +379,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
-}
-
-String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
-{
-    if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
-        return String(it->second.data(), it->second.size());
-
-    return default_val;
 }
 
 grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_context) const

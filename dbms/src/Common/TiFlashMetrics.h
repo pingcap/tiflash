@@ -51,6 +51,11 @@ namespace DB
         F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}),                       \
         F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}), F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),             \
         F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}), F(type_run_mpp_task, {"type", "run_mpp_task"}))                             \
+    M(tiflash_remote_read_count, "Number of handling request", Counter,                                                                   \
+        F(type_sent, {"type", "sent"}),                                                                                                   \
+        F(type_received, {"type", "received"}),                                                                                             \
+        F(type_started, {"type", "started"}),                                                                                             \
+        F(type_ended, {"type", "ended"}))                                                                                                  \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),           \
