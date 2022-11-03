@@ -170,10 +170,10 @@ PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver
         {
             // Full gc commit, we need to rewrite this page to
             // be normal page with upsert-entry.
-            // TODO: Also we need to decrease the ref-count of ori_page_id.
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
             is_deleted = false;
             type = EditRecordType::VAR_ENTRY;
+            // Also we need to decrease the ref-count of ori_page_id.
             return ori_page_id;
         }
         else
@@ -185,6 +185,9 @@ PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver
             entries.emplace(delete_ver, EntryOrDelete::newDelete());
             is_deleted = false;
             type = EditRecordType::VAR_ENTRY;
+            // Though the ref-id is marked as deleted, but the ref-count of
+            // ori_page_id is not decreased. Return the ori_page_id
+            // for decreasing ref-count.
             return ori_page_id;
         }
     }
