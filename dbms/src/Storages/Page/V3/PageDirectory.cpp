@@ -123,13 +123,7 @@ PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver
 {
     auto page_lock = acquireLock();
 
-    if (type == EditRecordType::VAR_DELETE)
-    {
-        type = EditRecordType::VAR_ENTRY;
-        assert(entries.empty());
-        entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
-        return buildV3Id(TEST_NAMESPACE_ID, INVALID_PAGE_ID);
-    }
+    // For applying upsert entry, only `VAR_ENTRY`/`VAR_REF` is valid state.
 
     if (type == EditRecordType::VAR_ENTRY)
     {
@@ -160,7 +154,7 @@ PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver
             // create a new version that inherit the `being_ref_count` of the last entry
             entries.emplace(ver, EntryOrDelete::newReplacingEntry(last_iter->second, entry));
         }
-        return buildV3Id(TEST_NAMESPACE_ID, INVALID_PAGE_ID);
+        return buildV3Id(0, INVALID_PAGE_ID);
     }
 
     if (type == EditRecordType::VAR_REF)
@@ -168,8 +162,8 @@ PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver
         // an ref-page is rewritten into a normal page
         if (!is_deleted)
         {
-            // Full gc commit, we need to rewrite this page to
-            // be normal page with upsert-entry.
+            // Full GC has rewritten new data on disk, we need to update this RefPage
+            // to be a normal page with the upsert-entry.
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
             is_deleted = false;
             type = EditRecordType::VAR_ENTRY;
@@ -178,9 +172,10 @@ PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver
         }
         else
         {
-            // The ref-id is deleted before full gc commit,
-            // we need to rewrite this page to be normal page
-            // with upsert-entry and a delete.
+            // The ref-id is deleted before full gc commit, but the new entry is
+            // rewritten into `entry`. We need to update this RefPage to be a
+            // be normal page with upsert-entry and a delete. Then later GC will
+            // remove the useless data on `entry`.
             entries.emplace(ver, EntryOrDelete::newNormalEntry(entry));
             entries.emplace(delete_ver, EntryOrDelete::newDelete());
             is_deleted = false;
