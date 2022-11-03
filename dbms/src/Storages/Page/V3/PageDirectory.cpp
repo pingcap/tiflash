@@ -561,6 +561,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_REF)
     {
+        // If the ref-id is not deleted, we will check whether its origin_entry.file_id in blob_ids
         if (!is_deleted)
         {
             ref_ids_maybe_rewrite[page_id] = {ori_page_id, create_ver};
@@ -579,6 +580,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     if (iter->second.isDelete())
         return 0;
 
+    // If `entry.file_id in blob_ids` we will rewrite this non-deleted page to a new location 
     assert(iter->second.isEntry());
     // The total entries size that will be moved
     PageSize entry_size_full_gc = 0;
@@ -1333,6 +1335,7 @@ void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiter
         auto id_to_deref = versioned_entries->createUpsertEntry(record.version, record.entry);
         if (id_to_deref.low != INVALID_PAGE_ID)
         {
+            // The ref-page is rewritten into a normal page, we need to decrease the ref-count of original page
             MVCCMapType::const_iterator deref_iter;
             {
                 std::shared_lock read_lock(table_rw_mutex);

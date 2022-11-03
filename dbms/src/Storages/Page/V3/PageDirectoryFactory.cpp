@@ -200,7 +200,9 @@ void PageDirectoryFactory::applyRecord(
             auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry);
             if (id_to_deref.low != INVALID_PAGE_ID)
             {
+                // The ref-page is rewritten into a normal page, we need to decrease the ref-count of the original page
                 auto deref_iter = dir->mvcc_table_directory.find(id_to_deref);
+                RUNTIME_CHECK_MSG(deref_iter != dir->mvcc_table_directory.end(), "Can't find [page_id={}] to deref when applying upsert", id_to_deref);
                 auto deref_res = deref_iter->second->derefAndClean(/*lowest_seq*/ 0, id_to_deref, restored_version, 1, nullptr);
                 RUNTIME_ASSERT(!deref_res);
             }
