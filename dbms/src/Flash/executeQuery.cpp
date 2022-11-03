@@ -22,6 +22,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/executeQuery.h>
+#include <Flash/Executor/DataStreamExecutor.h>
 
 namespace ProfileEvents
 {
@@ -110,5 +111,11 @@ BlockIO executeQuery(Context & context, bool internal)
         DAGQuerySource dag(context);
         return executeDAG(dag, context, internal);
     }
+}
+
+QueryExecutorPtr queryExecute(Context & context, bool internal)
+{
+    auto io = executeQuery(context, internal);
+    return std::make_unique<DataStreamExecutor>(io);
 }
 } // namespace DB

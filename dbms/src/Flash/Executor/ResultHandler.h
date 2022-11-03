@@ -14,13 +14,33 @@
 
 #pragma once
 
-#include <Core/QueryProcessingStage.h>
-#include <DataStreams/BlockIO.h>
-#include <Interpreters/Context.h>
-#include <Flash/Executor/QueryExecutor.h>
+#include <Core/Block.h>
+
+#include <functional>
 
 namespace DB
 {
-BlockIO executeQuery(Context & context, bool internal = false);
-QueryExecutorPtr queryExecute(Context & context, bool internal = false);
+class ResultHandler
+{
+public:
+    using Handler = std::function<void(const Block &)>;
+    explicit ResultHandler(Handler handler_)
+        : handler(handler_)
+    {}
+    ResultHandler()
+        : is_default(true)
+    {}
+
+    bool isDefault() const { return is_default; }
+
+    void operator()(const Block & block) const
+    {
+        handler(block);
+    }
+
+private:
+    Handler handler;
+
+    bool is_default = false;
+};
 } // namespace DB
