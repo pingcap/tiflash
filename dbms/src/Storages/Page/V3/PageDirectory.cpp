@@ -172,7 +172,7 @@ PageIdV3Internal VersionedPageEntries::createUpsertEntry(const PageVersion & ver
         }
         else
         {
-            // The ref-id is deleted before full gc commit, but the new entry is
+            // The ref-id is deleted before full gc commit, but the data is
             // rewritten into `entry`. We need to update this RefPage to be a
             // be normal page with upsert-entry and a delete. Then later GC will
             // remove the useless data on `entry`.
