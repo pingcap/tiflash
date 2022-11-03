@@ -33,7 +33,7 @@ release: SHELL := $(CONTAINER_SHELL)
 release:
 	mkdir -p cmake-build-Release \
 	&& cd cmake-build-Release \
-	&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELEASE \
+	&& cmake .. -GNinja -DCMAKE_BUILD_TYPE=RELWITHDEBINFO \
 			-DCMAKE_C_COMPILER=clang \
 			-DCMAKE_CXX_COMPILER=clang++ \
 	&& cmake --build . \
