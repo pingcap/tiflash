@@ -580,7 +580,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     if (iter->second.isDelete())
         return 0;
 
-    // If `entry.file_id in blob_ids` we will rewrite this non-deleted page to a new location 
+    // If `entry.file_id in blob_ids` we will rewrite this non-deleted page to a new location
     assert(iter->second.isEntry());
     // The total entries size that will be moved
     PageSize entry_size_full_gc = 0;
