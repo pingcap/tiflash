@@ -230,10 +230,8 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
     auto query_executor = queryExecute(context.context, /*internal=*/true);
-    std::mutex read_mu;
     Blocks blocks;
-    query_executor->execute([&read_mu, &blocks](const Block & block) {
-        std::lock_guard lock(read_mu);
+    query_executor->execute([&blocks](const Block & block) {
         blocks.push_back(block);
     });
     return mergeBlocks(blocks).getColumnsWithTypeAndName();
