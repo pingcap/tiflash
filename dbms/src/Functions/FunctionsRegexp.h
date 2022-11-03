@@ -395,6 +395,18 @@ private:
     ParamImplType data;
 };
 
+#define APPLY_FOR_PARAM_STRING_VARIANTS(M, pv_name, param_name, next_process) \
+    M(StringNullableAndNotConst, pv_name, param_name, next_process) \
+    M(StringNotNullableAndConst, pv_name, param_name, next_process) \
+    M(StringNotNullableAndNotConst, pv_name, param_name, next_process) \
+    M(StringNullableAndConst, pv_name, param_name, next_process) \
+
+#define APPLY_FOR_PARAM_INT_VARIANTS(M, pv_name, param_name, next_process) \
+    M(IntNullableAndNotConst, pv_name, param_name, next_process) \
+    M(IntNotNullableAndConst, pv_name, param_name, next_process) \
+    M(IntNotNullableAndNotConst, pv_name, param_name, next_process) \
+    M(IntNullableAndConst, pv_name, param_name, next_process) \
+
 class ParamVariant
 {
 public:
@@ -458,30 +470,29 @@ public:
         {
             switch (param_type)
             {
-            case ParamType::StringNullableAndNotConst:
-                delete reinterpret_cast<ParamStringNullableAndNotConst *>(param);
-                break;
-            case ParamType::StringNotNullableAndConst:
-                delete reinterpret_cast<ParamStringNotNullableAndConst *>(param);
-                break;
-            case ParamType::StringNotNullableAndNotConst:
-                delete reinterpret_cast<ParamStringNotNullableAndNotConst *>(param);
-                break;
-            case ParamType::StringNullableAndConst:
-                delete reinterpret_cast<ParamStringNullableAndConst *>(param);
-                break;
-            case ParamType::IntNullableAndNotConst:
-                delete reinterpret_cast<ParamIntNullableAndNotConst *>(param);
-                break;
-            case ParamType::IntNotNullableAndConst:
-                delete reinterpret_cast<ParamIntNotNullableAndConst *>(param);
-                break;
-            case ParamType::IntNotNullableAndNotConst:
-                delete reinterpret_cast<ParamIntNotNullableAndNotConst *>(param);
-                break;
-            case ParamType::IntNullableAndConst:
-                delete reinterpret_cast<ParamIntNullableAndConst *>(param);
-                break;
+// Enumerate cases that delete string param pointer
+#define M(NAME, pv_name, param_name, next_process) \
+    case ParamType::NAME: \
+    { \
+        delete reinterpret_cast<Param##NAME *>(param); \
+        break; \
+    }
+
+    // Expand the macro to enumerate string param cases
+    APPLY_FOR_PARAM_STRING_VARIANTS(M, placeholder1, placeholder2, placeholder3)
+#undef M
+
+// Enumerate cases that delete int param pointer
+#define M(NAME, pv_name, param_name, next_process) \
+    case ParamType::NAME: \
+    { \
+        delete reinterpret_cast<Param##NAME *>(param); \
+        break; \
+    }
+
+    // Expand the macro to enumerate int param cases
+    APPLY_FOR_PARAM_INT_VARIANTS(M, placeholder1, placeholder2, placeholder3)
+#undef M
             default:
                 throw Exception("Unexpected ParamType");
             }
@@ -587,36 +598,21 @@ private:
 // Do not merge GET_ACTUAL_STRING_PARAM and GET_ACTUAL_INT_PARAM together,
 // as this will generate more useless codes and templates.
 
-// Common method to get actual string param
-#define GET_ACTUAL_STRING_PARAM(pv_name, param_name, next_process)                                                            \
-    do                                                                                                                        \
-    {                                                                                                                         \
+#define ENUMERATE_PARAM_VARIANT_CASES(NAME, pv_name, param_name, next_process) \
+    case ParamVariant::ParamType::NAME: \
+    { \
+        ParamVariant::Param##NAME *(param_name) = (pv_name).getParam##NAME();       \
+        next_process; \
+        break; \
+    }
+
+#define GET_ACTUAL_STRING_PARAM(pv_name, param_name, next_process) \
+    do \
+    { \
         switch ((pv_name).getParamType())                                                                                     \
         {                                                                                                                     \
-        case ParamVariant::ParamType::StringNullableAndNotConst:                                                              \
-        {                                                                                                                     \
-            ParamVariant::ParamStringNullableAndNotConst *(param_name) = (pv_name).getParamStringNullableAndNotConst();       \
-            next_process;                                                                                                     \
-            break;                                                                                                            \
-        }                                                                                                                     \
-        case ParamVariant::ParamType::StringNotNullableAndConst:                                                              \
-        {                                                                                                                     \
-            ParamVariant::ParamStringNotNullableAndConst *(param_name) = (pv_name).getParamStringNotNullableAndConst();       \
-            next_process;                                                                                                     \
-            break;                                                                                                            \
-        }                                                                                                                     \
-        case ParamVariant::ParamType::StringNotNullableAndNotConst:                                                           \
-        {                                                                                                                     \
-            ParamVariant::ParamStringNotNullableAndNotConst *(param_name) = (pv_name).getParamStringNotNullableAndNotConst(); \
-            next_process;                                                                                                     \
-            break;                                                                                                            \
-        }                                                                                                                     \
-        case ParamVariant::ParamType::StringNullableAndConst:                                                                 \
-        {                                                                                                                     \
-            ParamVariant::ParamStringNullableAndConst *(param_name) = (pv_name).getParamStringNullableAndConst();             \
-            next_process;                                                                                                     \
-            break;                                                                                                            \
-        }                                                                                                                     \
+        /* Expand this macro to enumerate all string cases */ \
+        APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, pv_name, param_name, next_process) \
         default:                                                                                                              \
             throw Exception("Unexpected ParamType");                                                                          \
         }                                                                                                                     \
@@ -997,6 +993,7 @@ private:
 
 #undef GET_ACTUAL_INT_PARAM
 #undef GET_ACTUAL_STRING_PARAM
+#undef ENUMERATE_PARAM_VARIANT_CASES
 #undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
 #undef RES_ARG_VAR_NAME
 #undef MATCH_TYPE_PARAM_PTR_VAR_NAME
@@ -1005,5 +1002,8 @@ private:
 #undef MATCH_TYPE_PV_VAR_NAME
 #undef PAT_PV_VAR_NAME
 #undef EXPR_PV_VAR_NAME
+
+#undef APPLY_FOR_PARAM_INT_VARIANTS
+#undef APPLY_FOR_PARAM_STRING_VARIANTS
 
 } // namespace DB
