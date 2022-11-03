@@ -17,6 +17,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/ReadBufferFromFileProvider.h>
+#include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBuffer.h>
 
 #include <memory>

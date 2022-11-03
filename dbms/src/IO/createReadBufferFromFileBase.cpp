@@ -20,6 +20,8 @@
 #endif
 #include <Common/ProfileEvents.h>
 
+#include "Encryption/ReadBufferFromFileProvider.h"
+
 namespace DB
 {
 namespace ErrorCodes

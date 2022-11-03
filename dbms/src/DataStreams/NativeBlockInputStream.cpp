@@ -23,6 +23,8 @@
 
 #include <ext/range.h>
 
+#include "IO/CompressedReadBuffer.h"
+
 
 namespace DB
 {
@@ -100,9 +102,9 @@ NativeBlockInputStream::NativeBlockInputStream(
     , index_block_it(index_block_it_)
     , index_block_end(index_block_end_)
 {
-    istr_concrete = typeid_cast<CompressedReadBufferFromFile<> *>(&istr);
+    istr_concrete = typeid_cast<CompressedReadBufferFromFileProvider<> *>(&istr);
     if (!istr_concrete)
-        throw Exception("When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFile.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("When need to use index for NativeBlockInputStream, istr must be CompressedReadBufferFromFileProvider.", ErrorCodes::LOGICAL_ERROR);
 
     if (index_block_it == index_block_end)
         return;

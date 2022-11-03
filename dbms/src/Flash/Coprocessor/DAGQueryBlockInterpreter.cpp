@@ -285,7 +285,7 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
 
     right_query.source = build_pipeline.firstStream();
     right_query.join = join_ptr;
-    join_ptr->init(right_query.source->getHeader(), join_build_concurrency);
+    join_ptr->init(right_query.source->getHeader(), join_build_concurrency, context.getTemporaryPath(), context.getFileProvider());
 
     /// probe side streams
     executeExpression(probe_pipeline, probe_side_prepare_actions, log, "append join key and join filters for probe side");

@@ -29,6 +29,13 @@
 #include <Interpreters/NullableUtils.h>
 #include <common/logger_useful.h>
 
+#include "Common/ClickHouseRevision.h"
+#include "DataStreams/NativeBlockInputStream.h"
+#include "DataStreams/NativeBlockOutputStream.h"
+#include "DataStreams/TemporaryFileStream.h"
+#include "Encryption/WriteBufferFromFileProvider.h"
+#include "IO/CompressedWriteBuffer.h"
+
 
 namespace DB
 {
@@ -472,12 +479,15 @@ void Join::setSampleBlock(const Block & block)
         sample_block_with_columns_to_add.insert(ColumnWithTypeAndName(Join::match_helper_type, match_helper_name));
 }
 
-void Join::init(const Block & sample_block, size_t build_concurrency_)
+void Join::init(const Block & sample_block, size_t build_concurrency_, String temporary_path_, FileProviderPtr  file_provider_)
 {
     std::unique_lock lock(rwlock);
     if (unlikely(initialized))
         throw Exception("Logical error: Join has been initialized", ErrorCodes::LOGICAL_ERROR);
     initialized = true;
+    this->temporary_path = temporary_path_;
+    this->file_provider = file_provider_;
+    this->block_rear_index_in_disk = 0;
     setBuildConcurrencyAndInitPool(build_concurrency_);
     /// Choose data structure to use for JOIN.
     initMapImpl(chooseMethod(getKeyColumns(key_names_right, sample_block), key_sizes));
@@ -510,7 +520,7 @@ struct Inserter<ASTTableJoin::Strictness::Any, Map, KeyGetter>
         auto emplace_result = key_getter.emplaceKey(map, i, pool, sort_key_container);
 
         if (emplace_result.isInserted())
-            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
+            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, nullptr, i);
     }
 };
 
@@ -523,7 +533,7 @@ struct Inserter<ASTTableJoin::Strictness::All, Map, KeyGetter>
         auto emplace_result = key_getter.emplaceKey(map, i, pool, sort_key_container);
 
         if (emplace_result.isInserted())
-            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, i);
+            new (&emplace_result.getMapped()) typename Map::mapped_type(stored_block, nullptr, i);
         else
         {
             /** The first element of the list is stored in the value of the hash table, the rest in the pool.
@@ -810,6 +820,85 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         blocks.push_back(block);
         stored_block = &blocks.back();
         original_blocks.push_back(block);
+        BlockDesc block_desc(stored_block, false, 0, 0);
+        block_descs.push_back(block_desc);
+        if (original_blocks.size() >=2 )
+        {
+            temporary_files.emplace_back(std::make_unique<Poco::TemporaryFile>(temporary_path));
+            auto const & file = temporary_files.back();
+            const std::string & path = file->path();
+            const std::string & index_path = path + ".index";
+            WriteBufferFromFileProvider file_buf(file_provider, path, EncryptionPath(path, ""));
+            CompressedWriteBuffer compressed_buf(file_buf);
+            WriteBufferFromFileProvider index_file_buf(file_provider, index_path, EncryptionPath(index_path, ""));
+            CompressedWriteBuffer index_compressed_buf(index_file_buf);
+            NativeBlockOutputStream block_out(compressed_buf, ClickHouseRevision::get(), original_blocks.front(), &index_compressed_buf);
+            size_t write_block_count = 0;
+            for (auto block_it = original_blocks.begin(); block_it != original_blocks.end(); ++block_it)
+            {
+                block_descs[this->block_rear_index_in_disk].in_disk = true;
+                block_descs[this->block_rear_index_in_disk].temporary_file_index = temporary_files.size() - 1;
+                block_descs[this->block_rear_index_in_disk].block_index = write_block_count++;
+                block_rear_index_in_disk++;
+                block_out.write(*block_it);
+            }
+            block_out.flush();
+            std::cout<<"write temp file :"<<path<<std::endl;
+            std::cout<<"write temp file index :"<<index_path<<std::endl;
+            original_blocks.clear();
+        }
+
+
+        NameSet column_names_set;
+        for (size_t i = 0; i < stored_block->columns(); ++i)
+        {
+            column_names_set.emplace(stored_block->getByPosition(i).name);
+        }
+
+
+//        while (!temporary_files.empty()) {
+//            auto & tmp = temporary_files.back();
+//            CompressedReadBufferFromFileProvider file_in(file_provider, tmp->path(), EncryptionPath(tmp->path(), ""), 0, 0, nullptr);
+//            CompressedReadBufferFromFile index_compressed_buf(tmp->path() + ".index", 0, 0);
+//            std::shared_ptr<const IndexForNativeFormat> index{std::make_shared<IndexForNativeFormat>(index_compressed_buf, column_names_set)};
+//            auto block_in = std::make_shared<NativeBlockInputStream>(file_in, ClickHouseRevision::get(), index->blocks.begin()+1, index->blocks.end());
+//
+//            while (auto block1 = block_in->read())
+//            {
+//                for (size_t i = 0; i < block1.rows(); ++i)
+//                {
+//                    std::cout<<block1.getByPosition(0).column->get64(i)<<" ";
+//                }
+//            }
+//            std::cout<<std::endl;
+//            temporary_files.pop_back();
+//        }
+
+        for (size_t i = 0; i < block_descs.size(); ++i)
+        {
+            if (!block_descs[i].in_disk)
+            {
+                auto block1 = block_descs[i].block;
+                for (size_t j = 0; j < block1->rows(); ++j)
+                {
+                    std::cout << block1->getByPosition(0).column->get64(j) << " ";
+                }
+            } else {
+                auto & tmp = temporary_files[block_descs[i].temporary_file_index];
+                CompressedReadBufferFromFileProvider file_in(file_provider, tmp->path(), EncryptionPath(tmp->path(), ""), 0, 0, nullptr);
+                CompressedReadBufferFromFile index_compressed_buf(tmp->path() + ".index", 0, 0);
+                std::shared_ptr<const IndexForNativeFormat> index{std::make_shared<IndexForNativeFormat>(index_compressed_buf, column_names_set)};
+                auto block_in = std::make_shared<NativeBlockInputStream>(file_in, ClickHouseRevision::get(), index->blocks.begin(), index->blocks.end());
+                while (auto block1 = block_in->read())
+                {
+                    for (size_t j = 0; j < block1.rows(); ++j)
+                    {
+                        std::cout << block1.getByPosition(0).column->get64(j) << " ";
+                    }
+                }
+            }
+            std::cout << std::endl;
+        }
     }
     if (build_set_exceeded.load())
         return;

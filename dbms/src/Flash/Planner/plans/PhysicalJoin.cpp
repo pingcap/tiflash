@@ -235,7 +235,7 @@ void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & co
     SubqueryForSet build_query;
     build_query.source = build_pipeline.firstStream();
     build_query.join = join_ptr;
-    join_ptr->init(build_query.source->getHeader(), join_build_concurrency);
+    join_ptr->init(build_query.source->getHeader(), join_build_concurrency, context.getTemporaryPath(), context.getFileProvider());
     dag_context.addSubquery(execId(), std::move(build_query));
 }
 

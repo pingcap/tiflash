@@ -74,6 +74,28 @@ public:
     }
 };
 
+TEST_F(WindowExecutorTestRunner, testSpillToDisk)
+try
+{
+    auto request = context
+                       .scan("test_db", "test_table")
+                       .sort({{"partition", false}, {"order", false}, {"partition", false}, {"order", false}}, true)
+                       .window(RowNumber(), {"order", false}, {"partition", false}, buildDefaultRowsFrame())
+                       .build(context);
+    context.context.getSettingsRef().max_bytes_before_external_sort = 50;
+    // nullable
+    executeWithTableScanAndConcurrency(
+        request,
+        "test_db",
+        "test_table",
+        {toNullableVec<Int64>("partition", {1, 1, 1, 1, 1, 1, 1, 1}),
+         {toNullableVec<Int64>("order", {2, 2, 2, 2, 1, 1, 1, 1})}},
+        createColumns({toNullableVec<Int64>("partition", {1, 1, 1, 1,1 , 1, 1, 1}),
+                       toNullableVec<Int64>("order", {1, 1, 1, 1, 2, 2, 2, 2}),
+                       toNullableVec<Int64>("row_number", {1, 2, 3, 4, 5, 6, 7, 8})}));
+}
+CATCH
+
 TEST_F(WindowExecutorTestRunner, testWindowFunctionByPartitionAndOrder)
 try
 {

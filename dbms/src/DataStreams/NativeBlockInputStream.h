@@ -17,7 +17,10 @@
 #include <Common/PODArray.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <Encryption/CompressedReadBufferFromFileProvider.h>
 #include <IO/CompressedReadBufferFromFile.h>
+
+#include "Encryption/ReadBufferFromFileProvider.h"
 
 namespace DB
 {
@@ -136,7 +139,7 @@ private:
     IndexOfBlockForNativeFormat::Columns::const_iterator index_column_it;
 
     /// If an index is specified, then `istr` must be CompressedReadBufferFromFile.
-    CompressedReadBufferFromFile<> * istr_concrete;
+    CompressedReadBufferFromFileProvider<> * istr_concrete;
 
     PODArray<double> avg_value_size_hints;
 

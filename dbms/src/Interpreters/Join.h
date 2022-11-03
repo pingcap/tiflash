@@ -30,6 +30,9 @@
 
 #include <shared_mutex>
 
+#include "Context.h"
+#include "Poco/TemporaryFile.h"
+
 
 namespace DB
 {
@@ -111,7 +114,7 @@ public:
     /** Call `setBuildConcurrencyAndInitPool`, `initMapImpl` and `setSampleBlock`.
       * You must call this method before subsequent calls to insertFromBlock.
       */
-    void init(const Block & sample_block, size_t build_concurrency_ = 1);
+    void init(const Block & sample_block, size_t build_concurrency_ = 1, String temporary_path_ = "", FileProviderPtr file_provider_ = nullptr);
 
     bool insertFromBlock(const Block & block);
 
@@ -169,15 +172,34 @@ public:
     };
     void setBuildTableState(BuildTableState state_);
 
+    struct BlockDesc
+    {
+        const Block * block;
+        bool in_disk;
+        size_t temporary_file_index;
+        size_t block_index;
+        BlockDesc() = default;
+        BlockDesc(const Block * block_, bool in_disk_, size_t temporary_file_index_, size_t block_index_)
+            : block(block_)
+            , in_disk(in_disk_)
+            , temporary_file_index(temporary_file_index_)
+            , block_index(block_index_)
+        {}
+    };
+
+    using BlockDescs = std::vector<BlockDesc>;
+
     /// Reference to the row in block.
     struct RowRef
     {
         const Block * block;
+        const BlockDesc * block_desc;
         size_t row_num;
 
         RowRef() = default;
-        RowRef(const Block * block_, size_t row_num_)
+        RowRef(const Block * block_, const BlockDesc * block_desc_, size_t row_num_)
             : block(block_)
+            , block_desc(block_desc_)
             , row_num(row_num_)
         {}
     };
@@ -188,11 +210,12 @@ public:
         RowRefList * next = nullptr;
 
         RowRefList() = default;
-        RowRefList(const Block * block_, size_t row_num_)
-            : RowRef(block_, row_num_)
+        RowRefList(const Block * block_, const BlockDesc * block_desc_, size_t row_num_)
+            : RowRef(block_, block_desc_, row_num_)
         {}
     };
 
+    using TemporaryFiles = std::vector<std::unique_ptr<Poco::TemporaryFile>>;
 
     /** Depending on template parameter, adds or doesn't add a flag, that element was used (row was joined).
       * For implementation of RIGHT and FULL JOINs.
@@ -304,6 +327,10 @@ private:
     /// keep original block for concurrent build
     Blocks original_blocks;
 
+    TemporaryFiles temporary_files;
+    BlockDescs block_descs;
+    size_t block_rear_index_in_disk;
+
     MapsAny maps_any; /// For ANY LEFT|INNER JOIN
     MapsAll maps_all; /// For ALL LEFT|INNER JOIN
     MapsAnyFull maps_any_full; /// For ANY RIGHT|FULL JOIN
@@ -337,6 +364,10 @@ private:
 
     /// Limits for maximum map size.
     SizeLimits limits;
+
+    String temporary_path;
+
+    FileProviderPtr file_provider;
 
     Block totals;
     std::atomic<size_t> total_input_build_rows{0};

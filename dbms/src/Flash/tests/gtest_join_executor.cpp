@@ -142,6 +142,20 @@ try
 }
 CATCH
 
+TEST_F(JoinExecutorTestRunner, TTT)
+try{
+    context.addMockTable("simple_test", "t1", {{"a", TiDB::TP::TypeInt24}, {"b", TiDB::TP::TypeInt24}}, {toNullableVec<Int32>("a", {1, 2, 3, 4, 5}), toNullableVec<Int32>("b", {1, 2, 3, 4, 5})});
+    context.addMockTable("simple_test", "t2", {{"a", TiDB::TP::TypeInt24}, {"b", TiDB::TP::TypeInt24}}, {toNullableVec<Int32>("a", {1, 3, 1, 2, 1}), toNullableVec<Int32>("b", {5, 4, 3, 2, 1})});
+    context.context.getSettingsRef().max_block_size = 2;
+
+    auto request = context.scan("simple_test", "t1")
+                       .join(context.scan("simple_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                       .build(context);
+
+    executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 3, 1, 2, 1}), toNullableVec<Int32>({1, 3, 1, 2, 1}),toNullableVec<Int32>({1, 3, 1, 2, 1}),toNullableVec<Int32>({5, 4, 3, 2, 1})});
+}
+CATCH
+
 TEST_F(JoinExecutorTestRunner, MultiJoin)
 try
 {

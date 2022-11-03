@@ -148,6 +148,21 @@ Context TiFlashTestEnv::getContext(const DB::Settings & settings, Strings testda
     if (testdata_path.empty())
         testdata_path.push_back(root_path);
     context.setPath(root_path);
+    /// Directory with temporary data for processing of heavy queries.
+    {
+        std::string tmp_path = context.getTemporaryPath();
+        Poco::File(tmp_path).createDirectories();
+
+        /// Clearing old temporary files.
+        Poco::DirectoryIterator dir_end;
+        for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
+        {
+            if (it->isFile() && startsWith(it.name(), "tmp"))
+            {
+                context.getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
+            }
+        }
+    }
     auto paths = getPathPool(testdata_path);
     context.setPathPool(paths.first, paths.second, Strings{}, true, context.getPathCapacity(), context.getFileProvider());
     global_contexts[0]->initializeGlobalStoragePoolIfNeed(context.getPathPool());
