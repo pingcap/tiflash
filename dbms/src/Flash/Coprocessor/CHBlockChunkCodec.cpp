@@ -176,6 +176,7 @@ Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)
     }
     return res;
 }
+
 void CHBlockChunkCodec::readBlockMeta(ReadBuffer & istr, size_t & columns, size_t & rows) const
 {
     readVarUInt(columns, istr);

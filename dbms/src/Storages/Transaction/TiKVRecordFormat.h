@@ -65,6 +65,7 @@ static const char ASYNC_COMMIT_PREFIX = 'a';
 static const char ROLLBACK_TS_PREFIX = 'r';
 static const char FLAG_OVERLAPPED_ROLLBACK = 'R';
 static const char GC_FENCE_PREFIX = 'F';
+static const char LAST_CHANGE_PREFIX = 'l';
 
 static const size_t SHORT_VALUE_MAX_LEN = 64;
 

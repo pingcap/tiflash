@@ -146,7 +146,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_key_names,
         build_key_names,
         true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
