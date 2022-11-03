@@ -216,14 +216,24 @@ TEST_P(EncryptionTest, EncryptionTest)
     EXPECT_TRUE(testEncryption(16, 16 * 2, test::IV_OVERFLOW_FULL));
 }
 
+INSTANTIATE_TEST_CASE_P(
+    EncryptionTestInstance,
+    EncryptionTest,
+    testing::Combine(
+        testing::Bool(),
+        testing::Values(
+            EncryptionMethod::Aes128Ctr,
+            EncryptionMethod::Aes192Ctr,
+            EncryptionMethod::Aes256Ctr,
 #if USE_GM_SSL
-INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr, EncryptionMethod::SM4Ctr)));
+            EncryptionMethod::SM4Ctr
 #elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
-INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr)));
+// not support SM4
 #else
-// Openssl support SM4 after 1.1.1 release version.
-INSTANTIATE_TEST_CASE_P(EncryptionTestInstance, EncryptionTest, testing::Combine(testing::Bool(), testing::Values(EncryptionMethod::Aes128Ctr, EncryptionMethod::Aes192Ctr, EncryptionMethod::Aes256Ctr, EncryptionMethod::SM4Ctr)));
+            // Openssl support SM4 after 1.1.1 release version.
+            EncryptionMethod::SM4Ctr
 #endif
+            )));
 
 
 TEST(PosixWritableFileTest, test)
