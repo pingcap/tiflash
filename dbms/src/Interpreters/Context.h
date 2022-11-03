@@ -388,7 +388,7 @@ public:
     BackgroundProcessingPool & initializeBlockableBackgroundPool(UInt16 pool_size);
     BackgroundProcessingPool & getBlockableBackgroundPool();
 
-    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, bool isDisaggregatedComputeNode_);
+    void createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, bool disaggregated_compute_node_);
 
     void initializeSchemaSyncService();
     SchemaSyncServicePtr & getSchemaSyncService();

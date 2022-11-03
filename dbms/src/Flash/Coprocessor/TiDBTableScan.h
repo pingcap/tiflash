@@ -39,7 +39,7 @@ public:
         return columns;
     }
     void constructTableScanForRemoteRead(tipb::TableScan * tipb_table_scan, TableID table_id) const;
-    void constructPartitionTableScanForRemoteRead(tipb::PartitionTableScan * tipb_table_scan) const;
+    void constructPartitionTableScanForRemoteRead(tipb::PartitionTableScan * tipb_partition_table_scan) const;
     Int64 getLogicalTableID() const
     {
         return logical_table_id;

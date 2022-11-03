@@ -81,7 +81,10 @@ public:
 
     const Context & getContext() const;
 
-    explicit TMTContext(Context & context_, const TiFlashRaftConfig & raft_config, const pingcap::ClusterConfig & cluster_config_, bool disaggregatedComputeNode_);
+    explicit TMTContext(Context & context_,
+            const TiFlashRaftConfig & raft_config,
+            const pingcap::ClusterConfig & cluster_config_,
+            bool disaggregated_compute_node_);
 
     SchemaSyncerPtr getSchemaSyncer() const;
 
@@ -117,7 +120,7 @@ public:
     Int64 waitRegionReadyTimeout() const;
     uint64_t readIndexWorkerTick() const;
 
-    bool isDisaggregatedComputeNode() const { return disaggregatedComputeNode; }
+    bool isDisaggregatedComputeNode() const { return disaggregated_compute_node; }
 private:
     Context & context;
     KVStorePtr kvstore;
@@ -143,7 +146,7 @@ private:
     std::atomic_uint64_t wait_index_timeout_ms;
     std::atomic_uint64_t read_index_worker_tick_ms;
     std::atomic_int64_t wait_region_ready_timeout_sec;
-    bool disaggregatedComputeNode;
+    bool disaggregated_compute_node;
 };
 
 const std::string & IntoStoreStatusName(TMTContext::StoreStatus status);

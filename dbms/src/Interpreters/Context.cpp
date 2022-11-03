@@ -1374,12 +1374,12 @@ BackgroundProcessingPool & Context::getBlockableBackgroundPool()
     return *shared->blockable_background_pool;
 }
 
-void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, bool isDisaggregatedComputeNode_)
+void Context::createTMTContext(const TiFlashRaftConfig & raft_config, pingcap::ClusterConfig && cluster_config, bool disaggregated_compute_node_)
 {
     auto lock = getLock();
     if (shared->tmt_context)
         throw Exception("TMTContext has already existed", ErrorCodes::LOGICAL_ERROR);
-    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config, isDisaggregatedComputeNode_);
+    shared->tmt_context = std::make_shared<TMTContext>(*this, raft_config, cluster_config, disaggregated_compute_node_);
 }
 
 void Context::initializePathCapacityMetric( //

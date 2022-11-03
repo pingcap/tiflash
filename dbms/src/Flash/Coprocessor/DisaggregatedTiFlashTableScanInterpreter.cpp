@@ -130,7 +130,7 @@ std::vector<std::shared_ptr<::mpp::DispatchTaskRequest>> DisaggregatedTiFlashTab
     std::shared_ptr<ThreadManager> thread_manager = newThreadManager();
     for (const auto & dispatch_req : dispatch_reqs)
     {
-        thread_manager->schedule(/*mem_tracker=*/true, "", [dispatch_req, this] {
+        thread_manager->schedule(/*propagate_memory_tracker=*/true, "", [dispatch_req, this] {
                 pingcap::kv::RpcCall<mpp::DispatchTaskRequest> rpc_call(dispatch_req);
                 // gjt todo: retry dispatch
                 // gjt todo: make timeout const
