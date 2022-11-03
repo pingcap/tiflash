@@ -53,8 +53,8 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
 
     std::shared_ptr<::mpp::DispatchTaskRequest> dispatch_req;
     ::mpp::TaskMeta * dispatch_req_meta = dispatch_req->mutable_meta();
-    dispatch_req_meta->set_task_id(sender_target_task_meta.task_id());
-    dispatch_req_meta->set_start_ts(sender_target_task_meta.start_ts());
+    dispatch_req_meta->set_start_ts(sender_target_task_start_ts);
+    dispatch_req_meta->set_task_id(sender_target_task_task_id);
     dispatch_req_meta->set_address(batch_cop_task.store_addr);
     const auto & settings = context.getSettings();
     dispatch_req->set_timeout(settings.mpp_task_timeout);
@@ -104,15 +104,19 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
 
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
-    // gjt todo: also check exec summaries.
-    executor->set_executor_id("disaggregated_storage_exchange_sender");
+    // Mocked executor_id of ExchangeSender.
+    // Meaning of this executor_id:
+    //   1. disaggregated means this only happens in disaggregated mode.
+    //   2. storage means this ExchangeSender will be executed in tiflash_storage node.
+    executor->set_executor_id(fmt::format("{}_{}_disaggregated_storage_exchange_sender",
+                sender_target_task_start_ts, sender_target_task_task_id));
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
     sender->add_encoded_task_meta(sender_target_task_meta.SerializeAsString());
     auto * child = sender->mutable_child();
     child->CopyFrom(*(table_scan.getTableScanPB()));
-    // gjt todo: ignore sender.all_filed_types
+    // Ignore sender.all_filed_types because it's useless for tiflash Planner/Interpreter.
     // Ignore sender.PartitionKeys and sender.Types because it's a PassThrough sender.
 
     dispatch_req->set_encoded_plan(sender_dag_req.SerializeAsString());
@@ -147,14 +151,20 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
 {
     tipb::ExchangeReceiver receiver;
     const auto & sender_target_task_meta = context.getDAGContext()->getMPPTaskMeta();
-    // gjt todo: field types is used to construct schema of ExchangeReceiver, which is only meaningful for cop.
+    // Ignore receiver.field types, because it's used to construct schema of ExchangeReceiver,
+    // which is only meaningful for cop protocal.
     for (const auto & dispatch_req : dispatch_reqs)
     {
         const ::mpp::TaskMeta & sender_task_meta = dispatch_req->meta();
         receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
     }
 
-    static const String executor_id = "disaggregated_compute_exchange_receiver";
+    // Mocked executor_id of ExchangeReceiver.
+    // Meaning of this executor_id:
+    //   1. disaggregated means this only happens in disaggregated mode.
+    //   2. storage means this ExchangeReceiver will be executed in tiflash_compute node.
+    const String executor_id = fmt::format("{}_{}_disaggregated_compute_exchange_receiver",
+            sender_target_task_start_ts, sender_target_task_task_id);
     auto exchange_receiver = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
                 receiver,
@@ -169,23 +179,22 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
             executor_id,
             /*fine_grained_shuffle_stream_count=*/0,
             /*is_tiflash_storage_receiver=*/true);
-    // No need to put this ExchangeReciever to DAGContext::receiver_set,
-    // because ExchangeReceiverInputStream is generated immediately.
-    // Planner no need to touch this ExchangeReciever.
-    // gjt todo: put receiver_set!!
+
+    context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);
 
     // We can use PhysicalExchange::transform() to build InputStream after DAGQueryBlockInterpreter is deprecated.
     size_t max_streams = context.getMaxStreams();
+    auto & exchange_receiver_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
+    const String extra_info = "squashing after disaggregated compute exchange receiver";
     for (size_t i = 0; i < max_streams; ++i)
     {
         BlockInputStreamPtr stream = std::make_shared<ExchangeReceiverInputStream>(exchange_receiver,
                                                                                    log->identifier(),
                                                                                    executor_id,
                                                                                    /*stream_id=*/0);
-        // gjt todo:
-        // exchange_receiver_io_input_streams.push_back(stream);
+        exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
-        // stream->setExtraInfo(extra_info);
+        stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
     }
 }

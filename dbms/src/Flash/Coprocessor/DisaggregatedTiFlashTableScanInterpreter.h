@@ -40,7 +40,9 @@ public:
         : context(context_)
         , table_scan(table_scan_)
         , remote_requests(remote_requests_)
-        , log(log_) {}
+        , log(log_)
+        , sender_target_task_start_ts(context_.getDAGContext()->getMPPTaskMeta().start_ts())
+        , sender_target_task_task_id(context_.getDAGContext()->getMPPTaskMeta().task_id()) {}
     void execute(DAGPipeline & pipeline);
 private:
     std::vector<pingcap::coprocessor::BatchCopTask> buildBatchCopTasks();
@@ -53,5 +55,7 @@ private:
     const TiDBTableScan & table_scan;
     const std::vector<RemoteRequest> & remote_requests;
     LoggerPtr log;
+    uint64_t sender_target_task_start_ts;
+    int64_t sender_target_task_task_id;
 };
 } // namespace DB

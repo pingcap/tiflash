@@ -323,6 +323,9 @@ void MPPTask::preprocess()
             throw Exception("task not in running state, may be cancelled");
         for (auto & r : dag_context->getCoprocessorReaders())
             receiver_set->addCoprocessorReader(r);
+        const auto & receiver_opt = dag_context->getDisaggregatedComputeExchangeReceiver();
+        if (receiver_opt.has_value())
+            receiver_set->addExchangeReceiver(receiver_opt->first, receiver_opt->second);
     }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
