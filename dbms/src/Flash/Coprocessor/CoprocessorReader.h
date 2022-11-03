@@ -17,9 +17,9 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/ArrowChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/DecodeDetail.h>
 #include <Flash/Coprocessor/DefaultChunkCodec.h>
-#include <Flash/Coprocessor/IChunkDecodeAndSquash.h>
 #include <Interpreters/Context.h>
 #include <common/logger_useful.h>
 
@@ -141,7 +141,7 @@ public:
     }
 
     // stream_id, decoder_ptr are only meaningful for ExchagneReceiver.
-    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<IChunkDecodeAndSquash> & /*decoder_ptr*/)
+    CoprocessorReaderResult nextResult(std::queue<Block> & block_queue, const Block & header, size_t /*stream_id*/, std::unique_ptr<CHBlockChunkDecodeAndSquash> & /*decoder_ptr*/)
     {
         auto && [result, has_next] = resp_iter.next();
         if (!result.error.empty())
