@@ -595,9 +595,6 @@ private:
 // Unify the name of functions that actually execute regexp
 #define REGEXP_CLASS_MEM_FUNC_IMPL_NAME executeRegexpFunc
 
-// Do not merge GET_ACTUAL_STRING_PARAM and GET_ACTUAL_INT_PARAM together,
-// as this will generate more useless codes and templates.
-
 #define ENUMERATE_PARAM_VARIANT_CASES(NAME, pv_name, param_name, next_process) \
     case ParamVariant::ParamType::NAME:                                        \
     {                                                                          \
@@ -605,6 +602,9 @@ private:
         next_process;                                                          \
         break;                                                                 \
     }
+
+// Do not merge GET_ACTUAL_STRING_PARAM and GET_ACTUAL_INT_PARAM together,
+// as this will generate more useless codes and templates.
 
 #define GET_ACTUAL_STRING_PARAM(pv_name, param_name, next_process)                                            \
     do                                                                                                        \
