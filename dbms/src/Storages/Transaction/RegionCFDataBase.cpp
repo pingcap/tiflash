@@ -346,6 +346,12 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 }
                 break;
             }
+            case LAST_CHANGE_PREFIX:
+            {
+                UInt64 _last_change_ts = readUInt64(data, len);
+                UInt64 _versions_to_last_change = readVarUInt(data, len);
+                break;
+            }
             default:
             {
                 std::string msg = std::string("invalid flag ") + flag + " in lock value " + value.toDebugString();
