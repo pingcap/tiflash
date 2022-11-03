@@ -1381,7 +1381,7 @@ try
     // Full GC get entries
     auto candidate_entries_1 = dir->getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
-    EXPECT_EQ(candidate_entries_1.first[1].size(), 1); // 3 entries for 2 page id
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 1); // 1 entries for 1 page id
 
     auto candidate_entries_2_3 = dir->getEntriesByBlobIds({2, 3});
     EXPECT_EQ(candidate_entries_2_3.first.size(), 1);
