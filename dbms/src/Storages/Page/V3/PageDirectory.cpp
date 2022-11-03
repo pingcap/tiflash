@@ -1242,6 +1242,8 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     UInt64 new_sequence = last_sequence + 1;
 
     // stage 1, persisted the changes to WAL with new versions
+    // Inorder to handle {put X, ref Y->X, del X} inside one WriteBatch (and
+    // in later batch pipeline), we will increase the sequence for each record.
     for (auto & r : edit.getMutRecords())
     {
         r.version = PageVersion(new_sequence, 0);
@@ -1353,6 +1355,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
         blob_id_set.insert(blob_id);
     assert(blob_id_set.size() == blob_ids.size());
 
+    // TODO: return the max entry.size to make `BlobStore::gc` more clean
     std::map<BlobFileId, PageIdAndVersionedEntries> blob_versioned_entries;
     PageSize total_page_size = 0;
     UInt64 total_page_nums = 0;
@@ -1389,6 +1392,8 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
         }
     }
 
+    // For the non-deleted ref-ids, we will check whether theirs original entries lay on
+    // `blob_id_set`. Rewrite the entries for these ref-ids to be normal pages.
     size_t num_ref_id_rewrite = 0;
     for (const auto & [ref_id, ori_id_ver] : ref_ids_maybe_rewrite)
     {
@@ -1415,7 +1420,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
         }
     }
 
-    LOG_INFO(log, "Get entries by blob ids done [rewrite_ref_pages={}] [total_page_size={}] [total_page_nums={}]", //
+    LOG_INFO(log, "Get entries by blob ids done [rewrite_ref_page_num={}] [total_page_size={}] [total_page_nums={}]", //
              num_ref_id_rewrite,
              total_page_size, //
              total_page_nums);

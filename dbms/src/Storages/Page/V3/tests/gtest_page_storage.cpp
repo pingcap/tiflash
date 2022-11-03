@@ -438,18 +438,6 @@ try
 }
 CATCH
 
-// TEST_F(PageStorageTest, UnsupportWriteBatch)
-// {
-//     // This will make put && delete share the same
-//     // version. If full gc happen, then the upsert
-//     // entry can not be insert between put && delete.
-//     WriteBatch wb;
-//     wb.putPage(1, default_tag, getDefaultBuffer(), buf_sz);
-//     wb.putRefPage(2, 1);
-//     wb.delPage(1);
-//     ASSERT_THROW(page_storage->write(std::move(wb)), DB::Exception);
-// }
-
 TEST_F(PageStorageTest, WriteMultipleBatchRead1)
 try
 {
