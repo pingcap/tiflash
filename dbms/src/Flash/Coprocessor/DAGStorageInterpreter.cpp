@@ -530,7 +530,7 @@ std::vector<pingcap::coprocessor::copTask> DAGStorageInterpreter::buildCopTasks(
 void DAGStorageInterpreter::buildRemoteStreams(const std::vector<RemoteRequest> & remote_requests, DAGPipeline & pipeline)
 {
     std::vector<pingcap::coprocessor::copTask> all_tasks = buildCopTasks(remote_requests);
-    GET_METRIC(tiflash_remote_read_count, type_sent).Increment(static_cast<double>(all_tasks.size()));
+    GET_METRIC(tiflash_coprocessor_request_count, type_remote_read_sent).Increment(static_cast<double>(all_tasks.size()));
 
     const DAGSchema & schema = remote_requests[0].schema;
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();

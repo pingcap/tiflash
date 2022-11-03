@@ -120,17 +120,18 @@ grpc::Status FlashService::Coprocessor(
 
     GET_METRIC(tiflash_coprocessor_request_count, type_cop).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Increment();
+    if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+    {
+        GET_METRIC(tiflash_coprocessor_request_count, type_remote_read).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Increment();
+    }
     Stopwatch watch;
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
-    });
-    if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
-        GET_METRIC(tiflash_remote_read_count, type_received).Increment();
-    SCOPE_EXIT({
         if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
-            GET_METRIC(tiflash_remote_read_count, type_ended).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Decrement();
     });
 
     context->setMockStorage(mock_storage);
@@ -142,7 +143,11 @@ grpc::Status FlashService::Coprocessor(
             return status;
         }
         if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
-            GET_METRIC(tiflash_remote_read_count, type_started).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_dag).Increment();
+        SCOPE_EXIT({
+            if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+                GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_dag).Decrement();
+        });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
         CoprocessorHandler cop_handler(cop_context, request, response);
         return cop_handler.execute();
