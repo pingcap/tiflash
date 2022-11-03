@@ -12,15 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsFormatting.h>
+#pragma once
+
+#include <DataTypes/IDataType.h>
 
 namespace DB
 {
-void registerFunctionsFormatting(FunctionFactory & factory)
+namespace CodecUtils
 {
-    factory.registerFunction<FunctionBitmaskToList>();
-    factory.registerFunction<FunctionFormatReadableSize>();
-}
+struct DataTypeWithTypeName
+{
+    DataTypeWithTypeName(const DataTypePtr & t, const String & n)
+        : type(t)
+        , name(n)
+    {
+    }
 
+    DataTypePtr type;
+    String name;
+};
+
+void checkColumnSize(size_t expected, size_t actual);
+void checkDataTypeName(size_t column_index, const String & expected, const String & actual);
+} // namespace CodecUtils
 } // namespace DB
