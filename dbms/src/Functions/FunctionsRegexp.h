@@ -396,16 +396,16 @@ private:
 };
 
 #define APPLY_FOR_PARAM_STRING_VARIANTS(M, pv_name, param_name, next_process) \
-    M(StringNullableAndNotConst, pv_name, param_name, next_process) \
-    M(StringNotNullableAndConst, pv_name, param_name, next_process) \
-    M(StringNotNullableAndNotConst, pv_name, param_name, next_process) \
-    M(StringNullableAndConst, pv_name, param_name, next_process) \
+    M(StringNullableAndNotConst, pv_name, param_name, next_process)           \
+    M(StringNotNullableAndConst, pv_name, param_name, next_process)           \
+    M(StringNotNullableAndNotConst, pv_name, param_name, next_process)        \
+    M(StringNullableAndConst, pv_name, param_name, next_process)
 
 #define APPLY_FOR_PARAM_INT_VARIANTS(M, pv_name, param_name, next_process) \
-    M(IntNullableAndNotConst, pv_name, param_name, next_process) \
-    M(IntNotNullableAndConst, pv_name, param_name, next_process) \
-    M(IntNotNullableAndNotConst, pv_name, param_name, next_process) \
-    M(IntNullableAndConst, pv_name, param_name, next_process) \
+    M(IntNullableAndNotConst, pv_name, param_name, next_process)           \
+    M(IntNotNullableAndConst, pv_name, param_name, next_process)           \
+    M(IntNotNullableAndNotConst, pv_name, param_name, next_process)        \
+    M(IntNullableAndConst, pv_name, param_name, next_process)
 
 class ParamVariant
 {
@@ -471,27 +471,27 @@ public:
             switch (param_type)
             {
 // Enumerate cases that delete string param pointer
-#define M(NAME, pv_name, param_name, next_process) \
-    case ParamType::NAME: \
-    { \
+#define M(NAME, pv_name, param_name, next_process)     \
+    case ParamType::NAME:                              \
+    {                                                  \
         delete reinterpret_cast<Param##NAME *>(param); \
-        break; \
+        break;                                         \
     }
 
-    // Expand the macro to enumerate string param cases
-    APPLY_FOR_PARAM_STRING_VARIANTS(M, placeholder1, placeholder2, placeholder3)
+                // Expand the macro to enumerate string param cases
+                APPLY_FOR_PARAM_STRING_VARIANTS(M, placeholder1, placeholder2, placeholder3)
 #undef M
 
 // Enumerate cases that delete int param pointer
-#define M(NAME, pv_name, param_name, next_process) \
-    case ParamType::NAME: \
-    { \
+#define M(NAME, pv_name, param_name, next_process)     \
+    case ParamType::NAME:                              \
+    {                                                  \
         delete reinterpret_cast<Param##NAME *>(param); \
-        break; \
+        break;                                         \
     }
 
-    // Expand the macro to enumerate int param cases
-    APPLY_FOR_PARAM_INT_VARIANTS(M, placeholder1, placeholder2, placeholder3)
+                // Expand the macro to enumerate int param cases
+                APPLY_FOR_PARAM_INT_VARIANTS(M, placeholder1, placeholder2, placeholder3)
 #undef M
             default:
                 throw Exception("Unexpected ParamType");
@@ -599,23 +599,23 @@ private:
 // as this will generate more useless codes and templates.
 
 #define ENUMERATE_PARAM_VARIANT_CASES(NAME, pv_name, param_name, next_process) \
-    case ParamVariant::ParamType::NAME: \
-    { \
-        ParamVariant::Param##NAME *(param_name) = (pv_name).getParam##NAME();       \
-        next_process; \
-        break; \
+    case ParamVariant::ParamType::NAME:                                        \
+    {                                                                          \
+        ParamVariant::Param##NAME *(param_name) = (pv_name).getParam##NAME();  \
+        next_process;                                                          \
+        break;                                                                 \
     }
 
-#define GET_ACTUAL_STRING_PARAM(pv_name, param_name, next_process) \
-    do \
-    { \
-        switch ((pv_name).getParamType())                                                                                     \
-        {                                                                                                                     \
-        /* Expand this macro to enumerate all string cases */ \
-        APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, pv_name, param_name, next_process) \
-        default:                                                                                                              \
-            throw Exception("Unexpected ParamType");                                                                          \
-        }                                                                                                                     \
+#define GET_ACTUAL_STRING_PARAM(pv_name, param_name, next_process)                                            \
+    do                                                                                                        \
+    {                                                                                                         \
+        switch ((pv_name).getParamType())                                                                     \
+        {                                                                                                     \
+            /* Expand this macro to enumerate all string cases */                                             \
+            APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, pv_name, param_name, next_process) \
+        default:                                                                                              \
+            throw Exception("Unexpected ParamType");                                                          \
+        }                                                                                                     \
     } while (0);
 
 // Common method to get actual string param
