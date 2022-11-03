@@ -25,5 +25,5 @@ target_link_libraries(test_util_bench_main dbms gtest_main benchmark)
 target_include_directories(test_util_bench_main BEFORE PUBLIC ${benchmark_SOURCE_DIR}/include)
 
 if (ENABLE_TESTS)
-    add_subdirectory (tests)
+    add_subdirectory (tests EXCLUDE_FROM_ALL)
 endif ()

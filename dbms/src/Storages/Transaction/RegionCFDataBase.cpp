@@ -235,7 +235,7 @@ size_t RegionCFDataBase<Trait>::serialize(WriteBuffer & buf) const
 template <typename Trait>
 size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data)
 {
-    size_t size = readBinary2<size_t>(buf);
+    auto size = readBinary2<size_t>(buf);
     size_t cf_data_size = 0;
     for (size_t i = 0; i < size; ++i)
     {
@@ -344,6 +344,15 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
                 {
                     readUInt64(data, len);
                 }
+                break;
+            }
+            case LAST_CHANGE_PREFIX:
+            {
+                // Used to accelerate TiKV MVCC scan, useless for TiFlash.
+                UInt64 last_change_ts = readUInt64(data, len);
+                UInt64 versions_to_last_change = readVarUInt(data, len);
+                UNUSED(last_change_ts);
+                UNUSED(versions_to_last_change);
                 break;
             }
             default:
