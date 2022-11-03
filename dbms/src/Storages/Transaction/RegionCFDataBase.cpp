@@ -348,8 +348,11 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
             }
             case LAST_CHANGE_PREFIX:
             {
+                // Used to accelerate TiKV MVCC scan, useless for TiFlash.
                 UInt64 _last_change_ts = readUInt64(data, len);
                 UInt64 _versions_to_last_change = readVarUInt(data, len);
+                UNUSED(_last_change_ts);
+                UNUSED(_versions_to_last_change);
                 break;
             }
             default:
