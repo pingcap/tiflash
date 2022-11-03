@@ -235,7 +235,7 @@ size_t RegionCFDataBase<Trait>::serialize(WriteBuffer & buf) const
 template <typename Trait>
 size_t RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data)
 {
-    size_t size = readBinary2<size_t>(buf);
+    auto size = readBinary2<size_t>(buf);
     size_t cf_data_size = 0;
     for (size_t i = 0; i < size; ++i)
     {
