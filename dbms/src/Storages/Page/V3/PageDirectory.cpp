@@ -478,7 +478,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
     auto page_lock = acquireLock();
     if (type == EditRecordType::VAR_ENTRY)
     {
-        for (const auto & [versioned_type, entry_or_del] : entries)
+        for (const auto & [ver, entry_or_del] : entries)
         {
             if (!entry_or_del.isEntry())
             {
@@ -488,7 +488,7 @@ PageSize VersionedPageEntries::getEntriesByBlobIds(
             const auto & entry = entry_or_del.entry;
             if (blob_ids.count(entry.file_id) > 0)
             {
-                blob_versioned_entries[entry.file_id].emplace_back(page_id, versioned_type, entry);
+                blob_versioned_entries[entry.file_id].emplace_back(page_id, ver, entry);
                 total_entries_size += entry.size;
             }
         }
@@ -1286,7 +1286,7 @@ PageDirectory::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_ids) con
         }
     }
 
-    LOG_INFO(log, "Get entries by Blob ids done. [total_page_size={}] [total_page_nums={}]", //
+    LOG_INFO(log, "Get entries by blob ids done. [total_page_size={}] [total_page_nums={}]", //
              total_page_size, //
              total_page_nums);
     return std::make_pair(std::move(blob_versioned_entries), total_page_size);

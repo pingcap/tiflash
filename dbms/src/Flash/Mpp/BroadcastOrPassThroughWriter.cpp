@@ -49,6 +49,13 @@ void BroadcastOrPassThroughWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
+void BroadcastOrPassThroughWriter<StreamWriterPtr>::flush()
+{
+    if (rows_in_blocks > 0)
+        encodeThenWriteBlocks<false>();
+}
+
+template <class StreamWriterPtr>
 void BroadcastOrPassThroughWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(

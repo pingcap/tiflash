@@ -16,6 +16,17 @@
 
 namespace DB::HashBaseWriterHelper
 {
+void materializeBlock(Block & input_block)
+{
+    for (size_t i = 0; i < input_block.columns(); ++i)
+    {
+        auto & element = input_block.getByPosition(i);
+        auto & src = element.column;
+        if (ColumnPtr converted = src->convertToFullColumnIfConst())
+            src = converted;
+    }
+}
+
 void materializeBlocks(std::vector<Block> & blocks)
 {
     for (auto & block : blocks)
@@ -38,33 +49,44 @@ std::vector<MutableColumns> createDestColumns(const Block & sample_block, size_t
     return dest_tbl_cols;
 }
 
-void computeHash(const Block & input_block,
-                 uint32_t bucket_num,
+void computeHash(const Block & block,
+                 uint32_t num_bucket,
                  const TiDB::TiDBCollators & collators,
                  std::vector<String> & partition_key_containers,
                  const std::vector<Int64> & partition_col_ids,
-                 std::vector<std::vector<MutableColumnPtr>> & result_columns)
+                 WeakHash32 & hash,
+                 IColumn::Selector & selector)
+{
+    size_t num_rows = block.rows();
+    // compute hash values
+    for (size_t i = 0; i < partition_col_ids.size(); ++i)
+    {
+        const auto & column = block.getByPosition(partition_col_ids[i]).column;
+        column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
+    }
+
+    // fill selector array with most significant bits of hash values
+    const auto & hash_data = hash.getData();
+    for (size_t i = 0; i < num_rows; ++i)
+    {
+        /// Row from interval [(2^32 / num_bucket) * i, (2^32 / num_bucket) * (i + 1)) goes to bucket with number i.
+        selector[i] = hash_data[i]; /// [0, 2^32)
+        selector[i] *= num_bucket; /// [0, num_bucket * 2^32), selector stores 64 bit values.
+        selector[i] >>= 32u; /// [0, num_bucket)
+    }
+}
+
+void scatterColumns(const Block & input_block,
+                    uint32_t bucket_num,
+                    const TiDB::TiDBCollators & collators,
+                    std::vector<String> & partition_key_containers,
+                    const std::vector<Int64> & partition_col_ids,
+                    std::vector<std::vector<MutableColumnPtr>> & result_columns)
 {
     size_t rows = input_block.rows();
     WeakHash32 hash(rows);
-
-    // get hash values by all partition key columns
-    for (size_t i = 0; i < partition_col_ids.size(); ++i)
-    {
-        input_block.getByPosition(partition_col_ids[i]).column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
-    }
-
-    const auto & hash_data = hash.getData();
-
-    // partition each row
     IColumn::Selector selector(rows);
-    for (size_t row = 0; row < rows; ++row)
-    {
-        /// Row from interval [(2^32 / bucket_num) * i, (2^32 / bucket_num) * (i + 1)) goes to bucket with number i.
-        selector[row] = hash_data[row]; /// [0, 2^32)
-        selector[row] *= bucket_num; /// [0, bucket_num * 2^32), selector stores 64 bit values.
-        selector[row] >>= 32u; /// [0, bucket_num)
-    }
+    computeHash(input_block, bucket_num, collators, partition_key_containers, partition_col_ids, hash, selector);
 
     for (size_t col_id = 0; col_id < input_block.columns(); ++col_id)
     {
@@ -77,4 +99,29 @@ void computeHash(const Block & input_block,
         }
     }
 }
+
+void scatterColumnsInplace(const Block & block,
+                           uint32_t bucket_num,
+                           const TiDB::TiDBCollators & collators,
+                           std::vector<String> & partition_key_containers,
+                           const std::vector<Int64> & partition_col_ids,
+                           WeakHash32 & hash,
+                           IColumn::Selector & selector,
+                           std::vector<IColumn::ScatterColumns> & scattered)
+{
+    size_t num_rows = block.rows();
+    // compute hash values
+    hash.getData().resize(num_rows);
+    hash.reset(num_rows);
+    selector.resize(num_rows);
+    computeHash(block, bucket_num, collators, partition_key_containers, partition_col_ids, hash, selector);
+
+    // partition
+    for (size_t i = 0; i < block.columns(); ++i)
+    {
+        const auto & column = block.getByPosition(i).column;
+        column->scatterTo(scattered[i], selector);
+    }
+}
+
 } // namespace DB::HashBaseWriterHelper
