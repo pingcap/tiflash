@@ -34,6 +34,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/setThreadName.h>
+#include <Core/Defines.h>
 #include <Encryption/DataKeyManager.h>
 #include <Encryption/FileProvider.h>
 #include <Encryption/MockKeyManager.h>
@@ -234,6 +235,7 @@ struct TiFlashProxyConfig
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
+    std::string user_engine_label;
 
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     const String engine_store_version = "engine-version";
@@ -242,7 +244,6 @@ struct TiFlashProxyConfig
     const String engine_store_advertise_address = "advertise-engine-addr";
     const String pd_endpoints = "pd-endpoints";
     const String engine_label = "engine-label";
-    const String engine_label_value = "tiflash";
 
     explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
     {
@@ -265,7 +266,11 @@ struct TiFlashProxyConfig
                 args_map[engine_store_address] = config.getString("flash.service_addr");
             else
                 args_map[engine_store_advertise_address] = args_map[engine_store_address];
-            args_map[engine_label] = engine_label_value;
+
+            if (args_map.count(engine_label) == 0)
+                args_map[engine_label] = DEFAULT_ENGINE_LABEL;
+            // Record engine_label and we will check if it's valid or not later.
+            user_engine_label = args_map[engine_label];
 
             for (auto && [k, v] : args_map)
             {
@@ -280,6 +285,12 @@ struct TiFlashProxyConfig
             args.push_back(v.second.data());
         }
         is_proxy_runnable = true;
+    }
+
+    void checkEngineLabel()
+    {
+        RUNTIME_ASSERT(user_engine_label == DEFAULT_ENGINE_LABEL || user_engine_label == COMPUTE_ENGINE_LABEL,
+                "Expect engine label: {} or {}, got: {}", DEFAULT_ENGINE_LABEL, COMPUTE_ENGINE_LABEL, user_engine_label);
     }
 };
 
@@ -835,6 +846,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     TiFlashProxyConfig proxy_conf(config());
+    proxy_conf.checkEngineLabel();
+
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
@@ -1153,7 +1166,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         /// create TMTContext
         auto cluster_config = getClusterConfig(security_config, raft_config);
-        global_context->createTMTContext(raft_config, std::move(cluster_config));
+        global_context->createTMTContext(raft_config, std::move(cluster_config), isDisaggregatedComputeNode(proxy_conf.user_engine_label));
         global_context->getTMTContext().reloadConfig(config());
     }
 

@@ -130,7 +130,7 @@ void TiFlashTestEnv::addGlobalContext(Strings testdata_path, PageStorageRunMode 
     raft_config.ignore_databases = {"system"};
     raft_config.engine = TiDB::StorageEngine::DT;
     raft_config.for_unit_test = true;
-    global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
+    global_context->createTMTContext(raft_config, pingcap::ClusterConfig(), /*disaggregatedComputeNode=*/false);
 
     global_context->setDeltaIndexManager(1024 * 1024 * 100 /*100MB*/);
 

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <common/defines.h>
+#include <string>
 
 #define DBMS_NAME "ClickHouse"
 #define DBMS_VERSION_MAJOR 1
@@ -109,3 +110,10 @@
 #if !defined(__x86_64__) && !defined(__aarch64__)
 //    #error PLATFORM_NOT_SUPPORTED
 #endif
+
+static const std::string DEFAULT_ENGINE_LABEL = "tiflash";
+static const std::string COMPUTE_ENGINE_LABEL = "tiflash_compute";
+inline bool isDisaggregatedComputeNode(const std::string & user_engine_label)
+{
+    return user_engine_label == COMPUTE_ENGINE_LABEL;
+}
