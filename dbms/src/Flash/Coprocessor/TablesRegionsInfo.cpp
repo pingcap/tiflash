@@ -46,7 +46,6 @@ const SingleTableRegions & TablesRegionsInfo::getTableRegionInfoByTableID(Int64 
 
 static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tmt_context)
 {
-    return true;
     fiu_do_on(FailPoints::force_no_local_region_for_mpp_task, { return true; });
     RegionPtr current_region = tmt_context.getKVStore()->getRegion(region_info.region_id);
     if (current_region == nullptr || current_region->peerState() != raft_serverpb::PeerState::Normal)
