@@ -34,6 +34,7 @@
 #include <Flash/Planner/plans/PhysicalWindowSort.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -96,10 +97,20 @@ void PhysicalPlan::build(const String & executor_id, const tipb::Executor * exec
     case tipb::ExecType::TypeSelection:
     {
         auto child = popBack();
-        if (pushDownSelection(child, executor_id, executor->selection()))
-            pushBack(child);
-        else
+        if (context.getTMTContext().isDisaggregatedComputeNode())
+        {
+            // In disaggregated mode, because we have local cache in tiflash_compute node,
+            // so tiflash_storage node only use Selection as a hint. Selection need to execute in tiflash_compute node.
+            pushDownSelection(child, executor_id, executor->selection());
             pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
+        }
+        else
+        {
+            if (pushDownSelection(child, executor_id, executor->selection()))
+                pushBack(child);
+            else
+                pushBack(PhysicalFilter::build(context, executor_id, log, executor->selection(), child));
+        }
         break;
     }
     case tipb::ExecType::TypeAggregation:

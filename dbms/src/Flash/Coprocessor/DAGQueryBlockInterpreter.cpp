@@ -50,6 +50,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Join.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/Transaction/TMTContext.h>
 
 namespace DB
 {
@@ -100,7 +101,8 @@ AnalysisResult analyzeExpressions(
     ExpressionActionsChain chain;
     // selection on table scan had been executed in handleTableScan
     // In test mode, filter is not pushed down to table scan
-    if (query_block.selection && (!query_block.isTableScanSource() || context.isTest()))
+    // In disaggregated mode, filter is just a hint, Selection need to execute in tiflash_compute node.
+    if (query_block.selection && (!query_block.isTableScanSource() || context.isTest() || context.getTMTContext().isDisaggregatedComputeNode()))
     {
         std::vector<const tipb::Expr *> where_conditions;
         for (const auto & c : query_block.selection->selection().conditions())
