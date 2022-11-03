@@ -118,9 +118,10 @@ grpc::Status FlashService::Coprocessor(
     if (!check_result.ok())
         return check_result;
 
+    bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
     GET_METRIC(tiflash_coprocessor_request_count, type_cop).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Increment();
-    if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+    if (is_remote_read)
     {
         GET_METRIC(tiflash_coprocessor_request_count, type_remote_read).Increment();
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Increment();
@@ -130,7 +131,7 @@ grpc::Status FlashService::Coprocessor(
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
-        if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+        if (is_remote_read)
             GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Decrement();
     });
 
@@ -142,10 +143,10 @@ grpc::Status FlashService::Coprocessor(
         {
             return status;
         }
-        if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+        if (is_remote_read)
             GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_dag).Increment();
         SCOPE_EXIT({
-            if (getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true")
+            if (is_remote_read)
                 GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_dag).Decrement();
         });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
