@@ -710,6 +710,15 @@ try
 
     wb.clear();
     {
+        char c_buff[buff_size];
+
+        for (size_t i = 0; i < buff_size; ++i)
+        {
+            c_buff[i] = i & 0xff;
+        }
+
+        ReadBufferPtr buff = std::make_shared<ReadBufferFromMemory>(c_buff, buff_size);
+        wb.putPage(page_id, /*tag*/ 0, buff, buff_size);
         wb.putRefPage(page_id + 1, page_id);
         wb.delPage(page_id);
 
@@ -717,11 +726,18 @@ try
         auto records = edit.getRecords();
 
         auto record = records[0];
+        ASSERT_EQ(record.type, EditRecordType::PUT);
+        ASSERT_EQ(record.page_id.low, page_id);
+        ASSERT_EQ(record.entry.offset, buff_size * 2);
+        ASSERT_EQ(record.entry.size, buff_size);
+        ASSERT_EQ(record.entry.file_id, 1);
+
+        record = records[1];
         ASSERT_EQ(record.type, EditRecordType::REF);
         ASSERT_EQ(record.page_id.low, page_id + 1);
         ASSERT_EQ(record.ori_page_id.low, page_id);
 
-        record = records[1];
+        record = records[2];
         ASSERT_EQ(record.type, EditRecordType::DEL);
         ASSERT_EQ(record.page_id.low, page_id);
     }

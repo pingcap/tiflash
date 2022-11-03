@@ -1237,13 +1237,15 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     // also needs to be protected by `write_lock` throughout the `apply`
     // TODO: It is totally serialized, make it a pipeline
     std::unique_lock write_lock(table_rw_mutex);
-    UInt64 last_sequence = sequence.load();
-    PageVersion new_version(last_sequence + 1, 0);
+    const UInt64 last_sequence = sequence.load();
+    // new sequence allocated in this edit
+    UInt64 new_sequence = last_sequence + 1;
 
-    // stage 1, persisted the changes to WAL with version [seq=last_seq + 1, epoch=0]
+    // stage 1, persisted the changes to WAL with new versions
     for (auto & r : edit.getMutRecords())
     {
-        r.version = new_version;
+        r.version = PageVersion(new_sequence, 0);
+        new_sequence += 1;
     }
     wal->apply(ser::serializeTo(edit), write_limiter);
 
@@ -1266,7 +1268,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             {
             case EditRecordType::PUT_EXTERNAL:
             {
-                auto holder = version_list->createNewExternal(new_version);
+                auto holder = version_list->createNewExternal(r.version);
                 if (holder)
                 {
                     // put the new created holder into `external_ids`
@@ -1276,13 +1278,13 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
                 break;
             }
             case EditRecordType::PUT:
-                version_list->createNewEntry(new_version, r.entry);
+                version_list->createNewEntry(r.version, r.entry);
                 break;
             case EditRecordType::DEL:
-                version_list->createDelete(new_version);
+                version_list->createDelete(r.version);
                 break;
             case EditRecordType::REF:
-                applyRefEditRecord(mvcc_table_directory, version_list, r, new_version);
+                applyRefEditRecord(mvcc_table_directory, version_list, r, r.version);
                 break;
             case EditRecordType::UPSERT:
             case EditRecordType::VAR_DELETE:
@@ -1294,13 +1296,13 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         }
         catch (DB::Exception & e)
         {
-            e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, new_version, edit.size()));
+            e.addMessage(fmt::format(" [type={}] [page_id={}] [ver={}] [edit_size={}]", magic_enum::enum_name(r.type), r.page_id, r.version, edit.size()));
             e.rethrow();
         }
     }
 
     // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
-    sequence.fetch_add(1);
+    sequence.fetch_add(new_sequence - last_sequence);
 }
 
 void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)

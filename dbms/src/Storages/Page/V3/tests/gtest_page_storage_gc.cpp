@@ -250,10 +250,6 @@ try
     {
         WriteBatch batch;
         batch.putPage(page_id1, default_tag, getDefaultBuffer(), buf_sz);
-        page_storage->write(std::move(batch));
-    }
-    {
-        WriteBatch batch;
         batch.putRefPage(ref_page_id2, page_id1);
         batch.delPage(page_id1);
         page_storage->write(std::move(batch));
