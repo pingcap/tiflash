@@ -17,10 +17,10 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
-#include <Flash/Coprocessor/IChunkDecodeAndSquash.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Interpreters/Context.h>
@@ -65,7 +65,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     // CoprocessorBlockInputStream doesn't take care of this.
     size_t stream_id;
 
-    std::unique_ptr<IChunkDecodeAndSquash> decoder_ptr;
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
 
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
