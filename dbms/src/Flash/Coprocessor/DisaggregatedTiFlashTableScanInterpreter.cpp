@@ -104,12 +104,8 @@ std::shared_ptr<::mpp::DispatchTaskRequest> DisaggregatedTiFlashTableScanInterpr
 
     tipb::Executor * executor = sender_dag_req.mutable_root_executor();
     executor->set_tp(tipb::ExecType::TypeExchangeSender);
-    // Mocked executor_id of ExchangeSender.
-    // Meaning of this executor_id:
-    //   1. disaggregated means this only happens in disaggregated mode.
-    //   2. storage means this ExchangeSender will be executed in tiflash_storage node.
-    executor->set_executor_id(fmt::format("{}_{}_disaggregated_storage_exchange_sender",
-                sender_target_task_start_ts, sender_target_task_task_id));
+    // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
+    executor->set_executor_id(table_scan.getTableScanExecutorID());
 
     tipb::ExchangeSender * sender = executor->mutable_exchange_sender();
     sender->set_tp(tipb::ExchangeType::PassThrough);
@@ -159,12 +155,8 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
         receiver.add_encoded_task_meta(sender_task_meta.SerializeAsString());
     }
 
-    // Mocked executor_id of ExchangeReceiver.
-    // Meaning of this executor_id:
-    //   1. disaggregated means this only happens in disaggregated mode.
-    //   2. storage means this ExchangeReceiver will be executed in tiflash_compute node.
-    const String executor_id = fmt::format("{}_{}_disaggregated_compute_exchange_receiver",
-            sender_target_task_start_ts, sender_target_task_task_id);
+    // ExchangeSender just use TableScan's executor_id, so exec summary will be merged to TableScan.
+    const String executor_id = table_scan.getTableScanExecutorID();
     auto exchange_receiver = std::make_shared<ExchangeReceiver>(
             std::make_shared<GRPCReceiverContext>(
                 receiver,
@@ -180,11 +172,11 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
             /*fine_grained_shuffle_stream_count=*/0,
             /*is_tiflash_storage_receiver=*/true);
 
+    // MPPTask::receiver_set will record this ExchangeReceiver, so can cancel it in ReceiverSet::cancel().
     context.getDAGContext()->setDisaggregatedComputeExchangeReceiver(executor_id, exchange_receiver);
 
     // We can use PhysicalExchange::transform() to build InputStream after DAGQueryBlockInterpreter is deprecated.
     size_t max_streams = context.getMaxStreams();
-    auto & exchange_receiver_io_input_streams = context.getDAGContext()->getInBoundIOInputStreamsMap()[executor_id];
     const String extra_info = "squashing after disaggregated compute exchange receiver";
     for (size_t i = 0; i < max_streams; ++i)
     {
@@ -192,7 +184,6 @@ void DisaggregatedTiFlashTableScanInterpreter::buildReceiverStreams(
                                                                                    log->identifier(),
                                                                                    executor_id,
                                                                                    /*stream_id=*/0);
-        exchange_receiver_io_input_streams.push_back(stream);
         stream = std::make_shared<SquashingBlockInputStream>(stream, 8192, 0, log->identifier());
         stream->setExtraInfo(extra_info);
         pipeline.streams.push_back(stream);
