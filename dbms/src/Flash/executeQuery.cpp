@@ -16,13 +16,13 @@
 #include <Common/ProfileEvents.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGQuerySource.h>
+#include <Flash/Executor/DataStreamExecutor.h>
 #include <Flash/Planner/PlanQuerySource.h>
 #include <Flash/executeQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/Quota.h>
 #include <Interpreters/executeQuery.h>
-#include <Flash/Executor/DataStreamExecutor.h>
 
 namespace ProfileEvents
 {
@@ -116,6 +116,6 @@ BlockIO executeQuery(Context & context, bool internal)
 QueryExecutorPtr queryExecute(Context & context, bool internal)
 {
     auto io = executeQuery(context, internal);
-    return std::make_unique<DataStreamExecutor>(io);
+    return std::make_unique<DataStreamExecutor>(io.process_list_entry, io);
 }
 } // namespace DB

@@ -54,4 +54,9 @@ String DataStreamExecutor::dump() const
     data_stream->dumpTree(fb);
     return fb.toString();
 }
+
+int DataStreamExecutor::estimateNewThreadCount()
+{
+    return data_stream->estimateNewThreadCount();
+}
 } // namespace DB

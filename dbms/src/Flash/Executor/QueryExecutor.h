@@ -45,10 +45,15 @@ struct ExecutionResult
     }
 };
 
+class ProcessListEntry;
+using ProcessListEntryPtr = std::shared_ptr<ProcessListEntry>;
+
 class QueryExecutor
 {
 public:
-    QueryExecutor() = default;
+    explicit QueryExecutor(const ProcessListEntryPtr & process_list_entry_)
+        : process_list_entry(process_list_entry_)
+    {}
 
     virtual ~QueryExecutor() = default;
 
@@ -59,8 +64,13 @@ public:
 
     virtual String dump() const = 0;
 
+    virtual int estimateNewThreadCount() = 0;
+
 protected:
     virtual ExecutionResult execute(ResultHandler) = 0;
+
+protected:
+    ProcessListEntryPtr process_list_entry;
 };
 
 using QueryExecutorPtr = std::unique_ptr<QueryExecutor>;

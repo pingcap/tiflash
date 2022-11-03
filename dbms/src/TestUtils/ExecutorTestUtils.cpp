@@ -98,10 +98,8 @@ void ExecutorTest::executeInterpreter(const String & expected_string, const std:
     context.context.setDAGContext(&dag_context);
     context.context.setExecutorTest();
     // Currently, don't care about regions information in interpreter tests.
-    auto res = executeQuery(context.context, /*internal=*/true);
-    FmtBuffer fb;
-    res.in->dumpTree(fb);
-    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(fb.toString()));
+    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    ASSERT_EQ(Poco::trim(expected_string), Poco::trim(query_executor->dump()));
 }
 
 void ExecutorTest::executeExecutor(
@@ -231,7 +229,14 @@ DB::ColumnsWithTypeAndName ExecutorTest::executeStreams(const std::shared_ptr<ti
     context.context.setMockStorage(context.mockStorage());
     context.context.setDAGContext(&dag_context);
     // Currently, don't care about regions information in tests.
-    return readBlock(executeQuery(context.context, /*internal=*/true).in);
+    auto query_executor = queryExecute(context.context, /*internal=*/true);
+    std::mutex read_mu;
+    Blocks blocks;
+    query_executor->execute([&read_mu, &blocks](const Block & block) {
+        std::lock_guard lock(read_mu);
+        blocks.push_back(block);
+    });
+    return mergeBlocks(blocks).getColumnsWithTypeAndName();
 }
 
 DB::ColumnsWithTypeAndName ExecutorTest::executeRawQuery(const String & query, size_t concurrency)

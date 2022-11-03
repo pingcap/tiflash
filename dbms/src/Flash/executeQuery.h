@@ -16,8 +16,8 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
-#include <Interpreters/Context.h>
 #include <Flash/Executor/QueryExecutor.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {

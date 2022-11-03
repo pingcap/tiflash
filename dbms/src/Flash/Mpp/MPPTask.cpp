@@ -97,7 +97,11 @@ void MPPTask::abortDataStreams(AbortType abort_type)
 {
     /// When abort type is ONERROR, it means MPPTask already known it meet error, so let the remaining task stop silently to avoid too many useless error message
     bool is_kill = abort_type == AbortType::ONCANCELLATION;
-    context->getProcessList().sendCancelToQuery(context->getCurrentQueryId(), context->getClientInfo().current_user, is_kill);
+    if (auto query_executor = query_executor_holder.tryGet(); query_executor)
+    {
+        assert(query_executor.value());
+        query_executor.value()->cancel(is_kill);
+    }
 }
 
 void MPPTask::finishWrite()
@@ -315,7 +319,8 @@ void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
     initExchangeReceivers();
-    executeQuery(*context);
+    query_executor_holder.set(queryExecute(*context));
+    // executeQuery(*context);
     {
         std::unique_lock lock(tunnel_and_receiver_mu);
         if (status != RUNNING)
@@ -365,24 +370,22 @@ void MPPTask::runImpl()
             throw Exception("task not in running state, may be cancelled");
         }
         mpp_task_statistics.start();
-        auto from = dag_context->getBlockIO().in;
-        from->readPrefix();
-        LOG_DEBUG(log, "begin read ");
 
-        while (from->read())
-            continue;
-
-        // finish DataStream
-        from->readSuffix();
-        // finish receiver
-        receiver_set->close();
-        // finish MPPTunnel
-        finishWrite();
+        auto result = query_executor_holder.get().execute();
+        if (!result.is_success)
+            err_msg = result.err_msg;
+        else
+        {
+            // finish receiver
+            receiver_set->close();
+            // finish MPPTunnel
+            finishWrite();
+        }
 
         const auto & return_statistics = mpp_task_statistics.collectRuntimeStatistics();
         LOG_DEBUG(
             log,
-            "finish write with {} rows, {} blocks, {} bytes",
+            "finish with {} rows, {} blocks, {} bytes",
             return_statistics.rows,
             return_statistics.blocks,
             return_statistics.bytes);
@@ -510,11 +513,11 @@ bool MPPTask::scheduleThisTask(ScheduleState state)
 
 int MPPTask::estimateCountOfNewThreads()
 {
-    if (dag_context == nullptr || dag_context->getBlockIO().in == nullptr || dag_context->tunnel_set == nullptr)
+    if (!query_executor_holder.isHolding() || dag_context->tunnel_set == nullptr)
         throw Exception("It should not estimate the threads for the uninitialized task" + id.toString());
 
-    // Estimated count of new threads from InputStreams(including ExchangeReceiver), remote MppTunnels s.
-    return dag_context->getBlockIO().in->estimateNewThreadCount() + 1
+    // Estimated count of new threads from query executor(including ExchangeReceiver), remote MppTunnels s.
+    return query_executor_holder.get().estimateNewThreadCount() + 1
         + dag_context->tunnel_set->getRemoteTunnelCnt();
 }
 

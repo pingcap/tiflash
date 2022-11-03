@@ -23,8 +23,8 @@ namespace DB
 class DataStreamExecutor : public QueryExecutor
 {
 public:
-    explicit DataStreamExecutor(const BlockIO & block_io)
-        : QueryExecutor()
+    explicit DataStreamExecutor(const ProcessListEntryPtr & process_list_entry_, const BlockIO & block_io)
+        : QueryExecutor(process_list_entry_)
         , data_stream(block_io.in)
     {
         assert(data_stream);
@@ -33,6 +33,8 @@ public:
     String dump() const override;
 
     void cancel(bool is_kill) override;
+
+    int estimateNewThreadCount() override;
 
 protected:
     ExecutionResult execute(ResultHandler result_handler) override;
