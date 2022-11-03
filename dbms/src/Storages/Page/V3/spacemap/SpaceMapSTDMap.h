@@ -252,6 +252,8 @@ protected:
 
         // Update return start
         offset = it->first;
+        // If the chosen free block contains `hint_biggest_offset`, then the free block must be the largest free block
+        // in this spacemap
         bool is_champion = it->first <= hint_biggest_offset && hint_biggest_offset < it->first + it->second;
         RUNTIME_CHECK_MSG(!is_champion || (hint_biggest_offset + hint_biggest_cap <= it->first + it->second),
                           "Algorithm broken: is_champion {} hint_biggest_offset {} hint_biggest_cap {} candidate offset {} candidate size {}",
