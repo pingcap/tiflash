@@ -12,15 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsFormatting.h>
+#pragma once
+
+#include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ChunkCodec.h>
+#include <Flash/Coprocessor/CodecUtils.h>
 
 namespace DB
 {
-void registerFunctionsFormatting(FunctionFactory & factory)
+
+class CHBlockChunkDecodeAndSquash
 {
-    factory.registerFunction<FunctionBitmaskToList>();
-    factory.registerFunction<FunctionFormatReadableSize>();
-}
+public:
+    CHBlockChunkDecodeAndSquash(const Block & header, size_t rows_limit_);
+    ~CHBlockChunkDecodeAndSquash() = default;
+    std::optional<Block> decodeAndSquash(const String &);
+    std::optional<Block> flush();
+
+private:
+    CHBlockChunkCodec codec;
+    std::optional<Block> accumulated_block;
+    size_t rows_limit;
+};
+
 
 } // namespace DB

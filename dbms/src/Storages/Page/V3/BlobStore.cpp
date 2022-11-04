@@ -20,6 +20,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/formatReadable.h>
 #include <Poco/File.h>
 #include <Storages/Page/FileUsage.h>
 #include <Storages/Page/PageDefines.h>
@@ -27,6 +28,7 @@
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/PageEntry.h>
+#include <Storages/Page/WriteBatch.h>
 #include <boost_wrapper/string_split.h>
 #include <common/logger_useful.h>
 
@@ -34,6 +36,7 @@
 #include <ext/scope_guard.h>
 #include <iterator>
 #include <mutex>
+#include <unordered_map>
 
 namespace ProfileEvents
 {
@@ -1005,7 +1008,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             // Check if GC is required
             if (stat->sm_valid_rate <= config.heavy_gc_valid_rate)
             {
-                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, Need do compact GC", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, full GC", stat->id, stat->sm_valid_rate);
                 blob_need_gc.emplace_back(stat->id);
 
                 // Change current stat to read only
@@ -1015,7 +1018,7 @@ std::vector<BlobFileId> BlobStore::getGCStats()
             else
             {
                 blobstore_gc_info.appendToNoNeedGCBlob(stat->id, stat->sm_valid_rate);
-                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, No need to GC.", stat->id, stat->sm_valid_rate);
+                LOG_TRACE(log, "Current [blob_id={}] valid rate is {:.2f}, no need to GC", stat->id, stat->sm_valid_rate);
             }
 
             if (right_margin != stat->sm_total_size)
@@ -1049,7 +1052,7 @@ PageEntriesEdit BlobStore::gc(std::map<BlobFileId, PageIdAndVersionedEntries> & 
     {
         throw Exception("BlobStore can't do gc if nothing need gc.", ErrorCodes::LOGICAL_ERROR);
     }
-    LOG_INFO(log, "BlobStore gc will migrate {:.2f}MB into new Blobs", (1.0 * total_page_size / DB::MB));
+    LOG_INFO(log, "BlobStore gc will migrate {} into new blob files", formatReadableSizeWithBinarySuffix(total_page_size));
 
     auto write_blob = [this, total_page_size, &written_blobs, &write_limiter](const BlobFileId & file_id,
                                                                               char * data_begin,
