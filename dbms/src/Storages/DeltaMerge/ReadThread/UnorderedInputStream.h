@@ -80,10 +80,10 @@ protected:
             return {};
         }
         Stopwatch watch_read;
+        addReadTaskPoolToScheduler();
         SCOPE_EXIT({
             auto elapsed = watch_read.elapsedSeconds();
-            addReadTaskPoolToScheduler();
-            GET_METRIC(tiflash_storage_read_duration_seconds, type_table_scan).Observe(elapsed);
+            GET_METRIC(tiflash_storage_read_duration_seconds, type_table_scan_shared).Observe(elapsed);
         });
         while (true)
         {
