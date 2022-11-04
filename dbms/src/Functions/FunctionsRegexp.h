@@ -501,18 +501,6 @@ public:
 
     ParamType getParamType() const { return param_type; }
 
-    // Return string
-    ParamStringNullableAndNotConst * getParamStringNullableAndNotConst() const { return reinterpret_cast<ParamStringNullableAndNotConst *>(param); }
-    ParamStringNotNullableAndConst * getParamStringNotNullableAndConst() const { return reinterpret_cast<ParamStringNotNullableAndConst *>(param); }
-    ParamStringNotNullableAndNotConst * getParamStringNotNullableAndNotConst() const { return reinterpret_cast<ParamStringNotNullableAndNotConst *>(param); }
-    ParamStringNullableAndConst * getParamStringNullableAndConst() const { return reinterpret_cast<ParamStringNullableAndConst *>(param); }
-
-    // Return int
-    ParamIntNullableAndNotConst * getParamIntNullableAndNotConst() const { return reinterpret_cast<ParamIntNullableAndNotConst *>(param); }
-    ParamIntNotNullableAndConst * getParamIntNotNullableAndConst() const { return reinterpret_cast<ParamIntNotNullableAndConst *>(param); }
-    ParamIntNotNullableAndNotConst * getParamIntNotNullableAndNotConst() const { return reinterpret_cast<ParamIntNotNullableAndNotConst *>(param); }
-    ParamIntNullableAndConst * getParamIntNullableAndConst() const { return reinterpret_cast<ParamIntNullableAndConst *>(param); }
-
 private:
     void handleStringConstCol(size_t col_size, const ColumnConst * col_const)
     {
@@ -578,6 +566,10 @@ private:
     ColumnPtr col_ptr;
     StringRef default_str;
     Int64 default_int [[maybe_unused]];
+
+public:
+    // This variable should be reinterpret_cast to specific type before used
+    // macro GET_ACTUAL_PARAM_PTR may be helpful
     void * param;
 };
 
@@ -595,10 +587,14 @@ private:
 // Unify the name of functions that actually execute regexp
 #define REGEXP_CLASS_MEM_FUNC_IMPL_NAME executeRegexpFunc
 
+#define ACTUAL_PARAM_TYPE(NAME) ParamVariant::Param##NAME
+
+#define GET_ACTUAL_PARAM_PTR(NAME, ptr) (reinterpret_cast<ACTUAL_PARAM_TYPE(NAME) *>(ptr))
+
 #define ENUMERATE_PARAM_VARIANT_CASES(NAME, pv_name, param_name, next_process) \
     case ParamVariant::ParamType::NAME:                                        \
     {                                                                          \
-        ParamVariant::Param##NAME *(param_name) = (pv_name).getParam##NAME();  \
+        auto *(param_name) = GET_ACTUAL_PARAM_PTR(NAME, (pv_name).param);      \
         next_process;                                                          \
         break;                                                                 \
     }
@@ -994,6 +990,8 @@ private:
 #undef GET_ACTUAL_INT_PARAM
 #undef GET_ACTUAL_STRING_PARAM
 #undef ENUMERATE_PARAM_VARIANT_CASES
+#undef GET_ACTUAL_PARAM_PTR
+#undef ACTUAL_PARAM_TYPE
 #undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
 #undef RES_ARG_VAR_NAME
 #undef MATCH_TYPE_PARAM_PTR_VAR_NAME
