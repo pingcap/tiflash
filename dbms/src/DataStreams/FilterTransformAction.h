@@ -27,10 +27,15 @@ public:
         const ExpressionActionsPtr & expression_,
         const String & filter_column_name_);
 
-    void transform(Block & block);
+    bool alwaysFalse();
+    // return false if all filter out.
+    bool transform(Block & block);
+    Block getHeader() const;
+    ExpressionActionsPtr getExperssion() const;
 
-    ExpressionActionsPtr expression;
+private:
     Block header;
+    ExpressionActionsPtr expression;
     ssize_t filter_column;
 
     ConstantFilterDescription constant_filter_description;

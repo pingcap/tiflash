@@ -31,8 +31,7 @@ extern const int LOGICAL_ERROR;
 FilterTransformAction::FilterTransformAction(
     const Block & header_,
     const ExpressionActionsPtr & expression_,
-    const String & filter_column_name,
-    const String & req_id)
+    const String & filter_column_name)
     : header(header_)
     , expression(expression_)
 {
@@ -54,25 +53,34 @@ FilterTransformAction::FilterTransformAction(
     }
 }
 
+bool FilterTransformAction::alwaysFalse()
+{
+    return constant_filter_description.always_false;
+}
+
+Block FilterTransformAction::getHeader() const
+{
+    return header;
+}
+
+ExpressionActionsPtr FilterTransformAction::getExperssion() const
+{
+    return expression;
+}
+
 bool FilterTransformAction::transform(Block & block)
 {
-    if (constant_filter_description.always_false)
-        return false;
-
-    if (!block)
-        return false;
+    if (unlikely(!block))
+        return true;
 
     expression->execute(block);
 
     if (constant_filter_description.always_true)
         return true;
 
-    size_t columns = res.columns();
-    size_t rows = res.rows();
-    ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
-
-    if (unlikely(child_filter && child_filter->size() != rows))
-        throw Exception("Unexpected child filter size", ErrorCodes::LOGICAL_ERROR);
+    size_t columns = block.columns();
+    size_t rows = block.rows();
+    ColumnPtr column_of_filter = block.safeGetByPosition(filter_column).column;
 
     /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
         *  and now - are calculated. That is, not all cases are covered by the code above.
@@ -83,235 +91,91 @@ bool FilterTransformAction::transform(Block & block)
 
     if (constant_filter_description.always_false)
     {
-        return false;
+        block.clear();
+        return true;
     }
 
-        IColumn::Filter * filter;
-        ColumnPtr filter_holder;
+    IColumn::Filter * filter;
+    ColumnPtr filter_holder;
 
-        if (constant_filter_description.always_true)
-        {
-            return true;
-        }
-        else
-        {
-            FilterDescription filter_and_holder(*column_of_filter);
-            filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
-            filter_holder = filter_and_holder.data_holder;
-        }
-
-        /** Let's find out how many rows will be in result.
-          * To do this, we filter out the first non-constant column
-          *  or calculate number of set bytes in the filter.
-          */
-        size_t first_non_constant_column = 0;
-        for (size_t i = 0; i < columns; ++i)
-        {
-            if (!res.safeGetByPosition(i).column->isColumnConst())
-            {
-                first_non_constant_column = i;
-
-                if (first_non_constant_column != static_cast<size_t>(filter_column))
-                    break;
-            }
-        }
-
-        size_t filtered_rows = 0;
-        if (first_non_constant_column != static_cast<size_t>(filter_column))
-        {
-            ColumnWithTypeAndName & current_column = res.safeGetByPosition(first_non_constant_column);
-            current_column.column = current_column.column->filter(*filter, -1);
-            filtered_rows = current_column.column->size();
-        }
-        else
-        {
-            filtered_rows = countBytesInFilter(*filter);
-        }
-
-        /// If the current block is completely filtered out, let's move on to the next one.
-        if (filtered_rows == 0)
-            return false;
-
-        /// If all the rows pass through the filter.
-        if (filtered_rows == rows)
-        {
-            /// Replace the column with the filter by a constant.
-            res.safeGetByPosition(filter_column).column
-                = res.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, UInt64(1));
-            /// No need to touch the rest of the columns.
-            return true;
-        }
-
-        /// Filter the rest of the columns.
-        for (size_t i = 0; i < columns; ++i)
-        {
-            ColumnWithTypeAndName & current_column = res.safeGetByPosition(i);
-
-            if (i == static_cast<size_t>(filter_column))
-            {
-                /// The column with filter itself is replaced with a column with a constant `1`, since after filtering, nothing else will remain.
-                /// NOTE User could pass column with something different than 0 and 1 for filter.
-                /// Example:
-                ///  SELECT materialize(100) AS x WHERE x
-                /// will work incorrectly.
-                current_column.column = current_column.type->createColumnConst(filtered_rows, UInt64(1));
-                continue;
-            }
-
-            if (i == first_non_constant_column)
-                continue;
-
-            if (current_column.column->isColumnConst())
-                current_column.column = current_column.column->cut(0, filtered_rows);
-            else
-                current_column.column = current_column.column->filter(*filter, filtered_rows);
-        }
-
-        return true;
-}
-
-Block FilterBlockInputStream::readImpl()
-{
-    Block res;
-
-    if (constant_filter_description.always_false)
-        return res;
-
-    /// Until non-empty block after filtering or end of stream.
-    while (true)
+    if (constant_filter_description.always_true)
     {
-        IColumn::Filter * child_filter = nullptr;
+        return true;
+    }
+    else
+    {
+        FilterDescription filter_and_holder(*column_of_filter);
+        filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
+        filter_holder = filter_and_holder.data_holder;
+    }
 
-        res = children.back()->read(child_filter, true);
-
-        if (!res)
-            return res;
-
-        expression->execute(res);
-
-        if (constant_filter_description.always_true && !child_filter)
-            return res;
-
-        size_t columns = res.columns();
-        size_t rows = res.rows();
-        ColumnPtr column_of_filter = res.safeGetByPosition(filter_column).column;
-
-        if (unlikely(child_filter && child_filter->size() != rows))
-            throw Exception("Unexpected child filter size", ErrorCodes::LOGICAL_ERROR);
-
-        /** It happens that at the stage of analysis of expressions (in sample_block) the columns-constants have not been calculated yet,
-            *  and now - are calculated. That is, not all cases are covered by the code above.
-            * This happens if the function returns a constant for a non-constant argument.
-            * For example, `ignore` function.
-            */
-        constant_filter_description = ConstantFilterDescription(*column_of_filter);
-
-        if (constant_filter_description.always_false)
+    /** Let's find out how many rows will be in result.
+      * To do this, we filter out the first non-constant column
+      *  or calculate number of set bytes in the filter.
+      */
+    size_t first_non_constant_column = 0;
+    for (size_t i = 0; i < columns; ++i)
+    {
+        if (!block.safeGetByPosition(i).column->isColumnConst())
         {
-            res.clear();
-            return res;
+            first_non_constant_column = i;
+
+            if (first_non_constant_column != static_cast<size_t>(filter_column))
+                break;
+        }
+    }
+
+    size_t filtered_rows = 0;
+    if (first_non_constant_column != static_cast<size_t>(filter_column))
+    {
+        ColumnWithTypeAndName & current_column = block.safeGetByPosition(first_non_constant_column);
+        current_column.column = current_column.column->filter(*filter, -1);
+        filtered_rows = current_column.column->size();
+    }
+    else
+    {
+        filtered_rows = countBytesInFilter(*filter);
+    }
+
+    /// If the current block is completely filtered out, let's move on to the next one.
+    if (filtered_rows == 0)
+        return false;
+
+    /// If all the rows pass through the filter.
+    if (filtered_rows == rows)
+    {
+        /// Replace the column with the filter by a constant.
+        block.safeGetByPosition(filter_column).column
+            = block.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, UInt64(1));
+        /// No need to touch the rest of the columns.
+        return true;
+    }
+
+    /// Filter the rest of the columns.
+    for (size_t i = 0; i < columns; ++i)
+    {
+        ColumnWithTypeAndName & current_column = block.safeGetByPosition(i);
+
+        if (i == static_cast<size_t>(filter_column))
+        {
+            /// The column with filter itself is replaced with a column with a constant `1`, since after filtering, nothing else will remain.
+            /// NOTE User could pass column with something different than 0 and 1 for filter.
+            /// Example:
+            ///  SELECT materialize(100) AS x WHERE x
+            /// will work incorrectly.
+            current_column.column = current_column.type->createColumnConst(filtered_rows, UInt64(1));
+            continue;
         }
 
-        IColumn::Filter * filter;
-        ColumnPtr filter_holder;
-
-        if (constant_filter_description.always_true)
-        {
-            if (child_filter)
-                filter = child_filter;
-            else
-                return res;
-        }
-        else
-        {
-            FilterDescription filter_and_holder(*column_of_filter);
-            filter = const_cast<IColumn::Filter *>(filter_and_holder.data);
-            filter_holder = filter_and_holder.data_holder;
-
-            if (child_filter)
-            {
-                /// Merge child_filter
-                UInt8 * a = filter->data();
-                UInt8 * b = child_filter->data();
-                for (size_t i = 0; i < rows; ++i)
-                {
-                    *a = *a > 0 && *b != 0;
-                    ++a;
-                    ++b;
-                }
-            }
-        }
-
-        /** Let's find out how many rows will be in result.
-          * To do this, we filter out the first non-constant column
-          *  or calculate number of set bytes in the filter.
-          */
-        size_t first_non_constant_column = 0;
-        for (size_t i = 0; i < columns; ++i)
-        {
-            if (!res.safeGetByPosition(i).column->isColumnConst())
-            {
-                first_non_constant_column = i;
-
-                if (first_non_constant_column != static_cast<size_t>(filter_column))
-                    break;
-            }
-        }
-
-        size_t filtered_rows = 0;
-        if (first_non_constant_column != static_cast<size_t>(filter_column))
-        {
-            ColumnWithTypeAndName & current_column = res.safeGetByPosition(first_non_constant_column);
-            current_column.column = current_column.column->filter(*filter, -1);
-            filtered_rows = current_column.column->size();
-        }
-        else
-        {
-            filtered_rows = countBytesInFilter(*filter);
-        }
-
-        /// If the current block is completely filtered out, let's move on to the next one.
-        if (filtered_rows == 0)
+        if (i == first_non_constant_column)
             continue;
 
-        /// If all the rows pass through the filter.
-        if (filtered_rows == rows)
-        {
-            /// Replace the column with the filter by a constant.
-            res.safeGetByPosition(filter_column).column
-                = res.safeGetByPosition(filter_column).type->createColumnConst(filtered_rows, UInt64(1));
-            /// No need to touch the rest of the columns.
-            return res;
-        }
-
-        /// Filter the rest of the columns.
-        for (size_t i = 0; i < columns; ++i)
-        {
-            ColumnWithTypeAndName & current_column = res.safeGetByPosition(i);
-
-            if (i == static_cast<size_t>(filter_column))
-            {
-                /// The column with filter itself is replaced with a column with a constant `1`, since after filtering, nothing else will remain.
-                /// NOTE User could pass column with something different than 0 and 1 for filter.
-                /// Example:
-                ///  SELECT materialize(100) AS x WHERE x
-                /// will work incorrectly.
-                current_column.column = current_column.type->createColumnConst(filtered_rows, UInt64(1));
-                continue;
-            }
-
-            if (i == first_non_constant_column)
-                continue;
-
-            if (current_column.column->isColumnConst())
-                current_column.column = current_column.column->cut(0, filtered_rows);
-            else
-                current_column.column = current_column.column->filter(*filter, filtered_rows);
-        }
-
-        return res;
+        if (current_column.column->isColumnConst())
+            current_column.column = current_column.column->cut(0, filtered_rows);
+        else
+            current_column.column = current_column.column->filter(*filter, filtered_rows);
     }
+
+    return true;
 }
-
-
 } // namespace DB
