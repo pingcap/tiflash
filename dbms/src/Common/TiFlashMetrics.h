@@ -233,7 +233,7 @@ namespace DB
     M(tiflash_mpp_task_manager, "The gauge of mpp task manager", Gauge,                                                                   \
         F(type_mpp_query_count, {"type", "mpp_query_count"}))                                                                             \
     M(tiflash_storage_read_duration_seconds, "Bucketed histogram read duration", Histogram,                                               \
-        F(type_table_scan_shared, {{"type", "table_scan_shared"}}, ExpBuckets{0.001, 2, 20}))                                             \
+        F(type_table_scan_shared, {{"type", "table_scan_shared"}}, ExpBuckets{0.001, 2, 20}),                                             \
         F(type_table_scan_raw, {{"type", "table_scan_raw"}}, ExpBuckets{0.001, 2, 20}))                                                   \
 // clang-format on
 
