@@ -224,13 +224,15 @@ INSTANTIATE_TEST_CASE_P(
         testing::Values(
             EncryptionMethod::Aes128Ctr,
             EncryptionMethod::Aes192Ctr,
-            EncryptionMethod::Aes256Ctr,
+            EncryptionMethod::Aes256Ctr
 #if USE_GM_SSL
+            ,
             EncryptionMethod::SM4Ctr
 #elif OPENSSL_VERSION_NUMBER < 0x1010100fL || defined(OPENSSL_NO_SM4)
 // not support SM4
 #else
             // Openssl support SM4 after 1.1.1 release version.
+            ,
             EncryptionMethod::SM4Ctr
 #endif
             )));
@@ -485,7 +487,9 @@ try
     linked_file.close();
 
     // Check the stat
-    struct stat file_stat;
+    struct stat file_stat
+    {
+    };
     ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
     ASSERT_EQ(2, file_stat.st_nlink);
 
@@ -541,7 +545,9 @@ try
     linked_enc_file.close();
 
     // Check the stat
-    struct stat file_stat;
+    struct stat file_stat
+    {
+    };
     ASSERT_EQ(0, stat(linked_file_path.c_str(), &file_stat));
     ASSERT_EQ(2, file_stat.st_nlink);
 
