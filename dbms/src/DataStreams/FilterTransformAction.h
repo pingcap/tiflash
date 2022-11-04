@@ -27,7 +27,7 @@ public:
         const ExpressionActionsPtr & expression_,
         const String & filter_column_name_);
 
-    bool alwaysFalse();
+    bool alwaysFalse() const;
     // return false if all filter out.
     bool transform(Block & block);
     Block getHeader() const;

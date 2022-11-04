@@ -53,7 +53,7 @@ FilterTransformAction::FilterTransformAction(
     }
 }
 
-bool FilterTransformAction::alwaysFalse()
+bool FilterTransformAction::alwaysFalse() const
 {
     return constant_filter_description.always_false;
 }
