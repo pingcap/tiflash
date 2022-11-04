@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1663121028653,
+  "iteration": 1667552037139,
   "links": [],
   "panels": [
     {
@@ -5755,6 +5755,110 @@
           }
         },
         {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Duration of storage's read tasks",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 0,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 5,
+            "w": 12,
+            "x": 12,
+            "y": 32
+          },
+          "hiddenSeries": false,
+          "id": 158,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": null,
+            "sortDesc": null,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 5,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(1, sum(rate(tiflash_storage_read_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"table_scan.*\"}[$__rate_interval])) by (le,type))",
+              "format": "time_series",
+              "hide": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "max-{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Read Tasks Duration",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 1,
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": false
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
           "cards": {
             "cardPadding": null,
             "cardRound": null
@@ -5778,7 +5882,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 32
+            "y": 37
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -5964,7 +6068,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 40
+            "y": 45
           },
           "hiddenSeries": false,
           "id": 47,
@@ -6218,7 +6322,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 48
+            "y": 53
           },
           "height": "",
           "hiddenSeries": false,
@@ -6546,7 +6650,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 56
+            "y": 61
           },
           "hiddenSeries": false,
           "id": 67,
@@ -6760,7 +6864,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 64
+            "y": 69
           },
           "hiddenSeries": false,
           "id": 86,
