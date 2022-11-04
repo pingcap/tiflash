@@ -144,10 +144,10 @@ grpc::Status FlashService::Coprocessor(
             return status;
         }
         if (is_remote_read)
-            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_dag).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Increment();
         SCOPE_EXIT({
             if (is_remote_read)
-                GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_dag).Decrement();
+                GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Decrement();
         });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
         CoprocessorHandler cop_handler(cop_context, request, response);
@@ -167,12 +167,12 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
     if (!check_result.ok())
         return check_result;
 
-    GET_METRIC(tiflash_coprocessor_request_count, type_super_batch).Increment();
-    GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_batch).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_batch).Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
