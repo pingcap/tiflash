@@ -407,6 +407,10 @@ private:
     M(IntNotNullableAndNotConst, pv_name, param_name, next_process)        \
     M(IntNullableAndConst, pv_name, param_name, next_process)
 
+#define PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME param
+
+#define GET_PARAM_PTR_FROM_PARAM_VARIANT(pv_name) (pv_name).PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME
+
 class ParamVariant
 {
 public:
@@ -439,7 +443,7 @@ public:
         : col_ptr(col)
         , default_str(default_val)
         , default_int(0)
-        , param(nullptr)
+        , PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME(nullptr)
     {
         if (col_ptr != nullptr)
         {
@@ -458,7 +462,7 @@ public:
         : col_ptr(col)
         , default_str("", 0)
         , default_int(default_val)
-        , param(nullptr)
+        , PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME(nullptr)
     {
         // TODO implement it in next pr
         throw Exception("Not implemented so far");
@@ -466,7 +470,7 @@ public:
 
     ~ParamVariant()
     {
-        if (param != nullptr)
+        if (PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME != nullptr)
         {
             switch (param_type)
             {
@@ -474,21 +478,12 @@ public:
 #define M(NAME, pv_name, param_name, next_process)     \
     case ParamType::NAME:                              \
     {                                                  \
-        delete reinterpret_cast<Param##NAME *>(param); \
+        delete reinterpret_cast<Param##NAME *>(PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME); \
         break;                                         \
     }
 
                 // Expand the macro to enumerate string param cases
                 APPLY_FOR_PARAM_STRING_VARIANTS(M, placeholder1, placeholder2, placeholder3)
-#undef M
-
-// Enumerate cases that delete int param pointer
-#define M(NAME, pv_name, param_name, next_process)     \
-    case ParamType::NAME:                              \
-    {                                                  \
-        delete reinterpret_cast<Param##NAME *>(param); \
-        break;                                         \
-    }
 
                 // Expand the macro to enumerate int param cases
                 APPLY_FOR_PARAM_INT_VARIANTS(M, placeholder1, placeholder2, placeholder3)
@@ -570,7 +565,7 @@ private:
 public:
     // This variable should be reinterpret_cast to specific type before used
     // macro GET_ACTUAL_PARAM_PTR may be helpful
-    void * param;
+    void * PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME;
 };
 
 // Unifying these names is necessary in macros
@@ -589,12 +584,12 @@ public:
 
 #define ACTUAL_PARAM_TYPE(NAME) ParamVariant::Param##NAME
 
-#define GET_ACTUAL_PARAM_PTR(NAME, ptr) (reinterpret_cast<ACTUAL_PARAM_TYPE(NAME) *>(ptr))
+#define GET_ACTUAL_PARAM_PTR(NAME, param_ptr_name) (reinterpret_cast<ACTUAL_PARAM_TYPE(NAME) *>(param_ptr_name))
 
 #define ENUMERATE_PARAM_VARIANT_CASES(NAME, pv_name, param_name, next_process) \
     case ParamVariant::ParamType::NAME:                                        \
     {                                                                          \
-        auto *(param_name) = GET_ACTUAL_PARAM_PTR(NAME, (pv_name).param);      \
+        auto *(param_name) = GET_ACTUAL_PARAM_PTR(NAME, GET_PARAM_PTR_FROM_PARAM_VARIANT(pv_name));      \
         next_process;                                                          \
         break;                                                                 \
     }
@@ -1001,6 +996,8 @@ private:
 #undef PAT_PV_VAR_NAME
 #undef EXPR_PV_VAR_NAME
 
+#undef GET_PARAM_PTR_FROM_PARAM_VARIANT
+#undef PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME
 #undef APPLY_FOR_PARAM_INT_VARIANTS
 #undef APPLY_FOR_PARAM_STRING_VARIANTS
 
