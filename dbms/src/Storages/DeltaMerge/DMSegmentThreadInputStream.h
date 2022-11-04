@@ -106,7 +106,10 @@ protected:
             }
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
 
+            Stopwatch watch_read;
             Block res = cur_stream->read(res_filter, return_filter);
+            auto elapsed = watch_read.elapsedSeconds();
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_table_scan).Observe(elapsed);
 
             if (res)
             {

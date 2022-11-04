@@ -79,7 +79,11 @@ protected:
         {
             return {};
         }
-        addReadTaskPoolToScheduler();
+        Stopwatch watch_read;
+        SCOPE_EXIT({
+            auto elapsed = watch_read.elapsedSeconds();
+            GET_METRIC(tiflash_storage_subtask_duration_seconds, type_table_scan).Observe(elapsed);
+        });
         while (true)
         {
             FAIL_POINT_PAUSE(FailPoints::pause_when_reading_from_dt_stream);
