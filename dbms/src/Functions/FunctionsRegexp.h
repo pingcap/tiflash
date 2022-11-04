@@ -474,12 +474,12 @@ public:
         {
             switch (param_type)
             {
-// Enumerate cases that delete string param pointer
-#define M(NAME, pv_name, param_name, next_process)     \
-    case ParamType::NAME:                              \
-    {                                                  \
+// Enumerate cases that delete param pointer
+#define M(NAME, pv_name, param_name, next_process)                                    \
+    case ParamType::NAME:                                                             \
+    {                                                                                 \
         delete reinterpret_cast<Param##NAME *>(PARAM_VARIANT_PARAM_PTR_MEM_VAR_NAME); \
-        break;                                         \
+        break;                                                                        \
     }
 
                 // Expand the macro to enumerate string param cases
@@ -586,12 +586,12 @@ public:
 
 #define GET_ACTUAL_PARAM_PTR(NAME, param_ptr_name) (reinterpret_cast<ACTUAL_PARAM_TYPE(NAME) *>(param_ptr_name))
 
-#define ENUMERATE_PARAM_VARIANT_CASES(NAME, pv_name, param_name, next_process) \
-    case ParamVariant::ParamType::NAME:                                        \
-    {                                                                          \
-        auto *(param_name) = GET_ACTUAL_PARAM_PTR(NAME, GET_PARAM_PTR_FROM_PARAM_VARIANT(pv_name));      \
-        next_process;                                                          \
-        break;                                                                 \
+#define ENUMERATE_PARAM_VARIANT_CASES(NAME, pv_name, param_name, next_process)                      \
+    case ParamVariant::ParamType::NAME:                                                             \
+    {                                                                                               \
+        auto *(param_name) = GET_ACTUAL_PARAM_PTR(NAME, GET_PARAM_PTR_FROM_PARAM_VARIANT(pv_name)); \
+        next_process;                                                                               \
+        break;                                                                                      \
     }
 
 // Do not merge GET_ACTUAL_STRING_PARAM and GET_ACTUAL_INT_PARAM together,
