@@ -51,7 +51,7 @@ void ExecutorStatisticsCollector::initialize(DAGContext * dag_context_)
     dag_context = dag_context_;
     assert(dag_context->dag_request);
     traverseExecutors(dag_context->dag_request, [&](const tipb::Executor & executor) {
-        assert(executor.has_executor_id());
+        RUNTIME_CHECK(executor.has_executor_id());
         const auto & executor_id = executor.executor_id();
         if (!append<
                 AggStatistics,
