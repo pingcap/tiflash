@@ -231,7 +231,7 @@ public:
         throw Exception("Shouldn't call this constructor");
     }
 
-    explicit ParamInt(const void * int_container_, IntType int_type_)
+    ParamInt(const void * int_container_, IntType int_type_)
         : const_int_val(0)
         , int_type(int_type_)
         , int_container(int_container_)
@@ -435,7 +435,7 @@ public:
     };
 
     // default ParamString's ParamType should be ParamType::StringNotNullAndNotConst
-    explicit ParamVariant(ColumnPtr col, size_t col_size, const StringRef & default_val)
+    ParamVariant(ColumnPtr col, size_t col_size, const StringRef & default_val)
         : col_ptr(col)
         , default_str(default_val)
         , default_int(0)
@@ -454,7 +454,7 @@ public:
     }
 
     // default ParamInt's ParamType should be ParamType::IntNotNullAndNotConst
-    explicit ParamVariant(ColumnPtr col, size_t col_size [[maybe_unused]], Int64 default_val)
+    ParamVariant(ColumnPtr col, size_t col_size [[maybe_unused]], Int64 default_val)
         : col_ptr(col)
         , default_str("", 0)
         , default_int(default_val)

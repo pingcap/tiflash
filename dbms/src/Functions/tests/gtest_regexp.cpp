@@ -2067,6 +2067,31 @@ TEST_F(Regexp, RegexpLike)
                              createNullableVectorColumn<String>(match_types, match_type_nulls)));
     }
 
+    std::cout << "case 9" << std::endl;
+    // case 9 test empty columns
+    {
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({}),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>({}),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+
+        ASSERT_COLUMN_EQ(createOnlyNullColumnConst(0),
+                         executeFunction(
+                             "regexp_like",
+                             createOnlyNullColumnConst(0),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({}),
+                         executeFunction(
+                             "regexp_like",
+                             createConstColumn<String>(0, ""),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+    }
+
     // empty pattern is not allowed
     ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createConstColumn<String>(row_size, "")), Exception);
     ASSERT_THROW(executeFunction("regexp_like", createConstColumn<String>(row_size, ""), createConstColumn<String>(row_size, "")), Exception);
