@@ -213,14 +213,6 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
                     done_with_set = true;
             }
 
-            if (!done_with_join)
-            {
-                // move building hash tables into `HashJoinBuildBlockInputStream`, so that fetch block and insert block into a hash table are
-                // running into a thread, avoiding generating more threads.
-                if (subquery.join->isBuildSetExceeded())
-                    done_with_join = true;
-            }
-
             if (!done_with_table)
             {
                 block = materializeBlock(block);
