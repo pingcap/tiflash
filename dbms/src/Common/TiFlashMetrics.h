@@ -46,11 +46,13 @@ namespace DB
     M(tiflash_coprocessor_request_count, "Total number of request", Counter, F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
         F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}),                       \
         F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}), F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),             \
-        F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}), F(type_run_mpp_task, {"type", "run_mpp_task"}))                             \
+        F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}), F(type_run_mpp_task, {"type", "run_mpp_task"}),                             \
+        F(type_remote_read, {"type", "remote_read"}), F(type_remote_read_sent, {"type", "remote_read_sent"}))                             \
     M(tiflash_coprocessor_handling_request_count, "Number of handling request", Gauge, F(type_cop, {"type", "cop"}), F(type_cop_dag, {"type", "cop_dag"}),                     \
         F(type_super_batch, {"type", "super_batch"}), F(type_super_batch_cop_dag, {"type", "super_batch_cop_dag"}),                       \
         F(type_dispatch_mpp_task, {"type", "dispatch_mpp_task"}), F(type_mpp_establish_conn, {"type", "mpp_establish_conn"}),             \
-        F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}), F(type_run_mpp_task, {"type", "run_mpp_task"}))                             \
+        F(type_cancel_mpp_task, {"type", "cancel_mpp_task"}), F(type_run_mpp_task, {"type", "run_mpp_task"}),                              \
+        F(type_remote_read, {"type", "remote_read"}), F(type_remote_read_dag, {"type", "remote_read_dag"}))                                \
     M(tiflash_coprocessor_executor_count, "Total number of each executor", Counter, F(type_ts, {"type", "table_scan"}),                   \
         F(type_sel, {"type", "selection"}), F(type_agg, {"type", "aggregation"}), F(type_topn, {"type", "top_n"}),                        \
         F(type_limit, {"type", "limit"}), F(type_join, {"type", "join"}), F(type_exchange_sender, {"type", "exchange_sender"}),           \
