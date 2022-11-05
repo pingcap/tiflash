@@ -13,9 +13,9 @@
 // limitations under the License.
 #include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
+#include <grpc/grpc_security.h>
 
-#include "../../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
-#include "grpc/grpc_security.h"
+#include "../../grpc/src/cpp/server/secure_server_credentials.h"
 
 namespace DB
 {
