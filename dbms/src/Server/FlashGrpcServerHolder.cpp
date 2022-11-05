@@ -14,6 +14,8 @@
 #include <Flash/EstablishCall.h>
 #include <Server/FlashGrpcServerHolder.h>
 
+#include "../../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
+#include "grpc/grpc_security.h"
 
 namespace DB
 {
@@ -199,6 +201,28 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         LOG_FATAL(log, "Exception happens in destructor of FlashGrpcServerHolder with message: {}", message);
         std::terminate();
     }
+}
+
+std::shared_ptr<grpc::ServerCredentials> SslServerCredentialsWithFetcher(
+    const grpc::SslServerCredentialsOptions & options)
+{
+    std::vector<grpc_ssl_pem_key_cert_pair> pem_key_cert_pairs;
+    for (const auto & key_cert_pair : options.pem_key_cert_pairs)
+    {
+        grpc_ssl_pem_key_cert_pair p = {key_cert_pair.private_key.c_str(),
+                                        key_cert_pair.cert_chain.c_str()};
+        pem_key_cert_pairs.push_back(p);
+    }
+    grpc_server_credentials * c_creds = grpc_ssl_server_credentials_create_ex(
+        options.pem_root_certs.empty() ? nullptr : options.pem_root_certs.c_str(),
+        pem_key_cert_pairs.empty() ? nullptr : &pem_key_cert_pairs[0],
+        pem_key_cert_pairs.size(),
+        options.force_client_auth
+            ? GRPC_SSL_REQUEST_AND_REQUIRE_CLIENT_CERTIFICATE_AND_VERIFY
+            : options.client_certificate_request,
+        nullptr);
+    return std::shared_ptr<grpc::ServerCredentials>(
+        new grpc::SecureServerCredentials(c_creds));
 }
 
 void FlashGrpcServerHolder::setMockStorage(MockStorage & mock_storage)
