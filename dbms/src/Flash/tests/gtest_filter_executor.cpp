@@ -33,6 +33,7 @@ public:
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                                      toNullableVec<String>("s2", {"apple", {}, "banana"})});
+        context.addMockTable({"test_db", "filter"}, {{"bool_col", TiDB::TP::TypeTiny}}, {toNullableVec<Int8>("bool_col", {0, 1, 0, 1, 1, 0, 1, 0})});
     }
 };
 
@@ -176,6 +177,17 @@ try
         request,
         {toNullableVec<String>({"banana"}),
          toNullableVec<String>({"banana"})});
+}
+CATCH
+
+TEST_F(FilterExecutorTestRunner, bool_col)
+try
+{
+    auto request = context
+                       .scan("test_db", "filter")
+                       .filter(col("bool_col"))
+                       .build(context);
+    executeAndAssertColumnsEqual(request, {toNullableVec<Int8>("bool_col", {1, 1, 1, 1})});
 }
 CATCH
 
