@@ -179,7 +179,7 @@ public:
         , notify_queue(queue)
         , msg_channels(msg_channels_)
         , req_info(fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id))
-        , log(Logger::get("ExchangeReceiver", req_id, req_info))
+        , log(Logger::get(req_id, req_info))
     {
         packets.resize(batch_packet_count);
         for (auto & packet : packets)
@@ -222,7 +222,7 @@ public:
     void handle()
     {
         std::string err_info;
-        LOG_TRACE(log, "stage: {}", stage);
+        LOG_TRACE(log, "stage: {}", magic_enum::enum_name(stage));
         switch (stage)
         {
         case AsyncRequestStage::WAIT_MAKE_READER:
@@ -421,7 +421,7 @@ ExchangeReceiverBase<RPCContext>::ExchangeReceiverBase(
     , thread_manager(newThreadManager())
     , live_connections(source_num)
     , state(ExchangeReceiverState::NORMAL)
-    , exc_log(Logger::get("ExchangeReceiver", req_id, executor_id))
+    , exc_log(Logger::get(req_id, executor_id))
     , collected(false)
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
 {
@@ -598,7 +598,7 @@ void ExchangeReceiverBase<RPCContext>::readLoop(const Request & req)
     String local_err_msg;
     String req_info = fmt::format("tunnel{}+{}", req.send_task_id, req.recv_task_id);
 
-    LoggerPtr log = Logger::get("ExchangeReceiver", exc_log->identifier(), req_info);
+    LoggerPtr log = exc_log->getChild(req_info);
 
     try
     {
@@ -681,7 +681,7 @@ template <typename RPCContext>
 DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     const std::shared_ptr<ReceivedMessage> & recv_msg,
     std::queue<Block> & block_queue,
-    const Block & header)
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
     DecodeDetail detail;
@@ -692,40 +692,74 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
 
     // Record total packet size even if fine grained shuffle is enabled.
     detail.packet_bytes = packet.ByteSizeLong();
-
     for (const String * chunk : recv_msg->chunks)
     {
-        Block block = CHBlockChunkCodec::decode(*chunk, header);
-        detail.rows += block.rows();
-        if (unlikely(block.rows() == 0))
+        auto result = decoder_ptr->decodeAndSquash(*chunk);
+        if (!result)
             continue;
-        block_queue.push(std::move(block));
+        detail.rows += result->rows();
+        if likely (result->rows() > 0)
+        {
+            block_queue.push(std::move(result.value()));
+        }
     }
     return detail;
 }
 
 template <typename RPCContext>
-ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(std::queue<Block> & block_queue, const Block & header, size_t stream_id)
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
+    std::queue<Block> & block_queue,
+    const Block & header,
+    size_t stream_id,
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {
         LOG_ERROR(exc_log, "stream_id out of range, stream_id: {}, total_stream_count: {}", stream_id, msg_channels.size());
         return ExchangeReceiverResult::newError(0, "", "stream_id out of range");
     }
+
     std::shared_ptr<ReceivedMessage> recv_msg;
     if (msg_channels[stream_id]->pop(recv_msg) != MPMCQueueResult::OK)
     {
-        std::unique_lock lock(mu);
-        return state != ExchangeReceiverState::NORMAL
-            ? ExchangeReceiverResult::newError(0, name, constructStatusString(state, err_msg))
-            : ExchangeReceiverResult::newEOF(name); /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
+        return handleUnnormalChannel(block_queue, decoder_ptr);
     }
     else
     {
         assert(recv_msg != nullptr);
         if (unlikely(recv_msg->error_ptr != nullptr))
             return ExchangeReceiverResult::newError(recv_msg->source_index, recv_msg->req_info, recv_msg->error_ptr->msg());
-        return toDecodeResult(block_queue, header, recv_msg);
+        return toDecodeResult(block_queue, header, recv_msg, decoder_ptr);
+    }
+}
+
+template <typename RPCContext>
+ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
+    std::queue<Block> & block_queue,
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
+{
+    std::optional<Block> last_block = decoder_ptr->flush();
+    std::unique_lock lock(mu);
+    if (this->state != DB::ExchangeReceiverState::NORMAL)
+    {
+        return DB::ExchangeReceiverResult::newError(0, DB::ExchangeReceiverBase<RPCContext>::name, DB::constructStatusString(this->state, this->err_msg));
+    }
+    else
+    {
+        /// If there are cached data in squashDecoder, then just push the block and return EOF next iteration
+        if (last_block && last_block->rows() > 0)
+        {
+            /// Can't get correct caller_index here, use 0 instead
+            auto result = ExchangeReceiverResult::newOk(nullptr, 0, "");
+            result.decode_detail.packets = 0;
+            result.decode_detail.rows = last_block->rows();
+            block_queue.push(std::move(last_block.value()));
+            return result;
+        }
+        else
+        {
+            return DB::ExchangeReceiverResult::newEOF(DB::ExchangeReceiverBase<RPCContext>::name); /// live_connections == 0, msg_channel is finished, and state is NORMAL, that is the end.
+        }
     }
 }
 
@@ -733,7 +767,8 @@ template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     std::queue<Block> & block_queue,
     const Block & header,
-    const std::shared_ptr<ReceivedMessage> & recv_msg)
+    const std::shared_ptr<ReceivedMessage> & recv_msg,
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
     if (recv_msg->resp_ptr != nullptr) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
@@ -757,7 +792,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
             }
             else if (!recv_msg->chunks.empty())
             {
-                result.decode_detail = decodeChunks(recv_msg, block_queue, header);
+                result.decode_detail = decodeChunks(recv_msg, block_queue, decoder_ptr);
             }
             return result;
         }
@@ -765,7 +800,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     else /// the non-last packets
     {
         auto result = ExchangeReceiverResult::newOk(nullptr, recv_msg->source_index, recv_msg->req_info);
-        result.decode_detail = decodeChunks(recv_msg, block_queue, header);
+        result.decode_detail = decodeChunks(recv_msg, block_queue, decoder_ptr);
         return result;
     }
 }

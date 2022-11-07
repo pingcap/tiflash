@@ -39,8 +39,8 @@ class DMVersionFilterBlockInputStream : public IBlockInputStream
     static constexpr size_t UNROLL_BATCH = 64;
     static_assert(MODE == DM_VERSION_FILTER_MODE_MVCC || MODE == DM_VERSION_FILTER_MODE_COMPACT);
 
-    constexpr static const char * MVCC_FILTER_NAME = "DMVersionFilterBlockInputStream<MVCC>";
-    constexpr static const char * COMPACT_FILTER_NAME = "DMVersionFilterBlockInputStream<COMPACT>";
+    constexpr static const char * MVCC_FILTER_NAME = "mode=MVCC";
+    constexpr static const char * COMPACT_FILTER_NAME = "mode=COMPACT";
 
 public:
     DMVersionFilterBlockInputStream(const BlockInputStreamPtr & input,

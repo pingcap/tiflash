@@ -78,17 +78,18 @@ public:
 
     size_t getSegmentRowNumWithoutMVCC(PageId segment_id);
     size_t getSegmentRowNum(PageId segment_id);
+    bool isSegmentDefinitelyEmpty(PageId segment_id);
 
     PageId getRandomSegmentId();
 
     /**
      * You must pass at least 2 segments. Checks whether all segments passed in are sharing the same stable.
      */
-    [[nodiscard]] bool areSegmentsSharingStable(const std::vector<PageId> & segments_id);
+    [[nodiscard]] bool areSegmentsSharingStable(const std::vector<PageId> & segments_id) const;
 
-    std::pair<Int64, Int64> getSegmentKeyRange(PageId segment_id);
+    std::pair<Int64, Int64> getSegmentKeyRange(PageId segment_id) const;
 
-    void printFinishedOperations();
+    void printFinishedOperations() const;
 
 protected:
     std::mt19937 random;

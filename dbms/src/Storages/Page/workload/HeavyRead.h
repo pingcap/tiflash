@@ -48,7 +48,7 @@ private:
 
     void run() override
     {
-        DB::PageStorage::Config config;
+        DB::PageStorageConfig config;
         initPageStorage(config, name());
         PSWriter::fillAllPages(ps);
 

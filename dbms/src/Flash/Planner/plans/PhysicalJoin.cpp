@@ -146,7 +146,6 @@ PhysicalPlanNodePtr PhysicalJoin::build(
         probe_key_names,
         build_key_names,
         true,
-        SizeLimits(settings.max_rows_in_join, settings.max_bytes_in_join, settings.join_overflow_mode),
         tiflash_join.kind,
         tiflash_join.strictness,
         log->identifier(),
@@ -214,21 +213,24 @@ void PhysicalJoin::probeSideTransform(DAGPipeline & probe_pipeline, Context & co
 void PhysicalJoin::buildSideTransform(DAGPipeline & build_pipeline, Context & context, size_t max_streams)
 {
     auto & dag_context = *context.getDAGContext();
-    const auto & settings = context.getSettingsRef();
-
-    size_t join_build_concurrency = settings.join_concurrent_build ? std::min(max_streams, build_pipeline.streams.size()) : 1;
+    size_t join_build_concurrency = std::max(build_pipeline.streams.size(), build_pipeline.streams_with_non_joined_data.size());
 
     /// build side streams
     executeExpression(build_pipeline, build_side_prepare_actions, log, "append join key and join filters for build side");
     // add a HashJoinBuildBlockInputStream to build a shared hash table
-    auto get_concurrency_build_index = JoinInterpreterHelper::concurrencyBuildIndexGenerator(join_build_concurrency);
     String join_build_extra_info = fmt::format("join build, build_side_root_executor_id = {}", build()->execId());
     auto & join_execute_info = dag_context.getJoinExecuteInfoMap()[execId()];
-    build_pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, get_concurrency_build_index(), log->identifier());
-        stream->setExtraInfo(join_build_extra_info);
-        join_execute_info.join_build_streams.push_back(stream);
-    });
+    auto build_streams = [&](BlockInputStreams & streams) {
+        size_t build_index = 0;
+        for (auto & stream : streams)
+        {
+            stream = std::make_shared<HashJoinBuildBlockInputStream>(stream, join_ptr, build_index++, log->identifier());
+            stream->setExtraInfo(join_build_extra_info);
+            join_execute_info.join_build_streams.push_back(stream);
+        }
+    };
+    build_streams(build_pipeline.streams);
+    build_streams(build_pipeline.streams_with_non_joined_data);
     // for test, join executor need the return blocks to output.
     executeUnion(build_pipeline, max_streams, log, /*ignore_block=*/!context.isTest(), "for join");
 

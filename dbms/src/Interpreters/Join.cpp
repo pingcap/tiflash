@@ -116,7 +116,6 @@ Join::Join(
     const Names & key_names_left_,
     const Names & key_names_right_,
     bool use_nulls_,
-    const SizeLimits & limits,
     ASTTableJoin::Kind kind_,
     ASTTableJoin::Strictness strictness_,
     const String & req_id,
@@ -135,7 +134,6 @@ Join::Join(
     , key_names_right(key_names_right_)
     , use_nulls(use_nulls_)
     , build_concurrency(0)
-    , build_set_exceeded(false)
     , collators(collators_)
     , left_filter_column(left_filter_column_)
     , right_filter_column(right_filter_column_)
@@ -145,8 +143,7 @@ Join::Join(
     , original_strictness(strictness)
     , max_block_size_for_cross_join(max_block_size_)
     , build_table_state(BuildTableState::SUCCEED)
-    , log(Logger::get("Join", req_id))
-    , limits(limits)
+    , log(Logger::get(req_id))
 {
     if (other_condition_ptr != nullptr)
     {
@@ -169,10 +166,15 @@ void Join::setBuildTableState(BuildTableState state_)
     build_table_cv.notify_all();
 }
 
-
-Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes)
+bool CanAsColumnString(const IColumn * column)
 {
-    size_t keys_size = key_columns.size();
+    return typeid_cast<const ColumnString *>(column)
+        || (column->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(column)->getDataColumn()));
+}
+
+Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_sizes) const
+{
+    const size_t keys_size = key_columns.size();
 
     if (keys_size == 0)
         return Type::CROSS;
@@ -215,10 +217,33 @@ Join::Type Join::chooseMethod(const ColumnRawPtrs & key_columns, Sizes & key_siz
         return Type::keys256;
 
     /// If there is single string key, use hash table of it's values.
-    if (keys_size == 1
-        && (typeid_cast<const ColumnString *>(key_columns[0])
-            || (key_columns[0]->isColumnConst() && typeid_cast<const ColumnString *>(&static_cast<const ColumnConst *>(key_columns[0])->getDataColumn()))))
-        return Type::key_string;
+    if (keys_size == 1 && CanAsColumnString(key_columns[0]))
+    {
+        if (collators.empty() || !collators[0])
+            return Type::key_strbin;
+        else
+        {
+            switch (collators[0]->getCollatorType())
+            {
+            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+            {
+                return Type::key_strbinpadding;
+            }
+            case TiDB::ITiDBCollator::CollatorType::BINARY:
+            {
+                return Type::key_strbin;
+            }
+            default:
+            {
+                // for CI COLLATION, use original way
+                return Type::key_string;
+            }
+            }
+        }
+    }
 
     if (keys_size == 1 && typeid_cast<const ColumnFixedString *>(key_columns[0]))
         return Type::key_fixed_string;
@@ -320,6 +345,16 @@ template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<Join::Type::key_string, Value, Mapped>
 {
     using Type = ColumnsHashing::HashMethodString<Value, Mapped, true, false>;
+};
+template <typename Value, typename Mapped>
+struct KeyGetterForTypeImpl<Join::Type::key_strbinpadding, Value, Mapped>
+{
+    using Type = ColumnsHashing::HashMethodStringBin<Value, Mapped, true>;
+};
+template <typename Value, typename Mapped>
+struct KeyGetterForTypeImpl<Join::Type::key_strbin, Value, Mapped>
+{
+    using Type = ColumnsHashing::HashMethodStringBin<Value, Mapped, false>;
 };
 template <typename Value, typename Mapped>
 struct KeyGetterForTypeImpl<Join::Type::key_fixed_string, Value, Mapped>
@@ -783,7 +818,7 @@ void recordFilteredRows(const Block & block, const String & filter_column, Colum
     null_map = &static_cast<const ColumnUInt8 &>(*null_map_holder).getData();
 }
 
-bool Join::insertFromBlock(const Block & block)
+void Join::insertFromBlock(const Block & block)
 {
     std::unique_lock lock(rwlock);
     if (unlikely(!initialized))
@@ -791,7 +826,7 @@ bool Join::insertFromBlock(const Block & block)
     total_input_build_rows += block.rows();
     blocks.push_back(block);
     Block * stored_block = &blocks.back();
-    return insertFromBlockInternal(stored_block, 0);
+    insertFromBlockInternal(stored_block, 0);
 }
 
 /// the block should be valid.
@@ -811,15 +846,10 @@ void Join::insertFromBlock(const Block & block, size_t stream_index)
         stored_block = &blocks.back();
         original_blocks.push_back(block);
     }
-    if (build_set_exceeded.load())
-        return;
-    if (!insertFromBlockInternal(stored_block, stream_index))
-    {
-        build_set_exceeded.store(true);
-    }
+    insertFromBlockInternal(stored_block, stream_index);
 }
 
-bool Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
+void Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
 {
     size_t keys_size = key_names_right.size();
     ColumnRawPtrs key_columns(keys_size);
@@ -911,8 +941,6 @@ bool Join::insertFromBlockInternal(Block * stored_block, size_t stream_index)
                 insertFromBlockImpl<ASTTableJoin::Strictness::All>(type, maps_all_full, rows, key_columns, key_sizes, collators, stored_block, null_map, rows_not_inserted_to_map[stream_index].get(), stream_index, getBuildConcurrencyInternal(), *pools[stream_index]);
         }
     }
-
-    return limits.check(getTotalRowCount(), getTotalByteCount(), "JOIN", ErrorCodes::SET_SIZE_LIMIT_EXCEEDED);
 }
 
 

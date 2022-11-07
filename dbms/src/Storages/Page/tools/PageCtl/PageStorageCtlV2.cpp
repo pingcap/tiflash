@@ -70,11 +70,11 @@ enum DebugMode
 };
 
 void dump_all_entries(PageFileSet & page_files, int32_t mode = DebugMode::DUMP_ALL_ENTRIES);
-void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config);
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const DB::PageStorageConfig & config);
 
-PageStorage::Config parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
+DB::PageStorageConfig parse_storage_config(int argc, char ** argv, Poco::Logger * logger)
 {
-    PageStorage::Config config;
+    DB::PageStorageConfig config;
     if (argc > 4)
     {
         size_t num = strtoull(argv[4], nullptr, 10);
@@ -173,7 +173,7 @@ try
         return 0;
     }
 
-    PageStorage::Config config = parse_storage_config(argc, argv, logger);
+    DB::PageStorageConfig config = parse_storage_config(argc, argv, logger);
     PageStorage storage("PageCtl", delegator, config, file_provider);
     storage.restore();
     switch (mode)
@@ -246,24 +246,24 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
                 printf("%s\tseq: %9llu\t", page_file.toString().c_str(), sequence);
                 switch (record.type)
                 {
-                case DB::WriteBatch::WriteType::PUT_EXTERNAL:
-                case DB::WriteBatch::WriteType::PUT:
+                case DB::WriteBatchWriteType::PUT_EXTERNAL:
+                case DB::WriteBatchWriteType::PUT:
                     printf("PUT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case DB::WriteBatch::WriteType::UPSERT:
+                case DB::WriteBatchWriteType::UPSERT:
                     printf("UPSERT");
                     printPageEntry(record.page_id, record.entry);
                     id_and_caches.emplace_back(std::make_pair(record.page_id, record.entry));
                     break;
-                case DB::WriteBatch::WriteType::DEL:
+                case DB::WriteBatchWriteType::DEL:
                     printf("DEL\t%lld\t%llu\t%u\n", //
                            record.page_id,
                            page_file.getFileId(),
                            page_file.getLevel());
                     break;
-                case DB::WriteBatch::WriteType::REF:
+                case DB::WriteBatchWriteType::REF:
                     printf("REF\t%lld\t%lld\t\t%llu\t%u\n", //
                            record.page_id,
                            record.ori_page_id,
@@ -292,7 +292,7 @@ void dump_all_entries(PageFileSet & page_files, int32_t mode)
     }
 }
 
-void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const PageStorage::Config & config)
+void list_all_capacity(const PageFileSet & page_files, PageStorage & storage, const DB::PageStorageConfig & config)
 {
     static constexpr double MB = 1.0 * 1024 * 1024;
 

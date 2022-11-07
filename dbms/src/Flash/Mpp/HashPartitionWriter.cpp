@@ -56,6 +56,13 @@ void HashPartitionWriter<StreamWriterPtr>::finishWrite()
 }
 
 template <class StreamWriterPtr>
+void HashPartitionWriter<StreamWriterPtr>::flush()
+{
+    if (rows_in_blocks > 0)
+        partitionAndEncodeThenWriteBlocks<false>();
+}
+
+template <class StreamWriterPtr>
 void HashPartitionWriter<StreamWriterPtr>::write(const Block & block)
 {
     RUNTIME_CHECK_MSG(
@@ -90,7 +97,7 @@ void HashPartitionWriter<StreamWriterPtr>::partitionAndEncodeThenWriteBlocks()
         {
             const auto & block = blocks.back();
             auto dest_tbl_cols = HashBaseWriterHelper::createDestColumns(block, partition_num);
-            HashBaseWriterHelper::computeHash(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
+            HashBaseWriterHelper::scatterColumns(block, partition_num, collators, partition_key_containers, partition_col_ids, dest_tbl_cols);
             blocks.pop_back();
 
             for (size_t part_id = 0; part_id < partition_num; ++part_id)
@@ -121,7 +128,7 @@ void HashPartitionWriter<StreamWriterPtr>::writePackets(std::vector<TrackedMppDa
     if constexpr (send_exec_summary_at_last)
     {
         tipb::SelectResponse response;
-        addExecuteSummaries(response, /*delta_mode=*/false);
+        summary_collector.addExecuteSummaries(response, /*delta_mode=*/false);
         /// Sending the response to only one node, default the first one.
         assert(!packets.empty());
         packets[0].serializeByResponse(response);

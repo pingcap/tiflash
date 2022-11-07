@@ -33,7 +33,7 @@ MinTSOScheduler::MinTSOScheduler(UInt64 soft_limit, UInt64 hard_limit, UInt64 ac
     , thread_hard_limit(hard_limit)
     , estimated_thread_usage(0)
     , active_set_soft_limit(active_set_soft_limit_)
-    , log(Logger::get("MinTSOScheduler"))
+    , log(Logger::get())
 {
     auto cores = getNumberOfPhysicalCPUCores();
     if (active_set_soft_limit == 0 || active_set_soft_limit > 10 * cores)

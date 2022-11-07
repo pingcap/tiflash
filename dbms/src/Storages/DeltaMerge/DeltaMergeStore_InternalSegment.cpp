@@ -33,10 +33,8 @@ extern const Metric DT_SnapshotOfDeltaMerge;
 
 namespace DB
 {
-
 namespace DM
 {
-
 SegmentPair DeltaMergeStore::segmentSplit(DMContext & dm_context, const SegmentPtr & segment, SegmentSplitReason reason, std::optional<RowKeyValue> opt_split_at, SegmentSplitMode opt_split_mode)
 {
     LOG_INFO(
@@ -219,35 +217,6 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
         dm_context.min_version,
         Segment::simpleInfo(ordered_segments));
 
-    /// This segment may contain some rows that not belong to this segment range which is left by previous split operation.
-    /// And only saved data in this segment will be filtered by the segment range in the merge process,
-    /// unsaved data will be directly copied to the new segment.
-    /// So we flush here to make sure that all potential data left by previous split operation is saved.
-    for (const auto & seg : ordered_segments)
-    {
-        size_t sleep_ms = 5;
-        while (true)
-        {
-            if (seg->hasAbandoned())
-            {
-                LOG_INFO(log, "Merge - Give up segmentMerge because segment abandoned, segment={}", seg->simpleInfo());
-                return {};
-            }
-
-            if (seg->flushCache(dm_context))
-                break;
-
-            SYNC_FOR("before_DeltaMergeStore::segmentMerge|retry_flush");
-
-            // Else: retry. Flush could fail. Typical cases:
-            // #1. The segment is abandoned (due to an update is finished)
-            // #2. There is another flush in progress, for example, triggered in background
-            // Let's sleep 5ms ~ 100ms and then retry flush again.
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
-            sleep_ms = std::min(sleep_ms * 2, 100);
-        }
-    }
-
     std::vector<SegmentSnapshotPtr> ordered_snapshots;
     ordered_snapshots.reserve(ordered_segments.size());
     ColumnDefinesPtr schema_snap;
@@ -313,6 +282,8 @@ SegmentPtr DeltaMergeStore::segmentMerge(DMContext & dm_context, const std::vect
     auto merged_stable = Segment::prepareMerge(dm_context, schema_snap, ordered_segments, ordered_snapshots, wbs);
     wbs.writeLogAndData();
     merged_stable->enableDMFilesGC();
+
+    SYNC_FOR("after_DeltaMergeStore::segmentMerge|prepare_merge");
 
     SegmentPtr merged;
     {

@@ -25,10 +25,9 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Config/TOMLConfiguration.h>
 #include <Poco/Util/LayeredConfiguration.h>
+#include <boost_wrapper/string.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
-
-#include <boost/algorithm/string.hpp>
 
 namespace DB
 {

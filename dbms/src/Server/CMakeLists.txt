@@ -68,14 +68,19 @@ target_include_directories(tiflash-dttool-entry-object PUBLIC ${TiFlash_SOURCE_D
 
 add_executable (tiflash main.cpp)
 
-get_target_property(TIFLASH_PROXY_LIB_PATH ${TIFLASH_PROXY_LIBRARY} IMPORTED_LOCATION)
-cmake_path(GET TIFLASH_PROXY_LIB_PATH PARENT_PATH TIFLASH_PROXY_LIB_DIR)
+if (USE_INTERNAL_TIFLASH_PROXY)
+    get_target_property(TIFLASH_PROXY_LIB_PATH ${TIFLASH_PROXY_LIBRARY} IMPORTED_LOCATION)
+    cmake_path(GET TIFLASH_PROXY_LIB_PATH PARENT_PATH TIFLASH_PROXY_LIB_DIR)
+else()
+    set(TIFLASH_PROXY_LIB_DIR "${PREBUILT_LIBS_ROOT}")
+endif()
+
 cmake_path(
     RELATIVE_PATH TIFLASH_PROXY_LIB_DIR
     BASE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     OUTPUT_VARIABLE TIFLASH_PROXY_LIB_RPATH)
 
-if (ARCH_LINUX)
+if (OS_LINUX)
     if (ARCH_AARCH64)
         set(TIFLASH_ARCH_NAME "aarch64")
     elseif(ARCH_AMD64)
@@ -114,6 +119,11 @@ if (ARCH_LINUX)
                 "ld-linux-aarch64.*"
                 "libpthread.*"# exclude libc dependencies
             DIRECTORIES ${TIFLASH_DEPENDENCY_DIRECTORIES})
+    if (USE_GM_SSL)
+        install (TARGETS gmssl
+                COMPONENT tiflash-release
+                DESTINATION ".")
+    endif()
 
     install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
 elseif(APPLE)

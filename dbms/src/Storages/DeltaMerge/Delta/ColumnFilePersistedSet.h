@@ -77,11 +77,21 @@ private:
     void checkColumnFiles(const ColumnFilePersistedLevels & new_column_file_levels);
 
 public:
-    explicit ColumnFilePersistedSet(const std::string & log_prefix_, PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
+    explicit ColumnFilePersistedSet(PageId metadata_id_, const ColumnFilePersisteds & persisted_column_files = {});
 
     /// Restore the metadata of this instance.
     /// Only called after reboot.
-    static ColumnFilePersistedSetPtr restore(const std::string & log_prefix, DMContext & context, const RowKeyRange & segment_range, PageId id);
+    static ColumnFilePersistedSetPtr restore(DMContext & context, const RowKeyRange & segment_range, PageId id);
+
+    /**
+     * Resets the logger by using the one from the segment.
+     * Segment_log is not available when constructing, because usually
+     * at that time the segment has not been constructed yet.
+     */
+    void resetLogger(const LoggerPtr & segment_log)
+    {
+        log = segment_log;
+    }
 
     /// Thread safe part start
     String simpleInfo() const { return "ColumnFilePersistedSet [" + DB::toString(metadata_id) + "]"; }
@@ -110,8 +120,20 @@ public:
 
     BlockPtr getLastSchema();
 
-    ColumnFilePersisteds
-    checkHeadAndCloneTail(DMContext & context, const RowKeyRange & target_range, const ColumnFiles & head_column_files, WriteBatches & wbs) const;
+    /**
+     * Return newly appended column files compared to `previous_column_files`.
+     * If `previous_column_files` is not the prefix of the current column files, exceptions will be thrown.
+     *
+     * Example:
+     *  A, B, C, D          Current Column File
+     *  A, B                Previous Column File
+     *        C, D          Return Value
+     *
+     * Example of throws exception:
+     *  A, B, C, D          Current Column File
+     *     B                Previous Column File
+     */
+    ColumnFilePersisteds diffColumnFiles(const ColumnFiles & previous_column_files) const;
 
     /// Thread safe part start
     PageId getId() const { return metadata_id; }

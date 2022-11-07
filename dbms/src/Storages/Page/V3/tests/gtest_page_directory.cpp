@@ -75,8 +75,8 @@ TEST(ExternalIdsByNamespaceTest, Simple)
         Int32 expect = 0;
         who.compare_exchange_strong(expect, 2);
     });
-    th_get_alive.wait();
-    th_insert.wait();
+    th_get_alive.get();
+    th_insert.get();
 
     {
         // holder keep "50" alive
@@ -101,7 +101,7 @@ class PageDirectoryTest : public DB::base::TiFlashStorageTestBasic
 {
 public:
     PageDirectoryTest()
-        : log(Logger::get("PageDirectoryTest"))
+        : log(Logger::get())
     {}
 
     void SetUp() override
@@ -1378,17 +1378,16 @@ try
     INSERT_ENTRY_TO(page_id, 5, 3);
     INSERT_ENTRY_TO(another_page_id, 6, 1);
 
-    // FIXME: This will copy many outdate pages
     // Full GC get entries
     auto candidate_entries_1 = dir->getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
-    EXPECT_EQ(candidate_entries_1.first[1].size(), 3); // 3 entries for 2 page id
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 1); // 1 entries for 1 page id
 
     auto candidate_entries_2_3 = dir->getEntriesByBlobIds({2, 3});
-    EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
+    EXPECT_EQ(candidate_entries_2_3.first.size(), 1);
     const auto & entries_in_file2 = candidate_entries_2_3.first[2];
     const auto & entries_in_file3 = candidate_entries_2_3.first[3];
-    EXPECT_EQ(entries_in_file2.size(), 2); // 2 entries for 1 page id
+    EXPECT_EQ(entries_in_file2.empty(), true);
     EXPECT_EQ(entries_in_file3.size(), 1); // 1 entries for 1 page id
 
     PageEntriesEdit gc_migrate_entries;
@@ -1411,6 +1410,10 @@ try
 
     // Full GC execute apply
     dir->gcApply(std::move(gc_migrate_entries));
+
+    auto snap = dir->createSnapshot();
+    ASSERT_ENTRY_EQ(entry_v5, dir, page_id, snap);
+    ASSERT_ENTRY_EQ(entry_v6, dir, another_page_id, snap);
 }
 CATCH
 
@@ -1429,20 +1432,16 @@ try
 
     EXPECT_EQ(dir->numPages(), 2);
 
-    // 1.1 Full GC get entries for blob_id in [1]
+    // A.1 Full GC get entries for blob_id in [1]
     auto candidate_entries_1 = dir->getEntriesByBlobIds({1});
     EXPECT_EQ(candidate_entries_1.first.size(), 1);
-    EXPECT_EQ(candidate_entries_1.first[1].size(), 3); // 3 entries for 2 page id
+    EXPECT_EQ(candidate_entries_1.first[1].size(), 1); // 1 entries for `another_page_id`
 
     // for blob_id in [2, 3]
     auto candidate_entries_2_3 = dir->getEntriesByBlobIds({2, 3});
-    EXPECT_EQ(candidate_entries_2_3.first.size(), 2);
-    const auto & entries_in_file2 = candidate_entries_2_3.first[2];
-    const auto & entries_in_file3 = candidate_entries_2_3.first[3];
-    EXPECT_EQ(entries_in_file2.size(), 2); // 2 entries for 1 page id
-    EXPECT_EQ(entries_in_file3.size(), 1); // 1 entry for 1 page_id
+    EXPECT_EQ(candidate_entries_2_3.first.empty(), true);
 
-    // 2.1 Execute GC
+    // B.1 Execute GC
     dir->gcInMemEntries();
     // `page_id` get removed
     EXPECT_EQ(dir->numPages(), 1);
@@ -1465,8 +1464,12 @@ try
         }
     }
 
-    // 1.2 Full GC execute apply
-    ASSERT_THROW({ dir->gcApply(std::move(gc_migrate_entries)); }, DB::Exception);
+    // A.2 Full GC execute apply, upsert `another_page_id`, but we still don't
+    // support Full GC and gcInMem run conncurrently
+    dir->gcApply(std::move(gc_migrate_entries));
+
+    auto snap = dir->createSnapshot();
+    ASSERT_ENTRY_EQ(entry_v6, dir, another_page_id, snap);
 }
 CATCH
 
@@ -1550,7 +1553,7 @@ try
 }
 CATCH
 
-TEST_F(PageDirectoryGCTest, UpsertOnRefedEntries)
+TEST_F(PageDirectoryGCTest, RewriteRefedId)
 try
 {
     // 10->entry1, 11->10, 12->10
@@ -1577,17 +1580,28 @@ try
         EXPECT_TRUE(outdated_entries.empty());
     }
 
-    // upsert 10->entry2
     PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        // this will return ref page 11 and 12 that need to be rewritten
+        // to new blob file.
         auto full_gc_entries = dir->getEntriesByBlobIds({1});
+        ASSERT_EQ(full_gc_entries.first.size(), 1);
         auto ids = full_gc_entries.first.at(1);
-        ASSERT_EQ(ids.size(), 1);
+        ASSERT_EQ(ids.size(), 2);
+        ASSERT_EQ(std::get<0>(ids[0]), buildV3Id(TEST_NAMESPACE_ID, 11));
+        ASSERT_EQ(std::get<0>(ids[1]), buildV3Id(TEST_NAMESPACE_ID, 12));
+
+        // upsert 11->entry2
+        // upsert 12->entry3
+        PageEntriesEdit edit;
         edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
+        edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
+        // this will rewrite ref page 11, 12 to normal page
         dir->gcApply(std::move(edit));
     }
 
+    // page 10 get removed
     auto removed_entries = dir->gcInMemEntries();
     ASSERT_EQ(removed_entries.size(), 1);
     EXPECT_SAME_ENTRY(removed_entries[0], entry1);
@@ -1595,7 +1609,8 @@ try
     {
         auto snap = dir->createSnapshot();
         EXPECT_ENTRY_EQ(entry2, dir, 11, snap);
-        EXPECT_ENTRY_EQ(entry2, dir, 12, snap);
+        EXPECT_ENTRY_EQ(entry3, dir, 12, snap);
+        EXPECT_ENTRY_NOT_EXIST(dir, 10, snap);
     }
 
     // del 11->entry2
@@ -1603,18 +1618,97 @@ try
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         dir->apply(std::move(edit));
-        EXPECT_EQ(dir->gcInMemEntries().size(), 0);
+        // entry2 get removed
+        auto outdated_entries = dir->gcInMemEntries();
+        ASSERT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry2, outdated_entries[0]);
     }
-    // del 12->entry2
+    // del 12->entry3
     {
         PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
         dir->apply(std::move(edit));
-        // entry2 get removed
+        // entry3 get removed
         auto outdated_entries = dir->gcInMemEntries();
-        EXPECT_EQ(1, outdated_entries.size());
-        EXPECT_SAME_ENTRY(entry2, *outdated_entries.begin());
+        ASSERT_EQ(1, outdated_entries.size());
+        EXPECT_SAME_ENTRY(entry3, outdated_entries[0]);
     }
+
+    ASSERT_EQ(dir->getAllPageIds().empty(), true);
+}
+CATCH
+
+TEST_F(PageDirectoryGCTest, RewriteRefedIdWithConcurrentDelete)
+try
+{
+    // 10->entry1, 11->10, 12->10
+    PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    {
+        PageEntriesEdit edit;
+        edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
+        dir->apply(std::move(edit));
+    }
+    {
+        PageEntriesEdit edit;
+        edit.ref(buildV3Id(TEST_NAMESPACE_ID, 12), buildV3Id(TEST_NAMESPACE_ID, 10));
+        edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
+        dir->apply(std::move(edit));
+    }
+    // entry1 should not be removed
+    {
+        auto outdated_entries = dir->gcInMemEntries();
+        EXPECT_TRUE(outdated_entries.empty());
+    }
+
+    PageEntryV3 entry2{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
+    PageEntryV3 entry3{.file_id = 2, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123 + 1024, .checksum = 0x4567};
+    {
+        // this will return ref page 11 and 12 that need to be rewritten
+        // to new blob file.
+        auto full_gc_entries = dir->getEntriesByBlobIds({1});
+        ASSERT_EQ(full_gc_entries.first.size(), 1);
+        auto ids = full_gc_entries.first.at(1);
+        ASSERT_EQ(ids.size(), 2);
+        ASSERT_EQ(std::get<0>(ids[0]), buildV3Id(TEST_NAMESPACE_ID, 11));
+        ASSERT_EQ(std::get<0>(ids[1]), buildV3Id(TEST_NAMESPACE_ID, 12));
+
+        // unlike `RewriteRefedId`, foreground delete 11, 12 before
+        // full gc apply upserts
+        PageEntriesEdit fore_edit;
+        fore_edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
+        fore_edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
+        dir->apply(std::move(fore_edit));
+
+        // full gc ends, apply upserts
+        // upsert 11->entry2
+        // upsert 12->entry3
+        PageEntriesEdit edit;
+        edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
+        edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
+        // this will rewrite ref page 11, 12 to normal page
+        dir->gcApply(std::move(edit));
+    }
+
+    // page 10,11,12 get removed
+    auto removed_entries = dir->gcInMemEntries();
+    ASSERT_EQ(removed_entries.size(), 3);
+    EXPECT_SAME_ENTRY(removed_entries[0], entry1);
+    EXPECT_SAME_ENTRY(removed_entries[1], entry2);
+    EXPECT_SAME_ENTRY(removed_entries[2], entry3);
+
+    {
+        auto snap = dir->createSnapshot();
+        EXPECT_ENTRY_NOT_EXIST(dir, 11, snap);
+        EXPECT_ENTRY_NOT_EXIST(dir, 12, snap);
+        EXPECT_ENTRY_NOT_EXIST(dir, 10, snap);
+    }
+
+    ASSERT_EQ(dir->getAllPageIds().empty(), true);
 }
 CATCH
 
@@ -1953,7 +2047,7 @@ try
         dir->apply(std::move(edit));
     }
 
-    auto restore_from_edit = [](const PageEntriesEdit & edit, BlobStats & stats) {
+    auto restore_from_edit = [](PageEntriesEdit & edit, BlobStats & stats) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();
@@ -1997,7 +2091,7 @@ try
     PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
-    auto restore_from_edit = [](const PageEntriesEdit & edit) {
+    auto restore_from_edit = [](PageEntriesEdit & edit) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();

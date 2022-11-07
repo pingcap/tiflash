@@ -79,7 +79,7 @@ protected:
     }
 
 protected:
-    PageStorage::Config config;
+    PageStorageConfig config;
     std::shared_ptr<PageStorage> storage;
     const FileProviderPtr file_provider;
 };
