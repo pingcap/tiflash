@@ -371,7 +371,7 @@ void MPPTask::runImpl()
         mpp_task_statistics.start();
 
         auto result = query_executor_holder.get().execute();
-        if (!result.is_success)
+        if (unlikely(!result.is_success))
             err_msg = result.err_msg;
         else
         {
@@ -512,8 +512,10 @@ bool MPPTask::scheduleThisTask(ScheduleState state)
 
 int MPPTask::estimateCountOfNewThreads()
 {
-    if (!query_executor_holder.isHolding() || dag_context->tunnel_set == nullptr)
-        throw Exception("It should not estimate the threads for the uninitialized task" + id.toString());
+    RUNTIME_CHECK_MSG(
+        query_executor_holder.isHolding() && dag_context->tunnel_set != nullptr,
+        "It should not estimate the threads for the uninitialized task {}",
+        id.toString());
 
     // Estimated count of new threads from query executor(including ExchangeReceiver), remote MppTunnels s.
     return query_executor_holder.get().estimateNewThreadCount() + 1
