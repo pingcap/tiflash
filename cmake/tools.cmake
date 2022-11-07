@@ -35,7 +35,7 @@ message (STATUS "Using compiler:\n${COMPILER_SELF_IDENTIFICATION}")
 set (CLANG_MINIMUM_VERSION 12)
 
 if (COMPILER_GCC)
-    message (FATAL_ERROR "GCC is not officially supported, and may not work.")
+    message (FATAL_ERROR "GCC is not officially supported.")
 elseif (COMPILER_CLANG)
     if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS ${CLANG_MINIMUM_VERSION})
         message (FATAL_ERROR "Compilation with Clang version ${CMAKE_CXX_COMPILER_VERSION} is unsupported, the minimum required version is ${CLANG_MINIMUM_VERSION}.")
