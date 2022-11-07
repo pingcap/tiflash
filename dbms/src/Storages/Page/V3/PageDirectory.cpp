@@ -1240,8 +1240,7 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
     // in later batch pipeline), we will increase the sequence for each record.
     for (auto & r : edit.getMutRecords())
     {
-        ++my_sequence;
-        r.version = PageVersion(my_sequence, 0);
+        r.version = PageVersion(++my_sequence, 0);
     }
 
     const auto serialized_edit_data = ser::serializeTo(edit);
