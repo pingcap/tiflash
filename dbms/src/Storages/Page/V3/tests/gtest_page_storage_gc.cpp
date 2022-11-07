@@ -433,7 +433,8 @@ try
     LOG_INFO(log, "close and restore WAL from disk");
     page_storage.reset();
 
-    // There is no any entry on wal log-files
+    // The living ref-pages (id3, id4) are rewrite into
+    // normal pages.
     auto [wal, reader] = WALStore::create(String(NAME), file_provider, delegator, WALConfig::from(new_config));
     UNUSED(wal);
     size_t num_entries_on_wal = 0;
