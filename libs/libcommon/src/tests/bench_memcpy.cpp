@@ -34,9 +34,13 @@
 namespace bench
 {
 
-ALWAYS_INLINE static inline void * tiflash_internal_memcpy(void * __restrict dst, const void * __restrict src, size_t size)
+void * _internal_avx2_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
 {
-    return sse2_inline_memcpy(dst, src, size);
+    return mem_utils::avx2_inline_memcpy(dst_, src_, size);
+}
+void * _internal_sse2_memcpy(void * __restrict dst_, const void * __restrict src_, size_t size)
+{
+    return sse2_inline_memcpy(dst_, src_, size);
 }
 
 template <size_t min, size_t max, size_t align, bool hot, size_t loop_cnt_>
@@ -121,7 +125,8 @@ protected:
     using id = MemUtilsCopy<min, max, align, hot, loop_cnt>;                   \
     BENCH_MEM_COPY(id, stl_mempy, std::memcpy, iters)                          \
     BENCH_MEM_COPY(id, inline_clickhouse_memcpy, legacy::inline_memcpy, iters) \
-    BENCH_MEM_COPY(id, inline_tiflash_memcpy, tiflash_internal_memcpy, iters)  \
+    BENCH_MEM_COPY(id, sse2_memcpy, sse2_inline_memcpy, iters)                 \
+    BENCH_MEM_COPY(id, avx2_memcpy, mem_utils::avx2_inline_memcpy, iters)      \
     BENCH_MEM_COPY(id, folly_memcpy, __folly_memcpy, iters)
 
 #define BENCH_MEM_IMPL_ID(min, max, align, hot, loop_cnt) MemUtilsCopy##_##min##_##max##_##align##_##hot##_##loop_cnt
@@ -133,7 +138,7 @@ BENCH_MEM_COPY_ALL(1, 20, 3, true, 20000, 500);
 BENCH_MEM_COPY_ALL(1, 40, 3, true, 20000, 500);
 BENCH_MEM_COPY_ALL(1, 80, 3, true, 20000, 500);
 BENCH_MEM_COPY_ALL(1, 200, 3, true, 20000, 500);
-BENCH_MEM_COPY_ALL(1, 1000, 3, true, 20000, 500);
+BENCH_MEM_COPY_ALL(1, 2000, 3, true, 20000, 500);
 
 
 } // namespace bench
