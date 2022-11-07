@@ -17,19 +17,11 @@
 
 namespace DB
 {
-namespace ErrorCodes
-{
-extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
-extern const int LOGICAL_ERROR;
-} // namespace ErrorCodes
-
 LimitTransformAction::LimitTransformAction(
     const Block & header_,
-    size_t limit_,
-    size_t offset_)
+    size_t limit_)
     : header(header_)
     , limit(limit_)
-    , offset(offset_)
 {
 }
 
@@ -49,14 +41,14 @@ bool LimitTransformAction::transform(Block & block)
         return true;
 
     /// pos - how many lines were read, including the last read block
-    if (pos >= offset + limit)
+    if (pos >= limit)
     {
         return false;
     }
 
     auto rows = block.rows();
     pos += rows;
-    if (pos >= offset + rows && pos <= offset + limit)
+    if (pos >= rows && pos <= limit)
     {
         // give away the whole block
         return true;
@@ -66,13 +58,13 @@ bool LimitTransformAction::transform(Block & block)
         // give away a piece of the block
         size_t start = std::max(
             static_cast<Int64>(0),
-            static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows));
+            static_cast<Int64>(rows) - static_cast<Int64>(pos));
 
         size_t length = std::min(
             static_cast<Int64>(limit),
             std::min(
-                static_cast<Int64>(pos) - static_cast<Int64>(offset),
-                static_cast<Int64>(limit) + static_cast<Int64>(offset) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
+                static_cast<Int64>(pos),
+                static_cast<Int64>(limit) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
 
         for (size_t i = 0; i < block.columns(); ++i)
             block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->cut(start, length);

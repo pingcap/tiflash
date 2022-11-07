@@ -1284,7 +1284,7 @@ void InterpreterSelectQuery::executePreLimit(Pipeline & pipeline)
     if (query.limit_length)
     {
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, 0, /*req_id=*/"", false);
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length + limit_offset, /*req_id=*/"");
         });
     }
 }
@@ -1359,7 +1359,7 @@ void InterpreterSelectQuery::executeLimit(Pipeline & pipeline)
             always_read_till_end = true;
 
         pipeline.transform([&](auto & stream) {
-            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, limit_offset, /*req_id=*/"", always_read_till_end);
+            stream = std::make_shared<LimitBlockInputStream>(stream, limit_length, /*req_id=*/"");
         });
     }
 }

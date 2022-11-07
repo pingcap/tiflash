@@ -25,8 +25,7 @@ struct LimitTransformAction
 public:
     LimitTransformAction(
         const Block & header_,
-        size_t limit_,
-        size_t offset);
+        size_t limit_);
 
     bool transform(Block & block);
     Block getHeader() const;
@@ -35,7 +34,6 @@ public:
 private:
     Block header;
     size_t limit;
-    size_t offset;
     size_t pos = 0;
 };
 } // namespace DB
