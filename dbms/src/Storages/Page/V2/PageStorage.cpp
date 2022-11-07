@@ -1175,9 +1175,9 @@ bool PageStorage::gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, c
 
     Stopwatch watch;
     if (gc_type == GCType::LowWrite)
-        GET_METRIC(tiflash_storage_page_gc_count, type_low_write).Increment();
+        GET_METRIC(tiflash_storage_page_gc_count, type_v2_low).Increment();
     else
-        GET_METRIC(tiflash_storage_page_gc_count, type_exec).Increment();
+        GET_METRIC(tiflash_storage_page_gc_count, type_v2).Increment();
     SCOPE_EXIT({ GET_METRIC(tiflash_storage_page_gc_duration_seconds, type_v2).Observe(watch.elapsedSeconds()); });
 
 
