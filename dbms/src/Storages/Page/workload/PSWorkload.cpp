@@ -17,12 +17,11 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/V2/PageStorage.h>
 #include <Storages/Page/V3/PageStorageImpl.h>
+#include <Storages/Page/workload/PSRunnable.h>
 #include <Storages/Page/workload/PSWorkload.h>
 #include <TestUtils/MockDiskDelegator.h>
 
 #include <ext/scope_guard.h>
-
-#include "Storages/Page/workload/PSRunnable.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

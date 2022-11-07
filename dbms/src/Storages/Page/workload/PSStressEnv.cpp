@@ -59,7 +59,7 @@ StressEnv StressEnv::parse(int argc, char ** argv)
         ("paths,P", value<std::vector<std::string>>(), "store path(s)") //
         ("failpoints", value<std::vector<std::string>>(), "failpoint(s) to enable") //
         ("gc_interval", value<UInt32>()->default_value(30), "GC interval(seconds). 0 means no gc") //
-        ("status_interval", value<UInt32>()->default_value(1), "Status statistics interval(seconds). 0 means no statistics") //
+        ("status_interval", value<UInt32>()->default_value(5), "Status statistics interval(seconds). 0 means no statistics") //
         ("situation_mask,M", value<UInt64>()->default_value(0), "Run special tests sequentially, example -M 2") //
         ("verify", value<bool>()->default_value(true), "Run special tests sequentially with verify.") //
         ("running_ps_version,V", value<UInt16>()->default_value(3), "Select a version of PageStorage. 2 or 3 can used");
