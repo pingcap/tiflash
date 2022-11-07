@@ -38,7 +38,7 @@ private:
     void fillTiExecutionSummary(
         tipb::ExecutorExecutionSummary * execution_summary,
         ExecutionSummary & current,
-        const String & executor_id);
+        const String & executor_id) const;
 
 private:
     DAGContext & dag_context;

@@ -21,7 +21,7 @@ namespace DB
 void ExecutionSummaryCollector::fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
     ExecutionSummary & current,
-    const String & executor_id)
+    const String & executor_id) const
 {
     execution_summary->set_time_processed_ns(current.time_processed_ns);
     execution_summary->set_num_produced_rows(current.num_produced_rows);
