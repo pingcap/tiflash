@@ -123,11 +123,11 @@ public:
         const ColumnPtr & column_haystack = block.getByPosition(arguments[0]).column;
         const ColumnPtr & column_needle = block.getByPosition(arguments[1]).column;
 
-        const ColumnConst * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
-        const ColumnConst * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
+        const auto * col_haystack_const = typeid_cast<const ColumnConst *>(&*column_haystack);
+        const auto * col_needle_const = typeid_cast<const ColumnConst *>(&*column_needle);
 
         UInt8 escape_char = CH_ESCAPE_CHAR;
-        String match_type = "";
+        String match_type;
         if constexpr (Impl::need_customized_escape_char)
         {
             const auto * col_escape_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
@@ -158,7 +158,7 @@ public:
         {
             if (arguments.size() > 2)
             {
-                auto * col_match_type_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
+                const auto * col_match_type_const = typeid_cast<const ColumnConst *>(&*block.getByPosition(arguments[2]).column);
                 if (col_match_type_const == nullptr)
                     throw Exception("Match type argument of function " + getName() + " must be constant");
                 match_type = col_match_type_const->getValue<String>();
@@ -168,7 +168,7 @@ public:
         if (col_haystack_const && col_needle_const)
         {
             ResultType res{};
-            String needle_string = col_needle_const->getValue<String>();
+            auto needle_string = col_needle_const->getValue<String>();
             Impl::constantConstant(col_haystack_const->getValue<String>(), needle_string, escape_char, match_type, collator, res);
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(col_haystack_const->size(), toField(res));
             return;
@@ -179,8 +179,8 @@ public:
         typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
         vec_res.resize(column_haystack->size());
 
-        const ColumnString * col_haystack_vector = checkAndGetColumn<ColumnString>(&*column_haystack);
-        const ColumnString * col_needle_vector = checkAndGetColumn<ColumnString>(&*column_needle);
+        const auto * col_haystack_vector = checkAndGetColumn<ColumnString>(&*column_haystack);
+        const auto * col_needle_vector = checkAndGetColumn<ColumnString>(&*column_needle);
 
         if (col_haystack_vector && col_needle_vector)
             Impl::vectorVector(col_haystack_vector->getChars(),
@@ -193,7 +193,7 @@ public:
                                vec_res);
         else if (col_haystack_vector && col_needle_const)
         {
-            String needle_string = col_needle_const->getValue<String>();
+            auto needle_string = col_needle_const->getValue<String>();
             Impl::vectorConstant(col_haystack_vector->getChars(), col_haystack_vector->getOffsets(), needle_string, escape_char, match_type, collator, vec_res);
         }
         else if (col_haystack_const && col_needle_vector)
@@ -261,11 +261,11 @@ public:
         const ColumnPtr column = block.getByPosition(arguments[0]).column;
         const ColumnPtr column_needle = block.getByPosition(arguments[1]).column;
 
-        const ColumnConst * col_needle = typeid_cast<const ColumnConst *>(&*column_needle);
+        const auto * col_needle = typeid_cast<const ColumnConst *>(&*column_needle);
         if (!col_needle)
             throw Exception("Second argument of function " + getName() + " must be constant string.", ErrorCodes::ILLEGAL_COLUMN);
 
-        if (const ColumnString * col = checkAndGetColumn<ColumnString>(column.get()))
+        if (const auto * col = checkAndGetColumn<ColumnString>(column.get()))
         {
             auto col_res = ColumnString::create();
 

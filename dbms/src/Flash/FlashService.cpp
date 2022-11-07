@@ -98,6 +98,14 @@ grpc::Status executeInThreadPool(ThreadPool & pool, std::function<grpc::Status()
     return future.get();
 }
 
+String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
+{
+    if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
+        return String(it->second.data(), it->second.size());
+
+    return default_val;
+}
+
 grpc::Status FlashService::Coprocessor(
     grpc::ServerContext * grpc_context,
     const coprocessor::Request * request,
@@ -110,13 +118,21 @@ grpc::Status FlashService::Coprocessor(
     if (!check_result.ok())
         return check_result;
 
+    bool is_remote_read = getClientMetaVarWithDefault(grpc_context, "is_remote_read", "") == "true";
     GET_METRIC(tiflash_coprocessor_request_count, type_cop).Increment();
     GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Increment();
+    if (is_remote_read)
+    {
+        GET_METRIC(tiflash_coprocessor_request_count, type_remote_read).Increment();
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Increment();
+    }
     Stopwatch watch;
     SCOPE_EXIT({
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_cop).Decrement();
         GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_cop).Observe(watch.elapsedSeconds());
         GET_METRIC(tiflash_coprocessor_response_bytes).Increment(response->ByteSizeLong());
+        if (is_remote_read)
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read).Decrement();
     });
 
     context->setMockStorage(mock_storage);
@@ -127,6 +143,12 @@ grpc::Status FlashService::Coprocessor(
         {
             return status;
         }
+        if (is_remote_read)
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Increment();
+        SCOPE_EXIT({
+            if (is_remote_read)
+                GET_METRIC(tiflash_coprocessor_handling_request_count, type_remote_read_executing).Decrement();
+        });
         CoprocessorContext cop_context(*db_context, request->context(), *grpc_context);
         CoprocessorHandler cop_handler(cop_context, request, response);
         return cop_handler.execute();
@@ -145,12 +167,12 @@ grpc::Status FlashService::BatchCoprocessor(grpc::ServerContext * grpc_context, 
     if (!check_result.ok())
         return check_result;
 
-    GET_METRIC(tiflash_coprocessor_request_count, type_super_batch).Increment();
-    GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch).Increment();
+    GET_METRIC(tiflash_coprocessor_request_count, type_batch).Increment();
+    GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Increment();
     Stopwatch watch;
     SCOPE_EXIT({
-        GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch).Decrement();
-        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_super_batch).Observe(watch.elapsedSeconds());
+        GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch).Decrement();
+        GET_METRIC(tiflash_coprocessor_request_duration_seconds, type_batch).Observe(watch.elapsedSeconds());
         // TODO: update the value of metric tiflash_coprocessor_response_bytes.
     });
 
@@ -363,14 +385,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContextForTest() cons
     auto task_manager = tmt_context.getMPPTaskManager();
     task_manager->abortMPPQuery(request->meta().start_ts(), "Receive cancel request from GTest", AbortType::ONCANCELLATION);
     return grpc::Status::OK;
-}
-
-String getClientMetaVarWithDefault(const grpc::ServerContext * grpc_context, const String & name, const String & default_val)
-{
-    if (auto it = grpc_context->client_metadata().find(name); it != grpc_context->client_metadata().end())
-        return String(it->second.data(), it->second.size());
-
-    return default_val;
 }
 
 grpc::Status FlashService::checkGrpcContext(const grpc::ServerContext * grpc_context) const

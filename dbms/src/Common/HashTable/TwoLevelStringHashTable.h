@@ -89,8 +89,8 @@ public:
     // added bucket computation. See the comments there.
     template <typename Self, typename Func, typename KeyHolder>
     static auto
-#if defined(ADDRESS_SANITIZER)
-        NO_INLINE NO_SANITIZE_ADDRESS
+#if defined(ADDRESS_SANITIZER) || defined(THREAD_SANITIZER)
+        NO_INLINE NO_SANITIZE_ADDRESS NO_SANITIZE_THREAD
 #else
         ALWAYS_INLINE
 #endif
