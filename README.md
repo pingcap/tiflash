@@ -147,7 +147,7 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
 ninja tiflash
 ```
 
-Note: In Linux, usually you need to explicitly specify to use LLVM. Otherwise, the default compiler will be GCC:
+Note: In Linux, usually you need to explicitly specify to use LLVM.:
 
 ```shell
 # In cmake-build-debug directory:
