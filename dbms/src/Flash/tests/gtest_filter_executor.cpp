@@ -33,7 +33,24 @@ public:
                                     {{"s1", TiDB::TP::TypeString}, {"s2", TiDB::TP::TypeString}},
                                     {toNullableVec<String>("s1", {"banana", {}, "banana"}),
                                      toNullableVec<String>("s2", {"apple", {}, "banana"})});
-        context.addMockTable({"test_db", "filter"}, {{"bool_col", TiDB::TP::TypeTiny}}, {toNullableVec<Int8>("bool_col", {0, 1, 0, 1, 1, 0, 1, 0})});
+
+        context.addMockTable({"test_db", "filter"},
+                             {
+                                 {"bool_col", TiDB::TP::TypeTiny},
+                                 {"int32_col", TiDB::TP::TypeLong},
+                                 {"int64_col", TiDB::TP::TypeLongLong},
+                                 {"float_col", TiDB::TP::TypeFloat},
+                                 {"double_col", TiDB::TP::TypeDouble},
+                                 {"string_col", TiDB::TP::TypeString},
+                             },
+                             {
+                                 toNullableVec<Int8>("bool_col", {0, 1, 0, 1, 1, 0, 1, 0}),
+                                 toNullableVec<Int32>("int32_col", {0, 1, 2, 3, 4, 5, 6, 7}),
+                                 toNullableVec<Int64>("int64_col", {0, 1, 2, 3, 4, 5, 6, 7}),
+                                 toNullableVec<Float32>("float_col", {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}),
+                                 toNullableVec<Float64>("double_col", {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}),
+                                 toNullableVec<String>("string_col", {"", "a", "1", "0", "ab", "  ", "\t", "\n"}),
+                             });
     }
 };
 
@@ -183,11 +200,57 @@ CATCH
 TEST_F(FilterExecutorTestRunner, bool_col)
 try
 {
-    auto request = context
-                       .scan("test_db", "filter")
-                       .filter(col("bool_col"))
-                       .build(context);
-    executeAndAssertColumnsEqual(request, {toNullableVec<Int8>("bool_col", {1, 1, 1, 1})});
+    // use bool_col
+    {
+        auto request = context
+                           .scan("test_db", "filter")
+                           .filter(col("bool_col"))
+                           .project({col("bool_col")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int8>({1, 1, 1, 1})});
+    }
+
+    // convert to bool
+    {
+        auto request = context
+                           .scan("test_db", "filter")
+                           .filter(col("int32_col"))
+                           .project({col("int32_col")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int32>({1, 2, 3, 4, 5, 6, 7})});
+    }
+    {
+        auto request = context
+                           .scan("test_db", "filter")
+                           .filter(col("int64_col"))
+                           .project({col("int64_col")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Int64>({1, 2, 3, 4, 5, 6, 7})});
+    }
+    {
+        auto request = context
+                           .scan("test_db", "filter")
+                           .filter(col("float_col"))
+                           .project({col("float_col")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Float32>({0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7})});
+    }
+    {
+        auto request = context
+                           .scan("test_db", "filter")
+                           .filter(col("double_col"))
+                           .project({col("double_col")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<Float64>({0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7})});
+    }
+    {
+        auto request = context
+                           .scan("test_db", "filter")
+                           .filter(col("string_col"))
+                           .project({col("string_col")})
+                           .build(context);
+        executeAndAssertColumnsEqual(request, {toNullableVec<String>({"1"})});
+    }
 }
 CATCH
 
