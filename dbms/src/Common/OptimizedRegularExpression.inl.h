@@ -17,9 +17,9 @@
 #include <Common/StringUtils/StringUtils.h>
 
 #include <iostream>
-#include "Common/Exception.h"
-#include "common/defines.h"
-#include "common/types.h"
+#include <Common/Exception.h>
+#include <common/defines.h>
+#include <common/types.h>
 
 
 #define MIN_LENGTH_FOR_STRSTR 3
