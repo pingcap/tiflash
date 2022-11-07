@@ -121,10 +121,12 @@ struct StoreStats
     Float64 avg_stable_rows = 0;
     Float64 avg_stable_size = 0;
 
+    // statistics about column file in delta
     UInt64 total_pack_count_in_delta = 0;
     Float64 avg_pack_count_in_delta = 0;
     Float64 avg_pack_rows_in_delta = 0;
     Float64 avg_pack_size_in_delta = 0;
+    UInt64 max_pack_count_in_delta = 0;
 
     UInt64 total_pack_count_in_stable = 0;
     Float64 avg_pack_count_in_stable = 0;

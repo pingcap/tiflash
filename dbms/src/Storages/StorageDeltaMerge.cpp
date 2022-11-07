@@ -1425,19 +1425,10 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_SIZE(avg_pack_size_in_stable)
 
     INSERT_INT(storage_stable_num_snapshots);
-    INSERT_INT(storage_stable_num_pages);
-    INSERT_INT(storage_stable_num_normal_pages)
-    INSERT_INT(storage_stable_max_page_id);
 
     INSERT_INT(storage_delta_num_snapshots);
-    INSERT_INT(storage_delta_num_pages);
-    INSERT_INT(storage_delta_num_normal_pages)
-    INSERT_INT(storage_delta_max_page_id);
 
     INSERT_INT(storage_meta_num_snapshots);
-    INSERT_INT(storage_meta_num_pages);
-    INSERT_INT(storage_meta_num_normal_pages)
-    INSERT_INT(storage_meta_max_page_id);
 
     INSERT_INT(background_tasks_length);
 

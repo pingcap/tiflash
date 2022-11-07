@@ -53,7 +53,9 @@ StoreStats DeltaMergeStore::getStoreStats()
             stat.total_delete_ranges += delta->getDeletes();
 
             stat.delta_count += 1;
-            stat.total_pack_count_in_delta += delta->getColumnFileCount();
+            const auto num_delta_column_file = delta->getColumnFileCount();
+            stat.total_pack_count_in_delta += num_delta_column_file;
+            stat.max_pack_count_in_delta = std::max(stat.max_pack_count_in_delta, num_delta_column_file);
 
             stat.total_delta_rows += delta->getRows();
             stat.total_delta_size += delta->getBytes();
