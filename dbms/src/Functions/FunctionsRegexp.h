@@ -649,13 +649,12 @@ private:
 private:
     void handleIntConstCol(size_t col_size, const ColumnConst * col_const)
     {
+        Field field;
+        col_const->get(0, field);
+        auto data_int64 = field.isNull() ? -1 : getIntFromField(field);
         const auto & col_const_data = col_const->getDataColumnPtr();
         if (col_const_data->isColumnNullable())
         {
-            Field field;
-            col_const->get(0, field);
-            auto data_int64 = field.isNull() ? -1 : getIntFromField(field);
-            auto col_const_data = col_const->getDataColumnPtr();
             const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData());
 
             // Construct actual param
@@ -665,7 +664,7 @@ private:
         else
         {
             // Construct actual param
-            param = new ParamStringNotNullableAndConst(col_size, col_const->getDataAt(0));
+            param = new ParamIntNotNullableAndConst(col_size, data_int64);
             param_type = ParamType::IntNotNullableAndConst;
         }
     }
@@ -693,11 +692,11 @@ private:
 #define M(INT_TYPE, col_ptr, null_map, param) \
     else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
     { \
-        param = new ParamIntNullableAndNotConst(col_size, null_map, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
+        (param) = new ParamIntNullableAndNotConst(col_size, null_map, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
     }
 
             if (false) {}
-            APPLY_FOR_INT_CONTAINER(M, col_ptr, null_map, param)
+            APPLY_FOR_INT_CONTAINER(M, nested_ptr, null_map, param)
             else
                 throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -711,7 +710,7 @@ private:
 #define M(INT_TYPE, col_ptr, null_map, param) \
     else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
     { \
-        param = new ParamIntNotNullableAndNotConst(col_size, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
+        (param) = new ParamIntNotNullableAndNotConst(col_size, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
     }
 
             if (false) {}
@@ -1224,7 +1223,7 @@ public:
     static FunctionPtr create(const Context &) { return std::make_shared<FunctionStringRegexpInstr>(); }
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
-    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { COLLATOR_VAR_NAME = collator_; }
+    void setCollator(const TiDB::TiDBCollatorPtr & collator_) override { collator = collator_; }
     bool useDefaultImplementationForNulls() const override { return false; }
     size_t getNumberOfArguments() const override { return 0; }
 
@@ -1297,7 +1296,7 @@ public:
             Int64 ret_op = RetOpT::isConst() ? ret_op_const_val : get_ret_op_func(ret_op_container, 0);
             String match_type = match_type_param.getString(0);
 
-            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, COLLATOR_VAR_NAME), flags);
+            Regexps::Regexp regexp(addMatchTypeForPattern(pat, match_type, collator), flags);
             ResultType res = regexp.instr(expr.c_str(), expr.size(), pos, occur, ret_op);
             res_arg.column = res_arg.type->createColumnConst(col_size, toField(res));
             return;
@@ -1349,7 +1348,7 @@ public:
         {
             // Codes in this if branch execute instr with memorized regexp
 
-            const auto & regexp = memorize(pat_param, match_type_param, COLLATOR_VAR_NAME);
+            const auto & regexp = memorize(pat_param, match_type_param, collator);
             if constexpr (has_nullable_col)
             {
                 // Process nullable columns with memorized regexp
@@ -1416,7 +1415,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
@@ -1435,7 +1434,7 @@ public:
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
-                    auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME);
+                    auto regexp = createRegexpWithMatchType(pat, match_type, collator);
                     vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
@@ -1489,14 +1488,14 @@ public:
         ParamVariant PAT_PV_VAR_NAME(col_pat, col_size, StringRef("", 0));
         ParamVariant POS_PV_VAR_NAME(col_pos, col_size, 1);
         ParamVariant OCCUR_PV_VAR_NAME(col_occur, col_size, 1);
-        ParamVariant RET_OP_PV_VAR_NAME(col_occur, col_size, 0);
+        ParamVariant RET_OP_PV_VAR_NAME(col_return_option, col_size, 0);
         ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
 
         GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
-    TiDB::TiDBCollatorPtr COLLATOR_VAR_NAME = nullptr;
+    TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
 #undef GET_ACTUAL_PARAMS_AND_EXECUTE
@@ -1507,8 +1506,6 @@ private:
 #undef GET_RET_OP_ACTUAL_PARAM
 #undef GET_MATCH_TYPE_ACTUAL_PARAM
 #undef EXECUTE_REGEXP_INSTR
-
-#undef COLLATOR_VAR_NAME
 
 #undef GET_ACTUAL_INT_PARAM
 #undef GET_ACTUAL_STRING_PARAM
