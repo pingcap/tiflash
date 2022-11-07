@@ -368,10 +368,14 @@ TEST(ReadLimiterTest, ReadMany)
     ASSERT_EQ(read_limiter.getAvailableBalance(), -900);
     ASSERT_EQ(read_limiter.alloc_bytes, 100);
 
-    std::this_thread::sleep_for(1200ms);
     Stopwatch sw;
-    request(read_limiter, 100);
-    ASSERT_LE(sw.elapsedMilliseconds(), 1); // Not blocked.
+    request(read_limiter, 1);  // About 1000ms
+    auto req_ms = sw.elapsedMilliseconds();
+    // Theoretical value of `req_ms` is 1000. 
+    // But time can be affected by many factors, 
+    // such as machine load, process scheduling delays, clock jitter.
+    ASSERT_GE(req_ms, 950);
+    ASSERT_LT(req_ms, 1100);
 }
 
 #ifdef __linux__
