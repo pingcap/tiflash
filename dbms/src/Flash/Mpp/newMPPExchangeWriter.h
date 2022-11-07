@@ -36,6 +36,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     UInt64 fine_grained_shuffle_batch_size)
 {
     RUNTIME_CHECK(dag_context.isMPPTask());
+    should_send_exec_summary_at_last = dag_context.collect_execution_summaries && should_send_exec_summary_at_last;
     if (dag_context.isRootMPPTask())
     {
         RUNTIME_CHECK(!enable_fine_grained_shuffle);
