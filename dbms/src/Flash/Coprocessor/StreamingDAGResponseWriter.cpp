@@ -105,7 +105,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 {
     TrackedSelectResp response;
     if constexpr (send_exec_summary_at_last)
-        summary_collector.addExecuteSummaries(response.getResponse(), /*delta_mode=*/true);
+        summary_collector.addExecuteSummaries(response.getResponse());
     response.setEncodeType(dag_context.encode_type);
     if (blocks.empty())
     {
