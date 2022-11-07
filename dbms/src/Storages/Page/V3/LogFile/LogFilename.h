@@ -38,7 +38,7 @@ struct LogFilename
     static constexpr const char * LOG_FILE_PREFIX_NORMAL = "log";
     static constexpr const char * LOG_FILE_PREFIX_TEMP = ".temp.log";
 
-    static LogFilename parseFrom(const String & parent_path, const String & filename, LoggerPtr log, size_t bytes);
+    static LogFilename parseFrom(const String & parent_path, const String & filename, LoggerPtr log, size_t bytes = 0);
 
     inline String filename(LogFileStage file_stage) const
     {
