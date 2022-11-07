@@ -52,11 +52,7 @@ public:
         DB::PageStorageConfig config;
         initPageStorage(config, name());
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
-
-        stress_time = std::make_shared<StressTimeout>(options.timeout_s);
-        stress_time->start();
+        startBackgroundTimer();
 
         startWriter<PSCommonWriter>(options.num_writers, [](std::shared_ptr<PSCommonWriter> writer) -> void {
             writer->setBatchBufferNums(100);

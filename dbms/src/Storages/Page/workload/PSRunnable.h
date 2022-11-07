@@ -35,9 +35,12 @@ public:
     size_t pages_used = 0;
 };
 
+// The random page id for adding and removing
 struct RandomPageId
 {
+    // The new page id to add to pagestorage
     DB::PageId page_id;
+    // The page ids to removed from pagestorage
     DB::PageIdSet page_id_to_remove;
 
     explicit RandomPageId(DB::PageId new_page_id)
@@ -51,6 +54,7 @@ struct RandomPageId
     }
 };
 
+// The shared status inside workload
 struct GlobalStat
 {
     // shared status between PSWindowWriter and PSWindowReader

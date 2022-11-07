@@ -72,10 +72,6 @@ private:
             pool.joinAll();
             stop_watch.stop();
         }
-
-        // ps->traverse([](const DB::Page & page) {
-        //     LOG_INFO(StressEnv::logger, "page_id={}", page.page_id);
-        // });
     }
 
     bool verify() override

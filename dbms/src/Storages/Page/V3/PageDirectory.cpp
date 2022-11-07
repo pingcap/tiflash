@@ -1129,6 +1129,7 @@ std::set<PageIdV3Internal> PageDirectory::getAllPageIds()
     const auto seq = sequence.load();
     for (auto & [page_id, versioned] : mvcc_table_directory)
     {
+        // Only return the page_id that is visible
         if (versioned->isVisible(seq))
             page_ids.insert(page_id);
     }

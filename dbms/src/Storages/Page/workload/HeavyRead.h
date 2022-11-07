@@ -53,11 +53,7 @@ private:
         initPageStorage(config, name());
         initPages(MAX_PAGE_ID_DEFAULT);
 
-        metrics_dumper = std::make_shared<PSMetricsDumper>(1);
-        metrics_dumper->start();
-
-        stress_time = std::make_shared<StressTimeout>(60);
-        stress_time->start();
+        startBackgroundTimer();
         {
             stop_watch.start();
             startReader<PSReader>(options.num_readers, [](std::shared_ptr<PSReader> reader) -> void {
