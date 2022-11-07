@@ -215,7 +215,7 @@ public:
 
     explicit ParamInt(Int64 val)
         : const_int_val(val)
-        , int_type(IntType::UInt8)
+        , int_type(IntType::Int64)
         , int_container(nullptr)
     {
         if constexpr (!is_const)
@@ -261,13 +261,17 @@ public:
         }
     }
 
-    void setIntType(IntType int_type_) { int_type = int_type_; }
     IntType getIntType() const { return int_type; }
     String getString(size_t) const { throw Exception("ParamInt not supports this function"); }
     void getStringRef(size_t, StringRef &) const { throw Exception("ParamInt not supports this function"); }
     constexpr static bool isConst() { return is_const; }
-    void setContainer(const void * container) { int_container = container; }
     const void * getContainer() const { return int_container; }
+
+    void setIntTypeAndContainer(IntType type, const void * container)
+    {
+        int_type = type;
+        int_container = container;
+    }
 
 private:
     Int64 const_int_val;
