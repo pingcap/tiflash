@@ -1990,7 +1990,7 @@ TEST_F(Regexp, RegexpLike)
                              createNullableVectorColumn<String>(exprs, exprs_nulls),
                              createColumn<String>(patterns)));
 
-        // test regexp_like(vectir, nullable vector)
+        // test regexp_like(vector, nullable vector)
         ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vv_res, pattern_nulls),
                          executeFunction(
                              "regexp_like",
@@ -2356,6 +2356,7 @@ struct RegexpInstrCase
     String match_type;
 };
 
+// TODO add empty column test
 TEST_F(Regexp, RegexpInstr)
 {
     // Test: All columns are const
