@@ -1233,15 +1233,10 @@ void PageDirectory::applyRefEditRecord(
 
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
-    // Note that we need to make sure increasing `sequence` in order, so it
-    // also needs to be protected by `write_lock` throughout the `apply`
-    // TODO: It is totally serialized, make it a pipeline
-    std::unique_lock write_lock(table_rw_mutex);
-    const UInt64 last_sequence = sequence.load();
-    // new sequence allocated in this edit
-    UInt64 new_sequence = last_sequence + 1;
+    auto edit_size = edit.getMutRecords().size();
+    auto last_sequence = sequence.fetch_add(edit_size);
+    auto new_sequence = last_sequence + 1;
 
-    // stage 1, persisted the changes to WAL with new versions
     // Inorder to handle {put X, ref Y->X, del X} inside one WriteBatch (and
     // in later batch pipeline), we will increase the sequence for each record.
     for (auto & r : edit.getMutRecords())
@@ -1249,7 +1244,13 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
         r.version = PageVersion(new_sequence, 0);
         new_sequence += 1;
     }
-    wal->apply(ser::serializeTo(edit), write_limiter);
+
+    const serialized_edit_data = ser::serializeTo(edit);
+
+    std::unique_lock write_lock(table_rw_mutex);
+
+    // stage 1, persisted the changes to WAL with new versions
+    wal->apply(serialized_edit_data, write_limiter);
 
     // stage 2, create entry version list for page_id.
     for (const auto & r : edit.getRecords())
@@ -1302,9 +1303,6 @@ void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write
             e.rethrow();
         }
     }
-
-    // stage 3, the edit committed, incr the sequence number to publish changes for `createSnapshot`
-    sequence.fetch_add(new_sequence - last_sequence);
 }
 
 void PageDirectory::gcApply(PageEntriesEdit && migrated_edit, const WriteLimiterPtr & write_limiter)
