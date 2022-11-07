@@ -1234,18 +1234,17 @@ void PageDirectory::applyRefEditRecord(
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     auto edit_size = edit.getMutRecords().size();
-    auto last_sequence = sequence.fetch_add(edit_size);
-    auto new_sequence = last_sequence + 1;
+    auto my_sequence = sequence.fetch_add(edit_size);
 
     // Inorder to handle {put X, ref Y->X, del X} inside one WriteBatch (and
     // in later batch pipeline), we will increase the sequence for each record.
     for (auto & r : edit.getMutRecords())
     {
-        r.version = PageVersion(new_sequence, 0);
-        new_sequence += 1;
+        ++my_sequence;
+        r.version = PageVersion(my_sequence, 0);
     }
 
-    const serialized_edit_data = ser::serializeTo(edit);
+    const auto serialized_edit_data = ser::serializeTo(edit);
 
     std::unique_lock write_lock(table_rw_mutex);
 
