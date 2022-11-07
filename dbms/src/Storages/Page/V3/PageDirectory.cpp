@@ -1237,9 +1237,10 @@ void PageDirectory::applyRefEditRecord(
 void PageDirectory::apply(PageEntriesEdit && edit, const WriteLimiterPtr & write_limiter)
 {
     Stopwatch watch;
-    // Note that we need to make sure increasing `sequence` in order, so it
-    // also needs to be protected by `write_lock` throughout the `apply`
-    // TODO: It is totally serialized, make it a pipeline
+    // In order to make the changes in `edit` be atomically published to the reading snapshots,
+    // `sequence` must be updated after the edit is fully applied into this directory.
+    // TODO: It is totally serialized by only 1 thread with IO waiting. Make this process a
+    // pipeline so that we can batch the incoming edit when doing IO.
     std::unique_lock write_lock(table_rw_mutex);
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_latch).Observe(watch.elapsedSeconds());
     watch.restart();
