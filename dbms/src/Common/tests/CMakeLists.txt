@@ -98,6 +98,6 @@ add_executable (allocator_perf allocator_perf.cpp)
 target_link_libraries (allocator_perf clickhouse_common_io)
 
 add_executable(bench_common
-    bench_unified_log_formatter.cpp
+    bench_logger.cpp
 )
 target_link_libraries(bench_common benchmark::benchmark_main clickhouse_common_io)

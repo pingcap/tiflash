@@ -57,6 +57,12 @@ public:
             {
                 auto op_idx = dist(random);
                 actions[op_idx].second(this);
+
+                // If there were check errors, there is no need to proceed. Let's just stop here.
+                if (::testing::Test::HasFailure())
+                    return;
+
+                verifySegmentsIsEmpty();
             }
         }
 
@@ -69,8 +75,8 @@ protected:
     const std::vector<std::pair<double /* probability */, std::function<void(SegmentRandomizedTest *)>>> actions = {
         {1.0, &SegmentRandomizedTest::writeRandomSegment},
         {0.1, &SegmentRandomizedTest::deleteRangeRandomSegment},
-        {1.0, &SegmentRandomizedTest::splitRandomSegment},
-        {1.0, &SegmentRandomizedTest::splitAtRandomSegment},
+        {0.5, &SegmentRandomizedTest::splitRandomSegment},
+        {0.5, &SegmentRandomizedTest::splitAtRandomSegment},
         {0.25, &SegmentRandomizedTest::mergeRandomSegments},
         {1.0, &SegmentRandomizedTest::mergeDeltaRandomSegment},
         {1.0, &SegmentRandomizedTest::flushCacheRandomSegment},
@@ -87,13 +93,30 @@ protected:
      */
     PageId outbound_right_seg{};
 
+    void verifySegmentsIsEmpty()
+    {
+        // For all segments, when isEmpty() == true, verify the result against getSegmentRowNum.
+        for (const auto & seg_it : segments)
+        {
+            const auto seg_id = seg_it.first;
+            if (isSegmentDefinitelyEmpty(seg_id))
+            {
+                auto rows = getSegmentRowNum(seg_id);
+                RUNTIME_CHECK(rows == 0);
+
+                rows = getSegmentRowNumWithoutMVCC(seg_id);
+                RUNTIME_CHECK(rows == 0);
+            }
+        }
+    }
+
     void writeRandomSegment()
     {
         if (segments.empty())
             return;
         auto segment_id = getRandomSegmentId();
         auto write_rows = std::uniform_int_distribution<size_t>{20, 100}(random);
-        LOG_FMT_DEBUG(logger, "start random write, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
+        LOG_DEBUG(logger, "start random write, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
         writeSegment(segment_id, write_rows);
     }
 
@@ -103,7 +126,7 @@ protected:
             return;
         auto segment_id = getRandomSegmentId();
         auto write_rows = std::uniform_int_distribution<size_t>{20, 100}(random);
-        LOG_FMT_DEBUG(logger, "start random write delete, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
+        LOG_DEBUG(logger, "start random write delete, segment_id={} write_rows={} all_segments={}", segment_id, write_rows, segments.size());
         writeSegmentWithDeletedPack(segment_id, write_rows);
     }
 
@@ -112,7 +135,7 @@ protected:
         if (segments.empty())
             return;
         auto segment_id = getRandomSegmentId();
-        LOG_FMT_DEBUG(logger, "start random delete range, segment_id={} all_segments={}", segment_id, segments.size());
+        LOG_DEBUG(logger, "start random delete range, segment_id={} all_segments={}", segment_id, segments.size());
         deleteRangeSegment(segment_id);
     }
 
@@ -120,9 +143,13 @@ protected:
     {
         if (segments.empty())
             return;
+        // Just don't have too many segments, because it greatly reduces our efficiency of testing
+        // correlated actions.
+        if (segments.size() > 10)
+            return;
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
-        LOG_FMT_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, magic_enum::enum_name(split_mode), segments.size());
+        LOG_DEBUG(logger, "start random split, segment_id={} mode={} all_segments={}", segment_id, magic_enum::enum_name(split_mode), segments.size());
         splitSegment(segment_id, split_mode);
     }
 
@@ -130,13 +157,15 @@ protected:
     {
         if (segments.empty())
             return;
+        if (segments.size() > 10)
+            return;
         auto segment_id = getRandomSegmentId();
         auto split_mode = getRandomSplitMode();
         const auto [start, end] = getSegmentKeyRange(segment_id);
         if (end - start <= 1)
             return;
         auto split_at = std::uniform_int_distribution<Int64>{start, end - 1}(random);
-        LOG_FMT_DEBUG(logger, "start random split at, segment_id={} split_at={} mode={} all_segments={}", segment_id, split_at, magic_enum::enum_name(split_mode), segments.size());
+        LOG_DEBUG(logger, "start random split at, segment_id={} split_at={} mode={} all_segments={}", segment_id, split_at, magic_enum::enum_name(split_mode), segments.size());
         splitSegmentAt(segment_id, split_at, split_mode);
     }
 
@@ -145,7 +174,7 @@ protected:
         if (segments.size() < 2)
             return;
         auto segments_id = getRandomMergeableSegments();
-        LOG_FMT_DEBUG(logger, "start random merge, segments_id=[{}] all_segments={}", fmt::join(segments_id, ","), segments.size());
+        LOG_DEBUG(logger, "start random merge, segments_id=[{}] all_segments={}", fmt::join(segments_id, ","), segments.size());
         mergeSegment(segments_id);
     }
 
@@ -154,7 +183,7 @@ protected:
         if (segments.empty())
             return;
         PageId random_segment_id = getRandomSegmentId();
-        LOG_FMT_DEBUG(logger, "start random merge delta, segment_id={} all_segments={}", random_segment_id, segments.size());
+        LOG_DEBUG(logger, "start random merge delta, segment_id={} all_segments={}", random_segment_id, segments.size());
         mergeSegmentDelta(random_segment_id);
     }
 
@@ -163,7 +192,7 @@ protected:
         if (segments.empty())
             return;
         PageId random_segment_id = getRandomSegmentId();
-        LOG_FMT_DEBUG(logger, "start random flush cache, segment_id={} all_segments={}", random_segment_id, segments.size());
+        LOG_DEBUG(logger, "start random flush cache, segment_id={} all_segments={}", random_segment_id, segments.size());
         flushSegmentCache(random_segment_id);
     }
 
@@ -219,7 +248,7 @@ protected:
             }
         }
 
-        LOG_FMT_DEBUG(logger, "start random replace segment data, segments_id={} block_rows={} all_segments={}", fmt::join(segments_list, ","), block.rows(), segments.size());
+        LOG_DEBUG(logger, "start random replace segment data, segments_id={} block_rows={} all_segments={}", fmt::join(segments_list, ","), block.rows(), segments.size());
         replaceSegmentData({segments_list}, block);
 
         // Verify rows.
@@ -314,7 +343,7 @@ try
     SegmentTestOptions options;
     options.is_common_handle = true;
     reloadWithOptions(options);
-    run(50000, /* min key */ -5000000, /* max key */ 5000000);
+    run(50000, /* min key */ -50000, /* max key */ 50000);
 }
 CATCH
 

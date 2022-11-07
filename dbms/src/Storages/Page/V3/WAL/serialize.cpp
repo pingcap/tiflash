@@ -21,6 +21,8 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/WriteBatch.h>
 
+#include <magic_enum.hpp>
+
 namespace DB::PS::V3::ser
 {
 inline void serializeVersionTo(const PageVersion & version, WriteBuffer & buf)
@@ -218,7 +220,7 @@ void deserializeFrom(ReadBuffer & buf, PageEntriesEdit & edit)
             break;
         }
         default:
-            throw Exception(fmt::format("Unknown record type: {}", record_type), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Unknown record type: {}", static_cast<Int32>(record_type)), ErrorCodes::LOGICAL_ERROR);
         }
     }
 }

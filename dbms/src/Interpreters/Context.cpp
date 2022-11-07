@@ -523,7 +523,7 @@ void Context::setUserFilesPath(const String & path)
     shared->user_files_path = path;
 }
 
-void Context::setPathPool( //
+void Context::setPathPool(
     const Strings & main_data_paths,
     const Strings & latest_data_paths,
     const Strings & kvstore_paths,
@@ -1004,8 +1004,17 @@ ASTPtr Context::getCreateDatabaseQuery(const String & database_name) const
     return shared->databases[db]->getCreateDatabaseQuery(*this);
 }
 
+void Context::checkIsConfigLoaded() const
+{
+    if (shared->application_type == ApplicationType::SERVER && !is_config_loaded)
+    {
+        throw Exception("Configuration are used before load from configure file tiflash.toml, so the user config may not take effect.", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 Settings Context::getSettings() const
 {
+    checkIsConfigLoaded();
     return settings;
 }
 
@@ -1167,6 +1176,18 @@ Context & Context::getGlobalContext()
     if (!global_context)
         throw Exception("Logical error: there is no global context", ErrorCodes::LOGICAL_ERROR);
     return *global_context;
+}
+
+const Settings & Context::getSettingsRef() const
+{
+    checkIsConfigLoaded();
+    return settings;
+}
+
+Settings & Context::getSettingsRef()
+{
+    checkIsConfigLoaded();
+    return settings;
 }
 
 void Context::setProgressCallback(ProgressCallback callback)
@@ -1733,6 +1754,7 @@ void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & confi
     shared->default_profile_name = config.getString("default_profile", "default");
     shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
     setSetting("profile", shared->system_profile_name);
+    is_config_loaded = true;
 }
 
 String Context::getDefaultProfileName() const

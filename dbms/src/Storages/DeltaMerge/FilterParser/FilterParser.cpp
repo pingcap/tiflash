@@ -258,12 +258,15 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         return op;
     }
 
-
     if (auto iter = FilterParser::scalar_func_rs_filter_map.find(expr.sig()); iter != FilterParser::scalar_func_rs_filter_map.end())
     {
         FilterParser::RSFilterType filter_type = iter->second;
         switch (filter_type)
         {
+        // Not/And/Or only support when the child is FunctionExpr, thus expr like `a and null` can not do filter here.
+        // If later we want to support Not/And/Or do filter not only FunctionExpr but also ColumnExpr and Literal,
+        // we must take a special consideration about null value, due to we just ignore the null value in other filter(such as equal, greater, etc.)
+        // Therefore, null value may bring some extra correctness problem if we expand Not/And/Or filtering areas.
         case FilterParser::RSFilterType::Not:
         {
             if (unlikely(expr.children_size() != 1))
@@ -309,6 +312,48 @@ RSOperatorPtr parseTiExpr(const tipb::Expr & expr,
         case FilterParser::RSFilterType::LessEqual:
             op = parseTiCompareExpr(expr, filter_type, columns_to_read, creator, timezone_info, log);
             break;
+
+        case FilterParser::RSFilterType::IsNull:
+        {
+            // for IsNULL filter, we only support do filter when the child is ColumnExpr.
+            // That is, we only do filter when the statement likes `where a is null`, but not `where (a > 1) is null`
+            // because in other filter calculation(like Equal/Less/LessEqual/Greater/GreateEqual/NotEqual), we just make filter ignoring the null value.
+            // Therefore, if we support IsNull with sub expr, there could be correctness problem.
+            // For example, we have a table t(a int, b int), and the data is: (1, 2), (0, null), (null, 1)
+            // and then we execute `select * from t where (a > 1) is null`, we want to get (null, 1)
+            // but in RSResult (a > 1), we will get the result RSResult::None, and then we think the result is the empty set.
+            if (unlikely(expr.children_size() != 1))
+            {
+                op = createUnsupported(
+                    expr.ShortDebugString(),
+                    "filter IsNull with " + DB::toString(expr.children_size()) + " children",
+                    false);
+            }
+            else
+            {
+                const auto & child = expr.children(0);
+                if (likely(isColumnExpr(child)))
+                {
+                    auto field_type = child.field_type().tp();
+                    if (!isRoughSetFilterSupportType(field_type))
+                        op = createUnsupported(
+                            expr.ShortDebugString(),
+                            "ColumnRef with field type(" + DB::toString(field_type) + ") is not supported",
+                            false);
+                    else
+                    {
+                        ColumnID id = getColumnIDForColumnExpr(child, columns_to_read);
+                        Attr attr = creator(id);
+                        op = createIsNull(attr);
+                    }
+                }
+                else
+                {
+                    op = createUnsupported(child.ShortDebugString(), "child of is null is not column", false);
+                }
+            }
+        }
+        break;
 
         case FilterParser::RSFilterType::In:
         case FilterParser::RSFilterType::NotIn:
@@ -595,13 +640,13 @@ std::unordered_map<tipb::ScalarFuncSig, FilterParser::RSFilterType> FilterParser
     // {tipb::ScalarFuncSig::UnaryMinusReal, "negate"},
     // {tipb::ScalarFuncSig::UnaryMinusDecimal, "negate"},
 
-    // {tipb::ScalarFuncSig::DecimalIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::DurationIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::RealIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::StringIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::TimeIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::IntIsNull, "isNull"},
-    // {tipb::ScalarFuncSig::JsonIsNull, "isNull"},
+    {tipb::ScalarFuncSig::DecimalIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::DurationIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::RealIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::StringIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::TimeIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::IntIsNull, FilterParser::RSFilterType::IsNull},
+    {tipb::ScalarFuncSig::JsonIsNull, FilterParser::RSFilterType::IsNull},
 
     //{tipb::ScalarFuncSig::BitAndSig, "cast"},
     //{tipb::ScalarFuncSig::BitOrSig, "cast"},

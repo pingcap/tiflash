@@ -34,12 +34,12 @@
 #include <algorithm>
 #include <future>
 #include <iterator>
+#include <random>
 
 namespace DB
 {
 namespace FailPoints
 {
-extern const char gc_skip_update_safe_point[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 extern const char force_triggle_background_merge_delta[];
@@ -123,7 +123,7 @@ try
     store = nullptr;
 
     sp_gc.next(); // continue the page storage gc
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 
@@ -155,7 +155,7 @@ try
     store = nullptr;
 
     sp_gc.next(); // continue removing dtfiles
-    th_gc.wait();
+    th_gc.get();
 }
 CATCH
 
@@ -185,6 +185,7 @@ try
                                                       "test",
                                                       "t_200",
                                                       200,
+                                                      true,
                                                       *new_cols,
                                                       handle_column_define,
                                                       false,
@@ -196,7 +197,7 @@ try
     }
 
     sp_gc.next(); // continue the page storage gc
-    th_gc.wait();
+    th_gc.get();
 
     BlockInputStreamPtr in = new_store->read(*db_context,
                                              db_context->getSettingsRef(),
@@ -207,7 +208,7 @@ try
                                              EMPTY_FILTER,
                                              "",
                                              /* keep_order= */ false,
-                                             /* is_fast_mode= */ false,
+                                             /* is_fast_scan= */ false,
                                              /* expected_block_size= */ 1024)[0];
     ASSERT_INPUTSTREAM_NROWS(in, 100);
 }
@@ -253,7 +254,7 @@ try
          })
     {
         SCOPED_TRACE(fmt::format("Test case for {}", DMTestEnv::PkTypeToString(pk_type)));
-        LOG_FMT_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
+        LOG_INFO(log, "Test case for {} begin.", DMTestEnv::PkTypeToString(pk_type));
 
         auto cols = DMTestEnv::getDefaultColumns(pk_type);
         store = reload(cols, (pk_type == DMTestEnv::PkType::CommonHandle), 1);
@@ -300,7 +301,7 @@ try
         stream = std::make_shared<PKSquashingBlockInputStream<false>>(stream, EXTRA_HANDLE_COLUMN_ID, store->isCommonHandle());
         ASSERT_INPUTSTREAM_NROWS(stream, nrows + nrows_2);
 
-        LOG_FMT_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
+        LOG_INFO(log, "Test case for {} done.", DMTestEnv::PkTypeToString(pk_type));
     }
 }
 CATCH
@@ -1339,6 +1340,7 @@ try
     size_t num_rows_write_in_total = 0;
 
     const size_t num_rows_per_write = 5;
+    std::default_random_engine random;
     while (true)
     {
         {
@@ -1365,7 +1367,7 @@ try
                 break;
             case TestMode::V2_Mix:
             {
-                if ((std::rand() % 2) == 0)
+                if ((random() % 2) == 0)
                 {
                     store->write(*db_context, settings, block);
                 }
@@ -1404,7 +1406,7 @@ try
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
@@ -1412,7 +1414,7 @@ try
                     createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
                 }));
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -2953,7 +2955,7 @@ try
 
             store->flushCache(*db_context, RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()));
             num_rows_write_in_total += num_rows_per_write;
-            auto segment_stats = store->getSegmentStats();
+            auto segment_stats = store->getSegmentsStats();
             size_t delta_cache_size = 0;
             for (auto & stat : segment_stats)
             {
@@ -2985,7 +2987,7 @@ try
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
 
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "start to check data of [1,{}]", num_rows_write_in_total);
 
             ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
@@ -2993,7 +2995,7 @@ try
                 createColumns({
                     createColumn<Int64>(createNumbers<Int64>(1, num_rows_write_in_total + 1)),
                 }));
-            LOG_FMT_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
+            LOG_TRACE(&Poco::Logger::get(GET_GTEST_FULL_NAME), "done checking data of [1,{}]", num_rows_write_in_total);
         }
 
         // Reading with a large number of small DTFile ingested will greatly slow down the testing
@@ -3044,6 +3046,7 @@ public:
                                                   "test",
                                                   DB::base::TiFlashStorageTestBasic::getCurrentFullTestName(),
                                                   101,
+                                                  true,
                                                   *cols,
                                                   (*cols)[0],
                                                   pk_type == DMTestEnv::PkType::CommonHandle,
@@ -3307,11 +3310,11 @@ try
 
     // Let's finish the flush.
     sp_flush_commit.next();
-    th_flush.wait();
+    th_flush.get();
 
     // Proceed the mergeDelta retry. Retry should succeed without triggering any new flush.
     sp_merge_delta_retry.next();
-    th_merge_delta.wait();
+    th_merge_delta.get();
 }
 CATCH
 
@@ -3363,7 +3366,7 @@ try
 
     // Proceed and finish the split.
     sp_split_prepare.next();
-    th_split.wait();
+    th_split.get();
     {
         // Write to the new segment1 + segment2 after split.
         auto newly_written_rows = helper->rows_by_segments[1] + helper->rows_by_segments[2];
@@ -3376,7 +3379,7 @@ try
 
     // This time the retry should succeed without any future retries.
     sp_merge_delta_retry.next();
-    th_merge_delta.wait();
+    th_merge_delta.get();
 }
 CATCH
 

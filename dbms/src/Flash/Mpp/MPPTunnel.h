@@ -66,16 +66,17 @@ class TunnelSender : private boost::noncopyable
 {
 public:
     virtual ~TunnelSender() = default;
-    TunnelSender(size_t queue_size, const LoggerPtr & log_, const String & tunnel_id_)
-        : send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
+    TunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker_, const LoggerPtr & log_, const String & tunnel_id_)
+        : memory_tracker(memory_tracker_)
+        , send_queue(MPMCQueue<TrackedMppDataPacketPtr>(queue_size))
         , log(log_)
         , tunnel_id(tunnel_id_)
     {
     }
 
-    virtual bool push(TrackedMppDataPacketPtr && data)
+    virtual bool push(const mpp::MPPDataPacket & data)
     {
-        return send_queue.push(data) == MPMCQueueResult::OK;
+        return send_queue.push(std::make_shared<TrackedMppDataPacket>(data, getMemoryTracker())) == MPMCQueueResult::OK;
     }
 
     virtual void cancelWith(const String & reason)
@@ -101,6 +102,10 @@ public:
     String getTunnelId()
     {
         return tunnel_id;
+    }
+    MemoryTracker * getMemoryTracker() const
+    {
+        return memory_tracker != nullptr ? memory_tracker.get() : nullptr;
     }
 
 protected:
@@ -134,6 +139,7 @@ protected:
         std::shared_future<String> future;
         std::atomic<bool> msg_has_set{false};
     };
+    MemoryTrackerPtr memory_tracker;
     MPMCQueue<TrackedMppDataPacketPtr> send_queue;
     ConsumerState consumer_state;
     const LoggerPtr log;
@@ -159,20 +165,20 @@ private:
 class AsyncTunnelSender : public TunnelSender
 {
 public:
-    AsyncTunnelSender(size_t queue_size, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_)
-        : TunnelSender(0, log_, tunnel_id_)
+    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memory_tracker, const LoggerPtr & log_, const String & tunnel_id_, grpc_call * call_)
+        : TunnelSender(0, memory_tracker, log_, tunnel_id_)
         , queue(queue_size, call_, log_)
     {}
 
     /// For gtest usage.
-    AsyncTunnelSender(size_t queue_size, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func)
-        : TunnelSender(0, log_, tunnel_id_)
+    AsyncTunnelSender(size_t queue_size, MemoryTrackerPtr & memoryTracker, const LoggerPtr & log_, const String & tunnel_id_, GRPCKickFunc func)
+        : TunnelSender(0, memoryTracker, log_, tunnel_id_)
         , queue(queue_size, func)
     {}
 
-    bool push(TrackedMppDataPacketPtr && data) override
+    bool push(const mpp::MPPDataPacket & data) override
     {
-        return queue.push(data);
+        return queue.push(std::make_shared<TrackedMppDataPacket>(data, getMemoryTracker()));
     }
 
     bool finish() override
@@ -295,8 +301,6 @@ public:
     bool isAsync() const { return mode == TunnelSenderMode::ASYNC_GRPC; }
 
     const LoggerPtr & getLogger() const { return log; }
-
-    void updateMemTracker();
 
     TunnelSenderPtr getTunnelSender() { return tunnel_sender; }
     SyncTunnelSenderPtr getSyncTunnelSender() { return sync_tunnel_sender; }

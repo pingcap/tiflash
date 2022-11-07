@@ -15,6 +15,8 @@
 #include <DataStreams/WindowBlockInputStream.h>
 #include <Interpreters/WindowDescription.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -24,7 +26,7 @@ extern const int NOT_IMPLEMENTED;
 } // namespace ErrorCodes
 
 WindowBlockInputStream::WindowBlockInputStream(const BlockInputStreamPtr & input, const WindowDescription & window_description_, const String & req_id)
-    : log(Logger::get(NAME, req_id))
+    : log(Logger::get(req_id))
     , window_description(window_description_)
 {
     children.push_back(input);
@@ -272,7 +274,7 @@ void WindowBlockInputStream::advanceFrameStart()
         throw Exception(
             ErrorCodes::NOT_IMPLEMENTED,
             "The frame begin type '{}' is not implemented",
-            window_description.frame.begin_type);
+            magic_enum::enum_name(window_description.frame.begin_type));
     }
 }
 
@@ -371,7 +373,7 @@ void WindowBlockInputStream::advanceFrameEnd()
     default:
         throw Exception(ErrorCodes::NOT_IMPLEMENTED,
                         "The frame end type '{}' is not implemented",
-                        window_description.frame.end_type);
+                        magic_enum::enum_name(window_description.frame.end_type));
     }
 }
 

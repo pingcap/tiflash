@@ -17,6 +17,7 @@
 #include <Common/FmtUtils.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
@@ -64,6 +65,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     // CoprocessorBlockInputStream doesn't take care of this.
     size_t stream_id;
 
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
+
     void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
         for (const auto & execution_summary : resp.execution_summaries())
@@ -84,6 +87,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         if (resp.execution_summaries_size() == 0)
             return;
+
         if (!execution_summaries_inited[index].load())
         {
             initRemoteExecutionSummaries(resp, index);
@@ -97,7 +101,7 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
                 const auto & executor_id = execution_summary.executor_id();
                 if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
                 {
-                    LOG_FMT_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
+                    LOG_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
                     continue;
                 }
                 auto & current_execution_summary = execution_summaries_map[executor_id];
@@ -128,17 +132,17 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
     {
         while (true)
         {
-            auto result = remote_reader->nextResult(block_queue, sample_block, stream_id);
+            auto result = remote_reader->nextResult(block_queue, sample_block, stream_id, decoder_ptr);
             if (result.meet_error)
             {
-                LOG_FMT_WARNING(log, "remote reader meets error: {}", result.error_msg);
+                LOG_WARNING(log, "remote reader meets error: {}", result.error_msg);
                 throw Exception(result.error_msg);
             }
             if (result.eof)
                 return false;
             if (result.resp != nullptr && result.resp->has_error())
             {
-                LOG_FMT_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
+                LOG_WARNING(log, "remote reader meets error: {}", result.resp->error().DebugString());
                 throw Exception(result.resp->error().DebugString());
             }
             /// only the last response contains execution summaries
@@ -155,21 +159,22 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             }
 
             const auto & decode_detail = result.decode_detail;
+            total_rows += decode_detail.rows;
 
             size_t index = 0;
             if constexpr (is_streaming_reader)
                 index = result.call_index;
 
-            ++connection_profile_infos[index].packets;
+            connection_profile_infos[index].packets += decode_detail.packets;
             connection_profile_infos[index].bytes += decode_detail.packet_bytes;
 
-            total_rows += decode_detail.rows;
-            LOG_FMT_TRACE(
+            LOG_TRACE(
                 log,
                 "recv {} rows from remote for {}, total recv row num: {}",
                 decode_detail.rows,
                 result.req_info,
                 total_rows);
+
             if (decode_detail.rows > 0)
                 return true;
             // else continue
@@ -193,6 +198,9 @@ public:
         execution_summaries.resize(source_num);
         connection_profile_infos.resize(source_num);
         sample_block = Block(getColumnWithTypeAndName(toNamesAndTypes(remote_reader->getOutputSchema())));
+        constexpr size_t squash_rows_limit = 8192;
+        if constexpr (is_streaming_reader)
+            decoder_ptr = std::make_unique<CHBlockChunkDecodeAndSquash>(sample_block, squash_rows_limit);
     }
 
     Block getHeader() const override { return sample_block; }
@@ -211,7 +219,6 @@ public:
             if (!fetchRemoteResult())
                 return {};
         }
-        // todo should merge some blocks to make sure the output block is big enough
         Block block = block_queue.front();
         block_queue.pop();
         return block;
@@ -222,6 +229,7 @@ public:
         return execution_summaries_inited[index].load() ? &execution_summaries[index] : nullptr;
     }
 
+    size_t getTotalRows() const { return total_rows; }
     size_t getSourceNum() const { return source_num; }
     bool isStreamingCall() const { return is_streaming_reader; }
     const std::vector<ConnectionProfileInfo> & getConnectionProfileInfos() const { return connection_profile_infos; }
@@ -243,7 +251,7 @@ public:
 protected:
     void readSuffixImpl() override
     {
-        LOG_FMT_DEBUG(log, "finish read {} rows from remote", total_rows);
+        LOG_DEBUG(log, "finish read {} rows from remote", total_rows);
     }
 
     void appendInfo(FmtBuffer & buffer) const override

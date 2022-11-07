@@ -327,8 +327,8 @@ public:
     void setQueryContext(Context & context_) { query_context = &context_; }
     void setSessionContext(Context & context_) { session_context = &context_; }
     void setGlobalContext(Context & context_) { global_context = &context_; }
-    const Settings & getSettingsRef() const { return settings; };
-    Settings & getSettingsRef() { return settings; };
+    const Settings & getSettingsRef() const;
+    Settings & getSettingsRef();
 
 
     void setProgressCallback(ProgressCallback callback);
@@ -496,6 +496,10 @@ private:
 
     /// Session will be closed after specified timeout.
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
+
+    void checkIsConfigLoaded() const;
+
+    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 
 using ContextPtr = std::shared_ptr<Context>;

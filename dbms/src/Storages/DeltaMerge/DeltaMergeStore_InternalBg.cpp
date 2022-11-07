@@ -15,6 +15,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/GCOptions.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/Transaction/TMTContext.h>
 
@@ -29,9 +30,6 @@ namespace DB
 {
 namespace FailPoints
 {
-extern const char gc_skip_update_safe_point[];
-extern const char gc_skip_merge_delta[];
-extern const char gc_skip_merge[];
 extern const char pause_before_dt_background_delta_merge[];
 extern const char pause_until_dt_background_delta_merge[];
 } // namespace FailPoints
@@ -101,9 +99,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                     {
                         // just ignore
                     }
-                    LOG_FMT_INFO(logger,
-                                 "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
-                                 DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
+                    LOG_INFO(logger,
+                             "GC try remove useless DM file, but file not found and may have been removed, dmfile={}",
+                             DMFile::getPathByStatus(path, id, DMFile::Status::READABLE));
                 }
                 else if (dmfile->canGC())
                 {
@@ -125,9 +123,9 @@ void DeltaMergeStore::setUpBackgroundTask(const DMContextPtr & dm_context)
                         err_msg = e.message();
                     }
                     if (err_msg.empty())
-                        LOG_FMT_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
+                        LOG_INFO(logger, "GC removed useless DM file, dmfile={}", dmfile->path());
                     else
-                        LOG_FMT_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={} err_msg={}", dmfile->path(), err_msg);
+                        LOG_INFO(logger, "GC try remove useless DM file, but error happen, dmfile={} err_msg={}", dmfile->path(), err_msg);
                 }
             }
         }
@@ -224,7 +222,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     {
         /// Note that `task.dm_context->db_context` will be free after query is finish. We should not use that in background task.
         task.dm_context->min_version = latest_gc_safe_point.load(std::memory_order_relaxed);
-        LOG_FMT_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
+        LOG_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
     }
 
     SegmentPtr left, right;
@@ -267,7 +265,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     }
     catch (const Exception & e)
     {
-        LOG_FMT_ERROR(
+        LOG_ERROR(
             log,
             "Execute task on segment failed, task={} segment={} err={}",
             magic_enum::enum_name(task.type),
@@ -325,7 +323,7 @@ bool shouldCompactStableWithTooManyInvalidVersion(const SegmentPtr & seg, DB::Ti
         return true;
 
     const auto & property = seg->getStable()->getStableProperty();
-    LOG_FMT_TRACE(log, "{}", property.toDebugString());
+    LOG_TRACE(log, "{}", property.toDebugString());
     // No data older than safe_point to GC.
     if (property.gc_hint_version > gc_safepoint)
         return false;
@@ -358,7 +356,7 @@ bool shouldCompactDeltaWithStable(const DMContext & context, const SegmentPtr & 
     //   What's more, we can ignore this kind of delete range in future to avoid this extra gc.
     auto check_result = (delete_rows >= stable_rows * invalid_data_ratio_threshold) || (delete_bytes >= stable_bytes * invalid_data_ratio_threshold);
 
-    LOG_FMT_TRACE(
+    LOG_TRACE(
         log,
         "GC - Checking shouldCompactDeltaWithStable, "
         "check_result={} delete_rows={}, delete_bytes={} stable_rows={} stable_bytes={} segment={}",
@@ -400,7 +398,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 {
     if (snap->stable->getDMFilesPacks() == 0)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange skipped segment "
             "because the DTFile of stable is empty, segment={}",
@@ -412,9 +410,9 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     if (at_least_result.first_pack_intersection == RSResult::All //
         && at_least_result.last_pack_intersection == RSResult::All)
     {
-        LOG_FMT_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange permanently skipped segment "
-                           "because all packs in DTFiles are fully contained by the segment range, segment={}",
-                      seg->info());
+        LOG_TRACE(log, "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange permanently skipped segment "
+                       "because all packs in DTFiles are fully contained by the segment range, segment={}",
+                  seg->info());
         seg->setValidDataRatioChecked();
         return false;
     }
@@ -443,7 +441,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
     }
     if (!contains_invalid_data)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - shouldCompactStableWithTooMuchDataOutOfSegmentRange checked false "
             "because segment DTFile is shared with a neighbor segment, "
@@ -497,7 +495,7 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 
     auto check_result = (at_least_result.rows < file_rows * (1 - invalid_data_ratio_threshold)) //
         || (at_least_result.bytes < file_bytes * (1 - invalid_data_ratio_threshold));
-    LOG_FMT_TRACE(
+    LOG_TRACE(
         log,
         "GC - Checking shouldCompactStableWithTooMuchDataOutOfSegmentRange, "
         "check_result={} first_pack_inc={} last_pack_inc={} rows_at_least={} bytes_at_least={} file_rows={} file_bytes={} segment={} ",
@@ -517,15 +515,11 @@ bool shouldCompactStableWithTooMuchDataOutOfSegmentRange(const DMContext & conte
 
 SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, const SegmentPtr & segment)
 {
-    fiu_do_on(FailPoints::gc_skip_merge, {
-        return {};
-    });
-
     auto segment_rows = segment->getEstimatedRows();
     auto segment_bytes = segment->getEstimatedBytes();
     if (segment_rows >= dm_context->small_segment_rows || segment_bytes >= dm_context->small_segment_bytes)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - Merge skipped because current segment is not small, segment={} table={}",
             segment->simpleInfo(),
@@ -536,7 +530,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
     auto segments_to_merge = getMergeableSegments(dm_context, segment);
     if (segments_to_merge.size() < 2)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - Merge skipped because cannot find adjacent segments to merge, segment={} table={}",
             segment->simpleInfo(),
@@ -544,7 +538,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
         return {};
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "GC - Trigger Merge, segment={} table={}",
         segment->simpleInfo(),
@@ -560,10 +554,6 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMerge(const DMContextPtr & dm_context, c
 
 SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_context, const SegmentPtr & segment, const SegmentPtr & prev_segment, const SegmentPtr & next_segment, DB::Timestamp gc_safe_point)
 {
-    fiu_do_on(FailPoints::gc_skip_merge_delta, {
-        return {};
-    });
-
     SegmentSnapshotPtr segment_snap;
     {
         std::shared_lock lock(read_write_mutex);
@@ -571,14 +561,14 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
         // The segment we just retrieved may be dropped from the map. Let's verify it again before creating a snapshot.
         if (!isSegmentValid(lock, segment))
         {
-            LOG_FMT_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={} table={}", segment->simpleInfo(), table_name);
+            LOG_TRACE(log, "GC - Skip checking MergeDelta because not valid, segment={} table={}", segment->simpleInfo(), table_name);
             return {};
         }
 
         segment_snap = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfDeltaMerge);
         if (!segment_snap)
         {
-            LOG_FMT_TRACE(
+            LOG_TRACE(
                 log,
                 "GC - Skip checking MergeDelta because snapshot failed, segment={} table={}",
                 segment->simpleInfo(),
@@ -651,7 +641,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 
     if (!should_compact)
     {
-        LOG_FMT_TRACE(
+        LOG_TRACE(
             log,
             "GC - MergeDelta skipped, segment={} table={}",
             segment->simpleInfo(),
@@ -659,7 +649,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
         return {};
     }
 
-    LOG_FMT_INFO(
+    LOG_INFO(
         log,
         "GC - Trigger MergeDelta, compact_reason={} segment={} table={}",
         GC::toString(compact_reason),
@@ -669,7 +659,7 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
 
     if (!new_segment)
     {
-        LOG_FMT_DEBUG(
+        LOG_DEBUG(
             log,
             "GC - MergeDelta aborted, compact_reason={} segment={} table={}",
             GC::toString(compact_reason),
@@ -684,20 +674,13 @@ SegmentPtr DeltaMergeStore::gcTrySegmentMergeDelta(const DMContextPtr & dm_conte
     return new_segment;
 }
 
-UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
+UInt64 DeltaMergeStore::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (shutdown_called.load(std::memory_order_relaxed))
         return 0;
 
-    bool skip_update_safe_point = false;
-    fiu_do_on(FailPoints::gc_skip_update_safe_point, {
-        skip_update_safe_point = true;
-    });
-    if (!skip_update_safe_point)
-    {
-        if (!updateGCSafePoint())
-            return 0;
-    }
+    if (gc_options.update_safe_point && !updateGCSafePoint())
+        return 0;
 
     {
         std::shared_lock lock(read_write_mutex);
@@ -711,12 +694,13 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     DB::Timestamp gc_safe_point = latest_gc_safe_point.load(std::memory_order_acquire);
-    LOG_FMT_TRACE(log,
-                  "GC on table {} start with key: {}, gc_safe_point: {}, max gc limit: {}",
-                  table_name,
-                  next_gc_check_key.toDebugString(),
-                  gc_safe_point,
-                  limit);
+    LOG_TRACE(log,
+              "GC on table start, table={} check_key={} options={} gc_safe_point={} max_gc_limit={}",
+              table_name,
+              next_gc_check_key.toDebugString(),
+              gc_options.toString(),
+              gc_safe_point,
+              limit);
 
     UInt64 check_segments_num = 0;
     Int64 gc_segments_num = 0;
@@ -764,14 +748,14 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
         try
         {
             SegmentPtr new_seg = nullptr;
-            if (!new_seg)
+            if (!new_seg && gc_options.do_merge)
                 new_seg = gcTrySegmentMerge(dm_context, segment);
-            if (!new_seg)
+            if (!new_seg && gc_options.do_merge_delta)
                 new_seg = gcTrySegmentMergeDelta(dm_context, segment, prev_segment, next_segment, gc_safe_point);
 
             if (!new_seg)
             {
-                LOG_FMT_TRACE(
+                LOG_TRACE(
                     log,
                     "GC - Skipped segment, segment={} table={}",
                     segment->simpleInfo(),
@@ -789,7 +773,7 @@ UInt64 DeltaMergeStore::onSyncGc(Int64 limit)
     }
 
     if (gc_segments_num != 0)
-        LOG_FMT_DEBUG(log, "Finish GC, gc_segments_num={}", gc_segments_num);
+        LOG_DEBUG(log, "Finish GC, gc_segments_num={}", gc_segments_num);
 
     return gc_segments_num;
 }

@@ -42,14 +42,14 @@ MockKeyManager::MockKeyManager(EncryptionMethod method_, const String & key_, co
     , key{key_}
     , iv{iv}
     , encryption_enabled{encryption_enabled_}
-    , logger(DB::Logger::get("MockKeyManager"))
+    , logger(DB::Logger::get())
 {}
 
 FileEncryptionInfo MockKeyManager::newFile(const String & fname)
 {
     if (encryption_enabled)
     {
-        LOG_FMT_TRACE(logger, "Create mock encryption [file={}]", fname);
+        LOG_TRACE(logger, "Create mock encryption [file={}]", fname);
         files.emplace_back(fname);
     }
     return getFile(fname);
@@ -68,7 +68,7 @@ void MockKeyManager::deleteFile(const String & fname, bool throw_on_error)
         {
             if (*iter == fname)
             {
-                LOG_FMT_TRACE(logger, "Delete mock encryption [file={}]", fname);
+                LOG_TRACE(logger, "Delete mock encryption [file={}]", fname);
                 files.erase(iter);
                 break;
             }
@@ -85,7 +85,7 @@ void MockKeyManager::linkFile(const String & src_fname, const String & dst_fname
         {
             throw DB::Exception(fmt::format("Can't find file which name is {}", src_fname), DB::ErrorCodes::LOGICAL_ERROR);
         }
-        LOG_FMT_TRACE(logger, "Link mock encryption file [src_file={}] [dst_file={}]", src_fname, dst_fname);
+        LOG_TRACE(logger, "Link mock encryption file [src_file={}] [dst_file={}]", src_fname, dst_fname);
         files.emplace_back(dst_fname);
     }
 }

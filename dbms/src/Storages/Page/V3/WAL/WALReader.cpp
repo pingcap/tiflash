@@ -81,7 +81,7 @@ LogFilenameSet WALStoreReader::listAllFiles(
 std::tuple<std::optional<LogFilename>, LogFilenameSet>
 WALStoreReader::findCheckpoint(LogFilenameSet && all_files)
 {
-    LogFilenameSet::const_iterator latest_checkpoint_iter = all_files.cend();
+    auto latest_checkpoint_iter = all_files.cend();
     for (auto iter = all_files.cbegin(); iter != all_files.cend(); ++iter)
     {
         if (iter->level_num > 0)
@@ -138,7 +138,7 @@ WALStoreReaderPtr WALStoreReader::create(
     WALRecoveryMode recovery_mode_,
     const ReadLimiterPtr & read_limiter)
 {
-    LogFilenameSet log_files = listAllFiles(delegator, Logger::get("WALStore", storage_name));
+    LogFilenameSet log_files = listAllFiles(delegator, Logger::get(storage_name));
     return create(std::move(storage_name), provider, std::move(log_files), recovery_mode_, read_limiter);
 }
 
@@ -155,7 +155,7 @@ WALStoreReader::WALStoreReader(String storage_name,
     , files_to_read(std::move(files_))
     , next_reading_file(files_to_read.begin())
     , recovery_mode(recovery_mode_)
-    , logger(Logger::get("WALStore", std::move(storage_name)))
+    , logger(Logger::get(storage_name))
 {}
 
 bool WALStoreReader::remained() const
@@ -170,7 +170,7 @@ bool WALStoreReader::remained() const
     return false;
 }
 
-std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
+std::optional<String> WALStoreReader::next()
 {
     bool ok = false;
     String record;
@@ -179,14 +179,14 @@ std::tuple<bool, PageEntriesEdit> WALStoreReader::next()
         std::tie(ok, record) = reader->readRecord();
         if (ok)
         {
-            return {true, ser::deserializeFrom(record)};
+            return record;
         }
 
         // Roll to read the next file
         if (bool next_file = openNextFile(); !next_file)
         {
             // No more file to be read.
-            return {false, PageEntriesEdit{}};
+            return std::nullopt;
         }
     } while (true);
 }
@@ -202,7 +202,7 @@ bool WALStoreReader::openNextFile()
         const auto log_num = next_file.log_num;
         const auto filename = next_file.filename(next_file.stage);
         const auto fullname = next_file.fullname(next_file.stage);
-        LOG_FMT_DEBUG(logger, "Open log file for reading [file={}]", fullname);
+        LOG_DEBUG(logger, "Open log file for reading [file={}]", fullname);
 
         auto read_buf = createReadBufferFromFileBaseByFileProvider(
             provider,

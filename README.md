@@ -147,7 +147,7 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG
 ninja tiflash
 ```
 
-Note: In Linux, usually you need to explicitly specify to use LLVM. Otherwise, the default compiler will be GCC:
+Note: In Linux, usually you need to explicitly specify to use LLVM.
 
 ```shell
 # In cmake-build-debug directory:
@@ -227,18 +227,6 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
   There is another option to append extra paths for CMake to find system libraries:
 
   - `PREBUILT_LIBS_ROOT`: Default as empty, can be specified with multiple values, seperated by `;`
-
-  Specifically, for [TiFlash proxy](https://github.com/pingcap/tidb-engine-ext):
-
-  - `USE_INTERNAL_TIFLASH_PROXY=TRUE` (default) / `FALSE`
-
-    One may want to use external TiFlash proxy, e.g., if he is developing TiFlash proxy together with TiFlash, assume `$TIFLASH_PROXY_REPO` to be the path to the external TiFlash proxy repo
-
-    Usually need to be combined with `PREBUILT_LIBS_ROOT=$TIFLASH_PROXY_REPO`, and `$TIFLASH_PROXY_REPO` should have the following directory structure:
-
-    - Header files are under directory `$TIFLASH_PROXY_REPO/raftstore-proxy/ffi/src`
-
-    - Built library is under directory `$TIFLASH_PROXY_REPO/target/release`
 
   </details>
 
@@ -369,7 +357,7 @@ Before submitting a pull request, please resolve clang-tidy errors and use [form
 ```shell
 # In the TiFlash repository root:
 merge_base=$(git merge-base upstream/master HEAD)
-python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only` 
+python3 release-centos7-llvm/scripts/run-clang-tidy.py -p cmake-build-debug -j 20 --files `git diff $merge_base --name-only`
 # if there are too much errors, you can try to run the script again with `-fix`
 python3 format-diff.py --diff_from $merge_base
 ```

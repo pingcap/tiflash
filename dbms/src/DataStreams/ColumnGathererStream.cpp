@@ -136,12 +136,12 @@ void ColumnGathererStream::readSuffixImpl()
     String speed;
     if (seconds)
         speed = fmt::format(", {:.2f} rows/sec., {:.2f} MiB/sec.", profile_info.rows / seconds, profile_info.bytes / 1048576.0 / seconds);
-    LOG_FMT_TRACE(log,
-                  "Gathered column {} ({:.2f} bytes/elem.) in {} sec.{}",
-                  name,
-                  static_cast<double>(profile_info.bytes) / profile_info.rows,
-                  seconds,
-                  speed);
+    LOG_TRACE(log,
+              "Gathered column {} ({:.2f} bytes/elem.) in {} sec.{}",
+              name,
+              static_cast<double>(profile_info.bytes) / profile_info.rows,
+              seconds,
+              speed);
 }
 
 } // namespace DB

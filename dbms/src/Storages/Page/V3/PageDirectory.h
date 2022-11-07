@@ -30,6 +30,7 @@
 #include <Storages/Page/V3/WALStore.h>
 #include <common/types.h>
 
+#include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -56,7 +57,7 @@ public:
         CurrentMetrics::add(CurrentMetrics::PSMVCCNumSnapshots);
     }
 
-    ~PageDirectorySnapshot()
+    ~PageDirectorySnapshot() override
     {
         CurrentMetrics::sub(CurrentMetrics::PSMVCCNumSnapshots);
     }
@@ -80,7 +81,7 @@ using PageDirectorySnapshotPtr = std::shared_ptr<PageDirectorySnapshot>;
 
 struct EntryOrDelete
 {
-    bool is_delete;
+    bool is_delete = true;
     Int64 being_ref_count = 1;
     PageEntryV3 entry;
 
@@ -134,6 +135,14 @@ struct EntryOrDelete
 class VersionedPageEntries;
 using VersionedPageEntriesPtr = std::shared_ptr<VersionedPageEntries>;
 using PageLock = std::lock_guard<std::mutex>;
+
+enum class ResolveResult
+{
+    FAIL,
+    TO_REF,
+    TO_NORMAL,
+};
+
 class VersionedPageEntries
 {
 public:
@@ -153,6 +162,12 @@ public:
 
     void createNewEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
+    // Commit the upsert entry after full gc.
+    // Return a PageId, if the page id is valid, it means it rewrite a RefPage into
+    // a normal Page. Caller must call `derefAndClean` to decrease the ref-count of
+    // the returing page id.
+    [[nodiscard]] PageIdV3Internal createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
+
     bool createNewRef(const PageVersion & ver, PageIdV3Internal ori_page_id);
 
     std::shared_ptr<PageIdV3Internal> createNewExternal(const PageVersion & ver);
@@ -161,12 +176,6 @@ public:
 
     std::shared_ptr<PageIdV3Internal> fromRestored(const PageEntriesEdit::EditRecord & rec);
 
-    enum ResolveResult
-    {
-        RESOLVE_FAIL,
-        RESOLVE_TO_REF,
-        RESOLVE_TO_NORMAL,
-    };
     std::tuple<ResolveResult, PageIdV3Internal, PageVersion>
     resolveToPageId(UInt64 seq, bool ignore_delete, PageEntryV3 * entry);
 
@@ -174,7 +183,7 @@ public:
 
     std::optional<PageEntryV3> getEntry(UInt64 seq) const;
 
-    std::optional<PageEntryV3> getLastEntry() const;
+    std::optional<PageEntryV3> getLastEntry(std::optional<UInt64> seq) const;
 
     bool isVisible(UInt64 seq) const;
 
@@ -186,7 +195,8 @@ public:
     PageSize getEntriesByBlobIds(
         const std::unordered_set<BlobFileId> & blob_ids,
         PageIdV3Internal page_id,
-        std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries);
+        std::map<BlobFileId, PageIdAndVersionedEntries> & blob_versioned_entries,
+        std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> & ref_ids_maybe_rewrite);
 
     /**
      * Given a `lowest_seq`, this will clean all outdated entries before `lowest_seq`.
@@ -196,23 +206,27 @@ public:
      *   to be decreased the ref count by `derefAndClean`.
      *   The elem is <page_id, <version, num to decrease ref count>> 
      * `entries_removed`: Return the entries removed from the version list
-     * `keep_last_valid_var_entry`: Keep the last valid entry, useful for dumping snapshot.
      *
      * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
      */
-    bool cleanOutdatedEntries(
+    [[nodiscard]] bool cleanOutdatedEntries(
         UInt64 lowest_seq,
         std::map<PageIdV3Internal, std::pair<PageVersion, Int64>> * normal_entries_to_deref,
         PageEntriesV3 * entries_removed,
-        const PageLock & page_lock,
-        bool keep_last_valid_var_entry = false);
-    bool derefAndClean(
+        const PageLock & page_lock);
+    /**
+     * Decrease the ref-count of entry with given `deref_ver`.
+     * If `lowest_seq` != 0, then it will run `cleanOutdatedEntries` after decreasing
+     * the ref-count.
+     *
+     * Return `true` iff this page can be totally removed from the whole `PageDirectory`.
+     */
+    [[nodiscard]] bool derefAndClean(
         UInt64 lowest_seq,
         PageIdV3Internal page_id,
         const PageVersion & deref_ver,
         Int64 deref_count,
-        PageEntriesV3 * entries_removed,
-        bool keep_last_valid_var_entry = false);
+        PageEntriesV3 * entries_removed);
 
     void collapseTo(UInt64 seq, PageIdV3Internal page_id, PageEntriesEdit & edit);
 
@@ -229,7 +243,7 @@ public:
             "type:{}, create_ver: {}, is_deleted: {}, delete_ver: {}, "
             "ori_page_id: {}, being_ref_count: {}, num_entries: {}"
             "}}",
-            type,
+            magic_enum::enum_name(type),
             create_ver,
             is_deleted,
             delete_ver,
@@ -321,8 +335,7 @@ public:
 
     // Perform a GC for in-memory entries and return the removed entries.
     // If `return_removed_entries` is false, then just return an empty set.
-    // When dump snapshot, we need to keep the last valid entry. Check out `tryDumpSnapshot` for the reason.
-    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true, bool keep_last_valid_var_entry = false);
+    PageEntriesV3 gcInMemEntries(bool return_removed_entries = true);
 
     // Get the external id that is not deleted or being ref by another id by
     // `ns_id`.

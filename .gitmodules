@@ -68,6 +68,9 @@
 [submodule "contrib/grpc"]
 	path = contrib/grpc
 	url = https://github.com/grpc/grpc
+	# ignore dirty status since we apply a patch to
+	# suppress a verbose logging
+	ignore = dirty
 [submodule "contrib/boringssl"]
 	path = contrib/boringssl
 	url = https://github.com/google/boringssl
@@ -86,3 +89,6 @@
 [submodule "contrib/magic_enum"]
 	path = contrib/magic_enum
 	url = https://github.com/Neargye/magic_enum.git
+[submodule "contrib/GmSSL"]
+	path = contrib/GmSSL
+	url = https://github.com/guanzhi/GmSSL.git

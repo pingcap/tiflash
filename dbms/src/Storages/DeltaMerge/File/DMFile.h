@@ -283,15 +283,16 @@ public:
 
     /**
      * Return all column defines. This is useful if you want to read all data from a dmfile.
+     * Note that only the column id and type is valid.
      * @return All columns
      */
     ColumnDefines getColumnDefines()
     {
         ColumnDefines results{};
         results.reserve(this->column_stats.size());
-        for (const auto & i : this->column_stats)
+        for (const auto & cs : this->column_stats)
         {
-            results.emplace_back(i.first, "", i.second.type);
+            results.emplace_back(cs.first, "", cs.second.type);
         }
         return results;
     }
