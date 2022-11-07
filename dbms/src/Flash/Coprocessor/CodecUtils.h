@@ -12,25 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Functions/FunctionFactory.h>
-#include <Functions/FunctionsRandom.h>
+#pragma once
+
+#include <DataTypes/IDataType.h>
 
 namespace DB
 {
-namespace detail
+namespace CodecUtils
 {
-void seed(LinearCongruentialGenerator & generator, intptr_t additional_seed)
+struct DataTypeWithTypeName
 {
-    generator.seed(intHash64(randomSeed() ^ intHash64(additional_seed)));
-}
-} // namespace detail
+    DataTypeWithTypeName(const DataTypePtr & t, const String & n)
+        : type(t)
+        , name(n)
+    {
+    }
 
+    DataTypePtr type;
+    String name;
+};
 
-void registerFunctionsRandom(FunctionFactory & factory)
-{
-    factory.registerFunction<FunctionRand>();
-    factory.registerFunction<FunctionRand64>();
-    factory.registerFunction<FunctionRandConstant>();
-}
-
+void checkColumnSize(size_t expected, size_t actual);
+void checkDataTypeName(size_t column_index, const String & expected, const String & actual);
+} // namespace CodecUtils
 } // namespace DB

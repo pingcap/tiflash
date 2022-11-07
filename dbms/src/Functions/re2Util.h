@@ -14,12 +14,11 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/config.h>
 #include <Storages/Transaction/Collator.h>
 #include <Storages/Transaction/CollatorUtils.h>
 #include <re2/re2.h>
-
-#include "Common/Exception.h"
 
 
 #if USE_RE2_ST

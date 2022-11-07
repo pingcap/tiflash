@@ -16,9 +16,17 @@
 
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
+#include <Columns/ColumnsNumber.h>
+#include <Columns/IColumn.h>
+#include <Common/Exception.h>
 #include <Common/Volnitsky.h>
 #include <Common/config.h>
+#include <Core/Field.h>
+#include <Core/Types.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
@@ -27,25 +35,14 @@
 #include <Functions/Regexps.h>
 #include <Functions/StringUtil.h>
 #include <Functions/re2Util.h>
+#include <Parsers/Lexer.h>
+#include <common/StringRef.h>
+#include <common/defines.h>
+#include <common/types.h>
 #include <re2/re2.h>
 
 #include <memory>
 #include <type_traits>
-
-#include "Columns/ColumnNullable.h"
-#include "Columns/ColumnString.h"
-#include "Columns/ColumnVector.h"
-#include "Columns/ColumnsNumber.h"
-#include "Columns/IColumn.h"
-#include "Common/Exception.h"
-#include "Core/Field.h"
-#include "Core/Types.h"
-#include "DataTypes/DataTypeNothing.h"
-#include "DataTypes/DataTypeNullable.h"
-#include "Parsers/Lexer.h"
-#include "common/StringRef.h"
-#include "common/defines.h"
-#include "common/types.h"
 
 #if USE_RE2_ST
 #include <re2_st/re2.h>
@@ -87,11 +84,7 @@ struct NameReplaceRegexpAll
     static constexpr auto name = "replaceRegexpAll";
 };
 
-static constexpr std::string_view regexp_name(NameTiDBRegexp::name);
 static constexpr std::string_view regexp_like_name(NameRegexpLike::name);
-static constexpr std::string_view regexp_instr_name(NameRegexpInstr::name);
-
-// String getMatchType(const String & match_type, TiDB::TiDBCollatorPtr collator = nullptr);
 
 inline int getDefaultFlags()
 {
@@ -119,7 +112,7 @@ inline Regexps::Pool::Pointer createRegexpWithMatchType(const String & pattern, 
 template <typename T>
 inline constexpr bool check_int_type()
 {
-    return static_cast<bool>(std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, UInt128> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>);
+    return std::is_same_v<T, UInt8> || std::is_same_v<T, UInt16> || std::is_same_v<T, UInt32> || std::is_same_v<T, UInt64> || std::is_same_v<T, Int8> || std::is_same_v<T, Int16> || std::is_same_v<T, Int32> || std::is_same_v<T, Int64>;
 }
 
 Int64 getIntFromField(Field & field)
@@ -264,7 +257,6 @@ public:
             throw Exception("const parm should not call this constructor");
     }
 
-    static void setIntType(IntType) { throw Exception("ParamString not supports this function"); }
     static IntType getIntType() { throw Exception("ParamString not supports this function"); }
 
     template <typename T>
@@ -295,7 +287,6 @@ public:
 
     constexpr static bool isConst() { return is_const; }
 
-    void setContainer(const void *) {}
     const void * getContainer() const { return nullptr; }
 
 private:
@@ -317,7 +308,7 @@ public:
 
     explicit ParamInt(Int64 val)
         : const_int_val(val)
-        , int_type(IntType::UInt8)
+        , int_type(IntType::Int64)
         , int_container(nullptr)
     {
         if constexpr (!is_const)
@@ -333,7 +324,7 @@ public:
         throw Exception("Shouldn't call this constructor");
     }
 
-    explicit ParamInt(const void * int_container_, IntType int_type_)
+    ParamInt(const void * int_container_, IntType int_type_)
         : const_int_val(0)
         , int_type(int_type_)
         , int_container(int_container_)
@@ -363,13 +354,11 @@ public:
         }
     }
 
-    void setIntType(IntType int_type_) { int_type = int_type_; }
     IntType getIntType() const { return int_type; }
     String getString(size_t) const { throw Exception("ParamInt not supports this function"); }
     void getStringRef(size_t, StringRef &) const { throw Exception("ParamInt not supports this function"); }
-    constexpr static bool isConst() { return is_const; }
-    void setContainer(const void * container) { int_container = container; }
     const void * getContainer() const { return int_container; }
+    constexpr static bool isConst() { return is_const; }
 
 private:
     Int64 const_int_val;
@@ -382,7 +371,7 @@ private:
 
 // Columns may be const, nullable or plain vector, we can conveniently handle
 // these different type columns with Param.
-template <typename ParamImplType, bool is_null>
+template <typename ParamImplType, bool is_nullable>
 class Param
 {
 public:
@@ -393,28 +382,36 @@ public:
         : col_size(col_size_)
         , null_map(nullptr)
         , data(str_ref)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // const nullable string param
     Param(size_t col_size_, const StringRef & str_ref, ConstNullMapPtr null_map_)
         : col_size(col_size_)
         , null_map(null_map_)
         , data(str_ref)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // const int param
     Param(size_t col_size_, Int64 val)
         : col_size(col_size_)
         , null_map(nullptr)
         , data(val)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // const nullable int param
     Param(size_t col_size_, Int64 val, ConstNullMapPtr null_map_)
         : col_size(col_size_)
         , null_map(null_map_)
         , data(val)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // pure vector string param
     // chars_ type: ParamImplType::Chars_t
@@ -423,7 +420,9 @@ public:
         : col_size(col_size_)
         , null_map(nullptr)
         , data(chars_, offsets_)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // pure vector int param
     // int_container_ type: ParamImplType::Container
@@ -431,7 +430,9 @@ public:
         : col_size(col_size_)
         , null_map(nullptr)
         , data(int_container_, int_type)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // nullable vector string param
     // chars_ type: ParamImplType::Chars_t
@@ -440,7 +441,9 @@ public:
         : col_size(col_size_)
         , null_map(null_map_)
         , data(chars_, offsets_)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     // nullable vector int param
     // int_container_ type: ParamImplType::Container
@@ -448,7 +451,9 @@ public:
         : col_size(col_size_)
         , null_map(null_map_)
         , data(int_container_, int_type)
-    {}
+    {
+        checkNullableLogic();
+    }
 
     template <typename T>
     Int64 getInt(size_t idx) const { return data.template getInt<T>(idx); }
@@ -457,246 +462,335 @@ public:
 
     bool isNullAt(size_t idx) const
     {
-        if constexpr (is_null)
+        if constexpr (is_nullable && ParamImplType::isConst())
+            return (*null_map)[0];
+        else if constexpr (is_nullable)
             return (*null_map)[idx];
         else
             return false;
     }
 
-    void setIntType(IntType int_type) { data.setIntType(int_type); }
     IntType getIntType() const { return data.getIntType(); }
     size_t getDataNum() const { return col_size; }
-    constexpr static bool isNullableCol() { return is_null; }
-    constexpr static bool isConst() { return ParamImplType::isConst(); }
-    void setContainer(const void * container) { data.setContainer(container); }
     const void * getContainer() const { return data.getContainer(); }
+    constexpr static bool isNullableCol() { return is_nullable; }
+    constexpr static bool isConst() { return ParamImplType::isConst(); }
 
 private:
+    // When this is a nullable param, we should ensure the null_map is not nullptr
+    inline void checkNullableLogic()
+    {
+        if (is_nullable && (null_map == nullptr))
+            throw Exception("Nullable Param with nullptr null_map");
+    }
+
     const size_t col_size;
     ConstNullMapPtr null_map;
     ParamImplType data;
 };
 
+#define APPLY_FOR_PARAM_STRING_VARIANTS(M, pv_name, param_name, next_process) \
+    M(StringNullableAndNotConst, pv_name, param_name, next_process)           \
+    M(StringNotNullableAndConst, pv_name, param_name, next_process)           \
+    M(StringNotNullableAndNotConst, pv_name, param_name, next_process)        \
+    M(StringNullableAndConst, pv_name, param_name, next_process)
+
+#define APPLY_FOR_PARAM_INT_VARIANTS(M, pv_name, param_name, next_process) \
+    M(IntNullableAndNotConst, pv_name, param_name, next_process)           \
+    M(IntNotNullableAndConst, pv_name, param_name, next_process)           \
+    M(IntNotNullableAndNotConst, pv_name, param_name, next_process)        \
+    M(IntNullableAndConst, pv_name, param_name, next_process)
+
+#define ACTUAL_PARAM_TYPE(NAME) ParamVariant::Param##NAME
+
+#define GET_ACTUAL_PARAM_PTR(NAME, param_ptr_name) (reinterpret_cast<ACTUAL_PARAM_TYPE(NAME) *>(param_ptr_name))
+
+#define ENUMERATE_PARAM_VARIANT_CASES(NAME, param_ptr_name, actual_param_ptr_name, next_process) \
+    case ParamVariant::ParamType::NAME:                                                          \
+    {                                                                                            \
+        auto *(actual_param_ptr_name) = GET_ACTUAL_PARAM_PTR(NAME, param_ptr_name);              \
+        next_process;                                                                            \
+        break;                                                                                   \
+    }
+
+class ParamVariant
+{
+public:
+    // String type
+    using ParamStringNullableAndNotConst = Param<ParamString<false>, true>;
+    using ParamStringNotNullableAndConst = Param<ParamString<true>, false>;
+    using ParamStringNotNullableAndNotConst = Param<ParamString<false>, false>;
+    using ParamStringNullableAndConst = Param<ParamString<true>, true>;
+
+    // Int type
+    using ParamIntNullableAndNotConst = Param<ParamInt<false>, true>;
+    using ParamIntNotNullableAndConst = Param<ParamInt<true>, false>;
+    using ParamIntNotNullableAndNotConst = Param<ParamInt<false>, false>;
+    using ParamIntNullableAndConst = Param<ParamInt<true>, true>;
+
+    enum class ParamType
+    {
+        StringNullableAndNotConst,
+        StringNotNullableAndConst,
+        StringNotNullableAndNotConst,
+        StringNullableAndConst,
+        IntNullableAndNotConst,
+        IntNotNullableAndConst,
+        IntNotNullableAndNotConst,
+        IntNullableAndConst
+    };
+
+    // default ParamString's ParamType should be ParamType::StringNotNullAndNotConst
+    ParamVariant(ColumnPtr col, size_t col_size, const StringRef & default_val)
+        : col_ptr(col), param(nullptr)
+    {
+        if (col_ptr != nullptr)
+        {
+            setParamStringTypeAndGenerateParam(col_size);
+        }
+        else
+        {
+            // This param is not provided by user, so we should use default value.
+            param = new ParamStringNotNullableAndConst(col_size, default_val);
+            param_type = ParamType::StringNotNullableAndConst;
+        }
+    }
+
+    // default ParamInt's ParamType should be ParamType::IntNotNullAndNotConst
+    ParamVariant(ColumnPtr col, size_t col_size, Int64 default_val)
+        : col_ptr(col), param(nullptr)
+    {
+        if (col_ptr != nullptr)
+        {
+            setParamIntTypeAndGenerateParam(col_size);
+        }
+        else
+        {
+            // This param is not provided by user, so we should use default value.
+            param = new ParamIntNotNullableAndConst(col_size, default_val);
+            param_type = ParamType::IntNotNullableAndConst;
+        }
+    }
+
+    ~ParamVariant()
+    {
+        if (param != nullptr)
+        {
+            switch (param_type)
+            {
+                // Expand the macro to enumerate string param cases
+                APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, param, actual_param_ptr, ({ delete actual_param_ptr; }))
+
+                // Expand the macro to enumerate int param cases
+                APPLY_FOR_PARAM_INT_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, param, actual_param_ptr, ({ delete actual_param_ptr; }))
+            default:
+                throw Exception("Unexpected ParamType");
+            }
+        }
+    }
+
+    ParamType getParamType() const { return param_type; }
+
+private:
+    void handleStringConstCol(size_t col_size, const ColumnConst * col_const)
+    {
+        const auto & col_const_data = col_const->getDataColumnPtr();
+        if (col_const_data->isColumnNullable())
+        {
+            Field field;
+            col_const->get(0, field);
+            String tmp = field.isNull() ? String("") : field.safeGet<String>();
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData());
+
+            // Construct actual param
+            param = new ParamStringNullableAndConst(col_size, StringRef(tmp.data(), tmp.size()), null_map);
+            param_type = ParamType::StringNullableAndConst;
+        }
+        else
+        {
+            // Construct actual param
+            param = new ParamStringNotNullableAndConst(col_size, col_const->getDataAt(0));
+            param_type = ParamType::StringNotNullableAndConst;
+        }
+    }
+
+    void handleStringNonConstCol(size_t col_size)
+    {
+        if (col_ptr->isColumnNullable())
+        {
+            auto nested_ptr = static_cast<const ColumnNullable &>(*(col_ptr)).getNestedColumnPtr();
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_ptr)).getNullMapData());
+
+            // Construct actual param
+            param = new ParamStringNullableAndNotConst(col_size, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));
+            param_type = ParamType::StringNullableAndNotConst;
+        }
+        else
+        {
+            // This is a pure string vector column
+            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(col_ptr)));
+
+            // Construct actual param
+            param = new ParamStringNotNullableAndNotConst(col_size, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));
+            param_type = ParamType::StringNotNullableAndNotConst;
+        }
+    }
+
+    void setParamStringTypeAndGenerateParam(size_t col_size)
+    {
+        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(col_ptr)));
+        if (col_const != nullptr)
+            handleStringConstCol(col_size, col_const);
+        else
+            handleStringNonConstCol(col_size);
+    }
+
+private:
+    void handleIntConstCol(size_t col_size, const ColumnConst * col_const)
+    {
+        const auto & col_const_data = col_const->getDataColumnPtr();
+        if (col_const_data->isColumnNullable())
+        {
+            Field field;
+            col_const->get(0, field);
+            auto data_int64 = field.isNull() ? -1 : getIntFromField(field);
+            auto col_const_data = col_const->getDataColumnPtr();
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData());
+
+            // Construct actual param
+            param = new ParamIntNullableAndConst(col_size, data_int64, null_map);
+            param_type = ParamType::IntNullableAndConst;
+        }
+        else
+        {
+            // Construct actual param
+            param = new ParamStringNotNullableAndConst(col_size, col_const->getDataAt(0));
+            param_type = ParamType::IntNotNullableAndConst;
+        }
+    }
+
+#define APPLY_FOR_INT_CONTAINER(M, col_ptr, null_map, param) \
+    M(UInt8, col_ptr, null_map, param) \
+    M(UInt16, col_ptr, null_map, param) \
+    M(UInt32, col_ptr, null_map, param) \
+    M(UInt64, col_ptr, null_map, param) \
+    M(Int8, col_ptr, null_map, param) \
+    M(Int16, col_ptr, null_map, param) \
+    M(Int32, col_ptr, null_map, param) \
+    M(Int64, col_ptr, null_map, param) \
+
+    void handleIntNonConstCol(size_t col_size)
+    {
+        if (col_ptr->isColumnNullable())
+        {
+            auto nested_ptr = static_cast<const ColumnNullable &>(*(col_ptr)).getNestedColumnPtr();
+            const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_ptr)).getNullMapData());
+
+            // Construct actual param
+            param_type = ParamType::IntNullableAndNotConst;
+
+#define M(INT_TYPE, col_ptr, null_map, param) \
+    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
+    { \
+        param = new ParamIntNullableAndNotConst(col_size, null_map, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
+    }
+
+            if (false) {}
+            APPLY_FOR_INT_CONTAINER(M, col_ptr, null_map, param)
+            else
+                throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+#undef M
+        }
+        else
+        {
+            // Construct actual param
+            param_type = ParamType::IntNotNullableAndNotConst;
+
+#define M(INT_TYPE, col_ptr, null_map, param) \
+    else if (const auto * ptr = typeid_cast<const Column##INT_TYPE *>(&(*(col_ptr)))) \
+    { \
+        param = new ParamIntNotNullableAndNotConst(col_size, reinterpret_cast<const void *>(&(ptr->getData())), IntType::INT_TYPE); \
+    }
+
+            if (false) {}
+            APPLY_FOR_INT_CONTAINER(M, col_ptr, null_map, param)
+            else
+                throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+#undef M
+        }
+    }
+
+#undef APPLY_FOR_INT_CONTAINER
+
+    void setParamIntTypeAndGenerateParam(size_t col_size)
+    {
+        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(col_ptr)));
+        if (col_const != nullptr)
+            handleIntConstCol(col_size, col_const);
+        else
+            handleIntNonConstCol(col_size);
+    }
+
+    ParamType param_type;
+    ColumnPtr col_ptr;
+
+public:
+    // ATTENTION! Be careful to change this variable's name as many macros use it
+    //
+    // This variable should be reinterpret_cast to specific type before used
+    void * param;
+};
+
 // Unifying these names is necessary in macros
-#define EXPR_COL_PTR_VAR_NAME col_expr
-#define PAT_COL_PTR_VAR_NAME col_pat
-#define POS_COL_PTR_VAR_NAME col_pos
-#define OCCUR_COL_PTR_VAR_NAME col_occur
-#define RET_OP_COL_PTR_VAR_NAME col_ret_op
-#define MATCH_TYPE_COL_PTR_VAR_NAME col_match_type
+#define EXPR_PV_VAR_NAME expr_pv
+#define PAT_PV_VAR_NAME pat_pv
+#define POS_PV_VAR_NAME pos_pv
+#define OCCUR_PV_VAR_NAME occur_pv
+#define RET_OP_PV_VAR_NAME return_option_pv
+#define MATCH_TYPE_PV_VAR_NAME match_type_pv
+
+#define EXPR_PARAM_PTR_VAR_NAME expr_param
+#define PAT_PARAM_PTR_VAR_NAME pat_param
+#define POS_PARAM_PTR_VAR_NAME pos_param
+#define OCCUR_PARAM_PTR_VAR_NAME occur_param
+#define RET_OP_PARAM_PTR_VAR_NAME return_option_param
+#define MATCH_TYPE_PARAM_PTR_VAR_NAME match_type_param
 
 #define RES_ARG_VAR_NAME res_arg
-#define COL_SIZE_VAR_NAME col_size
-
-#define EXPR_PARAM_VAR_NAME expr_param
-#define PAT_PARAM_VAR_NAME pat_param
-#define POS_PARAM_VAR_NAME pos_param
-#define OCCUR_PARAM_VAR_NAME occur_param
-#define RET_OP_PARAM_VAR_NAME ret_op_param
-#define MATCH_TYPE_PARAM_VAR_NAME match_type_param
-
-#define SELF_CLASS_NAME (name)
-#define ARG_NUM_VAR_NAME arg_num
-#define VEC_RES_VAR_NAME vec_res
-#define COLLATOR_VAR_NAME collator
 
 // Unify the name of functions that actually execute regexp
 #define REGEXP_CLASS_MEM_FUNC_IMPL_NAME executeRegexpFunc
 
-// Method to convert nullable string column
-// converted_col is impossible to be const here
-#define CONVERT_NULL_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                                                                     \
-    do                                                                                                                                                                                \
-    {                                                                                                                                                                                 \
-        if (((converted_col)->isColumnNullable()))                                                                                                                                    \
-        {                                                                                                                                                                             \
-            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();                                                                             \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*nested_ptr));                                                                                                       \
-            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());                                                                        \
-            Param<ParamString<false>, true>(param_name)(COL_SIZE_VAR_NAME, null_map, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets()))); \
-            next_convertion;                                                                                                                                                          \
-        }                                                                                                                                                                             \
-        else                                                                                                                                                                          \
-        {                                                                                                                                                                             \
-            /* This is a pure string vector column */                                                                                                                                 \
-            const auto * tmp = checkAndGetColumn<ColumnString>(&(*(converted_col)));                                                                                                  \
-            Param<ParamString<false>, false>(param_name)(COL_SIZE_VAR_NAME, static_cast<const void *>(&(tmp->getChars())), static_cast<const void *>(&(tmp->getOffsets())));          \
-            next_convertion;                                                                                                                                                          \
-        }                                                                                                                                                                             \
+// Do not merge GET_ACTUAL_STRING_PARAM and GET_ACTUAL_INT_PARAM together,
+// as this will generate more useless codes and templates.
+
+#define GET_ACTUAL_STRING_PARAM(pv_name, param_name, next_process)                                                    \
+    do                                                                                                                \
+    {                                                                                                                 \
+        switch ((pv_name).getParamType())                                                                             \
+        {                                                                                                             \
+        /* Expand this macro to enumerate all string cases */                                                     \
+        APPLY_FOR_PARAM_STRING_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, (pv_name).param, param_name, next_process) \
+        default:                                                                                                      \
+            throw Exception("Unexpected ParamType");                                                                  \
+        }                                                                                                             \
     } while (0);
 
-// Method to convert const string column
-#define CONVERT_CONST_STR_COL_TO_PARAM(param_name, converted_col, next_convertion)                                          \
-    do                                                                                                                      \
-    {                                                                                                                       \
-        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                     \
-        if (col_const != nullptr)                                                                                           \
-        {                                                                                                                   \
-            auto col_const_data = col_const->getDataColumnPtr();                                                            \
-            Field field;                                                                                                    \
-            col_const->get(0, field);                                                                                       \
-            String tmp = field.isNull() ? String("") : field.safeGet<String>();                                             \
-            if (col_const_data->isColumnNullable())                                                                         \
-            {                                                                                                               \
-                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData());         \
-                Param<ParamString<true>, true>(param_name)(COL_SIZE_VAR_NAME, StringRef(tmp.data(), tmp.size()), null_map); \
-                next_convertion;                                                                                            \
-            }                                                                                                               \
-            else                                                                                                            \
-            {                                                                                                               \
-                Param<ParamString<true>, false>(param_name)(COL_SIZE_VAR_NAME, col_const->getDataAt(0));                    \
-                next_convertion;                                                                                            \
-            }                                                                                                               \
-        }                                                                                                                   \
-        else                                                                                                                \
-        {                                                                                                                   \
-            CONVERT_NULL_STR_COL_TO_PARAM((param_name), (converted_col), next_convertion)                                     \
-        }                                                                                                                   \
+// Common method to get actual int param
+#define GET_ACTUAL_INT_PARAM(pv_name, param_name, next_process) \
+    do                                                          \
+    {                                                           \
+        switch ((pv_name).getParamType()) \
+        { \
+        /* Expand this macro to enumerate all int cases */                                                     \
+        APPLY_FOR_PARAM_INT_VARIANTS(ENUMERATE_PARAM_VARIANT_CASES, (pv_name).param, param_name, next_process) \
+        default:                                                                                                      \
+            throw Exception("Unexpected ParamType");                                                                  \
+        } \
     } while (0);
-
-// Method to convert nullable int column to param
-// converted_col is impossible to be const here
-#define CONVERT_NULL_INT_COL_TO_PARAM(param_name, converted_col, next_convertion)                                 \
-    do                                                                                                         \
-    {                                                                                                          \
-        if ((converted_col)->isColumnNullable())                                                               \
-        {                                                                                                      \
-            auto nested_ptr = static_cast<const ColumnNullable &>(*(converted_col)).getNestedColumnPtr();      \
-            const auto * null_map = &(static_cast<const ColumnNullable &>(*(converted_col)).getNullMapData());              \
-            Param<ParamInt<false>, true> (param_name)(COL_SIZE_VAR_NAME, null_map, nullptr, IntType::Int64); /* The thrid and fourth parameters are useless here */ \
-            /* various int types may be input, we need to check them one by one */                             \
-            if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(nested_ptr))))                      \
-            { \
-                (param_name).setIntType(IntType::UInt8); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(nested_ptr))))                \
-            { \
-                (param_name).setIntType(IntType::UInt16); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(nested_ptr))))                 \
-            { \
-                (param_name).setIntType(IntType::UInt32); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(nested_ptr))))                 \
-            { \
-                (param_name).setIntType(IntType::UInt64); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt128 *>(&(*(nested_ptr))))                \
-            { \
-                (param_name).setIntType(IntType::UInt128); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(nested_ptr))))                   \
-            { \
-                (param_name).setIntType(IntType::Int8); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(nested_ptr))))                  \
-            { \
-                (param_name).setIntType(IntType::UInt8); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(nested_ptr))))                  \
-            { \
-                (param_name).setIntType(IntType::Int32); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(nested_ptr))))                  \
-            { \
-                (param_name).setIntType(IntType::Int64); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else                                                                                               \
-                throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT); \
-            next_convertion; \
-        }                                                                                                      \
-        else                                                                                                   \
-        {                                                                                                      \
-            /* This is a pure vector column */                                                                 \
-            /* various int types may be input, we need to check them one by one */                             \
-            Param<ParamInt<false>, false>(param_name)(COL_SIZE_VAR_NAME, nullptr, IntType::Int64); /* The second and third parameters are useless here */  \
-            if (const auto * ptr = typeid_cast<const ColumnUInt8 *>(&(*(converted_col))))                    \
-            { \
-                (param_name).setIntType(IntType::UInt8); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt16 *>(&(*(converted_col))))              \
-            { \
-                (param_name).setIntType(IntType::UInt16); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt32 *>(&(*(converted_col))))              \
-            { \
-                (param_name).setIntType(IntType::UInt32); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt64 *>(&(*(converted_col))))              \
-            { \
-                (param_name).setIntType(IntType::UInt64); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnUInt128 *>(&(*(converted_col))))             \
-            { \
-                (param_name).setIntType(IntType::UInt128); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt8 *>(&(*(converted_col))))                \
-            { \
-                (param_name).setIntType(IntType::Int8); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt16 *>(&(*(converted_col))))               \
-            { \
-                (param_name).setIntType(IntType::Int16); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt32 *>(&(*(converted_col))))               \
-            { \
-                (param_name).setIntType(IntType::Int32); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else if (const auto * ptr = typeid_cast<const ColumnInt64 *>(&(*(converted_col))))               \
-            { \
-                (param_name).setIntType(IntType::Int64); \
-                (param_name).setContainer(reinterpret_cast<const void *>(&(ptr->getData()))); \
-            } \
-            else                                                                                               \
-                throw Exception("Invalid int type int regexp function", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT); \
-            next_convertion; \
-        }                                                                                                      \
-    } while (0);
-
-// Method to convert const int column
-#define CONVERT_CONST_INT_COL_TO_PARAM(param_name, converted_col, next_convertion)                                                              \
-    do                                                                                                                                       \
-    {                                                                                                                                        \
-        const auto * col_const = typeid_cast<const ColumnConst *>(&(*(converted_col)));                                                      \
-        if (col_const != nullptr)                                                                                                            \
-        {                                                                                                                                    \
-            Field field;                                                                                                                 \
-            col_const->get(0, field);                                                                                                    \
-            auto data_int64 = field.isNull() ? -1 : getIntFromField(field);                                                                                             \
-            auto col_const_data = col_const->getDataColumnPtr();                                                                             \
-            if (col_const_data->isColumnNullable())                                                                                          \
-            {                                                                                                                                \
-                const auto * null_map = &(static_cast<const ColumnNullable &>(*(col_const_data)).getNullMapData()); \
-                Param<ParamInt<true>, true>(param_name)(COL_SIZE_VAR_NAME, data_int64, null_map);  \
-                next_convertion;                                                                                                                \
-            }                                                                                                                                \
-            else                                                                                                                             \
-            {                                                                                                                                \
-                Param<ParamInt<true>, false>(param_name)(COL_SIZE_VAR_NAME, data_int64);                                                       \
-                next_convertion;                                                                                                                \
-            }                                                                                                                                \
-        }                                                                                                                                    \
-        else                                                                                                                                 \
-            CONVERT_NULL_INT_COL_TO_PARAM((param_name), (converted_col), next_convertion)                                                      \
-    } while (0);
-
 
 class FunctionStringRegexpBase
 {
@@ -716,6 +810,9 @@ public:
     template <typename ExprT, typename MatchTypeT>
     std::unique_ptr<Regexps::Regexp> memorize(const ExprT & pat_param, const MatchTypeT & match_type_param, TiDB::TiDBCollatorPtr collator) const
     {
+        if (pat_param.isNullAt(0) || match_type_param.isNullAt(0))
+            return nullptr;
+
         String final_pattern = pat_param.getString(0);
         if (unlikely(final_pattern.empty()))
             throw Exception(EMPTY_PAT_ERR_MSG);
@@ -743,8 +840,7 @@ public:
             {
                 *has_nullable_col = true;
                 const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
+                assert(null_type != nullptr);
 
                 const auto & nested_type = null_type->getNestedType();
 
@@ -760,13 +856,7 @@ public:
             else
             {
                 if (!arg->isString())
-                {
-                    // It may be DataTypeNothing if it's not string
-                    if (arg->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
+                    throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }
         else
@@ -776,9 +866,8 @@ public:
             {
                 *has_nullable_col = true;
                 const auto * null_type = checkAndGetDataType<DataTypeNullable>(arg.get());
-                if (null_type == nullptr)
-                    throw Exception("Get unexpected nullptr in FunctionStringRegexpInstr", ErrorCodes::LOGICAL_ERROR);
-                
+                assert(null_type != nullptr);
+
                 const auto & nested_type = null_type->getNestedType();
 
                 // It may be DataTypeNothing if it's not string
@@ -793,60 +882,45 @@ public:
             else
             {
                 if (!arg->isInteger())
-                {
-                    // It may be DataTypeNothing if it's not string
-                    if (arg->getTypeId() != TypeIndex::Nothing)
-                        throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-                    else
-                        *has_data_type_nothing = true;
-                }
+                    throw Exception(fmt::format("Illegal type {} of argument of regexp function", arg->getName()), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }
     }
 };
 
 // regexp and regexp_like functions are executed in this macro
-#define EXECUTE_REGEXP_LIKE()                                                                                                  \
-    do                                                                                                                         \
-    {                                                                                                                          \
-        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
+#define EXECUTE_REGEXP_LIKE()                                                                                                                       \
+    do                                                                                                                                              \
+    {                                                                                                                                               \
+        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
-// Method to convert match type column
-#define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                     \
-    do                                                                                                                        \
-    {                                                                                                                         \
-        if ((ARG_NUM_VAR_NAME) == 3)                                                                                          \
-            CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_LIKE()})) \
-        else                                                                                                                  \
-        {                                                                                                                     \
-            /* match_type is not provided here */                                                                             \
-            Param<ParamString<true>, false> MATCH_TYPE_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, StringRef("", 0));                   \
-            EXECUTE_REGEXP_LIKE()                                                                                             \
-        }                                                                                                                     \
+// Method to get actual match type param
+#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                             \
+    do                                                                                                            \
+    {                                                                                                             \
+        GET_ACTUAL_STRING_PARAM(MATCH_TYPE_PV_VAR_NAME, MATCH_TYPE_PARAM_PTR_VAR_NAME, ({EXECUTE_REGEXP_LIKE()})) \
     } while (0);
 
-// Method to convert pattern column
-#define CONVERT_PAT_COL_TO_PARAM()                                                                                      \
-    do                                                                                                                  \
-    {                                                                                                                   \
-        CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
+// Method to get actual pattern param
+#define GET_PAT_ACTUAL_PARAM()                                                                              \
+    do                                                                                                      \
+    {                                                                                                       \
+        GET_ACTUAL_STRING_PARAM(PAT_PV_VAR_NAME, PAT_PARAM_PTR_VAR_NAME, ({GET_MATCH_TYPE_ACTUAL_PARAM()})) \
     } while (0);
 
-// Method to convert expression column
-#define CONVERT_EXPR_COL_TO_PARAM()                                                                                \
-    do                                                                                                             \
-    {                                                                                                              \
-        /* Getting column size from expr col */                                                                    \
-        size_t COL_SIZE_VAR_NAME = (EXPR_COL_PTR_VAR_NAME)->size();                                                \
-        CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
+// Method to get actual expression param
+#define GET_EXPR_ACTUAL_PARAM()                                                                        \
+    do                                                                                                 \
+    {                                                                                                  \
+        GET_ACTUAL_STRING_PARAM(EXPR_PV_VAR_NAME, EXPR_PARAM_PTR_VAR_NAME, ({GET_PAT_ACTUAL_PARAM()})) \
     } while (0);
 
-// The entry to convert columns to params and execute regexp functions
-#define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
-    do                                       \
-    {                                        \
-        CONVERT_EXPR_COL_TO_PARAM()          \
+// The entry to get actual params and execute regexp functions
+#define GET_ACTUAL_PARAMS_AND_EXECUTE() \
+    do                                  \
+    {                                   \
+        GET_EXPR_ACTUAL_PARAM()         \
     } while (0);
 
 // Implementation of regexp and regexp_like functions
@@ -879,7 +953,7 @@ public:
         if (arg_num < REGEXP_MIN_PARAM_NUM)
             throw Exception("Too few arguments", ErrorCodes::TOO_LESS_ARGUMENTS_FOR_FUNCTION);
         else if (arg_num > args_max_num)
-            throw Exception("Too mant arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
+            throw Exception("Too many arguments", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
         bool has_nullable_col = false;
         bool has_data_type_nothing = false;
@@ -904,7 +978,7 @@ public:
         // Check if args are all const columns
         if constexpr (ExprT::isConst() && PatT::isConst() && MatchTypeT::isConst())
         {
-            if (col_size == 0 || expr_param.isNullAt(0) || pat_param.isNullAt(0) || match_type_param.isNullAt(0))
+            if (expr_param.isNullAt(0) || pat_param.isNullAt(0) || match_type_param.isNullAt(0))
             {
                 res_arg.column = res_arg.type->createColumnConst(col_size, Null());
                 return;
@@ -934,7 +1008,20 @@ public:
         // Start to match
         if constexpr (canMemorize<PatT, MatchTypeT>())
         {
-            const auto & regexp = memorize(pat_param, match_type_param, collator);
+            std::unique_ptr<Regexps::Regexp> regexp;
+            if (col_size > 0)
+            {
+                regexp = memorize(pat_param, match_type_param, collator);
+                if (regexp == nullptr)
+                {
+                    auto nullmap_col = ColumnUInt8::create();
+                    typename ColumnUInt8::Container & nullmap = nullmap_col->getData();
+                    nullmap.resize(col_size, 1);
+                    res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
+                    return;
+                }
+            }
+
             if constexpr (has_nullable_col)
             {
                 // expr column must be a nullable column here, so we need to check null for each elems
@@ -1034,116 +1121,95 @@ public:
         // Do something related with nullable columns
         NullPresence null_presence = getNullPresense(block, arguments);
 
+        const ColumnPtr & col_expr = block.getByPosition(arguments[0]).column;
+
         if (null_presence.has_null_constant)
         {
             block.getByPosition(result).column = block.getByPosition(result).type->createColumnConst(block.rows(), Null());
             return;
         }
 
-        const ColumnPtr & EXPR_COL_PTR_VAR_NAME = block.getByPosition(arguments[0]).column;
-        const ColumnPtr & PAT_COL_PTR_VAR_NAME = block.getByPosition(arguments[1]).column;
+        const ColumnPtr & col_pat = block.getByPosition(arguments[1]).column;
 
-        size_t ARG_NUM_VAR_NAME = arguments.size();
+        size_t arg_num = arguments.size();
         auto & RES_ARG_VAR_NAME = block.getByPosition(result);
 
-        ColumnPtr MATCH_TYPE_COL_PTR_VAR_NAME;
-        if ((ARG_NUM_VAR_NAME) == REGEXP_LIKE_MAX_PARAM_NUM)
-            MATCH_TYPE_COL_PTR_VAR_NAME = block.getByPosition(arguments[2]).column;
+        ColumnPtr col_match_type;
+        if (arg_num == 3)
+            col_match_type = block.getByPosition(arguments[2]).column;
 
-        // CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
+        size_t col_size = col_expr->size();
+
+        ParamVariant EXPR_PV_VAR_NAME(col_expr, col_size, StringRef("", 0));
+        ParamVariant PAT_PV_VAR_NAME(col_pat, col_size, StringRef("", 0));
+        ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
+
+        GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
     TiDB::TiDBCollatorPtr collator = nullptr;
 };
 
-#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
-#undef CONVERT_EXPR_COL_TO_PARAM
-#undef CONVERT_PAT_COL_TO_PARAM
-#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
+#undef GET_ACTUAL_PARAMS_AND_EXECUTE
+#undef GET_EXPR_ACTUAL_PARAM
+#undef GET_PAT_ACTUAL_PARAM
+#undef GET_MATCH_TYPE_ACTUAL_PARAM
 #undef EXECUTE_REGEXP_LIKE
 
 #define EXECUTE_REGEXP_INSTR() \
     do \
     { \
-        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, EXPR_PARAM_VAR_NAME, PAT_PARAM_VAR_NAME, POS_PARAM_VAR_NAME, OCCUR_PARAM_VAR_NAME, RET_OP_PARAM_VAR_NAME, MATCH_TYPE_PARAM_VAR_NAME); \
+        REGEXP_CLASS_MEM_FUNC_IMPL_NAME(RES_ARG_VAR_NAME, *(EXPR_PARAM_PTR_VAR_NAME), *(PAT_PARAM_PTR_VAR_NAME), *(POS_PARAM_PTR_VAR_NAME), *(OCCUR_PARAM_PTR_VAR_NAME), *(RET_OP_PARAM_PTR_VAR_NAME), *(MATCH_TYPE_PARAM_PTR_VAR_NAME)); \
     } while (0);
 
-// Method to convert match type column to param
-#define CONVERT_MATCH_TYPE_COL_TO_PARAM()                                                                                          \
+// Method to get actual match type param
+#define GET_MATCH_TYPE_ACTUAL_PARAM()                                                                                          \
     do                                                                                                                             \
     { \
-        if (ARG_NUM_VAR_NAME == REGEXP_INSTR_MAX_PARAM_NUM) \
-        { \
-            CONVERT_CONST_STR_COL_TO_PARAM(MATCH_TYPE_PARAM_VAR_NAME, MATCH_TYPE_COL_PTR_VAR_NAME, ({EXECUTE_REGEXP_INSTR()})) \
-        } \
-        else                                                                          \
-        { \
-            Param<ParamString<true>, false> MATCH_TYPE_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, StringRef("", 0));                   \
-            EXECUTE_REGEXP_INSTR() \
-        } \
+        GET_ACTUAL_STRING_PARAM(MATCH_TYPE_PV_VAR_NAME, MATCH_TYPE_PARAM_PTR_VAR_NAME, ({EXECUTE_REGEXP_INSTR()})) \
     } while (0);
 
-// Method to convert return option column
-#define CONVERT_RET_OP_COL_TO_PARAM() \
+// Method to get actual return option param
+#define GET_RET_OP_ACTUAL_PARAM() \
     do \
     { \
-        if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 3) \
-        { \
-            Param<ParamInt<true>, false> RET_OP_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(0)); \
-            CONVERT_MATCH_TYPE_COL_TO_PARAM() \
-        } \
-        else \
-            CONVERT_CONST_INT_COL_TO_PARAM(RET_OP_PARAM_VAR_NAME, RET_OP_COL_PTR_VAR_NAME, ({CONVERT_MATCH_TYPE_COL_TO_PARAM()})) \
+        GET_ACTUAL_INT_PARAM(RET_OP_PV_VAR_NAME, RET_OP_PARAM_PTR_VAR_NAME, ({GET_MATCH_TYPE_ACTUAL_PARAM()})) \
     } while (0);
 
-// Method to convert occurrence column to param
-#define CONVERT_OCCUR_COL_TO_PARAM() \
+// Method to get actual occur param
+#define GET_OCCUR_ACTUAL_PARAM() \
     do \
     { \
-        if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 2) \
-        { \
-            Param<ParamInt<true>, false> OCCUR_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(1)); \
-            CONVERT_RET_OP_COL_TO_PARAM() \
-        } \
-        else \
-            CONVERT_CONST_INT_COL_TO_PARAM(OCCUR_PARAM_VAR_NAME, OCCUR_COL_PTR_VAR_NAME, ({CONVERT_RET_OP_COL_TO_PARAM()})) \
+        GET_ACTUAL_INT_PARAM(OCCUR_PV_VAR_NAME, OCCUR_PARAM_PTR_VAR_NAME, ({GET_RET_OP_ACTUAL_PARAM()})) \
     } while (0);
 
-// Method to convert position column to param
-#define CONVERT_POS_COL_TO_PARAM() \
+// Method to get actual position param
+#define GET_POS_ACTUAL_PARAM() \
     do \
     { \
-        if (ARG_NUM_VAR_NAME < REGEXP_MIN_PARAM_NUM + 1) \
-        { \
-            Param<ParamInt<true>, false> POS_PARAM_VAR_NAME(COL_SIZE_VAR_NAME, static_cast<Int64>(1)); \
-            CONVERT_OCCUR_COL_TO_PARAM() \
-        } \
-        else \
-            CONVERT_CONST_INT_COL_TO_PARAM(POS_PARAM_VAR_NAME, POS_COL_PTR_VAR_NAME, ({CONVERT_OCCUR_COL_TO_PARAM()})) \
+        GET_ACTUAL_INT_PARAM(POS_PV_VAR_NAME, POS_PARAM_PTR_VAR_NAME, ({GET_OCCUR_ACTUAL_PARAM()})) \
     } while (0);
 
-// Method to convert pattern column to param
-#define CONVERT_PAT_COL_TO_PARAM()                                                                                           \
+// Method to get actual pattern param
+#define GET_PAT_ACTUAL_PARAM()                                                                                           \
     do                                                                                                                       \
     {                                                                                                                        \
-        CONVERT_CONST_STR_COL_TO_PARAM(PAT_PARAM_VAR_NAME, PAT_COL_PTR_VAR_NAME, ({CONVERT_POS_COL_TO_PARAM()})) \
+        GET_ACTUAL_STRING_PARAM(PAT_PV_VAR_NAME, PAT_PARAM_PTR_VAR_NAME, ({GET_POS_ACTUAL_PARAM()})) \
     } while (0);
 
-// Method to convert expression column to param
-#define CONVERT_EXPR_COL_TO_PARAM()                                                                                 \
+// Method to get actual expression param
+#define GET_EXPR_ACTUAL_PARAM()                                                                                 \
     do                                                                                                              \
     {                                                                                                               \
-        /* Getting column size from expr col */                                                                    \
-        size_t COL_SIZE_VAR_NAME = (EXPR_COL_PTR_VAR_NAME)->size();                                                \
-        CONVERT_CONST_STR_COL_TO_PARAM(EXPR_PARAM_VAR_NAME, EXPR_COL_PTR_VAR_NAME, ({CONVERT_PAT_COL_TO_PARAM()})) \
+        GET_ACTUAL_STRING_PARAM(EXPR_PV_VAR_NAME, EXPR_PARAM_PTR_VAR_NAME, ({GET_PAT_ACTUAL_PARAM()})) \
     } while (0);
 
-// The entry to convert columns to params and execute regexp functions
-#define CONVERT_COLS_TO_PARAMS_AND_EXECUTE() \
+// The entry to get actual params and execute regexp functions
+#define GET_ACTUAL_PARAMS_AND_EXECUTE() \
     do                                       \
     {                                        \
-        CONVERT_EXPR_COL_TO_PARAM()          \
+        GET_EXPR_ACTUAL_PARAM()          \
     } while (0);
 
 // Implementation of regexp_instr function
@@ -1239,8 +1305,8 @@ public:
 
         // Initialize result column
         auto col_res = ColumnVector<ResultType>::create();
-        typename ColumnVector<ResultType>::Container & VEC_RES_VAR_NAME = col_res->getData();
-        VEC_RES_VAR_NAME.resize(col_size, 0);
+        typename ColumnVector<ResultType>::Container & vec_res = col_res->getData();
+        vec_res.resize(col_size, 0);
 
         constexpr bool has_nullable_col = ExprT::isNullableCol() || PatT::isNullableCol() || PosT::isNullableCol() || OccurT::isNullableCol() || RetOpT::isNullableCol() || MatchTypeT::isNullableCol();
 
@@ -1303,7 +1369,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
-                    VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                    vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
             }
@@ -1318,7 +1384,7 @@ public:
                     GET_POS_VALUE(i)
                     GET_OCCUR_VALUE(i)
                     GET_RET_OP_VALUE(i)
-                    VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                    vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
                 res_arg.column = std::move(col_res);
             }
@@ -1351,7 +1417,7 @@ public:
                     GET_RET_OP_VALUE(i)
                     match_type = match_type_param.getString(i);
                     auto regexp = createRegexpWithMatchType(pat, match_type, COLLATOR_VAR_NAME);
-                    VEC_RES_VAR_NAME[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
+                    vec_res[i] = regexp->instr(expr_ref.data, expr_ref.size, pos, occur, ret_op);
                 }
 
                 res_arg.column = ColumnNullable::create(std::move(col_res), std::move(nullmap_col));
@@ -1393,65 +1459,80 @@ public:
             return;
         }
 
-        const ColumnPtr & EXPR_COL_PTR_VAR_NAME = block.getByPosition(arguments[0]).column;
-        const ColumnPtr & PAT_COL_PTR_VAR_NAME = block.getByPosition(arguments[1]).column;
+        const ColumnPtr & col_expr = block.getByPosition(arguments[0]).column;
+        const ColumnPtr & col_pat = block.getByPosition(arguments[1]).column;
 
-        size_t ARG_NUM_VAR_NAME = arguments.size();
+        size_t arg_num = arguments.size();
         auto & RES_ARG_VAR_NAME = block.getByPosition(result);
 
-        ColumnPtr POS_COL_PTR_VAR_NAME;
-        ColumnPtr OCCUR_COL_PTR_VAR_NAME;
-        ColumnPtr RET_OP_COL_PTR_VAR_NAME;
-        ColumnPtr MATCH_TYPE_COL_PTR_VAR_NAME;
+        ColumnPtr col_pos;
+        ColumnPtr col_occur;
+        ColumnPtr col_return_option;
+        ColumnPtr col_match_type;
 
         // Go through cases to get arguments
-        switch((ARG_NUM_VAR_NAME))
+        switch(arg_num)
         {
         case REGEXP_INSTR_MAX_PARAM_NUM:
-            MATCH_TYPE_COL_PTR_VAR_NAME = block.getByPosition(arguments[5]).column;
+            col_match_type = block.getByPosition(arguments[5]).column;
         case REGEXP_MIN_PARAM_NUM + 3:
-            RET_OP_COL_PTR_VAR_NAME = block.getByPosition(arguments[4]).column;
+            col_return_option = block.getByPosition(arguments[4]).column;
         case REGEXP_MIN_PARAM_NUM + 2:
-            OCCUR_COL_PTR_VAR_NAME = block.getByPosition(arguments[3]).column;
+            col_occur = block.getByPosition(arguments[3]).column;
         case REGEXP_MIN_PARAM_NUM + 1:
-            POS_COL_PTR_VAR_NAME = block.getByPosition(arguments[2]).column;
+            col_pos = block.getByPosition(arguments[2]).column;
         };
 
-        CONVERT_COLS_TO_PARAMS_AND_EXECUTE()
+        size_t col_size = col_expr->size();
+
+        ParamVariant EXPR_PV_VAR_NAME(col_expr, col_size, StringRef("", 0));
+        ParamVariant PAT_PV_VAR_NAME(col_pat, col_size, StringRef("", 0));
+        ParamVariant POS_PV_VAR_NAME(col_pos, col_size, 1);
+        ParamVariant OCCUR_PV_VAR_NAME(col_occur, col_size, 1);
+        ParamVariant RET_OP_PV_VAR_NAME(col_occur, col_size, 0);
+        ParamVariant MATCH_TYPE_PV_VAR_NAME(col_match_type, col_size, StringRef("", 0));
+
+        GET_ACTUAL_PARAMS_AND_EXECUTE()
     }
 
 private:
     TiDB::TiDBCollatorPtr COLLATOR_VAR_NAME = nullptr;
 };
 
-#undef CHOOSE_TYPE_AND_EXECUTE
-#undef CHOOSE_AND_EXEC_FOR_POS_PARAM
-#undef CHOOSE_AND_EXEC_FOR_OCCUR_PARAM
-#undef CHOOSE_AND_EXEC_FOR_RET_OP_PARAM
-
-#undef CONVERT_COLS_TO_PARAMS_AND_EXECUTE
-#undef CONVERT_EXPR_COL_TO_PARAM
-#undef CONVERT_PAT_COL_TO_PARAM
-#undef CONVERT_POS_COL_TO_PARAM
-#undef CONVERT_OCCUR_COL_TO_PARAM
-#undef CONVERT_RET_OP_COL_TO_PARAM
-#undef CONVERT_MATCH_TYPE_COL_TO_PARAM
+#undef GET_ACTUAL_PARAMS_AND_EXECUTE
+#undef GET_EXPR_ACTUAL_PARAM
+#undef GET_PAT_ACTUAL_PARAM
+#undef GET_POS_ACTUAL_PARAM
+#undef GET_OCCUR_ACTUAL_PARAM
+#undef GET_RET_OP_ACTUAL_PARAM
+#undef GET_MATCH_TYPE_ACTUAL_PARAM
 #undef EXECUTE_REGEXP_INSTR
 
-#undef CONVERT_CONST_STR_COL_TO_PARAM
-#undef CONVERT_NULL_STR_COL_TO_PARAM
-#undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
 #undef COLLATOR_VAR_NAME
-#undef VEC_RES_VAR_NAME
-#undef ARG_NUM_VAR_NAME
-#undef SELF_CLASS_NAME
-#undef MATCH_TYPE_PARAM_VAR_NAME
-#undef PAT_PARAM_VAR_NAME
-#undef EXPR_PARAM_VAR_NAME
-#undef COL_SIZE_VAR_NAME
+
+#undef GET_ACTUAL_INT_PARAM
+#undef GET_ACTUAL_STRING_PARAM
+#undef REGEXP_CLASS_MEM_FUNC_IMPL_NAME
 #undef RES_ARG_VAR_NAME
-#undef MATCH_TYPE_COL_PTR_VAR_NAME
-#undef PAT_COL_PTR_VAR_NAME
-#undef EXPR_COL_PTR_VAR_NAME
+
+#undef MATCH_TYPE_PARAM_PTR_VAR_NAME
+#undef RET_OP_PARAM_PTR_VAR_NAME
+#undef OCCUR_PARAM_PTR_VAR_NAME
+#undef POS_PARAM_PTR_VAR_NAME
+#undef PAT_PARAM_PTR_VAR_NAME
+#undef EXPR_PARAM_PTR_VAR_NAME
+
+#undef MATCH_TYPE_PV_VAR_NAME
+#undef RET_OP_PV_VAR_NAME
+#undef OCCUR_PV_VAR_NAME
+#undef POS_PV_VAR_NAME
+#undef PAT_PV_VAR_NAME
+#undef EXPR_PV_VAR_NAME
+
+#undef ACTUAL_PARAM_TYPE
+#undef GET_ACTUAL_PARAM_PTR
+#undef ENUMERATE_PARAM_VARIANT_CASES
+#undef APPLY_FOR_PARAM_INT_VARIANTS
+#undef APPLY_FOR_PARAM_STRING_VARIANTS
 
 } // namespace DB

@@ -30,7 +30,7 @@ public:
     /// limit - if not 0, then you can sort each block not completely, but only `limit` first rows by order.
     PartialSortingBlockInputStream(
         const BlockInputStreamPtr & input_,
-        SortDescription & description_,
+        const SortDescription & description_,
         const String & req_id,
         size_t limit_ = 0)
         : description(description_)

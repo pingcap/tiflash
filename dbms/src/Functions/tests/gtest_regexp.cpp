@@ -13,20 +13,19 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeNullable.h>
-#include <Functions/FunctionFactory.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Storages/Transaction/Collator.h>
 #include <TestUtils/FunctionTestUtils.h>
-
-/// this is a hack, include the cpp file so we can test MatchImpl directly
+#include <Common/Exception.h>
+#include <common/types.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsRegexp.cpp> // NOLINT
 #include <Functions/FunctionsStringSearch.cpp> // NOLINT
+
 #include <string>
 #include <vector>
 
-#include "Common/Exception.h"
-#include "Core/ColumnWithTypeAndName.h"
-#include "DataTypes/DataTypesNumber.h"
-#include "common/types.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -2068,6 +2067,31 @@ TEST_F(Regexp, RegexpLike)
                              createNullableVectorColumn<String>(match_types, match_type_nulls)));
     }
 
+    std::cout << "case 9" << std::endl;
+    // case 9 test empty columns
+    {
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({}),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>({}),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+
+        ASSERT_COLUMN_EQ(createOnlyNullColumnConst(0),
+                         executeFunction(
+                             "regexp_like",
+                             createOnlyNullColumnConst(0),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({}),
+                         executeFunction(
+                             "regexp_like",
+                             createConstColumn<String>(0, ""),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+    }
+
     // empty pattern is not allowed
     ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createConstColumn<String>(row_size, "")), Exception);
     ASSERT_THROW(executeFunction("regexp_like", createConstColumn<String>(row_size, ""), createConstColumn<String>(row_size, "")), Exception);
@@ -2547,7 +2571,7 @@ TEST_F(Regexp, RegexpInstr)
 
     }
 
-    // Test: Args including nullable columns
+    // Test: Args include nullable columns
     {
         // test regexp_instr(nullable vector, vector)
         test_cases = {{0, {{1, 0, 0, 0, 0, 0}}, "ttttifl", "tifl"},

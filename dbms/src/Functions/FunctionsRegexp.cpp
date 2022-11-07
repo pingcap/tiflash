@@ -12,26 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnNullable.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsRegexp.h>
 #include <Functions/Regexps.h>
 #include <fmt/core.h>
 
-#include "Columns/ColumnNullable.h"
-
 namespace DB
 {
-
-namespace
-{
-const char flag_i = 'i';
-const char flag_c = 'c';
-const char flag_m = 'm';
-const char flag_s = 's';
-
-std::set<char> valid_flags{flag_i, flag_c, flag_m, flag_s};
-} // namespace
-
 /** Replace all matches of regexp 'needle' to string 'replacement'. 'needle' and 'replacement' are constants.
   * 'replacement' could contain substitutions, for example: '\2-\3-\1'
   */
@@ -48,7 +36,7 @@ struct ReplaceRegexpImpl
     /// Sequence of instructions, describing how to get resulting string.
     /// Each element is either:
     /// - substitution (in that case first element of pair is their number and second element is empty)
-    /// - string that need to be inserted (in that case, first element of pair is that string and second element is -1)
+    /// - string that need to be inserted (in that case, first element of pair is -1 and second element is that string)
     using Instructions = std::vector<std::pair<int, std::string>>;
 
     static const size_t max_captures = 10;

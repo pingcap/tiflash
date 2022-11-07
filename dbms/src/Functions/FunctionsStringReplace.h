@@ -17,13 +17,12 @@
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
+#include <Columns/IColumn.h>
+#include <Common/Exception.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-
-#include "Columns/IColumn.h"
-#include "Common/Exception.h"
 
 namespace DB
 {

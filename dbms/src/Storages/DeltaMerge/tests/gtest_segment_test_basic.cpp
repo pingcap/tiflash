@@ -27,6 +27,11 @@
 
 #include <magic_enum.hpp>
 
+namespace CurrentMetrics
+{
+extern const Metric DT_SnapshotOfReadRaw;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 namespace DM
@@ -74,6 +79,15 @@ size_t SegmentTestBasic::getSegmentRowNum(PageId segment_id)
     auto segment = segments[segment_id];
     auto in = segment->getInputStreamModeNormal(*dm_context, *tableColumns(), {segment->getRowKeyRange()});
     return getInputStreamNRows(in);
+}
+
+bool SegmentTestBasic::isSegmentDefinitelyEmpty(PageId segment_id)
+{
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    auto snapshot = segment->createSnapshot(*dm_context, /* for_update */ true, CurrentMetrics::DT_SnapshotOfReadRaw);
+    RUNTIME_CHECK(snapshot != nullptr);
+    return segment->isDefinitelyEmpty(*dm_context, snapshot);
 }
 
 std::optional<PageId> SegmentTestBasic::splitSegment(PageId segment_id, Segment::SplitMode split_mode, bool check_rows)
@@ -230,10 +244,10 @@ void SegmentTestBasic::flushSegmentCache(PageId segment_id)
     operation_statistics["flush"]++;
 }
 
-std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageId segment_id)
+std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageId segment_id) const
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
-    const auto & segment = segments[segment_id];
+    const auto & segment = segments.find(segment_id)->second;
 
     Int64 start_key, end_key;
     if (!options.is_common_handle)
@@ -509,16 +523,16 @@ void SegmentTestBasic::replaceSegmentData(const std::vector<PageId> & segments_i
     operation_statistics["replaceData"]++;
 }
 
-bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id)
+bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageId> & segments_id) const
 {
     RUNTIME_CHECK(segments_id.size() >= 2);
     for (auto segment_id : segments_id)
         RUNTIME_CHECK(segments.find(segment_id) != segments.end());
 
-    auto base_stable = segments[segments_id[0]]->getStable()->getDMFilesString();
+    auto base_stable = segments.find(segments_id[0])->second->getStable()->getDMFilesString();
     for (size_t i = 1; i < segments_id.size(); i++)
     {
-        if (base_stable != segments[segments_id[i]]->getStable()->getDMFilesString())
+        if (base_stable != segments.find(segments_id[i])->second->getStable()->getDMFilesString())
             return false;
     }
     return true;
@@ -567,7 +581,7 @@ void SegmentTestBasic::setColumns(const ColumnDefinesPtr & columns)
     reloadDMContext();
 }
 
-void SegmentTestBasic::printFinishedOperations()
+void SegmentTestBasic::printFinishedOperations() const
 {
     LOG_INFO(logger, "======= Begin Finished Operations Statistics =======");
     LOG_INFO(logger, "Operation Kinds: {}", operation_statistics.size());
