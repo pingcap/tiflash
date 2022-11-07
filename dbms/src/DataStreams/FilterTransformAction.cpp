@@ -120,13 +120,13 @@ bool FilterTransformAction::transform(Block & block)
         {
             first_non_constant_column = i;
 
-            if (first_non_constant_column != static_cast<size_t>(filter_column))
+            if (first_non_constant_column != filter_column)
                 break;
         }
     }
 
     size_t filtered_rows = 0;
-    if (first_non_constant_column != static_cast<size_t>(filter_column))
+    if (first_non_constant_column != filter_column)
     {
         ColumnWithTypeAndName & current_column = block.safeGetByPosition(first_non_constant_column);
         current_column.column = current_column.column->filter(*filter, -1);
@@ -156,7 +156,7 @@ bool FilterTransformAction::transform(Block & block)
     {
         ColumnWithTypeAndName & current_column = block.safeGetByPosition(i);
 
-        if (i == static_cast<size_t>(filter_column))
+        if (i == filter_column)
         {
             /// The column with filter itself is replaced with a column with a constant `1`, since after filtering, nothing else will remain.
             /// NOTE User could pass column with something different than 0 and 1 for filter.

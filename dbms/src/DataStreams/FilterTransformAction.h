@@ -36,7 +36,7 @@ public:
 private:
     Block header;
     ExpressionActionsPtr expression;
-    ssize_t filter_column;
+    size_t filter_column;
 
     ConstantFilterDescription constant_filter_description;
 };
