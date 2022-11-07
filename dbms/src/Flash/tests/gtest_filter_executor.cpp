@@ -36,7 +36,7 @@ public:
 
         context.addMockTable({"test_db", "filter"},
                              {
-                                 {"bool_col", TiDB::TP::TypeTiny},
+                                 {"int8_col", TiDB::TP::TypeTiny},
                                  {"int32_col", TiDB::TP::TypeLong},
                                  {"int64_col", TiDB::TP::TypeLongLong},
                                  {"float_col", TiDB::TP::TypeFloat},
@@ -44,7 +44,7 @@ public:
                                  {"string_col", TiDB::TP::TypeString},
                              },
                              {
-                                 toNullableVec<Int8>("bool_col", {0, 1, 0, 1, 1, 0, 1, 0}),
+                                 toNullableVec<Int8>("int8_col", {0, 1, 0, 1, 1, 0, 1, 0}),
                                  toNullableVec<Int32>("int32_col", {0, 1, 2, 3, 4, 5, 6, 7}),
                                  toNullableVec<Int64>("int64_col", {0, 1, 2, 3, 4, 5, 6, 7}),
                                  toNullableVec<Float32>("float_col", {0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}),
@@ -197,20 +197,17 @@ try
 }
 CATCH
 
-TEST_F(FilterExecutorTestRunner, bool_col)
+TEST_F(FilterExecutorTestRunner, convert_bool)
 try
 {
-    // use bool_col
     {
         auto request = context
                            .scan("test_db", "filter")
-                           .filter(col("bool_col"))
-                           .project({col("bool_col")})
+                           .filter(col("int8_col"))
+                           .project({col("int8_col")})
                            .build(context);
         executeAndAssertColumnsEqual(request, {toNullableVec<Int8>({1, 1, 1, 1})});
     }
-
-    // convert to bool
     {
         auto request = context
                            .scan("test_db", "filter")
