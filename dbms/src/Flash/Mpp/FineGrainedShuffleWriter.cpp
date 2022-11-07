@@ -182,7 +182,7 @@ void FineGrainedShuffleWriter<StreamWriterPtr>::writePackets(const TrackedMppDat
     {
         const auto & packet = packets[part_id];
         assert(packet);
-        if (packet->getPacket().chunks_size() > 0)
+        if (likely(packet->getPacket().chunks_size() > 0))
             writer->partitionWrite(packet, part_id);
     }
 }
