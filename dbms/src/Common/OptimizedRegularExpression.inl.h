@@ -12,15 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/OptimizedRegularExpression.h>
 #include <Poco/Exception.h>
+#include <Common/OptimizedRegularExpression.h>
 #include <Common/StringUtils/StringUtils.h>
-
-#include <iostream>
 #include <Common/Exception.h>
 #include <common/defines.h>
 #include <common/types.h>
 
+#include <iostream>
 
 #define MIN_LENGTH_FOR_STRSTR 3
 #define MAX_SUBPATTERNS 5
