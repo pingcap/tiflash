@@ -213,7 +213,7 @@ void PageDirectoryFactory<Trait>::applyRecord(
         case EditRecordType::UPSERT:
         {
             auto id_to_deref = version_list->createUpsertEntry(restored_version, r.entry);
-            if (id_to_deref.low != INVALID_PAGE_ID)
+            if (id_to_deref != ExternalIdTrait::getInvalidID())
             {
                 // The ref-page is rewritten into a normal page, we need to decrease the ref-count of the original page
                 auto deref_iter = dir->mvcc_table_directory.find(id_to_deref);

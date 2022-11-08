@@ -1644,17 +1644,17 @@ try
     // 10->entry1, 11->10, 12->10
     PageEntryV3 entry1{.file_id = 1, .size = 1024, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.put(buildV3Id(TEST_NAMESPACE_ID, 10), entry1);
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 11), buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
     }
     {
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.ref(buildV3Id(TEST_NAMESPACE_ID, 12), buildV3Id(TEST_NAMESPACE_ID, 10));
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 10));
         dir->apply(std::move(edit));
@@ -1679,7 +1679,7 @@ try
 
         // unlike `RewriteRefedId`, foreground delete 11, 12 before
         // full gc apply upserts
-        PageEntriesEdit fore_edit;
+        u128::PageEntriesEdit fore_edit;
         fore_edit.del(buildV3Id(TEST_NAMESPACE_ID, 11));
         fore_edit.del(buildV3Id(TEST_NAMESPACE_ID, 12));
         dir->apply(std::move(fore_edit));
@@ -1687,7 +1687,7 @@ try
         // full gc ends, apply upserts
         // upsert 11->entry2
         // upsert 12->entry3
-        PageEntriesEdit edit;
+        u128::PageEntriesEdit edit;
         edit.upsertPage(std::get<0>(ids[0]), std::get<1>(ids[0]), entry2);
         edit.upsertPage(std::get<0>(ids[1]), std::get<1>(ids[1]), entry3);
         // this will rewrite ref page 11, 12 to normal page
@@ -2091,7 +2091,7 @@ try
     PageEntryV3 entry_50_1{.file_id = 1, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
     PageEntryV3 entry_50_2{.file_id = 2, .size = 7890, .padded_size = 0, .tag = 0, .offset = 0x123, .checksum = 0x4567};
 
-    auto restore_from_edit = [](const u128::PageEntriesEdit & edit) {
+    auto restore_from_edit = [](u128::PageEntriesEdit & edit) {
         auto ctx = ::DB::tests::TiFlashTestEnv::getContext();
         auto provider = ctx.getFileProvider();
         auto path = getTemporaryPath();

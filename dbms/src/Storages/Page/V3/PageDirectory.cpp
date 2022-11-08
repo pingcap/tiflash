@@ -126,7 +126,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
 }
 
 template <typename Trait>
-PageIdV3Internal VersionedPageEntries<Trait>::createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry)
+typename Trait::PageId VersionedPageEntries<Trait>::createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry)
 {
     auto page_lock = acquireLock();
 
@@ -161,7 +161,7 @@ PageIdV3Internal VersionedPageEntries<Trait>::createUpsertEntry(const PageVersio
             // create a new version that inherit the `being_ref_count` of the last entry
             entries.emplace(ver, EntryOrDelete::newReplacingEntry(last_iter->second, entry));
         }
-        return buildV3Id(0, INVALID_PAGE_ID);
+        return Trait::ExternalIdTrait::getInvalidID();
     }
 
     if (type == EditRecordType::VAR_REF)
@@ -1410,7 +1410,7 @@ void PageDirectory<Trait>::gcApply(typename Trait::PageEntriesEdit && migrated_e
         // Append the gc version to version list
         const auto & versioned_entries = iter->second;
         auto id_to_deref = versioned_entries->createUpsertEntry(record.version, record.entry);
-        if (id_to_deref.low != INVALID_PAGE_ID)
+        if (id_to_deref != ExternalIdTrait::getInvalidID())
         {
             // The ref-page is rewritten into a normal page, we need to decrease the ref-count of original page
             typename MVCCMapType::const_iterator deref_iter;
@@ -1449,7 +1449,7 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
     }
 
     UInt64 total_page_nums = 0;
-    std::map<PageIdV3Internal, std::tuple<PageIdV3Internal, PageVersion>> ref_ids_maybe_rewrite;
+    std::map<typename Trait::PageId, std::tuple<typename Trait::PageId, PageVersion>> ref_ids_maybe_rewrite;
 
     {
         typename MVCCMapType::const_iterator iter;
@@ -1467,8 +1467,11 @@ PageDirectory<Trait>::getEntriesByBlobIds(const std::vector<BlobFileId> & blob_i
             auto page_id = iter->first;
             const auto & version_entries = iter->second;
             fiu_do_on(FailPoints::pause_before_full_gc_prepare, {
-                if (page_id.low == 101)
-                    SYNC_FOR("before_PageDirectory::getEntriesByBlobIds_id_101");
+                if constexpr (std::is_same_v<Trait, u128::PageDirectoryTrait>)
+                {
+                    if (page_id.low == 101)
+                        SYNC_FOR("before_PageDirectory::getEntriesByBlobIds_id_101");
+                }
             });
             auto single_page_size = version_entries->getEntriesByBlobIds(blob_id_set, page_id, blob_versioned_entries, ref_ids_maybe_rewrite);
             total_page_size += single_page_size;
@@ -1560,7 +1563,7 @@ bool PageDirectory<Trait>::tryDumpSnapshot(const ReadLimiterPtr & read_limiter, 
                 std::move(snapshot_reader),
                 /* wal */ nullptr);
         }
-    };
+    }();
     // The records persisted in `files_snap` is older than or equal to all records in `edit`
     auto edit_from_disk = collapsed_dir->dumpSnapshotToEdit();
     bool done_any_io = wal->saveSnapshot(std::move(files_snap), Trait::Serializer::serializeTo(edit_from_disk), edit_from_disk.size(), write_limiter);

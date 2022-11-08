@@ -168,7 +168,7 @@ public:
     // Return a PageId, if the page id is valid, it means it rewrite a RefPage into
     // a normal Page. Caller must call `derefAndClean` to decrease the ref-count of
     // the returing page id.
-    [[nodiscard]] PageIdV3Internal createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
+    [[nodiscard]] typename Trait::PageId createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry);
 
     bool createNewRef(const PageVersion & ver, const typename Trait::PageId & ori_page_id);
 

@@ -799,7 +799,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
         // write new edit, new log file generated
         u128::PageEntriesEdit edit;
         edit.del(buildV3Id(TEST_NAMESPACE_ID, 100));
-        wal->apply(DB::PS::V3::u128::ser::serializeTo(edit));
+        wal->apply(u128::Serializer::serializeTo(edit));
     }
 
     {
@@ -813,7 +813,7 @@ TEST_P(WALStoreTest, GetFileSnapshot)
 
         // empty
         u128::PageEntriesEdit snap_edit;
-        bool done = wal->saveSnapshot(std::move(files), DB::PS::V3::u128::ser::serializeTo(snap_edit), snap_edit.size());
+        bool done = wal->saveSnapshot(std::move(files), u128::Serializer::serializeTo(snap_edit), snap_edit.size());
         ASSERT_TRUE(done);
         ASSERT_EQ(getNumLogFiles(), 1);
     }

@@ -89,7 +89,9 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const
     {
-        return blob_store->getFileUsageStatistics();
+        auto u = blob_store->getFileUsageStatistics();
+        u.merge(page_directory->getFileUsageStatistics());
+        return u;
     }
 
     void write(UniversalWriteBatch && write_batch, const WriteLimiterPtr & write_limiter = nullptr) const;
@@ -156,6 +158,18 @@ public:
         auto snap = uni_storage.getSnapshot("");
         const auto & [id, entry] = uni_storage.page_directory->getByIDOrNull(uni_page_id, snap);
         return (entry.isValid() && entry.tag > applied_index);
+    }
+
+    void read(const PageIds & /*page_ids*/, std::function<void(const PageId &, const UniversalPage &)> /*handler*/) const
+    {
+        // UniversalPageIds uni_page_ids;
+        // uni_page_ids.reserve(page_ids.size());
+        // for (const auto & pid : page_ids)
+        //     uni_page_ids.emplace_back(toFullPageId(pid));
+        // auto snap = uni_storage.getSnapshot("");
+        // auto page_entries = uni_storage.page_directory->getByIDs(uni_page_ids, snap);
+        // uni_storage.blob_store->read(page_entries, handler, nullptr);
+        throw Exception("Not implemented");
     }
 
     void traverse(const std::function<void(const DB::UniversalPage & page)> & /*acceptor*/)

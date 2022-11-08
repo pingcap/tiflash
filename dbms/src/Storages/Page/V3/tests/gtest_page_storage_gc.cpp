@@ -228,7 +228,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = ser::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value());
             num_entries_on_wal += e.size();
             EXPECT_TRUE(e.empty());
         }
@@ -304,7 +304,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = ser::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value());
             num_entries_on_wal += e.size();
             EXPECT_TRUE(e.empty());
         }
@@ -445,7 +445,7 @@ try
         auto s = reader->next();
         if (s.has_value())
         {
-            auto e = ser::deserializeFrom(s.value());
+            auto e = u128::Serializer::deserializeFrom(s.value());
             num_entries_on_wal += e.size();
             for (const auto & r : e.getRecords())
             {
@@ -456,7 +456,7 @@ try
                     else if (r.page_id.low == ref_page_id4)
                         exist_id4_normal_entry = true;
                 }
-                LOG_INFO(log, PageEntriesEdit::toDebugString(r));
+                LOG_INFO(log, u128::PageEntriesEdit::toDebugString(r));
             }
         }
     }
