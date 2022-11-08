@@ -257,17 +257,16 @@ bool PSReader::runImpl()
 {
     DB::PageIds page_ids = genRandomPageIds();
 
-    DB::PageHandler handler = [&](DB::PageId page_id, const DB::Page & page) {
-        (void)page_id;
-        // use `sleep` to mock heavy read
+    auto page_map = ps->read(DB::TEST_NAMESPACE_ID, page_ids);
+    for (const auto & page : page_map)
+    {
         if (heavy_read_delay_ms > 0)
         {
             usleep(heavy_read_delay_ms * 1000);
         }
         ++pages_used;
-        bytes_used += page.data.size();
-    };
-    ps->read(DB::TEST_NAMESPACE_ID, page_ids, handler);
+        bytes_used += page.second.data.size();
+    }
     return true;
 }
 
