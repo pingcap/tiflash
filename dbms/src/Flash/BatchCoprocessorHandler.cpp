@@ -44,7 +44,7 @@ BatchCoprocessorHandler::BatchCoprocessorHandler(
 grpc::Status BatchCoprocessorHandler::execute()
 {
     Stopwatch watch;
-    SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_request_handle_seconds, type_super_batch).Observe(watch.elapsedSeconds()); });
+    SCOPE_EXIT({ GET_METRIC(tiflash_coprocessor_request_handle_seconds, type_batch).Observe(watch.elapsedSeconds()); });
 
     try
     {
@@ -52,10 +52,10 @@ grpc::Status BatchCoprocessorHandler::execute()
         {
         case COP_REQ_TYPE_DAG:
         {
-            GET_METRIC(tiflash_coprocessor_request_count, type_super_batch_cop_dag).Increment();
-            GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Increment();
+            GET_METRIC(tiflash_coprocessor_request_count, type_batch_executing).Increment();
+            GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_executing).Increment();
             SCOPE_EXIT(
-                { GET_METRIC(tiflash_coprocessor_handling_request_count, type_super_batch_cop_dag).Decrement(); });
+                { GET_METRIC(tiflash_coprocessor_handling_request_count, type_batch_executing).Decrement(); });
 
             auto dag_request = getDAGRequestFromStringWithRetry(cop_request->data());
             auto tables_regions_info = TablesRegionsInfo::create(cop_request->regions(), cop_request->table_regions(), cop_context.db_context.getTMTContext());

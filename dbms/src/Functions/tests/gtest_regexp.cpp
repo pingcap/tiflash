@@ -18,12 +18,18 @@
 #include <TestUtils/FunctionTestUtils.h>
 
 /// this is a hack, include the cpp file so we can test MatchImpl directly
+#include <Core/ColumnWithTypeAndName.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <common/types.h>
+
+#include <Functions/FunctionsRegexp.cpp> // NOLINT
 #include <Functions/FunctionsStringSearch.cpp> // NOLINT
 #include <string>
 #include <vector>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
+#include <fmt/core.h>
 #include <gtest/gtest.h>
 
 #pragma GCC diagnostic pop
@@ -38,6 +44,10 @@ protected:
     static bool isColumnConstNull(const ColumnWithTypeAndName & column_with_type)
     {
         return column_with_type.column->isColumnConst() && column_with_type.column->isNullAt(0);
+    }
+    static bool isColumnConst(const ColumnWithTypeAndName & column_with_type)
+    {
+        return column_with_type.column->isColumnConst();
     }
     static bool isColumnConstNotNull(const ColumnWithTypeAndName & column_with_type)
     {
@@ -1780,88 +1790,314 @@ TEST_F(Regexp, testRegexpTiDBCase)
     ASSERT_ANY_THROW((DB::MatchImpl<false, false, true>::constantConstant("", "\\", '\\', "", nullptr, res)));
 }
 
-TEST_F(Regexp, testRegexp)
+// TODO test empty columns
+// We can only test regexp_like function as regexp is the subset of regexp_like
+TEST_F(Regexp, RegexpLike)
 {
-    const auto * binary_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::BINARY);
+    const auto * utf8mb4_general_ci_collator = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     auto string_type = std::make_shared<DataTypeString>();
     auto nullable_string_type = makeNullable(string_type);
     auto uint8_type = std::make_shared<DataTypeUInt8>();
     auto nullable_uint8_type = makeNullable(uint8_type);
 
-    std::vector<String> input_strings{"abc", "Abc", "a\nb\nc", "abcd", "hello, 平凯星辰"};
-    std::vector<UInt8> input_string_nulls{0, 0, 0, 1, 0};
+    std::vector<String> exprs{"abc", "Abc", "a\nb\nc", "a\nb\nc", "a\nb\nc", "abcd", "hello, 平凯星辰", "", "a"};
+    std::vector<UInt8> exprs_nulls{0, 0, 0, 0, 1, 0, 0, 0, 0};
 
-    std::vector<String> patterns{"^a", "abc$", "a.*B.*c", "^bc$", "平凯.*"};
-    std::vector<UInt8> pattern_nulls{1, 0, 0, 0, 0};
+    std::vector<String> patterns{"^a", "abc$", "a.*B.*c", "^a$", "^b$", "^bc$", "平凯.*", "^$", "A"};
+    std::vector<UInt8> pattern_nulls{1, 0, 0, 0, 0, 0, 0, 0, 0};
 
-    std::vector<String> match_types{"", "i", "ims", "i", ""};
-    std::vector<UInt8> match_type_nulls{0, 1, 0, 0, 0};
+    std::vector<String> match_types{"", "i", "ims", "m", "m", "i", "", "", ""};
+    std::vector<UInt8> match_type_nulls{0, 1, 0, 0, 0, 0, 0, 0, 0};
 
-    std::vector<UInt64> results{1, 0, 0, 0, 1};
-    std::vector<UInt64> results_with_match_type{1, 1, 1, 0, 1};
-    std::vector<UInt64> results_with_match_type_collator{1, 0, 0, 0, 1};
+    std::vector<UInt64> results{1, 0, 0, 0, 0, 0, 1, 1, 0};
+    std::vector<UInt64> results_with_match_type{1, 1, 1, 1, 1, 0, 1, 1, 0};
+    std::vector<UInt64> results_with_collator{1, 1, 0, 0, 0, 0, 1, 1, 1};
+    std::vector<UInt64> results_with_collator_and_match_type{1, 1, 1, 1, 1, 0, 1, 1, 1};
 
-    std::vector<UInt64> vec_results{1, 0, 1, 1, 0};
-    std::vector<UInt64> vec_results_with_match_type{1, 1, 1, 1, 0};
-    std::vector<UInt64> vec_results_with_match_type_collator{1, 0, 1, 1, 0};
+    const String vec_res_match_type{"i"};
+    const String vec_res_collator_and_match_type{"m"};
 
-    size_t row_size = input_string_nulls.size();
+    std::vector<UInt64> vec_results{1, 0, 1, 1, 1, 1, 0, 0, 1};
+    std::vector<UInt64> vec_results_with_match_type{1, 1, 1, 1, 1, 1, 0, 0, 1}; // match type is const 'i'
+    std::vector<UInt64> vec_results_with_collator{1, 1, 1, 1, 1, 1, 0, 0, 1};
+    std::vector<UInt64> vec_results_with_collator_and_match_type{1, 1, 1, 1, 1, 1, 0, 0, 1}; // match type is const 'm'
 
-    auto const_uint8_null_column = createConstColumn<Nullable<UInt8>>(row_size, {});
-    auto const_string_null_column = createConstColumn<Nullable<String>>(row_size, {});
-    /// case 1. regexp(const, const [, const])
-    for (size_t i = 0; i < row_size; i++)
+    size_t row_size = exprs_nulls.size();
+
+    auto const_uint8_null_column = createOnlyNullColumnConst(row_size);
+    auto const_string_null_column = createOnlyNullColumnConst(row_size);
+
+    // case 1. regexp_like(const, const [, const])
     {
-        /// test regexp(const, const)
-        ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results[i]),
-                         executeFunction("regexp", createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i])));
+        for (size_t i = 0; i < row_size; i++)
+        {
+            // test regexp_like(const, const)
+            ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results[i]),
+                             executeFunction(
+                                 "regexp_like",
+                                 createConstColumn<String>(row_size, exprs[i]),
+                                 createConstColumn<String>(row_size, patterns[i])));
 
-        /// test regexp(const, const, const)
-        ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results_with_match_type[i]),
-                         executeFunction("regexp", createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, match_types[i])));
+            /// test regexp_like(const, const, const)
+            ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results_with_match_type[i]),
+                             executeFunction(
+                                 "regexp_like",
+                                 createConstColumn<String>(row_size, exprs[i]),
+                                 createConstColumn<String>(row_size, patterns[i]),
+                                 createConstColumn<String>(row_size, match_types[i])));
 
-        /// test regexp(const, const, const) with binary collator
-        ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results_with_match_type_collator[i]),
-                         executeFunction("regexp", {createConstColumn<String>(row_size, input_strings[i]), createConstColumn<String>(row_size, patterns[i]), createConstColumn<String>(row_size, match_types[i])}, binary_collator));
+            // test regexp_like(const, const, const) with ci collator
+            ASSERT_COLUMN_EQ(createConstColumn<UInt8>(row_size, results_with_collator[i]),
+                             executeFunction(
+                                 "regexp_like",
+                                 {createConstColumn<String>(row_size, exprs[i]),
+                                  createConstColumn<String>(row_size, patterns[i])},
+                                 utf8mb4_general_ci_collator));
+        }
     }
-    /// case 2. regexp(const, const [, const]) with null value
-    for (size_t i = 0; i < row_size; i++)
+
+    // case 2. regexp_like(const, const [, const]) with null value
     {
-        /// test regexp(const, const)
-        ASSERT_COLUMN_EQ(input_string_nulls[i] || pattern_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results[i]),
-                         executeFunction("regexp", input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i])));
+        for (size_t i = 0; i < row_size; i++)
+        {
+            // test regexp_like(const, const)
+            ASSERT_COLUMN_EQ(exprs_nulls[i] || pattern_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results[i]),
+                             executeFunction("regexp_like", exprs_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, exprs[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i])));
 
-        /// test regexp(const, const, const)
-        ASSERT_COLUMN_EQ(input_string_nulls[i] || pattern_nulls[i] || match_type_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results_with_match_type[i]),
-                         executeFunction("regexp", input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])));
+            // test regexp_like(const, const, const)
+            ASSERT_COLUMN_EQ(exprs_nulls[i] || pattern_nulls[i] || match_type_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results_with_match_type[i]),
+                             executeFunction("regexp_like", exprs_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, exprs[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])));
 
-        /// test regexp(const, const, const) with binary collator
-        ASSERT_COLUMN_EQ(input_string_nulls[i] || pattern_nulls[i] || match_type_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results_with_match_type_collator[i]),
-                         executeFunction("regexp", {input_string_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, input_strings[i]), pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]), match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])}, binary_collator));
+            // test regexp_like(const, const) with ci collator
+            ASSERT_COLUMN_EQ(exprs_nulls[i] || pattern_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results_with_collator[i]),
+                             executeFunction(
+                                 "regexp_like",
+                                 {exprs_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, exprs[i]),
+                                  pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i])},
+                                 utf8mb4_general_ci_collator));
+
+            // test regexp_like(const, const, const) with ci collator
+            ASSERT_COLUMN_EQ(exprs_nulls[i] || pattern_nulls[i] || match_type_nulls[i] ? const_uint8_null_column : createConstColumn<UInt8>(row_size, results_with_collator_and_match_type[i]),
+                             executeFunction(
+                                 "regexp_like",
+                                 {exprs_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, exprs[i]),
+                                  pattern_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, patterns[i]),
+                                  match_type_nulls[i] ? const_string_null_column : createConstColumn<Nullable<String>>(row_size, match_types[i])},
+                                 utf8mb4_general_ci_collator));
+        }
     }
-    /// case 3 regexp(vector, const[, const])
+
+    // case 3 regexp_like(vector, const[, const])
     {
-        /// test regexp(vector, const)
+        // test regexp_like(vector, const)
         ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results),
-                         executeFunction("regexp", createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0])));
+                         executeFunction("regexp_like", createColumn<String>(exprs), createConstColumn<String>(row_size, patterns[0])));
 
-        /// test regexp(vector, const, const)
+        // test regexp_like(vector, const, const)
         ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results_with_match_type),
-                         executeFunction("regexp", createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")));
+                         executeFunction("regexp_like", createColumn<String>(exprs), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")));
 
-        /// test regexp(vector, const, const) with binary collator
-        ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results_with_match_type_collator),
-                         executeFunction("regexp", {createColumn<String>(input_strings), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")}, binary_collator));
+        // test regexp_like(vector, const) with ci collator
+        ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results_with_collator),
+                         executeFunction(
+                             "regexp_like",
+                             {createColumn<String>(exprs),
+                              createConstColumn<String>(row_size, patterns[0])},
+                             utf8mb4_general_ci_collator));
+
+        // test regexp_like(vector, const, const) with ci collator
+        ASSERT_COLUMN_EQ(createColumn<UInt8>(vec_results_with_collator_and_match_type),
+                         executeFunction(
+                             "regexp_like",
+                             {createColumn<String>(exprs),
+                              createConstColumn<String>(row_size, patterns[0]),
+                              createConstColumn<String>(row_size, "m")},
+                             utf8mb4_general_ci_collator));
     }
-    /// case 4 regexp(vector, const[, const]) nullable
+
+    /// case 4 regexp_like(vector, const[, const]) with null value
     {
-        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results, input_string_nulls),
-                         executeFunction("regexp", createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0])));
-        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results_with_match_type, input_string_nulls),
-                         executeFunction("regexp", createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")));
-        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results_with_match_type_collator, input_string_nulls),
-                         executeFunction("regexp", {createNullableVectorColumn<String>(input_strings, input_string_nulls), createConstColumn<String>(row_size, patterns[0]), createConstColumn<String>(row_size, "i")}, binary_collator));
+        // regexp_like(vector, const)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createNullableVectorColumn<String>(exprs, exprs_nulls),
+                             createConstColumn<String>(row_size, patterns[0])));
+
+        // regexp_like(vector, const, const)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results_with_match_type, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createNullableVectorColumn<String>(exprs, exprs_nulls),
+                             createConstColumn<String>(row_size, patterns[0]),
+                             createConstColumn<String>(row_size, vec_res_match_type)));
+
+        // test regexp_like(vector, const) with ci collator
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results_with_collator, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             {createNullableVectorColumn<String>(exprs, exprs_nulls),
+                              createConstColumn<String>(row_size, patterns[0])},
+                             utf8mb4_general_ci_collator));
+
+        // test regexp_like(vector, const, const) with ci collator
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vec_results_with_collator_and_match_type, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             {createNullableVectorColumn<String>(exprs, exprs_nulls),
+                              createConstColumn<String>(row_size, patterns[0]),
+                              createConstColumn<String>(row_size, vec_res_collator_and_match_type)},
+                             utf8mb4_general_ci_collator));
     }
+
+    const std::vector<UInt64> vv_res{1, 0, 0, 0, 0, 0, 1, 1, 0}; // vector expr, vector pattern
+    const std::vector<UInt64> vvc_res{1, 1, 0, 0, 0, 0, 1, 1, 1}; // vector expr, vector pattern, const match_type 'i'
+    const std::vector<UInt64> vvc_collator_res{1, 1, 0, 1, 1, 0, 1, 1, 1}; // vector expr, vector pattern, const match_type 'm', with collator
+
+    // case 5 regexp_like(vector, vector[, const])
+    {
+        // test regexp_like(vector, vector)
+        ASSERT_COLUMN_EQ(createColumn<UInt8>(vv_res),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns)));
+
+        // test regexp_like(vector, vector, const)
+        ASSERT_COLUMN_EQ(createColumn<UInt8>(vvc_res),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createConstColumn<String>(row_size, vec_res_match_type)));
+
+        // test regexp_like(vector, vector, const) with ci collator
+        ASSERT_COLUMN_EQ(createColumn<UInt8>(vvc_collator_res),
+                         executeFunction(
+                             "regexp_like",
+                             {createColumn<String>(exprs),
+                              createColumn<String>(patterns),
+                              createConstColumn<String>(row_size, vec_res_collator_and_match_type)},
+                             utf8mb4_general_ci_collator));
+    }
+
+    // case 6 regexp_like(vector, vector[, const]) with null vable
+    {
+        // test regexp_like(nullable vector, vector)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vv_res, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createNullableVectorColumn<String>(exprs, exprs_nulls),
+                             createColumn<String>(patterns)));
+
+        // test regexp_like(vectir, nullable vector)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vv_res, pattern_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>(exprs),
+                             createNullableVectorColumn<String>(patterns, pattern_nulls)));
+
+        // test regexp_like(nullable vector, vector, const)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vvc_res, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createNullableVectorColumn<String>(exprs, exprs_nulls),
+                             createColumn<String>(patterns),
+                             createConstColumn<String>(row_size, vec_res_match_type)));
+
+        // test regexp_like(nullable vector, vector, const) with ci collator
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vvc_collator_res, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             {
+                                 createNullableVectorColumn<String>(exprs, exprs_nulls),
+                                 createColumn<String>(patterns),
+                                 createConstColumn<String>(row_size, vec_res_collator_and_match_type),
+                             },
+                             utf8mb4_general_ci_collator));
+    }
+
+    const std::vector<UInt64> vvv_res{1, 1, 1, 1, 1, 0, 1, 1, 0}; // vector expr, vector pattern, vector match_type
+    const std::vector<UInt64> vvv_collator_res{1, 1, 1, 1, 1, 0, 1, 1, 1}; // vector expr, vector pattern, vector match_type
+
+    // case 7 regexp_like(vector, vector[, vector])
+    {
+        // test regexp_like(vector, vector, vector)
+        ASSERT_COLUMN_EQ(createColumn<UInt8>(vvv_res),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createColumn<String>(match_types)));
+
+        // test regexp_like(vector, vector, vector) with ci collator
+        ASSERT_COLUMN_EQ(createColumn<UInt8>(vvv_collator_res),
+                         executeFunction(
+                             "regexp_like",
+                             {createColumn<String>(exprs),
+                              createColumn<String>(patterns),
+                              createColumn<String>(match_types)},
+                             utf8mb4_general_ci_collator));
+    }
+
+    // case 8 regexp_like(vector, vector[, vector]) withh null value
+    {
+        // test regexp_like(nullable vector, vector, vector)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vvv_res, exprs_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createNullableVectorColumn<String>(exprs, exprs_nulls),
+                             createColumn<String>(patterns),
+                             createColumn<String>(match_types)));
+
+        // test regexp_like(vector, nullable vector, vector)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vvv_res, pattern_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>(exprs),
+                             createNullableVectorColumn<String>(patterns, pattern_nulls),
+                             createColumn<String>(match_types)));
+
+        // test regexp_like(vector, vector, nullable vector)
+        ASSERT_COLUMN_EQ(createNullableVectorColumn<UInt8>(vvv_res, match_type_nulls),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>(exprs),
+                             createColumn<String>(patterns),
+                             createNullableVectorColumn<String>(match_types, match_type_nulls)));
+    }
+
+    std::cout << "case 9" << std::endl;
+    // case 9 test empty columns
+    {
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({}),
+                         executeFunction(
+                             "regexp_like",
+                             createColumn<String>({}),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+
+        ASSERT_COLUMN_EQ(createOnlyNullColumnConst(0),
+                         executeFunction(
+                             "regexp_like",
+                             createOnlyNullColumnConst(0),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+
+        ASSERT_COLUMN_EQ(createColumn<UInt8>({}),
+                         executeFunction(
+                             "regexp_like",
+                             createConstColumn<String>(0, ""),
+                             createColumn<String>({}),
+                             createColumn<String>({})));
+    }
+
+    // empty pattern is not allowed
+    ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createConstColumn<String>(row_size, "")), Exception);
+    ASSERT_THROW(executeFunction("regexp_like", createConstColumn<String>(row_size, ""), createConstColumn<String>(row_size, "")), Exception);
+    ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createColumn<String>(std::vector<String>{""})), Exception);
+    ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createNullableVectorColumn<String>(std::vector<String>{""}, std::vector<UInt8>{0})), Exception);
+    ASSERT_THROW(executeFunction("regexp_like", createColumn<String>(std::vector<String>{"1"}), createConstColumn<Nullable<String>>(row_size, "")), Exception);
 }
 
 TEST_F(Regexp, testRegexpCustomerCases)
@@ -1901,26 +2137,49 @@ TEST_F(Regexp, testRegexpCustomerCases)
                      "^756[0-9]{11}$";
     std::vector<String> patterns{pattern, pattern, pattern, pattern, pattern};
     std::vector<String> inputs{"73228012343218", "530101343498", "540101323298", "31111191919191", "78200000000000"};
+    size_t col_size = inputs.size();
     /// columnNothing, columnConstNull, columnConstNotNull, columnVectorNullable, columnVectorNotNull
-    ColumnsWithTypeAndName input_columns{createOnlyNullColumnConst(5), createConstColumn<Nullable<String>>(5, {}), createConstColumn<Nullable<String>>(5, inputs[0]), createConstColumn<String>(5, inputs[0]), createColumn<Nullable<String>>({inputs[0], {}, {}, inputs[3], inputs[4]}), createColumn<String>(inputs)};
-    ColumnsWithTypeAndName pattern_columns{createOnlyNullColumnConst(5), createConstColumn<Nullable<String>>(5, {}), createConstColumn<Nullable<String>>(5, patterns[0]), createConstColumn<String>(5, patterns[0]), createColumn<Nullable<String>>({patterns[0], {}, {}, patterns[3], patterns[4]}), createColumn<String>(patterns)};
+    ColumnsWithTypeAndName input_columns{createOnlyNullColumnConst(col_size), createConstColumn<Nullable<String>>(col_size, {}), createConstColumn<Nullable<String>>(col_size, inputs[0]), createConstColumn<String>(col_size, inputs[0]), createColumn<Nullable<String>>({inputs[0], {}, {}, inputs[3], inputs[4]}), createColumn<String>(inputs)};
+    ColumnsWithTypeAndName pattern_columns{createOnlyNullColumnConst(col_size), createConstColumn<Nullable<String>>(col_size, patterns[0]), createConstColumn<String>(col_size, patterns[0]), createColumn<Nullable<String>>({patterns[0], {}, {}, patterns[3], patterns[4]}), createColumn<String>(patterns)};
+
     for (const auto & input_column : input_columns)
     {
         for (const auto & pattern_column : pattern_columns)
         {
             if (input_column.type->onlyNull() || pattern_column.type->onlyNull())
             {
-                ASSERT_COLUMN_EQ(createOnlyNullColumnConst(5),
+                ASSERT_COLUMN_EQ(createOnlyNullColumnConst(col_size),
                                  executeFunction("regexp", input_column, pattern_column));
+            }
+            else if (isColumnConst(input_column) && isColumnConst(pattern_column)) // All columns are const
+            {
+                if (isColumnConstNull(input_column) && isColumnConstNull(pattern_column))
+                {
+                    ASSERT_COLUMN_EQ(createOnlyNullColumnConst(col_size, {}),
+                                     executeFunction("regexp", input_column, pattern_column));
+                }
+                else if ((isColumnConstNotNull(input_column) && isColumnConstNotNull(pattern_column)))
+                {
+                    ASSERT_COLUMN_EQ(createConstColumn<UInt8>(col_size, 1),
+                                     executeFunction("regexp", input_column, pattern_column));
+                }
+                else if (isColumnConstNull(input_column) || isColumnConstNull(pattern_column))
+                {
+                    DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<UInt8>>());
+                    auto col = data_type->createColumnConst(col_size, Null());
+
+                    ASSERT_COLUMN_EQ(ColumnWithTypeAndName(std::move(col), data_type, ""),
+                                     executeFunction("regexp", input_column, pattern_column));
+                }
             }
             else if (isColumnConstNull(input_column) || isColumnConstNull(pattern_column))
             {
-                ASSERT_COLUMN_EQ(createConstColumn<Nullable<UInt8>>(5, {}),
-                                 executeFunction("regexp", input_column, pattern_column));
-            }
-            else if (isColumnConstNotNull(input_column) && isColumnConstNotNull(pattern_column))
-            {
-                ASSERT_COLUMN_EQ(createConstColumn<UInt8>(5, 1),
+                DataTypePtr data_type = std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNumber<UInt8>>());
+                auto col = data_type->createColumn();
+                for (size_t i = 0; i < col_size; i++)
+                    col->insert(Null());
+
+                ASSERT_COLUMN_EQ(ColumnWithTypeAndName(std::move(col), data_type, ""),
                                  executeFunction("regexp", input_column, pattern_column));
             }
             else

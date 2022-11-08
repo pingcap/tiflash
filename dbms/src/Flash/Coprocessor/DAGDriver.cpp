@@ -151,7 +151,7 @@ try
         }
         else
         {
-            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_super_batch).Observe(peak_memory);
+            GET_METRIC(tiflash_coprocessor_request_memory_usage, type_batch).Observe(peak_memory);
         }
     }
 

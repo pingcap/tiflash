@@ -681,7 +681,7 @@ template <typename RPCContext>
 DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
     const std::shared_ptr<ReceivedMessage> & recv_msg,
     std::queue<Block> & block_queue,
-    std::unique_ptr<IChunkDecodeAndSquash> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
     DecodeDetail detail;
@@ -711,7 +711,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
     std::queue<Block> & block_queue,
     const Block & header,
     size_t stream_id,
-    std::unique_ptr<IChunkDecodeAndSquash> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     if (unlikely(stream_id >= msg_channels.size()))
     {
@@ -736,7 +736,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::nextResult(
 template <typename RPCContext>
 ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::handleUnnormalChannel(
     std::queue<Block> & block_queue,
-    std::unique_ptr<IChunkDecodeAndSquash> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     std::optional<Block> last_block = decoder_ptr->flush();
     std::unique_lock lock(mu);
@@ -768,7 +768,7 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
     std::queue<Block> & block_queue,
     const Block & header,
     const std::shared_ptr<ReceivedMessage> & recv_msg,
-    std::unique_ptr<IChunkDecodeAndSquash> & decoder_ptr)
+    std::unique_ptr<CHBlockChunkDecodeAndSquash> & decoder_ptr)
 {
     assert(recv_msg != nullptr);
     if (recv_msg->resp_ptr != nullptr) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
