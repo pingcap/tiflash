@@ -124,6 +124,11 @@ struct TrackedMppDataPacket
         : mem_tracker_wrapper(memory_tracker)
     {}
 
+    TrackedMppDataPacket(const mpp::MPPDataPacket & data, size_t size, MemoryTracker * memory_tracker)
+        : mem_tracker_wrapper(size, memory_tracker)
+        , packet(data)
+    {}
+
     void addChunk(std::string && value)
     {
         mem_tracker_wrapper.alloc(value.size());
@@ -191,6 +196,14 @@ struct TrackedMppDataPacket
     mpp::MPPDataPacket & getPacket()
     {
         return packet;
+    }
+
+    std::shared_ptr<DB::TrackedMppDataPacket> copy() const
+    {
+        return std::make_shared<TrackedMppDataPacket>(
+            packet,
+            mem_tracker_wrapper.size,
+            mem_tracker_wrapper.memory_tracker);
     }
 
     MemTrackerWrapper mem_tracker_wrapper;

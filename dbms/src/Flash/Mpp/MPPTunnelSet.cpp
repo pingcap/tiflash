@@ -26,7 +26,7 @@ namespace
 void checkPacketSize(size_t size)
 {
     static constexpr size_t max_packet_size = 1u << 31;
-    if (size >= max_packet_size)
+    if (unlikely(size >= max_packet_size))
         throw Exception(fmt::format("Packet is too large to send, size : {}", size));
 }
 
@@ -44,7 +44,7 @@ void MPPTunnelSetBase<Tunnel>::sendExecutionSummary(tipb::SelectResponse & respo
 {
     RUNTIME_CHECK(!tunnels.empty());
     // for execution summary, only need to send to one tunnel.
-    tunnels.back()->write(serializePacket(response));
+    tunnels[0]->write(serializePacket(response));
 }
 
 template <typename Tunnel>
@@ -59,13 +59,13 @@ template <typename Tunnel>
 void MPPTunnelSetBase<Tunnel>::broadcastWrite(const TrackedMppDataPacketPtr & packet)
 {
     checkPacketSize(packet->getPacket().ByteSizeLong());
-    RUNTIME_ASSERT(!tunnels.empty());
-    //  TODO avoid copy packet for broadcast.
-    for (size_t i = 1; i < tunnels.size(); ++i)
-        tunnels[i]->write(std::make_shared<TrackedMppDataPacket>(
-            packet->getPacket(),
-            tunnels[i]->getMemTracker()));
-    tunnels[0]->write(packet);
+    RUNTIME_CHECK(!tunnels.empty());
+    for (auto & tunnel : tunnels)
+    {
+        // We should copy the tracked packet for local tunnel.
+        // Because `switchMemoryTracker` will be called later in `readForLocal`.
+        tunnel->write(tunnel->isLocal() && tunnels.size() > 1 ? packet->copy() : packet);
+    }
 }
 
 template <typename Tunnel>
