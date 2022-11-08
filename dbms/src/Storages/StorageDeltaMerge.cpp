@@ -1415,6 +1415,7 @@ BlockInputStreamPtr StorageDeltaMerge::status()
     INSERT_FLOAT(avg_stable_rows)
 
     INSERT_INT(total_pack_count_in_delta)
+    INSERT_INT(max_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_count_in_delta)
     INSERT_FLOAT(avg_pack_rows_in_delta)
     INSERT_SIZE(avg_pack_size_in_delta)

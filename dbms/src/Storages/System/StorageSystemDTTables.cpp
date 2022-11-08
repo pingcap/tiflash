@@ -74,10 +74,10 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
         {"avg_stable_size", std::make_shared<DataTypeFloat64>()},
 
         {"total_pack_count_in_delta", std::make_shared<DataTypeUInt64>()},
+        {"max_pack_count_in_delta", std::make_shared<DataTypeUInt64>()},
         {"avg_pack_count_in_delta", std::make_shared<DataTypeFloat64>()},
         {"avg_pack_rows_in_delta", std::make_shared<DataTypeFloat64>()},
         {"avg_pack_size_in_delta", std::make_shared<DataTypeFloat64>()},
-        {"max_pack_count_in_delta", std::make_shared<DataTypeUInt64>()},
 
         {"total_pack_count_in_stable", std::make_shared<DataTypeUInt64>()},
         {"avg_pack_count_in_stable", std::make_shared<DataTypeFloat64>()},
@@ -188,10 +188,10 @@ BlockInputStreams StorageSystemDTTables::read(
             res_columns[j++]->insert(stat.avg_stable_size);
 
             res_columns[j++]->insert(stat.total_pack_count_in_delta);
+            res_columns[j++]->insert(stat.max_pack_count_in_delta);
             res_columns[j++]->insert(stat.avg_pack_count_in_delta);
             res_columns[j++]->insert(stat.avg_pack_rows_in_delta);
             res_columns[j++]->insert(stat.avg_pack_size_in_delta);
-            res_columns[j++]->insert(stat.max_pack_count_in_delta);
 
             res_columns[j++]->insert(stat.total_pack_count_in_stable);
             res_columns[j++]->insert(stat.avg_pack_count_in_stable);
