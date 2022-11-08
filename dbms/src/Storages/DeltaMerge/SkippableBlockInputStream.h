@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <Core/Block.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Common/TiFlashMetrics.h>
 
 namespace DB
 {

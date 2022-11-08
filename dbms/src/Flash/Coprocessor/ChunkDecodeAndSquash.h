@@ -20,7 +20,6 @@
 
 namespace DB
 {
-
 class CHBlockChunkDecodeAndSquash
 {
 public:

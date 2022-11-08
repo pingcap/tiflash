@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 #include <Common/TiFlashMetrics.h>
+#include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
 
 namespace ProfileEvents
 {
@@ -45,11 +45,11 @@ void DMVersionFilterBlockInputStream<MODE>::readSuffix()
 template <int MODE>
 Block DMVersionFilterBlockInputStream<MODE>::read(FilterPtr & res_filter, bool return_filter)
 {
-
     Stopwatch watch_read;
     SCOPE_EXIT({
-        [&](){
-            if (MODE == DM_VERSION_FILTER_MODE_MVCC) {
+        [&]() {
+            if (MODE == DM_VERSION_FILTER_MODE_MVCC)
+            {
                 GET_METRIC(tiflash_storage_read_duration_seconds, type_block_read_sub_mvcc).Observe(watch_read.elapsedSeconds());
             }
         }();

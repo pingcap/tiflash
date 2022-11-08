@@ -51,7 +51,6 @@ extern const char force_set_page_file_write_errno[];
 
 namespace PS::V3::tests
 {
-
 TEST_F(PageStorageTest, WriteRead)
 try
 {

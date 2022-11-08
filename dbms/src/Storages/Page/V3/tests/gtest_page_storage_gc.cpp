@@ -35,7 +35,6 @@ extern const char force_ps_wal_compact[];
 }
 namespace PS::V3::tests
 {
-
 struct FullGCParam
 {
     bool keep_snap;
