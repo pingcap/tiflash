@@ -92,7 +92,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
     }
     assert(blocks.empty());
     rows_in_blocks = 0;
-    writer->broadcastWrite(tracked_packet);
+    writer->broadcastOrPassThroughWrite(tracked_packet);
 }
 
 template class BroadcastOrPassThroughWriter<MPPTunnelSetPtr>;

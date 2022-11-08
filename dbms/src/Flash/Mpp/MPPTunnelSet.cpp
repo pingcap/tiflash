@@ -56,7 +56,7 @@ void MPPTunnelSetBase<Tunnel>::write(tipb::SelectResponse & response)
 }
 
 template <typename Tunnel>
-void MPPTunnelSetBase<Tunnel>::broadcastWrite(const TrackedMppDataPacketPtr & packet)
+void MPPTunnelSetBase<Tunnel>::broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet)
 {
     checkPacketSize(packet->getPacket().ByteSizeLong());
     RUNTIME_CHECK(!tunnels.empty());

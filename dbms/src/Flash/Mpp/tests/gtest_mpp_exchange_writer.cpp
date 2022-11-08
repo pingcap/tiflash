@@ -110,17 +110,17 @@ public:
     std::unique_ptr<DAGContext> dag_context_ptr;
 };
 
-using MockStreamWriterChecker = std::function<void(const TrackedMppDataPacketPtr &, uint16_t)>;
+using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketPtr &, uint16_t)>;
 
-struct MockStreamWriter
+struct MockExchangeWriter
 {
-    MockStreamWriter(MockStreamWriterChecker checker_,
-                     uint16_t part_num_)
+    MockExchangeWriter(MockExchangeWriterChecker checker_,
+                       uint16_t part_num_)
         : checker(checker_)
         , part_num(part_num_)
     {}
 
-    void broadcastWrite(const TrackedMppDataPacketPtr & packet) { checker(packet, 0); }
+    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet) { checker(packet, 0); }
     void partitionWrite(const TrackedMppDataPacketPtr & packet, uint16_t part_id) { checker(packet, part_id); }
     void write(tipb::SelectResponse &) { FAIL() << "cannot reach here, only consider CH Block format"; }
     void sendExecutionSummary(tipb::SelectResponse & response)
@@ -132,7 +132,7 @@ struct MockStreamWriter
     uint16_t getPartitionNum() const { return part_num; }
 
 private:
-    MockStreamWriterChecker checker;
+    MockExchangeWriterChecker checker;
     uint16_t part_num;
 };
 
@@ -150,7 +150,7 @@ try
     // 1. Build Block.
     auto block = prepareUniformBlock(block_rows);
 
-    // 2. Build MockStreamWriter.
+    // 2. Build MockExchangeWriter.
     std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         auto res = write_report.insert({part_id, packet});
@@ -159,10 +159,10 @@ try
         // batchWriteFineGrainedShuffle() only called once, so will only be one packet for each partition.
         ASSERT_TRUE(res.second);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -215,15 +215,15 @@ try
     }
     Block header = blocks.back();
 
-    // 2. Build MockStreamWriter.
+    // 2. Build MockExchangeWriter.
     std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -275,9 +275,9 @@ try
         // Should always insert succeed. There is at most one packet per partition.
         ASSERT_TRUE(res.second);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
-    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -311,15 +311,15 @@ try
     }
     Block header = blocks.back();
 
-    // 2. Build MockStreamWriter.
+    // 2. Build MockExchangeWriter.
     std::unordered_map<uint16_t, TrackedMppDataPacketPtrs> write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         write_report[part_id].emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -362,9 +362,9 @@ try
         // Should always insert succeed. There is at most one packet per partition.
         ASSERT_TRUE(res.second);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, part_num);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num);
 
-    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         part_col_ids,
         part_col_collators,
@@ -396,16 +396,16 @@ try
     }
     Block header = blocks.back();
 
-    // 2. Build MockStreamWriter.
+    // 2. Build MockExchangeWriter.
     TrackedMppDataPacketPtrs write_report;
     auto checker = [&write_report](const TrackedMppDataPacketPtr & packet, uint16_t part_id) {
         ASSERT_EQ(part_id, 0);
         write_report.emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, 1);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1);
 
     // 3. Start to write.
-    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         batch_send_min_limit,
         /*should_send_exec_summary_at_last=*/false,
@@ -440,9 +440,9 @@ try
         ASSERT_EQ(part_id, 0);
         write_report.emplace_back(packet);
     };
-    auto mock_writer = std::make_shared<MockStreamWriter>(checker, 1);
+    auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1);
 
-    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockStreamWriter>>>(
+    auto dag_writer = std::make_shared<BroadcastOrPassThroughWriter<std::shared_ptr<MockExchangeWriter>>>(
         mock_writer,
         batch_send_min_limit,
         /*should_send_exec_summary_at_last=*/true,

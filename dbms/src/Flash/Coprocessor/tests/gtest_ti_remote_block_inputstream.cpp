@@ -60,7 +60,7 @@ struct MockWriter
     }
 
     void partitionWrite(const TrackedMppDataPacketPtr &, uint16_t) { FAIL() << "cannot reach here."; }
-    void broadcastWrite(const TrackedMppDataPacketPtr & packet)
+    void broadcastOrPassThroughWrite(const TrackedMppDataPacketPtr & packet)
     {
         if (add_summary)
         {
