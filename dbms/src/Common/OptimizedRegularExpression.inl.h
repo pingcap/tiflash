@@ -474,7 +474,8 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
 
 // Convert utf8 position to byte position.
 // For Example:
-//   Taking string "ni好a" as an example. utf8 position 4 is corresponding to byte position 6.
+//   Taking string "ni好a" as an example.
+//   utf8 position of character 'a' in this string is 4 and byte position is 6.
 static inline size_t utf8Pos2bytePos(const char * str, size_t utf8_pos)
 {
     size_t byte_index = 0;
@@ -506,11 +507,11 @@ static inline size_t getMatchedIndex(const char * str, const char * sub_str, siz
     // sub_str must be in the str, so while loop condition could be true
     while (true)
     {
-        // PRINT("while");
         sub_str_offset = 0;
         start_offset += 1;
         str_offset = start_offset;
 
+        // Check string byte by byte
         bool is_same = true;
         while (sub_str_offset < single_checked_num)
         {
@@ -524,6 +525,8 @@ static inline size_t getMatchedIndex(const char * str, const char * sub_str, siz
         if (!is_same)
             continue;
 
+        // Length of rest of sub_str that needs to be compared can be divided exactly by eight.
+        // So, we can see 8 bytes as uint64_t and compare 8 byte at a time.
         while (sub_str_offset < sub_str_size && is_same)
         {
             if (static_cast<uint64_t>(str[str_offset]) == static_cast<uint64_t>(sub_str[str_offset]))
@@ -587,20 +590,21 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
     size_t matched_str_size = 0;
     String matched_str; // store the matched substring
 
+    // RegexType::FindAndConsume will truncate expr_sp each time it is called.
+    // expr_sp_before_truncated stores the string before expr_sp is truncated so that
+    // we can find the matched index of the substr
+    StringPieceType expr_sp_before_truncated;
+
     while (occur > 0)
     {
+        expr_sp_before_truncated = expr_sp;
         bool success = RegexType::FindAndConsume(&expr_sp, *re2, &matched_str);
         if (!success)
             return 0;
 
+        matched_index = expr_sp_before_truncated.find(matched_str);
         matched_str_size = matched_str.size();
-
-        // get the start index of matched string in expr
-        matched_index = getMatchedIndex(expr, matched_str.c_str(), matched_str_size);
         byte_offset += matched_index + matched_str_size;
-
-        // expr is truncated each time we get a matched string
-        expr = subject + byte_offset;
 
         --occur;
     }
