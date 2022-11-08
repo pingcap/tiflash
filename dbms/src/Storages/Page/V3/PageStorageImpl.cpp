@@ -207,31 +207,6 @@ PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, c
     }
 }
 
-PageIds PageStorageImpl::readImpl(NamespaceId ns_id, const PageIds & page_ids, const PageHandler & handler, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
-{
-    if (!snapshot)
-    {
-        snapshot = this->getSnapshot("");
-    }
-
-    PageIdV3Internals page_id_v3s;
-    for (auto p_id : page_ids)
-        page_id_v3s.emplace_back(buildV3Id(ns_id, p_id));
-
-    if (throw_on_not_exist)
-    {
-        auto page_entries = page_directory->getByIDs(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
-        return {};
-    }
-    else
-    {
-        auto [page_entries, page_ids_not_found] = page_directory->getByIDsOrNull(page_id_v3s, snapshot);
-        blob_store.read(page_entries, handler, read_limiter);
-        return page_ids_not_found;
-    }
-}
-
 PageMap PageStorageImpl::readImpl(NamespaceId ns_id, const std::vector<PageReadFields> & page_fields, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot, bool throw_on_not_exist)
 {
     if (!snapshot)

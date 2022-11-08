@@ -17,6 +17,7 @@
 #include <Common/SyncPoint/ScopeGuard.h>
 #include <Storages/Page/Config.h>
 #include <Storages/Page/Snapshot.h>
+#include <Storages/Page/V3/PageEntriesEdit.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/tests/gtest_page_storage.h>
@@ -32,7 +33,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_ps_wal_compact[];
-}
+extern const char pause_before_full_gc_prepare[];
+} // namespace FailPoints
 namespace PS::V3::tests
 {
 
@@ -320,6 +322,159 @@ INSTANTIATE_TEST_CASE_P(
         DeleteTiming::AfterFullGCCommit //
         ),
     [](const ::testing::TestParamInfo<PageStorageFullGCConcurrentTest::ParamType> & param) {
+        return String(magic_enum::enum_name(param.param));
+    });
+
+///////
+/// PageStorageFullGCConcurrentTest2
+///////
+
+// The full GC start timing when run concurrently
+// with creating ref page
+enum class StartTiming
+{
+    BeforeCreateRef = 1,
+    BeforeIncrRefCount,
+    AfterIncrRefCount,
+};
+class PageStorageFullGCConcurrentTest2
+    : public PageStorageTest
+    , public testing::WithParamInterface<StartTiming>
+{
+public:
+    PageStorageFullGCConcurrentTest2()
+        : timing(GetParam())
+    {
+    }
+
+    void SetUp() override
+    {
+        PageStorageTest::SetUp();
+    }
+
+    SyncPointScopeGuard getSyncPoint() const
+    {
+        switch (timing)
+        {
+        case StartTiming::BeforeCreateRef:
+            return SyncPointCtl::enableInScope("before_PageDirectory::applyRefEditRecord_create_ref");
+        case StartTiming::BeforeIncrRefCount:
+            return SyncPointCtl::enableInScope("before_PageDirectory::applyRefEditRecord_incr_ref_count");
+        case StartTiming::AfterIncrRefCount:
+            return SyncPointCtl::enableInScope("after_PageDirectory::applyRefEditRecord_incr_ref_count");
+        }
+    }
+
+protected:
+    StartTiming timing;
+};
+
+TEST_P(PageStorageFullGCConcurrentTest2, CreateRefPage)
+try
+{
+    // always pick all blob file for full gc
+    PageStorageConfig new_config;
+    new_config.blob_heavy_gc_valid_rate = 1.0;
+    page_storage->reloadSettings(new_config);
+
+    PageId page_id1 = 101;
+    PageId ref_page_id2 = 102;
+    PageId ref_page_id3 = 103;
+    PageId ref_page_id4 = 104;
+    {
+        WriteBatch batch;
+        batch.putPage(page_id1, default_tag, getDefaultBuffer(), buf_sz);
+        batch.putRefPage(ref_page_id2, page_id1);
+        batch.delPage(page_id1);
+        page_storage->write(std::move(batch));
+    }
+    {
+        WriteBatch batch;
+        batch.putRefPage(ref_page_id3, ref_page_id2);
+        batch.delPage(ref_page_id2);
+        page_storage->write(std::move(batch));
+    }
+
+    FailPointHelper::enableFailPoint(FailPoints::force_ps_wal_compact);
+    FailPointHelper::enableFailPoint(FailPoints::pause_before_full_gc_prepare);
+    auto sp_full_gc_prepare = SyncPointCtl::enableInScope("before_PageDirectory::getEntriesByBlobIds_id_101");
+    auto th_full_gc = std::async([&]() {
+        // let's try full gc, it should rewrite the ref-pages into normal pages
+        auto done_full_gc = page_storage->gcImpl(/* not_skip */ true, nullptr, nullptr);
+        EXPECT_EQ(true, done_full_gc);
+    });
+    // let's begin full gc and stop before collecting for id=101
+    sp_full_gc_prepare.waitAndPause();
+
+    auto sp_foreground_write = getSyncPoint();
+    auto th_foreground_write = std::async([&]() {
+        WriteBatch batch;
+        batch.putRefPage(ref_page_id4, ref_page_id3);
+        page_storage->write(std::move(batch));
+    });
+    // let's create the ref page with sync_point
+    sp_foreground_write.waitAndPause();
+
+
+    // let's continue the full gc
+    sp_full_gc_prepare.next();
+    // ... then continue the foreground write
+    sp_foreground_write.next();
+    sp_full_gc_prepare.disable();
+    sp_foreground_write.disable();
+
+    // finish
+    th_full_gc.get();
+    th_foreground_write.get();
+
+    // wal compact again
+    page_storage->page_directory->tryDumpSnapshot(nullptr, nullptr, true);
+
+    LOG_INFO(log, "close and restore WAL from disk");
+    page_storage.reset();
+
+    // The living ref-pages (id3, id4) are rewrite into
+    // normal pages.
+    auto [wal, reader] = WALStore::create(String(NAME), file_provider, delegator, WALConfig::from(new_config));
+    UNUSED(wal);
+    size_t num_entries_on_wal = 0;
+    bool exist_id3_normal_entry = false;
+    bool exist_id4_normal_entry = false;
+    while (reader->remained())
+    {
+        auto s = reader->next();
+        if (s.has_value())
+        {
+            auto e = ser::deserializeFrom(s.value());
+            num_entries_on_wal += e.size();
+            for (const auto & r : e.getRecords())
+            {
+                if (r.type == EditRecordType::VAR_ENTRY)
+                {
+                    if (r.page_id.low == ref_page_id3)
+                        exist_id3_normal_entry = true;
+                    else if (r.page_id.low == ref_page_id4)
+                        exist_id4_normal_entry = true;
+                }
+                LOG_INFO(log, PageEntriesEdit::toDebugString(r));
+            }
+        }
+    }
+    ASSERT_TRUE(exist_id3_normal_entry);
+    ASSERT_TRUE(exist_id4_normal_entry);
+    ASSERT_EQ(num_entries_on_wal, 2);
+}
+CATCH
+
+INSTANTIATE_TEST_CASE_P(
+    StartTiming,
+    PageStorageFullGCConcurrentTest2,
+    ::testing::Values(
+        StartTiming::BeforeCreateRef,
+        StartTiming::BeforeIncrRefCount,
+        StartTiming::AfterIncrRefCount //
+        ),
+    [](const ::testing::TestParamInfo<PageStorageFullGCConcurrentTest2::ParamType> & param) {
         return String(magic_enum::enum_name(param.param));
     });
 
