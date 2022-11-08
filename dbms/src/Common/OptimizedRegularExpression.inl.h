@@ -496,7 +496,6 @@ static inline Int64 bytePos2Utf8Pos(const char * str, Int64 byte_pos)
     return utf8_num + 1;
 }
 
-// We use this function when expr string is empty
 template <bool thread_safe>
 Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const char * expr, size_t expr_size, size_t pos, Int64 occur)
 {
@@ -571,10 +570,7 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
     makeOccurValid(occur);
 
     if (unlikely(subject_size == 0))
-    {
-        // Process empty expr in this if branch
         return processEmptyStringExpr(subject, subject_size, pos, occur);
-    }
 
     size_t byte_pos = utf8Pos2bytePos(subject, pos);
     return getSubstrMatchedIndex(subject, subject_size, byte_pos, occur, ret_op);
