@@ -476,9 +476,9 @@ unsigned OptimizedRegularExpressionImpl<thread_safe>::match(const char * subject
 // For Example:
 //   Taking string "ni好a" as an example.
 //   utf8 position of character 'a' in this string is 4 and byte position is 6.
-static inline size_t utf8Pos2bytePos(const char * str, size_t utf8_pos)
+static inline Int64 utf8Pos2bytePos(const char * str, Int64 utf8_pos)
 {
-    size_t byte_index = 0;
+    Int64 byte_index = 0;
     utf8_pos--;
     while (utf8_pos > 0)
     {
@@ -488,62 +488,12 @@ static inline size_t utf8Pos2bytePos(const char * str, size_t utf8_pos)
     return byte_index + 1;
 }
 
-static inline size_t bytePos2Utf8Pos(const char * str, size_t byte_pos)
+static inline Int64 bytePos2Utf8Pos(const char * str, Int64 byte_pos)
 {
     // byte_num means the number of byte before this byte_pos
-    size_t byte_num = byte_pos - 1;
-    size_t utf8_num = getStringUtf8Len(str, byte_num);
+    Int64 byte_num = byte_pos - 1;
+    Int64 utf8_num = getStringUtf8Len(str, byte_num);
     return utf8_num + 1;
-}
-
-static inline size_t getMatchedIndex(const char * str, const char * sub_str, size_t sub_str_size)
-{
-    const size_t stride = sizeof(int64_t);
-    size_t single_checked_num = sub_str_size >= stride ? sub_str_size % stride : sub_str_size;
-    size_t start_offset = -1; // offset that the head of sub_str in the str
-    size_t str_offset = 0;
-    size_t sub_str_offset = 0;
-
-    // sub_str must be in the str, so while loop condition could be true
-    while (true)
-    {
-        sub_str_offset = 0;
-        start_offset += 1;
-        str_offset = start_offset;
-
-        // Check string byte by byte
-        bool is_same = true;
-        while (sub_str_offset < single_checked_num)
-        {
-            if (str[str_offset++] != sub_str[sub_str_offset++])
-            {
-                is_same = false;
-                break;
-            }
-        }
-
-        if (!is_same)
-            continue;
-
-        // Length of rest of sub_str that needs to be compared can be divided exactly by eight.
-        // So, we can see 8 bytes as uint64_t and compare 8 byte at a time.
-        while (sub_str_offset < sub_str_size && is_same)
-        {
-            if (static_cast<uint64_t>(str[str_offset]) == static_cast<uint64_t>(sub_str[str_offset]))
-            {
-                is_same = false;
-                break;
-            }
-
-            sub_str_offset += stride;
-            str_offset += stride;
-        }
-
-        if (sub_str_offset >= sub_str_size)
-            break;
-    }
-
-    return start_offset;
 }
 
 // We use this function when expr string is empty
@@ -560,27 +510,23 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::processEmptyStringExpr(const 
     return pos;
 }
 
-template <bool thread_safe>
-Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
+static inline void checkArgs(Int64 utf8_total_len, size_t subject_size, Int64 pos, Int64 ret_op)
 {
-    int64_t utf8_total_len = getStringUtf8Len(subject, subject_size);
-
     if (unlikely(ret_op != 0 && ret_op != 1))
-        throw DB::Exception("Incorrect arguments to regexp_instr: return_option must be 1 or 0");
+        throw DB::Exception("Incorrect argument to regexp function: return_option must be 1 or 0");
 
     if (unlikely(pos <= 0 || (pos > utf8_total_len && subject_size != 0)))
-        throw DB::Exception("Index out of bounds in regular expression search.");
+        throw DB::Exception("Index out of bounds in regular function.");
+}
 
-    if (occur <= 0)
-        occur = 1;
+static inline void makeOccurValid(Int64 & occur)
+{
+    occur = occur < 0 ? 1 : occur;
+}
 
-    if (unlikely(subject_size == 0))
-    {
-        // Process empty expr in this if branch
-        return processEmptyStringExpr(subject, subject_size, pos, occur);
-    }
-
-    size_t byte_pos = utf8Pos2bytePos(subject, pos);
+template <bool thread_safe>
+Int64 OptimizedRegularExpressionImpl<thread_safe>::getSubstrMatchedIndex(const char * subject, size_t subject_size, Int64 byte_pos, Int64 occur, Int64 ret_op)
+{
     size_t byte_offset = byte_pos - 1; // This is a offset for bytes, not utf8
     const char * expr = subject + byte_offset;  // expr is the string actually passed into regexp to be matched
     size_t expr_size = subject_size - byte_offset;
@@ -602,6 +548,8 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
         if (!success)
             return 0;
 
+        // byte_offset is used for locating the substr's start index in the string
+        // so we need to update it each time.
         matched_index = expr_sp_before_truncated.find(matched_str);
         matched_str_size = matched_str.size();
         byte_offset += matched_index + matched_str_size;
@@ -611,6 +559,25 @@ Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, s
 
     byte_offset -= matched_str_size;
     return ret_op == 0 ? bytePos2Utf8Pos(subject, byte_offset + 1) : bytePos2Utf8Pos(subject, byte_offset + matched_str.size() + 1);
+}
+
+template <bool thread_safe>
+Int64 OptimizedRegularExpressionImpl<thread_safe>::instr(const char * subject, size_t subject_size, Int64 pos, Int64 occur, Int64 ret_op)
+{
+    Int64 utf8_total_len = getStringUtf8Len(subject, subject_size);
+
+    checkArgs(utf8_total_len, subject_size, pos, ret_op);
+
+    makeOccurValid(occur);
+
+    if (unlikely(subject_size == 0))
+    {
+        // Process empty expr in this if branch
+        return processEmptyStringExpr(subject, subject_size, pos, occur);
+    }
+
+    size_t byte_pos = utf8Pos2bytePos(subject, pos);
+    return getSubstrMatchedIndex(subject, subject_size, byte_pos, occur, ret_op);
 }
 
 #undef MIN_LENGTH_FOR_STRSTR
