@@ -55,19 +55,12 @@ bool LimitTransformAction::transform(Block & block)
     }
     else
     {
+        // pos > limit
         // give away a piece of the block
-        size_t start = std::max(
-            static_cast<Int64>(0),
-            static_cast<Int64>(rows) - static_cast<Int64>(pos));
-
-        size_t length = std::min(
-            static_cast<Int64>(limit),
-            std::min(
-                static_cast<Int64>(pos),
-                static_cast<Int64>(limit) - static_cast<Int64>(pos) + static_cast<Int64>(rows)));
-
+        assert(rows + limit > pos);
+        size_t length = rows + limit - pos;
         for (size_t i = 0; i < block.columns(); ++i)
-            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->cut(start, length);
+            block.safeGetByPosition(i).column = block.safeGetByPosition(i).column->cut(0, length);
         return true;
     }
 }
