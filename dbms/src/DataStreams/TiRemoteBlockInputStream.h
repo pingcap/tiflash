@@ -67,13 +67,8 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
 
     std::unique_ptr<CHBlockChunkDecodeAndSquash> decoder_ptr;
 
-    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
+    void initRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
     {
-        if (unlikely(resp.execution_summaries_size() == 0))
-            return;
-
-        // There will only be one summary packet for one index.
-        RUNTIME_CHECK(!execution_summaries_inited[index].load());
         for (const auto & execution_summary : resp.execution_summaries())
         {
             if (likely(execution_summary.has_executor_id()))
@@ -86,6 +81,42 @@ class TiRemoteBlockInputStream : public IProfilingBlockInputStream
             }
         }
         execution_summaries_inited[index].store(true);
+    }
+
+    void addRemoteExecutionSummaries(tipb::SelectResponse & resp, size_t index)
+    {
+        if (unlikely(resp.execution_summaries_size() == 0))
+            return;
+
+        if (!execution_summaries_inited[index].load())
+        {
+            initRemoteExecutionSummaries(resp, index);
+            return;
+        }
+        if constexpr (is_streaming_reader)
+            throw Exception(
+                fmt::format(
+                    "There are more than one execution summary packet of index {} in streaming reader, "
+                    "this should not happen",
+                    index));
+        auto & execution_summaries_map = execution_summaries[index];
+        for (const auto & execution_summary : resp.execution_summaries())
+        {
+            if (likely(execution_summary.has_executor_id()))
+            {
+                const auto & executor_id = execution_summary.executor_id();
+                if (unlikely(execution_summaries_map.find(executor_id) == execution_summaries_map.end()))
+                {
+                    LOG_WARNING(log, "execution {} not found in execution_summaries, this should not happen", executor_id);
+                    continue;
+                }
+                auto & remote_execution_summary = execution_summaries_map[executor_id];
+                remote_execution_summary.time_processed_ns = std::max(remote_execution_summary.time_processed_ns, execution_summary.time_processed_ns());
+                remote_execution_summary.num_produced_rows += execution_summary.num_produced_rows();
+                remote_execution_summary.num_iterations += execution_summary.num_iterations();
+                remote_execution_summary.concurrency += execution_summary.concurrency();
+            }
+        }
     }
 
     bool fetchRemoteResult()
