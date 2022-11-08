@@ -32,7 +32,8 @@ public:
     }
     bool transform(Block & block);
     Block getHeader() const;
-    size_t totalRows() const {
+    size_t totalRows() const
+    {
         return total_rows;
     }
 
